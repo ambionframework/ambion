@@ -175,15 +175,16 @@ restored bytes.
 connection, observation, citation, replacement, rollback, and restore
 all run through real room tools. The host-crash case reconnects to an adopted
 process after a separate checkout advances its branch. `pnpm check` passes.
-The focused lifecycle passes 1/1, and `pnpm test:live-local-workstation`
-passes 47/47 across four OpenSSH files, including the actual template,
-host-staged runtime, and crash recovery.
+The focused lifecycle passes 2/2, and `pnpm test:live-local-workstation`
+passes 48/48 across four OpenSSH files, including the actual template,
+host-staged runtime, crash recovery, and orphan cleanup after a timed-out
+startup response.
 
 SN31 updates current sensor capability, backend requirements, exports, and
 the 0.5.0 JSON manifest format. Release packaging validates all eleven
 packages, version agreement, package hygiene, and the packed sensor schema.
 The final Linux `pnpm format && pnpm check` passes all 23 Turbo tasks;
-`pnpm test:reports` passes 79/79. The final OpenSSH target passes 47/47.
+`pnpm test:reports` passes 79/79. The final OpenSSH target passes 48/48.
 An optional Pi live run with `openai/gpt-6-luna` at medium reasoning completed
 all 38 cases once with no skips or provider errors: 35 passed and 3 failed.
 The findings are the `corrects-3` judge rejecting "referenced withdrawn
@@ -357,8 +358,10 @@ readable after shutdown. A dirty run remains dirty in its manifest even
 after the edits are committed and pushed. Export edits change no snapshot.
 
 After a host crash, an adopted server can be connected again. Its launch
-source remains the earlier value even if the branch moved. A clean
-workspace disposal follows the existing process stop rules.
+source remains the earlier value even if the branch moved. If startup fails
+after the remote server is ready, a fresh workspace adopts and cancels the
+orphan, then verifies its port closed. A clean workspace disposal follows the
+existing process stop rules.
 
 **SN31. Release documentation.** Update workspace, workstation, process,
 example, trust, and package docs as their pending changes land. Remove

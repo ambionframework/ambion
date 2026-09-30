@@ -5,10 +5,16 @@ set -euo pipefail
 IMAGE='node:26.10-bookworm'
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CONTAINER="ambion-live-local-workstation-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+EXEC_PID=''
 
 cleanup() {
 	local status=$?
 	trap - EXIT HUP INT TERM
+	if [ -n "$EXEC_PID" ]; then
+		kill -TERM "$EXEC_PID" 2>/dev/null || true
+		wait "$EXEC_PID" 2>/dev/null || true
+		EXEC_PID=''
+	fi
 	if [ "$(docker inspect --format '{{ index .Config.Labels "org.ambion.local-workstation-run" }}' \
 		"$CONTAINER" 2>/dev/null || true)" = "$CONTAINER" ]; then
 		docker rm --force "$CONTAINER" >/dev/null 2>&1 || true
@@ -67,6 +73,16 @@ docker exec "$CONTAINER" bash -lc '
 	bash packages/workstation/test/sshd/setup.sh /tmp/ambion-sshd
 	AMBION_WORKSTATION_SSHD=/tmp/ambion-sshd/workstation.json \
 		pnpm --filter @ambionframework/workstation run test:sshd
-'
+' &
+EXEC_PID=$!
 
-echo 'Local workstation OpenSSH integration tier passed.'
+if wait "$EXEC_PID"; then
+	exec_status=0
+else
+	exec_status=$?
+fi
+EXEC_PID=''
+if [ "$exec_status" -eq 0 ]; then
+	echo 'Local workstation OpenSSH integration tier passed.'
+fi
+exit "$exec_status"

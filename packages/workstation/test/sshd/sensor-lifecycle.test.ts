@@ -19,6 +19,9 @@ import {
 	type Action,
 	action,
 	dynamicAction,
+	expectCancelled,
+	expectExitCode,
+	expectSuccess,
 	latest,
 	manifestRef,
 	processHandle,
@@ -76,10 +79,14 @@ describe.skipIf(configPath === undefined)('sensor lifecycle on OpenSSH', () => {
 		for (const item of [a, b, rollback, frame]) expect(item.cited).toBe(true);
 
 		const dirty = await runToolRoom(workspace, OWNER, [
-			action('bash', {
-				command: `cd ~/sensor-server && git switch -c sn35-dirty ${a.commit} && sed -i 's/22.25/22.5/' server.mjs && git status --short`,
-				wait: 1,
-			}),
+			action(
+				'bash',
+				{
+					command: `cd ~/sensor-server && git switch -c sn35-dirty ${a.commit} && sed -i 's/22.25/22.5/' server.mjs && git status --short`,
+					wait: 30,
+				},
+				expectSuccess('Create the dirty launch branch'),
+			),
 		]);
 		expect(latest(dirty.results, 'bash')).toContain('server.mjs');
 		const crashHost = await startSensorLifecycleCrashHost(runtime.node);
@@ -87,11 +94,15 @@ describe.skipIf(configPath === undefined)('sensor lifecycle on OpenSSH', () => {
 		crashHost.child.kill('SIGKILL');
 		await once(crashHost.child, 'exit');
 		const committedDirty = await runToolRoom(workspace, OWNER, [
-			action('bash', {
-				command:
-					"cd ~/sensor-server && git add server.mjs && git commit -m 'Save the running dirty sensor' && git push -u origin sn35-dirty && git rev-parse HEAD",
-				wait: 30,
-			}),
+			action(
+				'bash',
+				{
+					command:
+						"cd ~/sensor-server && git add server.mjs && git commit -m 'Save the running dirty sensor' && git push -u origin sn35-dirty && git rev-parse HEAD",
+					wait: 120,
+				},
+				expectSuccess('Commit and push the dirty launch edits'),
+			),
 		]);
 		expect(latest(committedDirty.results, 'bash')).not.toContain('nothing to commit');
 		const crash = await recoverSensorCrash({
@@ -125,6 +136,31 @@ describe.skipIf(configPath === undefined)('sensor lifecycle on OpenSSH', () => {
 		await disposeWorkspace(rig);
 		await restoreAcrossAccounts(refs, frameDigest, a.commit, b.commit, runtime);
 	}, 300_000);
+
+	it('adopts and cancels a READY server when startup response times out', async () => {
+		const rig = await openLifecycleWorkspace();
+		const runtime = await stageRuntimeAssets();
+		onTestFinished(async () => {
+			await disposeWorkspace(rig);
+			await rm(runtime.root, { recursive: true, force: true });
+		});
+		await clearHomes();
+		await deployVersion(
+			rig.workspace,
+			runtime,
+			'22.25',
+			'Prepare the startup cleanup fixture.',
+			true,
+		);
+		await expect(
+			startSensorLifecycleCrashHost(runtime.node, {
+				startupTimeoutMs: 50,
+				responseDelayMs: 10_000,
+			}),
+		).rejects.toThrow(
+			/remote READY bash-[a-f0-9]+ on port \d+; orphan was cancelled and port closed/,
+		);
+	}, 180_000);
 });
 
 interface Observation {
@@ -175,13 +211,26 @@ async function openLifecycleWorkspace(): Promise<LifecycleWorkspace> {
 
 async function clearHomes(): Promise<void> {
 	const backend = workstationBackend(await options());
-	for (const account of [OWNER, READER, 'lab-git']) {
-		await withEnv(backend, account, (env) => run(env, WIPE));
+	try {
+		for (const account of [OWNER, READER, 'lab-git']) {
+			const result = await withEnv(backend, account, (env) => run(env, WIPE));
+			if (result.code !== 0) {
+				throw new Error(
+					`Could not clear ${account}'s home (exit ${result.code}): ${result.output}`,
+				);
+			}
+		}
+		const repositories = await withEnv(backend, 'lab-git', (env) =>
+			run(env, 'rm -rf -- ~/repos ~/.ssh/authorized_keys.ambion'),
+		);
+		if (repositories.code !== 0) {
+			throw new Error(
+				`Could not clear lab-git repositories (exit ${repositories.code}): ${repositories.output}`,
+			);
+		}
+	} finally {
+		await backend.dispose?.();
 	}
-	await withEnv(backend, 'lab-git', (env) =>
-		run(env, 'rm -rf -- ~/repos ~/.ssh/authorized_keys.ambion'),
-	);
-	await backend.dispose?.();
 }
 
 async function deployVersion(
@@ -194,33 +243,74 @@ async function deployVersion(
 	const actions: Action[] = [];
 	if (first) {
 		actions.push(
-			action('fork', {
-				source: 'templates/sensor-server',
-				name: 'sensor-server',
-				clone: '~/sensor-server',
-			}),
+			action(
+				'fork',
+				{
+					source: 'templates/sensor-server',
+					name: 'sensor-server',
+					clone: '~/sensor-server',
+				},
+				(text) => {
+					if (!text.includes('Forked templates/sensor-server to analyst/sensor-server.')) {
+						throw new Error(`The sensor template fork failed: ${text}`);
+					}
+				},
+			),
 		);
-		actions.push(action('bash', { command: setupCloneAndBranch(runtime), wait: 30 }));
+		actions.push(
+			action(
+				'bash',
+				{ command: setupCloneAndBranch(runtime), wait: 30 },
+				expectSuccess('Provision the fork checkout and runtime dependencies'),
+			),
+		);
 	}
 	actions.push(
-		action('bash', {
-			command: `cd ~/sensor-server && sed -i 's/${first ? '21.6' : '22.25'}/${value}/' server.mjs`,
-			wait: 1,
-		}),
+		action(
+			'bash',
+			{
+				command: `cd ~/sensor-server && sed -i 's/${first ? '21.6' : '22.25'}/${value}/' server.mjs`,
+				wait: 30,
+			},
+			expectSuccess(`Customize sensor version ${value}`),
+		),
 		action('bash', {
 			command: `cd ~/sensor-server && PATH=${shellQuote(dirname(runtime.node))}:"$PATH" npm test`,
-			wait: 30,
+			wait: 0,
 		}),
-		action('bash', {
-			command: `cd ~/sensor-server && git add server.mjs && git commit -m '${message}' && git push -u origin lifecycle && git rev-parse HEAD`,
-			wait: 30,
-		}),
-		dynamicAction('bash', () => ({
-			command: launchCommand(runtime.node),
-			name: 'sensor-server',
-			wait: 1,
-			timeout: 86400,
-		})),
+		dynamicAction(
+			'wait',
+			(results) => ({
+				handles: [processHandle(latest(results, 'bash'))],
+				timeout: 120,
+			}),
+			(text, prior) => {
+				expectExitCode(
+					text,
+					0,
+					`Complete template validation for sensor version ${value}`,
+					processHandle(latest(prior, 'bash')),
+				);
+			},
+		),
+		action(
+			'bash',
+			{
+				command: `cd ~/sensor-server && git add server.mjs && git commit -m '${message}' && git push -u origin lifecycle && git rev-parse HEAD`,
+				wait: 120,
+			},
+			expectSuccess(`Commit and push sensor version ${value}`),
+		),
+		dynamicAction(
+			'bash',
+			() => ({
+				command: launchCommand(runtime.node),
+				name: 'sensor-server',
+				wait: 1,
+				timeout: 86400,
+			}),
+			verifyReady,
+		),
 		connectAction(),
 		action('observe', { sensor: 'bench/room-temperature' }),
 		citationAction('The measurement is retained.'),
@@ -237,6 +327,7 @@ async function deployVersion(
 	if (commit === undefined) throw new Error(`The saved commit is missing: ${commitText}`);
 	const observation = latest(runResult.results, 'observe');
 	const ref = manifestRef(observation);
+	await verifyStopped(runtime.node, readyPort(lastReady(runResult.results)));
 	return {
 		commit,
 		observation,
@@ -252,29 +343,42 @@ async function deployRollback(
 	commit: string,
 ): Promise<Observation> {
 	const runResult = await runToolRoom(workspace, OWNER, [
-		action('bash', {
-			command: `printf 'sn35-marker\\n' > "$HOME/sensor-data/sn35/operator-marker.txt" && cd ~/sensor-server && git switch lifecycle && git reset --hard ${commit} && git rev-parse HEAD`,
-			wait: 10,
-		}),
-		dynamicAction('bash', () => ({
-			command: launchCommand(runtime.node),
-			name: 'sensor-server-rollback',
-			wait: 1,
-			timeout: 86400,
-		})),
+		action(
+			'bash',
+			{
+				command: `printf 'sn35-marker\\n' > "$HOME/sensor-data/sn35/operator-marker.txt" && cd ~/sensor-server && git switch lifecycle && git reset --hard ${commit} && git rev-parse HEAD`,
+				wait: 30,
+			},
+			expectSuccess('Roll back the sensor checkout and preserve acquisition data'),
+		),
+		dynamicAction(
+			'bash',
+			() => ({
+				command: launchCommand(runtime.node),
+				name: 'sensor-server-rollback',
+				wait: 1,
+				timeout: 86400,
+			}),
+			verifyReady,
+		),
 		connectAction(),
 		action('observe', { sensor: 'bench/room-temperature' }),
 		citationAction('The earlier measurement is retained.'),
-		action('bash', {
-			command:
-				'test "$(cat "$HOME/sensor-data/sn35/operator-marker.txt")" = sn35-marker && echo rollback-data-survived',
-			wait: 1,
-		}),
+		action(
+			'bash',
+			{
+				command:
+					'test "$(cat "$HOME/sensor-data/sn35/operator-marker.txt")" = sn35-marker && echo rollback-data-survived',
+				wait: 30,
+			},
+			expectSuccess('Verify acquisition data survived code rollback'),
+		),
 		cancelAction(),
 	]);
 	expect(latest(runResult.results, 'bash')).toContain('rollback-data-survived');
 	const observation = latest(runResult.results, 'observe');
 	const ref = manifestRef(observation);
+	await verifyStopped(runtime.node, readyPort(lastReady(runResult.results)));
 	return {
 		commit,
 		observation,
@@ -286,21 +390,29 @@ async function deployRollback(
 
 async function observeFrame(workspace: Workspace, runtime: RuntimeAssets, digest: string) {
 	const runResult = await runToolRoom(workspace, OWNER, [
-		dynamicAction('bash', () => ({
-			command: launchCommand(runtime.node),
-			name: 'sensor-frame',
-			wait: 1,
-			timeout: 86400,
-		})),
+		dynamicAction(
+			'bash',
+			() => ({
+				command: launchCommand(runtime.node),
+				name: 'sensor-frame',
+				wait: 1,
+				timeout: 86400,
+			}),
+			verifyReady,
+		),
 		connectAction(),
 		action('observe', { sensor: 'bench/bench-camera' }),
 		citationAction('The frame is retained.'),
-		dynamicAction('bash', (prior) => {
-			const observation = latest(prior, 'observe');
-			const path = /Frame at \S+: (\/\S+)/.exec(observation)?.[1];
-			if (path === undefined) throw new Error('The frame export path is missing.');
-			return { command: `printf 'changed export bytes\\n' > '${path}'`, wait: 1 };
-		}),
+		dynamicAction(
+			'bash',
+			(prior) => {
+				const observation = latest(prior, 'observe');
+				const path = /Frame at \S+: (\/\S+)/.exec(observation)?.[1];
+				if (path === undefined) throw new Error('The frame export path is missing.');
+				return { command: `printf 'changed export bytes\\n' > '${path}'`, wait: 30 };
+			},
+			expectSuccess('Edit the observation export'),
+		),
 		dynamicAction('restore', (prior) => ({
 			ref: manifestRef(latest(prior, 'observe')),
 			path: '~/restored/frame-manifest.json',
@@ -309,20 +421,29 @@ async function observeFrame(workspace: Workspace, runtime: RuntimeAssets, digest
 	]);
 	const observation = latest(runResult.results, 'observe');
 	const ref = manifestRef(observation);
+	await verifyStopped(runtime.node, readyPort(lastReady(runResult.results)));
 	const fileRefRun = await runToolRoom(workspace, OWNER, [
-		action('bash', {
-			command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote("import fs from 'node:fs'; const m=JSON.parse(fs.readFileSync('./restored/frame-manifest.json','utf8')); console.log('FILE_REF='+m.files[0].ref)")}`,
-			wait: 1,
-		}),
+		action(
+			'bash',
+			{
+				command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote("import fs from 'node:fs'; const m=JSON.parse(fs.readFileSync('./restored/frame-manifest.json','utf8')); console.log('FILE_REF='+m.files[0].ref)")}`,
+				wait: 30,
+			},
+			expectSuccess('Read the retained frame manifest'),
+		),
 	]);
 	const fileRef = /FILE_REF=(ambion:\/\/\S+)/.exec(latest(fileRefRun.results, 'bash'))?.[1];
 	if (fileRef === undefined) throw new Error('The retained frame has no snapshot ref.');
 	const restored = await runToolRoom(workspace, OWNER, [
 		action('restore', { ref: fileRef, path: '~/restored/frame.png' }),
-		action('bash', {
-			command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote(`import fs from 'node:fs'; import crypto from 'node:crypto'; if(crypto.createHash('sha256').update(fs.readFileSync('./restored/frame.png')).digest('hex')!=='${digest}') process.exit(1); console.log('snapshot-bytes-unchanged')`)}`,
-			wait: 1,
-		}),
+		action(
+			'bash',
+			{
+				command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote(`import fs from 'node:fs'; import crypto from 'node:crypto'; if(crypto.createHash('sha256').update(fs.readFileSync('./restored/frame.png')).digest('hex')!=='${digest}') process.exit(1); console.log('snapshot-bytes-unchanged')`)}`,
+				wait: 30,
+			},
+			expectSuccess('Verify restored frame snapshot bytes'),
+		),
 	]);
 	expect(latest(restored.results, 'bash')).toContain('snapshot-bytes-unchanged');
 	return {
@@ -344,29 +465,37 @@ async function restoreAcrossAccounts(
 	const rig = await openLifecycleWorkspace();
 	try {
 		const restored = await runToolRoom(rig.workspace, READER, [
-			action('bash', {
-				command:
-					'if test -r /home/analyst/sensor-server/server.mjs; then echo owner-home-readable; exit 1; else echo separate-home; fi',
-				wait: 1,
-			}),
+			action(
+				'bash',
+				{
+					command:
+						'if test -r /home/analyst/sensor-server/server.mjs; then echo owner-home-readable; exit 1; else echo separate-home; fi',
+					wait: 30,
+				},
+				expectSuccess('Verify the reviewer cannot read the analyst home'),
+			),
 			action('restore', { ref: refs.a, path: '~/restored/a.json' }),
 			action('restore', { ref: refs.b, path: '~/restored/b.json' }),
 			action('restore', { ref: refs.rollback, path: '~/restored/rollback.json' }),
 			action('restore', { ref: refs.frame, path: '~/restored/frame-manifest.json' }),
 			action('restore', { ref: refs.crash, path: '~/restored/crash.json' }),
 			action('restore', { ref: refs.file, path: '~/restored/frame.png' }),
-			action('bash', {
-				command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote(
-					[
-						"import fs from 'node:fs'; import crypto from 'node:crypto';",
-						"const a=JSON.parse(fs.readFileSync('./restored/a.json','utf8')),b=JSON.parse(fs.readFileSync('./restored/b.json','utf8')),r=JSON.parse(fs.readFileSync('./restored/rollback.json','utf8')),d=JSON.parse(fs.readFileSync('./restored/crash.json','utf8'));",
-						`if(a.source.commit!=='${aCommit}'||b.source.commit!=='${bCommit}'||r.source.commit!=='${aCommit}'||a.source.dirty!==false||b.source.dirty!==false||r.source.dirty!==false||d.source.commit!=='${aCommit}'||d.source.branch!=='sn35-dirty'||d.source.dirty!==true) throw new Error('restored launch provenance mismatch');`,
-						"if(a.observations[0].at!=='2025-01-02T03:04:05.000Z'||a.observations[0].parts[0].values[1]!==22.25||b.observations[0].parts[0].values[1]!==24||r.observations[0].parts[0].values[1]!==22.25||d.observations[0].parts[0].values[1]!==22.5) throw new Error('restored observations mismatch');",
-						`if(crypto.createHash('sha256').update(fs.readFileSync('./restored/frame.png')).digest('hex')!=='${digest}') throw new Error('restored frame digest mismatch'); console.log('restored-evidence-verified');`,
-					].join('\n'),
-				)}`,
-				wait: 1,
-			}),
+			action(
+				'bash',
+				{
+					command: `${shellQuote(runtime.node)} --input-type=module -e ${shellQuote(
+						[
+							"import fs from 'node:fs'; import crypto from 'node:crypto';",
+							"const a=JSON.parse(fs.readFileSync('./restored/a.json','utf8')),b=JSON.parse(fs.readFileSync('./restored/b.json','utf8')),r=JSON.parse(fs.readFileSync('./restored/rollback.json','utf8')),d=JSON.parse(fs.readFileSync('./restored/crash.json','utf8'));",
+							`if(a.source.commit!=='${aCommit}'||b.source.commit!=='${bCommit}'||r.source.commit!=='${aCommit}'||a.source.dirty!==false||b.source.dirty!==false||r.source.dirty!==false||d.source.commit!=='${aCommit}'||d.source.branch!=='sn35-dirty'||d.source.dirty!==true) throw new Error('restored launch provenance mismatch');`,
+							"if(a.observations[0].at!=='2025-01-02T03:04:05.000Z'||a.observations[0].parts[0].values[1]!==22.25||b.observations[0].parts[0].values[1]!==24||r.observations[0].parts[0].values[1]!==22.25||d.observations[0].parts[0].values[1]!==22.5) throw new Error('restored observations mismatch');",
+							`if(crypto.createHash('sha256').update(fs.readFileSync('./restored/frame.png')).digest('hex')!=='${digest}') throw new Error('restored frame digest mismatch'); console.log('restored-evidence-verified');`,
+						].join('\n'),
+					)}`,
+					wait: 30,
+				},
+				expectSuccess('Verify restored manifests, measurements, and frame bytes'),
+			),
 		]);
 		expect(restored.results.find((result) => result.tool === 'bash')?.text).toContain(
 			'separate-home',
@@ -402,10 +531,19 @@ async function disposeWorkspace(rig: LifecycleWorkspace): Promise<void> {
 }
 
 function connectAction() {
-	return dynamicAction('connect', (results) => {
-		const ready = lastReady(results);
-		return { name: 'bench', process: processHandle(ready), port: readyPort(ready) };
-	});
+	return dynamicAction(
+		'connect',
+		(results) => {
+			const ready = lastReady(results);
+			return { name: 'bench', process: processHandle(ready), port: readyPort(ready) };
+		},
+		(text, prior) => {
+			const handle = processHandle(lastReady(prior));
+			if (!text.includes(`Connected bench on `) || !text.includes(`to process ${handle}.`)) {
+				throw new Error(`The running sensor process was not connected: ${text}`);
+			}
+		},
+	);
 }
 
 function citationAction(text: string) {
@@ -416,7 +554,19 @@ function citationAction(text: string) {
 }
 
 function cancelAction() {
-	return dynamicAction('cancel', (results) => ({ handle: processHandle(lastReady(results)) }));
+	return dynamicAction(
+		'cancel',
+		(results) => ({ handle: processHandle(lastReady(results)) }),
+		(text, prior) => expectCancelled(processHandle(lastReady(prior)))(text, prior),
+	);
+}
+
+function verifyReady(text: string): void {
+	const handle = processHandle(text);
+	readyPort(text);
+	if (!new RegExp(`^\\[Process ${handle}(?: \\([^)]+\\))? is running\\.`, 'm').test(text)) {
+		throw new Error(`The sensor server did not remain running after readiness: ${text}`);
+	}
 }
 
 function citationFound(

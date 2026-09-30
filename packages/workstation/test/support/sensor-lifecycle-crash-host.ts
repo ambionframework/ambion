@@ -23,9 +23,11 @@ try {
 		}),
 	]);
 	const text = latest(started.results, 'bash');
-	process.stdout.write(
-		`${JSON.stringify({ handle: processHandle(text), port: readyPort(text) })}\n`,
-	);
+	const identity = { handle: processHandle(text), port: readyPort(text) };
+	const delay = Number(process.env.AMBION_SENSOR_LIFECYCLE_RESPONSE_DELAY_MS ?? 0);
+	process.stderr.write(`SN35_READY:${JSON.stringify(identity)}\n`);
+	await new Promise((resolve) => setTimeout(resolve, Math.max(delay, 25)));
+	process.stdout.write(`${JSON.stringify(identity)}\n`);
 	await new Promise<void>(() => {
 		setInterval(() => undefined, 60_000);
 	});
