@@ -287,6 +287,7 @@ async function specOf(
  */
 async function shellOf(env: WorkspaceEnv, dir: string, command: string): Promise<number> {
 	const script = [
+		'trap : TERM',
 		`echo "$$" > '${dir}/pid'`,
 		'(',
 		command,
@@ -452,6 +453,31 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 					value: expect.stringMatching(/^cancelled /),
 				});
 				expect(await allEnded(env, [decoy])).toBe(true);
+			});
+		} finally {
+			await workspace.dispose();
+		}
+	});
+
+	it('stops an owned process with SIGTERM: a trap ends it inside the grace, and SIGKILL ends one that ignores TERM', async () => {
+		const { workspace, backend } = await nextRun();
+		try {
+			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			const clean = "trap 'echo cleanup; exit 0' TERM\nsleep 300 &\nwait";
+			const started = await call(workspace, 'bash', { command: clean, wait: 0 });
+			const stopped = await call(workspace, 'cancel', { handle: started.process?.handle });
+			expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
+			expect(stopped.text).toMatch(/^cleanup\n\n\[Process /);
+			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
+			const ignoring = await call(workspace, 'bash', { command: stubborn, wait: 1 });
+			const began = Date.now();
+			const killed = await call(workspace, 'cancel', { handle: ignoring.process?.handle });
+			expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);
+			expect(killed.process?.state).toBe('cancelled');
+			await withEnv(backend, OWNER, async (env) => {
+				const child = await env.readTextFile('child', ctx);
+				if (!child.ok) throw child.error;
+				expect(await allEnded(env, [Number(child.value.trim())])).toBe(true);
 			});
 		} finally {
 			await workspace.dispose();

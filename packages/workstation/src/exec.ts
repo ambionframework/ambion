@@ -7,10 +7,12 @@
  * group and waits for it, so the channel reports the command's exit status.
  * The script's first stderr line gives the group ID. A login shell can write
  * lines of its own first, such as a `.bashrc` that Debian's bash reads for
- * `sshd`, so `exec` looks for that line among the others. An abort or a deadline
- * opens a second channel and kills the whole group, as Pi's
- * `NodeExecutionEnv` does on a local machine. The SSH signal request cannot:
- * it reaches the session's own child alone.
+ * `sshd`, so `exec` looks for that line among the others. An abort or a
+ * deadline stops the whole group through a second channel: `SIGTERM`, and
+ * `SIGKILL` after the grace that the options name when the command has not
+ * exited by then. With no grace, the stop sends `SIGKILL` at once, as Pi's
+ * `NodeExecutionEnv` does on a local machine. The SSH signal request
+ * cannot do this: it reaches the session's own child alone.
  *
  * The command's output arrives on the channel's stdout, and `Capture` holds
  * it within a bound. `exec` hands one view to `onUpdate` after the command
@@ -26,6 +28,7 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	type Deadline,
 	deliverView,
+	type WorkspaceExecOptions,
 	withDeadline,
 } from '@ambionframework/workspace';
 import {
@@ -34,7 +37,6 @@ import {
 	err,
 	ok,
 	type Result,
-	type ShellExecOptions,
 	type ShellExecResult,
 } from '@earendil-works/pi-agent-core';
 import type { ClientChannel } from 'ssh2';
@@ -44,7 +46,7 @@ import { commandScript, invalidNames, PGID_PREFIX } from './script.ts';
 /** The longest timeout a timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
-/** How long an aborted command's channel may stay open after the kill. */
+/** How long an aborted command's channel may stay open after the `SIGKILL`. */
 const CLOSE_GRACE_MS = 2_000;
 
 /**
@@ -158,11 +160,14 @@ interface Ending {
 	readonly signal: string | undefined;
 }
 
-/** The exit status of a finished channel, 128 + the signal number for a signal. */
+/**
+ * The exit status of a finished channel, 128 + the signal number for a
+ * signal. `ssh2` names the signal with its `SIG` prefix, such as `SIGKILL`.
+ */
 function exitCodeOf(code: number | null | undefined, signal: string | undefined): number {
 	if (typeof code === 'number') return code;
 	if (signal === undefined) return 1;
-	const number = (constants.signals as Record<string, number | undefined>)[`SIG${signal}`];
+	const number = (constants.signals as Record<string, number | undefined>)[signal];
 	return 128 + (number ?? 0);
 }
 
@@ -220,12 +225,17 @@ function finished(
 }
 
 /**
- * Kill the command's process group through a second channel. The kill runs
- * in bash: the login shell can be `dash`, whose `kill` refuses `-KILL --`.
+ * Send `signal` to the command's process group through a second channel.
+ * The kill runs in bash: the login shell can be `dash`, whose `kill`
+ * refuses `-KILL --`.
  */
-async function killGroup(host: CommandHost, pgid: number): Promise<void> {
+async function signalGroup(
+	host: CommandHost,
+	pgid: number,
+	signal: 'TERM' | 'KILL',
+): Promise<void> {
 	try {
-		const killer = await host.open(`exec bash -c 'kill -KILL -- -${pgid}' 2>/dev/null`);
+		const killer = await host.open(`exec bash -c 'kill -${signal} -- -${pgid}' 2>/dev/null`);
 		await new Promise<void>((resolve) => {
 			killer.on('close', () => resolve());
 			killer.resume();
@@ -236,23 +246,54 @@ async function killGroup(host: CommandHost, pgid: number): Promise<void> {
 	}
 }
 
-/** Kill the group once its ID is known, and close the channel after a grace period. */
+/**
+ * Stop the group once its ID is known: `SIGTERM`, then `SIGKILL` after
+ * `grace` seconds when the command has not exited. A grace of 0 sends
+ * `SIGKILL` at once. The channel closes `CLOSE_GRACE_MS` after the time of
+ * the `SIGKILL`. The host holds the timer, so no channel stays open for the
+ * grace.
+ */
 function stopWhenAborted(
 	host: CommandHost,
 	channel: ClientChannel,
 	stderr: ScriptStderr,
 	deadline: Deadline,
+	grace: number,
 ): void {
-	const stop = () => {
+	let exited = false;
+	channel.once('exit', () => {
+		exited = true;
+	});
+	const send = (pgid: number) => {
+		if (grace === 0) return void signalGroup(host, pgid, 'KILL');
+		void signalGroup(host, pgid, 'TERM');
 		const kill = () => {
-			if (stderr.pgid !== undefined) void killGroup(host, stderr.pgid);
+			if (!exited) void signalGroup(host, pgid, 'KILL');
 		};
-		if (stderr.pgid === undefined) stderr.onPgid = kill;
-		else kill();
-		setTimeout(() => channel.close(), CLOSE_GRACE_MS).unref();
+		setTimeout(kill, grace * 1000).unref();
+	};
+	const stop = () => {
+		const signal = () => {
+			if (stderr.pgid !== undefined) send(stderr.pgid);
+		};
+		if (stderr.pgid === undefined) stderr.onPgid = signal;
+		else signal();
+		setTimeout(() => channel.close(), grace * 1000 + CLOSE_GRACE_MS).unref();
 	};
 	if (deadline.signal.aborted) stop();
 	else deadline.signal.addEventListener('abort', stop, { once: true });
+}
+
+/** A grace that no timer can hold. */
+function invalidGrace(grace: number | undefined): ExecutionError | undefined {
+	if (grace === undefined) return undefined;
+	if (!Number.isFinite(grace) || grace < 0 || grace > MAX_TIMEOUT_SECONDS) {
+		return new ExecutionError(
+			'spawn_error',
+			`Invalid grace: must be 0 to ${MAX_TIMEOUT_SECONDS} seconds`,
+		);
+	}
+	return undefined;
 }
 
 /** A timeout that no timer can hold, refused the same as in `NodeExecutionEnv`. */
@@ -271,7 +312,7 @@ function invalidTimeout(timeout: number | undefined): ExecutionError | undefined
 }
 
 /** Refuse a command before any channel opens: a bad variable name or a missing directory. */
-async function refusal(host: CommandHost, cwd: string, options: ShellExecOptions | undefined) {
+async function refusal(host: CommandHost, cwd: string, options: WorkspaceExecOptions | undefined) {
 	const invalid = invalidNames(options?.env);
 	if (invalid.length > 0) {
 		return new ExecutionError(
@@ -293,14 +334,14 @@ async function run(
 	host: CommandHost,
 	command: string,
 	cwd: string,
-	options: ShellExecOptions | undefined,
+	options: WorkspaceExecOptions | undefined,
 	deadline: Deadline,
 ) {
 	const channel = await host.open('exec setsid --wait bash -s');
 	const output = new Capture(options?.capture?.limits);
 	const stderr = new ScriptStderr();
 	const done = finished(channel, output, stderr, deadline.signal);
-	stopWhenAborted(host, channel, stderr, deadline);
+	stopWhenAborted(host, channel, stderr, deadline, options?.grace ?? 0);
 	channel.end(commandScript(command, cwd, options?.env));
 	const ending = await done;
 	output.pushText(stderr.lines());
@@ -311,7 +352,7 @@ async function run(
 /** The result of a command that ran to its channel's close, with its one view handed to `onUpdate`. */
 function settled(
 	ran: Awaited<ReturnType<typeof run>>,
-	options: ShellExecOptions | undefined,
+	options: WorkspaceExecOptions | undefined,
 	context: Context,
 ): Result<ShellExecResult, ExecutionError> {
 	if (!ran.ending.exited) {
@@ -326,10 +367,10 @@ export async function runCommand(
 	host: CommandHost,
 	command: string,
 	cwd: string,
-	options: ShellExecOptions | undefined,
+	options: WorkspaceExecOptions | undefined,
 	context: Context,
 ): Promise<Result<ShellExecResult, ExecutionError>> {
-	const invalid = invalidTimeout(options?.timeout);
+	const invalid = invalidTimeout(options?.timeout) ?? invalidGrace(options?.grace);
 	if (invalid) return err(invalid);
 	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;
 	return withDeadline(context.abortSignal, timeout, async (deadline) => {

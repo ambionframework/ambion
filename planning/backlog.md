@@ -169,15 +169,18 @@ the five tools.
    The workstation gives the PTY. just-bash has none, so it refuses the
    kind. Today stdin is `/dev/null`, so a command that prompts waits until
    its timeout.
-2. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
-   group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
-   a server or a database gets no time to flush.
+2. **A graceful cancel.** Implemented: `cancel`, the timeout, a cancel by
+   the host, and `dispose()` send `SIGTERM` to the group, and `SIGKILL`
+   after a grace of 10 seconds. The grace goes to the backend in the
+   options of `exec`. [Processes](../docs/processes.md#the-stop) states
+   the contract. A grace for each call waits for its first caller.
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
 
 **Condition:** an agent that must drive a prompt or a REPL. The
-interactive kind comes first.
+interactive kind comes first. The head and the tail in a result stay
+open.
 
 **D7. One stored source for the roster.** A composition seeds the roster
 from its `agents`, and each seating and unseating changes it. A

@@ -26,7 +26,7 @@
  */
 
 import { posix } from 'node:path';
-import type { WorkspaceEnv } from '@ambionframework/workspace';
+import type { WorkspaceEnv, WorkspaceExecOptions } from '@ambionframework/workspace';
 import { HomeEnv, shellQuote, tempDirPath, tempFilePath } from '@ambionframework/workspace';
 import {
 	type Context,
@@ -36,7 +36,6 @@ import {
 	type FileInfo,
 	ok,
 	type Result,
-	type ShellExecOptions,
 	type ShellExecResult,
 } from '@earendil-works/pi-agent-core';
 import type { ClientChannel, Stats } from 'ssh2';
@@ -360,7 +359,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 
 	exec(
 		command: string,
-		options: ShellExecOptions | undefined,
+		options: WorkspaceExecOptions | undefined,
 		context: Context,
 	): Promise<Result<ShellExecResult, ExecutionError>> {
 		const cwd = options?.cwd === undefined ? this.cwd : this.resolve(options.cwd);
