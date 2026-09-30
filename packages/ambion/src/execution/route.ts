@@ -41,7 +41,7 @@ export function localExecution(
  * executor family reads its own options here. The default of the kind
  * builds with no options.
  */
-export type ExecutionBuild<Options> = (
+type ExecutionBuild<Options> = (
 	host: ExecutionHost,
 	options: Options | undefined,
 ) => (request: ConnectorRequest) => Executor;

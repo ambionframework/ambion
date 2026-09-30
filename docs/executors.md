@@ -48,14 +48,12 @@ for an execution that is not a family, such as a stub for a kind that is
 not available.
 
 ```ts
-export type ExecutionBuild<Options> = (
-  host: ExecutionHost,
-  options: Options | undefined,
-) => (request: ConnectorRequest) => Executor;
-
 export function defineExecution<Options = undefined>(
   kind: string,
-  build: ExecutionBuild<Options>,
+  build: (
+    host: ExecutionHost,
+    options: Options | undefined,
+  ) => (request: ConnectorRequest) => Executor,
 ): (options?: Options) => Execution<AgentRunner>;
 
 export function localExecution(

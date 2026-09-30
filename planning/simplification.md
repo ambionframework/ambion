@@ -5,155 +5,247 @@ target shape is a set of parts where the removal of any one part breaks
 the whole. A concept stays when a test or a reader needs it. A concept
 goes when another concept already carries its meaning.
 
-**The review read every source file of the eleven packages.** It read the
-core room layer, the three executors, the workspace, the two backends,
-the journal, the Cloudflare adapter, the simulator, and the assistant. It
-also takes four findings of the owner. Each finding cites the files where
-the duplicate lives. [The backlog](backlog.md) and
+**The review read every source file of the eleven packages.** It covers
+the core room layer, the three executors, the workspace, the two
+backends, the journal, the Cloudflare adapter, the simulator, the
+assistant, and the workbench example. An independent audit then checked
+each row against commit `bec6b6f`. [The backlog](backlog.md) and
 [the plan](next.md) keep their roles. This page feeds items into them.
 
-**A rank is the number of concepts removed times the confidence.** A
-concept is a type, an exported name, an option, a file of rules, or a
-mechanism that a reader must learn. Lines saved do not count.
+**Four findings came from the owner.** They are the executor
+registration (done), the room acquisition (done), the Pi types in the
+workspace port (W1), and the repository registration (B1).
+
+## How a row is ranked
+
+**A concept is a name that a reader must learn.** It is a type, an
+exported name, an option, a mechanism, or a term. Lines saved do not
+count.
+
+**The rank is the concepts removed times the confidence.** High counts
+3, medium counts 2, and low counts 1. A row with no concept to remove,
+such as a defect, has no rank. The phases below take the rank, the risk,
+and the order of the dependencies together.
 
 ## Done in this change
 
-**Four reductions landed with this page.** `pnpm check` passes on them.
-The changelog names each change to an export.
+**Four reductions landed with this page.** `pnpm check` passes on them,
+and the changelog names each change to an export.
 
-| Change                                 | Concepts removed                                                                                         | Files                                                          |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| One shape of a say that waits          | `ScheduledSay`, `pendingSay()`. The fold, a view, and a read hold `PendingSay`                           | `room/scheduled.ts`, `scheduling.ts`                           |
-| One read of the pending says and waits | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`. Each restated `room.read()`       | `room-host/room.ts`, `cloudflare/src/room-object.ts`           |
-| One acquisition of a room name         | The second copy of the start transaction: build, register, start, and release on failure                 | `room.ts` (`acquire`)                                          |
-| One call defines an executor family    | `localExecution` plus a `*Build` closure in each adapter, and the `Claude/CodexExecutionOptions` aliases | `execution/route.ts`, `pi`, `claude`, and `codex` `compose.ts` |
+| Change                                 | Concepts removed                                                        | Files                                 |
+| -------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------- |
+| One shape of a say that waits          | `ScheduledSay`, `pendingSay()`                                          | `room/scheduled.ts`, `scheduling.ts`  |
+| One read of the pending says and waits | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`   | `room-host/room.ts`, `room-object.ts` |
+| One acquisition of a room name         | The second copy of build, register, start, and release on failure       | `room.ts` (`acquire`)                 |
+| One call defines an executor family    | The `*Build` closures, `localExecution` in adapters, two option aliases | `execution/route.ts`, `compose.ts` ×3 |
+
+**The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
+ISO, and the reconcile parses it. A view and a read clone it, so no
+caller shares the state of the fold.
 
 **An adapter now learns one kernel concept to register.**
 `defineExecution(kind, build)` returns the options-to-execution function
-and registers the default. `localExecution` stays for an execution that is
-not a family, such as the stub in `examples/workbench/src/unavailable.ts`.
+and registers the default. `localExecution` stays for an execution that
+is not a family, such as `examples/workbench/src/unavailable.ts`.
 
 ## The kernel: `packages/ambion`
 
-| ID  | Finding                                                                                                                                                                                                                                                                     | Removes | Confidence |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
-| K1  | **Readers of older formats remain.** `unspaced` reads a key with no prefix (`journal/journal.ts`, and the key rule of `docs/durability.md`). `validate.ts` refuses `removed` fields. The journal accepts entries "from before runs were fenced". CLAUDE.md forbids each one | 3       | High       |
-| K2  | **One runtime has five facets.** `Runtime`, `Hosting`, `ExecutionHost`, `RoomRuntime`, and `RuntimeState` (`host/runtime.ts:53-265`) read the same state. Cloudflare builds a throwaway runtime to get the default limits (`cloudflare/src/configure.ts`)                   | 3       | High       |
-| K3  | **The commit result has two forms.** `CommitOutcome` and `classifyCommit` (`protocol.ts:190-204`) have one caller, `room-tools.ts`. Inline them                                                                                                                             | 2       | High       |
-| K4  | **The hosting entry exports about twenty names that no consumer imports.** Among them: `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, `RECALL`, `DEFAULT_TRACE`, `refusal`, `summaryToolDescription`, `PERMANENT_STATUS`, `renderLine`, `Hosting`, `Stale`                 | ~20     | High       |
-| K5  | **Usage addition exists three times.** `addUsage` (`types.ts`) is not exported, so `pi/src/run-agent.ts` (`sum`) and `simulator/src/simulate.ts` (`total`) write their own                                                                                                  | 2       | High       |
-| K6  | **A body shape is written twice.** The TypeScript types (`journal/events.ts`, `types.ts`) and the TypeBox schemas (`journal/validate.ts`) state each body. The ended lease has a third copy in `LeaseRequest` (`protocol.ts`). Derive the types with `Static<>`             | 3       | Medium     |
-| K7  | **Three rules state "plain data".** `Cloneable` in the journal allows `Date` and `bigint`. The storage contract and SQLite need JSON. `assertWire` in `protocol.ts` states the JSON rule. Keep one `Json` type and one check                                                | 2       | Medium     |
-| K8  | **Three renderers write one line of the record.** `record.ts`, `execution/render.ts`, and `simulator/src/render.ts` (`messageLine`)                                                                                                                                         | 2       | Medium     |
-| K9  | **The `assistant` room option is a second way to write `agents`, `seats`, and `summary`.** `room.ts` expands it. The 70-line package holds two prompts and a `defineAgent(pi(...))`. Move `defineAssistant` beside Pi, have it return the three fields, and drop the option | 2       | Medium     |
-| K10 | **Five close shapes serve one fact.** `Close`, `CloseRef`, `CloseFact`, `SummaryClose`, and `OwedClose`. `CloseRef` and `CloseFact` stay, because LemmaScript lowers only the types in its own file. `SummaryClose` and the `OwedClose` alias go                            | 2       | High       |
-| K11 | **Three state shapes hold the fold.** `RoomState`, `RoomProjection`, and `BaseFacts`. `applyEvent` in `fold.ts` serves the cancellation step and the test oracle only                                                                                                       | 1       | Medium     |
-| K12 | **The wakes and the owed summaries are two parallel indexes.** `wakes.ts` and `owed.ts` each judge, re-judge, and index leases (`seatLeases`, `closedLeases`). `PendingActivation` already unifies their output. The rules differ, so a merge shares only the index         | 3       | Low        |
-| K13 | **The journal keeps a `seq` beside a dense storage `position`.** Gaps in `seq` are already allowed. `seq := position` drops a stored field and two verified rules, and the proofs need rework                                                                               | 2       | Medium     |
-| K14 | **The journal package generics have one consumer.** `Vocabulary`, `Bodies`, `Entries`, and the `Append*` types serve `roomJournal` alone. Cloudflare and the workbench use only the storage side                                                                            | 4       | Low        |
-| K15 | **The roster has two stored sources.** Backlog D7 holds the design: a seating for each seat at a start, and no `agents` in the composition                                                                                                                                  | 1       | Medium     |
+| ID  | Finding                                                            | Evidence                                                                                                 | Removes | Conf.  | Rank |
+| --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
+| K1  | Readers of older formats remain, which CLAUDE.md forbids           | Bare keys (`durability.md:272`), `removed` fields (`validate.ts:29`), run-less entries (`journal.ts:93`) | 3       | High   | 9    |
+| K2  | One runtime has five facets                                        | `Runtime`, `ExecutionHost`, `Hosting`, `RuntimeState`, `RoomRuntime` (`runtime.ts:53-249`)               | 3       | High   | 9    |
+| K3  | The commit result has two forms                                    | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
+| K4  | The hosting entry exports 16 names that no package or test imports | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
+| K5  | Usage addition exists three times                                  | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
+| K6  | A body shape is written as a type and again as a schema            | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
+| K7  | Three rules state "plain data", and they disagree                  | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
+| K8  | Three renderers write one line of the record                       | `record.ts:29`, `execution/render.ts:54`, `simulator/src/render.ts:29`                                   | 2       | Medium | 4    |
+| K9  | The `assistant` option restates `agents`, `seats`, and `summary`   | `normalizeAssistant` (`room.ts:231`); the package is 70 lines over `pi()`                                | 2       | Medium | 4    |
+| K10 | Five close shapes serve one fact                                   | `SummaryClose` (`exchange.ts:85`) and the `OwedClose` alias (`owed.ts:43`) go                            | 2       | High   | 6    |
+| K11 | Three state shapes hold the fold                                   | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                 | 1       | Medium | 2    |
+| K12 | The wakes and the owed summaries are two parallel indexes          | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                    | 3       | Low    | 3    |
+| K13 | The journal keeps a `seq` beside a dense storage position          | `nextSeq`, `advanceSeq`, `scanned` (`rules.verified.ts:49-71`)                                           | 2       | Medium | 4    |
+| K14 | The journal package generics have one consumer                     | Outside the core, only the storage names are imported                                                    | 4       | Low    | 4    |
+| K15 | The roster has two stored sources                                  | Backlog D7                                                                                               | 1       | Medium | 2    |
+| K16 | The room host has five views over one class                        | `RoomBase`, `ControlHost`, `DispatchHost`, `PeopleHost`, `WaitsHost`; members repeat                     | 4       | Medium | 8    |
+| K17 | Six names describe one exchange                                    | `ExchangeRef`, `ClosedExchange`, `ExchangeView`, `ClosedExchangeView`, `ExchangeRead`, `ExchangeHandle`  | 2       | Medium | 4    |
+| K18 | Three shapes describe one trace sink                               | `TraceSink`, `StepSink`, `TraceOpener` (`trace.ts:33-59`)                                                | 1       | Medium | 2    |
 
-**The deepest kernel option is a close as a message.** A close that routes
-to the summary writer as a message makes the summary an ordinary respond
+**K1 drops a promise.** `docs/durability.md:272` says that a key with no
+prefix reads as written. A read-only journal also opens with no run
+(`room.ts:156`), so the run-less path needs a check before it goes.
+
+**The deepest kernel option is a close as a message.** A close that
+routes to the summary writer makes the summary an ordinary respond
 activation. The `closed` activation source, `owed.ts`, `closedLeases`,
-`closeFor`, and the second purpose then go. The cost is large: the verified
-rules, the golden journals, and the authority of a summary change. Keep it
-as a design note until a second reason for it appears.
+`closeFor`, and the second purpose then go. The verified rules, the
+golden journals, and the authority of a summary change with it. It stays
+a design note until a second reason for it appears.
+
+## One name rule across the repository
+
+**X1 is one rule written fourteen times.** It is in three packages and
+the workbench. Rank 12: 4
+concepts, high confidence.
+
+| Where           | Copies                                                                           |
+| --------------- | -------------------------------------------------------------------------------- |
+| The core        | `NAME_PATTERN` (`define.ts:520`), `SEAT` (`activation-id.ts:17`)                 |
+| The workspace   | Nine literals in seven sensor files, `NAMESPACE` (`git-names.ts:24`)             |
+| The workstation | The name group of the serve pattern (`git-prepare.ts:40`)                        |
+| The workbench   | `ROOM_NAME` (`names.ts:1`), with a length bound of 48 that the core does not set |
 
 ## The executors: `pi`, `claude`, `codex`
 
-| ID  | Finding                                                                                                                                                                                                                                                                                                         | Removes | Confidence |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
-| E1  | **The steer bookkeeping is in each executor.** `Held` and `flush(through)` are the same in `pi/src/executor.ts` and `claude/src/executor.ts`. `ActivationState.steer` drops a steer when the executor has no `steer`, so a Codex seat records no `steer` step. `docs/executors.md` says every family stamps one | 3       | High       |
-| E2  | **A thrown error becomes a transient `PassResult` in five places.** Pi, Claude, Codex, `activation.ts`, and `runner.ts`. Pi has `UnknownModel` and Codex has `PermanentError` for one idea. Export one `PermanentError` and classify in `ActivationState.pass`                                                  | 3       | High       |
-| E3  | **The `Executor` level repeats the per-seat closure.** `Executor.harness` always equals the executor kind. `Executor` can be a function from an activation to a session                                                                                                                                         | 2       | High       |
-| E4  | **Pi has three option types for its services.** `PiExecutionOptions`, `ExecutionServicesOptions`, and `PiExecutorOptions`. `ExecutionServices.clock`, `.call`, and `.trace` are never read                                                                                                                      | 4       | High       |
-| E5  | **The kind narrowing and the policy copy are written three times.** `POLICY` and `policyOf` in Claude and Codex, `present()` twice, and Pi `modelOf` beside `executorOfKind`                                                                                                                                    | 3       | Medium     |
-| E6  | **A pass carries `tools` and `agentTools` apart.** Claude and Codex join them at once. Pi rebuilds its tools from `AmbionTool`. A `RoomTool` with the full `ToolResult` gives one tool shape                                                                                                                    | 3       | Medium     |
-| E7  | **Two scripted test languages share their verbs.** `@ambionframework/ambion/testing` and `@ambionframework/pi/testing` both export `callTool`, `speak`, `later`, `quiet`, `byAgent`, and `isClosing`. The Pi stream can take the core `Turn`                                                                    | 5       | Medium     |
-| E8  | **Small constants repeat.** `ROOM_SERVER` twice, the tool content union three times, and the "join the text of a tool result" helper three times                                                                                                                                                                | 3       | Medium     |
+| ID  | Finding                                                        | Evidence                                                                                    | Removes | Conf.  | Rank |
+| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
+| E1  | The steer bookkeeping is in each executor                      | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
+| E2  | A thrown error becomes a transient pass in five places         | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
+| E3  | `Executor.harness` always equals the executor kind             | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
+| E4  | Pi has three option types for its services                     | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
+| E5  | The kind narrowing and the policy copy are written three times | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
+| E6  | A pass carries `tools` and `agentTools` apart                  | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
+| E7  | Two scripted test languages export the same six verbs          | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
+| E8  | Small helpers repeat                                           | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
+
+**E1 hides a defect.** `ActivationState.steer` (`activation.ts:116`)
+drops a steer when the executor has no `steer`. A Codex seat then stamps
+no `steer` step. `docs/executors.md:275` says that every family stamps
+one, and `docs/executors.md:143` says that a steer is optional.
+
+**The core name `Turn` breaks the glossary.** `testing/scripted.ts:22`
+exports `Turn` for a scripted reply. CLAUDE.md gives `turn` to Pi. E7
+takes the core type into the Pi test language, so the rename comes first.
 
 **The `pi()` and `piExecution()` split stays.** `pi()` is a definition
 value that the room captures. `piExecution()` carries host services. One
-definition runs on different executions in `examples/workbench/src/rooms.ts`
-and `cloudflare/src/configure.ts`.
+definition runs on different executions in
+`examples/workbench/src/rooms.ts` and `cloudflare/src/configure.ts`.
 
 ## The workspace: `packages/workspace`
 
-| ID  | Finding                                                                                                                                                                                                                                                                                                                                        | Removes    | Confidence  |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
-| W1  | **The workspace port is Pi's type.** 36 source files of `workspace`, `just-bash`, and `workstation` import `@earendil-works/pi-agent-core`: `ExecutionEnv`, `Context`, `BACKGROUND_CONTEXT`, `withAbortSignal`, `FileError`, and the shell result types. `index.ts` re-exports `BACKGROUND_CONTEXT`. A Claude or Codex host meets a Pi concept | 1 large    | High        |
-| W2  | **Each capability repeats one pattern.** SQL, git, and sensors each add an optional backend, an owner, tools with a hand-kept list of names, guidance, host methods, and a close. One `Capability { tools; guidance?; remind?; close?; host? }` covers them and processes, snapshots, and skills                                               | 6          | High        |
-| W3  | **Three wrappers audit a tool.** `bindTool`, `recordedOnShell` (`tools.ts`), and `withSkills` (`workspace.ts`). Thirteen tools write their name twice. One `audited(tool)` reads `tool.name`                                                                                                                                                   | 2          | High        |
-| W4  | **Seven conformance suites have seven runners.** Each has its own `check`, its own case runner, and its own harness type name. One `Harness<S>`, one `suite`, and one `check` beside the journal's `ConformanceCase`                                                                                                                           | 6          | High        |
-| W5  | **The sensor name rule is written nine times.** `^[a-z][a-z0-9-]*` is in `resource.ts`, `sensors.ts`, `connect-tool.ts`, `observe-tool.ts`, `sensor-client.ts`, `sensor-connections.ts`, and `sensor-retention.ts`. `sensors.ts` encodes the git name rules again as schema patterns                                                           | 3          | Medium-high |
-| W6  | **The sensor connections keep a second liveness table.** `SensorConnections` tracks ended processes that the `ProcessTable` already knows. `ProcessTable` has agent and host variants of `list` and `cancel`, and `WorkspaceProcesses` wraps them a third time                                                                                 | 3          | Medium      |
-| W7  | **Two owners close the sensor connections.** `withProcesses` and `dispose` in `workspace.ts` both call `connections.close()`                                                                                                                                                                                                                   | 0 (defect) | High        |
-| W8  | **The backends label themselves under four names.** `database`, `server`, `store`, and `hostname`. `BashBackend.connect` and `SqlBackend.connect` take their arguments in different orders                                                                                                                                                     | 2          | Medium      |
-| W9  | **Refs, logs, and utilities repeat.** The own-ref check in `snapshots.ts` and `git-refs.ts`. `audit.ts` rebuilds `openLog` and names `rotateBytes` as `maxBytes`. `MAX_TIMEOUT_SECONDS` five times, `digestOf` three times, byte formatting three times                                                                                        | 5          | High        |
-| W10 | **`ProcessKind` has one value.** It is carried in `kind`, in the handle prefix, and in `docs/processes.md`                                                                                                                                                                                                                                     | 1          | Medium      |
+| ID  | Finding                                                         | Evidence                                                                     | Removes | Conf.  | Rank |
+| --- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------- | ------ | ---- |
+| W1  | The workspace port is Pi's type                                 | 36 source files import `pi-agent-core`; `index.ts:34` re-exports it          | 1       | High   | 3    |
+| W2  | Each capability repeats one pattern                             | `sqlPart`, `gitPart`, `sensorTools`; hand-kept tool name lists               | 6       | High   | 18   |
+| W3  | Three wrappers audit a tool                                     | `bindTool`, `recordedOnShell`, `withSkills`; 13 tools write their name twice | 2       | High   | 6    |
+| W4  | Seven conformance suites each have a `check` and a harness type | Five `check` copies; the suites already share `ConformanceCase`              | 3       | High   | 9    |
+| W5  | The sensor path validates at every layer                        | The client and the retention both check the schema and the digest            | 2       | Medium | 4    |
+| W6  | The sensor connections keep a second liveness table             | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel`      | 3       | Medium | 6    |
+| W7  | Two owners close the sensor connections                         | `workspace.ts:364` and `workspace.ts:517`                                    | 0       | High   | —    |
+| W8  | The backends label themselves under four names                  | `database`, `server`, `store`, `hostname`                                    | 2       | Medium | 4    |
+| W9  | Refs, logs, and constants repeat                                | See the list below                                                           | 5       | High   | 15   |
+| W10 | `ProcessKind` has one value                                     | `process-files.ts:23`; backlog D5 holds the question                         | 1       | Medium | 2    |
 
-**W1 is larger than the re-export.** The owner's finding names
-`BACKGROUND_CONTEXT`. The workspace also takes its environment port, its
-file errors, and its shell results from Pi. The workspace must own a
-minimal port of its own. The Pi executor then adapts that port. CLAUDE.md
-already states that `packages/workspace` owns the workspace port.
+**W1 is larger than the re-export.** The workspace also takes its
+environment port, its file errors, and its shell results from Pi. The
+rank counts one concept, but the row fixes a package boundary. CLAUDE.md
+states that `packages/workspace` owns the workspace port. Backlog K6, the
+neutral-file import rule, is the check that holds it.
+
+**W7 is a redundancy.** The transport close guards itself
+(`closeInFlight`), so the second call does nothing.
+
+**W9 holds five small duplicates.**
+
+- The ref length check and the workspace check: `snapshots.ts:140,209`
+  and `git-refs.ts:41,63`.
+- `audit.ts` rebuilds `openLog` and names `rotateBytes` as `maxBytes`.
+- The timer ceiling `2_147_483` five times, under two names:
+  `sqlite.ts:100`, `process-tools.ts:63`, `process-run.ts:36`,
+  `workstation/backend.ts:42`, `workstation/exec.ts:45`.
+- `digestOf` three times, and byte formatting three times.
 
 ## The backends: `just-bash` and `workstation`
 
-| ID  | Finding                                                                                                                                                                                                                                                                                                                                                     | Removes | Confidence |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
-| B1  | **Repository registration is one state machine written twice.** `just-bash/src/git/registration.ts` and `workstation/src/git-registration.ts` each validate names, compare trees, create or update a template, seed a shared repository once, and recover an interrupted seed. A pure `registrationStep()` in `workspace/git` decides; each backend applies | 1 large | High       |
-| B2  | **A transport pairing guards a mismatch that one factory prevents.** `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices`, and the check in `workspace.ts`. One factory for each package returns `{ bash, git }`                                                                                                                              | 3       | Medium     |
-| B3  | **The file adapter skeleton is written twice.** `FileResult<T>`, `attempt`, and `toFileInfo` in `just-bash/src/bash-env.ts` and `workstation/src/ssh-env.ts`. Move it into `HomeEnv` with a `classify` hook                                                                                                                                                 | 2       | High       |
-| B4  | **Git constants repeat.** `DEFAULT_BRANCH` twice and the `ambion` author four times. The serve script hard-codes the name pattern of `git-names.ts`                                                                                                                                                                                                         | 2       | High       |
+| ID  | Finding                                                         | Evidence                                                           | Removes | Conf.  | Rank |
+| --- | --------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
+| B1  | Repository registration is one state machine written twice      | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
+| B2  | A transport pairing guards a mismatch that one factory prevents | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
+| B3  | The file adapter skeleton is written twice                      | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
+| B4  | Git constants repeat                                            | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
+
+**B1 is one concept of about 300 lines.** Each file validates names,
+compares trees, creates or updates a template, seeds a shared repository
+once, and recovers an interrupted seed. Only the storage mechanics
+differ.
 
 **The push policy stays in both servers.** The TypeScript server and the
-bash server each enforce it, because each accepts pushes.
+bash server each accept pushes, so each enforces the policy.
 
-## The adapters and the documentation
+## The adapters, the simulator, and the workbench
 
-| ID  | Finding                                                                                                                                                                                                   | Removes | Confidence |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
-| C1  | **Cloudflare keeps a second durable store.** `MetadataStore` repeats the room name and the agent names that the journal holds. Only `stopped` is new. `SeatMetadata.wakes` and `cuts` exist for the tests | 3       | Medium     |
-| C2  | **`RoomObject` repeats the exchange handle.** `exchange`, `waitForClose`, and `waitForSummary` forward to the handle                                                                                      | 2       | Low        |
-| D1  | **Three pages repeat the shared executor options and the troubleshooting rows.** `pi.md`, `claude.md`, and `codex.md`. Keep them once in `executors.md`                                                   | 0       | High       |
-| D2  | **`resources.md` overlaps `workspace.md`.** It says "two bindings" where the code has four backends                                                                                                       | 1 page  | Medium     |
-| D3  | **"Envelope" has three meanings.** The journal envelope, the fold cost page `envelope.md`, and the verified rule envelope. Rename the page `limits.md`                                                    | 1 term  | Medium     |
+| ID  | Finding                                                          | Evidence                                                                   | Removes | Conf.  | Rank |
+| --- | ---------------------------------------------------------------- | -------------------------------------------------------------------------- | ------- | ------ | ---- |
+| C1  | Cloudflare keeps the room name and agent names in a second store | `RoomMetadata` (`storage.ts`); `SeatMetadata.wakes` and `cuts` serve tests | 3       | Medium | 6    |
+| C2  | `RoomObject` forwards three methods of the exchange handle       | `room-object.ts:231-244`                                                   | 2       | Low    | 2    |
+| S1  | The simulator and the workbench write helpers the platform has   | `deadlineSignal` (`simulator/signal.ts:2`), `formatUsage` (`steps.ts:56`)  | 2       | Medium | 4    |
+
+**C1 keeps the seat state.** `SeatMetadata.activation`, `phase`, and
+`hold` are state of their own.
+
+## The documentation
+
+| ID  | Finding                                                                | Evidence                                                                   |
+| --- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| D1  | About eight paragraphs repeat across pages                             | Shared option rows and troubleshooting in `pi.md`, `claude.md`, `codex.md` |
+| D2  | `resources.md` overlaps `workspace.md`                                 | `resources.md:4,150` say "two bindings"; seven backend factories exist     |
+| D3  | "Envelope" has three meanings                                          | `envelope.md`, `durability.md`, `formal.md`                                |
+| D4  | `durability.md` and `deployment.md` both describe leases and reconnect | The two pages each state the lease, alarm, and SQLite rules                |
 
 **Four statements of the documentation do not match the code.**
 
-- `docs/pi.md` says that Cloudflare builds its seats on
-  `createPiExecutor`. `cloudflare/src/configure.ts` uses `piExecution`.
-- `docs/pi.md` says that `thinkingLevel` is always `off`. The `thinking`
-  option exists in `pi/src/define.ts`.
-- `docs/codex.md` says that a missing binary is a transient failure.
-  `codex/src/catalog.ts` throws `PermanentError`.
-- `docs/executors.md` says that every family stamps a `steer` step. A Codex
-  seat stamps none (E1).
+- `docs/pi.md:27` says that Cloudflare builds its seats on
+  `createPiExecutor`. `cloudflare/src/configure.ts:109` uses `piExecution`.
+- `docs/pi.md:164` says that `thinkingLevel` is always `off`. The
+  `thinking` option exists in `pi/src/define.ts:27`.
+- `docs/codex.md:326` says that a missing binary is a transient failure.
+  `codex/src/catalog.ts:143` throws `PermanentError`.
+- `docs/executors.md:275` says that every family stamps a `steer` step. A
+  Codex seat stamps none (E1).
+
+**Two planning records are missing from the CLAUDE.md table.** The
+table names `next.md` and `backlog.md`. `review-0.5.0.md` and this page
+also exist.
+
+## The backlog items that reduce concepts
+
+| Backlog | Relation to this page                                                             |
+| ------- | --------------------------------------------------------------------------------- |
+| P1      | Moves `returnable` into the verified rules; the first done change edits that file |
+| K6      | The import rule that keeps W1 fixed                                               |
+| D5      | Owns the `ProcessKind` question of W10                                            |
+| D7      | Is K15                                                                            |
+| D20     | A generated API reference gives K4 its evidence                                   |
 
 ## The order of the work
 
-**Phase 1 removes names with no design change.** Each item is one commit
-that updates the export snapshot and the changelog.
+**Phase 1 removes names and fixes defects.** It changes no design. Each
+item is one commit that updates the export snapshot and the changelog.
 
-1. K1, K3, K4, K5, K10: the kernel readers, aliases, and exports.
-2. E4, E5, E8, W9, W10, B4: the executor and backend constants.
-3. W7 and the four documentation defects.
+1. K4, K3, K5, K10: the kernel exports, aliases, and helpers.
+2. E4, E5, E8, W9, W10, B4, S1: the executor, workspace, and backend
+   constants and helpers.
+3. The rename of the core `Turn`, W7, and the four documentation
+   defects.
 
 **Phase 2 merges one mechanism at a time.** Each item keeps coverage, as
 CLAUDE.md requires for a change that merges tests.
 
-1. W3, then W4: one audited tool, then one conformance harness.
-2. B1 and B3: the registration step and the file adapter.
-3. E1, E2, E3: the steer, the failure, and the executor level.
-4. K2: one runtime state with one host view.
-5. W2: one capability shape. It depends on W3.
+1. X1: one name rule, exported by the core.
+2. W3, then W4: one audited tool, then one harness type and one `check`.
+3. B1 and B3: the registration step and the file adapter.
+4. E1, E2, E3: the steer, the failure, and the executor level.
+5. K2 and K16: one runtime state and one room host view.
+6. W2: one capability shape. It depends on W3.
+7. E7: one scripted test language. It depends on the `Turn` rename.
 
 **Phase 3 needs a decision of the owner.** Each item changes a package
-boundary or a stored format.
+boundary, a stored format, or a promise.
 
 - W1: the workspace owns its port, and the Pi executor adapts it.
+- K1: the journal reads only the current format. It drops the promise of
+  `docs/durability.md:272`.
 - K9: the assistant moves beside Pi, and the room option goes.
 - K6, K7: the schema is the one source of a body, and JSON is the one
   rule of plain data.
@@ -166,15 +258,19 @@ boundary or a stored format.
 
 **Each of these looks like a duplicate and carries a meaning of its own.**
 
-- The unions that `rules.verified.ts` declares again. LemmaScript lowers
-  only the types of its own file, and `rules.test.ts` pins each copy.
+- The unions that `rules.verified.ts` declares again, such as `Source`
+  beside `ActivationSource`. LemmaScript lowers only the types of its own
+  file, and `rules.test.ts` pins each copy.
 - `startRoom` and `resumeRoom` as public calls. A start writes a
-  composition, and a resume keeps the recorded one. They now share one
+  composition, and a resume keeps the recorded one. They share one
   transaction.
 - `visit.send` and `room.post`. A send has an author, and a post is a
   message of the system.
 - `sqlite.ts` and `sqlite-guard.ts`. They are one concept in two files.
 - The port suite and the executor suite of the core. Cloudflare runs the
-  port suite. The two can share one runner (W4).
+  port suite. Every suite already returns `ConformanceCase[]` and runs in
+  one loop.
 - `localExecution`. A host needs one execution of a kind that is not a
   family.
+- The scripts in `scripts/`. `packages.mjs`, `release-lib.mjs`, and
+  `publish.mjs` each hold one concern.

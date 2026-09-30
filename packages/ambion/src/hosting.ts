@@ -61,7 +61,7 @@ export type {
 	RoomToolResult,
 } from './execution/room-tools.ts';
 export { toolContext } from './execution/room-tools.ts';
-export { defineExecution, type ExecutionBuild, localExecution } from './execution/route.ts';
+export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { StepSink, TraceOpener, TraceSink } from './execution/trace.ts';
 export type {
