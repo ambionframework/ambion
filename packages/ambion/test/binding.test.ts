@@ -18,7 +18,7 @@ import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
 import { owedOf, pendingOf, replayState } from './support/fold.ts';
 import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
@@ -366,7 +366,7 @@ describe('the room runs the verified rules', () => {
 	it('closes on a later pass when admitsClose refuses once', async () => {
 		const runtime = createRuntime({
 			clock: fakeClock(),
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		const room = stopAtEnd(
 			await startRoom({

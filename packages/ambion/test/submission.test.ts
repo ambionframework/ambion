@@ -41,7 +41,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -76,7 +76,7 @@ async function summarisedRoom(
 			execution: wrap(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							alpha: script,
 							assistant: (context) =>
@@ -214,7 +214,7 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 			runtime,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(async () => {
+				stream: scriptedStream(async () => {
 					started.resolve();
 					await held.promise;
 					return quiet();
@@ -226,7 +226,10 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 	await started.promise;
 	hostingOf(runtime).evict(name);
 	const resume = (
-		execution: Execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: Execution = piExecution({
+			sessions: 'memory',
+			stream: scriptedStream(() => quiet()),
+		}),
 	) => {
 		const next = createRuntime({ storage: opened.storage });
 		return {

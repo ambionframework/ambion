@@ -29,7 +29,7 @@ import {
 	contextText,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	seat,
 	speak,
 	toolNames,
@@ -69,7 +69,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summary: writer.name } : {}),
 		runtime,
-		execution: piExecution({ sessions: 'memory', stream: scripted(options.script) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(options.script) }),
 	});
 	return stopAtEnd(session);
 }
@@ -256,7 +256,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(session.name, {
 			agents: [product, surveyor],
 			runtime,
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({})) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(byAgent({})) }),
 		});
 		expect(await seatNames(stopAtEnd(resumed))).toEqual([product.name]);
 	});

@@ -25,7 +25,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
+import { quiet, scriptedStream, speak, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 
@@ -134,7 +134,7 @@ describe('the message byte limit', () => {
 			...limits,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context) => {
+				stream: scriptedStream((context) => {
 					results.push(toolResultTexts(context));
 					return toolResultTexts(context).length === 0 ? speak(long) : quiet();
 				}),

@@ -29,7 +29,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { contextText, quiet, scriptedStream, speak } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -201,7 +201,7 @@ function definition(identity: string, instructions: string) {
 }
 
 function answer(question: string, response: string, calls: Call[]): StreamFn {
-	return scripted((context) => {
+	return scriptedStream((context) => {
 		const text = contextText(context);
 		calls.push({ systemPrompt: context.systemPrompt ?? '', context: text });
 		return text.includes(question) && !text.includes(response) ? speak(response) : quiet();
@@ -219,7 +219,7 @@ describe('execution composition', () => {
 		const runtime = createRuntime({
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(() => {
+				stream: scriptedStream(() => {
 					defaultCalls += 1;
 					return quiet();
 				}),

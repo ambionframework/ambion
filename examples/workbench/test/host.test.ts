@@ -9,8 +9,8 @@ import {
 	freshDirectory,
 	idleStream,
 	openHost,
+	respondingStream,
 	scriptedFamilies,
-	scriptedStream,
 } from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
@@ -50,7 +50,7 @@ const designScript = byAgent({
 const open = (directory?: string) =>
 	openHost({
 		directory,
-		stream: scriptedStream(scriptedResponse),
+		stream: respondingStream(scriptedResponse),
 		executions: scriptedFamilies(designScript),
 	});
 
@@ -274,7 +274,7 @@ describe('Workbench host', () => {
 
 	it('lists a say that waits to return, and dismisses it once', async () => {
 		const workbench = await openHost({
-			stream: scriptedStream((agent, call, closing) => {
+			stream: respondingStream((agent, call, closing) => {
 				if (closing || agent !== 'assistant' || call !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 				const later = { text: 'Check the bench supply.', after: 600 };
@@ -330,7 +330,7 @@ describe('Workbench host', () => {
 
 	it('lists the processes that an agent starts with bash, reads an output, and cancels a running one', async () => {
 		// The assistant starts a short process that ends in its window, then a long one that it leaves running.
-		const stream = scriptedStream((agent, call, closing) => {
+		const stream = respondingStream((agent, call, closing) => {
 			const start = (command: string, name: string, wait: number) =>
 				fauxAssistantMessage([fauxToolCall('bash', { command, name, wait })], {
 					stopReason: 'toolUse',

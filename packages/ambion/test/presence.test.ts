@@ -22,7 +22,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { contextText, quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { type FaultyJournals, faultyJournals, memory } from './support/storage.ts';
 
@@ -32,7 +32,7 @@ const contexts: string[] = [];
 const prompts: string[] = [];
 
 /** Every seat reads and stays quiet, and the test reads what each seat was shown. */
-const recording = scripted((context) => {
+const recording = scriptedStream((context) => {
 	prompts.push(context.systemPrompt ?? '');
 	contexts.push(contextText(context));
 	return quiet();
@@ -111,7 +111,7 @@ describe('presence', () => {
 		const held = deferred();
 		const providerStarted = deferred();
 		const seen: string[] = [];
-		const holding = scripted(async (context) => {
+		const holding = scriptedStream(async (context) => {
 			seen.push(contextText(context));
 			providerStarted.resolve();
 			await held.promise;

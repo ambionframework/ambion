@@ -26,7 +26,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	speak,
 	summarise,
 	toolResultTexts,
@@ -58,7 +58,7 @@ interface Setup {
 	readonly agents: (typeof worker)[];
 	readonly summary?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
-	readonly stream: Parameters<typeof scripted>[0];
+	readonly stream: Parameters<typeof scriptedStream>[0];
 	readonly attempts?: number;
 	readonly drive: Drive;
 }
@@ -77,7 +77,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		agents: setup.agents,
 		...(setup.summary === undefined ? {} : { summary: setup.summary }),
 		seats: setup.seats,
-		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(setup.stream) }),
 	});
 	try {
 		await setup.drive(room, clock);
@@ -268,7 +268,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 		});
 	const execution = piExecution({
 		sessions: 'memory',
-		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
+		stream: scriptedStream(byAgent({ worker: says(['Thursday works.']) })),
 	});
 	const first = runtime();
 	const room = await startRoom({
