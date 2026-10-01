@@ -982,13 +982,24 @@ them.
 | Helper                                             | What it does                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `resolvePath`                                      | Holds the `~` and relative path rule                                     |
-| `HomeEnv`                                          | A base class: `cwd`, `absolutePath`, `joinPath`, and `readTextLines`     |
+| `HomeEnv`                                          | A base class: the file members, over `FileOperations` and `classify`     |
 | `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
 | `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
 | `boundedView`, `deliverView`                       | Build the bounded output view, and hand it to `onUpdate` with the result |
 | `TMP`, `randomName`, `tempDirPath`, `tempFilePath` | Name the temporary paths under `/tmp`                                    |
 | `runScript`                                        | Runs one script, and gives its exit code and its output as text          |
 | `shellQuote`                                       | Puts one word in single quotes for `bash`                                |
+
+**`HomeEnv` implements the file members once.** A backend supplies two
+abstract members: `files`, a `FileOperations` with one throwing storage
+operation for each member, and `classify`, which turns what an operation
+threw into a `FileError`. `HomeEnv` resolves the path, returns `aborted`
+when the context's signal is aborted, runs the operation, and calls
+`classify` with the path and a `FileExpect` hint: `file` for a read or a
+write, `directory` for `listDir`, and `any` for the rest. `classify` can
+return a promise. A backend can override a member that needs more than one
+operation. `HomeEnv` also implements `cwd`, `absolutePath`, `joinPath`,
+`readTextLines`, and `openTextLineReader`.
 
 **A backend writes no spill file.** Every `bash` call writes its whole
 output to a process file ([Processes](processes.md)), so a backend ignores
