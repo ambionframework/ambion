@@ -173,7 +173,7 @@ becomes an `approval` step with the answer. The executor denies a request when
 **`env` replaces the environment.** The value is not merged with
 `process.env`. Pass `PATH`, `HOME`, and the key that the executable needs.
 Without `env`, the seat gets an allowlist of the variables of the host. The
-allowlist limits environment variables and not the filesystem. A host on
+allowlist limits environment variables. It does not limit the filesystem. A host on
 Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*` does not
 cover must pass `env` with the variables it needs.
 
@@ -181,7 +181,7 @@ cover must pass `env` with the variables it needs.
 `CLAUDE_CONFIG_DIR` for it, turns the skills off, and sets
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`. Without `configRoot`, the
 directory is private and lives in the temporary directory, a restart loses
-it, and the executor never removes it. Without `env`, the seat also gets a `HOME` of
+it, and the executor never removes it. Without `env`, the seat also gets a `HOME` and `USERPROFILE` of
 its own, so its shell reads no rc file of the host user. The executor turns
 auto-memory off and empties the attribution text of commits and pull
 requests. A seat with no built-in tool runs in a scratch directory, and the

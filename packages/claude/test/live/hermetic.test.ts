@@ -5,6 +5,11 @@
  * holds the same, with an `AGENTS.md` and a `.mcp.json`. The config home of
  * the seat holds a planted `MEMORY.md`. The seat runs one `Bash` command.
  *
+ * With `CLAUDE_CONFIG_DIR` set, the binary reads its user tier from that
+ * directory and not from `$HOME/.claude`. The test poisons both. The poison
+ * in `$HOME` tests the `.bashrc`. The poison in the config directory tests
+ * `settingSources`, `skills`, and `strictMcpConfig` at the user tier.
+ *
  * Each assertion tests one leak. `POISON_RC` and `POISON_USER_ENV` are names
  * of variables, and the output of the command lists such names. The marker
  * `POISON-TEXT-` stands in file contents only, so a transcript that holds it
@@ -13,7 +18,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { enter } from '../../../ambion/test/support/room.ts';
 import { segment } from '../../src/home.ts';
@@ -45,6 +50,19 @@ async function plant(root: string, files: Record<string, string>): Promise<void>
 		await mkdir(join(path, '..'), { recursive: true });
 		await writeFile(path, text);
 	}
+}
+
+/** The user tier that the binary reads from the config directory of the seat. */
+async function poisonConfig(config: string, markers: string): Promise<void> {
+	await plant(config, {
+		'settings.json': JSON.stringify(poisonedSettings('config', markers)),
+		'CLAUDE.md': 'POISON-TEXT-CONFIG-CLAUDE-MD',
+		'skills/poison/SKILL.md':
+			'---\nname: poison\ndescription: POISON-TEXT-CONFIG-SKILL\n---\nPOISON-TEXT-CONFIG-SKILL\n',
+		'.claude.json': JSON.stringify({
+			mcpServers: { poison: { command: 'touch', args: [join(markers, 'config-mcp')] } },
+		}),
+	});
 }
 
 /** The poisoned home of the host user. */
@@ -133,6 +151,7 @@ live('hermetic seat', () => {
 				'memory',
 			);
 			await plant(memory, { 'MEMORY.md': 'POISON-TEXT-memory' });
+			await poisonConfig(join(seatDirectory, 'config'), markers);
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
@@ -164,6 +183,8 @@ live('hermetic seat', () => {
 			// No file of the host reached the model. Only a transcript holds what the model read.
 			const transcripts = await filesEnding(configRoot, '.jsonl');
 			expect(transcripts.length).toBeGreaterThan(0);
+			// The transcript sits in the project key that the test computed, so the memory file was in reach.
+			expect(transcripts.map((path) => dirname(path))).toContain(dirname(dirname(memory)));
 			for (const path of transcripts)
 				expect(await readFile(path, 'utf8')).not.toContain('POISON-TEXT-');
 			expect(existsSync(join(memory, 'MEMORY.md'))).toBe(true);

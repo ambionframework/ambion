@@ -192,9 +192,12 @@ it('gives a seat the allowlisted variables of this process and no other when the
 	try {
 		const { env } = optionsOf();
 		// The seat gets a home of its own, so its shell reads no rc file of the host user.
-		for (const name of [...ENV_ALLOWLIST, ...prefixed].filter((name) => name !== 'HOME'))
+		for (const name of [...ENV_ALLOWLIST, ...prefixed].filter(
+			(name) => name !== 'HOME' && name !== 'USERPROFILE',
+		))
 			expect(env?.[name]).toBe(`host-${name}`);
 		expect(env?.HOME).toBe('/seat/home');
+		expect(env?.USERPROFILE).toBe('/seat/home');
 		expect(env).not.toHaveProperty('AMBION_SECRET');
 		expect(env).not.toHaveProperty('GITHUB_TOKEN');
 	} finally {
@@ -210,6 +213,7 @@ it('lets an explicit env replace the environment, and sets the two variables of 
 			ONLY: 'this',
 			CLAUDE_CONFIG_DIR: '/seat/config',
 			CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+			CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
 		});
 	} finally {
 		vi.unstubAllEnvs();
@@ -218,7 +222,9 @@ it('lets an explicit env replace the environment, and sets the two variables of 
 
 it('keeps the HOME of an explicit env, and gives the seat HOME only on the allowlist path', () => {
 	expect(optionsOf({ env: { HOME: '/srv/user' } }).env?.HOME).toBe('/srv/user');
-	expect(optionsOf({ env: { PATH: '/bin' } }).env).not.toHaveProperty('HOME');
+	const bare = optionsOf({ env: { PATH: '/bin' } }).env;
+	expect(bare).not.toHaveProperty('HOME');
+	expect(bare).not.toHaveProperty('USERPROFILE');
 });
 
 it('keeps the config home and the traffic setting that an explicit env names, and makes no home for the config', () => {
@@ -229,6 +235,7 @@ it('keeps the config home and the traffic setting that an explicit env names, an
 	expect(env).toEqual({
 		CLAUDE_CONFIG_DIR: '/shared',
 		CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
+		CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
 	});
 	expect(cwd).toBeUndefined();
 	expect(made).toEqual([]);

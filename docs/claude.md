@@ -281,11 +281,14 @@ sets them on every query. The definition cannot change them.
 | `settingSources`                           | `[]`                         | The query reads no user, project, or local settings, and no `CLAUDE.md`.                                |
 | `skills`                                   | `[]`                         | No skill joins the query. The executor adds no `Skill` entry to the allow list.                         |
 | `settings`                                 | `SEAT_SETTINGS`              | The flag tier turns auto-memory off and empties the commit, pull request, and session-link attribution. |
+| `CLAUDE_CODE_DISABLE_AUTO_MEMORY`          | `1`                          | Auto-memory is off before any settings tier, so a managed setting cannot turn it on.                    |
 | `CLAUDE_CONFIG_DIR`                        | The config home of the seat  | The sessions and settings of the seat stay in its own directory.                                        |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1`                          | The executable skips the update check, telemetry, and other traffic that work omits.                    |
 
-A host that passes an `env` with either variable keeps its own value. A
-seat with no built-in tool gets two more settings; see [A seat with no
+A host that passes an `env` with one of these variables keeps its own value.
+The flag tier sits below the managed (policy) tier. A managed `attribution`
+can still add text to a commit or a pull request. Auto-memory is off through
+both the variable and the flag setting. A seat with no built-in tool gets two more settings; see [A seat with no
 built-in tool](#a-seat-with-no-built-in-tool).
 
 **What the model sees.** The model sees the room tools, the tools of the
@@ -295,17 +298,16 @@ definition, and the built-in tools that `allowedTools` names, minus
 **What the environment holds.** Without `env`, the seat gets the variables
 of the host process that an allowlist names, and no other. The allowlist
 limits the environment variables of the seat. It does not limit the
-filesystem. `HOME` passes, and a seat with `Bash` or `Read` runs as the host
-user and can read the files of that user.
+filesystem.
 
-**Without `env`, the seat gets a `HOME` of its own.** `HOME` is the `home`
-directory of the [seat directory](#config-home), and the host `HOME` does not
-pass. The shell of the seat reads no rc file of the host user, such as
-`.bashrc`. Git, ssh, and cloud tools that read `~` find the seat directory, so
-a `Bash` seat has no git identity unless the host passes an `env` that holds
-`HOME` and the other variables it needs. This does not make the filesystem
-private. A seat with `Bash` or `Read` reaches any absolute path that the host
-user can read. An `env` keeps its own `HOME`.
+**Without `env`, the seat gets a `HOME` of its own.** The executor sets
+`HOME` and `USERPROFILE` to the `home` directory of the [seat
+directory](#config-home). The host `HOME` does not pass. The shell of the
+seat reads no rc file of the host user, such as `.bashrc`. Git, ssh, and
+cloud tools read `~` in the seat directory. A `Bash` seat has no git identity
+unless the host passes an `env` with the variables it needs. An `env` keeps
+its own `HOME`. A seat with `Bash` or `Read` still reaches any absolute path
+that the host user can read.
 
 | Kind         | Names                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------- |
@@ -322,8 +324,8 @@ executor does not merge it with `process.env`, and it applies no
 allowlist. A `PATH`, a `HOME`, or a key that the value omits is absent.
 Pass the variables that the executable needs, as the example does. In both
 cases the executor then removes the variables of a Claude Code session, and
-sets `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
-unless the environment holds them.
+sets `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, and
+`CLAUDE_CODE_DISABLE_AUTO_MEMORY` unless the environment holds them.
 
 **A host on Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*`
 does not cover must pass `env`.** The allowlist holds no `AWS_` and no
@@ -504,7 +506,7 @@ The known limits:
 gets the last 2,000 characters of the stderr of the query. This holds for a
 failed `result`, for a query that ends early, and for a query that throws. A
 failed `result` waits 50 milliseconds, because the stderr arrives on its own
-pipe. The class comes from the result, the status, or the error, and never
+pipe. The wait ends at once when the process ends or `close` runs. The class comes from the result, the status, or the error, and never
 from the stderr text.
 
 **The executor reads a status only from `api_error_status`.** Free text

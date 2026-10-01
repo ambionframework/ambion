@@ -25,7 +25,8 @@
  * - `{ text, stream }` and `{ thinking, stream }`: one block, sent whole or as deltas.
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
- * - `{ fail: { status, text } }`: end the turn with an error result.
+ * - `{ fail: { status, text, exit?, stderr? } }`: end the turn with an error result. `stderr`
+ *   goes to standard error before the result, and `exit` exits with that code right after it.
  * - `{ stderr }`: write the text to standard error.
  * - `{ crash: { stderr, code } }`: write `stderr` to standard error and exit with `code`, with no result.
  * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
@@ -272,6 +273,13 @@ const init = (cwd = process.cwd()) =>
 
 const unresumable = () => resumed !== undefined && config.rejectResumeResult === true;
 
+function failTurn({ status, text, exit, stderr }) {
+	if (stderr !== undefined) process.stderr.write(`${stderr}\n`);
+	result({ is_error: true, result: text, api_error_status: status });
+	// The empty write ends after the result, so the exit loses no line.
+	if (exit !== undefined) process.stdout.write('', () => process.exit(exit));
+}
+
 async function play(list) {
 	if (unresumable()) {
 		out(init());
@@ -282,13 +290,7 @@ async function play(list) {
 		});
 	}
 	for (const action of list) {
-		if (action.fail !== undefined) {
-			return result({
-				is_error: true,
-				result: action.fail.text,
-				api_error_status: action.fail.status,
-			});
-		}
+		if (action.fail !== undefined) return failTurn(action.fail);
 		const [name, value] = Object.entries(action)[0];
 		await actions[name](value, action);
 	}

@@ -3,7 +3,7 @@ import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
 import { STDERR_TAIL } from '../src/executor.ts';
 import { passResultOf } from '../src/failure.ts';
-import { open, viewOf } from './support.ts';
+import { open, until, viewOf } from './support.ts';
 
 const result = (fields: object) =>
 	({
@@ -114,3 +114,43 @@ it.each([
 		expect(result.message).toContain(line);
 	},
 );
+
+const PERMANENT = { status: 401, text: 'API Error: 401 authentication_error: invalid x-api-key' };
+const TRANSIENT = { status: 529, text: 'API Error: 529 overloaded_error: try again later' };
+
+it.each([
+	{ what: 'a permanent result', fail: PERMANENT, cause: 'permanent', stderr: undefined },
+	{ what: 'a transient result', fail: TRANSIENT, cause: 'transient', stderr: undefined },
+	{
+		what: 'a permanent result with stderr',
+		fail: PERMANENT,
+		cause: 'permanent',
+		stderr: 'proxy: refused',
+	},
+	{
+		what: 'a transient result with stderr',
+		fail: TRANSIENT,
+		cause: 'transient',
+		stderr: 'proxy: 401 refused',
+	},
+])(
+	'keeps the cause of $what when the process exits at once after it',
+	async ({ fail, cause, stderr }) => {
+		const run = open({ turns: [[{ fail: { ...fail, exit: 1, stderr } }]] });
+		const result = await run.session.pass({ kind: 'view', view: viewOf() });
+		run.session.close?.();
+		expect(result).toMatchObject({ failed: true, cause });
+		expect(result.message).toContain(fail.text);
+		if (stderr !== undefined) expect(result.message).toContain(stderr);
+	},
+);
+
+it('settles a parked result when close runs inside the drain, and settles once', async () => {
+	const run = open({ turns: [[{ fail: PERMANENT }]] });
+	const pass = run.session.pass({ kind: 'view', view: viewOf() });
+	// The result arrives, and the pass waits for the end of the stderr. Closing now must not hang it.
+	await until(() => run.log().some((line) => 'user' in line), 'the fake reading the prompt');
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	run.session.close?.();
+	expect(await pass).toMatchObject({ failed: true, cause: 'permanent' });
+});

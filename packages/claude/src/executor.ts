@@ -135,6 +135,12 @@ class Activation implements ExecutorSession {
 	/** Set while a pass waits for its result. It settles the pass. */
 	private settle: ((result: PassResult) => void) | undefined;
 	private grace: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * The result that waits on `grace` to settle the pass. The end of the
+	 * stream, a throw, or `close` settles the pass with it at once, so the
+	 * exit of the process cannot replace its cause.
+	 */
+	private parked: PassResult | undefined;
 	private stopped = false;
 
 	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions, home: SeatHome) {
@@ -176,6 +182,7 @@ class Activation implements ExecutorSession {
 
 	/** End the input and the process. The driver calls this once the activation is over. */
 	close(): void {
+		this.settleParked();
 		this.stopped = true;
 		this.inbox.end();
 		clearTimeout(this.grace);
@@ -201,6 +208,7 @@ class Activation implements ExecutorSession {
 			// A line the query never took waits for the next delta.
 			this.held = [];
 			clearTimeout(this.grace);
+			this.parked = undefined;
 		}
 	}
 
@@ -289,6 +297,7 @@ class Activation implements ExecutorSession {
 			for await (const message of stream) this.handle(message);
 			// A restart replaced this stream. Its end says nothing about the pass.
 			if (stream !== this.stream) return;
+			if (this.settleParked()) return;
 			this.finish({
 				failed: true,
 				cause: 'transient',
@@ -302,6 +311,7 @@ class Activation implements ExecutorSession {
 	/** The query threw. A resume the SDK cannot honor can end the stream before any message. */
 	private threw(stream: Query, error: unknown): void {
 		if (this.stopped || stream !== this.stream) return;
+		if (this.settleParked()) return;
 		// The SDK also reports an unresumable session as an error result, which `answered` handles.
 		if (this.begin !== undefined && this.resumeFailed()) {
 			this.restart(this.begin);
@@ -375,12 +385,23 @@ class Activation implements ExecutorSession {
 			this.finish(result);
 			return;
 		}
-		this.grace = setTimeout(() => this.finish(this.withTail(result)), wait);
+		this.parked = result;
+		this.grace = setTimeout(() => this.settleParked(), wait);
 		this.grace.unref();
+	}
+
+	/** Settle the pass with the parked result, and say whether one waited. */
+	private settleParked(): boolean {
+		const parked = this.parked;
+		if (parked === undefined) return false;
+		this.finish(this.withTail(parked));
+		return true;
 	}
 
 	/** Settle the pass in flight. The core reports a failure. */
 	private finish(result: PassResult): void {
+		this.parked = undefined;
+		clearTimeout(this.grace);
 		const settle = this.settle;
 		if (settle === undefined) return;
 		this.settle = undefined;

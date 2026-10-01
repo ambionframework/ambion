@@ -131,8 +131,8 @@ function allowlisted(
 /**
  * The environment of a seat's executable. An `env` of the host replaces the
  * environment. Without one, the seat gets the allowlisted variables of this
- * process, and its own `HOME`, so the shell of the seat reads no rc file of
- * the host user. The seat never holds the variables of a Claude Code session
+ * process, and its own `HOME` and `USERPROFILE`, so the shell of the seat
+ * reads no rc file of the host user. The seat never holds the variables of a Claude Code session
  * of the host. It gets its own config home, unless `env` names one, and the
  * executable sends no traffic that the work does not need.
  */
@@ -141,12 +141,18 @@ function seatEnv(
 	home: SeatHome,
 ): Record<string, string | undefined> {
 	const seat = env === undefined ? allowlisted(process.env) : { ...env };
-	if (env === undefined) seat.HOME = home().home;
+	if (env === undefined) {
+		seat.HOME = home().home;
+		seat.USERPROFILE = seat.HOME;
+	}
 	for (const name of PARENT_SESSION) delete seat[name];
 	if (seat.CLAUDE_CONFIG_DIR === undefined || seat.CLAUDE_CONFIG_DIR === '')
 		seat.CLAUDE_CONFIG_DIR = home().config;
 	if (seat.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === undefined)
 		seat.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+	// The variable holds before any settings tier, so a managed setting cannot turn auto-memory on.
+	if (seat.CLAUDE_CODE_DISABLE_AUTO_MEMORY === undefined)
+		seat.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
 	return seat;
 }
 
