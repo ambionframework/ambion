@@ -48,7 +48,9 @@ export function selectSteps(names) {
 /** Lines that carry no finding: banners, timings, passes, and wrappers of the real error. */
 const NOISE = [
 	/^\s*• (turbo \d|Packages in scope|Running |Remote caching)/,
-	/^\s*(Tasks|Cached|Time|Failed):\s/,
+	/^\s*(Tasks|Cached):\s+\d+ (successful|cached), \d+ total$/,
+	/^\s*Time:\s+[\dhms.]+\s*$/,
+	/^Failed:\s+\S+#\S+/,
 	/^\s*ERROR\s+run failed/,
 	/ERROR\s+command \(.*\) .* exited \(\d+\)$/,
 	/WARNING\s+command finished with error, but continuing/,
@@ -148,8 +150,8 @@ export function failedTasks(text) {
 		.filter((task) => task !== '');
 }
 
-/** At most `limit` lines, and a last line that names the full log. A limit of 0 keeps all. */
-export function clip(lines, limit, log) {
-	if (limit === 0 || lines.length <= limit) return lines;
-	return [...lines.slice(0, limit), `… ${lines.length - limit} more lines in ${log}`];
+/** At most `limit` lines, and a last line that counts the rest. */
+export function clip(lines, limit) {
+	if (lines.length <= limit) return lines;
+	return [...lines.slice(0, limit), `… ${lines.length - limit} more lines`];
 }

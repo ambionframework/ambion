@@ -10,12 +10,17 @@
 		"CI",
 		// Vitest reads these to pick its agent reporter, which prints failures only.
 		"AI_AGENT",
+		"AUGMENT_AGENT",
 		"CLAUDECODE",
+		"CLAUDE_CODE",
 		"CODEX_SANDBOX",
 		"CODEX_THREAD_ID",
 		"CURSOR_AGENT",
 		"GEMINI_CLI",
+		"GOOSE_PROVIDER",
+		"JUNIE_DATA",
 		"OPENCODE",
+		"REPL_ID",
 		// Read by scripts/publish.mjs, never by a cached task.
 		"NODE_AUTH_TOKEN",
 		"NPM_TOKEN",

@@ -31,6 +31,9 @@ function run(script) {
 	child.stdout.on('data', (chunk) => chunks.push(chunk));
 	child.stderr.on('data', (chunk) => chunks.push(chunk));
 	return new Promise((resolve) => {
+		child.on('error', (error) => {
+			resolve({ code: 1, output: `cannot start pnpm: ${error.message}`, seconds: 0 });
+		});
 		child.on('close', (code) => {
 			const output = plain(Buffer.concat(chunks).toString('utf8'));
 			resolve({ code: code ?? 1, output, seconds: (Date.now() - started) / 1000 });
@@ -63,8 +66,9 @@ function report(step, result, dirs) {
 	}
 	const tasks = failedTasks(result.output);
 	console.log(`FAIL ${step.name} ${time}${tasks.length > 0 ? ` · ${tasks.join(' ')}` : ''}`);
-	for (const line of clip(findings(result.output, dirs), LIMIT, log)) console.log(`  ${line}`);
+	for (const line of clip(findings(result.output, dirs), LIMIT)) console.log(`  ${line}`);
 	if (step.fix) console.log(`  fix: ${step.fix}`);
+	console.log(`  log: ${log}`);
 	return false;
 }
 

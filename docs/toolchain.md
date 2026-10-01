@@ -182,7 +182,8 @@ one root script for each step: `format`, `lint`, `knip`, `rules`, and
 build skips `types` and `test`. Every other step runs, so one run reports
 every failure. The runner keeps the output of each step in
 `.cache/check/<step>.log`. A step that passes prints one line. A step that
-fails prints at most 60 lines of findings, then a `fix:` line. The filter in
+fails prints at most 60 lines of findings, a `fix:` line, and the path of
+its log. The filter in
 [`scripts/check-lib.mjs`](../scripts/check-lib.mjs) removes banners,
 timings, passing tests, and stack frames inside `node_modules`. It puts a
 header over the lines of each turbo task and makes each path relative to
@@ -196,7 +197,7 @@ the generated file. `pnpm check` runs `lsc gen-check`, which regenerates
 and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
 proof and `check-extra.sh`, which verifies every proofs file, and needs
 Dafny on `PATH`. `pnpm rule:check <file>` does both for one file.
-`lsc gen-check` writes each `.dfy.gen` and exits 0, so
+`lsc gen-check` passes a `.dfy` that only adds lines to the generation, so
 [`scripts/rules-fresh.sh`](../scripts/rules-fresh.sh) compares each listed
 `.dfy` with its fresh generation and names the stale file.
 

@@ -65,10 +65,15 @@ test('the failed tasks come from the summary of the run, without the scope', () 
 	assert.deepEqual(failedTasks('ok'), []);
 });
 
-test('a long finding keeps its head and names the log', () => {
+test('a long finding keeps its head and counts the rest', () => {
 	const lines = ['a', 'b', 'c'];
-	assert.deepEqual(clip(lines, 3, 'x.log'), lines);
-	assert.deepEqual(clip(lines, 2, 'x.log'), ['a', 'b', '… 1 more lines in x.log']);
+	assert.deepEqual(clip(lines, 3), lines);
+	assert.deepEqual(clip(lines, 2), ['a', 'b', '… 1 more lines']);
+});
+
+test('a finding that starts like a turbo summary line stays', () => {
+	const lines = ['Failed: assertion on docs/a.md', 'Time: the clock went back'];
+	assert.deepEqual(findings(lines.join('\n')), lines);
 });
 
 test('a selection keeps the report order and refuses a name that is no step', () => {

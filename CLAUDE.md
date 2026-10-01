@@ -21,8 +21,8 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
   returns the run that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
-  library. `claude` runs on a fake executable in tests; `codex` has live
-  tests only.
+  library. The `claude` tests run on a fake executable. `codex` has no fake;
+  its live tier runs the real SDK.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of
@@ -103,13 +103,16 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 - **Prove the code first without a provider.** Run the scripted tier and
   `pnpm check` before any live run.
 - **Never repeat a live run to chase a flake.** Read the failure first. A
-  credit or authentication message is a provider error, not a code defect.
+  credit or authentication message is a provider error.
 - **Never commit a key.** Pass a key through the environment for one command.
+  Write it to no file, workflow, or record.
 - **CI runs the live tier on `main` and weekly.** Add no live run to a pull
   request workflow.
 
 `AMBION_HARNESS=<pi|claude|codex>` selects the harness of the live seats.
-`pi` and `claude` read `ANTHROPIC_API_KEY`; `codex` reads `CODEX_API_KEY`.
+`pi` reads `<PROVIDER>_API_KEY` for the provider of `AMBION_MODEL`
+(`ANTHROPIC_API_KEY` by default). `claude` reads `ANTHROPIC_API_KEY`, and
+`codex` reads `CODEX_API_KEY`.
 
 ## Product rules
 
@@ -119,8 +122,9 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
   snapshot and the golden journals in the same commit, and name the change in
   the changelog. [`planning/next.md`](planning/next.md) holds the rule.
 - **The sensor wire API carries a version number.** A breaking change raises
-  `api`, and a client refuses a server at another `api`. Reducer state
-  belongs to the server. Measurement timestamps are the source of truth; host
+  `api`, and a client refuses a server at another `api`. A supplied server
+  does not upgrade with the host. Reducer state belongs to the server. The
+  workspace keeps observed evidence through existing snapshot refs. Measurement timestamps are the source of truth; host
   time governs host interactions.
 - **A sensor definition starts as a Git template.** The agent forks,
   customizes, validates, commits, and pushes before it runs a saved version.
@@ -137,7 +141,7 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
   (`@earendil-works/pi-agent-core`) owns the model loop, the session, and
   compaction. `packages/workspace` owns the workspace port, resource, tools,
   and backend helpers. `packages/just-bash` owns the just-bash filesystem and
-  shell. `packages/journal` owns the queue, the fence, and the entry
+  shell. The core composes ordinary tools. `packages/journal` owns the queue, the fence, and the entry
   envelope. A harness keeps its own session, best effort, for one exchange.
   Ambion owns only participants as values and the room. A third concern is a
   design failure: push it into a dependency or drop it.
@@ -175,7 +179,8 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
   `describe.each` with one body.
 - **Shared setup lives in `test/support`.** In the core, `scriptedAgent(name)`
   defines a seat on the scripted model, and `stopAtEnd(room)` stops a room at
-  the end of a test.
+  the end of a test. Use them in place of a local `defineAgent` and a
+  `try`/`finally`.
 - **The scripted executor makes a room deterministic.** It comes from
   `@ambionframework/ambion/testing`; `settled(room)` waits for the room. A
   scripted Pi stream comes from `@ambionframework/pi/testing`.
@@ -197,8 +202,8 @@ sentence. `README.md` and `docs/` follow these rules.
 4. **One word, one meaning.** An **activation** is the room waking one seat.
    An **exchange** is a person's question and every activation until the
    room goes quiet. What the journal holds is an **entry**. `turn` belongs to
-   Pi (one request to a provider). `row` belongs to SQL. Nobody uses `round`,
-   `trigger`, `call`, or `wake` for an activation.
+   Pi (one request to a provider). `row` belongs to SQL. `round` belongs to
+   nobody. An activation is never a `trigger`, a `call`, or a `wake`.
 5. **Simple tenses.** Present for how things work, imperative for
    instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits".
