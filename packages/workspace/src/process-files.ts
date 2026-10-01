@@ -53,7 +53,7 @@ export interface ProcessRecord {
 	/** Set when the state is `failed`. */
 	readonly error?: string;
 	/** True while the state is `running` and a cancel of the table waits for the end. */
-	readonly cancelling?: boolean;
+	readonly stopping?: boolean;
 }
 
 /** What `spec` holds: the facts of a process at its start. */
@@ -344,7 +344,7 @@ export async function readFiles(
 	);
 }
 
-type Ending = Pick<ProcessRecord, 'state' | 'endedAt' | 'exitCode' | 'error' | 'cancelling'>;
+type Ending = Pick<ProcessRecord, 'state' | 'endedAt' | 'exitCode' | 'error' | 'stopping'>;
 
 /**
  * The end that `stop` names: its cause, its time, and for a failure its
@@ -367,8 +367,8 @@ function stopEnding(stop: string): Ending {
  */
 function runningEnding(stop: string | undefined): Ending {
 	const state = stop === undefined ? undefined : stopEnding(stop).state;
-	const cancelling = state === 'cancelled' || state === 'timed_out';
-	return cancelling ? { state: 'running', cancelling } : { state: 'running' };
+	const stopping = state === 'cancelled' || state === 'timed_out';
+	return stopping ? { state: 'running', stopping } : { state: 'running' };
 }
 
 /** The exit code of a shell that `SIGTERM` ended: 128 + 15. */

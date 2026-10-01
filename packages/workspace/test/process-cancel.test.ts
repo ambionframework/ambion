@@ -143,10 +143,10 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		]);
 		// While the grace runs, the status reads running, and names the cancel that waits.
 		let listed: ProcessRecord | undefined;
-		for (let reads = 0; listed?.cancelling !== true && reads < 50; reads += 1) {
+		for (let reads = 0; listed?.stopping !== true && reads < 50; reads += 1) {
 			[listed] = await workspace.processes.list({ agent: 'ada' });
 		}
-		expect(listed).toMatchObject({ handle, state: 'running', cancelling: true });
+		expect(listed).toMatchObject({ handle, state: 'running', stopping: true });
 		expect((await invoke(workspace, 'status', { handle })).text).toContain(
 			'is running, and the table stopped it. It has not ended yet.',
 		);
@@ -207,10 +207,10 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(Date.now() - began).toBeLessThan(10_000);
 		expect(second.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		const early = await first;
-		expect((await joined).process).toMatchObject({ state: 'running', cancelling: true });
+		expect((await joined).process).toMatchObject({ state: 'running', stopping: true });
 		expect(Date.now() - began).toBeGreaterThanOrEqual(14_000);
 		expect(Date.now() - began).toBeLessThan(25_000);
-		expect(early.process).toMatchObject({ state: 'running', cancelling: true });
+		expect(early.process).toMatchObject({ state: 'running', stopping: true });
 		expect(early.text).toContain('is running, and the table stopped it. It has not ended yet.');
 		// The host timer sends SIGKILL after the full grace.
 		const ending = await invoke(workspace, 'wait', { handles: [handle], timeout: 25 });

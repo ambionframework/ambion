@@ -250,7 +250,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 * syntax error, gives that code. An error of the run gives `stop`.
 	 */
 	const recordEnd = async (process: Live, own: Own, run: Run): Promise<void> => {
-		if (process.cancelling !== undefined) return;
+		if (process.stopping !== undefined) return;
 		await onFiles(process, own, async (env) => {
 			const exit = await env.exists(`${process.dir}/exit`, BACKGROUND_CONTEXT);
 			if (!exit.ok) throw exit.error;

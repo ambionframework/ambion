@@ -66,7 +66,7 @@ export interface Live {
 	own?: Own;
 	timer?: ReturnType<typeof setTimeout>;
 	/** Why the first cancel ended it. */
-	cancelling?: CancelCause;
+	stopping?: CancelCause;
 }
 
 /** What the cancels need from the table. */
@@ -120,8 +120,8 @@ export function openCancels({ live, released, detached, readOne }: CancelOptions
 
 	/** Name the cause of the first cancel in `stop`. A later cancel keeps it. */
 	const nameCause = async (process: Live, env: WorkspaceEnv, cause: CancelCause): Promise<void> => {
-		if (process.cancelling !== undefined) return;
-		process.cancelling = cause;
+		if (process.stopping !== undefined) return;
+		process.stopping = cause;
 		await writeStop(env, process.dir, stopLine(cause));
 	};
 

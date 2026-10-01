@@ -770,7 +770,7 @@ describe('the files as the source of truth', () => {
 		{ files: { exit: '143', stop: STOP }, live: false, state: 'cancelled' },
 		{ files: { exit: TERMED }, live: false, state: 'exited' },
 		{ files: { exit: TERMED, stop: LOST_LINE }, live: false, state: 'exited' },
-		{ files: { stop: STOP }, live: true, state: 'running', cancelling: true },
+		{ files: { stop: STOP }, live: true, state: 'running', stopping: true },
 		{ files: { stop: LOST_LINE }, live: true, state: 'running' },
 		{
 			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
@@ -787,7 +787,7 @@ describe('the files as the source of truth', () => {
 		{ files: {}, live: false, state: 'failed' },
 	])(
 		'reads $state from the files $files, with a live shell: $live',
-		({ files, live, state, cancelling }) => {
+		({ files, live, state, stopping }) => {
 			const spec = {
 				handle: 'bash-00000000000b',
 				kind: 'bash' as const,
@@ -800,10 +800,10 @@ describe('the files as the source of truth', () => {
 			const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
 			const status = statusOf(read, false);
 			expect(status.state).toBe(state);
-			expect(status.cancelling).toBe(cancelling);
+			expect(status.stopping).toBe(stopping);
 			if (files.exit?.includes(' ')) expect(status.endedAt).toBe('2026-01-01T00:01:00Z');
 			// The state line names a cancel that waits for the end.
-			expect(stateLine(status).includes('the table stopped it')).toBe(cancelling === true);
+			expect(stateLine(status).includes('the table stopped it')).toBe(stopping === true);
 		},
 	);
 
