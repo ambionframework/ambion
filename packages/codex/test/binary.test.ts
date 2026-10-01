@@ -12,6 +12,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	type AmbionTool,
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -61,6 +62,26 @@ const lookup = defineTool({
 	execute: () => 'found r1',
 });
 
+/** A 1x1 PNG, base64. */
+const PIXEL =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+
+/** The text that Codex puts in place of an image when the model does not read images. */
+const OMITTED = 'image content omitted';
+
+const look = defineTool({
+	name: 'look',
+	description: 'Look at one frame.',
+	parameters: Type.Object({}),
+	execute: () => ({
+		content: [
+			{ type: 'text', text: 'frame at t=1' },
+			{ type: 'image', data: PIXEL, mimeType: 'image/png' },
+		],
+		details: {},
+	}),
+});
+
 const say = (text: string): Reply => ({ call: 'say', namespace: NAMESPACE, args: { text } });
 
 /** Open a room with one default seat on the binary. The room stops when the test ends. */
@@ -68,6 +89,7 @@ async function roomOn(
 	execution: Execution,
 	options: {
 		tools?: boolean;
+		extraTools?: readonly AmbionTool[];
 		native?: Partial<CodexOptions>;
 		instructions?: string;
 		trace?: TracePolicy;
@@ -85,7 +107,9 @@ async function roomOn(
 		executor: codex({
 			instructions: options.instructions ?? 'Answer in one sentence.',
 			model: MODEL,
-			...(options.tools ? { tools: [lookup] } : {}),
+			...(options.tools || options.extraTools
+				? { tools: [...(options.tools ? [lookup] : []), ...(options.extraTools ?? [])] }
+				: {}),
 			...options.native,
 		}),
 		...(options.trace === undefined ? {} : { trace: options.trace }),
@@ -267,6 +291,56 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(String(rollout)).toContain(`-${String(thread?.data?.thread)}.jsonl`);
 					expect(readFileSync(String(rollout), 'utf8')).toContain(String(thread?.data?.thread));
 					expect(threadOf(on.responses.requests[0])).toBe(thread?.data?.thread);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'sends an image from a tool of the seat to the model, and keeps the tool list as it was',
+			async () => {
+				const on = await codexOn([
+					{ call: 'look', namespace: NAMESPACE, args: {} },
+					say('a pixel'),
+					{ text: 'done' },
+				]);
+				try {
+					const { visit, steps } = await roomOn(on.execution, { extraTools: [look] });
+					await (await visit.send({ text: 'What is in the frame?' })).waitForClose();
+
+					expect(on.responses.requests).toHaveLength(3);
+					const [first, second] = on.responses.requests as [ResponsesRequest, ResponsesRequest];
+					// The image reaches the model as an `input_image` with the same bytes, and no placeholder.
+					const output = second.input.find((item) => item.type === 'function_call_output');
+					expect(output?.output).toEqual(
+						expect.arrayContaining([
+							{ type: 'input_text', text: 'frame at t=1' },
+							{ type: 'input_image', image_url: `data:image/png;base64,${PIXEL}` },
+						]),
+					);
+					expect(JSON.stringify(second.input)).not.toContain(OMITTED);
+					// The trace keeps the text part and the image part, with the size of the image in place of its bytes.
+					const result = steps.find(
+						(step) => step.type === 'tool_result' && JSON.stringify(step.output).includes('frame'),
+					);
+					expect(result).toMatchObject({
+						output: [
+							{ type: 'text', text: 'frame at t=1' },
+							{ type: 'image', mimeType: 'image/png', bytes: expect.any(Number) },
+						],
+					});
+					expect(JSON.stringify(result)).not.toContain(PIXEL);
+					// No native tool reads images, so the tool list holds the room tools and the seat tool.
+					expect(toolsOf(first)).toEqual({
+						functions: ['list_mcp_resource_templates', 'list_mcp_resources', 'read_mcp_resource'],
+						[NAMESPACE]: ['dismiss', 'look', 'recall', 'say', 'schedule', 'seat', 'unseat'],
+					});
+					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
+					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
 				} finally {
 					await on.close();
 				}

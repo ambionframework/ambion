@@ -538,6 +538,14 @@ permission profiles do not confine it. A feature flag cannot turn it off,
 because the model catalog turns it on: `gpt-5.6-luna` has
 `tool_mode: 'code_mode_only'`. `gpt-5.5` has no tool mode.
 
+**An image from a tool of the seat reaches the model.** A tool that returns
+an image part, such as the workspace `read` of a picture, sends the image to
+a model that reads images. Codex puts it in the tool output as an
+`input_image`, and the trace keeps the part. No native tool reads an image,
+because the `view_image` feature is off. A model with no image input in its
+catalog entry stays text-only. Codex then replaces the image with a text
+placeholder.
+
 **The default replaces the catalog entry.** A custom catalog overrides the
 entry of a model. The executor runs `codex debug models` on the installed
 binary once for each binary in the process and patches the entry of the seat
@@ -545,11 +553,11 @@ model. It writes the patched catalog to a temporary directory and passes the
 path as `model_catalog_json`. The recipe has five parts:
 
 1. **The catalog entry.** `tool_mode`, `apply_patch_tool_type`, and
-   `multi_agent_version` are `null`. `input_modalities` is `['text']`.
-   `supports_search_tool`, `supports_image_detail_original`, and the three
+   `multi_agent_version` are `null`. `supports_search_tool` and the three
    `include_*_usage_instructions` flags are `false`. `node_repl_disabled` is
    `true`. `experimental_supported_tools` is empty. This removes Code Mode,
-   the patch tool, image input, and the search tool.
+   the patch tool, and the search tool. The patch leaves `input_modalities`
+   and `supports_image_detail_original` as the entry has them.
 2. **The features.** The config sets 31 features to `false`, among them
    `shell_tool`, `unified_exec`, `code_mode`, `code_mode_only`, `apps`,
    `plugins`, `computer_use`, `multi_agent`, and `hooks`. This removes the
@@ -727,6 +735,7 @@ holds the smallest room that proves one claim.
 | `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                                    |
 | `test/live/tools.test.ts`       | A command and a file change become steps; the next say cites the path                                               |
 | `test/live/exclusive.test.ts`   | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
+| `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color                            |
 | `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                                        |
 | `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
 | `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                                               |
