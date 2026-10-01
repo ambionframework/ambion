@@ -56,6 +56,7 @@ describe('stepsView', () => {
 						seq: 7,
 					},
 					{ type: 'steer', seq: 8, consumed: false },
+					{ type: 'notice', level: 'warning', text: 'Reconnecting' },
 					{ type: 'usage', ...usage({ cost: 0.5 }) },
 					{ type: 'end', stop: 'stopped' },
 				],
@@ -74,6 +75,7 @@ describe('stepsView', () => {
 			'failed: boom',
 			'room committed at 7',
 			'steer 8 queued',
+			'warning: Reconnecting',
 			'$0.5000',
 			'ended: stopped',
 		]);

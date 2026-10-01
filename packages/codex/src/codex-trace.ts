@@ -5,7 +5,10 @@
  * An `agent_message` or `reasoning` item carries the whole text so far, so
  * the steps hold the growth of the text: one delta for each update, then a
  * closing step. A tool item becomes a `tool_call` and a `tool_result`. An
- * item that Codex reports only at its end gives both steps at once.
+ * item that Codex reports only at its end gives both steps at once. The plan
+ * of the agent (`todo_list`) is the tool `update_plan`. A diagnostic of Codex
+ * (an `error` item or an `error` event) is a `notice`. The terminal failure of
+ * a turn is no notice: the pass result carries it to the `end` step.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
 import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
@@ -20,6 +23,8 @@ function nameOf(item: ThreadItem): string {
 			return 'command';
 		case 'file_change':
 			return 'file_change';
+		case 'todo_list':
+			return 'update_plan';
 		default:
 			return item.type;
 	}
@@ -36,6 +41,8 @@ function inputOf(item: ThreadItem): unknown {
 			return { changes: item.changes };
 		case 'web_search':
 			return { query: item.query };
+		case 'todo_list':
+			return { items: item.items };
 		default:
 			return undefined;
 	}
@@ -60,6 +67,8 @@ function outcomeOf(item: ThreadItem): { output: unknown; error?: string } {
 			return item.status === 'failed'
 				? { output: item.changes, error: 'The patch failed.' }
 				: { output: item.changes };
+		case 'todo_list':
+			return { output: item.items };
 		default:
 			return { output: undefined };
 	}
@@ -67,7 +76,21 @@ function outcomeOf(item: ThreadItem): { output: unknown; error?: string } {
 
 /** The item types that run as a tool. */
 function isTool(item: ThreadItem): boolean {
-	return ['mcp_tool_call', 'command_execution', 'file_change', 'web_search'].includes(item.type);
+	return ['mcp_tool_call', 'command_execution', 'file_change', 'web_search', 'todo_list'].includes(
+		item.type,
+	);
+}
+
+/** The longest diagnostic text a notice keeps. A provider error body can be large. */
+export const NOTICE_CHARS = 2000;
+
+/** A diagnostic of Codex as a step. A long text keeps its start and a note of its length. */
+function warning(text: string): Step {
+	const kept =
+		text.length <= NOTICE_CHARS
+			? text
+			: `${text.slice(0, NOTICE_CHARS)} [${text.length - NOTICE_CHARS} more characters]`;
+	return { type: 'notice', level: 'warning', text: kept };
 }
 
 /** The paths a completed patch changed. A failed patch changed none. */
@@ -142,6 +165,8 @@ export class CodexSteps {
 				return this.item(event.item, true);
 			case 'turn.completed':
 				return [{ type: 'usage', ...usageOf(event.usage) }];
+			case 'error':
+				return [warning(event.message)];
 			default:
 				return [];
 		}
@@ -150,6 +175,7 @@ export class CodexSteps {
 	private item(item: ThreadItem, done: boolean): Step[] {
 		if (item.type === 'agent_message') return this.grown(this.idOf(item), 'text', item.text, done);
 		if (item.type === 'reasoning') return this.grown(this.idOf(item), 'thinking', item.text, done);
+		if (item.type === 'error') return done ? [warning(item.message)] : [];
 		return isTool(item) ? this.tool(item, done) : [];
 	}
 

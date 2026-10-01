@@ -137,22 +137,23 @@ package. The block in `packages/codex/README.md` gets the same check.
 **`codex(options)` takes the fields of an agent and the policy of Codex.**
 The executor passes each policy field to the Codex SDK unchanged.
 
-| Option                  | Default            | What it does                                                 |
-| ----------------------- | ------------------ | ------------------------------------------------------------ |
-| `instructions`          | Required           | The private voice of the agent                               |
-| `model`                 | Required           | A Codex model identifier                                     |
-| `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server |
-| `bundles`               | None               | Tool bundles with guidance                                   |
-| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                |
-| `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
-| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens  |
-| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
-| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`      |
-| `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
-| `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them               |
-| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only       |
-| `workingDirectory`      | Process directory  | The directory where Codex works                              |
-| `additionalDirectories` | None               | More writable directories, under `workspace-write` only      |
+| Option                  | Default            | What it does                                                        |
+| ----------------------- | ------------------ | ------------------------------------------------------------------- |
+| `instructions`          | Required           | The private voice of the agent                                      |
+| `model`                 | Required           | A Codex model identifier                                            |
+| `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server        |
+| `bundles`               | None               | Tool bundles with guidance                                          |
+| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
+| `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads                 |
+| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens         |
+| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them          |
+| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`             |
+| `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`                 |
+| `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them                      |
+| `reasoningSummary`      | `'auto'`           | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
+| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only              |
+| `workingDirectory`      | Process directory  | The directory where Codex works                                     |
+| `additionalDirectories` | None               | More writable directories, under `workspace-write` only             |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,
@@ -326,7 +327,7 @@ Linux and macOS only. A test kills a real host in the middle of a model request 
 
 ## Step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the Codex source of each step.
 
 **Each item that Codex reports becomes steps in the trace.** Codex reports an
@@ -334,16 +335,20 @@ item as it starts, as it changes, and as it completes. A text item carries the
 whole text so far, so the steps hold the growth: one delta for each update,
 then a closing step.
 
-| Codex item or event  | Steps                                                                      |
-| -------------------- | -------------------------------------------------------------------------- |
-| `agent_message`      | `text` deltas, then a closing `text`                                       |
-| `reasoning`          | `thinking` deltas, then a closing `thinking`                               |
-| `mcp_tool_call`      | `tool_call` and `tool_result`; a room tool has its own name                |
-| `command_execution`  | `tool_call` named `command`; the result holds the output and the exit code |
-| `file_change`        | `tool_call` named `file_change`; the result holds the changes              |
-| `web_search`         | `tool_call` named `web_search`, with the query                             |
-| `turn.completed`     | `usage`                                                                    |
-| `todo_list`, `error` | No step                                                                    |
+| Codex item or event | Steps                                                                                           |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `agent_message`     | `text` deltas, then a closing `text`                                                            |
+| `reasoning`         | `thinking` deltas, then a closing `thinking`                                                    |
+| `mcp_tool_call`     | `tool_call` and `tool_result`; a room tool has its own name                                     |
+| `command_execution` | `tool_call` named `command`; the result holds the output and the exit code                      |
+| `file_change`       | `tool_call` named `file_change`; the result holds the changes                                   |
+| `web_search`        | `tool_call` named `web_search`, with the query                                                  |
+| `todo_list`         | `tool_call` named `update_plan` with the `items`; the result holds them                         |
+| `error` item        | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
+| `error` event       | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
+| `turn.started`      | Once for each thread: `notice` at level `info`, with the thread, the home, and the rollout file |
+| `turn.completed`    | `usage`                                                                                         |
+| `turn.failed`       | No step; the failure goes to the `end` step                                                     |
 
 **The id of a step is unique in the room.** A real `codex` numbers the items
 of each turn from `item_0`. The id of a step holds the activation id, the
@@ -365,6 +370,13 @@ completed `file_change`. The next ordinary `say` cites them in `refs`,
 through the `roomTools` options of the session, and the executor holds each
 path once. A ref is an absolute URI with a scheme, so
 the executor writes each path as a `file:` URI. The room refuses a bare path.
+
+**A notice never gates the activation.** Codex reports its own diagnostics
+as `error` items and `error` events, such as an unknown setting in the
+config or "Reconnecting... 1/5". The trace keeps each one as a `notice` at
+level `warning`. A turn that fails ends with an `error` event and then
+`turn.failed`. The `end` step carries that failure, and the `error` event
+also shows as a `notice` with the same text.
 
 **The package writes no `approval` step.** Codex answers its own approvals by
 its policy and reports none through the SDK.
@@ -395,6 +407,39 @@ cached tokens counts the cache writes twice.
 **Known limits.** The count ignores `reasoning_output_tokens`. The recorded
 runs do not show whether `output_tokens` includes them. A field that an older
 `codex` omits counts as zero.
+
+## Debug an activation
+
+**The trace shows each step of the model.** Give the `logger` option of
+`createRuntime` a function that keeps the steps. Each activation logs its
+`thinking`, `text`, `tool_call`, and `tool_result` steps, the plan of the
+agent as `update_plan`, the `room` answers, and the `usage`. The `end` step
+holds the failure of a turn that failed.
+
+**The reasoning summary feeds `thinking`.** Codex shows no raw reasoning.
+It shows a summary that the model writes when the request asks for one. The
+catalog of some models turns the summary off, so the executor asks for it:
+`reasoningSummary` is `auto` by default and goes to Codex as
+`model_reasoning_summary`. `concise` and `detailed` set the size. `none`
+asks for no summary, and the request then has no `reasoning.summary` field.
+
+**The default trace policy cuts each thinking block to 280 characters.**
+[Executors](executors.md#the-trace-log) states the policy. Set
+`defineAgent({ trace: { thinking: 'full', toolOutput: 'full' } })` to keep
+all of each block while you debug.
+
+**One `notice` joins the trace to the full record of Codex.** The notice
+has the text "Codex thread" and the level `info`. Its `data` holds the
+`thread` id, the `home` of the seat, and the `rollout` path. The rollout is
+the file `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`. It
+holds the instructions, every input and output item, the reasoning, and the
+tool calls. The executor looks for the file after the turn starts. It leaves
+out `rollout` when it finds none. Each thread has one notice for the
+activation.
+
+**Codex keeps its own logs in the seat home.** `logs_2.sqlite` in the home
+holds the log of the `codex` process. The stderr of `codex exec` is not
+visible when the run succeeds.
 
 ## Failures
 
@@ -685,6 +730,7 @@ holds the smallest room that proves one claim.
 | `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                                        |
 | `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
 | `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                                               |
+| `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file                         |
 | `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan                        |
 
 **Run the live tier with a key.** Every definition sets the model

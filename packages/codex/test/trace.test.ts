@@ -2,7 +2,7 @@
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
-import { CodexSteps, changedPaths, usageOf } from '../src/codex-trace.ts';
+import { CodexSteps, changedPaths, NOTICE_CHARS, usageOf } from '../src/codex-trace.ts';
 import { causeOf, passResultOf } from '../src/failure.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
@@ -141,6 +141,49 @@ describe('tools', () => {
 		expect(steps.steps(started({ ...call, status: 'in_progress' }))).toMatchObject([
 			{ type: 'tool_call', name: 'say' },
 		]);
+	});
+});
+
+describe('plans and diagnostics', () => {
+	it('maps the plan of the agent to the tool update_plan', () => {
+		const items = [
+			{ text: 'Read the log', completed: true },
+			{ text: 'Name the owner', completed: false },
+		];
+		expect(
+			stepsOf(
+				started({ id: 'p1', type: 'todo_list', items }),
+				updated({ id: 'p1', type: 'todo_list', items }),
+				completed({ id: 'p1', type: 'todo_list', items }),
+			),
+		).toEqual([
+			{ type: 'tool_call', call: idOf('p1'), name: 'update_plan', input: { items } },
+			{ type: 'tool_result', call: idOf('p1'), output: items },
+		]);
+	});
+
+	it('maps an error item and a non-terminal error event to a warning notice', () => {
+		const text = 'Codex is ignoring 1 unrecognized configuration setting.';
+		expect(
+			stepsOf(completed({ id: 'e1', type: 'error', message: text }), {
+				type: 'error',
+				message: 'Reconnecting... 1/5',
+			}),
+		).toEqual([
+			{ type: 'notice', level: 'warning', text },
+			{ type: 'notice', level: 'warning', text: 'Reconnecting... 1/5' },
+		]);
+		expect(stepsOf(started({ id: 'e1', type: 'error', message: text }))).toEqual([]);
+		const long = 'x'.repeat(NOTICE_CHARS + 5);
+		expect(stepsOf({ type: 'error', message: long })).toEqual([
+			{ type: 'notice', level: 'warning', text: `${'x'.repeat(NOTICE_CHARS)} [5 more characters]` },
+		]);
+	});
+
+	it('maps the terminal failure of a turn to no step, because the pass result carries it', () => {
+		expect(stepsOf({ type: 'turn.failed', error: { message: 'unexpected status 401' } })).toEqual(
+			[],
+		);
 	});
 });
 
