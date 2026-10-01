@@ -161,7 +161,7 @@ activation does not fail. On Node the session is a JSONL file under
 ## Steps, usage, and failures
 
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
-`tool_result`, `steer`, and `usage`. It records no `approval`.
+`tool_result`, `steer`, and `usage`.
 
 **Usage.** One `usage` step follows each provider request, with the cost from
 the price table of the model.

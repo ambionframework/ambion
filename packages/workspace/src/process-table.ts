@@ -29,20 +29,20 @@ export interface ProcessQuery {
 	readonly running?: boolean;
 }
 
-/** Connect one agent's environment outside the queue of the bash owner. */
+/** Connect one agent's environment outside the queue of the bash resource. */
 type ProcessConnect = (agent: WorkspaceAgent) => Promise<WorkspaceEnv>;
 
-/** What the table needs from the workspace: a connect of its own, and the bash owner. */
+/** What the table needs from the workspace: a connect of its own, and the bash resource. */
 export interface ProcessTableOptions {
 	readonly connect: ProcessConnect;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
+	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 }
 
 /** The background processes of one workspace. */
 export interface ProcessTable {
 	/**
 	 * Start a bash process for `agent`. `env` is the agent's environment on
-	 * the bash owner: the table reads the agent's files and writes the new
+	 * the bash resource: the table reads the agent's files and writes the new
 	 * process's `spec` through it. The process runs on an environment of its own.
 	 */
 	start(agent: WorkspaceAgent, env: WorkspaceEnv, spec: BashProcessSpec): Promise<ProcessRecord>;
@@ -71,7 +71,7 @@ export interface ProcessTable {
 		agent: WorkspaceAgent,
 		handle: string,
 	): Promise<{ readonly status: ProcessRecord; readonly cancelled: boolean }>;
-	/** Write `seen` for a process in a final state, through `env` on the bash owner. */
+	/** Write `seen` for a process in a final state, through `env` on the bash resource. */
 	markSeen(env: WorkspaceEnv, process: ProcessRecord): Promise<void>;
 	/**
 	 * The reminder of one activation: the seat's running processes, and the

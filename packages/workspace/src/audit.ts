@@ -4,9 +4,9 @@
  *
  * The log is an ordinary file: an agent reads it with `read` or `bash cat`,
  * the same as any file a peer wrote. Writing one entry runs as one more
- * operation on the bash owner after the call ends. Another operation can run
- * between the call and its entry. A rotation never races another agent's
- * write, because each entry is an operation on the one owner.
+ * operation on the bash resource after the call ends. Another operation can
+ * run between the call and its entry. A rotation never races another agent's
+ * write, because each entry is an operation on the one bash resource.
  *
  * The append and the rotation are `log.ts`'s shared mechanism. This module
  * adds what is specific to a tool-call entry: the JSONL shape, a short
@@ -65,7 +65,7 @@ export interface AuditLogOptions {
 	readonly rotateBytes?: number;
 	/**
 	 * Told about a directory, write, or rotation failure, and about an entry
-	 * that the bash owner refuses, as after `dispose`. The call still returns.
+	 * that the bash resource refuses, as after `dispose`. The call still returns.
 	 */
 	readonly onError?: (error: Error) => void;
 }
@@ -129,8 +129,8 @@ async function recordEntry(
 
 /**
  * Open one rotating JSONL audit log. `append` runs inside one `use`
- * operation of the bash owner. It needs no queue of its own, because the
- * owner runs one operation at a time.
+ * operation of the bash resource. It needs no queue of its own, because the
+ * bash resource runs one operation at a time.
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');

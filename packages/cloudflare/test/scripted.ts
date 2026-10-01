@@ -33,7 +33,10 @@ function check(context: Context) {
 		);
 	const call = has('[posted → checker, returns')
 		? fauxToolCall('say', { to: 'priya', text: 'The check came back.' })
-		: fauxToolCall('schedule', { text: 'Check the pour log.', after: has('tomorrow') ? 3600 : 1 });
+		: fauxToolCall('schedule', {
+				text: 'Check the pour log.',
+				delaySeconds: has('tomorrow') ? 3600 : 1,
+			});
 	return fauxAssistantMessage([call], { stopReason: 'toolUse' });
 }
 

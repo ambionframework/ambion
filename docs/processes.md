@@ -41,7 +41,7 @@ the processes of the agents of this run through `workspace.processes`
 | `process-text.ts`   | The state line, the `ps` table, and the reminder text                |
 
 The journal holds no entry for a process. [Workspace](workspace.md)
-states the owner and the backends that a process runs on.
+states the resources and the backends that a process runs on.
 
 ## Words
 
@@ -239,7 +239,7 @@ compiling 14 of 120
   `schedule` call.
 
 ```text
-Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, call schedule with after, in seconds.
+Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, call schedule with delaySeconds.
 ```
 
 **The note names the seconds left before the deadline.** The agent weighs
@@ -296,18 +296,18 @@ handle and the limit of running processes fail too
 ## A process
 
 **A process runs on an environment of its own.** The table connects it
-through the bash backend, outside the queue of the bash owner. A long
+through the bash backend, outside the queue of the bash resource. A long
 process holds no tool call of any agent.
 
-**`bash` starts its process as one operation on the bash owner.** The
-start comes after every earlier operation on the owner, so a `write` and
+**`bash` starts its process as one operation on the bash resource.** The
+start comes after every earlier operation on the bash resource, so a `write` and
 then a `bash` that reads the file stay in order. The start reads the
 agent's table, checks the limits, writes `spec`, and connects the
 process's environment.
 
 **After the start, the backend's filesystem orders a process against
 other work.** A process and a later `write` of the same agent can
-interleave. The owner gives no order between them.
+interleave. The bash resource gives no order between them.
 
 **The table bounds the processes of each agent.**
 
@@ -568,7 +568,7 @@ export interface ReminderSeat {
 **A reminder has 5 seconds.** A reminder that throws, rejects, gives
 blank text, or takes longer gives no text, and the activation goes on.
 At the bound the core aborts `signal`. The workspace reminder then
-writes no `seen`, and a read that waits on a busy bash owner does not
+writes no `seen`, and a read that waits on a busy bash resource does not
 start. The core does not cut a long reminder, so the bundle bounds its own
 text.
 
@@ -581,7 +581,7 @@ when the pass has something to send.
 - **Claude** and **Codex** read the whole view on the first pass.
 
 **The process reminder reads the agent's table once.** It runs on the
-bash owner. A sensor-enabled workspace also checks each connected process
+bash resource. A sensor-enabled workspace also checks each connected process
 through the table and adds captured sensor discovery to the reminder.
 A bundle with skills first queues the copy of the
 skills, which costs one more read when the copy matches
@@ -616,7 +616,7 @@ then, the end stays in the files.
 ### The agent can come back later
 
 **An agent schedules its own next activation.** It calls `schedule` with
-`after`, in seconds, before its activation ends. The room gives the say
+`delaySeconds` before its activation ends. The room gives the say
 back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
 reads the process in its reminder, and `status` gives the output. When the
@@ -742,11 +742,12 @@ shell still runs, the table adopts it. The host's one `ended` event for
 it comes when a read sees its end.
 
 **`dispose()` cancels every running process of this run, and every adopted
-one.** The bash owner refuses new work and drains its queue. The table
+one.** The bash resource refuses new work and drains its queue. The table
 then refuses new processes and cancels each running process, each one with
 its full grace and the slack. All the processes cancel at the same time,
-whatever their agent. The bash backend then disposes. The git owner disposes after
-the bash owner, so a push in a process still reaches the git backend.
+whatever their agent. The bash backend then disposes. The git resource
+disposes after the bash resource, so a push in a process still reaches the
+git backend.
 
 ## Backends
 
@@ -776,7 +777,7 @@ workstation's Unix accounts.
 ## The audit log
 
 **Each call of the five tools has one audit entry.** The entry runs on the
-bash owner after the call ends. The entry of a `bash` call holds the state at
+bash resource after the call ends. The entry of a `bash` call holds the state at
 the end of the call, which can be `running`. A call that fails on a process
 that ended badly records `error` with the name `ToolFailure` and the `details`
 of its result: the `ProcessRecord`, and for `wait` on several handles, every
@@ -800,7 +801,7 @@ A process keeps running after your activation ends. It stops after timeout secon
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
-To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
+To check a long process later, call schedule with delaySeconds. The room wakes you with it then.
 ```
 
 ## Out of scope

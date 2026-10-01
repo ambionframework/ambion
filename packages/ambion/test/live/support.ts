@@ -16,6 +16,7 @@ import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
 import type { PiOptions } from '../../../pi/src/index.ts';
 import {
+	type CreateRuntimeOptions,
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -82,13 +83,19 @@ type RoomOptions = Omit<StartRoomOptions, 'name' | 'stream' | 'runtime'>;
  * A live room with explicit participants and fresh storage for its record
  * and traces. `records` holds every trace step of every seat. A tool call
  * that the harness refuses before the tool runs is a step there too.
+ * `limits` sets the runtime limits of the room.
  */
-export async function open(prefix: string, options: RoomOptions) {
+export async function open(
+	prefix: string,
+	options: RoomOptions,
+	limits?: CreateRuntimeOptions['limits'],
+) {
 	const log = collectSteps();
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		execution: executionFor(),
 		logger: log.logger,
+		...(limits === undefined ? {} : { limits }),
 	});
 	const session = await startRoom({
 		...options,

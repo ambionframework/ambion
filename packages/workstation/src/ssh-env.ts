@@ -16,7 +16,7 @@
  * - SFTP gives `mtime` in seconds, and `FileInfo` wants milliseconds
  *
  * Every SFTP call races the end of the session: `ssh2` keeps a request made
- * after its channel closes pending forever, and the owner runs one
+ * after its channel closes pending forever, and the resource runs one
  * operation at a time for every agent. A call that the connection's end cuts
  * short answers `unknown`, and nothing retries it. Each operation in `files`
  * runs under `guarded`.

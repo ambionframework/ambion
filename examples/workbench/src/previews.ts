@@ -82,14 +82,14 @@ function commitLines(named: CommitUri, commit: GitCommit): string[] {
  */
 async function nowLine(workspace: Workspace, named: CommitUri): Promise<string | undefined> {
 	const name = named.branch ?? named.tag;
-	const owner = workspace.git;
-	if (name === undefined || owner === undefined) return undefined;
+	const resource = workspace.git;
+	if (name === undefined || resource === undefined) return undefined;
 	const at = named.branch === undefined ? { tag: name } : { branch: name };
 	const label = `The ${named.branch === undefined ? 'tag' : 'branch'} ${name}`;
 	// An agent writes the ref, so its name can be one git refuses. The commit still shows.
 	if (!validRefName(name)) return `${label} is not a name git accepts; the ref keeps this commit.`;
 	// Only a missing name reads as gone. Any other failure is the preview's error.
-	const now = await owner.use(workspace.mirrorAgent, (env) => env.resolve(named.repository, at));
+	const now = await resource.use(workspace.mirrorAgent, (env) => env.resolve(named.repository, at));
 	if (now === undefined) return `${label} no longer exists; the ref keeps this commit.`;
 	return now === named.commit
 		? `${label} still names this commit.`

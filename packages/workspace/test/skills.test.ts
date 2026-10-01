@@ -49,7 +49,7 @@ const POUR_PLAN = {
 	'pour-plan/references/limits.md': 'A single pour holds at most 60 t.\n',
 };
 
-/** Wait until the bash owner has run every operation queued before this one. */
+/** Wait until the bash resource has run every operation queued before this one. */
 const drained = (workspace: Workspace, name = 'alpha') => workspace.use({ name }, () => undefined);
 
 const seat = (activation: string) => ({ agent: 'alpha', room: 'lobby', activation });

@@ -3,19 +3,19 @@ export interface WorkspaceAgent {
 	readonly name: string;
 }
 
-/** The minimal environment the resource owner can clean up. Every binding's env extends it. */
+/** The minimal environment the resource can clean up. Every binding's env extends it. */
 export interface ResourceEnv {
 	cleanup(): Promise<void>;
 }
 
-/** Storage operations beneath one workspace resource owner. */
+/** Storage operations beneath one workspace resource. */
 export interface ResourceBackend<Env extends ResourceEnv = ResourceEnv> {
 	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<Env>;
 	/** Release host-local resources without deleting the persisted workspace. */
 	dispose?(): Promise<void>;
 }
 
-/** A workspace resource and its single lifecycle and coordination owner. */
+/** One backend's lifecycle and coordination: `use` runs an operation, `dispose` ends it. */
 export interface WorkspaceResource<Env extends ResourceEnv = ResourceEnv> {
 	readonly name: string;
 	use<T>(
@@ -31,9 +31,9 @@ type Phase = 'active' | 'disposing' | 'disposed';
 const CLOSED = 'Workspace is no longer available.';
 
 /**
- * Open one owner over one backend. The owner serializes complete operations,
- * including connection and callback work, so every agent sharing it observes
- * one explicit ordering policy.
+ * Open one resource over one backend. The resource serializes complete
+ * operations, including connection and callback work, so every agent that
+ * shares it observes one explicit ordering policy.
  */
 export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 	name: string;

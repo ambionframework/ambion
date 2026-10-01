@@ -62,7 +62,7 @@ it('turns a reply into one message with one tool call for each call', async () =
 	expect(result.stopReason).toBe('toolUse');
 	expect(result.content).toMatchObject([
 		{ type: 'toolCall', name: 'say', arguments: args },
-		{ type: 'toolCall', name: 'schedule', arguments: { text: 'Soon.', after: 60 } },
+		{ type: 'toolCall', name: 'schedule', arguments: { text: 'Soon.', delaySeconds: 60 } },
 	]);
 });
 

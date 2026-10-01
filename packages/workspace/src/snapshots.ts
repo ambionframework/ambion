@@ -1,9 +1,9 @@
 /**
  * Snapshots: a stable, immutable ref to the bytes of a workspace file.
  *
- * `snapshot` reads each file as the agent that asks, on the bash owner, and
- * hashes its bytes with SHA-256. It then puts the bytes under their digest
- * on the object owner, as the host agent. The ref is the kernel's snapshot
+ * `snapshot` reads each file as the agent that asks, on the bash resource,
+ * and hashes its bytes with SHA-256. It then puts the bytes under their
+ * digest on the object resource, as the host agent. The ref is the kernel's snapshot
  * URI: `ambion://workspace/<name>/snapshot/<digest>/<path>`. The same bytes
  * give the same object.
  *
@@ -13,8 +13,8 @@
  * whatever the store.
  *
  * The operations run in turn and never inside each other: `snapshot` reads
- * on the bash owner, then puts on the object owner; `restore` gets on the
- * object owner, then writes on the bash owner.
+ * on the bash resource, then puts on the object resource; `restore` gets on
+ * the object resource, then writes on the bash resource.
  */
 
 import { posix } from 'node:path';
@@ -56,13 +56,13 @@ export interface SnapshotOptions {
 	readonly signal?: AbortSignal;
 }
 
-/** The two owners a snapshot runs on, the workspace name, and the host agent. */
+/** The two resources a snapshot runs on, the workspace name, and the host agent. */
 export interface SnapshotStore {
 	/** The workspace name, the first part of every ref. */
 	readonly workspace: string;
 	/** The agent that puts and gets every object. */
 	readonly host: WorkspaceAgent;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
+	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly objects: WorkspaceResource<ObjectEnv>['use'];
 }
 
@@ -163,10 +163,10 @@ export async function takeSnapshot(
 	const { signal } = options;
 	const context = contextOf(signal);
 	const reader = options.agent ?? store.host;
-	const found = await store.shell(reader, (env) => findAll(store, env, paths, context), signal);
+	const found = await store.bash(reader, (env) => findAll(store, env, paths, context), signal);
 	const refs: string[] = [];
 	for (const file of found) {
-		const bytes = await store.shell(reader, (env) => read(env, file, context), signal);
+		const bytes = await store.bash(reader, (env) => read(env, file, context), signal);
 		const saved = await retainSnapshotBuffer(store, file.path, bytes, signal);
 		refs.push(saved.ref);
 	}
@@ -308,7 +308,7 @@ async function restoreSnapshot(
 	);
 	const path = request.path ?? `~/snapshots/${digest}/${posix.basename(named)}`;
 	const context = contextOf(signal);
-	const target = await store.shell(agent, (env) => writeFile(env, path, bytes, context), signal);
+	const target = await store.bash(agent, (env) => writeFile(env, path, bytes, context), signal);
 	return { ref: request.ref, path: target, bytes: bytes.byteLength };
 }
 

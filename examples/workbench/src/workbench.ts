@@ -219,7 +219,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 				if (!process) fail(`No process ${handle}.`);
 				return readOutput(rooms.workspace, process);
 			}),
-		// The table orders a stop on the bash owner of the agent, so the cancel
+		// The table orders a stop on the bash resource of the agent, so the cancel
 		// needs no place in the host's queue, and a wait for the end holds no read.
 		cancelProcess: (handle) => rooms.workspace.processes.cancel(handle),
 		watchProcesses: (changed) => rooms.workspace.processes.subscribe(() => changed()),

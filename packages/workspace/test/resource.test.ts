@@ -1,5 +1,5 @@
 /**
- * The resource owner and its lifecycle: the neutral contract over a backend
+ * The resource and its lifecycle: the neutral contract over a backend
  * with no Pi types, the queue that direct use and bound tools share, and
  * disposal that drains active work, revokes queued work, and stays terminal.
  */
@@ -16,7 +16,7 @@ const beta = { name: 'beta' };
 const closed = /no longer available/i;
 
 describe('the neutral resource contract', () => {
-	it('drives an owner over a backend with no Pi types, cleans up after each operation, and disposes once', async () => {
+	it('drives a resource over a backend with no Pi types, cleans up after each operation, and disposes once', async () => {
 		const events: string[] = [];
 		const backend: ResourceBackend<ResourceEnv & { note: string }> = {
 			connect: async (who) => ({

@@ -3,9 +3,9 @@
  * `layout.snapshots`, on the bash backend, written as the host agent.
  *
  * A workspace opens it when `WorkspaceBackends.objects` is absent. Each
- * operation runs on the bash owner as the host agent, so the object owner
- * may wait on the bash owner, and no bash operation waits on the object
- * owner. A put writes a temporary file beside the target and renames it, so
+ * operation runs on the bash resource as the host agent, so the object
+ * resource may wait on the bash resource, and no bash operation waits on
+ * the object resource. A put writes a temporary file beside the target and renames it, so
  * no reader sees a part, and a put of a digest the folder holds writes
  * nothing. On a workstation, the host account alone writes the folder.
  */
@@ -25,9 +25,9 @@ import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 import { assertDigest, assertObjectSize } from './object-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
-/** What the file store writes through: the bash owner, the host agent, and the folder. */
+/** What the file store writes through: the bash resource, the host agent, and the folder. */
 export interface FileObjectOptions {
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
+	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly host: WorkspaceAgent;
 	readonly root: string;
 }
@@ -82,24 +82,20 @@ async function getFile(
 	return bytes;
 }
 
-/** The file store over the bash owner at `root`. Every agent reaches the one folder. */
+/** The file store over the bash resource at `root`. Every agent reaches the one folder. */
 export function fileObjectBackend(options: FileObjectOptions): ObjectBackend {
-	const { shell, host, root } = options;
+	const { bash, host, root } = options;
 	const env: ObjectEnv = {
 		put: async (digest, bytes, signal) => {
 			assertDigest(digest);
 			assertObjectSize(digest, bytes.byteLength);
 			const context = contextOf(signal);
-			await shell(
-				host,
-				(files) => putFile(files, posix.join(root, digest), bytes, context),
-				signal,
-			);
+			await bash(host, (files) => putFile(files, posix.join(root, digest), bytes, context), signal);
 		},
 		get: async (digest, signal) => {
 			assertDigest(digest);
 			const context = contextOf(signal);
-			return shell(host, (files) => getFile(files, posix.join(root, digest), context), signal);
+			return bash(host, (files) => getFile(files, posix.join(root, digest), context), signal);
 		},
 		cleanup: async () => undefined,
 	};

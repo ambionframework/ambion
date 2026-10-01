@@ -1,6 +1,6 @@
 /**
  * The commit ref of a host: the commit that a branch, a tag, or a hash names
- * in a repository, read on the git owner, as the kernel's commit URI.
+ * in a repository, read on the git resource, as the kernel's commit URI.
  *
  * An agent writes a commit ref itself. A host that wants to know that a
  * commit exists on the server builds the ref here, or compares a cited ref
@@ -22,7 +22,7 @@ function named(at: GitRevision): string {
 
 /**
  * The ref of the commit that `at` names in `repository`, as `agent` reads it
- * on the git owner. Throws for a name that git would misread, for a
+ * on the git resource. Throws for a name that git would misread, for a
  * repository or a name that does not exist, and for a ref longer than a
  * message carries.
  */
@@ -45,7 +45,7 @@ export async function commitRefOf(
 
 /**
  * The commit that the commit ref `ref` names, as `agent` reads it on the git
- * owner. Throws for a ref that is not a commit ref of `workspace`, and for a
+ * resource. Throws for a ref that is not a commit ref of `workspace`, and for a
  * commit that the server does not hold.
  */
 export async function readCommitOf(

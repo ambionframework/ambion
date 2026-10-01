@@ -40,8 +40,9 @@ import { failedPass } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
-import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
-import { approver, type ClaudeExecutionOptions, claudeOf, queryOptions } from './options.ts';
+import { floorRefusal, passResultOf, sessionOf, unresumableResult } from './failure.ts';
+import { type SeatHome, seatHome } from './home.ts';
+import { type ClaudeExecutionOptions, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -49,19 +50,54 @@ import { roomServer } from './tools.ts';
 export const RESUMED_NOTE =
 	'Your duties and instructions for this activation follow. Where they differ from the start of this session, follow these.';
 
+/** How long a failed result waits for the end of the standard error, in milliseconds. */
+const STDERR_DRAIN = 50;
+
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
+
+/** The most characters of standard error that a failure message holds. */
+export const STDERR_TAIL = 2_000;
+
+/** The end of what an executable wrote to its standard error. */
+class Tail {
+	private text = '';
+
+	/** Add a chunk, and keep the last `STDERR_TAIL` characters. */
+	add(data: string): void {
+		this.text = (this.text + data).slice(-STDERR_TAIL);
+	}
+
+	/** A failure message with the tail after it. The message stands alone when the tail is empty. */
+	append(message: string): string {
+		const tail = this.text.trim();
+		return tail === ''
+			? message
+			: `${message}\n\nThe standard error of the process ended with:\n${tail}`;
+	}
+}
 
 /** What builds a Claude opener for one seat: its definition, and the options that run it. */
 export interface ClaudeOpenerOptions extends ClaudeExecutionOptions {
 	readonly definition: AgentDefinition;
+	/** The room of the seat. It names the config directory. Absent, `room`. */
+	readonly room?: string;
+	/** The name of the seat. It names the config directory. Absent, the name of the definition. */
+	readonly seat?: string;
 	/** The SDK entry. Absent, the SDK's own `query`. */
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
 /** The Claude opener. One instance per seat, for as long as the room runs. */
 export function createClaudeOpener(options: ClaudeOpenerOptions): ActivationOpener {
-	return (activation: ExecutorActivation): RunningActivation => new Activation(activation, options);
+	// Every activation of the seat shares one config home, because a resume reads the session store there.
+	const home = seatHome(
+		options.configRoot,
+		options.room ?? 'room',
+		options.seat ?? options.definition.name,
+	);
+	return (activation: ExecutorActivation): RunningActivation =>
+		new Activation(activation, options, home);
 }
 
 /** A steered line held until its pass sends its prompt. */
@@ -76,6 +112,7 @@ class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly options: ClaudeExecutionOptions;
+	private readonly home: SeatHome;
 	private readonly open: NonNullable<ClaudeOpenerOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
@@ -93,15 +130,24 @@ class Activation implements RunningActivation {
 	/** Opens the query. Set on the first pass. */
 	private begin: (() => Query) | undefined;
 	private stream: Query | undefined;
+	/** The end of the standard error of the current query. */
+	private tail = new Tail();
 	/** Set while a pass waits for its result. It settles the pass. */
 	private settle: ((result: PassResult) => void) | undefined;
 	private grace: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * The result that waits on `grace` to settle the pass. The end of the
+	 * stream, a throw, or `close` settles the pass with it at once, so the
+	 * exit of the process cannot replace its cause.
+	 */
+	private parked: PassResult | undefined;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeOpenerOptions) {
+	constructor(activation: ExecutorActivation, options: ClaudeOpenerOptions, home: SeatHome) {
 		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;
+		this.home = home;
 		this.open = options.query ?? query;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
@@ -136,6 +182,7 @@ class Activation implements RunningActivation {
 
 	/** End the input and the process. The driver calls this once the activation is over. */
 	close(): void {
+		this.settleParked();
 		this.stopped = true;
 		this.inbox.end();
 		clearTimeout(this.grace);
@@ -161,6 +208,7 @@ class Activation implements RunningActivation {
 			// A line the query never took waits for the next delta.
 			this.held = [];
 			clearTimeout(this.grace);
+			this.parked = undefined;
 		}
 	}
 
@@ -204,6 +252,9 @@ class Activation implements RunningActivation {
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));
+			// A restart opens a query with a tail of its own. The old query can write no more into it.
+			const tail = new Tail();
+			this.tail = tail;
 			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({
@@ -211,8 +262,9 @@ class Activation implements RunningActivation {
 					systemPrompt: `${pass.mechanism}\n\n${pass.agent}`,
 					server,
 					names,
-					canUseTool: approver(executor, this.trace, names),
 					options: this.options,
+					home: this.home,
+					stderr: (data) => tail.add(data),
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),
 				}),
 			});
@@ -244,10 +296,11 @@ class Activation implements RunningActivation {
 			for await (const message of stream) this.handle(message);
 			// A restart replaced this stream. Its end says nothing about the pass.
 			if (stream !== this.stream) return;
+			if (this.settleParked()) return;
 			this.finish({
 				failed: true,
 				cause: 'transient',
-				message: 'The Claude session ended before the pass did.',
+				message: this.tail.append('The Claude session ended before the pass did.'),
 			});
 		} catch (error) {
 			this.threw(stream, error);
@@ -257,12 +310,25 @@ class Activation implements RunningActivation {
 	/** The query threw. A resume the SDK cannot honor can end the stream before any message. */
 	private threw(stream: Query, error: unknown): void {
 		if (this.stopped || stream !== this.stream) return;
+		if (this.settleParked()) return;
 		// The SDK also reports an unresumable session as an error result, which `answered` handles.
 		if (this.begin !== undefined && this.resumeFailed()) {
 			this.restart(this.begin);
 			return;
 		}
-		this.finish(failedPass(error));
+		this.finish(this.withTail(failedPass(error)));
+	}
+
+	/**
+	 * A failed result with the end of the standard error in its message. The
+	 * cause and the error stay as they were, so the text of the process never
+	 * changes how the core classifies the failure. A pass that did not fail
+	 * stays as it is.
+	 */
+	private withTail(result: PassResult): PassResult {
+		return result.failed && result.message !== undefined
+			? { ...result, message: this.tail.append(result.message) }
+			: result;
 	}
 
 	/** Whether a resumed query threw before it said anything. */
@@ -280,8 +346,24 @@ class Activation implements RunningActivation {
 			// The SDK reports a tool result as the model reads it next.
 			if (step.type === 'tool_result') this.activation.delivered(step.call);
 		}
+		if (message.type === 'system' && message.subtype === 'init') this.checked(message);
 		if (message.type === 'user') this.echoed(message);
 		if (message.type === 'result') this.answered(message);
+	}
+
+	/**
+	 * The init message names the version of the executable. An executable
+	 * below the floor would read files that user text names, so the pass
+	 * fails at once and the query closes before any model turn runs. The
+	 * `session` step is already recorded.
+	 */
+	private checked(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): void {
+		const refusal = floorRefusal(init.claude_code_version);
+		if (refusal === undefined) return;
+		this.finish(refusal);
+		this.stopped = true;
+		this.inbox.end();
+		this.stream?.close();
 	}
 
 	/** The SDK sent a user message back: the model has it, so the core counts its range read. */
@@ -303,17 +385,38 @@ class Activation implements RunningActivation {
 			return;
 		}
 		const more = this.echoes.waiting > 0 || (message.queued_turn_count ?? 0) > 0;
-		if (!more) {
-			this.finish(passResultOf(message));
+		this.settleWith(passResultOf(message), more ? ECHO_GRACE : 0);
+	}
+
+	/**
+	 * Settle the pass with a result after `delay` milliseconds. A failed
+	 * result waits a moment more, because the standard error comes on a pipe
+	 * of its own and can trail the result. The message then holds its tail.
+	 */
+	private settleWith(result: PassResult, delay: number): void {
+		clearTimeout(this.grace);
+		const wait = result.failed ? delay + STDERR_DRAIN : delay;
+		if (wait === 0) {
+			this.finish(result);
 			return;
 		}
-		clearTimeout(this.grace);
-		this.grace = setTimeout(() => this.finish(passResultOf(message)), ECHO_GRACE);
+		this.parked = result;
+		this.grace = setTimeout(() => this.settleParked(), wait);
 		this.grace.unref();
+	}
+
+	/** Settle the pass with the parked result, and say whether one waited. */
+	private settleParked(): boolean {
+		const parked = this.parked;
+		if (parked === undefined) return false;
+		this.finish(this.withTail(parked));
+		return true;
 	}
 
 	/** Settle the pass in flight. The core reports a failure. */
 	private finish(result: PassResult): void {
+		this.parked = undefined;
+		clearTimeout(this.grace);
 		const settle = this.settle;
 		if (settle === undefined) return;
 		this.settle = undefined;

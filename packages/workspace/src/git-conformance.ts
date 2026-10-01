@@ -334,9 +334,9 @@ const concurrentForksKeepOneFork: Body = async (pair, fixture) => {
 const abortedForkRejects: Body = async ({ workspace }) => {
 	const controller = new AbortController();
 	controller.abort();
-	const owner = workspace.git;
-	if (owner === undefined) throw new Error('The workspace has no git owner.');
-	const rejected = await owner
+	const resource = workspace.git;
+	if (resource === undefined) throw new Error('The workspace has no git resource.');
+	const rejected = await resource
 		.use(ANALYST, (env) => env.fork('templates/blank', 'cut', controller.signal))
 		.then(
 			() => false,

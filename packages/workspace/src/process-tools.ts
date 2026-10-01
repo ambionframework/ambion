@@ -10,11 +10,11 @@
  * running processes. The whole output of a process goes to a file in the
  * agent's home, which `read` reaches.
  *
- * `bash` starts its process as one operation on the bash owner, so a
- * process starts after every earlier operation of the owner. The process
- * then runs off the owner. Each handle tool reads the end of the output
- * file as one more operation on the bash owner. No tool holds the owner
- * while it waits for a process. `docs/processes.md` states the texts.
+ * `bash` starts its process as one operation on the bash resource, so a
+ * process starts after every earlier operation of the bash resource. The
+ * process then runs off the bash resource. Each handle tool reads the end
+ * of the output file as one more operation on the bash resource. No tool
+ * holds the bash resource while it waits for a process. `docs/processes.md` states the texts.
  */
 
 import {
@@ -68,9 +68,9 @@ const NOT_CUT = { cut: false } as const;
 const MIN_GRACE_SECONDS = 1;
 const MAX_GRACE_SECONDS = 300;
 
-/** What the process tools need from the workspace: the bash owner and the process table. */
+/** What the process tools need from the workspace: the bash resource and the process table. */
 export interface ProcessToolOptions {
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
+	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly processes: ProcessTable;
 }
 
@@ -88,7 +88,7 @@ export function processToolGuidance(): string {
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
-		`To check a long process later, call schedule with after, in seconds. The room wakes you with it then.`,
+		`To check a long process later, call schedule with delaySeconds. The room wakes you with it then.`,
 	].join('\n');
 }
 
@@ -306,7 +306,7 @@ async function started(
 		...(params.name === undefined ? {} : { name: params.name }),
 		...(ctx.room === undefined ? {} : { room: ctx.room }),
 	};
-	const process = await options.shell(
+	const process = await options.bash(
 		ctx.agent,
 		(env) => options.processes.start(ctx.agent, env, spec),
 		ctx.signal,
@@ -480,7 +480,7 @@ async function described(
 	note = '',
 ): Promise<AgentToolResult<ProcessDetails>> {
 	const dir = process.output.slice(0, process.output.lastIndexOf('/'));
-	const read = await options.shell(
+	const read = await options.bash(
 		ctx.agent,
 		async (env) => {
 			const output = await readOutput(env, dir);

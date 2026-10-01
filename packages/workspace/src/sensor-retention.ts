@@ -8,9 +8,9 @@ import { contextOf, unwrap } from './object-files.ts';
 import { sha256Hex } from './object-rules.ts';
 import { isHandle } from './process-files.ts';
 import type { WorkspaceAgent } from './resource.ts';
+import type { ObserveRequest, ObserveResponse, SensorSource } from './sensor-api.ts';
+import { isValidObserveRequest, ObserveResponseSchema, SensorSourceSchema } from './sensor-api.ts';
 import { SensorDigestError } from './sensor-client.ts';
-import type { ObserveRequest, ObserveResponse, SensorSource } from './sensors.ts';
-import { isValidObserveRequest, ObserveResponseSchema, SensorSourceSchema } from './sensors.ts';
 import type { SnapshotStore } from './snapshots.ts';
 import { retainSnapshotBuffer } from './snapshots.ts';
 
@@ -181,7 +181,7 @@ async function publishExport(
 	context: Context,
 ): Promise<void> {
 	try {
-		await store.shell(
+		await store.bash(
 			observer,
 			async (env) => {
 				unwrap(
@@ -203,7 +203,7 @@ async function publishExport(
 		if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 	} catch (error) {
 		await store
-			.shell(
+			.bash(
 				observer,
 				async (env) => {
 					for (const path of [paths.staging, paths.directory])
@@ -218,8 +218,8 @@ async function publishExport(
 
 /**
  * Keep a verified observation in the workspace object store, then publish a
- * complete export into the observing agent's home. No object-owner operation
- * runs from inside the bash-owner callback.
+ * complete export into the observing agent's home. No object operation
+ * runs from inside the callback of the bash resource.
  */
 export async function retainSensorObservation(
 	store: SnapshotStore,
@@ -241,7 +241,7 @@ export async function retainSensorObservation(
 	const rootPath = `~/sensor-observations/${id}`;
 	const stagePath = `~/sensor-observations/.${id}.part`;
 	const context = contextOf(signal);
-	const paths = await store.shell(
+	const paths = await store.bash(
 		observer,
 		async (env) => {
 			const directory = unwrap(
