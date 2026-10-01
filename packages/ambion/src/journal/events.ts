@@ -52,6 +52,8 @@ export interface Seating extends Static<typeof seatingSchema> {}
 
 /** What a run started with. The roster folds from the latest one. */
 export interface Composition extends Static<typeof compositionSchema> {
+	agents: Seating[];
+	available: Seating[];
 	/** Where the composition sits on the record. */
 	seq: Seq;
 }

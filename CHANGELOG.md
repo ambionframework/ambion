@@ -3,9 +3,8 @@
 ## Unreleased
 
 **The body schemas are the one source of the body types.** The new file
-`packages/ambion/src/bodies.ts` holds the schema of each stored body. Before,
-each body was written twice, as a type and as a schema, and the two had
-drifted. `SpokenMessage`, `PostedMessage`, `PresenceMessage`,
+`packages/ambion/src/bodies.ts` holds the schema of each stored body. Before, a
+type and a schema each stated the body, and the two drifted. `SpokenMessage`, `PostedMessage`, `PresenceMessage`,
 `SummaryMessage`, `DismissedMessage`, `PresenceChange`, `Attention`,
 `EndReason`, `FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`,
 `Close`, `Cancellation`, `Fence`, `Seating`, and `Composition` now derive

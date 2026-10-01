@@ -3,7 +3,8 @@
 Presence is the contract for people in a room. The implementation is in
 [`room-host/`](../packages/ambion/src/room-host/room.ts), with the durable fold in
 [`room/presence.ts`](../packages/ambion/src/room/presence.ts) and the message
-shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+types in [`types.ts`](../packages/ambion/src/types.ts) over the body schemas in
+[`bodies.ts`](../packages/ambion/src/bodies.ts). Read
 [`room.md`](room.md) first: presence follows the same journal, routing, and
 activation rules as every other message.
 

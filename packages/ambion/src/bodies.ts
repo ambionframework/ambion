@@ -77,7 +77,7 @@ export const saidSchema = Type.Object(
 	{
 		...common,
 		kind: Type.Literal('said'),
-		/** A participant's name — stamped by the runtime, never claimed. */
+		/** The name of the participant. The runtime stamps it. */
 		from: Type.String(),
 		/** Present when the delivery or say was directed. */
 		to: Type.Optional(Type.String()),
