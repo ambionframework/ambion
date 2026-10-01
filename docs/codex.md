@@ -257,11 +257,27 @@ native tools.
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position. Codex sends no echo of the prompt.
 
-**The first prompt of an activation carries the seat's part.** The Codex
-SDK has no system prompt option, so the first prompt carries the mechanism,
-the agent instructions, and the whole view. A later pass sends the delta,
-the lines that landed since the pass read, as the next run of the same
-thread. The `turn.*` events of Codex mark each run.
+**The client config of an activation carries the seat's part.** The Codex
+SDK has no system prompt option, so the executor puts the seat text in the
+config of the client. The seat text is the harness note, the mechanism, and
+the agent instructions, in that order, with a blank line between them. The
+core fixes all three for an activation, so the executor builds the text once,
+from the first pass. The first prompt holds the whole view. A later pass sends
+the delta, the lines that landed since the pass read, as the next run of the
+same thread. The `turn.*` events of Codex mark each run.
+
+**The config key depends on `nativeTools`.**
+
+| `nativeTools`      | Config key                | Effect                                                                            |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------------- |
+| `'none'` (default) | `model_instructions_file` | The file replaces the base prompt of Codex. The file is in the scratch directory. |
+| `'codex'`          | `developer_instructions`  | The text adds a developer message. The base prompt of Codex stays.                |
+
+A seat with no native tools needs nothing from the base prompt, which teaches
+`apply_patch` and the shell. A seat with native tools needs the base prompt,
+because it teaches the model those tools. The SDK passes the text as a TOML
+string with `JSON.stringify`, so quotes, backslashes, newlines, and
+non-ASCII characters arrive as written. The binary tier proves it.
 
 **A run ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
 events for trouble that it survives, such as a reconnect. An `error` event
@@ -404,6 +420,26 @@ before `thread.started`. The executor then starts a fresh thread, runs the
 same prompt, and records the new id. A failure after `thread.started` is an
 ordinary failure.
 
+**A resumed thread takes the seat text by the config key.** This is a fact
+about Codex 0.158.0, from two runs of `codex exec` against a scripted
+endpoint: one run starts a thread with text A, and `codex exec resume <id>`
+runs it again with text B.
+
+- With `model_instructions_file`, the second request holds text B and no
+  text A. A resumed activation under `nativeTools: 'none'` sends the seat
+  text of its own activation.
+- With `developer_instructions`, the second request holds text A and no
+  text B. Codex keeps the developer message in the thread. The config of a
+  resumed activation under `nativeTools: 'codex'` cannot replace it.
+
+**A `codex` seat that resumes sends the seat text in its first prompt.**
+The seat text depends on the purpose of the activation, and Codex ignores a
+new `developer_instructions` on resume. The first prompt of such an
+activation holds the seat text, a blank line, and the view. A fresh thread
+keeps the view alone. A seat with `nativeTools: 'none'` never sends the text
+in a prompt. If the resume fails, the fresh thread runs the same prompt, so
+it holds the seat text twice.
+
 **Threads live in the Codex store of the seat home.** The SDK persists
 threads under `sessions` in the home, `~/.ambion/codex/sessions` by default.
 A host that loses that directory falls back to a fresh thread. A thread that
@@ -454,8 +490,8 @@ path as `model_catalog_json`. The recipe has five parts:
    network, no approval, and an empty temporary directory as its working
    directory. No repository and no host file is the default context.
 
-The temporary directory of each activation holds the patched catalog and the
-empty working directory. The executor removes it when the activation closes,
+The temporary directory of each activation holds the patched catalog, the
+file with the seat text, and the empty working directory. The executor removes it when the activation closes,
 and at process exit.
 
 **A model with no catalog entry does not start.** The activation fails as
@@ -554,10 +590,21 @@ next request lists the tools. A real model that meets this case has no
 
 **The binary tier proves what the model receives.** The recorded request
 bodies show the tool list, the prompts, and the items of an earlier pass.
-Today Codex sends its own prompt as the first developer message, and the
-part of the seat arrives in the last user message. It also lists the tools in
-an `additional_tools` input item. A test states each of these facts, so a
-change to one shows in a failing assertion.
+A default seat receives the seat text as the first developer message, and no
+developer message starts with "You are Codex". The last user message holds
+the view alone. Today Codex still adds the skills of its home as a developer
+message, and it lists the tools in an `additional_tools` input item. The
+top-level `instructions` field of the request stays empty. A test states each
+of these facts, so a change to one shows in a failing assertion.
+
+**The binary tier covers both modes of native tools.** One test sends a seat
+text with quotes, backslashes, a newline, and non-ASCII characters under
+`'none'` and under `'codex'`. It asserts that the text arrives unchanged in
+the developer message of each mode. Under `'codex'` the text follows the
+prompt of Codex. The `'codex'` seat keeps the plugin features of Codex, which
+sync a marketplace from GitHub and ask `chatgpt.com`. The test home sets
+`plugins` and `remote_plugin` to `false` under `[features]`, so the run
+reaches no network. The proxy and the endpoint prove it.
 
 **The binary tier cannot prove that a model obeys.** A scripted model does
 what the script says. The live tier proves the claims that need a real model.
@@ -615,8 +662,8 @@ vitest.live.config.ts test/live/loop.test.ts`.
 ## Troubleshooting
 
 **The seat answers in its final message and nobody hears it.** Codex has its
-own final-answer channel. The room hears only `say`. The first prompt of a
-thread says so. A seat that still ends with plain text and no `say` shows a
+own final-answer channel. The room hears only `say`. The harness note at the
+start of the seat text says so. A seat that still ends with plain text and no `say` shows a
 `text` step and no `tool_call` in its trace, and `activation_end` reports
 `said: false`.
 

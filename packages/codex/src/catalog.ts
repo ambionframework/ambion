@@ -9,7 +9,8 @@
  *
  * 1. `exclusiveEntry` patches the catalog entry of the model.
  * 2. `exclusiveConfig` turns off every feature and tool the config controls.
- * 3. `Scratch` holds the patched catalog and an empty working directory.
+ * 3. `Scratch` holds the patched catalog, the instructions file of the seat,
+ *    and an empty working directory.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -208,15 +209,17 @@ function removeAll(): void {
 	open.clear();
 }
 
-/** A patched catalog and an empty working directory, for one activation. */
+/** A patched catalog, the instructions file of the seat, and an empty working directory, for one activation. */
 export class Scratch {
 	/** The path of the patched catalog. */
 	readonly catalog: string;
+	/** The path of the file that holds the seat text. Codex reads it in place of its own base prompt. */
+	readonly instructions: string;
 	/** An empty directory, so no host file is the default context. */
 	readonly directory: string;
 	private readonly root: string;
 
-	constructor(entry: CatalogEntry) {
+	constructor(entry: CatalogEntry, instructions: string) {
 		this.root = mkdtempSync(join(tmpdir(), 'ambion-codex-'));
 		open.add(this.root);
 		if (!hooked) {
@@ -224,9 +227,11 @@ export class Scratch {
 			process.once('exit', removeAll);
 		}
 		this.catalog = join(this.root, 'models.json');
+		this.instructions = join(this.root, 'instructions.md');
 		this.directory = join(this.root, 'work');
 		mkdirSync(this.directory);
 		writeFileSync(this.catalog, JSON.stringify({ models: [exclusiveEntry(entry)] }));
+		writeFileSync(this.instructions, instructions);
 	}
 
 	/** Remove both. Safe to call again. */
@@ -236,8 +241,12 @@ export class Scratch {
 	}
 }
 
-/** The scratch for `model`. A model with no catalog entry fails as permanent, so native tools never stay on. */
-export async function scratchFor(model: string, source: CatalogSource): Promise<Scratch> {
+/** The scratch for `model`, with the seat text in its instructions file. A model with no catalog entry fails as permanent, so native tools never stay on. */
+export async function scratchFor(
+	model: string,
+	source: CatalogSource,
+	instructions: string,
+): Promise<Scratch> {
 	const entry = await source(model);
 	if (entry === undefined) {
 		throw new PermanentError(
@@ -245,5 +254,5 @@ export async function scratchFor(model: string, source: CatalogSource): Promise<
 				`Set nativeTools: 'codex', or use a model that 'codex debug models' lists.`,
 		);
 	}
-	return new Scratch(entry);
+	return new Scratch(entry, instructions);
 }

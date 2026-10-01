@@ -68,6 +68,27 @@ The word `Runtime` now names the core `Runtime` alone.
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
 
+**Breaking: the seat text of a Codex seat leaves the first user message.**
+The Codex SDK has no system prompt option, so the executor put the harness
+note, the mechanism, and the agent instructions in front of the view in the
+first user message, under the base prompt of Codex, about 18 KB. The executor now
+passes that text in the config of the client, fixed for the activation. The
+first user message holds the view alone. A seat with `nativeTools: 'none'`
+gets the text in a file in the scratch directory, named by
+`model_instructions_file`. The file replaces the base prompt of Codex, so the
+first developer message is the seat text and no message starts with "You are
+Codex". A seat with `nativeTools: 'codex'` gets the text as
+`developer_instructions` after the base prompt, which teaches its native
+tools.
+
+**A resumed `codex` thread keeps its developer message.** Codex 0.158.0
+keeps the `developer_instructions` that a thread started with, and ignores a
+new value on resume. The seat text depends on the purpose of the activation.
+The first prompt of a `nativeTools: 'codex'` activation that resumes a thread
+therefore carries the seat text, then the view. A fresh thread and every
+`nativeTools: 'none'` activation send the view alone. A resumed `'none'`
+activation uses its own instructions file.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and
