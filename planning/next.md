@@ -243,7 +243,7 @@ of sent to Priya. The ignored run evidence is under
       (LB6)
 - [x] **7.** No cycle of value imports. (LB7)
 - [x] **8.** The workspace owns its port. Needs 4. (LB8)
-- [ ] **9.** The tests pass under full parallel load. (LB9)
+- [x] **9.** The tests pass under full parallel load. (LB9, #472)
 
 **Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
 one layer table and probes every pair of layers. A test fails on any cycle
@@ -569,15 +569,19 @@ reads its manifest and its production closure, and finds no
 workspace conformance, the backend suites, the matrix cases, and the SN35
 lifecycle on OpenSSH pass.
 
-**LB9. The tests pass under full parallel load.** Three tests timed out in
-full parallel test runs on 2026-10-01 and passed alone:
-`examples/workbench/test/sensor-retention-source.test.ts`,
-`packages/just-bash/test/just-bash.test.ts` ("ends a change that the host
-asks for while the last change of a script runs"), and
-`packages/workspace/test/sensor-workstation.test.ts`. Find the cause of
-each. A longer timeout is a fix only when the cause is the time the work
-needs.
+**LB9. The tests pass under full parallel load.** #472 closed it. Five
+tests failed in full parallel test runs on 2026-10-01 and passed alone.
+Each fix names its cause:
 
-**Evidence:** each fix names its cause. `turbo run test --force` passes
-five runs in a row on Linux at the default concurrency, and the test jobs
-of `.github/workflows/ci.yml` pass.
+| Test                                                                                                        | Cause                                                                                                                                                                  | Fix                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/workspace/test/sensor-workstation.test.ts`                                                        | Fixed sleeps took 10.5 s of 11.2 s: a 1.8 s hold on each of four index requests and a 1 s `wait` on each of three server starts. The 20 s limit failed under load.     | A file releases the first index request. Each server writes a file when it listens. The test takes 1.7 s.                         |
+| `examples/workbench/test/sensor-retention-source.test.ts`                                                   | Ten git processes and a Node server. The package has no test timeout, and a loaded runner took the test to 5.4 s.                                                      | The work needs the time. The test now has 20 s.                                                                                   |
+| `packages/cloudflare/test/seat.test.ts` ("cancels an unclaimed wake")                                       | A race. The wake sets the alarm of the seat at once, and the activation sometimes answered before the cancellation.                                                    | A hold keeps the wake unclaimed until the cancellation. The lift of the hold then runs the alarm, and the room refuses its claim. |
+| `examples/workbench/templates/actuator-controller/test/controller.test.mjs` ("the loop reaches the target") | A stop of the process at full power overshot the target. The loop then missed its 3 s deadline, or ended outside the tolerance. A stop with `SIGSTOP` reproduces both. | A stronger integral: the loop settles in 0.8 s. A deadline of 6 s holds a stop of 2 s.                                            |
+| `packages/just-bash/test/just-bash.test.ts` ("ends a change that the host asks for")                        | A shell loop wrote 300 files through the interpreter before the copy. It took three quarters of the test, and a loaded run passed 20 s.                                | The host writes the 300 files. The test takes 0.6 s alone, half of before.                                                        |
+
+**Evidence:** on `main` at #468 with this change, `turbo run test --force`
+passed five runs in a row on Linux at the default concurrency. Runs with
+busy processes, on one or two cores, and with `SIGSTOP` reproduced each
+failure before its fix. The test jobs of `.github/workflows/ci.yml` pass.

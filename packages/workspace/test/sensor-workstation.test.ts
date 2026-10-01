@@ -29,6 +29,8 @@ describe.skipIf(!hasSetsid)('connect through workstation process tools', () => {
 		const home = ssh.homes.get('owner');
 		if (home === undefined) throw new Error('The SSH fixture has no owner home.');
 		const indexMarker = join(home, 'index-requested');
+		const indexRelease = join(home, 'index-release');
+		const listening = join(home, 'sensor-listening');
 		const indexPath = join(home, 'sensor-index.json');
 		const index: SensorIndex = {
 			api: 1,
@@ -45,17 +47,18 @@ describe.skipIf(!hasSetsid)('connect through workstation process tools', () => {
 			`import http from 'node:http';`,
 			`import fs from 'node:fs';`,
 			`http.createServer(async (request, response) => {`,
-			`if (request.url === '/') { fs.writeFileSync(${JSON.stringify(indexMarker)}, 'entered'); await new Promise(resolve => setTimeout(resolve, 1800)); response.writeHead(200, { 'content-type': 'application/json' }); response.end(fs.readFileSync(${JSON.stringify(indexPath)}, 'utf8')); return; }`,
-			`response.writeHead(404).end(); }).listen(${port}, '127.0.0.1');`,
+			`if (request.url === '/') { fs.writeFileSync(${JSON.stringify(indexMarker)}, 'ready'); while (!fs.existsSync(${JSON.stringify(indexRelease)})) await new Promise(resolve => setTimeout(resolve, 10)); response.writeHead(200, { 'content-type': 'application/json' }); response.end(fs.readFileSync(${JSON.stringify(indexPath)}, 'utf8')); return; }`,
+			`response.writeHead(404).end(); }).listen(${port}, '127.0.0.1', () => fs.writeFileSync(${JSON.stringify(listening)}, 'ready'));`,
 		].join('\n');
 		await writeFile(join(home, 'sensor-server.mjs'), script);
 		const bash = toolOf(workspace, 'bash');
 		const started = await bash.invoke(
-			{ command: 'node sensor-server.mjs', name: 'sensor-server', wait: 1 },
+			{ command: 'node sensor-server.mjs', name: 'sensor-server', wait: 0 },
 			context('owner'),
 		);
 		if (typeof started === 'string') throw new Error('bash returned no process details.');
 		const handle = (started.details as { process: { handle: string } }).process.handle;
+		await untilFile(listening);
 		let connected = false;
 		const connecting = Promise.resolve(
 			toolOf(workspace, 'connect').invoke(
@@ -82,6 +85,8 @@ describe.skipIf(!hasSetsid)('connect through workstation process tools', () => {
 		expect(write.content.map((part) => (part.type === 'text' ? part.text : '')).join('')).toContain(
 			'Successfully wrote',
 		);
+		// The server holds the first index response until this file exists.
+		await writeFile(indexRelease, 'ready');
 		const outcome = await connecting;
 		if ('error' in outcome) throw outcome.error;
 		const result = outcome.result;
@@ -180,19 +185,21 @@ async function failReadinessAndEnd(
 ): Promise<void> {
 	const port = await unusedPort();
 	const indexPath = join(home, 'bad-index.json');
+	const listening = join(home, 'bad-sensor-listening');
 	await writeFile(indexPath, JSON.stringify({ ...index, api: 2 }));
 	const server = [
 		`import http from 'node:http';`,
 		`import fs from 'node:fs';`,
-		`http.createServer((_request, response) => { response.writeHead(200, { 'content-type': 'application/json' }); response.end(fs.readFileSync(${JSON.stringify(indexPath)}, 'utf8')); }).listen(${port}, '127.0.0.1');`,
+		`http.createServer((_request, response) => { response.writeHead(200, { 'content-type': 'application/json' }); response.end(fs.readFileSync(${JSON.stringify(indexPath)}, 'utf8')); }).listen(${port}, '127.0.0.1', () => fs.writeFileSync(${JSON.stringify(listening)}, 'ready'));`,
 	].join('\n');
 	await writeFile(join(home, 'bad-sensor-server.mjs'), server);
 	const started = await bash.invoke(
-		{ command: 'node bad-sensor-server.mjs', name: 'bad-sensor-server', wait: 1 },
+		{ command: 'node bad-sensor-server.mjs', name: 'bad-sensor-server', wait: 0 },
 		context('owner'),
 	);
 	if (typeof started === 'string') throw new Error('bash returned no bad process details.');
 	const handle = (started.details as { process: { handle: string } }).process.handle;
+	await untilFile(listening);
 	const before = new Set(ssh.forwards);
 	await expect(
 		toolOf(workspace, 'connect').invoke({ name: 'bad', process: handle, port }, context('owner')),
@@ -210,18 +217,20 @@ async function verifyDisposeDuringReadiness(
 ): Promise<void> {
 	const port = await unusedPort();
 	const marker = join(home, 'blocked-index-requested');
+	const listening = join(home, 'blocked-sensor-listening');
 	const server = [
 		`import http from 'node:http';`,
 		`import fs from 'node:fs';`,
-		`http.createServer((request, response) => { if (request.url === '/') { fs.writeFileSync(${JSON.stringify(marker)}, 'entered'); return; } response.writeHead(404).end(); }).listen(${port}, '127.0.0.1');`,
+		`http.createServer((request, response) => { if (request.url === '/') { fs.writeFileSync(${JSON.stringify(marker)}, 'ready'); return; } response.writeHead(404).end(); }).listen(${port}, '127.0.0.1', () => fs.writeFileSync(${JSON.stringify(listening)}, 'ready'));`,
 	].join('\n');
 	await writeFile(join(home, 'blocked-sensor-server.mjs'), server);
 	const started = await bash.invoke(
-		{ command: 'node blocked-sensor-server.mjs', name: 'blocked-sensor-server', wait: 1 },
+		{ command: 'node blocked-sensor-server.mjs', name: 'blocked-sensor-server', wait: 0 },
 		context('owner'),
 	);
 	if (typeof started === 'string') throw new Error('bash returned no blocked process details.');
 	const handle = (started.details as { process: { handle: string } }).process.handle;
+	await untilFile(listening);
 	const pending = Promise.resolve(
 		toolOf(workspace, 'connect').invoke(
 			{ name: 'pending', process: handle, port },
@@ -267,17 +276,21 @@ async function unusedPort(): Promise<number> {
 	return port;
 }
 
+/**
+ * Wait until a server script writes `ready` to `path`. The deadline only
+ * matters when the test fails, so it is long enough for a loaded runner.
+ */
 async function untilFile(path: string): Promise<void> {
-	const deadline = Date.now() + 2_000;
+	const deadline = Date.now() + 10_000;
 	while (Date.now() < deadline) {
 		try {
-			if ((await readFile(path, 'utf8')) === 'entered') return;
+			if ((await readFile(path, 'utf8')) === 'ready') return;
 		} catch {
-			// The remote request has not reached the server yet.
+			// The server has not written the file yet.
 		}
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
-	throw new Error('The connected sensor server did not receive its index request.');
+	throw new Error(`The sensor server did not write ${path}.`);
 }
 
 /**
@@ -291,7 +304,7 @@ async function waitForForwards(
 	atMost: number,
 	ssh: Awaited<ReturnType<typeof startSshServer>>,
 ): Promise<void> {
-	const deadline = Date.now() + 1_000;
+	const deadline = Date.now() + 10_000;
 	while (ssh.forwards.size > atMost && Date.now() < deadline)
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	expect(ssh.forwards.size).toBeLessThanOrEqual(atMost);
@@ -308,7 +321,7 @@ async function waitForNoNewForwards(
 	ssh: Awaited<ReturnType<typeof startSshServer>>,
 ): Promise<void> {
 	const leaked = () => [...ssh.forwards].filter((channel) => !known.has(channel));
-	const deadline = Date.now() + 1_000;
+	const deadline = Date.now() + 10_000;
 	while (leaked().length > 0 && Date.now() < deadline)
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	expect(leaked()).toHaveLength(0);
