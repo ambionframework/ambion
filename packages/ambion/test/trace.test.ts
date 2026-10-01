@@ -124,7 +124,7 @@ describe('the trace of a room activation', () => {
 				seat: 'product',
 				attempt: 1,
 				purpose: 'respond',
-				outcome: { status: 'released' },
+				outcome: { kind: 'released' },
 			}),
 		);
 	});
@@ -331,7 +331,7 @@ class PlayedRoom implements RoomProtocol {
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		this.leases.push(lease);
 		await this.hold(lease);
-		return { ok: { expiresAt: this.now() + 60_000, lastSeq: this.lastSeq } };
+		return { ok: { expiresAt: this.now() + 60_000, through: this.lastSeq } };
 	}
 }
 

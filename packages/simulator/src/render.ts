@@ -92,10 +92,10 @@ function toolsByActivation(events: readonly RoomNotification[]): Map<string, str
 }
 
 function activationLine(activation: ExchangeActivation, tools: readonly string[]): string {
-	const { status, ...rest } = activation.outcome;
+	const { kind, ...rest } = activation.outcome;
 	const detail = Object.keys(rest).length === 0 ? '' : ` ${JSON.stringify(rest)}`;
 	const called = tools.length === 0 ? 'no tools' : `tools ${tools.join(', ')}`;
-	return `- ${activation.seat}, ${activation.purpose}, ${status}${detail}, ${called}`;
+	return `- ${activation.seat}, ${activation.purpose}, ${kind}${detail}, ${called}`;
 }
 
 /** The record of a run as the judge reads it. */

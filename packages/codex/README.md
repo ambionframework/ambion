@@ -92,9 +92,11 @@ environment of the process, key included, reaches the binary unless you pass
 belongs to `codex` 0.155.1. Trust a newer version only when
 `test/live/exclusive.test.ts` passes on it.
 
-**Test on recorded events, and run the executor suite live.** The unit tests
-read event streams that a real `codex` recorded. A real model cannot be
-scripted, so the executor suite runs in the live tier. Run it with
+**Test on recorded events and a scripted model, and run the executor suite
+live.** The unit tests read event streams that a real `codex` recorded. They
+also run the real `codex` binary against a local endpoint that plays a script
+of model replies. The executor suite runs in the live tier on a real model.
+Run it with
 `CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`. It
 costs money.
 

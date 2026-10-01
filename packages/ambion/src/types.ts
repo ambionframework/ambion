@@ -48,35 +48,35 @@ export interface ExchangeRef {
 }
 
 /** An exchange the room has finished, and the range it turned out to hold. */
-export interface ClosedExchange extends ExchangeRef {
+export interface ExchangeRange extends ExchangeRef {
 	/** The last seq on the record when the room went quiet. */
 	readonly through: Seq;
 }
 
 /** The durable outcome of the optional summary assignment for a closed exchange. */
 export type SummaryOutcome =
-	| { readonly status: 'pending'; readonly writer?: string }
-	| { readonly status: 'published'; readonly summary: SummaryMessage }
-	| { readonly status: 'silent' }
-	| { readonly status: 'failed' };
+	| { readonly kind: 'pending'; readonly writer?: string }
+	| { readonly kind: 'published'; readonly summary: SummaryMessage }
+	| { readonly kind: 'silent' }
+	| { readonly kind: 'failed' };
 
 /** How an activation stands: at work, or ended for a reason. */
 export type ActivationOutcome =
-	| { readonly status: 'running' }
+	| { readonly kind: 'running' }
 	| {
-			readonly status: EndReason;
+			readonly kind: EndReason;
 			/** Set when a cancellation ended the activation. */
 			readonly cancelled?: true;
 			/** Why the activation failed, on a failed or abandoned activation. */
 			readonly cause?: FailureCause;
 	  };
 
-/** One activation of an exchange, as the exchange read lists it. */
+/** One activation of an exchange, as `Exchange` lists it. */
 export interface ExchangeActivation {
 	/** The activation id. */
 	readonly id: string;
 	readonly seat: string;
-	/** The attempt number. A retry of a wake is a new attempt. */
+	/** The attempt number. A retry is a new attempt of one due activation. */
 	readonly attempt: number;
 	/** `respond` answers a message. `summary` writes the closing summary. */
 	readonly purpose: 'respond' | 'summary';
@@ -100,14 +100,14 @@ export type ExchangeOutcome =
 	/** The last spoken message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
 
-/** A detached exchange view that can be read without starting a room. */
-export type ExchangeView =
+/** A detached exchange, open or closed, that a host reads without starting a room. */
+export type Exchange =
 	| (ExchangeRef & {
 			readonly status: 'open';
 			/** Every activation since the exchange opened, in journal order. */
 			readonly activations: readonly ExchangeActivation[];
 	  })
-	| (ClosedExchange & {
+	| (ExchangeRange & {
 			readonly status: 'closed';
 			/** Every activation in the range, every attempt and the summary included. */
 			readonly activations: readonly ExchangeActivation[];
@@ -119,19 +119,16 @@ export type ExchangeView =
 			readonly usage?: Usage;
 	  });
 
-/** A closed exchange view: the one that carries an outcome. */
-export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
-
 interface RoomReadFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
 	/** The scheduled says that wait to return, in the order they landed. */
 	readonly scheduled: readonly PendingSay[];
 	readonly participants: readonly ParticipantInfo[];
-	readonly exchanges: readonly ExchangeView[];
-	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
+	readonly exchanges: readonly Exchange[];
+	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
-	readonly watermark: Seq;
+	readonly through: Seq;
 }
 
 /** A detached room read. Missing records have no room facts. */
@@ -399,7 +396,7 @@ export type RoomEvent =
 	 * before any summary: the configured writer is one reader of this, not the only
 	 * one.
 	 */
-	| { type: 'exchange_closed'; exchange: ClosedExchange };
+	| { type: 'exchange_closed'; exchange: ExchangeRange };
 
 /** What one activation did, or what happened to it. Every member names the activation. */
 export type ActivationEvent =
@@ -435,8 +432,8 @@ export type ActivationEvent =
 			error: Error;
 	  }
 	/**
-	 * The room gave up: a permanent failure, or every attempt at a wake or a
-	 * draft came to nothing and the cap is reached. `activation` names the
+	 * The room gave up: a permanent failure, or every attempt of a due
+	 * activation came to nothing and the cap is reached. `activation` names the
 	 * attempt the room did not make, `cause` says why, and the journal holds
 	 * the entry that says so.
 	 */

@@ -66,7 +66,7 @@ requires definition names in the room metadata. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped
-records. Messages, participants, exchanges, and the watermark come from
+records. Messages, participants, exchanges, and the read position `through` come from
 it. The alarm calls `reconcile()` on the running room. The live `waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
 and require a running room. Use `read()` to inspect a stopped open exchange or
 its recorded summary outcome.

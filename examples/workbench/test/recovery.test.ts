@@ -169,7 +169,7 @@ describe('Workbench room reads and recovery', () => {
 		await workbench.send('bringup', 'mira', 'read-1', 'Read this room.');
 		const closedExchange = async () => {
 			const exchange = (await workbench.read('bringup', 0)).exchanges[0];
-			return exchange?.status === 'closed' && exchange.summary.status === 'silent'
+			return exchange?.status === 'closed' && exchange.summary.kind === 'silent'
 				? exchange
 				: undefined;
 		};
@@ -185,7 +185,7 @@ describe('Workbench room reads and recovery', () => {
 			status: 'running',
 			participants: expect.any(Array),
 			exchanges: expect.any(Array),
-			watermark: expect.any(Number),
+			through: expect.any(Number),
 		});
 		expect(selected.messages.every((message) => message.seq > from)).toBe(true);
 		await workbench.control('bringup', 'stop');

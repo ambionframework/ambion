@@ -262,9 +262,9 @@ describe('a lease', () => {
 		const drafted = assistantEnded(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'answer me' });
-		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		// a room that owes a summary is not quiet, so the failed attempt is the wait
 		await drafted;
-		// the close owes a summary, and the first draft failed
+		// the close owes a summary, and the first summary attempt failed
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
 		await clock.advance(60_000);
@@ -492,7 +492,7 @@ describe('a lease judged where its change is written', () => {
 
 	it('keeps a pending summary for each close when another exchange ends during its claim', async () => {
 		const held = deferred();
-		// the view of the second attempt at the draft is delayed on the wire
+		// the view of the second attempt at the summary is delayed on the wire
 		const delayed: Fault = {
 			on: 'view',
 			kind: 'delay',
@@ -523,11 +523,11 @@ describe('a lease judged where its change is written', () => {
 		const visit = await session.visit(priya);
 		const drafted = assistantEnded(session);
 		await visit.send({ text: 'First?' });
-		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		// a room that owes a summary is not quiet, so the failed attempt is the wait
 		await drafted;
 		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
 
-		// the seat works on the second exchange when the backoff passes and the draft is claimed
+		// the seat works on the second exchange when the backoff passes and the summary activation is claimed
 		await visit.send({ text: 'Second?' });
 		await tick();
 		await tick();
@@ -535,7 +535,7 @@ describe('a lease judged where its change is written', () => {
 		expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
 			status: 'active',
 		});
-		// the seat finishes while the draft's view is on the wire: a second close joins the draft
+		// the seat finishes while the view of the summary activation is on the wire: a second close joins it
 		held.resolve();
 		await tick();
 		await tick();

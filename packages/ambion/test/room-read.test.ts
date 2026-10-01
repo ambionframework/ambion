@@ -4,7 +4,7 @@ import { createRuntime, readRoom } from '../src/index.ts';
 import type { Close } from '../src/journal/entries.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import { readView } from '../src/room/read.ts';
+import { toRoomRead } from '../src/room/read.ts';
 import type { Message, RoomRead } from '../src/types.ts';
 import { roomName } from './support/room.ts';
 import { openFor } from './support/stop.ts';
@@ -116,7 +116,7 @@ describe('coherent room reads', () => {
 		};
 		const open = { person: 'sam', from: 4, at: '2026-01-01T00:00:04.000Z' };
 		const read = () => {
-			const snapshot = readView(
+			const snapshot = toRoomRead(
 				'room',
 				state(
 					[close('assistant')],
@@ -143,21 +143,21 @@ describe('coherent room reads', () => {
 				status: 'closed',
 				at: opening.at,
 				through: 3,
-				summary: { status: 'published', summary: published },
+				summary: { kind: 'published', summary: published },
 			}),
 			{ status: 'open', ...open, activations: [] },
 		]);
 		const closed = snapshot.exchanges[0];
-		if (closed?.status !== 'closed' || closed.summary.status !== 'published')
+		if (closed?.status !== 'closed' || closed.summary.kind !== 'published')
 			throw new Error('Expected a published summary.');
 		Reflect.set(closed.summary.summary, 'text', 'mutated');
 		expect(read().exchanges[0]).toMatchObject({ summary: { summary: { text: 'Done.' } } });
 	});
 
 	it('reports pending, silent, and failed outcomes from one projection cut', () => {
-		const pending = readView('room', state([close('assistant')], [opening]), 0, 4, false);
-		const silent = readView('room', state([close()], [opening]), 0, 4, false);
-		const failed = readView(
+		const pending = toRoomRead('room', state([close('assistant')], [opening]), 0, 4, false);
+		const silent = toRoomRead('room', state([close()], [opening]), 0, 4, false);
+		const failed = toRoomRead(
 			'room',
 			state([close('assistant')], [opening], new Map([['closed:3:assistant:1', abandoned]])),
 			0,
@@ -170,15 +170,15 @@ describe('coherent room reads', () => {
 			if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
 			return exchange.summary;
 		};
-		expect(outcome(pending)).toEqual({ status: 'pending', writer: 'assistant' });
-		expect(outcome(silent)).toEqual({ status: 'silent' });
-		expect(outcome(failed)).toEqual({ status: 'failed' });
-		expect(pending.watermark).toBe(4);
+		expect(outcome(pending)).toEqual({ kind: 'pending', writer: 'assistant' });
+		expect(outcome(silent)).toEqual({ kind: 'silent' });
+		expect(outcome(failed)).toEqual({ kind: 'failed' });
+		expect(pending.through).toBe(4);
 	});
 
 	it('validates cursors even when the room has no composition', () => {
 		expect(() =>
-			readView('missing', { ...state([], []), composition: undefined }, 0, 0, { since: -1 }),
+			toRoomRead('missing', { ...state([], []), composition: undefined }, 0, 0, { after: -1 }),
 		).toThrow(/cursor/i);
 	});
 });
@@ -188,7 +188,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 		['released', 'silent'],
 		['abandoned', 'failed'],
 	] as const)(
-		'observes a lease that ends %s as a %s summary, at a new watermark',
+		'observes a lease that ends %s as a %s summary, at a new position',
 		async (reason, expected) => {
 			const opened = await openFor(storage);
 			const runtime = createRuntime({
@@ -211,7 +211,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			const pending = await readRoom(name, { runtime });
 			const first = pending.exchanges[0];
 			expect(first?.status === 'closed' && first.summary).toEqual({
-				status: 'pending',
+				kind: 'pending',
 				writer: 'assistant',
 			});
 			await appendRecord(opened.journals, name, [
@@ -219,12 +219,12 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			]);
 			const complete = await readRoom(name, { runtime });
 			expect(complete.messages).toHaveLength(pending.messages.length);
-			expect(complete.watermark).toBeGreaterThan(pending.watermark);
-			expect(complete.exchanges[0]).toMatchObject({ summary: { status: expected } });
+			expect(complete.through).toBeGreaterThan(pending.through);
+			expect(complete.exchanges[0]).toMatchObject({ summary: { kind: expected } });
 		},
 	);
 
-	it('changes live participant status with the clock at one watermark', async () => {
+	it('changes live participant status with the clock at one position', async () => {
 		const opened = await openFor(storage);
 		let now = 1_000;
 		const runtime = createRuntime({
@@ -244,7 +244,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 		const active = await readRoom(name, { runtime, messages: false });
 		now = 3_000;
 		const idle = await readRoom(name, { runtime, messages: false });
-		expect(active.watermark).toBe(idle.watermark);
+		expect(active.through).toBe(idle.through);
 		expect(seat(active)).toMatchObject({ status: 'active' });
 		expect(seat(idle)).toMatchObject({ status: 'idle' });
 	});

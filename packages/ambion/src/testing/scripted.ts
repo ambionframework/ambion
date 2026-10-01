@@ -159,7 +159,7 @@ class ScriptedSession implements ExecutorSession {
 
 	async pass(pass: Pass): Promise<PassResult> {
 		// The script reads the whole view, so the pass reads the record through it.
-		const after = pass.kind === 'delta' ? pass.since : 0;
+		const after = pass.kind === 'delta' ? pass.after : 0;
 		this.activation.read({ after, through: pass.view.through });
 		try {
 			while (!this.over) {

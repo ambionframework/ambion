@@ -107,9 +107,9 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			participants: [],
 			exchanges: [],
 			exchange: undefined,
-			watermark: 0,
+			through: 0,
 		});
-		await expect(readRoom(missingName, { runtime, messages: { since: -1 } })).rejects.toThrow(
+		await expect(readRoom(missingName, { runtime, messages: { after: -1 } })).rejects.toThrow(
 			/cursor/i,
 		);
 
@@ -129,20 +129,20 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		await messagesOf(room);
 		const complete = await readRoom(name, { runtime });
 		const closed = complete.exchanges.find((exchange) => exchange.from === sent.from);
-		expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+		expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
 		expect(complete.exchange).toBeUndefined();
-		expect(complete.watermark).toBeGreaterThan(complete.messages.at(-1)?.seq ?? 0);
+		expect(complete.through).toBeGreaterThan(complete.messages.at(-1)?.seq ?? 0);
 
-		const suffix = await readRoom(name, { runtime, messages: { since: sent.from } });
+		const suffix = await readRoom(name, { runtime, messages: { after: sent.from } });
 		expect(suffix.messages.every((message) => message.seq > sent.from)).toBe(true);
 		const future = await readRoom(name, {
 			runtime,
-			messages: { since: Number.MAX_SAFE_INTEGER },
+			messages: { after: Number.MAX_SAFE_INTEGER },
 		});
 		expect(future).toMatchObject({
 			initialized: true,
 			messages: [],
-			watermark: complete.watermark,
+			through: complete.through,
 		});
 
 		const message = complete.messages.find((item) => item.seq === sent.from);

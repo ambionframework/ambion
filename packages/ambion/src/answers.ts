@@ -167,5 +167,5 @@ async function release(
 	}
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();
-	return { ok: { expiresAt: room.now(), lastSeq: room.state().lastSeq } };
+	return { ok: { expiresAt: room.now(), through: room.state().lastSeq } };
 }

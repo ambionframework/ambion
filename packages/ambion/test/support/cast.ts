@@ -1,6 +1,6 @@
 /**
  * The cast and the scenario the chaos tests drive: two seats that answer
- * every question once, an assistant that writes once per draft, two
+ * every question once, an assistant that writes once per summary activation, two
  * people, and three questions. No test runner is imported here, so a
  * child process runs the same scenario the tests do.
  */
@@ -54,7 +54,7 @@ const assistantScript: PiScript = (context) =>
 		? summarise('The one message.')
 		: quiet();
 
-/** Every seat answers the last question once; the assistant writes once per draft. */
+/** Every seat answers the last question once; the assistant writes once per summary activation. */
 export const script: PiScript = byAgent({
 	product: answersLastQuestion(people),
 	colleague: answersLastQuestion(people),

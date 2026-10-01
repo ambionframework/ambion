@@ -24,7 +24,7 @@ export const view = (name: string, extra: Record<string, unknown> = {}) =>
 		participants: [],
 		exchanges: [],
 		exchange: undefined,
-		watermark: 0,
+		through: 0,
 		...extra,
 	}) as unknown as RoomView;
 

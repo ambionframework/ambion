@@ -78,7 +78,7 @@ and records its rules read, such as `LeaseEndReason` beside `EndReason`.
 `expectTypeOf`, so the two cannot drift without a compile error.
 
 **A helper a contract names is a rule too.** `stoodDown` exists so that
-`summaryVerdict` can say `!stoodDown(drafts)` in a clause. Such a helper is
+`summaryVerdict` can say `!stoodDown(summaries)` in a clause. Such a helper is
 not exported when only rules call it. Knip fails an export that nothing
 imports, so a rule the runtime does not run cannot stay exported.
 
@@ -108,10 +108,11 @@ the lease the fold holds for that id, and asks `applyChange` for the
 lease after it. `cancelLeases` in `fold.ts` asks `cancelHold` for each
 lease a cancellation reaches. `exchangeAfter` in `exchange.ts` asks
 `openingQuestion` for the first question after the last close.
-`draftsOf` in `exchange.ts` asks `draftsClose` whether each lease drafts
-the close. `summaryCompletion` in `exchange.ts` and `withAttempts` in
-`owed.ts` read the drafts it selects. A comment at such a site says "the rule decides"
-where a second check remains to narrow a TypeScript type.
+`summaryLeasesOf` in `exchange.ts` asks `summarizesClose` whether each lease
+summarizes the close. `summaryCompletion` in `exchange.ts` and
+`withAttempts` in `owed.ts` read the summary leases it selects. A comment at
+such a site says "the rule decides" where a second check remains to narrow a
+TypeScript type.
 
 **A rule that reads a lease reads one shape.** `RuleLease` is the lease
 that the fold holds: its phase, its read position, its end, and the fields
@@ -140,7 +141,8 @@ moves back. The room's proofs file proves these lemmas:
   change fixes `activation`, `openedSeq`, and `claimedAt`. The read
   position never moves back. An ended lease stays as it ended.
   `openedSeq` is the seq of the entry that opened the lease. The name
-  `since` belongs to the exclusive read cursor of a read and of a pass.
+  `after` belongs to the exclusive read position of a read and of a pass.
+  The name `through` belongs to the inclusive one.
 - `OneOpenExchange`: the open exchange is the earliest question after the
   last close. Every other question that could open one comes at or after
   it.
@@ -305,10 +307,10 @@ found no such rule.
 | `endingOf`             | A revocation entry or an expiry entry that a pass writes                     |
 | `wellFormed`           | The ids that a claim, a renewal, a commit, and a release may carry           |
 | `nextActivationId`     | The id that each claim carries                                               |
-| `coversAttempt`        | The leases that answer a wake, so the wakes that the room owes               |
-| `wakeAnswered`         | The wakes that the room owes                                                 |
+| `coversAttempt`        | The leases that answer a wake, so the due activations that the room owes     |
+| `wakeAnswered`         | The due activations that the room owes                                       |
 | `countsAgainst`        | The attempt number in the next id, and the attempt limit                     |
-| `draftsClose`          | The attempt number of a summary draft, and the summary verdict               |
+| `summarizesClose`      | The attempt number of a summary attempt, and the summary verdict             |
 | `survivesCancellation` | The grants and the owed summaries that a cancellation leaves                 |
 | `closeFor`             | The grant of a closing activation                                            |
 | `activationGrant`      | A claim entry, a renewal entry, a commit entry, and a release entry          |

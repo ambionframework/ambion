@@ -11,7 +11,7 @@ import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
-import { readView } from '../src/room/read.ts';
+import { toRoomRead } from '../src/room/read.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { fakeClock } from '../src/testing.ts';
@@ -165,7 +165,7 @@ describe('the room runs the verified rules', () => {
 
 	it('reads an exchange outcome as exchangeOutcome answers', () => {
 		bind.once(rules.exchangeOutcome, 'exhausted');
-		const read = readView(
+		const read = toRoomRead(
 			'room',
 			replayState([composition, person, question, closed3], options),
 			now,
@@ -174,7 +174,7 @@ describe('the room runs the verified rules', () => {
 		);
 		expect(read.exchanges).toMatchObject([{ status: 'closed', outcome: { kind: 'exhausted' } }]);
 		expect(
-			readView(
+			toRoomRead(
 				'room',
 				replayState([composition, person, question, closed3], options),
 				now,
@@ -230,14 +230,14 @@ describe('the room runs the verified rules', () => {
 
 	it('owes a summary only when summaryVerdict says the close owes one', () => {
 		const closed = () => replayState([writerNamed, person, question, closed3], options);
-		bind.once(rules.summaryVerdict, { status: 'failed' });
+		bind.once(rules.summaryVerdict, { kind: 'failed' });
 		expect(owedOf(closed())).toEqual([]);
 		expect(owedOf(closed())).toMatchObject([{ seat: 'product', position: 3 }]);
 	});
 
-	it('counts a draft of a close as draftsClose answers', () => {
-		const drafted = (reason: 'failed' | 'released') => {
-			const draft = 'closed:3:product:1';
+	it('counts a summary attempt of a close as summarizesClose answers', () => {
+		const attempted = (reason: 'failed' | 'released') => {
+			const attempt = 'closed:3:product:1';
 			return replayState(
 				[
 					writerNamed,
@@ -247,24 +247,24 @@ describe('the room runs the verified rules', () => {
 					{
 						kind: 'lease',
 						seq: 5,
-						body: { id: draft, phase: 'running', expiresAt: now, at, readThrough: 0 },
+						body: { id: attempt, phase: 'running', expiresAt: now, at, readThrough: 0 },
 					},
 					{
 						kind: 'lease',
 						seq: 6,
-						body: { id: draft, phase: 'ended', reason, at, readThrough: 0 },
+						body: { id: attempt, phase: 'ended', reason, at, readThrough: 0 },
 					},
 				],
 				options,
 			);
 		};
-		bind.always(rules.draftsClose, () => false);
-		// No lease drafts the close: the failed draft is no attempt, and the released one stands nobody down.
-		expect(owedOf(drafted('failed'))).toMatchObject([{ attempt: 1, unsuccessfulAttempts: 0 }]);
-		expect(owedOf(drafted('released'))).toMatchObject([{ seat: 'product', position: 3 }]);
-		bind.restore(rules.draftsClose);
-		expect(owedOf(drafted('failed'))).toMatchObject([{ attempt: 2, unsuccessfulAttempts: 1 }]);
-		expect(owedOf(drafted('released'))).toEqual([]);
+		bind.always(rules.summarizesClose, () => false);
+		// No lease summarizes the close: the failed attempt is no attempt of it, and the released one stands nobody down.
+		expect(owedOf(attempted('failed'))).toMatchObject([{ attempt: 1, unsuccessfulAttempts: 0 }]);
+		expect(owedOf(attempted('released'))).toMatchObject([{ seat: 'product', position: 3 }]);
+		bind.restore(rules.summarizesClose);
+		expect(owedOf(attempted('failed'))).toMatchObject([{ attempt: 2, unsuccessfulAttempts: 1 }]);
+		expect(owedOf(attempted('released'))).toEqual([]);
 	});
 
 	it('admits a claim or a renewal as admitsLease answers', () => {
@@ -275,7 +275,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('stamps a closing commit as the rules answer', () => {
-		const drafting: Entry = {
+		const summarizing: Entry = {
 			kind: 'lease',
 			seq: 5,
 			body: {
@@ -286,7 +286,7 @@ describe('the room runs the verified rules', () => {
 				readThrough: 4,
 			},
 		};
-		const state = replayState([writerNamed, person, question, closed3, drafting], options);
+		const state = replayState([writerNamed, person, question, closed3, summarizing], options);
 		const commit: CommitRequest = {
 			activation: 'closed:3:product:1',
 			key: 'summary',

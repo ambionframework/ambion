@@ -102,7 +102,7 @@ class TwoQuestions implements RoomProtocol {
 
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		if (lease.operation === 'release') this.releases.push(lease);
-		return { ok: { expiresAt: Date.now() + 60_000, lastSeq: this.last } };
+		return { ok: { expiresAt: Date.now() + 60_000, through: this.last } };
 	}
 }
 
