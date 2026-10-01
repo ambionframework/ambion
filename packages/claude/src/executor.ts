@@ -40,7 +40,7 @@ import { failedPass } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
-import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
+import { floorRefusal, passResultOf, sessionOf, unresumableResult } from './failure.ts';
 import { type SeatHome, seatHome } from './home.ts';
 import { type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
@@ -346,8 +346,24 @@ class Activation implements ExecutorSession {
 			// The SDK reports a tool result as the model reads it next.
 			if (step.type === 'tool_result') this.activation.delivered(step.call);
 		}
+		if (message.type === 'system' && message.subtype === 'init') this.checked(message);
 		if (message.type === 'user') this.echoed(message);
 		if (message.type === 'result') this.answered(message);
+	}
+
+	/**
+	 * The init message names the version of the executable. An executable
+	 * below the floor would read files that user text names, so the pass
+	 * fails at once and the query closes before any model turn runs. The
+	 * `harness` step is already recorded.
+	 */
+	private checked(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): void {
+		const refusal = floorRefusal(init.claude_code_version);
+		if (refusal === undefined) return;
+		this.finish(refusal);
+		this.stopped = true;
+		this.inbox.end();
+		this.stream?.close();
 	}
 
 	/** The SDK sent a user message back: the model has it, so the core counts its range read. */

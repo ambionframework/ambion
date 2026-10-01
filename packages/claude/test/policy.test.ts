@@ -292,7 +292,7 @@ it('records one harness step from the init message, with the room tools by their
 		{
 			type: 'harness',
 			name: 'claude',
-			version: '0.0.0-fake',
+			version: '2.1.284',
 			model: 'claude-fake',
 			cwd: expect.stringContaining('work'),
 			session: expect.any(String),

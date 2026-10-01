@@ -20,7 +20,10 @@ executable read the file that an `@path` mention in a user message named. It
 did this with no tool call and no permission check, from the host
 filesystem. A participant of a room could pull any file of the host user into
 a seat. It also ran a message that started with `/` as a slash command. Each
-user message now reaches the model as written.
+user message now reaches the model as written. An older executable ignores
+the mark. The executor reads the version in the `system` init message and
+fails the pass with a permanent failure when it is below 2.1.248. It then
+closes the query, so no model turn runs.
 
 **The `approval` step is gone.** No executor writes it. Pi and Codex never
 wrote it, and the Claude executor wrote it only for a permission request,

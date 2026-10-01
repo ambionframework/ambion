@@ -258,19 +258,12 @@ and of its bundles. The workspace bundle gives `read`, `write`, `edit`, and
 
 ## Policy and the trust boundary
 
-**A Claude seat has no built-in tool.** It reaches files and a shell only
-through the workspace tools of its bundles. Those tools run behind the
-workspace port. The seat reaches the filesystem that the workspace backend
-serves: memory, one directory of the host, or a remote server.
-
-**The Claude Code process runs on the host as the host user.** It is a child
-process. Its working directory is a private scratch directory, and its
-environment is the environment of the seat. A compromise of that process
-reaches every file that the host user can read. It also reaches the
-credential in its environment and the network. The seat has no tool for
-these. The query is verbatim, so the text of a user cannot make the process
-read a file. The room tools and the tools of the definition run in the host
-process.
+**A seat has no built-in tool, and its process runs as the host user.**
+[What it is](#what-it-is-and-when-to-use-it) states both. The process is a
+child process. Its working directory is a private scratch directory, and its
+environment is the environment of the seat. The query is verbatim, so the
+text of a user cannot make the process read a file. The room tools and the
+tools of the definition run in the host process.
 
 **The room defines the seat, and fixed options enforce it.** The executor
 sets them on every query. The definition cannot change them.
@@ -298,8 +291,14 @@ no tool call and no permission check, and the file comes from the host
 filesystem. It also runs a message that starts with `/` as a slash command.
 A participant of the room could then pull any file of the host user into the
 seat. With `verbatimPrompts`, the SDK marks each user message as composed by
-the client, and the executable delivers the text as written. The option needs
-Claude Code 2.1.248 or later.
+the client, and the executable delivers the text as written.
+
+**The executor refuses an executable older than 2.1.248.** An older
+executable ignores the mark and reads the file. The `system` init message
+names the version. When it is older, absent, or unreadable, the pass fails
+with a permanent failure that names the version. The executor then closes the
+query, so no model turn runs. The `harness` step is already in the trace.
+`MIN_CLAUDE_VERSION` in `src/failure.ts` holds the floor.
 
 The query has no permission callback, so the executor raises no permission
 request and records no `approval` step. The flag tier sits below the managed
@@ -552,7 +551,9 @@ that the real binary honors `--tools`, `--allowedTools`,
 `--permission-mode`, `--strict-mcp-config`, or an empty setting source. It
 cannot show real token counts, real cost, the real `result` shape, the
 behavior of a real session store on resume, or a real sign-in. It never runs
-a model.
+a model. A change of the pinned SDK or CLI version re-runs
+`test/live/hermetic.test.ts`, because the CLI may narrow what `client_composed`
+skips.
 
 **The package has a live tier.** `packages/claude/test/live/` holds the
 cases that the fake cannot prove. They cover tool exclusivity, a hermetic
@@ -577,6 +578,7 @@ live tests of the Workbench also run the `design` seat. See
 | A project MCP server is missing                                       | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                      |
 | The seat is abandoned after one attempt with an authentication text   | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have set the key to `undefined`. |
 | `The Claude session ended before the pass did.`                       | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class.  |
+| A pass fails with `needs Claude Code 2.1.248 or later`                | `pathToClaudeCodeExecutable` names an executable below the floor. Use a newer one, or leave the option out to use the executable of the SDK.                                        |
 | A failed pass names a model or a setting the executable does not know | The message ends with the stderr of the process, which often names the cause. For an unknown model, it says that the model catalog does not describe it.                            |
 | A `bash` tool of the workspace finds no git identity                  | The seat has no `~` of the host user. The workspace backend owns the identity.                                                                                                      |
 | The executable cannot sign in on Bedrock, Vertex, or Foundry          | The allowlist holds no variable of that provider. Pass an `env` with the variables that the provider needs.                                                                         |

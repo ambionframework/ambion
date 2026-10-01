@@ -2,7 +2,7 @@
 import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
 import { STDERR_TAIL } from '../src/executor.ts';
-import { passResultOf } from '../src/failure.ts';
+import { MIN_CLAUDE_VERSION, meetsFloor, passResultOf } from '../src/failure.ts';
 import { open, until, viewOf } from './support.ts';
 
 const result = (fields: object) =>
@@ -153,4 +153,34 @@ it('settles a parked result when close runs inside the drain, and settles once',
 	await new Promise((resolve) => setTimeout(resolve, 20));
 	run.session.close?.();
 	expect(await pass).toMatchObject({ failed: true, cause: 'permanent' });
+});
+
+it.each([
+	{ what: 'an older patch', version: '2.1.247', ok: false },
+	{ what: 'an older minor', version: '2.0.999', ok: false },
+	{ what: 'the floor', version: MIN_CLAUDE_VERSION, ok: true },
+	{ what: 'a newer patch', version: '2.1.284', ok: true },
+	{ what: 'a newer major with more digits', version: '10.0.0', ok: true },
+	{ what: 'a pre-release suffix', version: '2.1.284-beta.1', ok: true },
+	{ what: 'an older pre-release', version: '2.1.100-beta.1', ok: false },
+	{ what: 'an absent version', version: undefined, ok: false },
+	{ what: 'garbage', version: 'not a version', ok: false },
+	{ what: 'two numbers', version: '2.1', ok: false },
+])('compares $what with the floor', ({ version, ok }) => {
+	expect(meetsFloor(version)).toBe(ok);
+});
+
+it('refuses an executable below the floor with a permanent failure, and runs no model turn', async () => {
+	const run = open({ turns: [[{ say: 'Saturday.' }]], claudeVersion: '2.1.100' });
+	const result = await run.session.pass({ kind: 'view', view: viewOf() });
+	run.session.close?.();
+	expect(result).toMatchObject({ failed: true, cause: 'permanent' });
+	expect(result.message).toContain('version 2.1.100');
+	expect(result.message).toContain(`needs Claude Code ${MIN_CLAUDE_VERSION} or later`);
+	// The trace shows what ran, and the model did nothing.
+	expect(run.steps).toContainEqual(
+		expect.objectContaining({ type: 'harness', version: '2.1.100' }),
+	);
+	expect(run.steps.some((step) => step.type === 'tool_call')).toBe(false);
+	expect(run.commits).toEqual([]);
 });

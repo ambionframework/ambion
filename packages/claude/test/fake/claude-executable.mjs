@@ -17,7 +17,8 @@
  *
  * Actions:
  * The first turn of a start sends the `system` init message first, as the real
- * executable does. `apiKeySource` and `initTools` in the scenario set two of its fields.
+ * executable does. `apiKeySource`, `initTools`, and `claudeVersion` in the scenario set three
+ * of its fields.
  *
  * - `{ say }`: call the room tool `say`.
  * - `{ sayUntilLanded }`: call `say`, and call it again when the room answers an error.
@@ -247,7 +248,7 @@ const init = (cwd = process.cwd()) =>
 		type: 'system',
 		subtype: 'init',
 		apiKeySource: config.apiKeySource ?? 'ANTHROPIC_API_KEY',
-		claude_code_version: '0.0.0-fake',
+		claude_code_version: config.claudeVersion ?? '2.1.284',
 		cwd,
 		tools: config.initTools ?? ['Bash', 'mcp__ambion__say'],
 		mcp_servers: [{ name: 'ambion', status: 'connected' }],

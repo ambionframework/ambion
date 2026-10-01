@@ -62,3 +62,40 @@ export function sessionOf(message: SDKMessage): string | undefined {
 		return undefined;
 	return message.session_id === '' ? undefined : message.session_id;
 }
+
+/**
+ * The oldest Claude Code executable that honors `verbatimPrompts`. An older
+ * one ignores `client_composed`, so it reads the file that an `@path` mention
+ * in a user message names, and it runs a message that starts with `/` as a
+ * command. The executor refuses to run a seat on an executable below this.
+ */
+export const MIN_CLAUDE_VERSION = '2.1.248';
+
+/** The numbers of a version such as `2.1.284` or `2.1.284-beta.1`, or nothing when it has none. */
+function numbersOf(version: string | undefined): number[] | undefined {
+	const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? '');
+	return match === null ? undefined : match.slice(1, 4).map(Number);
+}
+
+/** Whether a version is at or above the floor. An absent or unreadable version is not. */
+export function meetsFloor(version: string | undefined, floor = MIN_CLAUDE_VERSION): boolean {
+	const found = numbersOf(version);
+	const least = numbersOf(floor);
+	if (found === undefined || least === undefined) return false;
+	for (const [index, number] of found.entries()) {
+		const other = least[index] ?? 0;
+		if (number !== other) return number > other;
+	}
+	return true;
+}
+
+/** The refusal for an executable below the floor, or nothing when it meets it. */
+export function floorRefusal(version: string | undefined): PassResult | undefined {
+	if (meetsFloor(version)) return undefined;
+	const found = version === undefined || version === '' ? 'no version' : `version ${version}`;
+	return {
+		failed: true,
+		cause: 'permanent',
+		message: `The Claude Code executable reports ${found}. The executor needs Claude Code ${MIN_CLAUDE_VERSION} or later.`,
+	};
+}

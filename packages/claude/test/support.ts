@@ -80,6 +80,7 @@ export function viewOf(through = 1): ActivationView {
 export type Scenario = FakeScenario & {
 	session?: string;
 	apiKeySource?: string;
+	claudeVersion?: string;
 	initTools?: string[];
 	rejectResume?: boolean;
 	rejectResumeResult?: boolean;
