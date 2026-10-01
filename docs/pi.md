@@ -288,9 +288,9 @@ key, and the room answers.
 calls them in the same process, so it needs no transport.
 
 **The executor builds the tools of the definition from each `AmbionTool`.**
-It does not host `pass.agentTools`. [Executors](executors.md#the-room-tools)
-states the fields of a tool that the harness reads and a `RoomTool` does
-not carry.
+It hosts only the room tools of `pass.tools`.
+[Executors](executors.md#the-room-tools) states the fields of a tool that
+the harness reads and a `RoomTool` does not carry.
 
 **The model holds exactly the tools of the activation.** The executor
 passes the room tools, the tools of the definition, and the tools of its

@@ -472,9 +472,10 @@ it joins the vocabulary layer. The file list of that layer in
 `biome.jsonc` gains it ([Toolchain](toolchain.md)).
 
 **Every family hosts `compose` as one more tool.** Pi builds its tools
-from the definition. Claude and Codex host `pass.agentTools`, which maps
-the same tools one to one. The `invoke` of `compose` closes over the other
-tools of the definition, and calls each `AmbionTool` directly.
+from the definition. Claude and Codex host `pass.tools`, which holds each
+tool of the definition as a `RoomTool`. The `invoke` of `compose` closes
+over the other tools of the definition, and calls each `AmbionTool`
+directly.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
 actions in this order:
