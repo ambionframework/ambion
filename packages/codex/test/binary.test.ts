@@ -31,7 +31,7 @@ import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
 import { HARNESS_NOTE } from '../src/options.ts';
-import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL } from './binary.ts';
+import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL, SKILL_MARKER } from './binary.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
 
 /** How long a test may take. The binary starts in about a second, and a loaded host takes longer. */
@@ -270,6 +270,11 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// and the instructions of the host appear in no request.
 					expect(on.leaked()).toBe(false);
 					expect(JSON.stringify(on.responses.requests)).not.toContain(HOST_MARKER);
+					// The private HOME hides the skills of the host user: Codex discovers skills under
+					// `$HOME/.agents/skills`, and the seat HOME holds none.
+					expect(JSON.stringify(on.responses.requests)).not.toContain(SKILL_MARKER);
+					expect(JSON.stringify(on.responses.requests)).not.toContain('host-trap');
+					expect(existsSync(join(on.home, 'home'))).toBe(true);
 					expect(on.outbound).toEqual([]);
 
 					// Codex warns about the setting it does not know, and the trace keeps the warning.

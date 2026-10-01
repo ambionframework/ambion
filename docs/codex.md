@@ -23,7 +23,7 @@ states the workspace tools: `read`, `write`, `edit`, `bash`, and the
 others. A seat of any executor kind joins one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution. Pass `codexExecution({ codexPath, env, home, login })` for
-another binary, environment, Codex home, or login.
+another binary, environment overlay, Codex home, or login.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
@@ -60,15 +60,16 @@ that runs your process.
   `codex login --device-auth`.
 
 **A subscription needs no key.** Leave `CODEX_API_KEY` out of the
-environment, so that the binary runs on the ChatGPT sign-in. A
-custom `env` on `codexExecution()` needs `HOME`, so that the execution finds
-`~/.codex/auth.json`, or a `login` option. A subscription has its own usage
+environment, so that the binary runs on the ChatGPT sign-in. The execution
+finds `~/.codex/auth.json` under the `HOME` of the process, or under the
+`HOME` that `env` sets. A `login` option names another file. A subscription
+has its own usage
 limit, which is a permanent failure. Codex reports no cost, so the executor
 records none. A provider may restrict the use of a consumer subscription
 outside its own clients. Read its terms first.
 
 **The seats of an execution share a Codex home of their own.** The default home is
-`~/.ambion/codex`, under the `HOME` of `env`. The execution sets
+`~/.ambion/codex`, under the `HOME` of the host. The execution sets
 `CODEX_HOME` to it for each run of the binary, and the `CODEX_HOME` of the
 host never reaches the binary. A seat reads no `config.toml` and no
 `AGENTS.md` from `~/.codex`, and it starts none of the MCP servers that
@@ -78,7 +79,7 @@ mode `0700`, because it holds full transcripts, logs, and the linked login.
 
 **The home links the login of the host.** The first activation creates the
 symbolic link `auth.json` in the home. It points to the login file of the
-host: `auth.json` in the `CODEX_HOME` of `env` when that
+host: `auth.json` in the `CODEX_HOME` of the host when that
 variable is set, else `~/.codex/auth.json`. Codex writes that file in
 place, and it reads the file again before it refreshes a token. The host and
 all seats then share one login. A copy would hold a refresh token that
@@ -190,18 +191,55 @@ why.
 
 **`codexExecution(options)` takes the options of the executable.**
 
-| Option      | Default                                   | What it does                                                                   |
-| ----------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| `codexPath` | The bundled binary                        | A `codex` executable to run                                                    |
-| `env`       | `process.env`                             | The environment of the executable. Its `CODEX_HOME` names the home of the host |
-| `home`      | `.ambion/codex` under the `HOME` of `env` | The Codex home of every seat                                                   |
-| `login`     | The `auth.json` of the host               | The `auth.json` to link into the home. `false` links nothing                   |
+| Option      | Default                                      | What it does                                                                              |
+| ----------- | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `codexPath` | The bundled binary                           | A `codex` executable to run                                                               |
+| `env`       | None                                         | Variables to lay over the allowlisted variables of `process.env`. `undefined` removes one |
+| `home`      | `.ambion/codex` under the `HOME` of the host | The Codex home of every seat                                                              |
+| `login`     | The `auth.json` of the host                  | The `auth.json` to link into the home. `false` links nothing                              |
 
-**`CODEX_HOME` in `env` names the Codex home of the host.** It sets the
-default `login` to `<CODEX_HOME>/auth.json`. It never reaches the binary.
-The execution sets `CODEX_HOME` to `home` in the environment of every run
-of the binary, including the `codex debug models` run for the catalog. A
-host can spread `process.env` into `env` with no further step.
+**The binary runs with an allowlisted environment.** The base is the
+variables of `process.env` that the next table names. The
+`env` option lays over it: a value adds or replaces a variable, and
+`undefined` removes one. Then the execution sets the variables of the seat,
+and they win over `env`. The same environment goes to every run of the
+binary, including the `codex debug models` run for the catalog.
+
+**The allowlist holds what the binary needs to reach its provider.**
+
+| Admitted by                                                                  | Why                                                                 |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `PATH`, `USER`, `LOGNAME`, `TMPDIR`, `TEMP`, `TMP`, `TZ`, `LANG`             | The binary finds programs, writes temporary files, and formats time |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, lowercase forms        | A host behind a proxy reaches the provider                          |
+| `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`                       | A host with its own certificate store verifies the provider         |
+| `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `COMSPEC`, `PATHEXT` | The binary starts on Windows                                        |
+| `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, `CODEX_CA_CERTIFICATE`                | The key, the token, and the certificate of Codex                    |
+| `OPENAI_*`                                                                   | `OPENAI_API_KEY` and `OPENAI_BASE_URL` serve the default provider   |
+| `LC_*`                                                                       | The locale                                                          |
+
+**On Windows the allowlist compares names without case.** Windows spells
+some variables in mixed case, such as `Path` and `SystemRoot`, and the
+binary needs them to open a socket.
+
+**Every other variable stays with the host.** `SHELL` and `TERM` are not on
+the list, because a seat has no native tool and no terminal. Other `CODEX_`
+variables, such as `CODEX_SQLITE_HOME` and `CODEX_SANDBOX`, move the state,
+the sandbox, or a server of Codex out of the seat. A cloud key, a
+token of a code host, and the socket of an SSH agent reach neither the
+binary nor the room tools server that Codex starts. A provider with another
+`env_key` in the `config.toml` of `home` needs that variable in `env`.
+
+**The seat sets `CODEX_HOME`, `HOME`, and `USERPROFILE`.** `CODEX_HOME` is
+`home`. `HOME` and `USERPROFILE` are the private directory `home/home`, which
+the execution creates with the mode `0700`. Codex finds skills under
+`$HOME/.agents/skills`. With a private `HOME`, a skill of the host user
+reaches no prompt, and no dotfile of the host user is in the reach of the
+binary. The login still works, because `auth.json` lives in `CODEX_HOME`.
+
+**The defaults of `home` and `login` read the host.** The `HOME` and the
+`CODEX_HOME` of the host are the values of `process.env` with `env` laid over
+them. The `CODEX_HOME` of the host sets the default `login` to
+`<CODEX_HOME>/auth.json`. Neither value reaches the binary.
 
 **The executor always sets `skipGitRepoCheck`.** A room seat runs where the
 application puts it, and that place is often no git repository.
@@ -608,11 +646,12 @@ nine removed flags as on, such as `steer` and `sqlite`. A removed flag has
 no effect. A new default feature
 needs the same check on each upgrade.
 
-**The environment includes the key by default.** With no `env` on
-`codexExecution()`, the binary runs with a copy of `process.env`. No tool of
-the seat reads that copy, because a seat has no native tools. Pass an `env`
-that leaves the key out to keep it from the `codex` process, and sign in with
-`codex login`.
+**The environment is an allowlist.** The binary runs with the allowlisted
+variables of `process.env`, the `env` of the host laid over them, and the
+variables of the seat. `CODEX_API_KEY` and `OPENAI_API_KEY` pass by prefix.
+Pass `OPENAI_API_KEY: undefined` and `CODEX_API_KEY: undefined` in `env` to
+keep both from the `codex` process, and sign in with `codex login`. No
+other secret of the host reaches the binary or the room tools server.
 
 **The seat home keeps the config of the host user out.** The binary reads
 its config, its instructions, and its MCP servers from `CODEX_HOME`. The
@@ -620,7 +659,8 @@ execution points that variable at the seat home, so the `~/.codex` of the
 host user changes no seat: its `model_provider` reroutes no request, its
 `mcp_servers` start no process, and its `AGENTS.md` joins no prompt. The
 binary tier proves each of the three. Put a `config.toml` in `home` to
-configure every seat on purpose.
+configure every seat on purpose. The private `HOME` does the same for the
+skills of the host user under `~/.agents/skills`.
 
 **The `config.toml` of the seat home is the responsibility of the host.**
 The executor overrides each config key that the recipe names. Any other key
@@ -656,17 +696,18 @@ scripted.
 a temporary home with a `config.toml` that sends the provider to the
 endpoint, and passes it as `home`. The file leaves every other key to the
 recipe, including the update check. The environment of the binary holds
-`PATH`, a host home as `HOME`, a dummy key variable, and a proxy that
-records and refuses every outbound connection. The catalog lookup
+`PATH`, a dummy key variable, and a proxy that records and refuses every
+outbound connection, laid over the allowlist. The catalog lookup
 (`codex debug models`) runs in the same environment. No real sign-in reaches
 the binary, and every model request goes to the endpoint. The file skips on
 a platform with no bundled binary, except under CI, where it fails.
 
 **The host home holds traps.** Its `.codex` has a `config.toml` that
 reroutes the provider to a dead port and starts an MCP server that writes a
-marker file, and an `AGENTS.md` with a unique text. A test asserts that the
-endpoint got the requests, that the marker file does not exist, and that the
-text is in no request body.
+marker file, an `AGENTS.md` with a unique text, and a skill under
+`.agents/skills` with another. A test asserts that the endpoint got the
+requests, that the marker file does not exist, and that neither text is in a
+request body. `test/home.test.ts` asserts which variables reach the binary.
 
 **The login test uses an API key file.** A host `auth.json` holds an API
 key, and the provider takes the sign-in of the home. The test asserts that
@@ -810,8 +851,8 @@ missing `sessions` directory in the seat home, a changed `home` option, a
 the thread.
 
 **A run fails with a sign-in message.** The failure is permanent, so the room
-does not retry. Set `CODEX_API_KEY`, or run `codex login`. A custom `env`
-needs `HOME`, or the `login` option, for the sign-in. A login in the OS
+does not retry. Set `CODEX_API_KEY`, or run `codex login`. A `HOME` that
+`env` sets moves the default `login`. A login in the OS
 keyring is invisible to a seat: see "A keyring login cannot be shared".
 
 **`Cannot link .../auth.json to the login file ...`** The activation could
@@ -820,8 +861,8 @@ Run `CODEX_HOME=<home> codex login` to sign in to the home, or pass
 `login: false` and set `CODEX_API_KEY`.
 
 **A seat starts with no login although the host has one.** The host login
-file is `<CODEX_HOME>/auth.json` when the environment sets `CODEX_HOME`, else
-`~/.codex/auth.json`. Check that path, or pass `login`.
+file is `<CODEX_HOME>/auth.json` when the environment of the host sets
+`CODEX_HOME`, else `~/.codex/auth.json`. Check that path, or pass `login`.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
 Claude seat reached a Codex executor through an execution with no kind.
