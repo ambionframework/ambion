@@ -3,8 +3,8 @@
  * alarm is the room's clock, and a seat is reached over RPC to the seat
  * object that `seatName` names. The name of the room is the name of the
  * object, so the object keeps no copy of it. The constructor resumes an
- * initialized room with the configured definitions unless the metadata
- * records an explicit stop.
+ * initialized room with the definitions of the agents on its record unless
+ * the metadata records an explicit stop.
  */
 
 import { DurableObject } from 'cloudflare:workers';
@@ -32,7 +32,7 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { runningRoom, visitOf } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
-import { configuredAgents, definitionOf, runtimeFor } from './configure.ts';
+import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
 import { seatName } from './seat-object.ts';
 import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
@@ -117,9 +117,16 @@ export class RoomObject extends DurableObject<Env> {
 		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
 			if (this.metadata.read().stopped === true) return;
-			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
-			if (!recorded.initialized) return;
-			this.room = await resumeRoom(name, { runtime: this.runtime, agents: configuredAgents() });
+			const read = await readRoom(name, { runtime: this.runtime, messages: false });
+			if (!read.initialized) return;
+			const recorded = [
+				...read.participants.filter((one) => one.kind !== 'human'),
+				...read.reserve,
+			].map((one) => one.name);
+			this.room = await resumeRoom(name, {
+				runtime: this.runtime,
+				agents: recorded.map(definitionOf),
+			});
 		});
 	}
 

@@ -86,7 +86,18 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
+	// every wake the seat takes changes its record once, so the calls count the wakes
+	const wakes: number[] = [];
+	await inside<SeatInternals, void>(seat, async (object) => {
+		const change = object.metadata.change.bind(object.metadata);
+		object.metadata.change = (...args) => {
+			wakes.push(wakes.length);
+			return change(...args);
+		};
+	});
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
+	// nobody claims the wake, so the room sends it again
+	expect(await until(async () => (wakes.length >= 2 ? true : undefined))).toBe(true);
 	// the seat takes the wake for the second exchange and starts nothing
 	const held = `message:${secondExchange.from}:product:1`;
 	expect(await until(async () => (await stateOf(seat)).activation)).toBe(held);

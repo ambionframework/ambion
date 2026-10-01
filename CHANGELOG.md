@@ -5,8 +5,9 @@
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,
 and `RoomObject` takes the name from its id. `RoomMetadata` holds
-`stopped` alone, without `name` and `definitions`. A resumed room takes
-every agent that `configure` names, so a resumed room may seat any of them.
+`stopped` alone, without `name` and `definitions`. A resumed room takes the
+definitions of the agents on its record from `configure`. `RoomRead` gains
+`reserve`, the agents that no seat holds.
 `SeatMetadata` holds `activation`, `phase`, and `hold`, without `room` and
 `seat`: the seat object reads both from its name, which `seatName` builds.
 `SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`

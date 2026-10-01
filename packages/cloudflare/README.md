@@ -19,8 +19,8 @@ What is built:
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
 - **`RoomObject`** runs the room. The name of the object is the name of the
   room: reach it with `idFromName(room)`, and an object with no name throws.
-  Its constructor resumes an initialized room with every agent that
-  `configure` names, unless explicitly stopped; an uninitialized record waits for
+  Its constructor resumes an initialized room with the definitions of its
+  recorded agents from `configure`, unless explicitly stopped; an uninitialized record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
   `unseat`, `cancel`, `read`, `exchange`, `dismiss`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
@@ -64,8 +64,8 @@ What is built:
 `summaryWriter` name, and an optional `seats` map. The map sets the initial seats and
 their attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
-install a new definition. Automatic resume gives the room every definition
-that `configure` names, so a resumed room may seat any of them. Every seat uses the same room
+install a new definition. Automatic resume resolves each agent on the record,
+seated or in reserve, through `configure`. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped

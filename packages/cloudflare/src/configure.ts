@@ -121,11 +121,6 @@ export function seatHost(): ExecutionHost {
 	};
 }
 
-/** Every definition the worker configured. A resume resolves the names of a record from them. */
-export function configuredAgents(): readonly AgentDefinition[] {
-	return configured().agents;
-}
-
 export function definitionOf(name: string): AgentDefinition {
 	const def = settings?.agents.find((agent) => agent.name === name);
 	if (def === undefined) throw new Error(`'${name}' is not configured in this worker.`);
