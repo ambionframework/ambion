@@ -26,17 +26,11 @@ import type {
 	ShellExecOptions,
 	ShellExecResult,
 	ShellOutputLimits,
+	ShellOutputUpdate,
 	ShellOutputView,
 } from '@earendil-works/pi-agent-core';
-import {
-	applyShellOutputUpdate,
-	ExecutionError,
-	err,
-	FileError,
-	ok,
-	truncateHead,
-	truncateTail,
-} from '@earendil-works/pi-agent-core';
+import { ExecutionError, err, FileError, ok } from '@earendil-works/pi-agent-core';
+import { truncateHead, truncateTail } from './truncate.ts';
 
 /**
  * The options of one command on a workspace environment: Pi's options, and the
@@ -323,6 +317,26 @@ export function boundedView(
 		limits?.retain === 'head' ? truncateHead(output, options) : truncateTail(output, options);
 	const { content, ...truncation } = result;
 	return { text: content, truncation };
+}
+
+/** The view that `update` makes of `current`. */
+function applyShellOutputUpdate(
+	current: ShellOutputView | undefined,
+	update: ShellOutputUpdate,
+): ShellOutputView {
+	switch (update.kind) {
+		case 'replace':
+			return update.output;
+		case 'append':
+			return { text: `${current?.text ?? ''}${update.text}`, ...update.metadata };
+		case 'slide':
+			return {
+				text: `${current?.text.slice(update.drop) ?? ''}${update.text}`,
+				...update.metadata,
+			};
+		case 'metadata':
+			return { text: current?.text ?? '', ...update.metadata };
+	}
 }
 
 /**

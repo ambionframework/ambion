@@ -23,12 +23,7 @@ import {
 	defineTool,
 	type ToolContext,
 } from '@ambionframework/ambion';
-import {
-	type AgentToolResult,
-	DEFAULT_MAX_BYTES,
-	formatSize,
-	type ShellOutputTruncation,
-} from '@earendil-works/pi-agent-core';
+import type { AgentToolResult, ShellOutputTruncation } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
@@ -39,6 +34,7 @@ import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { ToolFailure } from './tools.ts';
+import { DEFAULT_MAX_BYTES, formatSize } from './truncate.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
