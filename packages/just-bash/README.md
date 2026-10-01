@@ -97,13 +97,13 @@ The storage is one SQLite file, through `node:sqlite`. The first use opens
 it, and `lab.dispose()` closes it and keeps the file. The root entry of the
 package loads no `node:sqlite`.
 
-| Option      | Meaning                                                                |
-| ----------- | ---------------------------------------------------------------------- |
-| `storage`   | `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests  |
-| `secret`    | The key of every token. A new secret revokes every token               |
-| `templates` | The registrations, by template name                                    |
-| `tokenTtl`  | Seconds a token lives. The default is 3600                             |
-| `onError`   | Called with a fault of the server. Absent, the backend reports nothing |
+| Option          | Meaning                                                                |
+| --------------- | ---------------------------------------------------------------------- |
+| `storage`       | `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests  |
+| `secret`        | The key of every token. A new secret revokes every token               |
+| `templates`     | The registrations, by template name                                    |
+| `credentialTtl` | Seconds a token lives. The default is 3600                             |
+| `onError`       | Called with a fault of the server. Absent, the backend reports nothing |
 
 **A registration updates its template.** The backend registers each
 template before its first operation. A changed source fast-forwards the

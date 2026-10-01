@@ -34,7 +34,7 @@ be stateful. The API prescribes no internal storage or checkpoint format.
 | Connect        | Call `connect` with that handle and port               | Qualified sensor names in the workspace              |
 | Observe        | Call `observe`, then cite its snapshot ref             | Retained measurements and files                      |
 | Revise or stop | Cancel; edit, validate, save, and start again          | An explicit replacement or an inactive sensor        |
-| Roll back      | Stop; check out a previous commit and start it         | A previous implementation, with a new process handle |
+| Roll back      | Cancel; check out a previous commit and start it       | A previous implementation, with a new process handle |
 
 **A branch holds ongoing work; a commit identifies a saved version.**
 Pushing code does not change an already-running server. Template updates
@@ -142,7 +142,7 @@ The `fork` and process commands use existing workspace tools. `connect` and
 stores its initial fixture data, then prints `READY` with the bound port.
 Each successful latest-read request appends an observation record. Its
 fixtures declare `spans: false`, so a span request returns 422. Cancelling
-the process stops the server through the existing process group mechanism.
+the process ends the server through the existing process group mechanism.
 
 **Stop before editing the files used by a running version.** The template
 uses no hot reload. After a change, start a new process and reconnect.
@@ -164,7 +164,7 @@ namespace and a Git repository name. A commit uses a full lowercase
 later does not relabel an earlier observation as a clean run. Validate,
 commit, push, and restart to produce a saved working version.
 
-**Rollback selects code, not acquisition data.** Stop the current process,
+**Rollback selects code, not acquisition data.** Cancel the current process,
 check out a previous commit, and run it again. This template writes its
 initial acquisition to `acquisition.json` once, appends successful requests
 to `observations.jsonl`, and stores frame bytes under `blobs/<sha256>`. The
@@ -181,7 +181,7 @@ its lifetime. Child acquisition programs belong to that process group.
 
 **Existing process behavior stays in force.** The default timeout is
 600 seconds. A long session therefore supplies an explicit timeout,
-as above. `connect` changes no timeout. A workspace disposal stops its
+as above. `connect` changes no timeout. A workspace disposal cancels its
 managed processes. A crash can leave a workstation process available for
 adoption. [Processes](processes.md) states these rules.
 
@@ -608,7 +608,7 @@ validates it, commits, and pushes a branch. It starts the saved version,
 connects through SSH, observes the changed result, and cites its snapshot.
 A second agent restores the evidence in its own home.
 
-**Replacement and rollback are part of acceptance.** The run stops the
+**Replacement and rollback are part of acceptance.** The run cancels the
 server, saves and starts another version, and observes its changed result.
 It then starts the earlier commit and observes the earlier behavior.
 The snapshots of both versions remain readable after both processes stop,

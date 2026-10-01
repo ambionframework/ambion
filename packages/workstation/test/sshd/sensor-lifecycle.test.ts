@@ -19,8 +19,8 @@ import {
 	type Action,
 	action,
 	dynamicAction,
+	expectCancelled,
 	expectExitCode,
-	expectStopped,
 	expectSuccess,
 	latest,
 	manifestRef,
@@ -557,7 +557,7 @@ function cancelAction() {
 	return dynamicAction(
 		'cancel',
 		(results) => ({ handle: processHandle(lastReady(results)) }),
-		(text, prior) => expectStopped(processHandle(lastReady(prior)))(text, prior),
+		(text, prior) => expectCancelled(processHandle(lastReady(prior)))(text, prior),
 	);
 }
 

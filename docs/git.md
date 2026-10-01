@@ -645,7 +645,7 @@ templates and other agents' forks. The server checks the credential and
 protects the default branch of shared repositories in its pre-receive
 hook.
 
-**A credential lives for `tokenTtl`, 1 hour by default.** A client asks
+**A credential lives for `credentialTtl`, 1 hour by default.** A client asks
 again before it expires. A new fork adds a write credential at once.
 
 **`justGitBackend` signs a new credential at each call.** The just-bash
@@ -737,13 +737,13 @@ const lab = openWorkspace({
 });
 ```
 
-| Option      | Meaning                                                                |
-| ----------- | ---------------------------------------------------------------------- |
-| `storage`   | `sqliteGitStorage(path)`, or `':memory:'` for tests                    |
-| `secret`    | The key of every token. A new secret revokes every token               |
-| `templates` | The registrations, by template name                                    |
-| `tokenTtl`  | Seconds a token lives. The default is 3600                             |
-| `onError`   | Called with a fault of the server. Absent, the backend reports nothing |
+| Option          | Meaning                                                                |
+| --------------- | ---------------------------------------------------------------------- |
+| `storage`       | `sqliteGitStorage(path)`, or `':memory:'` for tests                    |
+| `secret`        | The key of every token. A new secret revokes every token               |
+| `templates`     | The registrations, by template name                                    |
+| `credentialTtl` | Seconds a token lives. The default is 3600                             |
+| `onError`       | Called with a fault of the server. Absent, the backend reports nothing |
 
 **A clone URL is `http://git.ambion.invalid/<namespace>/<name>`.** The
 server and the token check resolve a request path with one function: they
@@ -958,7 +958,7 @@ and each hook takes the backend and the workspace that the case opened.
 **`packages/just-bash` runs the cases on the memory and the directory
 backends.** Its own tests add:
 
-- the tokens, and a `tokenTtl` that is not finite;
+- the tokens, and a `credentialTtl` that is not finite;
 - `template-sources`: no agent lists, gets, resolves, shows, or forks a
   repository in it, no agent holds a credential for it, and an agent with
   that name is refused;

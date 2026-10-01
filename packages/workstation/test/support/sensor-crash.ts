@@ -8,7 +8,7 @@ import { workstationBackend, workstationGitBackend } from '../../src/index.ts';
 import {
 	action,
 	dynamicAction,
-	expectStopped,
+	expectCancelled,
 	expectSuccess,
 	latest,
 	manifestRef,
@@ -338,7 +338,7 @@ async function cleanupOrphan(
 					},
 					expectSuccess('Read the retained orphan process output'),
 				),
-				action('cancel', { handle: discovered }, expectStopped(discovered)),
+				action('cancel', { handle: discovered }, expectCancelled(discovered)),
 			]);
 			const port = readyPort(latest(status.results, 'bash'));
 			if (remote !== undefined && port !== remote.port) {

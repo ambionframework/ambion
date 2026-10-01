@@ -479,7 +479,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 			return (result.details as { process: { state: string } }).process.state;
 		};
-		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
+		// A read adopts what it finds: ps reads both. The one past its timeout cancels at once.
 		// The pid of the one with the lost stop is in /proc, so the listing runs ps for it.
 		const listed = await toolOf(workspace, 'ps').invoke({}, context('ada'));
 		if (typeof listed === 'string') throw new Error('A process tool gives a structured result.');
@@ -552,7 +552,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			/^\(no new output\)\n\n\[Process .* is cancelled\./,
 		);
 		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
-		// The table holds the timeout, and stops the process the way a cancel does.
+		// The table holds the timeout, and cancels the process with the cause timed_out.
 		const timed = await call('bash', {
 			command: 'echo second; exec sleep 30',
 			timeout: 1,

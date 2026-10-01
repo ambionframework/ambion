@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Three names in the process and credential options change.** The option
+`tokenTtl` of `justGitBackend` and the option `keyTtl` of
+`workstationGitBackend` are now `credentialTtl`, the name that
+`GitConformanceOptions` already used. The exported type `ProcessStatus` is
+now `ProcessRecord`. A tool call or the host that ends a process cancels
+it, and the code now says so: `process-stop.ts` is `process-cancel.ts`, and
+`ProcessTable.cancel` gives `cancelled` where it gave `stopped`. The `stop`
+file in the directory of a process keeps its name. The tool names and the
+text for the model do not change.
 **The workspace packages name an endpoint, a label, and a server.** The word
 `host` now names the application that embeds a room, and the word `port`
 names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
