@@ -232,6 +232,7 @@ flowchart LR
    socket. The bridge runs the call on the tool that the core bound, takes
    the id of the call with `callId`, and returns the result.
 5. `close` stops the socket. The server exits when the socket closes.
+   It first stops `codex exec` if that process is still its parent.
 
 **Codex spawns the built server.** The package ships
 `dist/room-tools-server.mjs` and starts it with `node`. In the source tree
@@ -300,6 +301,17 @@ records the `steer` step of that line with `consumed: false`; see
 **A cut signals the run.** The signal of the activation signals the run in
 flight. `close` stops the socket and the server. A late cut signals no dead
 process.
+
+**A host that dies takes `codex exec` with it.** The SDK closes the input of
+`codex exec` at once. When the host process dies (SIGKILL, out of memory, a
+crash), the OS gives `codex exec` to init and the process runs its turn to the
+end. It keeps calling the model and keeps writing the thread. The
+room tools server sees the host socket close. If `codex exec` is still its
+parent, the server sends it SIGTERM and then exits. A `codex exec` that
+exited first has left the server to init, so the server sends no signal. On
+Windows, Node cannot tell that the parent is gone, so this guard holds on
+Linux and macOS only. A test kills a real host in the middle of a model request and proves that
+`codex exec` and its server go away within seconds.
 
 ## Step mapping
 
@@ -506,6 +518,15 @@ With no `sandboxMode`, a command runs with no sandbox, with write access
 and the network. A `sandboxMode` and `approvalPolicy` set what a command
 may do, and Code Mode is outside their reach. Use it only for a seat that
 may use the host.
+
+**A dead host ends the native commands of a seat.** `codex exec` ends the
+commands that it started when it receives SIGTERM, and the room tools server
+sends that signal when the host dies. The test runs `sleep 47` through the
+native `exec_command` tool, kills the host, and finds the command ended within
+seconds. The test does not cover a command that detaches itself from the
+process tree of Codex, such as a daemon. Only the OS can bound such a command.
+Use a container or a dedicated account for the seat, as the section above
+advises.
 
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
 0.155.1, which brings `codex` 0.155.1. The feature names and the catalog

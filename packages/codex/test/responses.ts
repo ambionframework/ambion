@@ -3,7 +3,7 @@
  * `codex` binary runs against a scripted model. The script holds one reply
  * for each request, in order. The endpoint records the body of each request.
  */
-import { createServer, type IncomingHttpHeaders } from 'node:http';
+import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /** One reply of the scripted model: assistant text, or a call to a named tool. */
@@ -146,11 +146,16 @@ function parsed(text: string): ResponsesRequest {
  */
 function listsTool(request: ResponsesRequest, reply: Reply | undefined): boolean {
 	if (reply === undefined || 'text' in reply || reply.namespace === undefined) return true;
-	return toolsOf(request)[reply.namespace]?.includes(reply.call) ?? false;
+	const tools = toolsOf(request);
+	// A native function of Codex is a top-level tool, outside any namespace.
+	return (tools[reply.namespace]?.includes(reply.call) ?? false) || reply.call in tools;
 }
 
-/** Runs when a request takes a reply, before the endpoint answers. It gets the index of the reply. */
-export type OnRequest = (index: number) => void | Promise<void>;
+/**
+ * Runs when a request takes a reply, before the endpoint answers. It gets the index of the reply
+ * and the response. The `close` event of the response tells that the client went away.
+ */
+export type OnRequest = (index: number, response: ServerResponse) => void | Promise<void>;
 
 /**
  * Start an endpoint on a free port of the loopback interface. When a request
@@ -186,7 +191,7 @@ export async function scriptedResponses(
 				return;
 			}
 			requests.push(body);
-			await onRequest?.(index);
+			await onRequest?.(index, response);
 			if (reply === undefined) overrun += 1;
 			response.end(eventsOf(reply ?? { text: SCRIPT_ENDED }, String(index), USAGE));
 		});
