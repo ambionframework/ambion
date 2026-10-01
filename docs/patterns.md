@@ -8,8 +8,8 @@ mechanism. The [repository README](../README.md) holds the positioning.
 
 | Pattern                             | Primitives                                                             | How the room represents it                                                                           |
 | ----------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Ask and get an answer               | [Exchange](exchange.md), close, optional [summary](summary.md)         | A question opens an exchange. Quiescence closes it. The closed view carries the outcome.             |
-| Ongoing room over days              | [Visits](presence.md), presence, catch-up, resume                      | `lastDeparture` and `room.read({ messages: { since } })` catch a returning person up.                |
+| Ask and get an answer               | [Exchange](exchange.md), close, optional [summary](summary.md)         | A question opens an exchange. Quiescence closes it. The closed `Exchange` carries the outcome.       |
+| Ongoing room over days              | [Visits](presence.md), presence, catch-up, resume                      | `lastDeparture` and `room.read({ messages: { after } })` catch a returning person up.                |
 | Broadcast, no reply owed            | A said message                                                         | Seats may stay silent. No reply is owed.                                                             |
 | Bring in a specialist               | [Reserve](roster.md), `seat`, `say({ to })`                            | An agent seats a reserve agent and addresses it by name.                                             |
 | Steer work in progress              | [Steer](exchange.md#3-three-rules) between provider requests           | A message that lands in an open exchange steers each eligible active seat.                           |
@@ -27,7 +27,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 **A second question joins the open exchange.** The person whose question
 opened it stays its `person`. The room does not open a second exchange.
 
-**Each person who spoke gets a summary.** The closed exchange view carries
+**Each person who spoke gets a summary.** The closed `Exchange` carries
 `summaries`. [The closing activation](summary.md#closing-activation) states
 the assignment rules.
 

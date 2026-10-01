@@ -61,8 +61,9 @@ live('a message during a turn', () => {
 
 			const [activation] = activationsOf(events, 'clerk');
 			const read = stepsOf(activation ?? '');
-			// Codex takes no steer: no step of the activation records one.
-			expect(read.some((step) => step.type === 'steer')).toBe(false);
+			// Codex takes no steer: the core stamps the held line, and the pass does not consume it.
+			const steers = read.filter((step) => step.type === 'steer');
+			expect(steers).toEqual([expect.objectContaining({ seq: late?.seq, consumed: false })]);
 
 			// Freshness: every say of the seat comes after the message it read, or names no stale record.
 			const said = messages.filter(

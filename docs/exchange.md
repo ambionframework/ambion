@@ -22,9 +22,9 @@ An exchange records its opening message seq (`from`), its opening time,
 and its `person` when a person spoke in it. A durable close fixes its
 inclusive final message seq (`through`). Journal administration can occupy
 seqs between messages.
-`ExchangeRef` carries identity. `ExchangeView` carries recorded state.
-`ExchangeHandle` provides live waits. An `ExchangeRead` contains a view,
-its original discussion, and the observed journal watermark.
+`ExchangeRef` carries identity. `Exchange` carries recorded state.
+`ExchangeHandle` provides live waits. An `ExchangeRead` contains an `Exchange`,
+its original discussion, and the journal position `through` that the read observed.
 See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
 
 A message URI is `ambion://room/<name>/message/<seq>`. Build the one for an
@@ -78,7 +78,7 @@ spoke owes no summary.
 first spoken message of a person at or after `from`, and the close stamps
 it. A handle and the `exchange_opened` event hold `person` as it was when
 they were made, and no event follows when a person joins. The close and
-the exchange view hold the final value.
+the `Exchange` hold the final value.
 
 ## 5. A fold over the journal
 
@@ -253,23 +253,23 @@ must be recreated after interruption.
 
 **`room.read()` returns detached state from one journal position.** It starts
 no agents and performs no reconciliation. `RoomRead` reports initialization,
-recorded goal, participants, exchange views, and the journal `watermark`.
+recorded goal, participants, `Exchange` values, and the journal position `through`.
 Use `readRoom(name, { runtime })` without a running handle, including stopped rooms.
 A stopped open exchange remains open until the journal records its close.
 
-Pass `{ messages: false }` for metadata, or `{ messages: { since } }` for messages
-after an exclusive cursor. `since` must be a non-negative safe integer. A future
+Pass `{ messages: false }` for metadata, or `{ messages: { after } }` for messages
+after an exclusive position. `after` must be a non-negative safe integer. A future
 cursor returns no messages; exchange metadata remains complete.
 
-The watermark includes close and lease entries. Activity can change when a lease
-expires without another append, so the watermark cannot validate a cached view.
+The position `through` includes close and lease entries. Activity can change when
+a lease expires without another append, so `through` cannot validate a cached view.
 An active host reads its observed journal prefix after local writes settle;
 a read does not force synchronization with another host's writes.
-See [`RoomRead` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
+See [`RoomRead` and `Exchange`](../packages/ambion/src/types.ts) for types.
 
 **`readExchange(name, from, { runtime })` reads the original discussion immediately.**
 It returns `undefined` for a missing exchange. The reference must be a positive
-safe integer. The read includes the exchange view and excludes summaries
+safe integer. The read includes the `Exchange` and excludes summaries
 from its discussion. A closed discussion uses its fixed inclusive source range;
 an open discussion contains the messages recorded so far. Reading never waits
 for close or summary completion. Late summaries appear in the exchange outcome.
@@ -281,7 +281,7 @@ if (recorded) {
 }
 ```
 
-**A closed exchange view carries an `outcome`.** The room derives it from
+**A closed `Exchange` carries an `outcome`.** The room derives it from
 the record. It adds no entry kind and starts no timer, so a resumed room reads
 the same outcome. The first case that holds wins:
 
@@ -306,7 +306,7 @@ Cancellation closes the current discussion without assigning a new summary. It
 settles existing pending summary work as failed. See the
 [cancellation contract](durability.md#cancellation) for ordering and retry behavior.
 
-**Every exchange view lists its `activations`.** One entry holds the
+**Every `Exchange` lists its `activations`.** One entry holds the
 activation `id`, the `seat`, the `attempt`, the `purpose` (`respond` or
 `summary`), and the `outcome`. The outcome is `running`, or an end reason
 with `cancelled` and `cause` when they apply. An entry carries `usage` when

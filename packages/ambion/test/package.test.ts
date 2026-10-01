@@ -123,6 +123,11 @@ it('names the ports, the reads, and the visit by their final names', () => {
 		main.ExchangeRead | undefined
 	>();
 	expectTypeOf<Awaited<ReturnType<typeof main.readRoom>>>().toEqualTypeOf<main.RoomRead>();
+	expectTypeOf<main.ExchangeRead['exchange']>().toEqualTypeOf<main.Exchange>();
+	expectTypeOf<main.RoomRead['through']>().toEqualTypeOf<Seq>();
+	expectTypeOf<
+		Extract<main.RoomEvent, { type: 'exchange_closed' }>['exchange']
+	>().toEqualTypeOf<main.ExchangeRange>();
 	expectTypeOf<main.StartRoomOptions>().toHaveProperty('execution');
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
 	expectTypeOf<main.HarnessSession>().toEqualTypeOf<hosting.HarnessSession>();

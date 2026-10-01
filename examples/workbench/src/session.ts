@@ -1,4 +1,4 @@
-import type { ExchangeView } from '@ambionframework/ambion';
+import type { Exchange } from '@ambionframework/ambion';
 import { attachCommand, type StagedAttachment } from './attachments.ts';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
@@ -562,7 +562,7 @@ export class Session {
 		if (exchange) await this.showExchange(exchange);
 	}
 
-	private async showExchange(exchange: ExchangeView): Promise<void> {
+	private async showExchange(exchange: Exchange): Promise<void> {
 		const activation = newest(exchange);
 		if (!activation) return this.say('That exchange ran no activation.');
 		try {

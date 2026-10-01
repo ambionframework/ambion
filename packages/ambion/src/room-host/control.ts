@@ -137,7 +137,7 @@ export async function hold(
 	);
 	// A refusal of a claim or a renewal is the same answer as a lease that ended.
 	return 'entry' in written && written.entry.body.phase === 'running'
-		? { ok: { expiresAt: written.entry.body.expiresAt, lastSeq: host.state().lastSeq } }
+		? { ok: { expiresAt: written.entry.body.expiresAt, through: host.state().lastSeq } }
 		: { stale: 'the lease ended' };
 }
 

@@ -11,7 +11,7 @@ import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
-import { readView } from '../src/room/read.ts';
+import { toRoomRead } from '../src/room/read.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { fakeClock } from '../src/testing.ts';
@@ -168,7 +168,7 @@ describe('the room runs the verified rules', () => {
 
 	it('reads an exchange outcome as exchangeOutcome answers', () => {
 		bind.once(rules.exchangeOutcome, 'exhausted');
-		const read = readView(
+		const read = toRoomRead(
 			'room',
 			replayState([composition, person, question, closed3], options),
 			now,
@@ -177,7 +177,7 @@ describe('the room runs the verified rules', () => {
 		);
 		expect(read.exchanges).toMatchObject([{ status: 'closed', outcome: { kind: 'exhausted' } }]);
 		expect(
-			readView(
+			toRoomRead(
 				'room',
 				replayState([composition, person, question, closed3], options),
 				now,

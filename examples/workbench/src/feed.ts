@@ -7,7 +7,7 @@ export interface FeedView {
 
 /** Where a feed reads a room from. The Workbench host is one source. */
 export interface FeedSource<View extends FeedView> {
-	read(room: string, since: number): Promise<View>;
+	read(room: string, after: number): Promise<View>;
 }
 
 /**

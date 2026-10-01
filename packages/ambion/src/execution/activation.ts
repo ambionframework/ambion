@@ -252,14 +252,14 @@ export class ActivationState {
 	}
 
 	/**
-	 * The record a pass reads. A delta follows `since`, or the position a
+	 * The record a pass reads. A delta follows `after`, or the position a
 	 * resumed session read through on the first pass of a respond activation.
 	 * Any other pass reads the whole view. A pass with no new message counts
 	 * the view read.
 	 */
 	private async record(input: PassInput, after: Seq | undefined): Promise<PassRecord | undefined> {
 		const { view } = input;
-		const from = input.kind === 'delta' ? input.since : after;
+		const from = input.kind === 'delta' ? input.after : after;
 		const continues = input.kind === 'delta' || view.spec.purpose.kind === 'respond';
 		const rendered =
 			from !== undefined && continues ? await this.delta(input, from) : await this.whole(view);

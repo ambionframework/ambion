@@ -238,7 +238,7 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
    landed keeps its summary, and the loop goes on. An abort that rejects,
    or a close that does not land in a second period of `exchangeMs`, ends
    the loop with `ended: 'failed'`.
-7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
+7. Read the closed `Exchange` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
    `ended: 'limit'`.
@@ -395,7 +395,9 @@ export interface Run {
   /** Every move the actor made, in order, the last `stop` included. */
   readonly moves: readonly Move[];
   /** One entry for each message the actor sent, in order. */
-  readonly exchanges: readonly (SeenExchange & { readonly view: ClosedExchangeView })[];
+  readonly exchanges: readonly (SeenExchange & {
+    readonly view: Extract<Exchange, { readonly status: 'closed' }>;
+  })[];
   /** One `room.read()` after the last close, with every message. */
   readonly room: RoomRead;
   /** Every notification after the subscription. */

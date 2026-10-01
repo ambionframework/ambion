@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { type RoomEntry, SPACE_PREFIX } from '../src/journal/journal.ts';
 import { projectState, replay } from '../src/room/projection.ts';
-import { readView } from '../src/room/read.ts';
-import type { ExchangeView, RoomRead } from '../src/types.ts';
+import { toRoomRead } from '../src/room/read.ts';
+import type { Exchange, RoomRead } from '../src/types.ts';
 import { goldenScenarios } from './support/golden.ts';
 
 /**
@@ -26,7 +26,7 @@ const load = async <T>(file: string): Promise<T> =>
 
 function foldOf(entries: readonly RoomEntry[]): RoomRead {
 	const state = projectState(replay(entries, { backoff }));
-	return readView('golden', state, now, entries.length, false);
+	return toRoomRead('golden', state, now, entries.length, false);
 }
 
 const json = (value: unknown) => `${JSON.stringify(value, null, '\t')}\n`;
@@ -72,7 +72,7 @@ if (process.env.GOLDEN === 'write') {
 } else {
 	const names = Object.keys(goldenScenarios);
 	const outcomes = (read: RoomRead) =>
-		read.exchanges.map((exchange: ExchangeView) =>
+		read.exchanges.map((exchange: Exchange) =>
 			exchange.status === 'closed' ? exchange.outcome.kind : exchange.status,
 		);
 

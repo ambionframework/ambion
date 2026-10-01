@@ -185,7 +185,7 @@ describe('Workbench room reads and recovery', () => {
 			status: 'running',
 			participants: expect.any(Array),
 			exchanges: expect.any(Array),
-			watermark: expect.any(Number),
+			through: expect.any(Number),
 		});
 		expect(selected.messages.every((message) => message.seq > from)).toBe(true);
 		await workbench.control('bringup', 'stop');
