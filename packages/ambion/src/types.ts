@@ -402,34 +402,34 @@ export type RoomEvent =
 	| { type: 'exchange_closed'; exchange: ClosedExchange };
 
 /** What one activation did, or what happened to it. Every member names the activation. */
-export type ExecutionEvent =
+export type ActivationEvent =
 	/**
 	 * The room woke a seat. One per activation, however many requests to a
 	 * provider it takes: an activation is the room's span, and Pi's own `turn`
 	 * — one request and the tools it calls — never surfaces here.
 	 */
-	| { type: 'activation_start'; agent: string; activation: string }
+	| { type: 'activation_start'; seat: string; activation: string }
 	/**
 	 * The lock refused ordinary speech because the record moved after its
 	 * author read it. The event includes the messages the author missed.
 	 */
-	| { type: 'conflict'; author: string; activation: string; missed: Message[] }
-	| { type: 'tool_execution_start'; agent: string; activation: string; toolName: string }
-	| { type: 'tool_execution_end'; agent: string; activation: string; toolName: string }
-	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
+	| { type: 'conflict'; seat: string; activation: string; missed: Message[] }
+	| { type: 'tool_call'; seat: string; activation: string; name: string }
+	| { type: 'tool_result'; seat: string; activation: string; name: string }
+	/** The seat stopped, and `said` says whether it left a mark on the record. */
 	| {
 			type: 'activation_end';
-			agent: string;
+			seat: string;
 			activation: string;
-			spoke: boolean;
+			said: boolean;
 			/** What the activation spent. Absent when it reached no provider or the room ended it. */
 			usage?: Usage;
 	  }
-	| { type: 'error'; agent: string; activation: string; error: Error; cause?: FailureCause }
+	| { type: 'error'; seat: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
 			type: 'delivery_error';
-			agent: string;
+			seat: string;
 			activation: string;
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
 			error: Error;
@@ -440,7 +440,7 @@ export type ExecutionEvent =
 	 * attempt the room did not make, `cause` says why, and the journal holds
 	 * the entry that says so.
 	 */
-	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause };
+	| { type: 'abandoned'; seat: string; activation: string; cause: FailureCause };
 
 // -- steps --------------------------------------------------------------------
 
@@ -540,8 +540,8 @@ export interface TracePolicy {
 	readonly toolOutput: 'omit' | 'full';
 }
 
-/** The room's event stream: room facts and execution events, under one `subscribe`. */
-export type RoomNotification = RoomEvent | ExecutionEvent;
+/** The room's event stream: room facts and activation events, under one `subscribe`. */
+export type RoomNotification = RoomEvent | ActivationEvent;
 
 /**
  * What an agent runs on: a family name, instructions, and tools. The room

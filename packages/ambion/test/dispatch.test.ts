@@ -190,7 +190,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		expect(connects).toBeGreaterThan(0);
 		expect(deliveryErrors(events)).toContainEqual(
 			expect.objectContaining({
-				agent: worker.name,
+				seat: worker.name,
 				activation: pending?.id,
 				operation: 'wake',
 				error: expect.objectContaining({ message: 'connector unavailable' }),
@@ -235,11 +235,11 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const errors = deliveryErrors(events);
 		expect(errors).toHaveLength(2);
 		expect(errors[0]).toMatchObject({
-			agent: worker.name,
+			seat: worker.name,
 			activation: firstPending?.id,
 			operation: 'wake',
 		});
-		expect(errors[1]).toMatchObject({ agent: worker.name, operation: 'wake' });
+		expect(errors[1]).toMatchObject({ seat: worker.name, operation: 'wake' });
 		expect(errors[1]?.activation).not.toBe(errors[0]?.activation);
 	});
 

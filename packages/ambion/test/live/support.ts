@@ -137,8 +137,8 @@ export const saidByAgents = (messages: readonly Message[], people: string[]) =>
 export const trailOf = (events: RoomNotification[], name: string): string =>
 	JSON.stringify(
 		events.flatMap((e): Record<string, unknown>[] => {
-			if (!('agent' in e) || e.agent !== name) return [];
-			if (e.type === 'activation_end') return [{ type: e.type, spoke: e.spoke }];
+			if (!('seat' in e) || e.seat !== name) return [];
+			if (e.type === 'activation_end') return [{ type: e.type, said: e.said }];
 			if (e.type === 'error' || e.type === 'delivery_error')
 				return [{ type: e.type, error: e.error.message }];
 			if (e.type === 'abandoned') return [{ type: e.type, cause: e.cause }];
@@ -147,7 +147,7 @@ export const trailOf = (events: RoomNotification[], name: string): string =>
 	);
 
 export const activationsOf = (events: RoomNotification[], name: string) =>
-	events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
+	events.filter((e) => e.type === 'activation_start' && e.seat === name).length;
 
 export { errorsIn, invariants } from '../support/invariants.ts';
 

@@ -69,9 +69,9 @@ export type {
 } from './protocol.ts';
 export { visitOf } from './room.ts';
 export type {
+	ActivationEvent,
 	AgentDefinition,
 	AgentExecutor,
-	ExecutionEvent,
 	FailureCause,
 	HarnessSession,
 	Seq,

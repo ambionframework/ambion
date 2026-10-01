@@ -174,7 +174,7 @@ describe('a room in doubt', () => {
 		// lands and loses its confirmation.
 		let delivered: Promise<unknown> | undefined;
 		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.agent === alpha.name && !delivered) {
+			if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
 				failNextClose = true;
 				delivered = visit.send({ text: 'Second?', key: 'q2' });
 			}

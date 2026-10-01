@@ -183,7 +183,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		expect(first.contexts.at(-1)).toContain('Second correction.');
 		expect(observed.wakes).toHaveLength(1);
 		expect(
-			events.filter((event) => event.type === 'activation_start').map((event) => event.agent),
+			events.filter((event) => event.type === 'activation_start').map((event) => event.seat),
 		).toEqual(['alpha']);
 		expect(pendingOf(stateOf(room))).toEqual([]);
 		const last = observed.steers.at(-1);

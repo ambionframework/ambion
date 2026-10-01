@@ -85,8 +85,8 @@ export function actorSystem(person: HumanDefinition, brief: string): string {
 function toolsByActivation(events: readonly RoomNotification[]): Map<string, string[]> {
 	const tools = new Map<string, string[]>();
 	for (const event of events) {
-		if (event.type !== 'tool_execution_start') continue;
-		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.toolName]);
+		if (event.type !== 'tool_call') continue;
+		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.name]);
 	}
 	return tools;
 }

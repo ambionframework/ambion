@@ -133,13 +133,13 @@ const summaries = async (session: Room) => (await messagesOf(session)).filter(is
 const seat = async (session: Room, name: string) =>
 	(await participantsOf(session)).find((s) => s.name === name);
 const starts = (events: ReturnType<typeof collect>, agent: string) =>
-	events.filter((e) => e.type === 'activation_start' && e.agent === agent);
+	events.filter((e) => e.type === 'activation_start' && e.seat === agent);
 
 /** Resolves when this seat's next activation ends. */
 const ended = (session: Room, name: string) =>
 	new Promise<void>((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== name) return;
+			if (event.type !== 'activation_end' || event.seat !== name) return;
 			off();
 			resolve();
 		});
@@ -187,7 +187,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		// again after the backoff, and the exchange closes once alpha stands down
 		held.resolve();
 		await clock.advance(60_000);
-		expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
+		expect(events.some((e) => e.type === 'error' && e.seat === 'alpha')).toBe(true);
 		expect(await currentExchange(resumed)).toMatchObject({ person: 'priya' });
 		await clock.advance(30_000);
 		await waitForRoom(resumed);

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
+describes one activation. The main entry and the hosting entry export the
+new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
+member names its seat in `seat`, where the members said `agent` and the
+`conflict` member said `author`. The tool members use `name` in place of
+`toolName`. The member types `tool_execution_start` and `tool_execution_end`
+are now `tool_call` and `tool_result`, the names that `Step` uses. The
+`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
+log line carries the new member types in its `event` field.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

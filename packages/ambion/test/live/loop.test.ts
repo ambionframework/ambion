@@ -53,10 +53,10 @@ live('the model and the loop', () => {
 		const messages = await messagesOf(session);
 		expect(events).toContainEqual(
 			expect.objectContaining({
-				type: 'tool_execution_start',
-				agent: 'clerk',
+				type: 'tool_call',
+				seat: 'clerk',
 				activation: expect.any(String),
-				toolName: 'lookup_order',
+				name: 'lookup_order',
 			}),
 		);
 		const said = saidBy(messages, 'clerk');
@@ -65,9 +65,9 @@ live('the model and the loop', () => {
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				type: 'activation_end',
-				agent: 'clerk',
+				seat: 'clerk',
 				activation: expect.any(String),
-				spoke: true,
+				said: true,
 			}),
 		);
 		await invariants(session, events);
@@ -91,7 +91,7 @@ live('the model and the loop', () => {
 			const visit = await enter(session, person);
 			const ended = new Promise<void>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'activation_end' && e.agent === 'clerk') resolve();
+					if (e.type === 'activation_end' && e.seat === 'clerk') resolve();
 				});
 			});
 			const exchange = await visit.send({ text: 'What is the status of order 7781?' });
@@ -108,9 +108,9 @@ live('the model and the loop', () => {
 			expect(events).toContainEqual(
 				expect.objectContaining({
 					type: 'activation_end',
-					agent: 'clerk',
+					seat: 'clerk',
 					activation: expect.any(String),
-					spoke: false,
+					said: false,
 				}),
 			);
 		} finally {

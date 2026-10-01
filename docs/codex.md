@@ -500,7 +500,7 @@ vitest.live.config.ts test/live/loop.test.ts`.
 own final-answer channel. The room hears only `say`. The first prompt of a
 thread says so. A seat that still ends with plain text and no `say` shows a
 `text` step and no `tool_call` in its trace, and `activation_end` reports
-`spoke: false`.
+`said: false`.
 
 **Every say is denied.** The seat answers in plain text, and the record holds
 nothing. The trace shows a `tool_result` with "MCP tool call requires

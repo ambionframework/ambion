@@ -94,15 +94,15 @@ live('judgment', () => {
 		expect(ask).toBeDefined();
 		// Nothing woke the passive seat until the say that named it.
 		const asked = events.findIndex((e) => e.type === 'message' && e.message.seq === ask?.seq);
-		const woken = events.findIndex((e) => e.type === 'activation_start' && e.agent === 'stock');
+		const woken = events.findIndex((e) => e.type === 'activation_start' && e.seat === 'stock');
 		expect(woken).toBeGreaterThan(asked);
 		expect(activationsOf(events.slice(0, asked), 'stock')).toBe(0);
 		expect(events).toContainEqual(
 			expect.objectContaining({
-				type: 'tool_execution_start',
-				agent: 'stock',
+				type: 'tool_call',
+				seat: 'stock',
 				activation: expect.any(String),
-				toolName: 'stock_level',
+				name: 'stock_level',
 			}),
 		);
 		const answer = saidBy(messages, 'stock');

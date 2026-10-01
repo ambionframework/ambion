@@ -82,8 +82,8 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		expect(connection.request).not.toHaveProperty('evict');
 		const { view } = connection.room;
 		await expect(view('unknown')).resolves.toHaveProperty('stale');
-		expect(events.filter((event) => event.type === 'tool_execution_start')).toEqual([
-			expect.objectContaining({ agent: writer.name, toolName: 'recall' }),
+		expect(events.filter((event) => event.type === 'tool_call')).toEqual([
+			expect.objectContaining({ seat: writer.name, name: 'recall' }),
 		]);
 		expect(events.filter((event) => event.type === 'error')).toEqual([]);
 	});

@@ -406,8 +406,8 @@ describe('closing summaries', () => {
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 		expect(
-			events.filter((e) => e.type === 'activation_end' && e.agent === 'assistant'),
-		).toMatchObject([{ spoke: false }]);
+			events.filter((e) => e.type === 'activation_end' && e.seat === 'assistant'),
+		).toMatchObject([{ said: false }]);
 	});
 
 	it('drafts again after the backoff when its activation fails outright', async () => {
@@ -584,8 +584,8 @@ describe('closing summaries', () => {
 		const written = summaries(await messagesOf(session));
 		expect(written.map((m) => m.to)).toEqual(['priya', 'sam']);
 		// one seat, so the two activations ran one after the other
-		const starts = seen.filter((e) => e.type === 'activation_start' && e.agent === 'assistant');
-		const ends = seen.filter((e) => e.type === 'activation_end' && e.agent === 'assistant');
+		const starts = seen.filter((e) => e.type === 'activation_start' && e.seat === 'assistant');
+		const ends = seen.filter((e) => e.type === 'activation_end' && e.seat === 'assistant');
 		expect(starts).toHaveLength(2);
 		expect(seen.indexOf(starts[1] as RoomNotification)).toBeGreaterThan(
 			seen.indexOf(ends[0] as RoomNotification),
@@ -611,7 +611,7 @@ describe('closing summaries', () => {
 		});
 		// an agent-only room never activates it
 		expect(
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant'),
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant'),
 		).toHaveLength(0);
 
 		const twin = defineHuman({ name: 'assistant', identity: 'Not the assistant.' });
@@ -688,7 +688,7 @@ describe('closing summaries', () => {
 		const session = await open({ script: byAgent({ product: twoAnswers, assistant: hangs }) });
 		const events = collect(session);
 		const starts = () =>
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant').length;
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant').length;
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
@@ -786,7 +786,7 @@ describe('an exchange', () => {
 	const askedAsStops = (session: Room, seat: string, ask: () => Promise<unknown>) =>
 		new Promise<{ landed: Promise<unknown> }>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end' || event.agent !== seat) return;
+				if (event.type !== 'activation_end' || event.seat !== seat) return;
 				off();
 				resolve({ landed: ask() });
 			});
@@ -847,7 +847,7 @@ describe('an exchange', () => {
 				),
 			).toEqual([[first?.seq, next?.seq]]);
 			expect(
-				events.filter((e) => e.type === 'activation_start' && e.agent === 'product'),
+				events.filter((e) => e.type === 'activation_start' && e.seat === 'product'),
 			).toHaveLength(starts);
 			expect(record.some((m) => m.kind === 'seated')).toBe(false);
 			expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
