@@ -170,7 +170,8 @@ points.
 **The first pass receives the view. A later pass receives a delta.** The
 `view` is the whole windowed record. A `delta` holds the fresh view and
 `since`, the position the activation had read through. A pass that throws
-is a transient failure.
+is a failed pass, and [its cause](#failure-classification) follows the
+error.
 
 **Freshness bounds correctness. Steering is a capability.** The driver
 reads `readThrough` to renew the lease and to release it. A commit that
@@ -514,7 +515,8 @@ room does with the cause.
 | --------------------------------------------------------------------------------------------------------- | ----------- |
 | An error text that names a credit, a quota, a usage limit, a credential, a login, or a permission refusal | `permanent` |
 | A status of 400, 401, 402, 403, 404, 405, or 422                                                          | `permanent` |
-| An error of the executor, such as a lost room call or a lost process                                      | `transient` |
+| An executor fault that a retry cannot clear, such as a model that the registry does not hold              | `permanent` |
+| Every other error of the executor, such as a lost room call or a lost process                             | `transient` |
 | Every other failure                                                                                       | `transient` |
 
 **One classifier serves every family.** `classifyCause({ text, status })`
@@ -528,6 +530,15 @@ spent quota with a 429, and only the text tells it from a rate limit.
 
 **A status decides the cause when no text matches.** An uncertain failure
 is transient, so the room retries it.
+
+**One rule turns a thrown error into a failed pass.** `failedPass(thrown)`
+from `@ambionframework/ambion/hosting` builds the failed `PassResult`. The
+cause is `permanent` for a `PermanentError` and `transient` for every other
+value. The rule reads the name of the error, so a second copy of the
+package gives the same cause. The result always carries `error`. The core
+calls it when a session throws, and an executor calls it for a fault of its
+own. A fault that the retry meets again, because the retry runs the same
+configuration, is a `PermanentError`.
 
 **The message of a failure names the provider's words.** A provider error
 often arrives as a status and a JSON body. `providerMessage` from
@@ -595,8 +606,11 @@ family. `@ambionframework/claude` is the worked example, and
    states the events. Declare `steer` only when the harness takes a line
    into a live pass.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
-   with `classifyCause`. [Failure classification](#failure-classification)
-   states the shared rule; bring the family's own source of a status.
+   with `classifyCause`. Throw `PermanentError` for a fault that a retry
+   cannot clear, such as a model that the registry does not hold, and
+   call `failedPass` for a thrown fault of the executor.
+   [Failure classification](#failure-classification) states the shared
+   rule; bring the family's own source of a status.
 7. **Record a session, and resume only the one the pass names.**
    [Exchange continuity](#exchange-continuity) states the recorded session
    and the fresh start. A harness with no session records none.

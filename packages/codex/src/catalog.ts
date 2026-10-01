@@ -17,14 +17,12 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { PermanentError } from '@ambionframework/ambion/hosting';
 
 const run = promisify(execFile);
 
 /** One model of the catalog that `codex debug models` prints. The executor reads only `slug`. */
 export type CatalogEntry = Readonly<Record<string, unknown>> & { readonly slug: string };
-
-/** A fault that a retry cannot clear. The activation fails as permanent. */
-export class PermanentError extends Error {}
 
 /** The catalog fields that give a model a native tool, and the value that removes it. */
 const NO_NATIVE_TOOLS = {

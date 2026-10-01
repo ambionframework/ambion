@@ -120,8 +120,9 @@ export interface ExecutorSession {
 	/** What the executor adds to a say and a schedule. The core reads it once, on the first pass. */
 	readonly roomTools?: RoomToolOptions;
 	/**
-	 * Run one pass. A pass that throws is a transient failure. A pass that
-	 * the cut ends reports no failure.
+	 * Run one pass. A pass that throws is a failed pass: a `PermanentError`
+	 * is permanent, and every other error is transient. A pass that the cut
+	 * ends reports no failure.
 	 */
 	pass(pass: Pass): Promise<PassResult>;
 	/**

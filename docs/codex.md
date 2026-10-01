@@ -323,9 +323,17 @@ a length stop.** The pass reports `stop: 'length'`. This is no failure.
 **A stream that ends with no terminal event is a transient failure.** A
 failure reaches the host as an `error` event before the driver sees it.
 
-**A missing `codex` binary or a socket error is transient.** A bad
-`codexPath` (see [Options](#options)) or a lost connection to the room tools
-server gives a transient failure.
+**A missing `codex` binary is permanent when the executor looks for it.**
+A seat with `nativeTools: 'none'` reads the model catalog from the binary.
+The executor throws `PermanentError` when the platform has no binary, or
+when `@openai/codex` is not installed and no `codexPath` is set.
+
+**A bad `codexPath` or a socket error is transient.** The executor uses a
+`codexPath` (see [Options](#options)) as given. A path that names no file
+fails when `codex debug models` or the SDK starts it, and that failure is
+transient. A seat with `nativeTools: 'codex'` leaves the lookup to the SDK,
+and a lookup that fails there is transient. A lost connection to the room
+tools server is transient.
 
 ## Exchange continuity
 

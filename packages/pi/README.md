@@ -221,8 +221,8 @@ registry, the price tables, or a real model. The live scenarios of
 
 - **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
 - **`Unknown model`.** The id needs the form `provider/model-id` and a
-  provider that the registry lists. The failure is transient, so the room
-  retries it to the cap.
+  provider that the registry lists. The failure is permanent, so the room
+  does not retry it.
 - **Abandoned after one attempt.** A permanent failure. Check
   `<PROVIDER>_API_KEY` and the credit of the account.
 

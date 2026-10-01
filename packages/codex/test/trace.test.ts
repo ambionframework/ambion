@@ -3,7 +3,7 @@ import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
 import { CodexSteps, changedPaths, usageOf } from '../src/codex-trace.ts';
-import { causeOf, passResultOf } from '../src/services.ts';
+import { causeOf, passResultOf } from '../src/failure.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
 const updated = (item: ThreadItem): ThreadEvent => ({ type: 'item.updated', item });

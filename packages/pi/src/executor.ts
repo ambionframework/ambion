@@ -45,11 +45,12 @@ import type {
 	PassResult,
 	Seq,
 } from '@ambionframework/ambion/hosting';
+import { failedPass } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
 import { compactionOf, modelOf, thinkingOf } from './define.ts';
-import { passOutcome, UnknownModel } from './failure.ts';
+import { passOutcome } from './failure.ts';
 import { provided, providerMessages, READ, recordMessage } from './freshness.ts';
 import { type OpenHarness, openHarness } from './harness.ts';
 import { streamModels } from './models.ts';
@@ -207,7 +208,8 @@ class Activation implements ExecutorSession {
 			// A cut closes the harness under the run. What it throws then is no failure.
 			if (this.stopped) return { failed: false };
 			await this.renew(pass.view);
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
+			// A local fault, such as a lost room call or an unknown model. `failedPass` sets the cause.
+			return failedPass(error);
 		} finally {
 			this.phase = 'idle';
 			this.drop(this.held.splice(0).map((held) => held.seq));
@@ -469,17 +471,6 @@ class Activation implements ExecutorSession {
 		if (fresh === undefined) return;
 		this.sessionId = fresh.metadata.id;
 		this.closing(fresh.metadata.id, fresh.close(CONTEXT));
-	}
-
-	/**
-	 * The result of a broken pass. A broken pass is a local fault, such as a
-	 * lost room call or a build error, so its cause is transient and the room
-	 * tries the activation again. A model id the registry does not hold is
-	 * permanent, because a retry reads the same id.
-	 */
-	private broke(error: Error): PassResult {
-		const cause = error instanceof UnknownModel ? 'permanent' : 'transient';
-		return { failed: true, cause, message: error.message, error };
 	}
 }
 

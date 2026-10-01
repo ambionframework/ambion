@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Nine reductions have landed.** `pnpm check` passes on them, and the
+**Ten reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -43,6 +43,7 @@ changelog names each change to an export and to a behavior.
 | One harness for the conformance suites (W4) | Four harness types, six `check` copies, the hand-written case runners    | `journal/src/conformance.ts`, the suites |
 | One registration state machine (B1)         | Two register pairs, two name and path checks, two equal-tree decisions   | `workspace/src/git-registration.ts`      |
 | One file adapter for the backends (B3)      | Two `attempt` helpers, two `FileResult` types, 26 member bodies          | `workspace/src/execution-env.ts`         |
+| One rule for a thrown pass (E2)             | `UnknownModel`, a second `PermanentError`, six copies of the conversion  | `execution/failure.ts` (`failedPass`)    |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -112,7 +113,7 @@ concepts, high confidence.
 | ID  | Finding                                                        | Evidence                                                                                    | Removes | Conf.  | Rank |
 | --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
 | E1  | The steer bookkeeping is in each executor                      | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
-| E2  | A thrown error becomes a transient pass in five places         | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
+| E2  | A thrown error becomes a transient pass in five places (done)  | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
 | E3  | `Executor.harness` always equals the executor kind             | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
 | E4  | Pi has three option types for its services                     | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
 | E5  | The kind narrowing and the policy copy are written three times | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |

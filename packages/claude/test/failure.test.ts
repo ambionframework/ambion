@@ -1,7 +1,7 @@
 /** How a result of the SDK maps to a pass result. */
 import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
-import { passResultOf } from '../src/services.ts';
+import { passResultOf } from '../src/failure.ts';
 
 const result = (fields: object) =>
 	({

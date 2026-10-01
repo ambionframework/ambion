@@ -10,6 +10,7 @@ import {
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
+	PermanentError,
 	type Steer,
 	type Wake,
 } from '@ambionframework/ambion/hosting';
@@ -24,7 +25,6 @@ import {
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
-import { UnknownModel } from '../src/failure.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 
@@ -518,7 +518,7 @@ describe('async seat model resolution', () => {
 
 	it.each([
 		['a catalog fault, as transient', new Error('catalog failed'), 'transient'],
-		['an unknown model, as permanent', new UnknownModel("Unknown model 'x/y'"), 'permanent'],
+		['an unknown model, as permanent', new PermanentError("Unknown model 'x/y'"), 'permanent'],
 	])(
 		'ends the lease as failed when model resolution rejects with %s',
 		async (_what, error, cause) => {
