@@ -55,7 +55,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	speak,
 	summarise,
 } from './support/scripted.ts';
@@ -80,7 +80,7 @@ async function open(
 	const clock = fakeClock();
 	const runtime =
 		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),

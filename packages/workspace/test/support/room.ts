@@ -7,7 +7,7 @@ import { type AgentDefinition, type Room, startRoom } from '@ambionframework/amb
 import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Context } from '@earendil-works/pi-ai';
 import { enter, roomName as name, scriptedAgent } from '../../../ambion/test/support/room.ts';
-import { byAgent, type PiScript, scripted } from '../../../ambion/test/support/scripted.ts';
+import { byAgent, type PiScript, scriptedStream } from '../../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../../ambion/test/support/stop.ts';
 
 /** Every tool result the model has been shown so far, oldest first. */
@@ -32,7 +32,7 @@ export async function run(
 		await startRoom({
 			name: name('workspace'),
 			agents,
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent(seats)) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(byAgent(seats)) }),
 		}),
 	);
 	const visit = await enter(session);

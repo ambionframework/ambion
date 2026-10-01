@@ -8,7 +8,12 @@ import { isSpoken, type Message } from '@ambionframework/ambion';
 import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { createExecutionServices } from '@ambionframework/pi';
-import { contextText, type PiScript, scripted, toolResultTexts } from '@ambionframework/pi/testing';
+import {
+	contextText,
+	type PiScript,
+	scriptedStream,
+	toolResultTexts,
+} from '@ambionframework/pi/testing';
 import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
 import type { AssistantMessage, Context, JsonValue } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
@@ -18,7 +23,7 @@ import { renderRecord } from '../src/render.ts';
 import { forever, open, priya } from './support.ts';
 
 const services = (script: PiScript) =>
-	createExecutionServices({ stream: scripted(script), sessions: 'memory' });
+	createExecutionServices({ stream: scriptedStream(script), sessions: 'memory' });
 
 const MODEL = 'scripted/model';
 const BRIEF = 'Find out if you can pour on Thursday. Stop once you know.';

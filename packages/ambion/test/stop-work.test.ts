@@ -28,7 +28,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
+import { isClosingContext, quiet, scriptedStream, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
@@ -38,7 +38,7 @@ import {
 	tappedJournals,
 } from './support/storage.ts';
 
-type Stream = ReturnType<typeof scripted>;
+type Stream = ReturnType<typeof scriptedStream>;
 
 /** A room with one worker seated `named`, stopped when the test ends. */
 async function workerRoom(
@@ -72,7 +72,7 @@ function holding(seat = worker.name) {
 	const started = deferred();
 	const release = deferred();
 	let calls = 0;
-	const stream = scripted((_context, agent) => {
+	const stream = scriptedStream((_context, agent) => {
 		if (agent !== seat) return quiet();
 		calls += 1;
 		started.resolve();
@@ -169,7 +169,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const lost = losing(opened.storage, 'lease');
 		const wakes: Wake[] = [];
 		const runtime = createRuntime({ storage: lost.journals });
-		const quietly = scripted(() => quiet());
+		const quietly = scriptedStream(() => quiet());
 		const room = await workerRoom(runtime, quietly, { execution: recordingExecution(wakes) });
 		await (await room.visit(person)).send({ to: worker.name, text: 'claim this work' });
 		await turn();
@@ -218,7 +218,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const time = manualClock();
 		const drafted = deferred();
 		let summaryCalls = 0;
-		const stream = scripted((context, agent, call) => {
+		const stream = scriptedStream((context, agent, call) => {
 			if (agent === worker.name) return call === 1 ? speak('answer') : quiet();
 			if (!isClosingContext(context)) return quiet();
 			summaryCalls += 1;
@@ -266,7 +266,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const runtime = createRuntime({ storage: opened.storage });
 		const room = await workerRoom(
 			runtime,
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			{
 				execution: recordingExecution(wakes),
 			},
@@ -281,7 +281,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const resumed = await resume(
 			room,
 			createRuntime({ storage: opened.storage }),
-			scripted((_context, _agent, call) => (call === 1 ? speak('the answer') : quiet())),
+			scriptedStream((_context, _agent, call) => (call === 1 ? speak('the answer') : quiet())),
 		);
 		await waitForRoom(resumed, 'quiet');
 		expect(await messagesOf(resumed)).toContainEqual(

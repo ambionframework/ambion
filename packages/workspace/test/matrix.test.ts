@@ -23,7 +23,7 @@ import {
 	byAgent,
 	callTool,
 	quiet,
-	scripted,
+	scriptedStream,
 	speak,
 	toolNames,
 	toolResultTexts,
@@ -58,7 +58,7 @@ const twoWorkspaces: Scenario = {
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							alpha: async (context, _name, call) => {
 								alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));

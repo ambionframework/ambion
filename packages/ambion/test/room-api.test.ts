@@ -29,7 +29,7 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	speak,
 	summarise,
 } from './support/scripted.ts';
@@ -87,7 +87,7 @@ async function world(
 		name: roomName('room-api'),
 		runtime,
 		agents: [alpha],
-		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		...options,
 	});
 	return { runtime, room: stopAtEnd(room) };
@@ -176,7 +176,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			await resumeRoom(first.name, {
 				runtime,
 				agents: [alpha],
-				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			}),
 		);
 		const recovered = resumed.exchange(sent.from);

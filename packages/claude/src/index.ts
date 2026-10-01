@@ -7,7 +7,7 @@
 
 export { claudeExecution } from './compose.ts';
 export { type ClaudeExecutor, type ClaudeOptions, type ClaudePolicy, claude } from './define.ts';
-export type { ClaudeRuntime } from './options.ts';
+export type { ClaudeExecutionOptions } from './options.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/claude';

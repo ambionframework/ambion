@@ -26,7 +26,7 @@ import {
 	later,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	speak,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -88,7 +88,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 				runtime,
 				agents: [worker],
 				seats: { worker: 'broadcast' },
-				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			}),
 		);
 	const resume = async (room: Room, runtime: Runtime) =>
@@ -96,7 +96,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			await resumeRoom(room.name, {
 				runtime,
 				agents: [worker],
-				execution: piExecution({ sessions: 'memory', stream: scripted(checksLater) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(checksLater) }),
 			}),
 		);
 
