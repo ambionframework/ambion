@@ -19,6 +19,7 @@ import type {
 	PassRecord,
 	PassResult,
 } from './executor.ts';
+import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
 import { resolveReminders } from './reminders.ts';
 import { renderActivation, renderDelta, renderPending, renderSystem } from './render.ts';
@@ -41,19 +42,6 @@ export interface ActivationInput {
 interface Tools {
 	readonly room: readonly RoomTool[];
 	readonly agent: readonly RoomTool[];
-}
-
-/** A failure of the activation that a retry can pass. */
-const transient = (message: string): PassResult => ({
-	failed: true,
-	cause: 'transient',
-	message,
-});
-
-/** A thrown error as a transient failure that carries it. */
-function failure(thrown: unknown): PassResult {
-	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
-	return { ...transient(error.message), error };
 }
 
 export class ActivationState {
@@ -130,19 +118,20 @@ export class ActivationState {
 		}
 	}
 
-	/** One pass over the record. A pass that throws is a transient failure. */
+	/** One pass over the record. A pass that throws is a failed pass: `failedPass` sets its cause. */
 	async pass(input: PassInput): Promise<PassResult> {
 		if (this.cancelled) return { failed: false };
 		const { seat } = input.view.spec;
 		if (seat !== this.input.definition.name) {
-			return this.report(transient(`Activation names another seat: '${seat}'.`));
+			const message = `Activation names another seat: '${seat}'.`;
+			return this.report({ failed: true, cause: 'transient', message });
 		}
 		this.view = input.view;
 		let result: PassResult;
 		try {
 			result = await this.executor.pass(this.passOf(input));
 		} catch (error) {
-			result = failure(error);
+			result = failedPass(error);
 		}
 		return this.report(result);
 	}

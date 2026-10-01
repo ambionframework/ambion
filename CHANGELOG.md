@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**One rule turns a thrown error into a failed pass.**
+`@ambionframework/ambion/hosting` exports `PermanentError` and `failedPass`.
+`PermanentError` names an executor fault that a retry cannot clear, because
+the retry runs the same configuration. `failedPass(thrown)` gives the failed
+`PassResult` of a thrown value: the cause is `permanent` for a
+`PermanentError` and `transient` for every other value, and `error` is
+always set. The core and the Pi, Claude, and Codex executors call it. Before,
+each of the five wrote the conversion. The Pi executor and the Codex catalog
+throw `PermanentError`. The internal `UnknownModel` of Pi and the internal
+`PermanentError` of Codex are gone. A Claude pass that throws
+`PermanentError` now fails as permanent. A Codex pass that throws a value
+that is no `Error` now carries an `error` in its result.
+
 **`HomeEnv` implements the file members of `ExecutionEnv`.**
 `@ambionframework/workspace` exports two new types: `FileOperations` and
 `FileExpect`. `FileOperations` holds one throwing storage operation for each

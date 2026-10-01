@@ -2,10 +2,9 @@
 
 import { systemClock } from '@ambionframework/ambion';
 import type { Clock, Limits } from '@ambionframework/ambion/hosting';
-import { callLimits, DEFAULT_TRACE_LIMITS } from '@ambionframework/ambion/hosting';
+import { callLimits, DEFAULT_TRACE_LIMITS, PermanentError } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
-import { UnknownModel } from './failure.ts';
 import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from './sessions.ts';
 
 /** Resolves an agent's `provider/model-id` to the model Pi's harness runs. */
@@ -69,7 +68,7 @@ const registryModel: ModelResolver = async (id, agent) => {
 		const model = (await registry()).getModel(id.slice(0, slash), id.slice(slash + 1));
 		if (model) return model;
 	}
-	throw new UnknownModel(
+	throw new PermanentError(
 		`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`,
 	);
 };

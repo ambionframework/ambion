@@ -13,6 +13,7 @@ import type {
 	Pass,
 	PassInput,
 } from '../src/execution/executor.ts';
+import { PermanentError } from '../src/execution/failure.ts';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
@@ -379,22 +380,29 @@ describe('scriptedExecutor', () => {
 	}
 
 	it.each([
-		['an error', new Error('lost'), new Error('lost')],
-		['a value that is no error', 'gone', new Error('gone')],
-	])('reports a pass that throws %s as one transient failure', async (_name, thrown, error) => {
-		const { state, events } = around(async () => {
-			throw thrown;
-		});
-		await expect(state.pass(input(respond))).resolves.toEqual({
-			failed: true,
-			cause: 'transient',
-			message: error.message,
-			error,
-		});
-		expect(events).toEqual([
-			{ type: 'error', agent: 'a', activation: 'act-1', error, cause: 'transient' },
-		]);
-	});
+		['an error', new Error('lost'), new Error('lost'), 'transient'],
+		['a value that is no error', 'gone', new Error('gone'), 'transient'],
+		[
+			'a permanent error',
+			new PermanentError('no model'),
+			new PermanentError('no model'),
+			'permanent',
+		],
+	] as const)(
+		'reports a pass that throws %s as one failure',
+		async (_name, thrown, error, cause) => {
+			const { state, events } = around(async () => {
+				throw thrown;
+			});
+			await expect(state.pass(input(respond))).resolves.toEqual({
+				failed: true,
+				cause,
+				message: error.message,
+				error,
+			});
+			expect(events).toEqual([{ type: 'error', agent: 'a', activation: 'act-1', error, cause }]);
+		},
+	);
 
 	it('refuses a view of another seat, and runs no pass', async () => {
 		const { state, passes, events } = around(async () => ({ failed: false }));

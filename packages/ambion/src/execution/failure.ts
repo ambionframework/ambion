@@ -5,6 +5,7 @@
  */
 
 import type { FailureCause } from '../types.ts';
+import type { PassResult } from './executor.ts';
 
 /** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
 export const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
@@ -35,6 +36,28 @@ export function classifyCause(input: {
 	return status !== undefined && status !== null && PERMANENT_STATUS.has(status)
 		? 'permanent'
 		: 'transient';
+}
+
+/**
+ * A fault of the executor that a retry cannot clear, because the retry runs
+ * the same configuration. A model that the registry does not hold is one.
+ * `failedPass` gives a thrown `PermanentError` the cause `permanent`.
+ */
+export class PermanentError extends Error {}
+
+/**
+ * A pass that threw, as a failed `PassResult`. The cause is `permanent` for
+ * a `PermanentError` and `transient` for every other value. A value that is
+ * no `Error` becomes one, so the result always carries `error`.
+ */
+export function failedPass(thrown: unknown): PassResult {
+	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+	return {
+		failed: true,
+		cause: error instanceof PermanentError ? 'permanent' : 'transient',
+		message: error.message,
+		error,
+	};
 }
 
 /** The error body a provider returns, as Anthropic and OpenAI shape it. */

@@ -36,6 +36,7 @@ import type {
 	ReadRange,
 	RoomToolOptions,
 } from '@ambionframework/ambion/hosting';
+import { failedPass } from '@ambionframework/ambion/hosting';
 import {
 	Codex,
 	type CodexOptions,
@@ -44,16 +45,10 @@ import {
 	type TurnOptions,
 } from '@openai/codex-sdk';
 import { type Bridge, startBridge } from './bridge.ts';
-import {
-	type CatalogSource,
-	installedCatalog,
-	PermanentError,
-	type Scratch,
-	scratchFor,
-} from './catalog.ts';
+import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
 import { CodexSteps, changedPaths } from './codex-trace.ts';
+import { passResultOf } from './failure.ts';
 import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
-import { passResultOf } from './services.ts';
 import { citing, servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
@@ -207,7 +202,7 @@ class Activation implements ExecutorSession {
 		return this.settle(fresh, prompt);
 	}
 
-	/** One run of the prompt. A fault of the run is a transient failure. */
+	/** One run of the prompt. A fault of the run is a failed pass. */
 	private async settle(thread: CodexThreadLike, prompt: string): Promise<PassResult> {
 		try {
 			return await this.run(thread, prompt);
@@ -307,13 +302,9 @@ class Activation implements ExecutorSession {
 
 	/**
 	 * The result for a fault of this executor, such as a lost process or a
-	 * build error. It is transient, so the room tries the activation again.
-	 * A model with no catalog entry is permanent.
+	 * build error. A cut closes the run, and the fault it throws is no failure.
 	 */
 	private broke(error: unknown): PassResult {
-		if (this.stopped) return { failed: false };
-		const message = error instanceof Error ? error.message : String(error);
-		const cause = error instanceof PermanentError ? 'permanent' : 'transient';
-		return { failed: true, cause, message, ...(error instanceof Error ? { error } : {}) };
+		return this.stopped ? { failed: false } : failedPass(error);
 	}
 }

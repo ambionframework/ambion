@@ -35,11 +35,12 @@ import type {
 	ReadRange,
 	Seq,
 } from '@ambionframework/ambion/hosting';
+import { failedPass } from '@ambionframework/ambion/hosting';
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
+import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
 import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
-import { passResultOf, sessionOf, unresumableResult } from './services.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -162,7 +163,7 @@ class Activation implements ExecutorSession {
 			this.flush(pass.view.through);
 			return await done;
 		} catch (error) {
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
+			return failedPass(error);
 		} finally {
 			this.settle = undefined;
 			clearTimeout(this.grace);
@@ -275,7 +276,7 @@ class Activation implements ExecutorSession {
 			this.restart(this.begin);
 			return;
 		}
-		this.finish(this.broke(error instanceof Error ? error : new Error(String(error))));
+		this.finish(failedPass(error));
 	}
 
 	/** Whether a resumed query threw before it said anything. */
@@ -332,13 +333,5 @@ class Activation implements ExecutorSession {
 		if (settle === undefined) return;
 		this.settle = undefined;
 		settle(result);
-	}
-
-	/**
-	 * The result for a fault of this executor, such as a lost process or a
-	 * build error. It is transient, so the room tries the activation again.
-	 */
-	private broke(error: Error): PassResult {
-		return { failed: true, cause: 'transient', message: error.message, error };
 	}
 }

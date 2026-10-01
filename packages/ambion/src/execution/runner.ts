@@ -32,6 +32,7 @@ import type {
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
 import type { PassInput, PassResult } from './executor.ts';
+import { failedPass } from './failure.ts';
 import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =
@@ -501,10 +502,9 @@ export class AgentRunner implements AgentPort {
 
 // -- the trace ----------------------------------------------------------------
 
-/** A room call the pass loop cannot recover from fails the activation as transient. */
+/** A room call the pass loop cannot recover from fails the activation, as a thrown pass does. */
 function broke(state: ActivationState, thrown: unknown): PassResult {
-	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
-	return state.report({ failed: true, cause: 'transient', message: error.message, error });
+	return state.report(failedPass(thrown));
 }
 
 /** One pass, opened in the trace. The first pass reads the view; a later one follows the record. */

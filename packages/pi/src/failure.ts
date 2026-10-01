@@ -19,12 +19,6 @@ const transient = (message: string): PassOutcome => ({
 });
 
 /**
- * A model id the registry does not hold. The id comes from the seat's
- * definition, so a retry reads the same id and fails the same way.
- */
-export class UnknownModel extends Error {}
-
-/**
  * The run error codes that name a fault in the configuration of the harness:
  * a model or a tool this process does not have. A retry runs in the same
  * process with the same configuration, so these failures are permanent.

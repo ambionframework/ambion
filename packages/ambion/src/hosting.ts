@@ -51,7 +51,13 @@ export type {
 	PassResult,
 	ReadRange,
 } from './execution/executor.ts';
-export { classifyCause, PERMANENT_STATUS, providerMessage } from './execution/failure.ts';
+export {
+	classifyCause,
+	failedPass,
+	PERMANENT_STATUS,
+	PermanentError,
+	providerMessage,
+} from './execution/failure.ts';
 export { REMINDER_TIMEOUT_MS } from './execution/reminders.ts';
 export { refusal, summaryToolDescription } from './execution/render.ts';
 export type {
