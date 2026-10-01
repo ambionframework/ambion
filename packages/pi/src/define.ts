@@ -107,7 +107,7 @@ export function fromPiTool<TParameters extends TSchema, TDetails>(
 	});
 }
 
-/** The model identifier `pi()` gave the executor. Another family's executor has none. */
+/** The model identifier `pi()` gave the executor. An executor of another kind has none. */
 export function modelOf(executor: Executor): string {
 	if ('model' in executor && typeof executor.model === 'string') return executor.model;
 	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);

@@ -48,11 +48,11 @@ export async function gitServer(agents: readonly string[] = []): Promise<GitServ
 	const credential = await server.options.credentialFor({ name: 'lab-git' });
 	const home = server.homes.get('lab-git');
 	if (home === undefined) throw new Error('The test server has no home for lab-git.');
-	const { host, port, hostKey } = server.options;
+	const { server: address, port, hostKey } = server.options;
 	return {
 		server,
 		home,
-		options: { host, port, hostKey, account: credential, templates: TEMPLATES },
+		options: { server: address, port, hostKey, account: credential, templates: TEMPLATES },
 	};
 }
 

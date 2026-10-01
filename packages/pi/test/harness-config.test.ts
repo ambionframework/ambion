@@ -29,7 +29,7 @@ import { openHarness } from '../src/harness.ts';
 import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, isClosingContext, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, isClosingContext, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -88,7 +88,7 @@ function recording(script: PiScript) {
 		options: SimpleStreamOptions | undefined;
 		model: string;
 	}[] = [];
-	const base = scripted(script);
+	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
 			context: scriptContext(context),
@@ -243,7 +243,7 @@ describe('the harness of an activation', () => {
 			session: await repo.create({}, BACKGROUND_CONTEXT),
 			models: streamModels(
 				model,
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 			),
 			model,
 			tools: [],
@@ -277,7 +277,7 @@ describe('the harness of an activation', () => {
 				session: refusing,
 				models: streamModels(
 					model,
-					scripted(() => quiet()),
+					scriptedStream(() => quiet()),
 				),
 				model,
 				tools: [],
@@ -300,7 +300,7 @@ describe('the harness of an activation', () => {
 			"Activation names another seat: 'other'.",
 		],
 		[
-			'an executor of another family',
+			'an executor of another kind',
 			defineAgent({
 				name: 'worker',
 				identity: 'Works.',
@@ -313,7 +313,7 @@ describe('the harness of an activation', () => {
 		const opener = createPiOpener({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});
@@ -454,7 +454,7 @@ describe('the harness of an activation', () => {
 		const events: HarnessEvent[] = [];
 		const next = await openHarness(
 			setup(
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 				(event) => events.push(event),
 			),
 		);

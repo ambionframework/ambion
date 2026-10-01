@@ -25,9 +25,9 @@ import {
 	later,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './scripted.ts';
@@ -58,7 +58,7 @@ interface Setup {
 	readonly agents: (typeof worker)[];
 	readonly summary?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
-	readonly stream: Parameters<typeof scripted>[0];
+	readonly stream: Parameters<typeof scriptedStream>[0];
 	readonly attempts?: number;
 	readonly drive: Drive;
 }
@@ -77,7 +77,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		agents: setup.agents,
 		...(setup.summary === undefined ? {} : { summary: setup.summary }),
 		seats: setup.seats,
-		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(setup.stream) }),
 	});
 	try {
 		await setup.drive(room, clock);
@@ -110,8 +110,8 @@ const complete = (): Promise<readonly JournalEntry[]> =>
  */
 const asksTheChecker: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
-	return speak('Is the crew free on Thursday?', 'checker');
+	if (contextText(context).includes('[checker → worker]')) return say('Thursday works.');
+	return say('Is the crew free on Thursday?', 'checker');
 };
 
 /**
@@ -195,8 +195,7 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  */
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[posted → worker, returns'))
-		return speak('The slab is poured.');
+	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
 	return later('Check the pour log.', 600);
 };
 
@@ -268,7 +267,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 		});
 	const execution = piExecution({
 		sessions: 'memory',
-		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
+		stream: scriptedStream(byAgent({ worker: says(['Thursday works.']) })),
 	});
 	const first = runtime();
 	const room = await startRoom({

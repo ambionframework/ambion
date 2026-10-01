@@ -22,7 +22,7 @@ import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiOpener } from '../src/executor.ts';
 import { memorySessions, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
 import { roomThatCommits, stateOf, unusedRoom } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -57,7 +57,7 @@ function activation(
 ) {
 	const requests: { context: Context; session: string | undefined }[] = [];
 	const steps: Step[] = [];
-	const base = scripted(script);
+	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
 			context: scriptContext(context),
@@ -181,7 +181,7 @@ describe('the Pi executor across the passes of one activation', () => {
 				await ready.promise;
 				return stubModel(id, agent);
 			},
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});
@@ -251,7 +251,7 @@ describe('the Pi executor across the passes of one activation', () => {
 				await ready.promise;
 				return stubModel(id, agent);
 			},
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});

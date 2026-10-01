@@ -10,7 +10,7 @@ import { hostingOf } from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
-	isSpoken,
+	isSaid,
 	type Runtime,
 	readRoom,
 	startRoom,
@@ -18,7 +18,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scriptedStream } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
 const quietRoom = (name: string, runtime: Runtime) =>
@@ -27,7 +27,7 @@ const quietRoom = (name: string, runtime: Runtime) =>
 		runtime,
 		seats: { [assistant.name]: 'none' },
 		agents: [assistant],
-		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 	});
 
 type Limits = NonNullable<CreateRuntimeOptions['limits']>;
@@ -137,8 +137,8 @@ describe('createRuntime', () => {
 		await (await b.visit(andrei)).send({ text: 'in the second' });
 		await Promise.all([waitForRoom(a, 'settled'), waitForRoom(b, 'settled')]);
 
-		expect((await messagesOf(a)).filter(isSpoken).map((m) => m.text)).toEqual(['in the first']);
-		expect((await messagesOf(b)).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
+		expect((await messagesOf(a)).filter(isSaid).map((m) => m.text)).toEqual(['in the first']);
+		expect((await messagesOf(b)).filter(isSaid).map((m) => m.text)).toEqual(['in the second']);
 		expect((await readRoom(name, { runtime: first })).name).toBe(a.name);
 		expect((await readRoom(name, { runtime: second })).name).toBe(b.name);
 		await Promise.all([a.stop(), b.stop()]);
@@ -164,6 +164,6 @@ describe('createRuntime', () => {
 		const reader = createRuntime({ storage: childStorage('sqlite', dir), clock: fakeClock() });
 		const view = await readRoom(name, { runtime: reader });
 		expect(view.messages.map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
-		expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
+		expect(view.messages.filter(isSaid).map((m) => m.text)).toEqual(['kept on disk']);
 	});
 });

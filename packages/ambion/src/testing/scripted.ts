@@ -49,7 +49,7 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Repl
 ];
 
 /** A reply that calls `say`, to one seat or to the room. */
-export const speak = (text: string, to?: string): Reply =>
+export const say = (text: string, to?: string): Reply =>
 	callTool('say', to ? { to, text } : { text });
 
 /** A reply that calls `schedule`: the room wakes the seat with the say after `after` seconds. */

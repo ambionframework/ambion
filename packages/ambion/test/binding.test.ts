@@ -18,7 +18,7 @@ import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
 import { owedOf, pendingOf, replayState } from './support/fold.ts';
 import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
@@ -80,9 +80,9 @@ describe('the room runs the verified rules', () => {
 	it('ends a lease only when mayEnd says so', () => {
 		const end = { type: 'end', id, reason: 'revoked', readThrough: 0 } as const;
 		bind.once(rules.mayEnd, false);
-		expect(decide(claimed(), end, now)).toEqual({ event: undefined });
+		expect(decide(claimed(), end, now)).toEqual({ entry: undefined });
 		expect(decide(claimed(), end, now)).toMatchObject({
-			event: { kind: 'lease', body: { phase: 'ended', reason: 'revoked' } },
+			entry: { kind: 'lease', body: { phase: 'ended', reason: 'revoked' } },
 		});
 	});
 
@@ -90,7 +90,7 @@ describe('the room runs the verified rules', () => {
 		bind.once(rules.leaseExpiry, 12_345);
 		expect(
 			decide(asked(), { type: 'claim', id, expiry: 60_000, deadline: 600_000 }, now),
-		).toMatchObject({ event: { kind: 'lease', body: { phase: 'running', expiresAt: 12_345 } } });
+		).toMatchObject({ entry: { kind: 'lease', body: { phase: 'running', expiresAt: 12_345 } } });
 	});
 
 	it('refuses or admits speech as speechFreshness answers', () => {
@@ -106,17 +106,17 @@ describe('the room runs the verified rules', () => {
 		});
 		bind.once(rules.speechFreshness, 'fresh');
 		expect(decide(claimed(), { type: 'commit', commit: commit(2) }, now)).toMatchObject({
-			event: { kind: 'message', body: { kind: 'said' } },
+			entry: { kind: 'message', body: { kind: 'said' } },
 		});
 	});
 
 	it('writes a close only when admitsClose says so', () => {
 		const close = { type: 'close', person: 'priya', from: 3, through: 3 } as const;
 		bind.once(rules.admitsClose, false);
-		expect(decide(asked(), close, now)).toEqual({ event: undefined });
+		expect(decide(asked(), close, now)).toEqual({ entry: undefined });
 		bind.once(rules.admitsClose, true);
 		expect(decide(asked(), { ...close, through: 9 }, now)).toMatchObject({
-			event: { kind: 'close', body: { through: 9, at } },
+			entry: { kind: 'close', body: { through: 9, at } },
 		});
 	});
 
@@ -207,7 +207,7 @@ describe('the room runs the verified rules', () => {
 		expect(decide(state(), claim, now)).toMatchObject({
 			refusal: { reason: expect.stringMatching(/no room grant/) },
 		});
-		expect(decide(state(), claim, now)).toMatchObject({ event: { kind: 'lease' } });
+		expect(decide(state(), claim, now)).toMatchObject({ entry: { kind: 'lease' } });
 	});
 
 	it('numbers the next attempt as nextActivationId answers', () => {
@@ -270,7 +270,7 @@ describe('the room runs the verified rules', () => {
 	it('admits a claim or a renewal as admitsLease answers', () => {
 		const renew = { type: 'renew', id, expiry: 60_000, deadline: 600_000 } as const;
 		bind.once(rules.admitsLease, 'granted');
-		expect(decide(asked(), renew, now)).toMatchObject({ event: { kind: 'lease' } });
+		expect(decide(asked(), renew, now)).toMatchObject({ entry: { kind: 'lease' } });
 		expect(decide(asked(), renew, now)).toMatchObject({ refusal: { category: 'stale' } });
 	});
 
@@ -298,10 +298,10 @@ describe('the room runs the verified rules', () => {
 			covers: { from: 1, through: 2 },
 		});
 		expect(decide(state, { type: 'commit', commit }, now)).toMatchObject({
-			event: { body: { kind: 'summary', to: 'ghost', covers: { from: 1, through: 2 } } },
+			entry: { body: { kind: 'summary', to: 'ghost', covers: { from: 1, through: 2 } } },
 		});
 		expect(decide(state, { type: 'commit', commit }, now)).toMatchObject({
-			event: { body: { kind: 'summary', to: 'priya', covers: { from: 3, through: 3 } } },
+			entry: { body: { kind: 'summary', to: 'priya', covers: { from: 3, through: 3 } } },
 		});
 	});
 
@@ -328,11 +328,11 @@ describe('the room runs the verified rules', () => {
 		expect(decide(state, renew, now)).toMatchObject({ refusal: { category: 'stale' } });
 		const expire = { type: 'end', id, reason: 'expired', readThrough: 0 } as const;
 		bind.once(rules.isExpired, true);
-		expect(decide(state, expire, now)).toMatchObject({ event: { body: { reason: 'expired' } } });
-		expect(decide(state, expire, now)).toEqual({ event: undefined });
+		expect(decide(state, expire, now)).toMatchObject({ entry: { body: { reason: 'expired' } } });
+		expect(decide(state, expire, now)).toEqual({ entry: undefined });
 		const late = { ...expire, reason: 'revoked', readThrough: 99 } as const;
 		bind.once(rules.onRecord, true);
-		expect(decide(state, late, now)).toMatchObject({ event: { kind: 'lease' } });
+		expect(decide(state, late, now)).toMatchObject({ entry: { kind: 'lease' } });
 		expect(decide(state, late, now)).toMatchObject({ refusal: { category: 'refused' } });
 	});
 
@@ -366,7 +366,7 @@ describe('the room runs the verified rules', () => {
 	it('closes on a later pass when admitsClose refuses once', async () => {
 		const runtime = createRuntime({
 			clock: fakeClock(),
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		const room = stopAtEnd(
 			await startRoom({

@@ -14,6 +14,42 @@ becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
 `createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
 `createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
 `ExecutorActivation`, and `ExecutorOptions` keep their names.
+**The verb `say` names the message type, its guard, the test verb, and the
+speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
+kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
+`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
+`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
+`Executor.speaking`. `Executor.guidance` keeps its name. The
+callback `RoomToolOptions.spoke` is now `said`. The kind string, the
+journal bodies, and the text that a model reads do not change.
+**Three names in the process and credential options change.** The option
+`tokenTtl` of `justGitBackend` and the option `keyTtl` of
+`workstationGitBackend` are now `credentialTtl`, the name that
+`GitConformanceOptions` already used. The exported type `ProcessStatus` is
+now `ProcessRecord`. A tool call or the host that ends a process cancels
+it, and the code now says so: `process-stop.ts` is `process-cancel.ts`, and
+`ProcessTable.cancel` gives `cancelled` where it gave `stopped`. The `stop`
+file in the directory of a process keeps its name. The tool names and the
+text for the model do not change.
+**The workspace packages name an endpoint, a label, and a server.** The word
+`host` now names the application that embeds a room, and the word `port`
+names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
+`WorkspacePorts` becomes `WorkspaceEndpoints`. Its method `open` becomes
+`forward`, and its field `hostname` becomes `machine`. The field `ports` of
+`BashBackend` becomes `endpoints`. `GitBackend.server`,
+`ObjectBackend.store`, and `SqlBackend.database` become `label`.
+`Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
+`<name>-host` stays. `WorkstationOptions.host` and
+`WorkstationGitOptions.host` become `server`.
+**The executor options and the Pi test stream get their own names.**
+`@ambionframework/claude` exports `ClaudeExecutionOptions`, and
+`@ambionframework/codex` exports `CodexExecutionOptions`. They replace
+`ClaudeRuntime` and `CodexRuntime`, and they match `PiExecutionOptions`.
+The word `Runtime` now names the core `Runtime` alone.
+`@ambionframework/pi/testing` exports `scriptedStream` in place of
+`scripted`. The core testing entry keeps `scripted`, the scripted
+execution. The Codex tool that the stdio server lists is `CodexTool`. It
+replaces a `RoomTool` that shadowed the core type of the same name.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
@@ -704,7 +740,7 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   summary goes to the `person` of the exchange. Before this change, the
   model decided, and a question followed by a departure sometimes closed
   with no answer. See
-  [Default assistant](docs/assistant.md#membership-and-completion).
+  [Default assistant](docs/assistant.md#seating-and-completion).
 - **A Codex seat lands a say in each activation.** A real `codex` numbers
   the items of each turn from `item_0`, and a room tool took the item id as
   the key of its commit. The say of a later activation then had the key of

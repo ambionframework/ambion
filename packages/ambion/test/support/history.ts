@@ -17,7 +17,7 @@
 import type { JournalEntry } from '@ambionframework/journal';
 import { decodeActivationId } from '../../src/activation-id.ts';
 import type { Clock, Message, Seq } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { owedOf, pendingOf } from './fold.ts';
 

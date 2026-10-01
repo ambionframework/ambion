@@ -24,7 +24,7 @@ each page.
 | [Assistant](assistant.md)             | The default assistant package and the `assistant` room option                |
 | [Exchange](exchange.md)               | Human questions, completion, and durable result handles                      |
 | [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                   |
-| [Roster](roster.md)                   | Agent membership, reserve, and attention                                     |
+| [Roster](roster.md)                   | Agent seating, reserve, and attention                                        |
 | [Sensors](sensors.md)                 | Sensor protocol, Git-template lifecycle, workstation transport, and evidence |
 | [Actuators](actuators.md)             | A pattern over processes: the controller contract and the template           |
 | [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend       |

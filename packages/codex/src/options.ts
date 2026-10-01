@@ -17,7 +17,7 @@ import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catal
 import type { CodexExecutor } from './define.ts';
 
 /** The services a Codex execution brings: where the executable is and what it runs with. */
-export interface CodexRuntime {
+export interface CodexExecutionOptions {
 	/** A `codex` executable to run. Absent, the SDK finds the one that `@openai/codex` ships. */
 	readonly codexPath?: string;
 	/** The environment of the executable. Absent, the environment of this process. */
@@ -81,19 +81,19 @@ export function threadOptions(executor: CodexExecutor, scratch?: Scratch): Threa
  * turns off the native tools.
  */
 export function clientOptions(
-	runtime: CodexRuntime,
+	execution: CodexExecutionOptions,
 	socketPath: string,
 	scratch?: Scratch,
 ): CodexOptions {
 	const env =
-		runtime.env &&
+		execution.env &&
 		Object.fromEntries(
-			Object.entries(runtime.env).filter(
+			Object.entries(execution.env).filter(
 				(entry): entry is [string, string] => entry[1] !== undefined,
 			),
 		);
 	return {
-		...present({ codexPathOverride: runtime.codexPath, env }),
+		...present({ codexPathOverride: execution.codexPath, env }),
 		config: {
 			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
 			mcp_servers: {

@@ -179,7 +179,7 @@ interface Landed {
 }
 
 /** What a participant said. */
-export interface SpokenMessage extends Landed {
+export interface SaidMessage extends Landed {
 	kind: 'said';
 	/**
 	 * URIs the message cites. The room validates and stores them and never reads
@@ -295,14 +295,14 @@ export interface DismissedMessage extends Landed {
 }
 
 export type Message =
-	SpokenMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
+	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {
 	return structuredClone(message);
 }
 
-export function isSpoken(message: Message): message is SpokenMessage {
+export function isSaid(message: Message): message is SaidMessage {
 	return message.kind === 'said';
 }
 
@@ -475,7 +475,7 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 }
 
 /**
- * One thing an activation did, in a vocabulary every executor family shares.
+ * One thing an activation did, in a vocabulary every executor kind shares.
  * The trace gives each step to the host's logger once. A step is plain JSON.
  */
 export type Step =
@@ -544,12 +544,12 @@ export interface TracePolicy {
 export type RoomNotification = RoomEvent | ExecutionEvent;
 
 /**
- * What an agent runs on: a family name, instructions, and tools. The room
- * reads the fields below and no other. An executor family adds its own
+ * What an agent runs on: an executor kind, instructions, and tools. The room
+ * reads the fields below and no other. An executor kind adds its own
  * fields, such as a model, and reads them itself.
  */
 export interface Executor {
-	/** The executor family, such as `pi`. The host that composes execution resolves it. */
+	/** The executor kind, such as `pi`. The host that composes execution resolves it. */
 	readonly kind: string;
 	readonly instructions: string;
 	readonly tools: readonly AmbionTool[];
@@ -557,7 +557,7 @@ export interface Executor {
 	readonly guidance?: string;
 	/** The reminders of the agent's tool bundles, in bundle order. */
 	readonly reminders?: readonly Reminder[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the room

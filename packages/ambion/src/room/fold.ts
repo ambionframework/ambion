@@ -4,13 +4,13 @@
  * The journal is the truth, and the room holds no fact beside it. The base
  * facts are what each entry adds or changes: the messages, the closes, the
  * leases, the composition, and the deliveries. `projection.ts` applies each
- * entry with `applyEvent` or its own step, and derives the rest: the roster,
+ * entry with `applyEntry` or its own step, and derives the rest: the roster,
  * the reserve, the people, the open exchange, and the activations the room
  * owes. A room that replays the journal derives the same state as the room
  * that wrote it, which is what lets a room resume where it stopped.
  */
 
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { PendingSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
@@ -56,7 +56,7 @@ export interface BaseFacts {
 	deliveries: Map<Seq, MessageDelivery>;
 }
 
-/** The empty room facts before the first committed event. */
+/** The empty room facts before the first committed entry. */
 export const older = (): BaseFacts => ({
 	messages: [],
 	closes: [],
@@ -67,11 +67,11 @@ export const older = (): BaseFacts => ({
 });
 
 /**
- * Applies one committed event to the room facts. `open` is the exchange
+ * Applies one committed entry to the room facts. `open` is the exchange
  * open before the entry, which the base facts do not hold. Only a
  * cancellation reads it: it closes that exchange.
  */
-export function applyEvent(read: BaseFacts, entry: Entry, open: ExchangeRef | undefined): void {
+export function applyEntry(read: BaseFacts, entry: Entry, open: ExchangeRef | undefined): void {
 	if (entry.kind === 'message') {
 		const message = placed(entry);
 		read.deliveries.set(message.seq, messageDelivery(message, read.leases));
