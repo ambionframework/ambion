@@ -44,7 +44,7 @@ export type FailureCause = Static<typeof failureCauseSchema>;
 
 /** What a seat asks the room to record. The room stamps everything else. */
 export type Intent =
-	| { kind: 'said'; to?: string; text: string; refs?: string[]; after?: number }
+	| { kind: 'said'; to?: string; text: string; refs?: string[]; delaySeconds?: number }
 	| { kind: 'seated'; name: string }
 	| { kind: 'unseated'; name: string }
 	| { kind: 'dismissed'; message: Seq };

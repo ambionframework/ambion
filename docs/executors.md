@@ -342,9 +342,9 @@ result names the message, as `said #41` or `said #41 to priya`, so the
 agent can cite it. `seat` and `unseat` give `seated surveyor (#42)`, and a
 seating the record already holds gives `surveyor is already seated`.
 
-**`schedule` commits a `said` intent with `after`.** The intent goes to the
+**`schedule` commits a `said` intent with `delaySeconds`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any
-position. It accepts `after`, `text`, and `refs`. The result names the say
+position. It accepts `delaySeconds`, `text`, and `refs`. The result names the say
 as `#<seq>` and gives the due time, and it lists the `unread` messages of
 the answer.
 

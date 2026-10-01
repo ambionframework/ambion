@@ -386,7 +386,8 @@ function closingCommit(
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
-	if (intent.after !== undefined) return refused('A closing response cannot schedule a say.');
+	if (intent.delaySeconds !== undefined)
+		return refused('A closing response cannot schedule a say.');
 	const recipient = intent.to ?? purpose.person;
 	if (!purpose.people.includes(recipient))
 		return refused('A closing response must address a person who spoke in the exchange.');
@@ -448,7 +449,7 @@ function speechFreshness(
 	request: CommitRequest,
 ): RoomDecision<'message'> | undefined {
 	// A scheduled say goes back to its author alone, so it states no read position.
-	if (request.intent.kind !== 'said' || request.intent.after !== undefined) return undefined;
+	if (request.intent.kind !== 'said' || request.intent.delaySeconds !== undefined) return undefined;
 	// The wire guard stays here: a Dafny int has no fraction and no NaN.
 	const readThrough = safePosition(request.readThrough);
 	const freshness = freshnessRule(readThrough, state.lastSeq);
@@ -527,11 +528,11 @@ function unseating(
 function addressRefusal(
 	state: RoomState,
 	seat: string,
-	intent: { to?: string; after?: number },
+	intent: { to?: string; delaySeconds?: number },
 	schedule?: ScheduleLimits,
 ): { refusal: Refusal } | undefined {
 	const target = intent.to;
-	if (intent.after !== undefined) {
+	if (intent.delaySeconds !== undefined) {
 		const reason = scheduleRefusal(state.scheduled, seat, intent, schedule);
 		return reason === undefined ? undefined : refused(reason);
 	}

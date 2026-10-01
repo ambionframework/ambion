@@ -92,7 +92,7 @@ describe('one line of the record', () => {
 			from: 'worker',
 			to: 'worker',
 			text: 'Check the build.',
-			after: 600,
+			delaySeconds: 600,
 		};
 		const returns = new Date(Date.parse(at) + 600_000).toISOString();
 		expect(renderLine(later)).toBe(`#3 [worker → worker] Check the build. (returns at ${returns})`);

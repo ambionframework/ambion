@@ -5,12 +5,13 @@
 import type { Seq } from './types.ts';
 
 /**
- * The bounds on a scheduled say: `after` in whole seconds from `minAfter` to
- * `maxAfter`, and at most `pending` says of one seat that wait to return.
+ * The bounds on a scheduled say: `delaySeconds` in whole seconds from
+ * `minDelaySeconds` to `maxDelaySeconds`, and at most `pending` says of one seat
+ * that wait to return.
  */
 export interface ScheduleLimits {
-	readonly minAfter: number;
-	readonly maxAfter: number;
+	readonly minDelaySeconds: number;
+	readonly maxDelaySeconds: number;
 	readonly pending: number;
 }
 
