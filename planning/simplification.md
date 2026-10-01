@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty-five reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-six reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                                                             | Files                                            |
@@ -59,6 +59,7 @@ changelog names each change to an export and to a behavior.
 | The schema is the one source of a body (K6)  | 18 hand-written body types, the third ended lease in `LeaseRequest`                                          | `bodies.ts`                                      |
 | The bash backend takes its git backend (B2)  | `BashServices`, `gitTransports`, the transport check, `GitAccess`, casts                                     | `workspace/src/backend.ts`                       |
 | The object name is the identity (C1)         | `RoomMetadata.name` and `definitions`, `SeatMetadata.room`, `seat`, `wakeCount`, `cuts`, `StartOptions.name` | `storage.ts`, `room-object.ts`, `seat-object.ts` |
+| JSON is the one rule of plain data (K7)      | `Cloneable`, `Equal`, `BodiesAreCloneable`, `CloneableJournal`, `assertWire`, the `structuredClone` copies   | `journal/src/json.ts`, `memory.ts`               |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -86,7 +87,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
 | K5  | Usage addition exists three times (done)                                           | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
 | K6  | A body shape is written as a type and again as a schema (done)                     | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
-| K7  | Three rules state "plain data", and they disagree                                  | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
+| K7  | Three rules state "plain data", and they disagree (done)                           | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
 | K8  | Three renderers write one line of the record                                       | `record.ts:29`, `execution/render.ts:54`, `simulator/src/render.ts:29`                                   | 2       | Medium | 4    |
 | K9  | The `assistant` option restates `agents`, `seats`, and `summary`                   | `normalizeAssistant` (`room.ts:231`); the package is 70 lines over `pi()`                                | 2       | Medium | 4    |
 | K10 | Five close shapes serve one fact (done in part)                                    | `SummaryClose` (`exchange.ts:85`) and the `OwedClose` alias (`owed.ts:43`) go                            | 2       | High   | 6    |
@@ -298,8 +299,8 @@ boundary, a stored format, or a promise.
 - K1: the journal reads only the current format. It drops the promise of
   `docs/durability.md:272`.
 - K9: the assistant moves beside Pi, and the room option goes.
-- K6, K7: the schema is the one source of a body, and JSON is the one
-  rule of plain data.
+- K6, K7 (done): the schema is the one source of a body, and JSON is the
+  one rule of plain data.
 - K13, K14: `seq` is the storage position, and `Journal` moves into the
   core.
 - B2, C1: one factory for each deployment, and no second store in

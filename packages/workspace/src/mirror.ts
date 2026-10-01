@@ -170,9 +170,9 @@ export async function mirrorRoom(
 		if (appendedSeq !== undefined && message.seq <= appendedSeq) return;
 		appendedSeq = message.seq;
 		const entry: RoomMessageEntry = { ...message, room: room.name };
-		// Message is already required to survive structuredClone as journal
-		// data (docs/durability.md §2); JsonValue's index signature is the
-		// one thing a named interface never satisfies structurally.
+		// A message is a JSON body, because the journal refuses any other value.
+		// JsonValue's index signature is the one thing a named interface never
+		// satisfies structurally.
 		pending = bestEffort(
 			() =>
 				drive.use(agent, (env) =>

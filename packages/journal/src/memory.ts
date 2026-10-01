@@ -1,3 +1,4 @@
+import { detached } from './json.ts';
 import { scanned } from './rules.verified.ts';
 import type {
 	JournalOpener,
@@ -12,7 +13,7 @@ class MemoryJournal implements JournalStorage {
 
 	async read(after: StoragePosition): Promise<JournalRead> {
 		return {
-			entries: structuredClone(this.entries.filter((stored) => stored.position > after)),
+			entries: detached(this.entries.filter((stored) => stored.position > after)),
 			position: scanned(after, this.entries.at(-1)?.position ?? after),
 		};
 	}
@@ -24,9 +25,9 @@ class MemoryJournal implements JournalStorage {
 		const head = this.entries.at(-1)?.position ?? 0;
 		if (head !== expectedPosition) return undefined;
 		const position = head + 1;
-		const stored = { entry: structuredClone(entry), position };
+		const stored = { entry: detached(entry), position };
 		this.entries.push(stored);
-		return structuredClone(stored);
+		return detached(stored);
 	}
 }
 

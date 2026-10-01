@@ -425,24 +425,3 @@ export interface RoomProtocol {
 export function roundTrip<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T;
 }
-
-const PLAIN = new Set(['Object', 'Array']);
-
-/** Throws when a value would not survive the wire as it is. */
-export function assertWire(value: unknown, path = '$'): void {
-	if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-	if (typeof value === 'number') {
-		if (!Number.isFinite(value)) throw new Error(`${path} is not a finite number.`);
-		return;
-	}
-	if (typeof value !== 'object') throw new Error(`${path} is a ${typeof value}.`);
-	const tag = (value as object).constructor?.name ?? 'Object';
-	if (!PLAIN.has(tag)) throw new Error(`${path} is a ${tag}.`);
-	for (const [key, item] of Object.entries(value as Record<string, unknown>))
-		assertKey(item, `${path}.${key}`);
-}
-
-function assertKey(item: unknown, path: string): void {
-	if (item === undefined) throw new Error(`${path} is undefined.`);
-	assertWire(item, path);
-}

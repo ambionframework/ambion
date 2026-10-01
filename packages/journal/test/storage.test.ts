@@ -131,6 +131,25 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 	});
 });
 
+describe.each(backends)('$name Journal refusal of a body that is not JSON', ({ open }) => {
+	it.each([
+		['an undefined field', { text: 'a', nested: undefined }],
+		['a Date', { text: new Date() }],
+		['a bigint', { text: 1n }],
+	])('refuses %s before storage sees it', async (_name, bad) => {
+		const backend = open();
+		onTestFinished(backend.dispose);
+		const opened = await journal(backend.opener, 'refused');
+		await expect(
+			opened.append('note', { decide: () => ({ body: bad as unknown as { text: string } }) }),
+		).rejects.toThrow(/refuses the proposed 'note' body/);
+		expect(opened.entries).toEqual([]);
+		expect((await (await backend.opener.open('refused')).read(0)).entries).toEqual([]);
+		const next = await opened.append('note', { decide: () => ({ body: { text: 'ok' } }) });
+		expect(next).toMatchObject({ entry: { seq: 1 } });
+	});
+});
+
 describe('native SQLite', () => {
 	it('atomically refuses a stale append across independently opened handles', async () => {
 		const database = new DatabaseSync(':memory:');
