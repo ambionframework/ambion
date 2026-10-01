@@ -19,7 +19,7 @@ const bench = { name: 'bench' };
 function lab(): Workspace {
 	const workspace = openWorkspace({
 		name: 'workbench',
-		backend: { bash: memoryBackend(), git: labRepositories(':memory:') },
+		backend: { bash: memoryBackend({ git: labRepositories(':memory:') }) },
 	});
 	onTestFinished(() => workspace.dispose());
 	return workspace;

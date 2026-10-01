@@ -82,19 +82,20 @@ live('shared git rebase', () => {
 		const workspace = openWorkspace({
 			name: roomName('shared-git'),
 			backend: {
-				bash: memoryBackend(),
-				git: justGitBackend({
-					storage: sqliteGitStorage(':memory:'),
-					secret: 'live-test-secret',
-					shared: {
-						notes: {
-							description: 'Working notes shared by the writing seats.',
-							source: {
-								'scribe-a.md': 'scribe-a: pending\n',
-								'scribe-b.md': 'scribe-b: pending\n',
+				bash: memoryBackend({
+					git: justGitBackend({
+						storage: sqliteGitStorage(':memory:'),
+						secret: 'live-test-secret',
+						shared: {
+							notes: {
+								description: 'Working notes shared by the writing seats.',
+								source: {
+									'scribe-a.md': 'scribe-a: pending\n',
+									'scribe-b.md': 'scribe-b: pending\n',
+								},
 							},
 						},
-					},
+					}),
 				}),
 			},
 		});

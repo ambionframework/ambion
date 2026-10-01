@@ -39,8 +39,8 @@ export const sqlBackends: readonly SqlHarness[] = [
 ];
 
 /**
- * A bash backend that connects through a fresh memory backend, carries its
- * git transports, and names the just-bash layout. `make` replaces or adds
+ * A bash backend that connects through a fresh memory backend, and names
+ * the just-bash layout. `make` replaces or adds
  * members, and gets the inner backend to connect through.
  */
 export function wrapped(
@@ -48,8 +48,7 @@ export function wrapped(
 ): BashBackend {
 	const inner = memoryBackend();
 	return {
-		connect: (agent, signal, services) => inner.connect(agent, signal, services),
-		gitTransports: inner.gitTransports,
+		connect: (agent, signal) => inner.connect(agent, signal),
 		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms', snapshots: '/snapshots' },
 		...make(inner),
 	};

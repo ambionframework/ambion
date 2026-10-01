@@ -153,14 +153,15 @@ export async function openRooms(
 	const workspace = openWorkspace({
 		name: WORKSPACE,
 		backend: {
-			bash: directoryBackend(workspacePath),
+			bash: directoryBackend(workspacePath, {
+				git: labRepositories(resolve(directory, 'git.db')),
+			}),
 			// The lab records live in their own file, apart from the journal database.
 			sql: sqliteBackend(resolve(directory, 'lab.db'), {
 				schema: labSchema,
 				appendOnly: labAppendOnly,
 				provenance: true,
 			}),
-			git: labRepositories(resolve(directory, 'git.db')),
 		},
 		audit: {},
 	});
