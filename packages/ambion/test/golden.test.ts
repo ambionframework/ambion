@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { Entry } from '../src/journal/journal.ts';
+import { type Entry, SPACE_PREFIX } from '../src/journal/journal.ts';
 import { projectState, replay } from '../src/room/projection.ts';
 import { readView } from '../src/room/read.ts';
 import type { ExchangeView, RoomRead } from '../src/types.ts';
@@ -31,7 +31,7 @@ function foldOf(entries: readonly Entry[]): RoomRead {
 
 const json = (value: unknown) => `${JSON.stringify(value, null, '\t')}\n`;
 
-const spaceOf = (key: string): string => /^(?:delivery|commit|post):/.exec(key)?.[0] ?? '';
+const spaceOf = (key: string): string => SPACE_PREFIX.exec(key)?.[0] ?? '';
 
 /**
  * The runtime makes run ids and idempotency keys from random numbers. The

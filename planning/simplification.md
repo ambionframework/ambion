@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Sixteen reductions have landed.** `pnpm check` passes on them, and the
+**Seventeen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -50,6 +50,7 @@ changelog names each change to an export and to a behavior.
 | The hosting entry exports what is used (K4) | 28 exports with no user outside the core                                 | `hosting.ts`                             |
 | One scripted test language (E7)             | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
 | One copy of each small rule (W9)            | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
+| The journal reads its own format (K1)       | Five refusal guards of earlier releases, the bare-key promise            | `journal/validate.ts`, `durability.md`   |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -71,7 +72,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 
 | ID  | Finding                                                                            | Evidence                                                                                                 | Removes | Conf.  | Rank |
 | --- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
-| K1  | Readers of older formats remain, which CLAUDE.md forbids                           | Bare keys (`durability.md:272`), `removed` fields (`validate.ts:29`), run-less entries (`journal.ts:93`) | 3       | High   | 9    |
+| K1  | Readers of older formats remain, which CLAUDE.md forbids (done)                    | Bare keys (`durability.md:272`), `removed` fields (`validate.ts:29`), run-less entries (`journal.ts:93`) | 3       | High   | 9    |
 | K2  | One runtime has five facets                                                        | `Runtime`, `ExecutionHost`, `Hosting`, `RuntimeState`, `RoomRuntime` (`runtime.ts:53-249`)               | 3       | High   | 9    |
 | K3  | The commit result has two forms                                                    | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
@@ -90,9 +91,10 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | K17 | Six names describe one exchange                                                    | `ExchangeRef`, `ClosedExchange`, `ExchangeView`, `ClosedExchangeView`, `ExchangeRead`, `ExchangeHandle`  | 2       | Medium | 4    |
 | K18 | Three shapes describe one trace sink                                               | `TraceSink`, `StepSink`, `TraceOpener` (`trace.ts:33-59`)                                                | 1       | Medium | 2    |
 
-**K1 drops a promise.** `docs/durability.md:272` says that a key with no
-prefix reads as written. A read-only journal also opens with no run
-(`room.ts:156`), so the run-less path needs a check before it goes.
+**K1 kept two paths that the census found current.** A presence key and a
+cancel key carry no prefix, so the prefix-less read stays. A journal that
+opens with no run writes entries with no `run`, and the verified fence
+rules read them, so that path stays too.
 
 **The deepest kernel option is a close as a message.** A close that
 routes to the summary writer makes the summary an ordinary respond
