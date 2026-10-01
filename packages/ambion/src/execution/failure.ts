@@ -8,7 +8,7 @@ import type { FailureCause } from '../types.ts';
 import type { PassResult } from './executor.ts';
 
 /** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
-export const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
+const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
 
 /**
  * Error text that names a refusal a retry cannot clear: a credit, a quota, a
@@ -23,8 +23,8 @@ const PERMANENT_TEXT =
 /**
  * Whether a failure is permanent or transient. A text that names a refusal
  * a retry cannot clear is permanent. `status` beats an unmatched text: a
- * permanent status from `PERMANENT_STATUS` is permanent even when the text
- * names nothing. Each harness brings its own source of a status. Every other
+ * status of 400, 401, 402, 403, 404, 405, or 422 is permanent even when the
+ * text names nothing. Each harness brings its own source of a status. Every other
  * failure is transient, so an uncertain failure retries.
  */
 export function classifyCause(input: {

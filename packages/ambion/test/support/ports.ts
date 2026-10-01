@@ -4,15 +4,10 @@
  * purpose, and one whose ports the test writes itself.
  */
 
-import type {
-	AgentPort,
-	ConnectorRequest,
-	Execution,
-	ExecutionConnector,
-	RoomProtocol,
-} from '../../src/hosting.ts';
-import { assertWire, roundTrip } from '../../src/hosting.ts';
+import type { ExecutionConnector } from '../../src/host/runtime.ts';
+import type { AgentPort, ConnectorRequest, Execution, RoomProtocol } from '../../src/hosting.ts';
 import type { Clock } from '../../src/index.ts';
+import { assertWire, roundTrip } from '../../src/protocol.ts';
 
 /** How a test wraps the room calls of a seat and its port. Each part is optional. */
 export interface Wrap {

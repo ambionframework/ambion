@@ -59,9 +59,10 @@ function launch(env, file = 'controller.mjs') {
 
 async function events(env) {
 	const text = await readFile(env.ACTUATOR_EVENTS, 'utf8').catch(() => '');
+	// The controller can be in the middle of a line. Only a line with its newline is whole.
 	return text
 		.split('\n')
-		.filter((line) => line !== '')
+		.slice(0, -1)
 		.map((line) => JSON.parse(line));
 }
 
