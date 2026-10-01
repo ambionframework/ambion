@@ -5,17 +5,28 @@
  * pattern that matches nothing passes every import, and Biome says nothing:
  * the extglob `@ambionframework/ambion/!(hosting|conformance)` refused no
  * import at all. This test lints one probe file for each case in a copy of
- * the tree, and checks which imports the rules refuse.
+ * the tree, and checks which imports the rules refuse. The cases for the
+ * core come from the table of layers in `scripts/core-layers.mjs`.
  */
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	copyFileSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, normalize } from 'node:path';
+import path, { dirname, join, normalize } from 'node:path';
 import test from 'node:test';
+import { CORE_LAYERS } from './core-layers.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const biome = join(root, 'node_modules', '.bin', 'biome');
+const coreSource = 'packages/ambion/src';
 
 /**
  * The model libraries and platform modules that every file of the core
@@ -31,6 +42,59 @@ const CORE_BANS = [
 	'@earendil-works/pi-ai/providers/all',
 	'@ambionframework/pi/testing',
 ].map((specifier) => [specifier, true]);
+
+/**
+ * The path of a probe file for a glob of the table. A plain file is itself,
+ * `dir/**` is `dir/probe.ts`, and `name*.ts` is `name-probe.ts`.
+ */
+function sampleOf(glob) {
+	if (/^[\w-]+(\.[\w-]+)*\/\*\*$/.test(glob)) return `${glob.slice(0, -2)}/probe.ts`;
+	if (/^[\w-]+\*\.ts$/.test(glob)) return `${glob.replace('*', '-probe')}`;
+	if (/^[\w-]+(\/[\w-]+)*\.ts$/.test(glob)) return glob;
+	throw new Error(
+		`The table of layers holds a glob of a shape that the test cannot probe: ${glob}`,
+	);
+}
+
+/** The relative specifier from the folder of one core file to another. */
+function specifierBetween(from, to) {
+	const relative = path.posix.relative(path.posix.dirname(from), to);
+	return relative.startsWith('.') ? relative : `./${relative}`;
+}
+
+/**
+ * One probe file for each glob of each layer. A probe imports the core bans,
+ * and a file of every layer, its own layer included. The rules refuse the
+ * file of a layer that is neither its own nor in its `imports`. The entry
+ * files have no layer override. Their probes pass the override of
+ * `packages/ambion/src/**` alone, which refuses the core bans only.
+ */
+function coreCases() {
+	const names = new Set(CORE_LAYERS.map((layer) => layer.name));
+	return CORE_LAYERS.flatMap((layer) => {
+		for (const name of layer.imports) {
+			assert.ok(names.has(name), `the layer ${layer.name} imports the unknown layer ${name}`);
+		}
+		return layer.files.map((glob) => {
+			const file = sampleOf(glob);
+			const targets = CORE_LAYERS.flatMap((target) =>
+				target.files
+					.map(sampleOf)
+					.filter((sample) => sample !== file)
+					.map((sample) => [
+						specifierBetween(file, sample),
+						target !== layer && !layer.imports.includes(target.name),
+					]),
+			);
+			return [
+				`${coreSource}/${path.posix.dirname(file)}`,
+				[...CORE_BANS, ...targets],
+				null,
+				path.posix.basename(file),
+			];
+		});
+	});
+}
 
 /**
  * [the folder the probe sits in, the import, whether a rule refuses it, the
@@ -75,9 +139,10 @@ const CASES = [
 		true,
 		'backend.ts',
 	],
-	// The five neutral files hold the same rule. `git-backend.ts` and
-	// `object-backend.ts` once matched the override of the whole package.
-	...['git-backend.ts', 'object-backend.ts'].map((file) => [
+	// Four of the five neutral files hold the same rule, and `backend.ts`
+	// has its own case above. `git-backend.ts` and `object-backend.ts` once
+	// matched the override of the whole package.
+	...['resource.ts', 'resource-entry.ts', 'git-backend.ts', 'object-backend.ts'].map((file) => [
 		'packages/workspace/src',
 		[
 			['@ambionframework/ambion', true],
@@ -119,149 +184,19 @@ const CASES = [
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],
-	// The core names no model library and no platform module.
-	['packages/ambion/src', '@earendil-works/pi-agent-core', true],
-	['packages/ambion/src', 'node:sqlite', true],
-	// Each layer of the core refuses the layers above it, and reaches those below.
+	// The core cases come from the table of layers.
+	...coreCases(),
+	// The table works at the grain of a layer. A host reaches the executor
+	// contract of the execution layer, and no driver.
 	[
-		'packages/ambion/src',
+		`${coreSource}/host`,
 		[
-			...CORE_BANS,
-			['./host/runtime.ts', true],
-			['./journal/journal.ts', true],
-			['./room/fold.ts', true],
-			['./execution/runner.ts', true],
-			['./room-host/core.ts', true],
-			['./room.ts', true],
-			['./errors.ts', false],
-		],
-		null,
-		'types.ts',
-	],
-	// The stored bodies belong to the vocabulary, so they hold the same rule.
-	[
-		'packages/ambion/src',
-		[
-			...CORE_BANS,
-			['./host/runtime.ts', true],
-			['./journal/journal.ts', true],
-			['./room/fold.ts', true],
-			['./execution/runner.ts', true],
-			['./room-host/core.ts', true],
-			['./room.ts', true],
-			['typebox', false],
-		],
-		null,
-		'bodies.ts',
-	],
-	[
-		'packages/ambion/src/host',
-		[
-			...CORE_BANS,
-			['../journal/journal.ts', true],
-			['../room/fold.ts', true],
 			['../execution/runner.ts', true],
-			['../room.ts', true],
 			['../execution/executor.ts', false],
-			['../types.ts', false],
 		],
 		null,
+		'runner-probe.ts',
 	],
-	[
-		'packages/ambion/src/journal',
-		[
-			...CORE_BANS,
-			['../host/runtime.ts', true],
-			['../protocol.ts', true],
-			['../room/fold.ts', true],
-			['../execution/runner.ts', true],
-			['../room.ts', true],
-			['../types.ts', false],
-			['../bodies.ts', false],
-		],
-		null,
-	],
-	[
-		'packages/ambion/src/room',
-		[
-			...CORE_BANS,
-			['../host/runtime.ts', true],
-			['../execution/runner.ts', true],
-			['../room-host/core.ts', true],
-			['../room.ts', true],
-			['../journal/journal.ts', false],
-			['../protocol.ts', false],
-		],
-		null,
-	],
-	[
-		'packages/ambion/src',
-		[
-			...CORE_BANS,
-			['./host/runtime.ts', true],
-			['./execution/runner.ts', true],
-			['./room-host/core.ts', true],
-			['./room.ts', true],
-			['./room/fold.ts', false],
-			['./journal/journal.ts', false],
-		],
-		null,
-		'answers.ts',
-	],
-	[
-		'packages/ambion/src/execution',
-		[
-			...CORE_BANS,
-			['../journal/journal.ts', true],
-			['../room/fold.ts', true],
-			['../room-host/core.ts', true],
-			['../room.ts', true],
-			['../host/runtime.ts', false],
-			['../protocol.ts', false],
-		],
-		null,
-	],
-	[
-		'packages/ambion/src',
-		[
-			...CORE_BANS,
-			['./journal/journal.ts', true],
-			['./room/fold.ts', true],
-			['./room-host/core.ts', true],
-			['./room.ts', true],
-			['./execution/runner.ts', false],
-			['./protocol.ts', false],
-		],
-		null,
-		'conformance-support.ts',
-	],
-	[
-		'packages/ambion/src/testing',
-		[
-			...CORE_BANS,
-			['../journal/journal.ts', true],
-			['../room/fold.ts', true],
-			['../room.ts', true],
-			['../room-host/core.ts', true],
-			['../execution/executor.ts', false],
-			['../host/runtime.ts', false],
-		],
-		null,
-	],
-	[
-		'packages/ambion/src/room-host',
-		[
-			...CORE_BANS,
-			['../execution/runner.ts', true],
-			['../room.ts', true],
-			['../room/fold.ts', false],
-			['../journal/journal.ts', false],
-			['./core.ts', false],
-		],
-		null,
-	],
-	// The entry files hold the same ban.
-	['packages/ambion/src', CORE_BANS, null, 'hosting.ts'],
 ];
 
 /** The number of restricted-import diagnostics for each probe path. */
@@ -297,9 +232,13 @@ test('the import rules refuse each import they name, and pass each published ent
 			const path = normalize(`${folder}/${file ?? `import-probe-${index}.ts`}`);
 			assert.ok(!paths.has(path), `two cases write the probe file ${path}`);
 			paths.add(path);
-			const imports = (Array.isArray(value) ? value : [value]).map((item) =>
-				Array.isArray(item) ? item : [item, refuse],
-			);
+			const imports = (Array.isArray(value) ? value : [value]).map((item) => {
+				assert.ok(
+					Array.isArray(item) || refuse !== null,
+					`the case ${index} for ${path} has a bare import ${item} and a null refusal: list the pairs`,
+				);
+				return Array.isArray(item) ? item : [item, refuse];
+			});
 			assert.ok(imports.length > 0, `the case ${index} for ${path} has no import`);
 			assert.ok(
 				imports.every(([specifier]) => specifier !== ''),
@@ -325,4 +264,35 @@ test('the import rules refuse each import they name, and pass each published ent
 	} finally {
 		rmSync(tree, { recursive: true, force: true });
 	}
+});
+
+/** Every `.ts` file under a folder, as paths relative to it. */
+function sourceFiles(folder, base = folder) {
+	return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+		const full = join(folder, entry.name);
+		if (entry.isDirectory()) return sourceFiles(full, base);
+		return entry.name.endsWith('.ts') ? [path.relative(base, full).split(path.sep).join('/')] : [];
+	});
+}
+
+test('every file of the core belongs to exactly one layer', () => {
+	const bad = sourceFiles(join(root, coreSource)).flatMap((file) => {
+		const layers = CORE_LAYERS.filter((layer) =>
+			layer.files.some((glob) => path.matchesGlob(file, glob)),
+		);
+		return layers.length === 1
+			? []
+			: [`${file}: ${layers.map((layer) => layer.name).join(', ') || 'no layer'}`];
+	});
+	assert.deepEqual(bad, []);
+});
+
+test('the layer comment of biome.jsonc lists each layer of the table', () => {
+	const lines = readFileSync(join(root, 'biome.jsonc'), 'utf8')
+		.split('\n')
+		.map((line) => line.trim());
+	const missing = CORE_LAYERS.filter(
+		(layer) => !lines.includes(`//   ${layer.files.join(', ')}  ${layer.about}`),
+	).map((layer) => layer.name);
+	assert.deepEqual(missing, []);
 });

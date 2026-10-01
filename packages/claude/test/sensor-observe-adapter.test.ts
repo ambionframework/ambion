@@ -35,7 +35,7 @@ it('passes actual observe image content to the Claude SDK', async () => {
 				env: {
 					...process.env,
 					AMBION_FAKE: JSON.stringify({
-						turns: [[{ call: { tool: 'observe', args: { sensor: 'bench-one/bench' } } }]],
+						passes: [[{ call: { tool: 'observe', args: { sensor: 'bench-one/bench' } } }]],
 						log: logFile,
 					}),
 				},

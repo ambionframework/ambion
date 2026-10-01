@@ -13,6 +13,16 @@ definitions of the agents on its record from `configure`. `RoomRead` gains
 `SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
 and `SeatObject.cuts()`. A room object that no name reaches throws.
 
+**The prompts of the room say "activation" where they said "turn".** The
+word `turn` belongs to Pi, where it is one request to a provider. The room
+tells a model to end its activation, and says that a message arrives during
+its activation. The tool results of `say` and the refusal of an empty message
+use the same word. The prompt for ordinary work says "Begin your activation"
+where it said "Take your turn". The roster line says "in an activation now".
+This changes model-facing text, and the prompt snapshots hold the new words.
+A live case on a real model is owed before the release. The Codex pages and
+comments say "pass" for one Codex turn. The Claude test fixture
+`FakeScenario.turns` becomes `FakeScenario.passes`.
 **A delay is `delaySeconds`, and `after` names only a seq cursor.** The
 `said` body of the journal holds `delaySeconds` where it held `after`, and the
 `said` intent and message hold the same field. The `schedule` tool takes

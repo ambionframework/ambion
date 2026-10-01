@@ -302,7 +302,7 @@ continues. A continued session takes the tools of the activation that
 continues it: a summary activation holds `say` alone.
 
 **An `unknown` or `stale` answer ends the pass.** The executor cuts the activation
-and stands the seat down. The tool result names why the turn ended, and no
+and stands the seat down. The tool result names why the pass ended, and no
 further pass follows.
 
 ## Tools and bundles an agent can add

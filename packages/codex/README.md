@@ -55,9 +55,9 @@ socket to the host, where the room runs it. The config sets
 answer an approval.
 
 **Freshness rests on `turn.started`.** Codex sends no echo of the input it
-read. The executor tells the core that the model read the prompt when a run
+read. The executor tells the core that the model read the prompt when a pass
 starts, and that a tool result reached the model when the tool returns. Codex takes
-no steer: a line that lands during a run waits for the next pass.
+no steer: a line that lands during a pass waits for the next pass.
 
 **Items become steps.** `mcp_tool_call` items become `tool_call` and
 `tool_result` steps. `agent_message` and `reasoning` items become `text` and
