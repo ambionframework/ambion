@@ -3,11 +3,12 @@
  * reaches inside one. `runInDurableObject` and the test share one isolate.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
+import { seatName } from '../src/seat-object.ts';
 
 export const roomOf = (name: string) => env.ROOM.get(env.ROOM.idFromName(name));
 
 export const seatOf = (room: string, seat = 'product') =>
-	env.SEAT.get(env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', room, seat])));
+	env.SEAT.get(env.SEAT.idFromName(seatName(room, seat)));
 
 /**
  * Take the object away, the way the platform may take it. The abort breaks

@@ -40,7 +40,6 @@ const writers = async (stub: DurableObjectStub, type: string) =>
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
 	const stub = roomOf(NAME);
 	await stub.start({
-		name: NAME,
 		summaryWriter: 'assistant',
 		seats: { slow: 'broadcast', assistant: 'none' },
 		definitions: ['slow', 'assistant'],
@@ -79,9 +78,6 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	);
 	expect(resumedNames).toEqual(expect.arrayContaining(['slow', 'assistant', 'priya']));
 	expect(resumedNames).not.toContain('product');
-	await runInDurableObject(again, async (instance) => {
-		await expect(instance.seat('product')).rejects.toThrow(/Unknown agent/);
-	});
 	// The serialized identity is enough to recover this handle after the object restart.
 	expect(await again.exchange(exchange.from)).toEqual(exchange);
 

@@ -12,28 +12,38 @@ import { namespaced } from '@ambionframework/journal';
 import { expect, it, onTestFinished } from 'vitest';
 import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
-import { inside, roomOf, seatOf } from './objects.ts';
+import { evict, inside, roomOf, seatOf } from './objects.ts';
 import { until } from './until.ts';
 import { configuration } from './worker.ts';
 
 type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
+
+/** The record a seat object keeps of its activation. */
+const stateOf = (seat: DurableObjectStub) =>
+	runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
+
+/** Whether the seat holds an activation, or the room records one that it ran. */
+async function woken(room: ReturnType<typeof roomOf>, seat: DurableObjectStub): Promise<boolean> {
+	if ((await stateOf(seat)).activation !== undefined) return true;
+	const read = await room.read({ messages: false });
+	return [...read.exchanges, read.exchange].some((one) => (one?.activations.length ?? 0) > 0);
+}
 
 /** A room whose product seat answers, with priya's first question sent. */
 async function asked(name: string) {
 	const room = roomOf(name);
 	const seat = seatOf(name);
 	await room.start({
-		name,
 		summaryWriter: 'assistant',
 		definitions: ['product', 'assistant'],
 		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
-	// At least one wake reached the seat. The room sends a wake nobody has taken
-	// again every 50 ms here, so how many arrive before the alarm runs is the
-	// runner's speed and not the room's behaviour.
-	expect(await until(() => seat.wakeCount())).toBeGreaterThanOrEqual(1);
+	// A wake reached the seat: it holds the activation, or the room already
+	// records the activation it ran. How many wakes arrive before the alarm
+	// runs is the runner's speed and not the room's behaviour.
+	expect(await until(() => woken(room, seat))).toBe(true);
 	return { room, seat, exchange };
 }
 
@@ -77,7 +87,10 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
-	expect(await until(async () => (await seat.wakeCount()) >= 3)).toBe(true);
+	// the seat takes the wake for the second exchange and starts nothing
+	const held = `message:${secondExchange.from}:product:1`;
+	expect(await until(async () => (await stateOf(seat)).activation)).toBe(held);
+	expect(await stateOf(seat)).toEqual({ activation: held, phase: 'pending', hold: true });
 	expect(
 		(await room.read({ messages: false })).participants.find((s) => s.name === 'product'),
 	).toMatchObject({
@@ -173,7 +186,7 @@ it('keeps the first pending activation when different wakes arrive together', as
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'first' }),
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'second' }),
 	]);
-	expect(await seat.wakeCount()).toBe(1);
+	expect(await stateOf(seat)).toEqual({ activation: 'first', phase: 'pending', hold: true });
 });
 
 it('forwards steering to the live runner without recording a wake', async () => {
@@ -206,7 +219,7 @@ it('forwards steering to the live runner without recording a wake', async () => 
 	expect(
 		await inside<Holder, Steer | undefined>(seat, async (object) => object.runner?.last),
 	).toEqual(steer);
-	expect(await seat.wakeCount()).toBe(0);
+	expect(await stateOf(seat)).toEqual({});
 	expect(
 		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
 	).toBeNull();
@@ -248,7 +261,7 @@ async function recovering(
 	onTestFinished(() => configure(configuration));
 	await inside<SeatInternals, void>(seat, async (object, state) => {
 		object.metadata.change(() => ({
-			patch: { room: name, seat: 'product', activation, phase: 'running' },
+			patch: { activation, phase: 'running' },
 		}));
 		const metadata = seatMetadata(state);
 		object.roomFor = () => ({
@@ -288,10 +301,9 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 	const newer = 'message:2:product:1';
 	const late = Promise.withResolvers<LeaseResponse>();
 	onTestFinished(() => late.resolve({ stale: 'late' }));
-	const name = 'seat-recovery-release-late';
-	const { read, timedOut } = await recovering(name, async (metadata) => {
+	const { read, timedOut } = await recovering('seat-recovery-release-late', async (metadata) => {
 		metadata.change(() => ({
-			patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
+			patch: { activation: newer, phase: 'pending' },
 		}));
 		return late.promise;
 	});
@@ -334,3 +346,28 @@ it.each(['idle', 'pending'] as const)(
 		expect(before.alarm).toBeNull();
 	},
 );
+
+it('runs an activation on an alarm that finds the object rebuilt, from the identity in its name', async () => {
+	const name = 'seat-identity';
+	const seat = seatOf(name);
+	await seat.hold(true);
+	const { room } = await asked(name);
+	// The seat holds the wake and runs nothing. The hold lifts in storage and
+	// the alarm falls after the platform took the object away, so no call
+	// builds the object again before the alarm runs it.
+	await inside<unknown, void>(seat, async (_object, state) => {
+		seatMetadata(state).change(() => ({ patch: { hold: false } }));
+		await state.storage.setAlarm(Date.now() + 300);
+	});
+	await evict(seat, 'the test takes the seat while its alarm waits');
+	const said = await until(async () =>
+		(await room.read()).messages.find((m) => m.kind === 'said' && m.from === 'product'),
+	);
+	expect(said).toMatchObject({ activation: 'message:4:product:1' });
+	expect(
+		await until(async () =>
+			(await stateOf(seatOf(name))).activation === undefined ? true : undefined,
+		),
+	).toBe(true);
+	expect(await stateOf(seatOf(name))).toEqual({ hold: false });
+});

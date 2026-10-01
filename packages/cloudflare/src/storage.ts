@@ -78,21 +78,16 @@ function metadataStore<T extends object>(sql: SqlStorage, name: string): Metadat
 	};
 }
 
+/** What a room object keeps outside its room record. Its name is its identity. */
 export interface RoomMetadata {
-	name?: string;
-	/** Definition names supplied for this room run. Used for automatic resume. */
-	definitions?: string[];
 	/** A planned stop leaves the record readable without automatically resuming it. */
 	stopped?: boolean;
 }
 
+/** What a seat object keeps outside the room record. Its name gives the room and the seat. */
 export interface SeatMetadata {
-	room?: string;
-	seat?: string;
 	activation?: string;
 	phase?: 'pending' | 'running';
-	wakeCount?: number;
-	cuts?: number;
 	hold?: boolean;
 }
 

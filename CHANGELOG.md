@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**The name of a Cloudflare object is its identity, and the objects keep
+no second copy.** `StartOptions.name` is removed: the stub names the room,
+and `RoomObject` takes the name from its id. `RoomMetadata` holds
+`stopped` alone, without `name` and `definitions`. A resumed room takes
+every agent that `configure` names, so a resumed room may seat any of them.
+`SeatMetadata` holds `activation`, `phase`, and `hold`, without `room` and
+`seat`: the seat object reads both from its name, which `seatName` builds.
+`SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
+and `SeatObject.cuts()`. A room object that no name reaches throws.
+
 **Three words name the three ways work ends.** A stop ends this run of the
 room, and the next run resumes from the record. `room.stop()` keeps its
 name. A cancel ends the open work, and the `cancel` entry keeps that fact.

@@ -1,8 +1,10 @@
 /**
  * The room as one Durable Object. The journal lives in the object's SQLite, the
  * alarm is the room's clock, and a seat is reached over RPC to the seat
- * object named `<room>:<seat>`. The constructor resumes an initialized room
- * unless durable metadata records an explicit stop.
+ * object that `seatName` names. The name of the room is the name of the
+ * object, so the object keeps no copy of it. The constructor resumes an
+ * initialized room with the configured definitions unless the metadata
+ * records an explicit stop.
  */
 
 import { DurableObject } from 'cloudflare:workers';
@@ -30,8 +32,9 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { runningRoom, visitOf } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
-import { definitionOf, runtimeFor } from './configure.ts';
+import { configuredAgents, definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
+import { seatName } from './seat-object.ts';
 import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
 
 export interface Env {
@@ -39,8 +42,8 @@ export interface Env {
 	SEAT: DurableObjectNamespace<SeatObject>;
 }
 
+/** What `start` takes. The stub names the room, so the options carry no name. */
 export interface StartOptions {
-	name: string;
 	summaryWriter?: string;
 	definitions?: readonly string[];
 	seats?: Record<string, Attention>;
@@ -79,9 +82,7 @@ export function rpcExecution(env: Env): Execution {
 	return {
 		connector: () => ({
 			connect(_room, request) {
-				const stub = env.SEAT.get(
-					env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', request.room, request.seat])),
-				);
+				const stub = env.SEAT.get(env.SEAT.idFromName(seatName(request.room, request.seat)));
 				return {
 					wake: (wake) => stub.wake(wake),
 					steer: (steer) => stub.steer(steer),
@@ -94,6 +95,7 @@ export function rpcExecution(env: Env): Execution {
 
 export class RoomObject extends DurableObject<Env> {
 	private readonly runtime: Runtime;
+	private readonly name: string;
 	protected readonly metadata: MetadataStore<RoomMetadata>;
 	protected readonly storage: JournalOpener;
 	private room: Room | undefined;
@@ -101,6 +103,11 @@ export class RoomObject extends DurableObject<Env> {
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		const name = ctx.id.name;
+		if (name === undefined) {
+			throw new Error('A room object is reached by name: use idFromName.');
+		}
+		this.name = name;
 		this.storage = sqlStorage(ctx);
 		this.runtime = runtimeFor({
 			storage: this.storage,
@@ -109,31 +116,19 @@ export class RoomObject extends DurableObject<Env> {
 		});
 		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
-			const { name, definitions, stopped } = this.metadata.read();
-			if (name === undefined || stopped === true) return;
-			if (definitions === undefined)
-				throw new Error(`Room '${name}' has no definitions in its metadata.`);
+			if (this.metadata.read().stopped === true) return;
 			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
 			if (!recorded.initialized) return;
-			this.room = await resumeRoom(name, {
-				runtime: this.runtime,
-				agents: definitions.map(definitionOf),
-			});
+			this.room = await resumeRoom(name, { runtime: this.runtime, agents: configuredAgents() });
 		});
 	}
 
 	/** Start the room from names the worker configured. The composition lands on the journal. */
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
-		this.metadata.change(() => ({
-			patch: {
-				name: options.name,
-				definitions: [...(options.definitions ?? [])],
-				stopped: false,
-			},
-		}));
+		this.metadata.change(() => ({ remove: ['stopped'] }));
 		this.room = await startRoom({
-			name: options.name,
+			name: this.name,
 			runtime: this.runtime,
 			agents: (options.definitions ?? []).map(definitionOf),
 			...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
@@ -223,9 +218,7 @@ export class RoomObject extends DurableObject<Env> {
 
 	/** Read a detached coherent projection, including stopped records. */
 	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomRead> {
-		const name = this.metadata.read().name;
-		if (name === undefined) throw new Error('The room is not started.');
-		return readRoom(name, { ...options, runtime: this.runtime });
+		return readRoom(this.name, { ...options, runtime: this.runtime });
 	}
 
 	async exchange(from: Seq) {

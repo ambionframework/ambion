@@ -14,10 +14,13 @@ What is built:
 - **`sqlStorage(state)`** opens one native journal backend over the object's
   SQLite. The runtime derives room journals from it.
   Room and seat objects keep their durable metadata in one row each of the
-  `ambion_metadata` table, beside the room journals.
+  `ambion_metadata` table, beside the room journals. The room row holds
+  `stopped`. The seat row holds `activation`, `phase`, and `hold`.
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
-- **`RoomObject`** runs the room. Its constructor resumes an initialized room
-  unless explicitly stopped; an uninitialized named record waits for
+- **`RoomObject`** runs the room. The name of the object is the name of the
+  room: reach it with `idFromName(room)`, and an object with no name throws.
+  Its constructor resumes an initialized room with every agent that
+  `configure` names, unless explicitly stopped; an uninitialized record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
   `unseat`, `cancel`, `read`, `exchange`, `dismiss`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
@@ -29,7 +32,8 @@ What is built:
   entry, so a restart reaches only present humans. `send` never enters the
   room implicitly. Explicit `visit` ensures presence, and repeated `leave` is
   harmless.
-- **`SeatObject`** runs one seat. `wake` stores the activation id and sets an
+- **`SeatObject`** runs one seat. Its name, from `seatName(room, seat)`,
+  gives the room and the seat. `wake` stores the activation id and sets an
   alarm; `alarm()` claims the lease, reads the view, runs the activation and
   whatever queued behind it to their end, and releases the lease. A second
   `alarm()` while a run is live in the object returns at once. An `alarm()`
@@ -56,13 +60,12 @@ What is built:
   with `activationTokenLimit` names one of them, or `length`, in
   `estimateTokens`.
 
-`RoomObject.start` receives the names of the definitions in `definitions`, an optional
+`RoomObject.start` takes no room name, because the stub names the room. It receives the names of the definitions in `definitions`, an optional
 `summaryWriter` name, and an optional `seats` map. The map sets the initial seats and
 their attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
-install a new definition. The room metadata retains the definition names, so
-automatic resume resolves the same definitions through `configure`. Resume
-requires definition names in the room metadata. Every seat uses the same room
+install a new definition. Automatic resume gives the room every definition
+that `configure` names, so a resumed room may seat any of them. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped
