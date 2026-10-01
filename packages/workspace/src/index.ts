@@ -3,7 +3,8 @@
  * optional git backend, and the tools an agent uses on them.
  *
  * `openWorkspace` opens a workspace over its backends by kind:
- * `backend: { bash, sql?, git? }`. `workspace.tools()` returns the tools and
+ * `backend: { bash, sql?, objects? }`, and the bash backend carries the
+ * optional git backend. `workspace.tools()` returns the tools and
  * guidance the workspace exposes to an agent. The root entry loads no
  * backend: `./sqlite` holds the SQLite SQL backend, and `./resource` holds
  * the neutral resource contract. The bash backends are separate packages:
@@ -36,7 +37,6 @@ export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type {
 	BashBackend,
-	BashServices,
 	WorkspaceBackends,
 	WorkspaceEndpoint,
 	WorkspaceEndpoints,
@@ -65,7 +65,6 @@ export {
 	withDeadline,
 } from './execution-env.ts';
 export type {
-	GitAccess,
 	GitBackend,
 	GitChange,
 	GitCommit,

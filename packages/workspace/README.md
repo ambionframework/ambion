@@ -91,8 +91,9 @@ it only to create the first commit, then preserve agents' content.
 Every agent can push to `shared/<name>`, whose default branch refuses
 deletion and non-fast-forward updates.
 
-`openWorkspace` takes its backends by kind: `backend: { bash, sql, git,
-objects }`. `bash` is required. `sql` is an optional `SqlBackend`, and the
+`openWorkspace` takes its backends by kind: `backend: { bash, sql, objects
+}`. `bash` is required, and its `git` option holds the optional git
+backend. `sql` is an optional `SqlBackend`, and the
 `sql` tool then runs on that database. `objects` is an optional
 `ObjectBackend` for the bytes of each snapshot; absent, a folder of the bash
 backend holds them. With no SQL backend, the workspace has no `sql`

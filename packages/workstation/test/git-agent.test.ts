@@ -20,13 +20,21 @@ const modeOf = async (path: string) => (await stat(path)).mode & 0o777;
 /** A workspace over both backends of one test server, and the analyst's `~/.ssh`. The test's end disposes it. */
 async function pair() {
 	const { server, options } = await gitServer(['analyst']);
-	const bash = workstationBackend(server.options);
 	const git = gitBackend(options);
-	const workspace = openWorkspace({ name: 'lab', backend: { bash, git } });
+	const bash = workstationBackend({ ...server.options, git });
+	const workspace = openWorkspace({ name: 'lab', backend: { bash } });
 	onTestFinished(() => workspace.dispose());
 	const connect = () => workspace.use(ANALYST, async () => undefined);
 	const home = server.homes.get('analyst') ?? '';
-	return { bash, git, workspace, connect, ssh: join(home, '.ssh'), port: options.port };
+	return {
+		bash,
+		git,
+		workspace,
+		connect,
+		ssh: join(home, '.ssh'),
+		port: options.port,
+		server: server.options,
+	};
 }
 
 describe.skipIf(!hasGitTools)('the git files of an agent', () => {
@@ -80,12 +88,13 @@ describe.skipIf(!hasGitTools)('the git files of an agent', () => {
 		expect(await modeOf(join(ssh, 'ambion-git.key'))).toBe(0o600);
 	});
 
-	it('carries the ssh transport, and fails a connect with no key', async () => {
-		const { bash, git } = await pair();
-		expect(bash.gitTransports).toEqual(['ssh']);
+	it('fails a connect with no key, and connects with no git backend', async () => {
+		const { bash, git, server } = await pair();
 		await git.dispose?.();
-		await expect(bash.connect(ANALYST, undefined, { git: git.access })).rejects.toThrow(/disposed/);
-		const env = await bash.connect(ANALYST);
+		await expect(bash.connect(ANALYST)).rejects.toThrow(/disposed/);
+		const plain = workstationBackend(server);
+		onTestFinished(async () => plain.dispose?.());
+		const env = await plain.connect(ANALYST);
 		await env.cleanup();
 	});
 });

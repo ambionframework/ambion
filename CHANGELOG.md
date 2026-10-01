@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+**A bash backend takes its git backend, and the types check the pair.**
+`memoryBackend` takes `git` in its options, and `directoryBackend(root,
+options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
+`WorkstationOptions` gets `git`, of the new exported type
+`WorkstationGitBackend`. `BashBackend` gets `readonly git?: GitBackend`, and
+`openWorkspace` opens `bash.git` under its own owner. A git backend of
+another package is now a compile error. Each bash backend reads the access
+of its git backend with no cast. Every tool text, guidance text, and
+credential flow stays the same.
+
+**The pairing checks are gone.** `WorkspaceBackends.git`, `BashServices`,
+the third parameter `services` of `BashBackend.connect`,
+`BashBackend.gitTransports`, `GitAccess`, `GitBackend.access`, and the field
+`transport` of `JustGitAccess` and `WorkstationGitAccess` no longer exist.
+`openWorkspace` no longer throws for a git backend whose transport the bash
+backend does not carry. `justGitBackend` still has `access: JustGitAccess`,
+and `workstationGitBackend` still has `access: WorkstationGitAccess`, on the
+types of their own packages. `@ambionframework/just-bash` exports the new
+type `DirectoryBackendOptions`.
+
+**`GitConformanceStore.bash` is a function.** `bash(git)` opens a bash
+backend for one git backend, in place of the field `bash`. The registration
+cases open a new bash backend for each workspace, so the suite no longer
+borrows one bash backend with a disposal that does nothing.
+
 **The purpose of an activation has one pair of values, and `ParticipantInfo`
 becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
 activation that writes a summary. It now holds `summarize`, the value that
@@ -11,6 +36,7 @@ respond activation and a summary activation. `isClosing` in
 `AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
 `AgentParticipant`, and `HumanParticipant`. The activation source and the
 activation ids do not change.
+
 **The body schemas are the one source of the body types.** The new file
 `packages/ambion/src/bodies.ts` holds the schema of each stored body.
 Before, a type and a schema each stated the body, and the two drifted.

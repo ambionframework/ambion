@@ -630,10 +630,10 @@ not: a 403 head and a 409 put.
 The `backend` option holds the backends by kind, as `WorkspaceBackends`.
 `backend.bash` is a `BashBackend`, and every workspace has one.
 `backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. `backend.git` is an optional
+live on the shell's filesystem. `backend.bash.git` is an optional
 `GitBackend`: the repositories of the workspace, which [Git](git.md)
-describes. `openWorkspace` throws when `bash.gitTransports` does not hold
-the transport of the git backend
+describes. The bash backend takes it as an option of its own package, so a
+wrong pair is a compile error
 ([The contract](git.md#the-contract)). With no SQL backend, the
 workspace has no `sql` tool.
 
