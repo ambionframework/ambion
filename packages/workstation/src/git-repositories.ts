@@ -25,15 +25,13 @@ import type {
 import {
 	assertCommitHash,
 	byPath,
+	DEFAULT_BRANCH,
 	namespaceOf,
 	revisionOf,
 	validName,
 } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { type GitAccount, tagged } from './git-account.ts';
-
-/** The branch that a repository names when its `HEAD` names none. */
-const DEFAULT_BRANCH = 'main';
 
 /** The text that `git init` writes into `description`. It counts as no description. */
 const UNNAMED = "Unnamed repository; edit this file 'description' to name the repository.";

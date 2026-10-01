@@ -8,7 +8,7 @@ import type {
 	PassResult,
 } from '../execution/executor.ts';
 import { failedPass } from '../execution/failure.ts';
-import { answerOf } from '../execution/room-tools.ts';
+import { answerOf, contentText } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
@@ -97,9 +97,7 @@ export const isClosing = (view: ActivationView): boolean => view.spec.purpose.ki
 const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
 
 const textOf = (result: string | ToolResult): string =>
-	typeof result === 'string'
-		? result
-		: result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	typeof result === 'string' ? result : contentText(result.content);
 
 const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
 

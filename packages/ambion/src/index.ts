@@ -88,7 +88,7 @@ export type {
 	TraceStep,
 	Usage,
 } from './types.ts';
-export { isPosted, isPresence, isSpoken, isSummary } from './types.ts';
+export { addUsage, isPosted, isPresence, isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

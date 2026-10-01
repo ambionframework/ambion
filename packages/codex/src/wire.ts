@@ -7,11 +7,12 @@
  */
 import { createInterface } from 'node:readline';
 import type { Readable } from 'node:stream';
+import type { ToolContent } from '@ambionframework/ambion/hosting';
 
 /** What an MCP tool hands back to the model. */
 export interface Result {
 	[key: string]: unknown;
-	content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[];
+	content: ToolContent[];
 	isError?: boolean;
 }
 

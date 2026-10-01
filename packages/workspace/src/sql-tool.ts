@@ -13,6 +13,7 @@
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
+import { contentText } from '@ambionframework/ambion/hosting';
 import {
 	type AgentToolResult,
 	BACKGROUND_CONTEXT,
@@ -168,7 +169,7 @@ function provenanceOf(ctx: ToolContext): SqlProvenance {
 function withImport(result: SqlResult, imported: { path: string; rows: number }): SqlResult {
 	const { path, rows } = imported;
 	const line = `Imported ${rows} ${plural(rows)} from ${path} into ${IMPORT_TABLE}.`;
-	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	const text = contentText(result.content);
 	return report(`${line}\n\n${text}`, { ...result.details, import: path, imported: rows });
 }
 

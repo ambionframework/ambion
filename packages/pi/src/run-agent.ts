@@ -22,6 +22,7 @@
 import {
 	type AgentDefinition,
 	type AmbionTool,
+	addUsage,
 	defineAgent,
 	type ToolBundle,
 	type ToolContext,
@@ -242,7 +243,7 @@ class Run {
 	/** One harness event: the spend of a request, and the last assistant message. */
 	note(event: HarnessEvent): void {
 		for (const step of this.steps.steps(event)) {
-			if (step.type === 'usage') this.usage = sum(this.usage, step);
+			if (step.type === 'usage') this.usage = addUsage(this.usage, step);
 		}
 		if (event.type === 'message_end' && event.message.role === 'assistant') {
 			this.last = event.message;
@@ -265,19 +266,4 @@ class Run {
 		}
 		throw new Error(`The agent '${this.definition.name}' stopped with no call to '${names}'.`);
 	}
-}
-
-/** Two totals added. `cost` stays absent until a request carries it. */
-function sum(total: Usage, step: Usage): Usage {
-	const cost =
-		total.cost === undefined && step.cost === undefined
-			? undefined
-			: (total.cost ?? 0) + (step.cost ?? 0);
-	return {
-		input: total.input + step.input,
-		output: total.output + step.output,
-		cacheRead: total.cacheRead + step.cacheRead,
-		cacheWrite: total.cacheWrite + step.cacheWrite,
-		...(cost === undefined ? {} : { cost }),
-	};
 }

@@ -17,7 +17,9 @@
 
 import type { SourceFiles } from '@ambionframework/workspace';
 import {
+	BACKEND_AUTHOR,
 	changeTo,
+	DEFAULT_BRANCH,
 	hashesOf,
 	namespaceOf,
 	type RegistrationSteps,
@@ -36,12 +38,6 @@ import type { TokenClaims } from './tokens.ts';
  * in it.
  */
 export const SOURCES = 'template-sources';
-
-/** The author of every commit that the backend writes. */
-const BACKEND_AUTHOR = { name: 'ambion', email: 'ambion@ambion.invalid' };
-
-/** The default branch of every repository that the backend creates. */
-export const DEFAULT_BRANCH = 'main';
 
 /** Each path at the tip of the default branch of `repo`, with its blob hash. Empty for an unborn branch. */
 async function tipHashes(repo: GitRepo): Promise<ReadonlyMap<string, string>> {

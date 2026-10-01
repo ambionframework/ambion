@@ -50,12 +50,14 @@ export interface AmbionTool {
 /** Whether an executor runs the calls of one activation in turn or together. */
 export type ToolExecutionMode = 'sequential' | 'parallel';
 
+/** One part of what a tool hands back to the model. */
+export type ToolContent =
+	| { readonly type: 'text'; readonly text: string }
+	| { readonly type: 'image'; readonly data: string; readonly mimeType: string };
+
 /** What a tool hands back to the model: content it reads, and details it does not. */
 export interface ToolResult {
-	readonly content: (
-		| { readonly type: 'text'; readonly text: string }
-		| { readonly type: 'image'; readonly data: string; readonly mimeType: string }
-	)[];
+	readonly content: ToolContent[];
 	readonly details: unknown;
 	/** Ends the activation after this result when every call of the batch sets it. */
 	readonly terminate?: boolean;

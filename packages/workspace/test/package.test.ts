@@ -145,6 +145,8 @@ it.each([
 		'./git',
 		git,
 		[
+			'BACKEND_AUTHOR',
+			'DEFAULT_BRANCH',
 			'SHARED',
 			'TEMPLATES',
 			'assertAgent',

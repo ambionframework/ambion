@@ -28,6 +28,7 @@ import {
 	assertAgent,
 	assertCommitHash,
 	byPath,
+	DEFAULT_BRANCH,
 	namespaceOf,
 	type RepositoryRegistration,
 	registerRepositories,
@@ -46,7 +47,7 @@ import {
 } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
-import { DEFAULT_BRANCH, registrationSteps, SOURCES, settleAll } from './registration.ts';
+import { registrationSteps, SOURCES, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
 import { signToken, type TokenClaims } from './tokens.ts';

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**`addUsage` joins the main entry.** `@ambionframework/ambion` exports
+`addUsage(total, step)`, which adds two `Usage` values. The Pi executor and
+the simulator call it. Each wrote its own copy before.
+
+**The hosting entry holds the helpers that executor families shared.**
+`@ambionframework/ambion/hosting` adds `present`, `pickPresent`,
+`contentText`, `ROOM_SERVER`, and `ToolContent`. The Claude, Codex, and Pi
+executors and the workspace wrote a copy of each before. `ToolContent`
+replaces `RoomToolContent`: it is the same type, and `ToolResult.content`
+now uses it too.
+
+**`@ambionframework/workspace/git` exports `DEFAULT_BRANCH` and
+`BACKEND_AUTHOR`.** The just-bash and workstation backends import them.
+Each backend wrote its own copy before.
+
 **`hostingOf` returns the state of the runtime.** `hostingOf(runtime)`
 returns the runtime's own state, as an `ExecutionHost` that also holds
 `journals`, `executions`, and `evict`. Before, it built a copy with

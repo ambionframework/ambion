@@ -14,7 +14,7 @@ import type {
 	ActivationView,
 	AgentDefinition,
 	RoomTool,
-	RoomToolContent,
+	ToolContent,
 } from '@ambionframework/ambion/hosting';
 import { toolContext } from '@ambionframework/ambion/hosting';
 import type { AgentHarnessTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -40,7 +40,7 @@ function fromRoomTool(tool: RoomTool): PiTool {
 }
 
 /** The text of one part of a result. A room tool gives text only. */
-function textOf(part: RoomToolContent): string {
+function textOf(part: ToolContent): string {
 	return part.type === 'text' ? part.text : '';
 }
 

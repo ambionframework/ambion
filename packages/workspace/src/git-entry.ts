@@ -9,7 +9,9 @@
 export {
 	assertAgent,
 	assertCommitHash,
+	BACKEND_AUTHOR,
 	byPath,
+	DEFAULT_BRANCH,
 	namespaceOf,
 	readOnly,
 	revisionOf,
