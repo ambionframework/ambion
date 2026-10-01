@@ -1,7 +1,7 @@
 import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework/ambion';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
-import type { BashBackend, BashServices, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
+import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
 import { defaultToolGuidance, fileCapability } from './default-tools.ts';
 import { workspaceFiles } from './files.ts';
@@ -281,39 +281,6 @@ function withSkills(
 }
 
 /**
- * Refuse a git backend whose transport the bash backend does not carry.
- * Neither backend has a name, so the error names the transport and the
- * server of the git backend, and the transports of the bash backend.
- */
-function assertTransport(bash: BashBackend, git: GitBackend | undefined): void {
-	if (git === undefined) return;
-	const { transport } = git.access;
-	const carried = bash.gitTransports ?? [];
-	if (carried.includes(transport)) return;
-	const list = carried.length === 0 ? 'no git transport' : carried.join(', ');
-	throw new Error(
-		`The bash backend cannot reach the git backend at ${git.label}: the git backend uses the transport ${transport}, and the bash backend carries ${list}.`,
-	);
-}
-
-/**
- * The bash backend under its owner. With a git backend, each `connect`
- * passes the backend's access, so the shell of each agent reaches the
- * repositories. The owner reads `connect` and `dispose` alone.
- */
-function bashUnderOwner(
-	bash: BashBackend,
-	git: GitBackend | undefined,
-): ResourceBackend<WorkspaceEnv> {
-	if (git === undefined) return bash;
-	const services: BashServices = { git: git.access };
-	return {
-		connect: (agent, signal) => bash.connect(agent, signal, services),
-		dispose: async () => bash.dispose?.(),
-	};
-}
-
-/**
  * The bash backend with the process table in its disposal. The bash owner
  * calls `dispose` once its queue drains: the table cancels its processes and
  * waits for the end first, and the backend then releases its handles. A process can reach the git
@@ -379,35 +346,32 @@ function openSqlOwner(
 
 /**
  * Open one workspace over its backends. `backend.bash` is required, and
- * `backend.sql` and `backend.git` are optional. Each backend gets its own
- * resource owner, so a long shell command does not delay a query or a
- * fork. The SQL backend reaches the bash backend through `WorkspaceFiles`
- * to write an export. The bash backend reaches the git backend through the
- * `GitAccess` that each `connect` receives. `openWorkspace` throws when
- * `bash.gitTransports` does not hold the transport of that access. `use`
- * and `mirror()` reach the bash owner, `sql` exposes the SQL owner, and
- * `git` the git owner. The
- * bash backend's `layout` names where the audit log and the room mirrors
- * live. A workspace with no SQL backend has no `sql` tool, and one with no
- * git backend has no `repos`, `clone` or `fork` tool. Set `audit.path`
- * to record every bound tool call at a path of your own; the default is
- * `layout.audit`. Tool guidance then tells every agent the log exists and
- * where to read it, and always names the room mirror convention at
- * `layout.rooms`. `backend.objects` holds the bytes of each snapshot; absent,
- * a file store at `layout.snapshots` holds them, written through the bash
- * owner as the host agent.
+ * `backend.sql` is optional. The git backend is `backend.bash.git`, and it
+ * is optional. Each backend gets its own resource owner, so a long shell
+ * command does not delay a query or a fork. The SQL backend reaches the
+ * bash backend through `WorkspaceFiles` to write an export. The bash
+ * backend reaches its own git backend through the access that its package
+ * defines. `use` and `mirror()` reach the bash owner, `sql` exposes the SQL
+ * owner, and `git` the git owner. The bash backend's `layout` names where
+ * the audit log and the room mirrors live. A workspace with no SQL backend
+ * has no `sql` tool, and one with no git backend has no `repos`, `clone` or
+ * `fork` tool. Set `audit.path` to record every bound tool call at a path
+ * of your own; the default is `layout.audit`. Tool guidance then tells
+ * every agent the log exists and where to read it, and always names the
+ * room mirror convention at `layout.rooms`. `backend.objects` holds the
+ * bytes of each snapshot; absent, a file store at `layout.snapshots` holds
+ * them, written through the bash owner as the host agent.
  */
 export function openWorkspace(options: {
 	name: string;
 	backend: WorkspaceBackends;
 	audit?: AuditLogOptions;
 }): Workspace {
-	const { bash, sql: sqlBackend, git: gitBackend } = options.backend;
-	assertTransport(bash, gitBackend);
-	const shellBackend = bashUnderOwner(bash, gitBackend);
+	const { bash, sql: sqlBackend } = options.backend;
+	const gitBackend = bash.git;
 	// Each process connects its own environment, outside the queue of the bash owner.
 	const table = openProcessTable({
-		connect: (agent) => shellBackend.connect(agent),
+		connect: (agent) => bash.connect(agent),
 		// The owner opens below. The table calls it only after the workspace opens.
 		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
@@ -415,7 +379,7 @@ export function openWorkspace(options: {
 		bash.endpoints === undefined ? undefined : createSensorConnections(bash.endpoints, table);
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: withProcesses(shellBackend, table, connections),
+		backend: withProcesses(bash, table, connections),
 	});
 	const sql =
 		sqlBackend === undefined

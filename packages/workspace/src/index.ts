@@ -36,7 +36,6 @@ export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type {
 	BashBackend,
-	BashServices,
 	WorkspaceBackends,
 	WorkspaceEndpoint,
 	WorkspaceEndpoints,
@@ -65,7 +64,6 @@ export {
 	withDeadline,
 } from './execution-env.ts';
 export type {
-	GitAccess,
 	GitBackend,
 	GitChange,
 	GitCommit,

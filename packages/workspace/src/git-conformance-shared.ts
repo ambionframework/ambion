@@ -206,18 +206,11 @@ export async function sharedRegistrationPersists<B extends GitBackend>(
 	store: GitConformanceStore<B>,
 	fixture: NonNullable<GitConformanceOptions['shared']>,
 ): Promise<void> {
-	const open = async (options: GitConformanceOptions) => {
-		const borrowedBash = new Proxy(store.bash, {
-			get(target, property, receiver) {
-				if (property === 'dispose') return async () => {};
-				return Reflect.get(target, property, receiver);
-			},
-		});
-		return openWorkspace({
+	const open = async (options: GitConformanceOptions) =>
+		openWorkspace({
 			name: 'git-conformance',
-			backend: { bash: borrowedBash, git: store.backend(options) },
+			backend: { bash: store.bash(store.backend(options)) },
 		});
-	};
 	const first = await open({ templates: {}, shared: fixture });
 	let initial: string | undefined;
 	let url = '';

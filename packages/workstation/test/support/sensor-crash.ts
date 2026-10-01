@@ -189,15 +189,15 @@ async function makeWorkspace(): Promise<{
 }> {
 	const ssh = await options();
 	const setup = await readSetup();
-	const bash = workstationBackend(ssh);
 	const git = workstationGitBackend({
 		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		account: { username: 'lab-git', privateKey: await keyOf(setup, 'lab-git') },
 	});
+	const bash = workstationBackend({ ...ssh, git });
 	return {
-		workspace: openWorkspace({ name: 'lab', backend: { bash, git }, audit: {} }),
+		workspace: openWorkspace({ name: 'lab', backend: { bash }, audit: {} }),
 		bash,
 		git,
 	};

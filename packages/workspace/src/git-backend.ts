@@ -2,14 +2,14 @@
  * The git backend: the repositories of one workspace, beside the bash
  * backend.
  *
- * Every workspace has a bash backend. A git backend is optional. When a
- * workspace has one, the `repos`, `clone` and `fork` tools use it under an
+ * Every workspace has a bash backend. A git backend is optional. The bash
+ * backend takes the git backend as an option of its own package, and it
+ * reads the access of that git backend, so the `git` of each agent reaches
+ * the repositories. A type of the package checks the pair: a git backend of
+ * another package is a compile error. When the bash backend has a git
+ * backend in `git`, the `repos`, `clone` and `fork` tools use it under an
  * owner of its own. `clone` looks up its source there, then checks it out on
- * the shell owner. The bash backend receives `GitAccess` when it connects,
- * so the `git` of each agent reaches the backend's repositories. A bash
- * backend lists the transports it carries in `gitTransports`, and
- * `openWorkspace` refuses a pair whose transport the bash backend does not
- * carry.
+ * the shell owner.
  *
  * A repository ID is `templates/<name>`, `shared/<name>`, or
  * `<agent>/<name>`. Only registration changes a template. Shared
@@ -40,17 +40,6 @@ export interface GitRepository {
 	readonly defaultBranch: string;
 	/** Each branch and the full hash of the commit it names. */
 	readonly branches: Readonly<Record<string, string>>;
-}
-
-/**
- * What a bash backend needs to reach the git backend as one agent. The core
- * knows the transport by its name alone. The package of each git backend
- * extends this type with the wire shape of its transport, and the bash
- * backend that carries the transport reads it.
- */
-export interface GitAccess {
-	/** The name of the transport, such as `in-process` or `ssh`. */
-	readonly transport: string;
 }
 
 /** What a fork gives: the new repository, or the reason the backend refused it. */
@@ -112,9 +101,11 @@ export interface GitEnv extends ResourceEnv {
 	fork(source: GitRepositoryId, name: string, signal?: AbortSignal): Promise<GitForkOutcome>;
 }
 
-/** The git backend of a workspace. */
+/**
+ * The git backend of a workspace. The package of each git backend adds an
+ * `access` to its own type, and the bash backend of that package reads it.
+ */
 export interface GitBackend extends ResourceBackend<GitEnv> {
-	readonly access: GitAccess;
 	/** The label that the guidance uses for the server of this backend, with no credential. */
 	readonly label: string;
 }

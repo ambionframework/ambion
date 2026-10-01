@@ -31,10 +31,11 @@ const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend(
 handle lives. `options.seed` writes files before any agent connects, and
 `readFiles()` reads every file back out without an agent. A host reaches the
 workspace's files with no tool call, which is what a real directory gives for
-free.
+free. `options.git` is the git backend, and it is optional.
 
-**`directoryBackend(root)` writes through to a real directory.** It creates
-the root when an operation needs it. `drive.dispose()` releases the handle
+**`directoryBackend(root, options)` writes through to a real directory.** It
+creates the root when an operation needs it. `options.git` is the git
+backend, and it is optional. `drive.dispose()` releases the handle
 and keeps the root and its files. A host deletes the data it owns.
 
 Neither backend exposes workstation endpoints. A workspace using these backends
@@ -62,9 +63,10 @@ command. The guidance tells each agent the same.
 ## The git backend
 
 **`justGitBackend(options)` runs a `just-git` server in the host's
-process.** Pass it as `backend.git`. The workspace then gives each agent
-the `repos`, `clone` and `fork` tools, and the `git` of each agent's shell reaches
-the backend's repositories. An agent can clone any repository into its home
+process.** Pass it as the `git` option of `memoryBackend` or
+`directoryBackend`. The workspace then gives each agent the `repos`, `clone`
+and `fork` tools, and the `git` of each agent's shell reaches the backend's
+repositories. An agent can clone any repository into its home
 without creating a fork. To make changes it can push, it forks a template,
 clones the fork, edits, commits, and pushes. A push persists the edits
 across a restart of the host.
@@ -75,21 +77,20 @@ import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git
 import { openWorkspace } from '@ambionframework/workspace';
 import { fromDirectory } from '@ambionframework/workspace';
 
+const git = justGitBackend({
+  storage: sqliteGitStorage('./data/lab-git.db'),
+  secret: process.env.LAB_GIT_SECRET ?? '',
+  templates: {
+    'weekly-report': {
+      description: 'A weekly status report: numbers, risks, and next steps.',
+      source: fromDirectory('./templates/weekly-report'),
+    },
+  },
+});
+
 const lab = openWorkspace({
   name: 'lab',
-  backend: {
-    bash: directoryBackend('./data/lab'),
-    git: justGitBackend({
-      storage: sqliteGitStorage('./data/lab-git.db'),
-      secret: process.env.LAB_GIT_SECRET ?? '',
-      templates: {
-        'weekly-report': {
-          description: 'A weekly status report: numbers, risks, and next steps.',
-          source: fromDirectory('./templates/weekly-report'),
-        },
-      },
-    }),
-  },
+  backend: { bash: directoryBackend('./data/lab', { git }) },
 });
 ```
 
@@ -113,10 +114,8 @@ A fork keeps the commit it came from.
 **No request leaves the process.** Every clone URL starts with
 `http://git.ambion.invalid`, a name that never resolves. The `git` command
 passes each request to the server in the process, with a token that no
-file holds. This is the `in-process` transport. The two just-bash
-backends carry it, and a workstation carries `ssh`.
-`openWorkspace` throws when the bash backend does not carry the
-transport of the git backend.
+file holds. The two just-bash backends take a `justGitBackend` and no
+other git backend. A git backend of another package is a compile error.
 
 ## Tests
 

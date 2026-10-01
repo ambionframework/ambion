@@ -2,10 +2,11 @@
  * The cases every git backend (`GitBackend`) must pass, together with a
  * bash backend whose `git` reaches it.
  *
- * A harness opens a store: one bash backend, and a factory that opens a git
- * backend over the same repositories each time it is called. A case opens
- * a workspace over the two, drives it as agents through `use` and through
- * `git` in the shell, and checks what the contract states. A refused push
+ * A harness opens a store: a factory that opens a git backend over the same
+ * repositories each time it is called, and a factory that opens a bash
+ * backend for one git backend. A case opens a workspace over the bash
+ * backend, drives it as agents through `use` and through `git` in the
+ * shell, and checks what the contract states. A refused push
  * is checked by the exit status of `git push`: the text of a refusal
  * differs from one backend to the other.
  *
@@ -64,9 +65,10 @@ export interface GitConformanceShared {
 	readonly description?: string;
 }
 
-/** One store of repositories, and a bash backend beside it. */
+/** One store of repositories, and the bash backend that reaches it. */
 export interface GitConformanceStore<B extends GitBackend = GitBackend> {
-	readonly bash: BashBackend;
+	/** Open a bash backend whose `git` is `git`. The workspace that holds it disposes it. */
+	bash(git: B): BashBackend;
 	/** Open a git backend over this store's repositories. */
 	backend(options: GitConformanceOptions): B;
 	dispose(): Promise<void>;
@@ -133,7 +135,7 @@ async function withWorkspace<B extends GitBackend>(
 	const backend = store.backend(options);
 	const workspace = openWorkspace({
 		name: 'git-conformance',
-		backend: { bash: store.bash, git: backend },
+		backend: { bash: store.bash(backend) },
 	});
 	try {
 		await body({ backend, workspace }, harness);
@@ -351,18 +353,11 @@ async function registered<T>(
 	options: GitConformanceOptions,
 	body: (workspace: Workspace) => Promise<T>,
 ): Promise<T> {
-	// Registration cases reopen a workspace over one persistent store. The
-	// store owns this bash backend and disposes it after the whole sequence;
-	// each short-lived workspace borrows it instead of ending that lifetime.
-	const bash = new Proxy(store.bash, {
-		get(target, property, receiver) {
-			if (property === 'dispose') return async () => {};
-			return Reflect.get(target, property, receiver);
-		},
-	});
+	// Registration cases reopen a workspace over one persistent store. Each
+	// workspace opens a new git backend and a new bash backend.
 	const workspace = openWorkspace({
 		name: 'git-conformance',
-		backend: { bash, git: store.backend(options) },
+		backend: { bash: store.bash(store.backend(options)) },
 	});
 	try {
 		return await body(workspace);

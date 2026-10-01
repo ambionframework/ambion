@@ -114,12 +114,6 @@ interface GitRepository {
   readonly branches: Readonly<Record<string, string>>;
 }
 
-/** What a bash backend needs to reach the git backend as one agent. */
-interface GitAccess {
-  /** The name of the transport, such as `in-process` or `ssh`. */
-  readonly transport: string;
-}
-
 /** A branch, a tag, or a commit hash of 7 to 64 lowercase hex digits. */
 type GitRevision =
   { readonly branch: string } | { readonly tag: string } | { readonly commit: string };
@@ -158,7 +152,6 @@ interface GitEnv extends ResourceEnv {
 }
 
 interface GitBackend extends ResourceBackend<GitEnv> {
-  readonly access: GitAccess;
   /** The label that the guidance uses for the server of this backend, with no credential. */
   readonly label: string;
 }
@@ -181,39 +174,39 @@ that operation with an error that names the template. The next operation
 tries again. Host code that wants the error at start calls
 `lab.git.use(lab.mirrorAgent, (env) => env.list())`.
 
-**A bash backend receives `GitAccess` when it connects.**
-`BashBackend.connect` gets a third, optional argument, `BashServices`,
-which holds `git?: GitAccess`. `openWorkspace` wraps the bash backend's
-`connect` and passes it when `backend.git` is set.
+**A bash backend takes its git backend as an option.** The option has
+the git backend type of the package of the bash backend. `memoryBackend`
+and `directoryBackend` take a `JustGitBackend`, and `workstationBackend`
+takes a `WorkstationGitBackend`. The bash backend reads the `access` of
+that git backend at each `connect`, with no cast. A git backend of another
+package is a compile error.
 
-**The core knows a transport by its name alone.** The package of each git
-backend extends `GitAccess` with the wire shape of its transport. The
-bash backend that carries the transport reads `transport`, and it casts
-to the access type of that package.
+**The core knows no access type.** Each git backend type of a package adds
+an `access` with the wire shape of its own transport. Only the bash backend
+of the same package reads it, so `GitBackend` in the core holds no
+`access`.
+
+**`BashBackend.git` is the git backend of the workspace.** The bash
+backend sets it from its option.
 
 ```ts
 interface BashBackend {
   // ...
-  /** The git transports that the shell of this backend carries. */
-  readonly gitTransports?: readonly string[];
+  /** The repositories that the shell reaches. */
+  readonly git?: GitBackend;
 }
 ```
 
-**`openWorkspace` refuses a pair that does not match.** When
-`backend.git` is set and `backend.bash.gitTransports` does not hold its
-`transport`, `openWorkspace` throws. Neither backend has a name, so the
-error names the `transport` and the `label` of the git backend, and the
-transports that the bash backend carries. A bash backend with no
-`gitTransports` carries none. This check is the only check: a bash
-backend reads the access at `connect` with no check of its own.
+**`openWorkspace` opens `bash.git` under an owner of its own.** A bash
+backend with no `git` gives a workspace with no `repos`, `clone`, or `fork`
+tool. `openWorkspace` runs no check of the pair.
 
 **`Workspace.git` is the owner of the git backend, for host code.** It is
 the same as `Workspace.sql`.
 
 **The changelog names these export changes.**
 
-- `WorkspaceBackends` gets `git`.
-- `BashBackend.connect` gets its third argument, `BashServices`.
+- `BashBackend` gets `git`.
 - `Workspace` gets `git`, `commitRef`, and `readCommit`.
 - `GitEnv` gets `resolve` and `show`, and the root entry exports
   `GitRevision`, `GitCommit`, and `GitChange`.
@@ -653,10 +646,10 @@ again before it expires. A new fork adds a write credential at once.
 
 ### On the just-bash backends
 
-**The just-bash backends carry the `in-process` transport.** Their
-`gitTransports` is `['in-process']`. They read the access of
-`justGitBackend`, a `JustGitAccess` from `@ambionframework/just-bash/git`.
-The root entry imports the type alone, so it loads no `node:sqlite`.
+**The just-bash backends read the access of `justGitBackend`.** The access
+is a `JustGitAccess` from `@ambionframework/just-bash/git`. The root entry
+imports the type alone, so it loads no `node:sqlite`. The option `git` of
+`memoryBackend` and `directoryBackend` takes the backend.
 
 ```ts
 /** One credential: one scope on one repository, until `expiresAt`. */
@@ -672,8 +665,7 @@ interface GitCredential {
 /** A web-standard fetch, in the shape the `just-git` client calls. */
 type GitFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-interface JustGitAccess extends GitAccess {
-  readonly transport: 'in-process';
+interface JustGitAccess {
   /** Every clone URL starts with this prefix. The just-bash `git` reaches it alone. */
   readonly prefix: string;
   /** Carries a git request to the server in the same process. */
@@ -699,12 +691,12 @@ server accepts.
 
 ### On a workstation
 
-**The workstation carries the git transport `ssh` of
-`workstationGitBackend`.** Each agent holds a key that names it, and the
-forced command `serve` of the git account applies the namespace rule to
-each request. [Workstation git](workstation-git.md#keys) describes the
-keys, and [Workstation](workstation.md#a-git-backend) describes the files
-in the agent's home.
+**The workstation reads the access of `workstationGitBackend`.** The
+access reaches the git account over `ssh`. Each agent holds a key that
+names it, and the forced command `serve` of the git account applies the
+namespace rule to each request. [Workstation git](workstation-git.md#keys)
+describes the keys, and [Workstation](workstation.md#a-git-backend)
+describes the files in the agent's home.
 
 ## justGitBackend: a server in the host's process
 
@@ -719,21 +711,20 @@ import { justGitBackend, sqliteGitStorage } from '@ambionframework/just-bash/git
 import { openWorkspace } from '@ambionframework/workspace';
 import { fromDirectory } from '@ambionframework/workspace';
 
+const git = justGitBackend({
+  storage: sqliteGitStorage('./data/lab-git.db'),
+  secret: process.env.LAB_GIT_SECRET ?? '',
+  templates: {
+    'weekly-report': {
+      description: 'A weekly status report: numbers, risks, and next steps.',
+      source: fromDirectory('./templates/weekly-report'),
+    },
+  },
+});
+
 const lab = openWorkspace({
   name: 'lab',
-  backend: {
-    bash: directoryBackend('./data/lab'),
-    git: justGitBackend({
-      storage: sqliteGitStorage('./data/lab-git.db'),
-      secret: process.env.LAB_GIT_SECRET ?? '',
-      templates: {
-        'weekly-report': {
-          description: 'A weekly status report: numbers, risks, and next steps.',
-          source: fromDirectory('./templates/weekly-report'),
-        },
-      },
-    }),
-  },
+  backend: { bash: directoryBackend('./data/lab', { git }) },
 });
 ```
 
@@ -880,39 +871,40 @@ identity of a push.
 
 ## Where the code lives
 
-| Package                | File                                   | What it holds                                                                               |
-| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                                  |
-| `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `clone`, `fork`, the git note, and the host's `commitRef` and `readCommit`         |
-| `packages/workspace`   | `src/workspace.ts`                     | The git owner, the `connect` wrapper, the check of the transport, and the order of disposal |
-| `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files                     |
-| `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
-| `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                           |
-| `packages/workspace`   | `src/git-registration.ts`              | `registerRepositories`, the decisions of registration, and `RegistrationSteps`              |
-| `packages/workspace`   | `src/git-templates.ts`                 | `RepositoryRegistration`, `filesOf`, and `changeTo`                                         |
-| `packages/workspace`   | `src/sources.ts`                       | `fromDirectory`, the source types, `hashesOf`, and `sameFiles`                              |
-| `packages/just-bash`   | `src/just-bash.ts`                     | `gitFor(agent, access)`                                                                     |
-| `packages/just-bash`   | `src/git/access.ts`                    | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
-| `packages/just-bash`   | `src/git/backend.ts`                   | `justGitBackend`, the access, and the environment                                           |
-| `packages/just-bash`   | `src/git/server.ts`, `tokens.ts`       | The `just-git` server, its authentication, and the tokens                                   |
-| `packages/just-bash`   | `src/git/registration.ts`              | The storage steps of registration and the settle of a crash                                 |
-| `packages/just-bash`   | `src/git/storage.ts`                   | `sqliteGitStorage` and the registry table                                                   |
-| `packages/workstation` | `src/git-backend.ts`                   | `workstationGitBackend`, its options, the access, and the identity                          |
-| `packages/workstation` | `src/git-account.ts`, `git-prepare.ts` | The client of the git account, its scripts, the preparation, and `serve`                    |
-| `packages/workstation` | `src/git-keys.ts`                      | The agent keys and the lines of `authorized_keys.ambion`                                    |
-| `packages/workstation` | `src/git-repositories.ts`              | `list`, `get`, and `fork` on the git account                                                |
-| `packages/workstation` | `src/git-registration.ts`              | The storage steps of registration on the git account                                        |
-| `packages/workstation` | `src/git-agent.ts`                     | The key files and the ssh configuration in the agent's home                                 |
+| Package                | File                                   | What it holds                                                                       |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
+| `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                          |
+| `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `clone`, `fork`, the git note, and the host's `commitRef` and `readCommit` |
+| `packages/workspace`   | `src/workspace.ts`                     | The git owner of `bash.git`, and the order of disposal                              |
+| `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files             |
+| `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                    |
+| `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                   |
+| `packages/workspace`   | `src/git-registration.ts`              | `registerRepositories`, the decisions of registration, and `RegistrationSteps`      |
+| `packages/workspace`   | `src/git-templates.ts`                 | `RepositoryRegistration`, `filesOf`, and `changeTo`                                 |
+| `packages/workspace`   | `src/sources.ts`                       | `fromDirectory`, the source types, `hashesOf`, and `sameFiles`                      |
+| `packages/just-bash`   | `src/just-bash.ts`                     | The `git` option of the backends, and `gitFor(agent, access)`                       |
+| `packages/just-bash`   | `src/git/access.ts`                    | `JustGitAccess`, `GitCredential`, and `GitFetch`                                    |
+| `packages/just-bash`   | `src/git/backend.ts`                   | `justGitBackend`, the access, and the environment                                   |
+| `packages/just-bash`   | `src/git/server.ts`, `tokens.ts`       | The `just-git` server, its authentication, and the tokens                           |
+| `packages/just-bash`   | `src/git/registration.ts`              | The storage steps of registration and the settle of a crash                         |
+| `packages/just-bash`   | `src/git/storage.ts`                   | `sqliteGitStorage` and the registry table                                           |
+| `packages/workstation` | `src/git-backend.ts`                   | `workstationGitBackend`, its options, the access, and the identity                  |
+| `packages/workstation` | `src/git-account.ts`, `git-prepare.ts` | The client of the git account, its scripts, the preparation, and `serve`            |
+| `packages/workstation` | `src/git-keys.ts`                      | The agent keys and the lines of `authorized_keys.ambion`                            |
+| `packages/workstation` | `src/git-repositories.ts`              | `list`, `get`, and `fork` on the git account                                        |
+| `packages/workstation` | `src/git-registration.ts`              | The storage steps of registration on the git account                                |
+| `packages/workstation` | `src/git-agent.ts`                     | The key files and the ssh configuration in the agent's home                         |
 
 ## Tests
 
 **`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`. A `GitConformanceBackend` is a
 `ConformanceHarness<GitConformanceStore>` with three credential hooks. Its
-`open()` returns a store: one bash backend, and a factory that opens a git
-backend over the same repositories each time it is called. The suite knows
-no transport. Three cases ask a hook of the harness for a credential fact,
-and each hook takes the backend and the workspace that the case opened.
+`open()` returns a store: a factory that opens a git backend over the same
+repositories each time it is called, and a factory that opens a bash
+backend for one git backend. The suite knows no access type. Three cases
+ask a hook of the harness for a credential fact, and each hook takes the
+backend and the workspace that the case opened.
 
 - `list` shows each template with its description, and each fork with its
   source, its default branch, and its URL. `list` with a namespace shows
@@ -971,7 +963,7 @@ backends.** Its own tests add:
 - a template from a directory.
 
 **`packages/workstation` runs the cases on OpenSSH.** The `workstation`
-CI job runs them with the hooks of the `ssh` transport
+CI job runs them with the hooks of the `ssh` access
 ([Workstation git](workstation-git.md#tests)).
 
 **`packages/workspace` holds the texts and a room test.** Each outcome of

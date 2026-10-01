@@ -41,6 +41,24 @@ it('does not offer real workstation endpoints', () => {
 	expect(main.directoryBackend('/tmp').endpoints).toBeUndefined();
 });
 
+it('takes a just-git backend only, and carries it on the bash backend', () => {
+	const unused = async (): Promise<never> => {
+		throw new Error('unused');
+	};
+	const bare = { label: 'unused', connect: unused };
+	// @ts-expect-error A git backend with no in-process access does not pair.
+	main.memoryBackend({ git: bare });
+	// @ts-expect-error The directory backend takes the same git backend.
+	main.directoryBackend('/tmp', { git: bare });
+	const backend = git.justGitBackend({
+		storage: git.sqliteGitStorage(':memory:'),
+		secret: 'unused',
+	});
+	expect(main.memoryBackend({ git: backend }).git).toBe(backend);
+	expect(main.directoryBackend('/tmp', { git: backend }).git).toBe(backend);
+	expect(main.memoryBackend().git).toBeUndefined();
+});
+
 /** The specifiers one built file imports, whatever the quote or the form. */
 const importsOf = (code: string): string[] =>
 	[...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1] ?? '');
