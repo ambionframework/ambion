@@ -74,7 +74,7 @@ export interface CancelOptions {
 	readonly live: Map<string, Live>;
 	/** Whether the table has released its backend: a poll then stops. */
 	readonly released: () => boolean;
-	/** Run `fn` on an environment of its own for `agent`, outside the bash owner's queue. */
+	/** Run `fn` on an environment of its own for `agent`, outside the queue of the bash resource. */
 	readonly detached: <T>(agent: string, fn: (env: WorkspaceEnv) => Promise<T>) => Promise<T>;
 	/** Read the files of one process. A read that finds the end of an adopted process settles it. */
 	readonly readOne: (agent: string, env: WorkspaceEnv, handle: string) => Promise<unknown>;

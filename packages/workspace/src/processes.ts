@@ -11,7 +11,7 @@
  * read finds it, and cancels it through its pid.
  *
  * A process runs on an environment of its own, which the table connects
- * outside the queue of the bash owner, so a long command holds no other
+ * outside the queue of the bash resource, so a long command holds no other
  * tool call. A timeout, a cancel, and `close` cancel a process through one
  * chain for each agent. The workstation backend holds one signal channel
  * for each client, in a queue of its own. A cancel sends `SIGTERM`, waits
@@ -79,7 +79,7 @@ const byStart = (a: { startedAt: string }, b: { startedAt: string }): number =>
 
 /** Open the process table of one workspace. */
 export function openProcessTable(options: ProcessTableOptions): ProcessTable {
-	const { connect, shell } = options;
+	const { connect, bash } = options;
 	const live = new Map<string, Live>();
 	/** The agents that used the workspace in this run: the host reads their tables. */
 	const agents = new Set<string>();
@@ -100,7 +100,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		}
 	};
 
-	/** Run `fn` on an environment of its own for `agent`, outside the bash owner's queue. */
+	/** Run `fn` on an environment of its own for `agent`, outside the queue of the bash resource. */
 	const detached = async <T>(agent: string, fn: (env: WorkspaceEnv) => Promise<T>): Promise<T> => {
 		if (released) throw new Error(CLOSED);
 		const env = await connect({ name: agent });
@@ -213,13 +213,13 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	const find: ProcessTable['find'] = async (agent, handle, signal) => {
 		if (!isHandle(handle)) throw unknown(handle);
-		const [found] = await shell(agent, (env) => read(agent.name, env, handle), signal);
+		const [found] = await bash(agent, (env) => read(agent.name, env, handle), signal);
 		if (found === undefined) throw unknown(handle);
 		return found.status;
 	};
 
 	const list: ProcessTable['list'] = async (agent, signal) =>
-		(await shell(agent, (env) => read(agent.name, env), signal)).map((found) => found.status);
+		(await bash(agent, (env) => read(agent.name, env), signal)).map((found) => found.status);
 
 	// -- the run of a process ---------------------------------------------------
 
@@ -417,7 +417,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	// -- the reminder and the host's list ---------------------------------------
 
 	const remind: ProcessTable['remind'] = (seat, signal) =>
-		shell(
+		bash(
 			{ name: seat.agent },
 			async (env) => {
 				const found = await read(seat.agent, env);

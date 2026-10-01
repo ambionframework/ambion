@@ -2,7 +2,7 @@
  * `workstationBackend`: a `BashBackend` over SSH to one remote server, with
  * one Unix account for each agent (`docs/workstation.md`).
  *
- * The resource owner calls `connect()` and `cleanup()` once for each
+ * The resource calls `connect()` and `cleanup()` once for each
  * operation, and a handshake on each would add network round trips to every
  * tool call. The backend keeps one session for each agent: `connect()`
  * builds it on the first call, and later calls reuse it. A background process
@@ -51,7 +51,7 @@ export interface WorkstationOptions {
 	readonly idleTimeout?: number;
 	/**
 	 * The repositories that `git` in each agent's shell reaches. The
-	 * workspace opens it under an owner of its own. Absent, the workspace has
+	 * workspace opens it under a resource of its own. Absent, the workspace has
 	 * no `repos`, `clone` or `fork` tool.
 	 */
 	readonly git?: WorkstationGitBackend;

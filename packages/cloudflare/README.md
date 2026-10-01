@@ -57,8 +57,8 @@ What is built:
   `estimateTokens`.
 
 `RoomObject.start` receives the names of the definitions in `definitions`, an optional
-`summaryWriter` name, and an optional `seats` map. The map sets initial members and
-attention. An omitted map seats every supplied agent at `broadcast`; an empty
+`summaryWriter` name, and an optional `seats` map. The map sets the initial seats and
+their attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
 install a new definition. The room metadata retains the definition names, so
 automatic resume resolves the same definitions through `configure`. Resume

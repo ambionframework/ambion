@@ -9,8 +9,8 @@ import type { TracedStep } from '@ambionframework/ambion';
 import { expect, it, onTestFailed } from 'vitest';
 import {
 	agent,
-	HARNESS,
 	invariants,
+	LIVE_KIND,
 	live,
 	MODEL,
 	open,
@@ -105,7 +105,7 @@ live('shared git rebase', () => {
 			second?: BashCall[];
 			finalNotes?: string;
 			model?: string;
-			harness?: string;
+			kind?: string;
 			thinking?: string;
 			usage?: Awaited<ReturnType<typeof spent>>;
 		} = {};
@@ -227,7 +227,7 @@ live('shared git rebase', () => {
 			expect(verified).toContain('scribe-b: checked');
 
 			evidence.model = MODEL;
-			evidence.harness = HARNESS;
+			evidence.kind = LIVE_KIND;
 			if (process.env.AMBION_THINKING !== undefined)
 				evidence.thinking = process.env.AMBION_THINKING;
 			evidence.usage = await spent(room.session);

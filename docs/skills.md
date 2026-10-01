@@ -192,14 +192,14 @@ the server, so the guidance does not name the absolute path.
 ## The copy in the home
 
 **Each respond activation makes the copy hold the set.** The reminder of the
-bundle queues the copy step on the bash owner, and then gives the process
+bundle queues the copy step on the bash resource, and then gives the process
 reminder ([Reminders](processes.md#reminders)).
 
 ```mermaid
 sequenceDiagram
   participant E as Executor
   participant B as Bundle reminder
-  participant O as Bash owner
+  participant O as Bash resource
   E->>B: remind(seat)
   B->>O: queue the copy step
   B->>O: queue the process reminder
@@ -223,7 +223,7 @@ sequenceDiagram
   the set has a script.
 
 **The copy ends before the first tool call of the activation.** The bash
-owner runs its operations in order, and the reminder queues the copy
+resource runs its operations in order, and the reminder queues the copy
 before the model makes a request. The reminder does not wait for the
 copy, so the 5-second bound of a reminder does not cut it. A long copy
 delays the process reminder behind it. A copy that takes more than 5

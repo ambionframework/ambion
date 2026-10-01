@@ -54,9 +54,9 @@ const FILES_NOTE = [
 	`workspace read and write the same files.`,
 ].join('\n');
 
-/** The file capability: the three file tools on the bash owner, and their note. */
-export function fileCapability(shell: WorkspaceResource<WorkspaceEnv>['use']): Capability {
-	return { tools: bindTools(createFileTools(), shell), notes: [FILES_NOTE] };
+/** The file capability: the three file tools on the bash resource, and their note. */
+export function fileCapability(bash: WorkspaceResource<WorkspaceEnv>['use']): Capability {
+	return { tools: bindTools(createFileTools(), bash), notes: [FILES_NOTE] };
 }
 
 /** The first line of a `read` result for an image, with the image part or without it. */

@@ -32,16 +32,16 @@ describe.each([memory])('$name', (fixture) => {
 	for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });
 
-/** The default file store at /snapshots over a bash backend under its own owner. */
+/** The default file store at /snapshots over a bash backend under its own resource. */
 function fileStore(bash: () => BashBackend) {
 	const open = () => {
-		const shell = openResource({ name: 'objects', backend: bash() });
+		const resource = openResource({ name: 'objects', backend: bash() });
 		const backend = fileObjectBackend({
-			shell: shell.use,
+			bash: resource.use,
 			host: { name: 'objects-host' },
 			root: '/snapshots',
 		});
-		return { backend: { ...backend, dispose: () => shell.dispose() } };
+		return { backend: { ...backend, dispose: () => resource.dispose() } };
 	};
 	return open;
 }
@@ -76,7 +76,7 @@ describe.each(objectStores)('$name', (fixture) => {
 	for (const c of objectConformance(fixture)) it(c.name, c.run);
 	it('retains a sensor manifest and restores its referenced file through the object backend', async () => {
 		const opened = await fixture.open();
-		const shell = openResource({ name: 'retention-conformance-shell', backend: memoryBackend() });
+		const resource = openResource({ name: 'retention-conformance-bash', backend: memoryBackend() });
 		const objects = openResource({
 			name: 'retention-conformance-objects',
 			backend: opened.backend,
@@ -84,7 +84,7 @@ describe.each(objectStores)('$name', (fixture) => {
 		const snapshotStore = {
 			workspace: 'retention-conformance',
 			host: { name: 'retention-host' },
-			shell: shell.use,
+			bash: resource.use,
 			objects: objects.use,
 		};
 		const bytes = new Uint8Array([7, 0, 255, 9]);
@@ -116,7 +116,7 @@ describe.each(objectStores)('$name', (fixture) => {
 				callAs('reviewer'),
 			);
 			const manifestPath = (restored as { details: { path: string } }).details.path;
-			const manifestText = await shell.use({ name: 'reviewer' }, async (env) => {
+			const manifestText = await resource.use({ name: 'reviewer' }, async (env) => {
 				const result = await env.readTextFile(manifestPath, BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 				return result.value;
@@ -136,7 +136,7 @@ describe.each(objectStores)('$name', (fixture) => {
 				callAs('reviewer'),
 			);
 			const filePath = (fileResult as { details: { path: string } }).details.path;
-			const restoredBytes = await shell.use({ name: 'reviewer' }, async (env) => {
+			const restoredBytes = await resource.use({ name: 'reviewer' }, async (env) => {
 				const result = await env.readBinaryFile(filePath, BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 				return result.value;
@@ -145,7 +145,7 @@ describe.each(objectStores)('$name', (fixture) => {
 				throw new Error('The restored sensor file changed through the object backend.');
 		} finally {
 			await objects.dispose();
-			await shell.dispose();
+			await resource.dispose();
 			await opened.dispose();
 		}
 	});
