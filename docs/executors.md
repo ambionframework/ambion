@@ -120,7 +120,7 @@ holds what serves the whole activation, in these properties:
 | `callId(tool)`    | The id of the next call of `tool`, for a harness that cannot see the id of a call.      |
 
 **`pass` receives what the core decides for one pass.** `Pass` holds
-`kind`, `view`, and `since` for a delta, as `PassInput` does, and these
+`kind`, `view`, and `after` for a delta, as `PassInput` does, and these
 properties:
 
 | Property        | What it is                                                                                     |
@@ -170,7 +170,7 @@ points.
 
 **The first pass receives the view. A later pass receives a delta.** The
 `view` is the whole windowed record. A `delta` holds the fresh view and
-`since`, the position the activation had read through. A pass that throws
+`after`, the position the activation had read through. A pass that throws
 is a failed pass, and [its cause](#failure-classification) follows the
 error.
 
@@ -226,7 +226,7 @@ an adapter places it where it caches best.
   bundles, and the ask line. A summarize activation gets no reminder.
 
 **A later pass reads the delta.** `record()` marks each message beyond
-`since` with the `[new]` prefix, and gives `undefined` when nothing is new.
+`after` with the `[new]` prefix, and gives `undefined` when nothing is new.
 The core then counts the view read. The core renders each steered line and
 each room refusal for the model.
 

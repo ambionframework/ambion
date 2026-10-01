@@ -150,7 +150,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 	let specialistAnswered = false;
 	let captured: { system: string; steered: string } | undefined;
 	const specialistSpoke = async () => {
-		const snapshot = await room?.read({ messages: { since: 0 } });
+		const snapshot = await room?.read({ messages: { after: 0 } });
 		return snapshot?.messages.some((m) => m.kind === 'said' && m.from === 'inventory') ?? false;
 	};
 	const inventory = () => {

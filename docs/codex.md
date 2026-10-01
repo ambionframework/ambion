@@ -441,16 +441,57 @@ checks each call.
 
 ## Testing
 
-**A real model cannot be scripted, so the executor suite runs live.** Pi and
-Claude have a fake model or a fake executable that plays a plan from
-`@ambionframework/ambion/conformance`. A fake `codex` proves only that the
-adapter agrees with its own guess about the SDK, so the package has none.
-The package has no `./testing` entry for that reason. The live file
+**Three tiers test the package.** Recorded events and the real binary on a
+scripted model run in the unit tier. The live tier runs the real binary on a
+real model.
+
+**The binary tier scripts the model.** `codex` accepts a custom model
+provider through its config. A local HTTP endpoint in `test/responses.ts`
+speaks the Responses API and plays one reply for each request: assistant
+text, or a call to a named tool. It records the body of each request. The
+tests in `test/binary.test.ts` run the bundled `codex`, its MCP client, the
+room tools server, the bridge, and a room over a journal. Only the model is
+scripted.
+
+**The binary tier runs in a Codex home of its own.** `test/binary.ts` writes
+a temporary home with a `config.toml` that sends the provider to the
+endpoint. The environment of the binary holds `PATH`, that home as `HOME`
+and `CODEX_HOME`, and a dummy key variable. No real sign-in reaches the
+binary, and every model request goes to the endpoint. The catalog lookup
+(`codex debug models`) still adds the environment of the host. The file
+skips on a platform with no bundled binary, except under CI, where it fails.
+
+**A scripted call names the namespace of an MCP tool.** The model calls a
+room tool with `name: 'say'` and `namespace: 'mcp__ambion'`. A call with the
+name alone gets the tool result `unsupported call: say`, and nothing reaches
+the room.
+
+**A loaded host can send the first request before the room tools are ready.**
+Codex starts the room tools server while it starts the turn. The first
+request then lists no room tool, and a call to `say` gets the result
+`unsupported call`. The endpoint finds this case: when a request does not
+list the tool that the next reply calls, it answers with a call to
+`list_mcp_resources`, which reports no usage, and keeps the reply. The
+next request lists the tools. A real model that meets this case has no
+`say` for that request.
+
+**The binary tier proves what the model receives.** The recorded request
+bodies show the tool list, the prompts, and the items of an earlier pass.
+Today Codex sends its own prompt as the first developer message, and the
+part of the seat arrives in the last user message. It also lists the tools in
+an `additional_tools` input item. A test states each of these facts, so a
+change to one shows in a failing assertion.
+
+**The binary tier cannot prove that a model obeys.** A scripted model does
+what the script says. The live tier proves the claims that need a real model.
+
+**The live tier runs the executor suite.** The live file
 `test/live/conformance.test.ts` runs the suite through
 `codexExecutorHarness` in `test/live/support.ts`: the model follows each
 plan from its instructions. A key that the provider refuses gives the
 permanent failure, and a `codex` binary that does not exist gives the
-transient one.
+transient one. The package has no `./testing` entry, because a fake `codex`
+proves only that the adapter agrees with its own guess about the SDK.
 
 **A dump shows what a live case saw.** Set `AMBION_LIVE_DUMP=<dir>` to write
 one JSON file for each case of the live suite. The file holds the room calls
@@ -467,7 +508,7 @@ runs the executor on the recorded events to test exchange continuity. A
 turn of the replay client can also call `say` through the socket of the
 bridge, as the room tools server does.
 
-**The live tier proves the claims that recorded events cannot.** Each file
+**The live tier proves the claims that a scripted model cannot.** Each file
 holds the smallest room that proves one claim.
 
 | File                            | Claim                                                                                                               |

@@ -182,9 +182,9 @@ describe('the harness of an activation', () => {
 		}).open('message:1:worker:1');
 		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
 		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
-		await session.pass({ kind: 'delta', since: 1, view: respond(both, 2) });
+		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
 		const both3 = [...both, said(3, 'And the hose?')];
-		await session.pass({ kind: 'delta', since: 2, view: respond(both3, 3) });
+		await session.pass({ kind: 'delta', after: 2, view: respond(both3, 3) });
 
 		expect(requests.some((request) => summarizing(request.context))).toBe(true);
 		const answers = requests.filter((request) => !summarizing(request.context));

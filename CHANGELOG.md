@@ -14,6 +14,16 @@ becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
 `createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
 `createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
 `ExecutorActivation`, and `ExecutorOptions` keep their names.
+**`View` names only what a seat receives, and a read position is `through`
+or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
+that the `exchange_closed` event carries, is now `ExchangeRange`.
+`ClosedExchangeView` is gone from the main entry. Write
+`Extract<Exchange, { readonly status: 'closed' }>` in its place.
+`RoomRead.watermark` and `ExchangeRead.watermark` are now `through`. The
+`ok` of a `LeaseResponse` holds `through` where it held `lastSeq`. The
+selection `read({ messages: { since } })` is now `{ after }`, and the delta
+of a `PassInput` holds `after` where it held `since`. The wire carries the
+new names. The journal and the golden journals do not change.
 **Outcomes use one discriminator, `kind`, and `wake` names only the port
 request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
 `kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
@@ -76,6 +86,17 @@ the room tools alone. Claude and Codex joined the two lists at once, and
 they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
 tools that the definition does not name, and builds the tools of the
 definition from their `AmbionTool`s as before.
+
+**The Codex package tests the real `codex` binary on a scripted model.**
+`codex` accepts a custom model provider through its config. A local endpoint
+in `packages/codex/test/responses.ts` speaks the Responses API and plays a
+script of replies. `test/binary.test.ts` runs the bundled binary against it,
+in a temporary Codex home, with a minimal environment. It proves that a seat
+speaks through `say`, that the activation reports the usage of the endpoint,
+that the model sees the room tools, the tools of the seat, and the three
+MCP resource tools and no native tool, and that a second pass resumes the
+same thread. This tier runs in the unit tier and needs no key. The executor
+does not change.
 
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.

@@ -26,8 +26,8 @@ import { noTraces } from './trace.ts';
 export const worker = scriptedAgent('worker');
 
 /** A granted lease. Absent an expiry, it expires 100 ms from now. */
-export const ok = (clock: Clock, expiresAt = clock.now() + 100, lastSeq = 1): LeaseResponse => ({
-	ok: { expiresAt, lastSeq },
+export const ok = (clock: Clock, expiresAt = clock.now() + 100, through = 1): LeaseResponse => ({
+	ok: { expiresAt, through },
 });
 
 /** A model call that never answers and never hears an abort. */

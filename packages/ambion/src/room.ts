@@ -17,12 +17,12 @@ import { roomJournal } from './journal/journal.ts';
 import { discussionMessages } from './room/exchange.ts';
 import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
-import { captureMessageSelection, readView } from './room/read.ts';
+import { captureMessageSelection, toRoomRead } from './room/read.ts';
 import { type CompositionDraft, type Room, RoomHost, type Visit } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
-	ExchangeView,
+	Exchange,
 	Message,
 	RoomRead,
 	SeatOptions,
@@ -150,7 +150,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	const journal = roomJournal(state.journals.open(name));
 	await journal.ready;
 	await journal.settled();
-	return readView(
+	return toRoomRead(
 		name,
 		projectState(replay(journal.entries, state.limits.activation)),
 		state.clock.now(),
@@ -161,9 +161,9 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 
 /** An exchange and its original discussion at one observed journal position. */
 export interface ExchangeRead {
-	readonly exchange: ExchangeView;
+	readonly exchange: Exchange;
 	readonly messages: readonly Message[];
-	readonly watermark: Seq;
+	readonly through: Seq;
 }
 
 /** Read one exchange's durable discussion without starting or reconciling a room. */
@@ -176,15 +176,15 @@ export async function readExchange(
 		throw new RangeError('Exchange reference must be a positive safe integer.');
 	const snapshot = await readRoom(name, {
 		runtime: options.runtime,
-		messages: { since: from - 1 },
+		messages: { after: from - 1 },
 	});
 	const exchange = snapshot.exchanges.find((candidate) => candidate.from === from);
 	if (exchange === undefined) return undefined;
-	const through = exchange.status === 'closed' ? exchange.through : snapshot.watermark;
+	const through = exchange.status === 'closed' ? exchange.through : snapshot.through;
 	return {
 		exchange,
 		messages: discussionMessages(snapshot.messages, from, through),
-		watermark: snapshot.watermark,
+		through: snapshot.through,
 	};
 }
 
