@@ -32,7 +32,6 @@ export interface SensorObserveRoom {
 /** Open a workspace, start its managed process, and connect the fixture API. */
 export async function openSensorObserveRoom(
 	options: {
-		images?: boolean;
 		defect?: SensorDefect;
 		server?: SensorServerOptions;
 		objects?: ObjectBackend;
@@ -71,7 +70,7 @@ export async function openSensorObserveRoom(
 			{ name: 'bench-one', process, port },
 			callAs('sensor-owner'),
 		);
-		const bundle = workspace.tools(options);
+		const bundle = workspace.tools();
 		const observe = bundle.tools.find((tool) => tool.name === 'observe');
 		if (observe === undefined) throw new Error('The workspace has no observe tool.');
 		const stopServer = async () => {

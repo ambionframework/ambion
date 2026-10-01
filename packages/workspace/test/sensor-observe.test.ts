@@ -148,7 +148,7 @@ describe('workspace observe integration', () => {
 	});
 
 	it('restores the manifest and exact frame and file bytes after the server stops for another agent', async () => {
-		const rig = await openSensorObserveRoom({ images: false, defect: 'dirty-source' });
+		const rig = await openSensorObserveRoom({ defect: 'dirty-source' });
 		try {
 			const observed = await rig.observe.invoke({ sensor: 'bench-one/bench' }, rig.observer);
 			if (typeof observed === 'string')
@@ -158,13 +158,12 @@ describe('workspace observe integration', () => {
 				manifestPath: string;
 				files: readonly { digest: string; ref: string; path: string }[];
 			};
-			expect(observed.content.some((part) => part.type === 'image')).toBe(false);
 			expect(details.files.map((file) => file.digest).sort()).toEqual(
 				[fileDigest, frameDigest].sort(),
 			);
 			await rig.stopServer();
 
-			const bundle = rig.site.tools({ images: false });
+			const bundle = rig.site.tools();
 			const restore = bundle.tools.find((tool) => tool.name === 'restore');
 			if (restore === undefined) throw new Error('The workspace has no restore tool.');
 			const manifest = await restore.invoke(
@@ -201,8 +200,8 @@ describe('workspace observe integration', () => {
 		}
 	});
 
-	it('keeps observe inputs fixed and gives text-only bundles image paths without attachments', async () => {
-		const rig = await openSensorObserveRoom({ images: false });
+	it('keeps observe inputs fixed and names the path of each image beside the image part', async () => {
+		const rig = await openSensorObserveRoom();
 		try {
 			const observeSchema = rig.observe.parameters as {
 				properties: Record<string, unknown>;
@@ -214,30 +213,39 @@ describe('workspace observe integration', () => {
 			const observed = await rig.observe.invoke({ sensor: 'bench-one/bench' }, rig.observer);
 			if (typeof observed === 'string')
 				throw new Error('observe returned a string instead of content.');
-			expect(observed.content.some((part) => part.type === 'image')).toBe(false);
+			expect(observed.content.filter((part) => part.type === 'image')).toHaveLength(1);
 			const output = observed.content
 				.filter((part) => part.type === 'text')
 				.map((part) => part.text)
 				.join('\n');
 			expect(output).toContain('Frame at 2026-09-29T10:00:01.000Z:');
-			expect(output).toContain('(image/png)');
 
 			const pngPath = '/home/observer/example.png';
 			await rig.site.use({ name: 'observer' }, async (env) => {
 				const result = await env.writeFile(pngPath, frameBytes, BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 			});
-			const read = rig.site.tools({ images: false }).tools.find((tool) => tool.name === 'read');
+			const read = rig.site.tools().tools.find((tool) => tool.name === 'read');
 			if (read === undefined) throw new Error('The workspace has no read tool.');
 			const result = await read.invoke({ path: pngPath }, rig.observer);
 			if (typeof result === 'string') throw new Error('read returned a string instead of content.');
-			expect(result.content.some((part) => part.type === 'image')).toBe(false);
+			expect(result.content.filter((part) => part.type === 'image')).toHaveLength(1);
 			const readText = result.content
 				.filter((part) => part.type === 'text')
 				.map((part) => part.text)
 				.join('\n');
-			expect(readText).toContain('[Image attachment omitted for this tool bundle: image/png]');
 			expect(readText).toContain(`Image path: ${pngPath}`);
+
+			// A format with no image part, such as BMP, still names the path of the file.
+			const bmpPath = '/home/observer/example.bmp';
+			await rig.site.use({ name: 'observer' }, async (env) => {
+				const result = await env.writeFile(bmpPath, onePixelBmp(), BACKGROUND_CONTEXT);
+				if (!result.ok) throw result.error;
+			});
+			const bmp = await read.invoke({ path: bmpPath }, rig.observer);
+			if (typeof bmp === 'string') throw new Error('read returned a string instead of content.');
+			expect(bmp.content.filter((part) => part.type === 'image')).toEqual([]);
+			expect(JSON.stringify(bmp.content)).toContain(`Image path: ${bmpPath}`);
 		} finally {
 			await rig.close();
 		}
@@ -508,3 +516,20 @@ describe('workspace observe integration', () => {
 		}
 	});
 });
+
+/** A BMP file of one pixel: the 14-byte file header, the 40-byte info header, and one padded row. */
+function onePixelBmp(): Uint8Array {
+	const bytes = new Uint8Array(58);
+	const view = new DataView(bytes.buffer);
+	bytes.set([0x42, 0x4d]);
+	view.setUint32(2, 58, true);
+	view.setUint32(10, 54, true);
+	view.setUint32(14, 40, true);
+	view.setInt32(18, 1, true);
+	view.setInt32(22, 1, true);
+	view.setUint16(26, 1, true);
+	view.setUint16(28, 24, true);
+	view.setUint32(34, 4, true);
+	bytes.set([0, 0, 255, 0], 54);
+	return bytes;
+}

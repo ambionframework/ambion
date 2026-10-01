@@ -48,8 +48,6 @@ export interface WorkspaceToolsOptions {
 	 * their files.
 	 */
 	readonly skills?: SkillSet;
-	/** Render image parts as model attachments. Bytes are retained either way. */
-	readonly images?: boolean;
 }
 
 /**
@@ -180,10 +178,9 @@ interface WorkspaceBackings {
 function capabilitiesOf(
 	shell: WorkspaceResource<WorkspaceEnv>,
 	{ sql, git, connections, store, processes }: WorkspaceBackings,
-	images: boolean,
 ): readonly Capability[] {
 	return [
-		fileCapability(shell.use, images),
+		fileCapability(shell.use),
 		processCapability({ shell: shell.use, processes }),
 		snapshotCapability(store),
 		sql && sqlCapability(sql.backend, sql.owner),
@@ -194,7 +191,7 @@ function capabilitiesOf(
 				server: git.backend.label,
 				workspace: shell.name,
 			}),
-		connections && sensorCapability({ connections, store, images }),
+		connections && sensorCapability({ connections, store }),
 	].filter((capability) => capability !== undefined);
 }
 
@@ -212,9 +209,8 @@ function workspaceTools(
 	shell: WorkspaceResource<WorkspaceEnv>,
 	backends: WorkspaceBackings,
 	audit: AuditLog | undefined,
-	images = true,
 ): ToolBundle {
-	const capabilities = capabilitiesOf(shell, backends, images);
+	const capabilities = capabilitiesOf(shell, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
 	const toolLine = defaultToolGuidance(tools.map((tool) => tool.name));
 	const [first = '', ...rest] = capabilities.flatMap((capability) => capability.notes);
@@ -452,23 +448,15 @@ export function openWorkspace(options: {
 		{ sql, git, processes: table, store, connections },
 		audit,
 	);
-	const textToolBundle = workspaceTools(
-		bash,
-		resource,
-		{ sql, git, processes: table, store, connections },
-		audit,
-		false,
-	);
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
 		subscribe: (listener: (event: ProcessEvent) => void) => table.subscribe(listener),
 		cancel: (handle: string) => table.hostCancel(handle),
 	});
 	const tools = (toolsOptions?: WorkspaceToolsOptions): ToolBundle => {
-		const bundle = toolsOptions?.images === false ? textToolBundle : toolBundle;
 		return toolsOptions?.skills === undefined
-			? bundle
-			: withSkills(bundle, skillSetOf(toolsOptions.skills), resource.use);
+			? toolBundle
+			: withSkills(toolBundle, skillSetOf(toolsOptions.skills), resource.use);
 	};
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, mirrorAgent, layout.rooms, mirrorOptions);
