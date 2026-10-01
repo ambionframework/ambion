@@ -149,7 +149,7 @@ tools.
 | Snapshots    | `snapshot`, `restore`                    | Every workspace                   | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
 | Tables       | `sql`                                    | With a SQL backend                | [Workspace](docs/workspace.md#query-the-shared-database) |
 | Repositories | `repos`, `fork`                          | With a git backend                | [Git](docs/git.md)                                       |
-| Sensors      | `connect`, `disconnect`, `observe`                   | With a backend that has endpoints | [Sensors](docs/sensors.md)                               |
+| Sensors      | `connect`, `disconnect`, `observe`       | With a backend that has endpoints | [Sensors](docs/sensors.md)                               |
 | Skills       | `read`, `bash`                           | When the host passes skills       | [Skills](docs/skills.md)                                 |
 
 **Actuators are a pattern over processes.** A controller command started

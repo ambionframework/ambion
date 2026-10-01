@@ -79,7 +79,7 @@ the existing agent-name grammar, `^[a-z][a-z0-9-]*$`.
 
 ## Host lifecycle and disconnect
 
-**The connection registry owns link lifetime.** A ports-enabled workspace
+**The connection registry owns link lifetime.** A workspace with endpoints
 exposes `workspace.sensors` to its host. `subscribe(listener)` returns an
 unsubscribe function. It reports committed `connected`, `refreshed`,
 `disconnected`, and `unavailable` events. Each event holds an immutable
@@ -94,7 +94,7 @@ returns the active connection and its standard sensor client, or undefined.
 This is a host read surface. It does not perform automatic evidence retention;
 agent evidence reads use standard `observe`. A host can use this surface for a
 live preview and stop it when the link disappears. The backend still owns the
-port transport. No callback is required in each sensor server implementation.
+endpoints. No callback is required in each sensor server implementation.
 
 **`disconnect({ name })` detaches a link without stopping its process.** Only
 the connection owner can disconnect it. The operation makes sensor reads

@@ -32,8 +32,7 @@ export async function openHost(options: {
 	const workspace = openWorkspace({
 		name: 'camera-chat',
 		backend: {
-			bash: localBashBackend(`${directory}/workspace`),
-			git: await localGitBackend(`${directory}/git`),
+			bash: localBashBackend(`${directory}/workspace`, await localGitBackend(`${directory}/git`)),
 		},
 		audit: {},
 	});
@@ -131,8 +130,8 @@ function activityText(event: RoomNotification, previous: string): string {
 			return 'Agent is observing and thinking';
 		case 'activation_end':
 			return 'Ready';
-		case 'tool_execution_start':
-			return `Agent is using ${event.toolName}`;
+		case 'tool_call':
+			return `Agent is using ${event.name}`;
 		case 'abandoned':
 			return 'Agent could not answer. Check the model credentials and camera status.';
 		default:

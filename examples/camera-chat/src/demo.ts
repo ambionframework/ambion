@@ -1,4 +1,5 @@
-import { callTool, quiet, scripted, toolResultTexts } from '@ambionframework/pi/testing';
+import { callTool, quiet } from '@ambionframework/ambion/testing';
+import { scriptedStream, toolResultTexts } from '@ambionframework/pi/testing';
 
 /** The demo reads status this many times, 100 ms apart, before it reports a failed start. */
 const READY_READS = 100;
@@ -16,7 +17,7 @@ export function demoStream() {
 	let reads = 0;
 	let handle = '';
 	let port = 0;
-	return scripted(async (context) => {
+	return scriptedStream(async (context) => {
 		const results = toolResultTexts(context);
 		const last = results.at(-1) ?? '';
 		switch (phase++) {
