@@ -1,24 +1,27 @@
 /**
- * A seat on the real binary reads nothing from the host user. The host here
- * is poisoned: its home holds user settings with hooks, an environment
- * block, a `CLAUDE.md`, a skill, an MCP server, and a `.bashrc`. Its project
- * holds the same, with an `AGENTS.md` and a `.mcp.json`. The config home of
- * the seat holds a planted `MEMORY.md`. The seat runs one `Bash` command.
+ * A seat on the real binary reads nothing from the host user. A Claude seat
+ * has no built-in tool, so the model cannot show what the process holds. A
+ * wrapper around the real binary (`support/wire.mjs`) records the names of
+ * the variables of the process, its working directory, and its `HOME` and
+ * `CLAUDE_CONFIG_DIR`.
  *
- * With `CLAUDE_CONFIG_DIR` set, the binary reads its user tier from that
- * directory and not from `$HOME/.claude`. The test poisons both. The poison
- * in `$HOME` tests the `.bashrc`. The poison in the config directory tests
- * `settingSources`, `skills`, and `strictMcpConfig` at the user tier.
+ * The host here is poisoned. Its home holds user settings with hooks, an
+ * environment block, a `CLAUDE.md`, a skill, an MCP server, and a `.bashrc`.
+ * The config directory of the seat holds the same user tier, because the
+ * binary reads its user tier there when `CLAUDE_CONFIG_DIR` is set. The work
+ * directory of the seat, which is its `cwd`, holds a poisoned project with an
+ * `AGENTS.md` and a `.mcp.json`. The config directory also holds a planted
+ * `MEMORY.md`.
  *
  * Each assertion tests one leak. `POISON_RC` and `POISON_USER_ENV` are names
- * of variables, and the output of the command lists such names. The marker
- * `POISON-TEXT-` stands in file contents only, so a transcript that holds it
- * proves that a file reached the model.
+ * of variables. The marker `POISON-TEXT-` stands in file contents only, so a
+ * transcript that holds it proves that a file reached the model.
  */
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
 import { enter } from '../../../ambion/test/support/room.ts';
 import { segment } from '../../src/home.ts';
@@ -26,6 +29,7 @@ import { claudeExecution } from '../../src/index.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
 const ROOM_TOOLS = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
+const WIRE = fileURLToPath(new URL('./support/wire.mjs', import.meta.url));
 
 /** The settings that a poisoned user or project holds. `kind` and `markers` name the files that they touch. */
 function poisonedSettings(kind: string, markers: string) {
@@ -81,10 +85,9 @@ async function poisonedHome(markers: string): Promise<string> {
 	return home;
 }
 
-/** The poisoned project directory that the seat names as its `cwd`. */
-async function poisonedProject(markers: string): Promise<string> {
-	const project = await realpath(await mkdtemp(join(tmpdir(), 'ambion-poison-project-')));
-	await plant(project, {
+/** The project tier that the binary reads from its working directory. */
+async function poisonProject(work: string, markers: string): Promise<void> {
+	await plant(work, {
 		'.claude/settings.json': JSON.stringify(poisonedSettings('project', markers)),
 		'CLAUDE.md': 'POISON-TEXT-project-claude-md',
 		'AGENTS.md': 'POISON-TEXT-project-agents-md',
@@ -92,7 +95,22 @@ async function poisonedProject(markers: string): Promise<string> {
 			mcpServers: { poison: { command: 'touch', args: [join(markers, 'project-mcp')] } },
 		}),
 	});
-	return project;
+}
+
+/** What the wrapper logged for each start of the binary. */
+interface Start {
+	names: string[];
+	cwd: string;
+	HOME: string;
+	CLAUDE_CONFIG_DIR: string;
+}
+
+async function startsIn(log: string): Promise<Start[]> {
+	const text = await readFile(log, 'utf8');
+	return text
+		.split('\n')
+		.filter((line) => line !== '')
+		.map((line) => JSON.parse(line) as Start);
 }
 
 /** The files under a directory that end with `suffix`. */
@@ -101,13 +119,6 @@ async function filesEnding(root: string, suffix: string): Promise<string[]> {
 	return entries
 		.filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
 		.map((entry) => join(entry.parentPath, entry.name));
-}
-
-/** The text of a tool result output. */
-function textOf(output: unknown): string {
-	if (typeof output === 'string') return output;
-	if (!Array.isArray(output)) return JSON.stringify(output);
-	return output.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
 }
 
 const cleanup: string[] = [];
@@ -122,36 +133,28 @@ live('hermetic seat', () => {
 		const markers = await mkdtemp(join(tmpdir(), 'ambion-poison-markers-'));
 		const configRoot = await realpath(await mkdtemp(join(tmpdir(), 'ambion-poison-root-')));
 		const home = await poisonedHome(markers);
-		const project = await poisonedProject(markers);
-		cleanup.push(markers, configRoot, home, project);
+		const wireLog = join(configRoot, 'wire.log');
+		cleanup.push(markers, configRoot, home);
 		vi.stubEnv('HOME', home);
 		vi.stubEnv('AMBION_SECRET', 'POISON-TEXT-host-secret');
-		const definition = seat('hermetic', 'Runs one command.', {
-			instructions: `
-				When asked, run this exact command once with the Bash tool, and no
-				other command: env | cut -d= -f1 | sort; echo "HOME=$HOME"
-				Then say the word done once.
-			`,
-			allowedTools: ['Bash'],
-			cwd: project,
+		const definition = seat('hermetic', 'Says one word.', {
+			instructions: 'When asked, say the word done once.',
 		});
-		const {
-			session,
-			name,
-			steps: stepsOf,
-		} = await open('hermetic', [definition], claudeExecution({ configRoot }));
+		const execution = claudeExecution({
+			configRoot,
+			pathToClaudeCodeExecutable: WIRE,
+			env: { AMBION_WIRE_LOG: wireLog },
+		});
+		const { session, name, steps: stepsOf } = await open('hermetic', [definition], execution);
 		try {
-			// The planted memory sits where the CLI looks for the memory of this project.
 			const seatDirectory = join(configRoot, segment(name), segment('hermetic'));
-			const memory = join(
-				seatDirectory,
-				'config',
-				'projects',
-				project.replace(/[^a-zA-Z0-9]/g, '-'),
-				'memory',
-			);
+			const work = join(seatDirectory, 'work');
+			const config = join(seatDirectory, 'config');
+			// The planted memory sits where the binary looks for the memory of this working directory.
+			const memory = join(config, 'projects', work.replace(/[^a-zA-Z0-9]/g, '-'), 'memory');
 			await plant(memory, { 'MEMORY.md': 'POISON-TEXT-memory' });
-			await poisonConfig(join(seatDirectory, 'config'), markers);
+			await poisonConfig(config, markers);
+			await poisonProject(work, markers);
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
@@ -163,19 +166,22 @@ live('hermetic seat', () => {
 			await untilQuiet(session);
 			const steps = stepsOf(activation);
 
-			// The harness step shows what the seat ran with.
+			// The harness step shows what the seat ran with: the room tools, and the room server alone.
 			const [harness] = stepsOfType(steps, 'harness');
-			expect(new Set(harness?.tools)).toEqual(new Set(['Bash', ...ROOM_TOOLS]));
+			expect(new Set(harness?.tools)).toEqual(new Set(ROOM_TOOLS));
 			expect(harness?.servers).toEqual([{ name: 'ambion', status: 'connected' }]);
-			expect(harness?.cwd).toBe(project);
+			expect(harness?.cwd).toBe(work);
 
-			// The shell read no rc file, and the environment holds no host variable.
-			const results = stepsOfType(steps, 'tool_result').map((step) => textOf(step.output));
-			const output = results.find((text) => text.includes('HOME=')) ?? '';
-			expect(output).not.toContain('POISON');
-			expect(output).not.toContain('AMBION_SECRET');
-			const seatHome = /^HOME=(.*)$/m.exec(output)?.[1] ?? '';
-			expect(seatHome).toBe(join(seatDirectory, 'home'));
+			// The process holds no host variable, and its directories are the directories of the seat.
+			const starts = await startsIn(wireLog);
+			expect(starts.length).toBeGreaterThan(0);
+			for (const start of starts) {
+				expect(start.names).not.toContain('AMBION_SECRET');
+				expect(start.names.filter((name) => name.includes('POISON'))).toEqual([]);
+				expect(start.HOME).toBe(join(seatDirectory, 'home'));
+				expect(start.CLAUDE_CONFIG_DIR).toBe(config);
+				expect(await realpath(start.cwd)).toBe(work);
+			}
 
 			// No hook and no server of the host ran.
 			expect(await readdir(markers)).toEqual([]);
@@ -183,10 +189,10 @@ live('hermetic seat', () => {
 			// No file of the host reached the model. Only a transcript holds what the model read.
 			const transcripts = await filesEnding(configRoot, '.jsonl');
 			expect(transcripts.length).toBeGreaterThan(0);
-			// The transcript sits in the project key that the test computed, so the memory file was in reach.
-			expect(transcripts.map((path) => dirname(path))).toContain(dirname(memory));
 			for (const path of transcripts)
 				expect(await readFile(path, 'utf8')).not.toContain('POISON-TEXT-');
+			// The transcript sits in the project key that the test computed, so the memory file was in reach.
+			expect(transcripts.map((path) => dirname(path))).toContain(dirname(memory));
 			expect(existsSync(join(memory, 'MEMORY.md'))).toBe(true);
 		} finally {
 			await session.stop();

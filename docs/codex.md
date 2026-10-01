@@ -242,7 +242,7 @@ process.
 
 ## Step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
 table below gives the Codex source of each step.
 
 **Each item that Codex reports becomes steps in the trace.** Codex reports an
@@ -281,9 +281,6 @@ completed `file_change`. The next ordinary `say` cites them in `refs`,
 through the `roomTools` options of the session, and the executor holds each
 path once. A ref is an absolute URI with a scheme, so
 the executor writes each path as a `file:` URI. The room refuses a bare path.
-
-**The package writes no `approval` step.** Codex answers its own approvals by
-its policy and reports none through the SDK.
 
 ## Usage
 

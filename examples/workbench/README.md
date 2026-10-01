@@ -262,7 +262,7 @@ the file that another agent reads.
 | Family | How it enforces the guarantee                                        |
 | ------ | -------------------------------------------------------------------- |
 | Pi     | Has no native tool. The seat holds only the tools that it receives.  |
-| Claude | Passes no built-in tool. The definition sets no `allowedTools`.      |
+| Claude | Passes no built-in tool. No Claude definition option names one.      |
 | Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
 
 `test/tool-set.test.ts` fails when a definition drifts from this. The live

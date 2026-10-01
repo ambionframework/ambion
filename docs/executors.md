@@ -416,7 +416,7 @@ the context that the core gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has eleven kinds,
+**A step is one thing an activation did.** The vocabulary has ten kinds,
 and every executor family shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
@@ -431,7 +431,6 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                                      |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.                   |
 | `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                                     |
-| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                                         |
 | `harness`     | executor    | What the harness ran with: its name, model, `cwd`, tools, and servers. Claude records it. Pi and Codex record none. |
 | `usage`       | executor    | Tokens and cost.                                                                                                    |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`.                  |
@@ -617,8 +616,8 @@ family. `@ambionframework/claude` is the worked example, and
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
 4. **Record the steps you own.** Call `trace.record` of the activation for
-   `thinking`, `text`, `tool_call`, `tool_result`, `approval`, and
-   `usage`. The driver records `pass`, `room`, and `end`. The core records
+   `thinking`, `text`, `tool_call`, `tool_result`, `harness` when the
+   harness reports its session, and `usage`. The driver records `pass`, `room`, and `end`. The core records
    `steer`, and it raises the tool events from the steps.
 5. **Report what the model consumed.** Call `read(range)` when the model
    consumes a range, and `delivered(call)` when a tool result reaches it,
@@ -657,8 +656,6 @@ const reviewer = defineAgent({
   executor: claude({
     instructions: 'Speak when the plan lacks evidence.',
     model: 'claude-sonnet-5',
-    allowedTools: ['Read'],
-    cwd: '/work/plans',
   }),
 });
 

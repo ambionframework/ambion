@@ -57,7 +57,7 @@ export function scenarioOf(plan: ExecutorPlan): FakeScenario {
 export interface ClaudeHarnessOptions {
 	/** The path of the fake Claude Code executable. */
 	readonly executable: string;
-	/** Extra environment for the fake. */
+	/** Variables laid over the allowlisted environment of the fake. */
 	readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
@@ -77,7 +77,7 @@ export function claudeExecutorHarness(options: ClaudeHarnessOptions): ExecutorHa
 					executor: claude({ instructions: '', model: 'fake' }),
 				},
 				pathToClaudeCodeExecutable: options.executable,
-				env: { ...process.env, ...options.env, AMBION_FAKE: JSON.stringify(scenarioOf(plan)) },
+				env: { ...options.env, AMBION_FAKE: JSON.stringify(scenarioOf(plan)) },
 			}),
 		can: { steer: true, usage: true, permanentFailure: true, memory: true },
 	};

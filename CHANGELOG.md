@@ -2,58 +2,66 @@
 
 ## Unreleased
 
-**A Claude seat gets its own config home and an allowlisted
-environment.** This breaks a host that relied on `claude login`. The
-executor sets `CLAUDE_CONFIG_DIR` to one directory for each seat, so the
-sign-in in the `~/.claude` directory of the host user no longer reaches a
-seat. Pass `ANTHROPIC_API_KEY`, or the token from `claude setup-token` as
-`CLAUDE_CODE_OAUTH_TOKEN`. To share the config home of the host on Linux,
-pass an `env` that names `CLAUDE_CONFIG_DIR`. That shares the sessions and the
-`.credentials.json` file. On macOS the sign-in lives in the keychain under a
-name that depends on `CLAUDE_CONFIG_DIR`, so run `claude login` with the same
-variable set, or use `claude setup-token`. `claudeExecution({ configRoot })` places
-the seat directories at `<configRoot>/<room>/<seat>`. Without it, each seat
-gets a private directory in the temporary directory, and a restart of the
-process loses its sessions. Without `env`, the seat no longer inherits the
-whole host environment. It gets `PATH`, `HOME`, the locale, the proxy and
-certificate variables, `CLAUDE_CODE_OAUTH_TOKEN`, and the `ANTHROPIC_` and
-`LC_` prefixes. An explicit `env` still replaces the environment. A host on Bedrock,
-Vertex, Foundry, or another provider that `ANTHROPIC_*` does not cover must
-pass an `env` with the variables that provider needs. The allowlist holds no
-`AWS_` or `GOOGLE_` prefix. The executor also passes `skills: []` and sets
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
+**A Claude seat has no built-in tool.** This breaks a host that set a Claude
+policy option. `ClaudePolicy` keeps `effort` and `maxBudgetUsd`. The options
+`permissionMode`, `allowedTools`, `disallowedTools`, `canUseTool`, `cwd`, and
+`additionalDirectories` are gone. The query always passes `tools: []`, an
+allow list of the tools of the seat, the mode `dontAsk`, and no permission
+callback. Its `cwd` is the `work` directory of the seat. A seat reaches
+files and a shell only through the workspace tools of its bundles, and those
+run behind the workspace port, which can be a remote workstation. The
+executor passes `toolAliases` that route `Bash`, `Read`, `Write`, and `Edit`
+to the tool of the seat with the matching name. An alias redirects the name
+and converts no argument.
 
-**A Claude seat with no built-in tool runs in a scratch directory.** Its
-`cwd` is the `work` directory of its config home, unless the definition sets
-one. The executor passes `toolAliases`, which route `Bash`, `Read`, `Write`,
-and `Edit` to the tool of the seat with the matching name. An alias redirects the name only and converts no argument.
+**The `approval` step is gone.** No executor writes it. Pi and Codex never
+wrote it, and the Claude executor wrote it only for a permission request,
+which no seat raises now. The step vocabulary has ten kinds, with `harness`
+in the place of `approval`. The Workbench no longer draws an `approval` line.
+
+**A Claude seat has its own config home, home directory, and environment.**
+This breaks a host that relied on `claude login`. The executor sets
+`CLAUDE_CONFIG_DIR`, `HOME`, and `USERPROFILE` to directories of the seat,
+after it reads `env`, so no option shares the config home of the host user.
+The sign-in of `claude login` cannot reach a seat. Pass `ANTHROPIC_API_KEY`,
+or the token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`.
+`claudeExecution({ configRoot })` places the seat directories at
+`<configRoot>/<room>/<seat>`. Without it, each seat gets a private
+directory in the temporary directory, and a restart loses its sessions.
+
+**The `env` option of `claudeExecution` adds variables.** This breaks a host
+that passed a whole environment. The base is the allowlisted variables of the
+host process: `PATH`, `HOME`, the locale, the proxy and certificate
+variables, `CLAUDE_CODE_OAUTH_TOKEN`, and the `ANTHROPIC_` and `LC_`
+prefixes. A value in `env` adds or replaces a variable, and `undefined`
+removes one. The variables of the seat win over `env`. The executor then
+removes the variables of a Claude Code session of the host. A host on Bedrock,
+Vertex, Foundry, or another provider that `ANTHROPIC_*` does not cover must
+pass the variables that provider needs. The allowlist holds no `AWS_` or
+`GOOGLE_` prefix. The shell and the tools of the seat read no file of the
+host user. The filesystem of the host is not the filesystem of the seat,
+because the seat has no built-in tool.
+
+**A Claude query passes a settings overlay.** The flag tier turns auto-memory
+off and empties the commit, pull request, and session-link attribution.
+`settingSources` stays empty, and the query passes `skills: []`. The executor
+also sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, which holds before any
+settings tier, and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. A managed
+`attribution` can still add text.
 
 **A failed Claude pass carries the end of the process stderr.** Every failed
 pass adds the last 2,000 characters of the stderr to the message. This holds
-for a failed result, a query that ends early, and a query that throws. A failed result
-waits 50 milliseconds for the stderr, and it settles at once when the process
-ends or `close` runs. The failure class still comes from the result or the
-original error.
-
-**A Claude seat gets a `HOME` of its own, and a settings overlay.** Without
-`env`, `HOME` and `USERPROFILE` name the `home` directory of the seat. The shell of the seat reads no `.bashrc` of the host user. Git,
-ssh, and cloud tools read `~` in that directory. A `Bash` seat has no git
-identity unless the host passes an `env`. The filesystem stays open to a seat
-with `Bash` or `Read`. An explicit `env` keeps its own `HOME`.
-
-The executor also passes `settings` at the flag tier. It turns auto-memory
-off and empties the commit, pull request, and session-link attribution.
-`settingSources` stays empty. The executor also sets
-`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, which holds before any settings tier,
-so a managed setting cannot turn auto-memory on. A managed `attribution` can
-still add text.
+for a failed result, a query that ends early, and a query that throws. A
+failed result waits 50 milliseconds for the stderr, and it settles at once
+when the process ends or `close` runs. The failure class still comes from the
+result or the original error.
 
 **The trace has a `harness` step.** `Step` gains
 `{ type: 'harness'; name; version?; model?; cwd?; session?; auth?;
 permissionMode?; tools; servers }`, which records what the harness ran with.
 The Claude executor records one for each `system` init message. `tools` holds
 the room tools by plain name. `servers` holds each MCP server with its
-status. `auth` names the source of the credential. Pi and Codex record none. The step vocabulary now has eleven kinds.
+status. `auth` names the source of the credential. Pi and Codex record none.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets

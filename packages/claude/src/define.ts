@@ -10,27 +10,16 @@ import {
 	describeExecutor,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
-import type { CanUseTool, PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 
-/** What the harness may do. The executor passes each field to the Claude Agent SDK unchanged. */
+/**
+ * What the harness may spend and how hard it thinks. A Claude seat has no
+ * built-in tool, so no field here names a tool, a directory, or a permission.
+ * The executor passes each field to the Claude Agent SDK unchanged.
+ */
 export interface ClaudePolicy {
-	/** The SDK permission mode. Absent uses `default`, where every tool outside `allowedTools` asks. */
-	readonly permissionMode?: PermissionMode;
-	/** Tools that run with no request. Built-in names and `mcp__` names both count. */
-	readonly allowedTools?: readonly string[];
-	/** Tools the model never sees. */
-	readonly disallowedTools?: readonly string[];
-	/**
-	 * Answers a permission request. Each request becomes an `approval` step
-	 * that carries the answer. Absent, the executor denies every request.
-	 */
-	readonly canUseTool?: CanUseTool;
 	/** The most the activation may spend, in US dollars. */
 	readonly maxBudgetUsd?: number;
 	readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-	/** The working directory of the harness. */
-	readonly cwd?: string;
-	readonly additionalDirectories?: readonly string[];
 }
 
 export interface ClaudeOptions extends AgentExecutorBaseOptions, ClaudePolicy {
@@ -44,16 +33,7 @@ export interface ClaudeExecutor extends AgentExecutor, ClaudePolicy {
 	readonly model: string;
 }
 
-const POLICY = [
-	'permissionMode',
-	'allowedTools',
-	'disallowedTools',
-	'canUseTool',
-	'maxBudgetUsd',
-	'effort',
-	'cwd',
-	'additionalDirectories',
-] as const;
+const POLICY = ['maxBudgetUsd', 'effort'] as const;
 
 /** The Claude executor: the Claude Agent SDK's loop, model, instructions, tools and policy. */
 export function claude(options: ClaudeOptions): ClaudeExecutor {

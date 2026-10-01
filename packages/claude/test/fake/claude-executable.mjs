@@ -7,8 +7,8 @@
  * The scenario is JSON in `AMBION_FAKE`: `{ turns, log }`. `turns` holds one
  * list of actions for each turn the fake runs. A turn starts when a user
  * message waits, and it ends with a `result`. `log` names a file that takes
- * one JSON line for the arguments, the initialize request, and each
- * permission answer.
+ * one JSON line for the arguments, the initialize request, and the
+ * environment.
  *
  * `rejectResume` makes a resumed start exit before it says anything.
  * `rejectResumeResult` makes a resumed start answer as the real SDK does: a
@@ -29,7 +29,6 @@
  *   goes to standard error before the result, and `exit` exits with that code right after it.
  * - `{ stderr }`: write the text to standard error.
  * - `{ crash: { stderr, code } }`: write `stderr` to standard error and exit with `code`, with no result.
- * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
  * - `{ own: { name, input, output } }`: a tool the executable runs itself.
  */
 import { appendFileSync } from 'node:fs';
@@ -76,7 +75,13 @@ const until = async (ready) => {
 
 log({ argv: process.argv.slice(2), cwd: process.cwd() });
 // The log holds the names of the variables, and the values of these few that hold no secret.
-const LOGGED_VALUES = ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
+const LOGGED_VALUES = [
+	'HOME',
+	'USERPROFILE',
+	'CLAUDE_CONFIG_DIR',
+	'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+	'CLAUDE_CODE_DISABLE_AUTO_MEMORY',
+];
 log({
 	env: {
 		names: Object.keys(process.env),
@@ -182,21 +187,6 @@ async function callRoom(tool, args) {
 	return result;
 }
 
-async function permission({ tool, input }) {
-	const id = toolUse(tool, input);
-	const response = await ask({
-		subtype: 'can_use_tool',
-		tool_name: tool,
-		input,
-		tool_use_id: id,
-		permission_suggestions: [],
-	});
-	const decision = response.response;
-	log({ permission: { tool, id, behavior: decision.behavior } });
-	if (decision.behavior === 'allow') toolResult(id, [{ type: 'text', text: 'ran' }], false);
-	else toolResult(id, [{ type: 'text', text: decision.message ?? 'denied' }], true);
-}
-
 const actions = {
 	say: (text) => callRoom('say', { text }),
 	sayUntilLanded: async (text) => {
@@ -210,7 +200,6 @@ const actions = {
 	usage: (added) => {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
 	},
-	permission,
 	stderr: (text) => process.stderr.write(`${text}\n`),
 	crash: ({ stderr, code }) => {
 		process.stderr.write(`${stderr}\n`);

@@ -125,12 +125,10 @@ export function fakeRoom(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	// A host that sets its own config home would take the sessions of every test.
-	const { CLAUDE_CONFIG_DIR: _host, ...inherited } = process.env;
 	const executor = createClaudeExecutor({
 		definition,
 		pathToClaudeCodeExecutable: executable,
-		env: { ...inherited, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		env: { ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 		...extra,
 	});
 	const sessions: ExecutorSession[] = [];

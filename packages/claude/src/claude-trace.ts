@@ -15,7 +15,7 @@ import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sd
 const ROOM_PREFIX = `mcp__${ROOM_SERVER}__`;
 
 /** The name a step and an event show: the tool without the server prefix. */
-export function plainName(tool: string): string {
+function plainName(tool: string): string {
 	return tool.startsWith(ROOM_PREFIX) ? tool.slice(ROOM_PREFIX.length) : tool;
 }
 

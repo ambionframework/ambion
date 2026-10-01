@@ -42,7 +42,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
 import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
 import { type SeatHome, seatHome } from './home.ts';
-import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
+import { type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -262,7 +262,6 @@ class Activation implements ExecutorSession {
 					systemPrompt: `${pass.mechanism}\n\n${pass.agent}`,
 					server,
 					names,
-					canUseTool: approver(executor, this.trace, names),
 					runtime: this.runtime,
 					home: this.home,
 					stderr: (data) => tail.add(data),
