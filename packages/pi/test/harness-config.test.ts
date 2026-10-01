@@ -300,7 +300,7 @@ describe('the harness of an activation', () => {
 			"Activation names another seat: 'other'.",
 		],
 		[
-			'an executor of another family',
+			'an executor of another kind',
 			defineAgent({
 				name: 'worker',
 				identity: 'Works.',

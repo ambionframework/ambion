@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { pickPresent, present } from '../src/hosting.ts';
 import { contentText } from '../src/index.ts';
 
-it('keeps the fields of an executor family that hold a value', () => {
+it('keeps the fields of an executor kind that hold a value', () => {
 	expect(present({ a: 1, b: undefined, c: 0, d: '' })).toEqual({ a: 1, c: 0, d: '' });
 	const options = { mode: 'strict', limit: undefined, name: 'writer', extra: true };
 	const fields = pickPresent(options, ['mode', 'limit', 'name']);

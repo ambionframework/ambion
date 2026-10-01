@@ -872,11 +872,11 @@ const sql = sqliteBackend('./data/lab.db', {
 
 ### The SqlBackend interface
 
-**`SqlBackend` holds four members, and `SqlEnv` holds two.** A new SQL
+**`SqlBackend` holds four properties, and `SqlEnv` holds two.** A new SQL
 backend, such as a database server with one account for each agent,
 implements them.
 
-| Member                              | Meaning                                                                |
+| Property                            | Meaning                                                                |
 | ----------------------------------- | ---------------------------------------------------------------------- |
 | `connect(agent, files, signal?)`    | An `SqlEnv` for one agent. A backend with accounts connects as it      |
 | `dispose()`                         | Optional. Release local handles, and keep the data                     |
@@ -982,7 +982,7 @@ them.
 | Helper                                             | What it does                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `resolvePath`                                      | Holds the `~` and relative path rule                                     |
-| `HomeEnv`                                          | A base class: the file members, over `FileOperations` and `classify`     |
+| `HomeEnv`                                          | A base class: the file methods, over `FileOperations` and `classify`     |
 | `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
 | `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
 | `MAX_TIMER_SECONDS`                                | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
@@ -991,14 +991,14 @@ them.
 | `runScript`                                        | Runs one script, and gives its exit code and its output as text          |
 | `shellQuote`                                       | Puts one word in single quotes for `bash`                                |
 
-**`HomeEnv` implements the file members once.** A backend supplies two
-abstract members: `files`, a `FileOperations` with one throwing storage
-operation for each member, and `classify`, which turns what an operation
+**`HomeEnv` implements the file methods once.** A backend supplies two
+abstract properties: `files`, a `FileOperations` with one throwing storage
+operation for each method, and `classify`, which turns what an operation
 threw into a `FileError`. `HomeEnv` resolves the path, returns `aborted`
 when the context's signal is aborted, runs the operation, and calls
 `classify` with the path and a `FileExpect` hint: `file` for a read or a
 write, `directory` for `listDir`, and `any` for the rest. `classify` can
-return a promise. A backend can override a member that needs more than one
+return a promise. A backend can override a method that needs more than one
 operation. `HomeEnv` also implements `cwd`, `absolutePath`, `joinPath`,
 `readTextLines`, and `openTextLineReader`.
 
