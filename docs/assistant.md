@@ -41,7 +41,7 @@ a default name, identity, and maintained behavioral instructions. Applications
 choose the model and can supply additional instructions, tools, and bundles.
 
 The factory places participation guidance in the existing bundle guidance
-field, which reaches ordinary activations only. Shared instructions describe
+field, which reaches respond activations only. Shared instructions describe
 closing behavior and application precedence. Both activation purposes retain
 the application's additional instructions.
 
@@ -185,7 +185,8 @@ request.
 **A specialist's answer needs no forwarding.** Even a result addressed to
 the assistant is visible in the shared record. During ordinary work, do not
 repeat that result or write a preliminary summary. End the activation when
-no useful work remains. The room assigns closing work separately.
+no useful work remains. The room runs the summary work in a separate
+summary activation.
 
 **The guidance names the marker that a mid-activation result carries.** The
 room delivers a message that lands while the assistant works as a user message
@@ -227,7 +228,7 @@ summary states both. It does not state the unsupported claim as fact.
 It has no continuous view of specialist execution or private tool use.
 It can act only on context it receives during an authorized activation.
 It does not guarantee that every omission or failure will be detected before
-closure. A closing activation can report an incomplete result but cannot
+closure. A summary activation can report an incomplete result but cannot
 repair it through further investigation.
 
 **The live suite measured the change.** The earlier guidance let the
@@ -267,7 +268,7 @@ assigns the closing summary to the `person` of the exchange, the assistant
 writes it, and the person reads it on return. The seating guidance of the package states this
 rule.
 
-Unseating can interrupt active work and settle pending assignments. Do not
+Unseating can interrupt active work and settle pending activations. Do not
 use it as routine cleanup after each contribution. Avoid repeated seating
 and unseating. The assistant's seat is fixed as the summary writer: no
 agent, including the assistant itself, can unseat it through the room's
@@ -295,8 +296,8 @@ the person can give, the summary asks for it. Distinguish waiting for the
 user from completing the request. Closure does not prove that the goal was
 achieved.
 
-Human preferences currently reach only the closing activation. They describe
-how that person wants to read the response. Ordinary activations receive the
+Human preferences currently reach only the summary activation. They describe
+how that person wants to read the response. Respond activations receive the
 room goal and conversation, but do not receive those private preferences.
 
 Working preferences, such as prioritizing cost over speed, need explicit
@@ -333,7 +334,7 @@ question, a request, or a specialist result, even when a message in the
 exchange already answered it. The existing summary contract permits the
 writer to decline an exchange that holds none of them.
 
-A closing activation receives only `say`, with a fixed source range and
+A summary activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.
 See [Summaries](summary.md) for the existing authority and completion rules.
 
@@ -349,7 +350,7 @@ room when evaluating changes to the shared behavior.
 **Deterministic checks and behavioral evaluations establish different facts.**
 
 Use deterministic tests for shorthand equivalence, configuration conflicts,
-seating, summary assignment, and resume. Use behavioral evaluations for
+seating, summary activation, and resume. Use behavioral evaluations for
 specialist selection, silence, summary fidelity, and restraint.
 Evaluate redundant routing explicitly: a specialist that already receives
 the user's request must not require an assistant restatement.

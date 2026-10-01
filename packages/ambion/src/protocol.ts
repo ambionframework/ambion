@@ -17,9 +17,9 @@ import type { Static } from 'typebox';
 import type { leaseEndedSchema } from './bodies.ts';
 import type { ScheduledSay } from './scheduling.ts';
 import type {
-	AgentParticipantInfo,
+	AgentParticipant,
 	HarnessSession,
-	HumanParticipantInfo,
+	HumanParticipant,
 	Intent,
 	Message,
 	Seq,
@@ -34,7 +34,7 @@ export type ActivationPurpose =
 			readonly exchange: Seq;
 			/** The person of the exchange, whose summary completes the close. */
 			readonly person: string;
-			/** Every person the closing activation addresses, `person` first. */
+			/** Every person the summary activation addresses, `person` first. */
 			readonly people: readonly string[];
 			readonly through: Seq;
 	  };
@@ -83,8 +83,8 @@ export interface AgentPort {
 
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
-	| AgentParticipantInfo
-	| (HumanParticipantInfo & {
+	| AgentParticipant
+	| (HumanParticipant & {
 			readonly changedAt?: string;
 			readonly lastDeparture?: Seq;
 			readonly messagesSinceDeparture: number;

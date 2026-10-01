@@ -1,5 +1,5 @@
 /**
- * The rendered prompt of one ordinary and one closing activation, part by
+ * The rendered prompt of one respond and one summary activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
  * The speaking policy of a definition replaces the default in the agent part.
  * The resolved reminders of the definition's bundles join the context of a

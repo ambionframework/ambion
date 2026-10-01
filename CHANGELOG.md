@@ -8,6 +8,15 @@ package exported the type as `JournalEntry`. The core imported it as
 now has one name, `Entry`, in the journal package and in the core. The
 room's union is `RoomEntry`. The `journal` package no longer exports
 `JournalEntry`.
+**The purpose of an activation has one pair of values, and `ParticipantInfo`
+becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
+activation that writes a summary. It now holds `summarize`, the value that
+`ActivationPurpose.kind` already used. The prose names the two purposes a
+respond activation and a summary activation. `isClosing` in
+`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
+`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
+`AgentParticipant`, and `HumanParticipant`. The activation source and the
+activation ids do not change.
 **The body schemas are the one source of the body types.** The new file
 `packages/ambion/src/bodies.ts` holds the schema of each stored body.
 Before, a type and a schema each stated the body, and the two drifted.
@@ -114,6 +123,18 @@ The word `Runtime` now names the core `Runtime` alone.
 `scripted`. The core testing entry keeps `scripted`, the scripted
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
+
+**A Codex seat has the room tools on its first model request.** Codex
+starts an MCP server in the background and waits one second for an optional
+server. A loaded host starts the room tools server in more time, so the first
+request of a turn listed no `mcp__ambion` tool. A real model could not call
+`say` on that request and could answer in text that the room never hears.
+The executor now sets `required = true` on the room tools server. Codex waits
+for it, up to 30 seconds, before the first model request. A server that
+cannot start now ends `codex exec` with "required MCP servers failed to
+initialize" before any model request, and the activation fails as transient.
+The test endpoint no longer answers a request that lacks a tool with a probe.
+A request without `say` now fails the test.
 
 **A Codex seat stops when its host dies.** The SDK closes the input of
 `codex exec` at once. A host that died by SIGKILL or out of memory left

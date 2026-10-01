@@ -18,7 +18,7 @@ export interface DefineAssistantOptions extends Pick<
 const ASSISTANT_IDENTITY =
 	'Room assistant. Seats and unseats specialists as the request needs, and summarizes each exchange.';
 
-/** The existing bundle guidance reaches ordinary activations only. */
+/** The existing bundle guidance reaches respond activations only. */
 const ORDINARY_GUIDANCE = [
 	'This is an ordinary activation. Your ordinary work is membership: seat a reserve specialist when the request needs its expertise, and unseat a specialist when the person asks for it or the scope no longer needs it. When no membership change is needed and no rule below requires a message, end silently. The room assigns closing work separately; do not write a final answer during this activation.',
 	'The presence of the person who asked does not change the work. When that person has left the room, seat and route exactly as you do for a person who stays; the room delivers the closing summary to that person.',
@@ -36,7 +36,7 @@ const ORDINARY_GUIDANCE = [
 
 /**
  * Shared instructions preserve application overrides in both activation purposes.
- * The room renders the summary duties into a closing activation, so these
+ * The room renders the summary duties into a summary activation, so these
  * instructions add only the assistant's own verification rules.
  */
 const ASSISTANT_INSTRUCTIONS = [

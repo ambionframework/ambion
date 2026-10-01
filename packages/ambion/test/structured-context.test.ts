@@ -251,7 +251,7 @@ describe('structured activation context', () => {
 		const view = viewOf(priyaClose, facts(twoExchanges));
 
 		// Sam's already-summarised exchange is background priya's writer now
-		// reads, folded the same way it would be for an ordinary activation —
+		// reads, folded the same way it would be for a respond activation —
 		// so the writer needs the same instruction for reading one.
 		expect(view.context.messages.some((message) => message.kind === 'summary')).toBe(true);
 		const rendered = renderActivation(view, worker);

@@ -143,7 +143,7 @@ passes waits for the next delta.
 
 **Room tools run in process.** One in-process MCP server serves `say`, `seat`,
 `unseat`, and the tools of the agent. The model sees them as `mcp__ambion__`
-tools. A closing activation receives `say` only.
+tools. A summary activation receives `say` only.
 
 ## Policy and the trust boundary
 

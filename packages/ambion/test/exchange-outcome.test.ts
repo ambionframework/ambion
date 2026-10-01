@@ -109,7 +109,7 @@ describe('exchange outcomes', () => {
 		],
 		[
 			'exhausted',
-			'an abandoned response activation',
+			'an abandoned respond activation',
 			[ended(5, 'message:4:worker:1', 'abandoned'), close(6, 4, 4)],
 		],
 		[
@@ -309,7 +309,7 @@ describe('summary completion query', () => {
 			pending,
 		],
 		[
-			'an abandoned response activation',
+			'an abandoned respond activation',
 			owed,
 			[],
 			[hold('abandoned', 'message:5:assistant:1')],
@@ -466,7 +466,7 @@ describe('exchange session', () => {
 
 	it.each([
 		['the latest session of the seat in the same closed exchange', 'message:8:worker:2', 'second'],
-		['the session of the exchange a closing activation summarizes', 'closed:9:worker:1', 'second'],
+		['the session of the exchange a summary activation summarizes', 'closed:9:worker:1', 'second'],
 		['the own session of a seat beside another seat', 'message:8:writer:2', 'writer'],
 		['the session of the open exchange', 'message:15:worker:1', 'open'],
 		[
