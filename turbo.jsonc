@@ -1,10 +1,26 @@
 {
 	"$schema": "https://turbo.build/schema.json",
+	// AGENTS.md is a link to CLAUDE.md, and the repository owns its text.
+	"agentGuidance": false,
+	"noUpdateNotifier": true,
 	"globalPassThroughEnv": [
 		"NODE_EXTRA_CA_CERTS",
 		"SSL_CERT_FILE",
 		"REQUESTS_CA_BUNDLE",
 		"CI",
+		// Vitest reads these to pick its agent reporter, which prints failures only.
+		"AI_AGENT",
+		"AUGMENT_AGENT",
+		"CLAUDECODE",
+		"CLAUDE_CODE",
+		"CODEX_SANDBOX",
+		"CODEX_THREAD_ID",
+		"CURSOR_AGENT",
+		"GEMINI_CLI",
+		"GOOSE_PROVIDER",
+		"JUNIE_DATA",
+		"OPENCODE",
+		"REPL_ID",
 		// Read by scripts/publish.mjs, never by a cached task.
 		"NODE_AUTH_TOKEN",
 		"NPM_TOKEN",
@@ -15,9 +31,11 @@
 			"persistent": true,
 			"cache": false
 		},
+		// A task prints its log only when it fails.
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": ["dist/**"]
+			"outputs": ["dist/**"],
+			"outputLogs": "errors-only"
 		},
 		// Type-checking a package needs its dependencies' emitted `.d.ts`, so it
 		// waits on the upstream builds rather than only on its own.
@@ -29,7 +47,7 @@
 			"dependsOn": ["build", "^build"],
 			"inputs": ["src/**", "test/**", "vitest*.ts", "tsconfig.json", "package.json", "index.html"],
 			"outputs": [],
-			"outputLogs": "new-only"
+			"outputLogs": "errors-only"
 		}
 	}
 }
