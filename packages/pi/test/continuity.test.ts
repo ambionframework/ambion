@@ -129,9 +129,9 @@ function seatOn(
 	const opener = createPiOpener({
 		definition,
 		model: stubModel,
-		stream: scriptedStream((context, agent, call) => {
+		stream: scriptedStream((context, agent, request) => {
 			seen.push({ ...context, messages: [...context.messages] });
-			return script(context, agent, call);
+			return script(context, agent, request);
 		}),
 		now: () => 0,
 		sessions,
@@ -244,8 +244,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 
 	it('refuses a say against a record that moved', async () => {
 		const room = new TwoQuestions(3);
-		const { run } = seatOn(room, await store(), (_context, _agent, call) =>
-			call === 2 ? say('Yes.') : quiet(),
+		const { run } = seatOn(room, await store(), (_context, _agent, request) =>
+			request === 2 ? say('Yes.') : quiet(),
 		);
 		const first = await run('message:1:product:1');
 		await run('message:2:product:1', { resume: first.session });
@@ -291,15 +291,18 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('fails on a provider refusal, and records the session it continued', async () => {
-		const { run, errors } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) =>
-			call === 1
-				? quiet()
-				: ({
-						...fauxAssistantMessage('', {
-							stopReason: 'error',
-							errorMessage: 'Your credit balance is too low',
-						}),
-					} as AssistantMessage),
+		const { run, errors } = seatOn(
+			new TwoQuestions(),
+			await store(),
+			(_context, _agent, request) =>
+				request === 1
+					? quiet()
+					: ({
+							...fauxAssistantMessage('', {
+								stopReason: 'error',
+								errorMessage: 'Your credit balance is too low',
+							}),
+						} as AssistantMessage),
 		);
 		const first = await run('message:1:product:1');
 		const failed = await run('message:2:product:1', { resume: first.session });
@@ -357,8 +360,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('reads the whole view once when the room retries a failed activation on its session', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
-			if (call === 1) throw new Error('overloaded 529');
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, request) => {
+			if (request === 1) throw new Error('overloaded 529');
 			return quiet();
 		});
 		const failed = await run('message:2:product:1');
@@ -373,8 +376,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('prompts the delta once when the room retries a failed activation that continued a session', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
-			if (call === 2) throw new Error('overloaded 529');
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, request) => {
+			if (request === 2) throw new Error('overloaded 529');
 			return quiet();
 		});
 		const first = await run('message:1:product:1');
@@ -463,8 +466,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 				failing(await inner.create(scope, id, context), WRITES, () => broken),
 			open: (scope, id, context) => inner.open(scope, id, context),
 		};
-		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, call) => {
-			broken = call === 1;
+		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, request) => {
+			broken = request === 1;
 			return quiet();
 		});
 		const failed = await run('message:2:product:1');

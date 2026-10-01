@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**A conformance fixture is a fixture, and the testing entry names its own
+script types.** `@ambionframework/ambion/conformance` exports
+`ExecutorFixture` and `PortFixture` in place of `ExecutorHarness` and
+`PortHarness`. `ConformanceHarness` is now `ConformanceFixture` in
+`@ambionframework/journal/conformance`, and in the entries that re-export
+it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`ClaudeFixtureOptions`. `@ambionframework/ambion/testing` exports
+`ScriptStep`, `ScriptCall`, and `ScriptResult` in place of `Step`, `Call`,
+and `Result`, so `Step` names the trace step alone. The request counter of a
+script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
+`AMBION_HARNESS`.
 **`Executor` now names one thing: the value in an agent definition.** The
 word named three things before. The hosting entry renames the function type
 `Executor` to `ActivationOpener`. It renames `ExecutorSession` to

@@ -769,7 +769,7 @@ what the script says. The live tier proves the claims that need a real model.
 
 **The live tier runs the executor suite.** The live file
 `test/live/conformance.test.ts` runs the suite through
-`codexExecutorHarness` in `test/live/support.ts`: the model follows each
+`codexExecutorFixture` in `test/live/support.ts`: the model follows each
 plan from its instructions. A key that the provider refuses gives the
 permanent failure, and a `codex` binary that does not exist gives the
 transient one. The package has no `./testing` entry, because a fake `codex`

@@ -35,9 +35,9 @@ function recording(scripts: Record<string, PiScript>) {
 		Object.fromEntries(
 			Object.entries(scripts).map(([name, inner]): [string, PiScript] => [
 				name,
-				(context, agent, call) => {
+				(context, agent, request) => {
 					seen[name] = [...(seen[name] ?? []), context];
-					return inner(context, agent, call);
+					return inner(context, agent, request);
 				},
 			]),
 		),
@@ -57,11 +57,11 @@ const desk = byAgent({
 describe('agentActor', () => {
 	it('plays the brief through the loop, reads what the person saw, and stops', async () => {
 		const { seen, script } = recording({
-			actor: (context, _agent, call) => {
-				if (call === 1) return callTool('send', { text: 'Can we pour?' });
-				if (call === 2 && contextText(context).includes('Which day?'))
+			actor: (context, _agent, request) => {
+				if (request === 1) return callTool('send', { text: 'Can we pour?' });
+				if (request === 2 && contextText(context).includes('Which day?'))
 					return callTool('send', { text: 'Thursday.' });
-				if (call === 3) return callTool('stop', { reason: 'Thursday is dry.' });
+				if (request === 3) return callTool('stop', { reason: 'Thursday is dry.' });
 				return quiet();
 			},
 		});
@@ -87,8 +87,8 @@ describe('agentActor', () => {
 
 	it('calls its tools as the person before it sends, and keeps the calls on the move', async () => {
 		const workspace = openWorkspace({ name: 'site', backend: { bash: memoryBackend() } });
-		const script: PiScript = (_context, _agent, call) =>
-			call === 1
+		const script: PiScript = (_context, _agent, request) =>
+			request === 1
 				? callTool('write', { path: 'note.txt', content: 'Pour on Thursday.' })
 				: callTool('send', { text: 'I wrote the plan down.', to: 'desk' });
 		const actor = agentActor({
@@ -110,8 +110,8 @@ describe('agentActor', () => {
 	});
 
 	it('asks for text again when a send is blank', async () => {
-		const script: PiScript = (context, _agent, call) =>
-			call === 1
+		const script: PiScript = (context, _agent, request) =>
+			request === 1
 				? callTool('send', { text: '   ' })
 				: callTool('send', { text: toolResultTexts(context).join(' ') });
 		const move = await agentActor({ model: MODEL, brief: BRIEF, services: services(script) })({
@@ -232,9 +232,9 @@ describe('agentJudge', () => {
 	it('refuses a grade that misses a criterion or breaks the schema, and takes the next', async () => {
 		const simulation = await injectedSimulation();
 		const { seen, script } = recording({
-			judge: (_context, _agent, call) => {
-				if (call === 1) return grade([{ reason: '[2].', pass: true }]);
-				if (call === 2) return grade(CRITERIA.map(() => ({ reason: '[2].', pass: 'yes' })));
+			judge: (_context, _agent, request) => {
+				if (request === 1) return grade([{ reason: '[2].', pass: true }]);
+				if (request === 2) return grade(CRITERIA.map(() => ({ reason: '[2].', pass: 'yes' })));
 				return grade([
 					{ reason: 'The desk speaks at [2].', pass: true },
 					{ reason: 'no evidence: no day at [2].', pass: false },

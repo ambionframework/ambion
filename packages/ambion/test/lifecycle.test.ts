@@ -444,8 +444,8 @@ function toolAgent(calls: string[]): Options {
 		seats: {},
 		execution: piExecution({
 			sessions: 'memory',
-			stream: scriptedStream((context, _agent, call) =>
-				call === 1 && toolNames(context).includes('chosen') ? callTool('chosen', {}) : quiet(),
+			stream: scriptedStream((context, _agent, request) =>
+				request === 1 && toolNames(context).includes('chosen') ? callTool('chosen', {}) : quiet(),
 			),
 		}),
 	};

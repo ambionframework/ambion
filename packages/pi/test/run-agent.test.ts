@@ -70,9 +70,9 @@ describe('runAgent', () => {
 	});
 
 	it('returns the call that ends the run, the calls before it, and the spend of each request', async () => {
-		const script: PiScript = (_context, _agent, call) => {
-			if (call === 1) return spending('lookup', { key: 'thursday' }, 10);
-			if (call === 2) return spending('finish', { answer: '' }, 20);
+		const script: PiScript = (_context, _agent, request) => {
+			if (request === 1) return spending('lookup', { key: 'thursday' }, 10);
+			if (request === 2) return spending('finish', { answer: '' }, 20);
 			return spending('finish', { answer: 'Thursday is dry.' }, 30);
 		};
 		const result = await runAgent(services(script), request());

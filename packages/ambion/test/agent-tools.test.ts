@@ -316,11 +316,11 @@ describe('a running tool', () => {
 		const reads: string[] = [];
 		const { room, seen, frozen, events, reminded } = await probeRoom(
 			'broadcast',
-			(context, _who, call) => {
+			(context, _who, request) => {
 				prompts.push(context.systemPrompt ?? '');
 				reads.push(JSON.stringify(context.messages));
-				if (call <= 2) return callTool('probe', {});
-				return call === 3 ? say('done') : quiet();
+				if (request <= 2) return callTool('probe', {});
+				return request === 3 ? say('done') : quiet();
 			},
 			true,
 		);
@@ -355,7 +355,7 @@ describe('a running tool', () => {
 	it('passes no exchange to a tool called in an activation that no question opened', async () => {
 		const { room, seen } = await probeRoom(
 			'presence',
-			(_context, _who, call) => (call === 1 ? callTool('probe', {}) : quiet()),
+			(_context, _who, request) => (request === 1 ? callTool('probe', {}) : quiet()),
 			false,
 		);
 		expect(seen).toHaveLength(1);

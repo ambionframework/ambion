@@ -2,7 +2,7 @@
  * The cases every git backend (`GitBackend`) must pass, together with a
  * bash backend whose `git` reaches it.
  *
- * A harness opens a store: a factory that opens a git backend over the same
+ * A fixture opens a store: a factory that opens a git backend over the same
  * repositories each time it is called, and a factory that opens a bash
  * backend for one git backend. A case opens a workspace over the bash
  * backend, drives it as agents through `use` and through `git` in the
@@ -11,19 +11,19 @@
  * differs from one backend to the other.
  *
  * The suite knows no access type. Three cases touch a credential, and each
- * asks a hook of the harness for the fact it checks. The package that
+ * asks a hook of the fixture for the fact it checks. The package that
  * pairs the git backend with its bash backend implements the hooks.
  *
  * ```ts
- * describe.each(harnesses)('$name', (harness) => {
- * 	for (const c of gitConformance(harness)) it(c.name, c.run);
+ * describe.each(fixtures)('$name', (fixture) => {
+ * 	for (const c of gitConformance(fixture)) it(c.name, c.run);
  * });
  * ```
  */
 
 import {
 	type ConformanceCase,
-	type ConformanceHarness,
+	type ConformanceFixture,
 	check,
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
@@ -95,7 +95,7 @@ export interface GitConformanceProbe {
  */
 export interface GitConformanceBackend<
 	B extends GitBackend = GitBackend,
-> extends ConformanceHarness<GitConformanceStore<B>> {
+> extends ConformanceFixture<GitConformanceStore<B>> {
 	readonly name: string;
 	/** The shortest `credentialTtl`, in seconds, that the backend takes. */
 	readonly shortestCredentialTtl: number;
@@ -119,15 +119,15 @@ const TEMPLATES: GitConformanceOptions['templates'] = {
 	blank: { files: { 'README.md': 'blank\n' } },
 };
 
-/** One case: the pair it opened, and the harness that answers the credential facts. */
+/** One case: the pair it opened, and the fixture that answers the credential facts. */
 type Body = <B extends GitBackend>(
 	pair: GitConformancePair<B>,
-	harness: GitConformanceBackend<B>,
+	fixture: GitConformanceBackend<B>,
 ) => Promise<void>;
 
 /** Run `body` over a workspace on `store`, and dispose the workspace after. */
 async function withWorkspace<B extends GitBackend>(
-	harness: GitConformanceBackend<B>,
+	fixture: GitConformanceBackend<B>,
 	store: GitConformanceStore<B>,
 	body: Body,
 	options: GitConformanceOptions = { templates: TEMPLATES, shared: SHARED_FIXTURE },
@@ -138,7 +138,7 @@ async function withWorkspace<B extends GitBackend>(
 		backend: { bash: store.bash(backend) },
 	});
 	try {
-		await body({ backend, workspace }, harness);
+		await body({ backend, workspace }, fixture);
 	} finally {
 		await workspace.dispose();
 	}
@@ -214,7 +214,7 @@ const forkOfForkNamesItsSource: Body = async ({ workspace }) => {
 	check(review?.source === 'analyst/report', 'a fork of a fork does not name its direct source');
 };
 
-const reservedNamespaceIsRefused: Body = async (pair, harness) => {
+const reservedNamespaceIsRefused: Body = async (pair, fixture) => {
 	const { workspace } = pair;
 	for (const name of ['templates', 'shared']) {
 		const refused = await git(workspace, { name }, (env) => env.list()).then(
@@ -222,7 +222,7 @@ const reservedNamespaceIsRefused: Body = async (pair, harness) => {
 			() => true,
 		);
 		check(refused, `an agent named ${name} was not refused`);
-		const credential = await harness.issueCredentials(pair, { name }).then(
+		const credential = await fixture.issueCredentials(pair, { name }).then(
 			() => false,
 			() => true,
 		);
@@ -285,7 +285,7 @@ const pushesOutsideTheNamespaceAreRefused: Body = async ({ workspace }) => {
 	check((await pushAs(workspace, ANALYST, url, '~/mine')) === 0, "the owner's push was refused");
 };
 
-const concurrentForksKeepOneFork: Body = async (pair, harness) => {
+const concurrentForksKeepOneFork: Body = async (pair, fixture) => {
 	const { backend, workspace } = pair;
 	const first = await backend.connect(ANALYST);
 	const second = await backend.connect(ANALYST);
@@ -303,7 +303,7 @@ const concurrentForksKeepOneFork: Body = async (pair, harness) => {
 	// A bash backend asks for the credentials of an agent beside the forks of other agents.
 	let reading = true;
 	const reader = (async () => {
-		while (reading) await harness.issueCredentials(pair, REVIEWER);
+		while (reading) await fixture.issueCredentials(pair, REVIEWER);
 	})();
 	const forks = [];
 	for (let index = 0; index < 20; index++) {
@@ -326,7 +326,7 @@ const concurrentForksKeepOneFork: Body = async (pair, harness) => {
 	check(twin !== undefined, 'the fork analyst/twin is missing');
 	if (twin === undefined) return;
 	check(
-		await harness.writeCredential(pair, ANALYST, twin.url),
+		await fixture.writeCredential(pair, ANALYST, twin.url),
 		'the owner holds no write credential for its fork',
 	);
 };
@@ -454,12 +454,12 @@ const refusesPathsOutsideTheRoot = async <B extends GitBackend>(
 };
 
 const credentialExpires = async <B extends GitBackend>(
-	harness: GitConformanceBackend<B>,
+	fixture: GitConformanceBackend<B>,
 	store: GitConformanceStore<B>,
 ): Promise<void> => {
-	if (harness.shortestCredentialTtl > 5) return;
+	if (fixture.shortestCredentialTtl > 5) return;
 	await withWorkspace(
-		harness,
+		fixture,
 		store,
 		async (pair, hooks) => {
 			await git(pair.workspace, ANALYST, (env) => env.list());
@@ -471,7 +471,7 @@ const credentialExpires = async <B extends GitBackend>(
 		{
 			templates: TEMPLATES,
 			shared: SHARED_FIXTURE,
-			credentialTtl: harness.shortestCredentialTtl,
+			credentialTtl: fixture.shortestCredentialTtl,
 		},
 	);
 };
@@ -507,17 +507,17 @@ const CASES: readonly [string, Body][] = [
 
 /** The cases of a git backend, as named test bodies. Each case opens a fresh store. */
 export function gitConformance<B extends GitBackend>(
-	harness: GitConformanceBackend<B>,
+	fixture: GitConformanceBackend<B>,
 ): readonly ConformanceCase[] {
 	const inWorkspace =
 		(body: Body) =>
 		(store: GitConformanceStore<B>): Promise<void> =>
-			withWorkspace(harness, store, body);
+			withWorkspace(fixture, store, body);
 	const sharedCase =
 		(body: (workspace: Workspace) => Promise<void>) =>
 		(store: GitConformanceStore<B>): Promise<void> =>
-			withWorkspace(harness, store, ({ workspace }) => body(workspace));
-	return conformanceSuite(harness, [
+			withWorkspace(fixture, store, ({ workspace }) => body(workspace));
+	return conformanceSuite(fixture, [
 		...CASES.map(([name, body]) => [name, inWorkspace(body)] as const),
 		[
 			'a registration with the same source writes nothing, and a changed one fast-forwards the template',
@@ -548,6 +548,6 @@ export function gitConformance<B extends GitBackend>(
 			'git guidance explains shared repository names and shared main policy',
 			sharedCase(sharedGuidanceExplainsPushPolicy),
 		],
-		['a credential is refused after it expires', (store) => credentialExpires(harness, store)],
+		['a credential is refused after it expires', (store) => credentialExpires(fixture, store)],
 	]);
 }

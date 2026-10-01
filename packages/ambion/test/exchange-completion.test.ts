@@ -65,9 +65,9 @@ type Outcome = (typeof outcomes)[number];
 
 const summaryFor =
 	(outcome: Outcome): PiScript =>
-	(_context, _agent, call) => {
+	(_context, _agent, request) => {
 		if (outcome === 'failed') throw new Error('Summary failed.');
-		return outcome === 'published' && call === 1 ? summarise('Recorded result.') : quiet();
+		return outcome === 'published' && request === 1 ? summarise('Recorded result.') : quiet();
 	};
 
 async function expectOutcome(exchange: ExchangeHandle | undefined, outcome: Outcome) {

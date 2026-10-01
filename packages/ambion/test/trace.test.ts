@@ -80,8 +80,8 @@ async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agen
 
 /** A stream that thinks, then calls `tool`, then stops. */
 const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {}) =>
-	scriptedStream((_context, _agent, call) =>
-		call === 1
+	scriptedStream((_context, _agent, request) =>
+		request === 1
 			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {
 					stopReason: 'toolUse',
 				})
@@ -423,7 +423,7 @@ describe('the steps the driver owns', () => {
 	] as const)('records a %s commit as a room step', async (result, answer) => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scriptedStream((_c, _a, call) => (call === 1 ? say('Hi.') : quiet())),
+			scriptedStream((_c, _a, request) => (request === 1 ? say('Hi.') : quiet())),
 			log.logger,
 		);
 		room.answer = answer;
@@ -439,8 +439,8 @@ describe('the steps the driver owns', () => {
 	it('records a delta pass and the steers of a running activation', async () => {
 		const release = deferred();
 		const started = deferred();
-		const stream: StreamFn = scriptedStream(async (_context, _agent, call) => {
-			if (call === 1) {
+		const stream: StreamFn = scriptedStream(async (_context, _agent, request) => {
+			if (request === 1) {
 				started.resolve();
 				await release.promise;
 			}

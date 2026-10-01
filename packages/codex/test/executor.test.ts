@@ -13,7 +13,7 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { HARNESS_NOTE } from '../src/options.ts';
+import { RESUMED_NOTE } from '../src/options.ts';
 import { recorded } from './fixtures.ts';
 import { open, sayingTurn, seat, viewOf } from './support.ts';
 
@@ -46,9 +46,9 @@ describe('exchange continuity', () => {
 			{ resume: ID },
 			{ resume: undefined },
 		]);
-		expect(room.seen.prompts[0]).not.toContain(HARNESS_NOTE);
-		expect(HARNESS_NOTE).toContain('`say`');
-		expect(HARNESS_NOTE).toContain('reaches no one');
+		expect(room.seen.prompts[0]).not.toContain(RESUMED_NOTE);
+		expect(RESUMED_NOTE).toContain('`say`');
+		expect(RESUMED_NOTE).toContain('reaches no one');
 	});
 
 	it.each([
@@ -67,7 +67,7 @@ describe('exchange continuity', () => {
 		await run(room.activate(), { harness, id: 'saved' });
 		expect(room.seen.opened).toEqual([{ resume }]);
 		// The seat text stays in the instructions file, also for a thread that resumes.
-		expect(room.seen.prompts[0]).not.toContain(HARNESS_NOTE);
+		expect(room.seen.prompts[0]).not.toContain(RESUMED_NOTE);
 	});
 
 	it('starts a fresh thread when the resume fails before the thread starts', async () => {
@@ -147,7 +147,7 @@ describe('native tools', () => {
 		expect(existsSync(config.model_catalog_json)).toBe(true);
 		// The file holds the seat text, and the prompt holds the view alone.
 		const text = readFileSync(config.model_instructions_file, 'utf8');
-		expect(text.startsWith(HARNESS_NOTE)).toBe(true);
+		expect(text.startsWith(RESUMED_NOTE)).toBe(true);
 		expect(text).toContain('Answer once.');
 		expect(room.seen.prompts[0]).not.toContain('Answer once.');
 		expect(thread?.workingDirectory && readdirSync(thread.workingDirectory)).toEqual([]);

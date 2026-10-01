@@ -89,9 +89,9 @@ function holdingAlpha(hold: number) {
 		sessions: 'memory',
 		stream: scriptedStream(
 			byAgent({
-				alpha: async (context, _agent, call) => {
+				alpha: async (context, _agent, request) => {
 					contexts.push(contextText(context));
-					if (call === hold) {
+					if (request === hold) {
 						started.resolve();
 						await release.promise;
 					}
@@ -276,16 +276,16 @@ describe.each(storages)('steering on $name', (storage) => {
 						stream: scriptedStream(
 							byAgent({
 								alpha: says(['First fact.', 'Second fact.']),
-								beta: async (_context, _agent, call) => {
-									if (call === 1) {
+								beta: async (_context, _agent, request) => {
+									if (request === 1) {
 										betaStarted.resolve();
 										await betaRelease.promise;
 									}
 									return quiet();
 								},
-								assistant: async (context, _agent, call) => {
+								assistant: async (context, _agent, request) => {
 									contexts.push(contextText(context));
-									if (call !== 1) return quiet();
+									if (request !== 1) return quiet();
 									summaryStarted.resolve();
 									await summaryRelease.promise;
 									return summarise('First exchange result.');

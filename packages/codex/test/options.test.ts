@@ -32,7 +32,7 @@ import { codex } from '../src/define.ts';
 import { seatHome } from '../src/home.ts';
 import {
 	clientOptions,
-	HARNESS_NOTE,
+	RESUMED_NOTE,
 	seatText,
 	serverPath,
 	threadOptions,
@@ -45,7 +45,7 @@ if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');
 describe('seatText', () => {
 	it('joins the harness note, the mechanism, and the agent part, in that order', () => {
 		expect(seatText({ mechanism: 'How a room works.', agent: 'Who the seat is.' })).toBe(
-			`${HARNESS_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
+			`${RESUMED_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
 		);
 	});
 });

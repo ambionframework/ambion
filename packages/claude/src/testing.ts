@@ -1,14 +1,14 @@
 /**
  * The tools that test a room on the Claude executor without a model: the
- * harness that runs the executor suite of `@ambionframework/ambion/conformance`
+ * fixture that runs the executor suite of `@ambionframework/ambion/conformance`
  * against a fake Claude Code executable.
  *
  * The fake is a script the SDK spawns through `pathToClaudeCodeExecutable`.
  * It reads its scenario from the `AMBION_FAKE` environment variable: a
- * JSON object with one list of actions for each turn. The harness maps each
+ * JSON object with one list of actions for each turn. The fixture maps each
  * plan of the suite to such a scenario.
  */
-import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { claude } from './define.ts';
 import { createClaudeOpener } from './executor.ts';
 
@@ -54,7 +54,7 @@ export function scenarioOf(plan: ExecutorPlan): FakeScenario {
 }
 
 /** Where the fake executable is, and what it runs with. */
-export interface ClaudeHarnessOptions {
+export interface ClaudeFixtureOptions {
 	/** The path of the fake Claude Code executable. */
 	readonly executable: string;
 	/** Extra environment for the fake. */
@@ -62,12 +62,12 @@ export interface ClaudeHarnessOptions {
 }
 
 /**
- * The harness that runs the executor suite on the Claude executor. It
+ * The fixture that runs the executor suite on the Claude executor. It
  * declares steering, usage and permanent failure, because the SDK takes a
  * message during a run, reports its spend, and names a refusal. It declares
  * memory, because the SDK persists a session and resumes it by id.
  */
-export function claudeExecutorHarness(options: ClaudeHarnessOptions): ExecutorHarness {
+export function claudeExecutorFixture(options: ClaudeFixtureOptions): ExecutorFixture {
 	return {
 		open: (plan, definition) =>
 			createClaudeOpener({

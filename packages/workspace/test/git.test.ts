@@ -540,7 +540,7 @@ describe('a seat in a room', () => {
 		const { workspace } = await lab();
 		const results: { tool: string; text: string; failed: boolean }[][] = [];
 		const room = await run([agent('analyst', { bundles: [workspace.tools()] })], {
-			analyst: (context, _who, call) => {
+			analyst: (context, _who, request) => {
 				results.push(toolResults(context));
 				const steps = [
 					callTool('fork', {
@@ -558,11 +558,11 @@ describe('a seat in a room', () => {
 					callTool('bash', { command: 'cd ~/report && git push origin week-39' }),
 					callTool('bash', { command: 'cd ~/report && git rev-parse HEAD' }),
 				];
-				if (call <= steps.length) return steps[call - 1] ?? quiet();
+				if (request <= steps.length) return steps[request - 1] ?? quiet();
 				// The agent writes the ref from the form that the git note states.
 				const hash = /[0-9a-f]{40}/.exec(toolResults(context).at(-1)?.text ?? '')?.[0] ?? '';
 				const ref = `ambion://workspace/lab/repo/analyst/report/branch/week-39/commit/${hash}`;
-				if (call === steps.length + 1)
+				if (request === steps.length + 1)
 					return callTool('say', { text: 'Pushed week-39.', refs: [ref] });
 				return quiet();
 			},
