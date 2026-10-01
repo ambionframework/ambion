@@ -8,6 +8,15 @@ package exported the type as `JournalEntry`. The core imported it as
 now has one name, `Entry`, in the journal package and in the core. The
 room's union is `RoomEntry`. The `journal` package no longer exports
 `JournalEntry`.
+**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
+describes one activation. The main entry and the hosting entry export the
+new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
+member names its seat in `seat`, where the members said `agent` and the
+`conflict` member said `author`. The tool members use `name` in place of
+`toolName`. The member types `tool_execution_start` and `tool_execution_end`
+are now `tool_call` and `tool_result`, the names that `Step` uses. The
+`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
+log line carries the new member types in its `event` field.
 **The verb `say` names the message type, its guard, the test verb, and the
 speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
 kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now

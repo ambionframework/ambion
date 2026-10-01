@@ -150,9 +150,9 @@ function queueCancellation(host: RoomHostState, seq: Seq): void {
 			if (host.heardLeases.has(lease.id))
 				host.emit({
 					type: 'activation_end',
-					agent: seat,
+					seat,
 					activation: lease.id,
-					spoke: state.messages.some((message) => message.activationId === lease.id),
+					said: state.messages.some((message) => message.activationId === lease.id),
 				});
 		}
 	});
@@ -167,7 +167,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(host, () => {
-			if (first) host.emit({ type: 'activation_start', agent: seat, activation: lease.id });
+			if (first) host.emit({ type: 'activation_start', seat, activation: lease.id });
 			// A claim that lost its confirmation never armed the expiry: this pass does.
 			void host.reconcile();
 		});
@@ -181,7 +181,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 			if (lease.reason === 'abandoned') {
 				host.emit({
 					type: 'abandoned',
-					agent: seat,
+					seat,
 					activation: lease.id,
 					cause: lease.cause ?? 'transient',
 				});
@@ -190,20 +190,20 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 		});
 		return;
 	}
-	const spoke = host.state().messages.some((m) => m.activationId === lease.id);
+	const said = host.state().messages.some((m) => m.activationId === lease.id);
 	publish(host, () => {
 		if (revoked) cutPort(host, seat, lease.id);
 		host.emit({
 			type: 'activation_end',
-			agent: seat,
+			seat,
 			activation: lease.id,
-			spoke,
+			said,
 			...(lease.usage === undefined ? {} : { usage: lease.usage }),
 		});
 		if (lease.reason === 'expired')
 			host.emit({
 				type: 'error',
-				agent: seat,
+				seat,
 				activation: lease.id,
 				error: new Error('The activation ran past its lease.'),
 			});
@@ -317,7 +317,7 @@ function emitDeliveryError(
 ): void {
 	host.emit({
 		type: 'delivery_error',
-		agent: seat,
+		seat,
 		activation,
 		operation,
 		error: error instanceof Error ? error : new Error(String(error)),

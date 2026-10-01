@@ -37,8 +37,7 @@ live('steer', () => {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'tool_execution_start' && e.toolName === 'check_calendar')
-						resolve(e.activation);
+					if (e.type === 'tool_call' && e.name === 'check_calendar') resolve(e.activation);
 				});
 			});
 			await visit.send({ text: 'When can we pour the slab?' });

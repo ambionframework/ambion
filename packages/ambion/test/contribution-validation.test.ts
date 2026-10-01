@@ -150,7 +150,7 @@ describe('the message byte limit', () => {
 		expect((await messagesOf(room)).some((m) => m.from === 'worker' && m.kind === 'said')).toBe(
 			false,
 		);
-		expect(events.some((e) => e.type === 'activation_end' && e.spoke === false)).toBe(true);
+		expect(events.some((e) => e.type === 'activation_end' && e.said === false)).toBe(true);
 	});
 });
 

@@ -75,7 +75,7 @@ live('the workspace', () => {
 		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
-			e.type === 'tool_execution_start' && e.agent === 'librarian' ? [e.toolName] : [],
+			e.type === 'tool_call' && e.seat === 'librarian' ? [e.name] : [],
 		);
 		expect(tools.some((tool) => tool === 'read' || tool === 'bash')).toBe(true);
 		expect(tools.some((tool) => ['write', 'edit', 'bash'].includes(tool))).toBe(true);
@@ -125,7 +125,7 @@ live('the workspace', () => {
 		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
-			e.type === 'tool_execution_start' && e.agent === 'analyst' ? [e.toolName] : [],
+			e.type === 'tool_call' && e.seat === 'analyst' ? [e.name] : [],
 		);
 		expect(tools).toContain('sql');
 		const answer = saidBy((await session.read()).messages, 'analyst');

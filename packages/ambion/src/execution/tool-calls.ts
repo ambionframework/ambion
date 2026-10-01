@@ -23,7 +23,7 @@ const COMMITS: ReadonlySet<string> = new Set([
 	DISMISS.name,
 ]);
 
-type ToolEvent = 'tool_execution_start' | 'tool_execution_end';
+type ToolEvent = 'tool_call' | 'tool_result';
 
 export class ToolCalls {
 	private readonly activation: string;
@@ -70,12 +70,12 @@ export class ToolCalls {
 		if (step.type === 'tool_call') {
 			this.named.set(step.call, step.name);
 			this.unclaimed.push({ call: step.call, name: step.name });
-			if (!COMMITS.has(step.name)) this.raise('tool_execution_start', step.name);
+			if (!COMMITS.has(step.name)) this.raise('tool_call', step.name);
 		} else if (step.type === 'tool_result') {
 			const name = this.named.get(step.call);
 			this.named.delete(step.call);
 			this.take((call) => call.call === step.call);
-			if (name !== undefined && !COMMITS.has(name)) this.raise('tool_execution_end', name);
+			if (name !== undefined && !COMMITS.has(name)) this.raise('tool_result', name);
 		}
 	}
 }

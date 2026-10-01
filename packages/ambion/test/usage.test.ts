@@ -68,7 +68,7 @@ describe.each(storages)('usage on $name storage', (storage) => {
 		await waitForRoom(room, 'quiet', 2_000);
 
 		const ends = events.filter(isEnd);
-		const worked = ends.find((event) => event.agent === 'product');
+		const worked = ends.find((event) => event.seat === 'product');
 		if (worked?.usage === undefined) throw new Error('Expected usage on activation_end.');
 		const steps = log
 			.of(worked.activation)

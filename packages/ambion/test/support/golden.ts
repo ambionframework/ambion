@@ -139,7 +139,7 @@ function session(): Promise<readonly Entry[]> {
 		}),
 		async drive(room) {
 			room.subscribe((event) => {
-				if (event.type === 'activation_end' && event.agent === worker.name) ended();
+				if (event.type === 'activation_end' && event.seat === worker.name) ended();
 			});
 			const person = await room.visit(priya);
 			await person.send({ to: worker.name, text: 'Can I tell the client Thursday?' });

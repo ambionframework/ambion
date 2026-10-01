@@ -343,7 +343,7 @@ describe('a running tool', () => {
 			expect(ctx.deadline).toBeLessThanOrEqual(Date.now() + 600_000);
 		}
 		const starts = events.filter(
-			(event) => event.type === 'activation_start' && event.agent === 'worker',
+			(event) => event.type === 'activation_start' && event.seat === 'worker',
 		);
 		expect(starts.map((event) => 'activation' in event && event.activation)).toEqual([activation]);
 		expect(frozen).toEqual([true, true]);

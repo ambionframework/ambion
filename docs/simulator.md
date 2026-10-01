@@ -428,7 +428,7 @@ source in the run.
 | What one exchange said            | `run.exchanges[].discussion`                                |
 | Unnecessary activations           | `run.exchanges[].view.activations`, by `seat` and `purpose` |
 | An activation failed or retried   | `run.exchanges[].view.activations[].outcome` and `attempt`  |
-| A tool was called                 | `tool_execution_start` in `run.events`                      |
+| A tool was called                 | `tool_call` in `run.events`                                 |
 | The lock refused a say            | `conflict` in `run.events`                                  |
 | Complete, cancelled, or exhausted | `run.exchanges[].view.outcome.kind`                         |
 | What the person read at the close | `run.exchanges[].summary`                                   |
