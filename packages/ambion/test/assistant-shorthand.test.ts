@@ -113,8 +113,8 @@ describe('assistant room shorthand', () => {
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context, agent, call) => {
-					if (agent === 'builder' && call === 1) return say('The answer.');
+				stream: scriptedStream((context, agent, request) => {
+					if (agent === 'builder' && request === 1) return say('The answer.');
 					if (agent === 'assistant' && isClosingContext(context)) {
 						closingTools.push(toolNames(context));
 						return say('The answer, summarized.');

@@ -191,21 +191,21 @@ Every other failure is transient.
 
 ## Test
 
-`@ambionframework/claude/testing` exports `claudeExecutorHarness`. It runs the
+`@ambionframework/claude/testing` exports `claudeExecutorFixture`. It runs the
 executor suite of `@ambionframework/ambion/conformance` against a fake Claude
 Code executable that the SDK spawns through `pathToClaudeCodeExecutable`. The
 suite needs no key and no network.
 
 ```ts
 import { executorConformance } from '@ambionframework/ambion/conformance';
-import { claudeExecutorHarness } from '@ambionframework/claude/testing';
+import { claudeExecutorFixture } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 describe('claude executor', () => {
-  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+  for (const c of executorConformance(claudeExecutorFixture({ executable }))) it(c.name, c.run);
 });
 ```
 
@@ -220,7 +220,7 @@ settings sources, or a resume. The package has no live tier.
 | ------------------------------------------------------ | --------------------------------------------------------- |
 | `claude(options)`                                      | The executor of an agent definition                       |
 | `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime` |
-| `claudeExecutorHarness`, `scenarioOf`                  | From `/testing`: the suite harness and its scenarios      |
+| `claudeExecutorFixture`, `scenarioOf`                  | From `/testing`: the suite fixture and its scenarios      |
 
 ## Troubleshooting
 

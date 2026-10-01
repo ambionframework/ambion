@@ -1,5 +1,5 @@
 /**
- * The harnesses of the git conformance cases: `justGitBackend` over a
+ * The fixtures of the git conformance cases: `justGitBackend` over a
  * temporary SQLite file, beside each just-bash backend. Each `backend` call
  * opens a new git backend over the same file, the way a restart of the host
  * does, and each `bash` call opens a just-bash backend for it. The hooks
@@ -69,7 +69,7 @@ async function probeCredential(pair: Pair, agent: WorkspaceAgent): Promise<GitCo
 	};
 }
 
-function harness(
+function fixture(
 	name: string,
 	bash: (dir: string, git: JustGitBackend) => BashBackend,
 ): GitConformanceBackend<JustGitBackend> {
@@ -93,7 +93,7 @@ function harness(
 	};
 }
 
-export const harnesses: readonly GitConformanceBackend<JustGitBackend>[] = [
-	harness('memory', (_dir, git) => memoryBackend({ git })),
-	harness('directory', (dir, git) => directoryBackend(dir, { git })),
+export const fixtures: readonly GitConformanceBackend<JustGitBackend>[] = [
+	fixture('memory', (_dir, git) => memoryBackend({ git })),
+	fixture('directory', (dir, git) => directoryBackend(dir, { git })),
 ];

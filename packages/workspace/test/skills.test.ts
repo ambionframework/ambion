@@ -190,12 +190,12 @@ describe('the skills of a seat', () => {
 				agent('clerk', { bundles: [workspace.tools({ skills: clerkSkills })] }),
 			],
 			{
-				surveyor: (context, _who, call) => {
+				surveyor: (context, _who, request) => {
 					prompts.surveyor = context.systemPrompt ?? '';
-					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
-					if (call === 2)
+					if (request === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
+					if (request === 2)
 						return callTool('read', { path: '~/.skills/pour-plan/references/limits.md' });
-					if (call === 3)
+					if (request === 3)
 						return callTool('bash', { command: '~/.skills/pour-plan/scripts/tonnage.sh 20' });
 					results.push(...toolResults(context).map((result) => result.text));
 					return quiet();
@@ -305,8 +305,8 @@ describe('the skills of a seat', () => {
 		await runAgent(
 			createExecutionServices({
 				sessions: 'memory',
-				stream: scriptedStream((context, _who, call) => {
-					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
+				stream: scriptedStream((context, _who, request) => {
+					if (request === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
 					read.push(...toolResults(context).map((result) => result.text));
 					return callTool('finish', {});
 				}),

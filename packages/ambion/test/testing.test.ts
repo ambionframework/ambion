@@ -57,10 +57,10 @@ describe('scripted', () => {
 		const results: string[][] = [];
 		const record =
 			(label: string, then: Script = () => quiet()): Script =>
-			(step, seat, call) => {
-				seen.push(`${label}:${seat}:${call}`);
+			(step, seat, request) => {
+				seen.push(`${label}:${seat}:${request}`);
 				results.push(step.results.map((result) => result.text));
-				return then(step, seat, call);
+				return then(step, seat, request);
 			};
 		const room = await open({
 			name: roomName('testing-route'),
@@ -68,8 +68,8 @@ describe('scripted', () => {
 			runtime: createRuntime(),
 			execution: scripted(
 				byAgent({
-					a: record('a', (_step, _seat, call) =>
-						call === 1 ? callTool('echo') : call === 2 ? say('an answer') : quiet(),
+					a: record('a', (_step, _seat, request) =>
+						request === 1 ? callTool('echo') : request === 2 ? say('an answer') : quiet(),
 					),
 					b: record('b'),
 				}),
@@ -121,9 +121,9 @@ describe('isSummarizing', () => {
 			summaryWriter: 'writer',
 			seats: { product: 'broadcast', writer: 'none' },
 			runtime: createRuntime(),
-			execution: scripted((step, seat, call) => {
+			execution: scripted((step, seat, request) => {
 				flags.push(isSummarizing(step.view));
-				return call === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
+				return request === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
 		});
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -141,7 +141,7 @@ describe('settled', () => {
 			name: roomName('testing-settled'),
 			agents: [agent('a')],
 			runtime: createRuntime(),
-			execution: scripted((_step, _seat, call) => (call === 1 ? say('an answer') : quiet())),
+			execution: scripted((_step, _seat, request) => (request === 1 ? say('an answer') : quiet())),
 		});
 		let reads = 0;
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -249,8 +249,8 @@ describe('scriptedOpener', () => {
 		const { open, commits } = harness(() => said(3 + commits.length));
 		const session = open(
 			scriptedOpener(
-				(_step, _seat, call) =>
-					call === 1 ? say('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
+				(_step, _seat, request) =>
+					request === 1 ? say('hi') : request === 2 ? schedule('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);

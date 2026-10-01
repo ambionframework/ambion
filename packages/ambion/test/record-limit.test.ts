@@ -59,9 +59,9 @@ async function watched(
 	const { limits, ...room } = options;
 	const pages: Page[] = [];
 	const contexts: { seat: string; text: string }[] = [];
-	const stream = scriptedStream((context, name, call) => {
+	const stream = scriptedStream((context, name, request) => {
 		contexts.push({ seat: name, text: contextText(context) });
-		return script(context, name, call);
+		return script(context, name, request);
 	});
 	const execution = around(piExecution({ sessions: 'memory', stream }), {
 		room(protocol, request) {
@@ -99,8 +99,8 @@ async function recorded(room: Room, text: string) {
 /** A worker that answers every question, and a scribe that summarizes when `writes` says so. */
 const scribing =
 	(people: string[], closings: string[], writes: (context: string) => boolean): PiScript =>
-	(context, name, call) => {
-		if (name !== 'scribe') return answersEveryQuestion(people)(context, name, call);
+	(context, name, request) => {
+		if (name !== 'scribe') return answersEveryQuestion(people)(context, name, request);
 		if (!isClosingContext(context) || !writes(context.systemPrompt ?? '')) return quiet();
 		closings.push(contextText(context));
 		return summarise('done');
@@ -134,8 +134,8 @@ describe('a limit windows the record', () => {
 	it('caps the record at the room for a seat with no token limit, and a token-limited seat stops at the room floor', async () => {
 		const { room, pages, contexts } = await watched(
 			[limited('worker'), limited('reader', 4000)],
-			(context, name, call) =>
-				name === 'worker' ? answersEveryQuestion(['andrei'])(context, name, call) : quiet(),
+			(context, name, request) =>
+				name === 'worker' ? answersEveryQuestion(['andrei'])(context, name, request) : quiet(),
 			{ limits: { context: { messages: 1 } } },
 		);
 		await ask(room, ['alpha marker', 'omega marker']);

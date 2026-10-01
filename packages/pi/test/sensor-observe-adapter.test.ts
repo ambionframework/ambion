@@ -27,8 +27,8 @@ it('passes actual observe content to the Pi provider', async () => {
 			agents: [worker],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context, _agent, call) => {
-					if (call === 1) return callTool('observe', { sensor: 'bench-one/bench' });
+				stream: scriptedStream((context, _agent, request) => {
+					if (request === 1) return callTool('observe', { sensor: 'bench-one/bench' });
 					for (const message of context.messages)
 						if (message.role === 'toolResult') providerToolResults.push(message);
 					return quiet();

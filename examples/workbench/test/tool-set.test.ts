@@ -4,7 +4,7 @@ import {
 	callTool,
 	quiet,
 	type Reply,
-	type Step,
+	type ScriptStep,
 	say,
 	scripted,
 	settled,
@@ -77,15 +77,17 @@ describe('the Workbench filesystem', () => {
 		if (!mira) throw new Error('No person.');
 		const marker = 'resistor 330 ohm';
 		const script = byAgent({
-			assistant: (_step, _seat, call) => (call === 1 ? say('Please plan.', 'design') : quiet()),
-			design: (_step, _seat, call) => {
-				if (call === 1) return callTool('write', { path: '/shared/handoff.md', content: marker });
-				if (call === 2) return say('Written.', 'experiments');
+			assistant: (_step, _seat, request) =>
+				request === 1 ? say('Please plan.', 'design') : quiet(),
+			design: (_step, _seat, request) => {
+				if (request === 1)
+					return callTool('write', { path: '/shared/handoff.md', content: marker });
+				if (request === 2) return say('Written.', 'experiments');
 				return quiet();
 			},
-			experiments: (step, _seat, call) => {
-				if (call === 1) return callTool('read', { path: '/shared/handoff.md' });
-				if (call === 2) return say(`Read back: ${step.results.at(-1)?.text}`, 'assistant');
+			experiments: (step, _seat, request) => {
+				if (request === 1) return callTool('read', { path: '/shared/handoff.md' });
+				if (request === 2) return say(`Read back: ${step.results.at(-1)?.text}`, 'assistant');
 				return quiet();
 			},
 		});
@@ -116,9 +118,9 @@ describe('the Workbench repositories', () => {
 		if (!theo) throw new Error('No person.');
 		const pin = /\| LED +\| 13 +\|/;
 		const script = byAgent({
-			assistant: (_step, _seat, call) =>
-				call === 1 ? say('Start the firmware.', 'design') : quiet(),
-			design: (step, _seat, call) => {
+			assistant: (_step, _seat, request) =>
+				request === 1 ? say('Start the firmware.', 'design') : quiet(),
+			design: (step, _seat, request) => {
 				const steps = [
 					callTool('fork', {
 						source: 'templates/firmware-sketch',
@@ -130,19 +132,19 @@ describe('the Workbench repositories', () => {
 							"cd ~/firmware && git switch -c sensing && sed -i 's/^| LED \\( *\\)| TBD /| LED \\1| 13  /' pins.md && git commit -am 'Set the LED pin' && git push origin sensing",
 					}),
 				];
-				if (call <= steps.length) return steps[call - 1] ?? quiet();
-				if (call === steps.length + 1)
+				if (request <= steps.length) return steps[request - 1] ?? quiet();
+				if (request === steps.length + 1)
 					return say(`Pushed: ${step.results.at(-1)?.text}`, 'experiments');
 				return quiet();
 			},
-			experiments: (step, _seat, call) => {
-				if (call === 1) return callTool('repos', { namespace: 'design' });
-				if (call === 2)
+			experiments: (step, _seat, request) => {
+				if (request === 1) return callTool('repos', { namespace: 'design' });
+				if (request === 2)
 					return callTool('bash', {
 						command:
 							'git clone http://git.ambion.invalid/design/firmware ~/review && cd ~/review && git checkout sensing && cat pins.md',
 					});
-				if (call === 3) return say(`Review: ${step.results.at(-1)?.text}`, 'assistant');
+				if (request === 3) return say(`Review: ${step.results.at(-1)?.text}`, 'assistant');
 				return quiet();
 			},
 		});
@@ -174,12 +176,12 @@ describe('the Workbench repositories', () => {
 		const theo = people[1];
 		if (!theo) throw new Error('No person.');
 		// The text of the latest spoken message: each seat answers the latest ask.
-		const latest = (step: Step) => {
+		const latest = (step: ScriptStep) => {
 			const said = step.view.context.messages.filter((message) => message.kind === 'said');
 			return said.at(-1);
 		};
 		// Each list holds the replies of one ask, by the count of results so far.
-		const start = (step: Step): Reply | undefined =>
+		const start = (step: ScriptStep): Reply | undefined =>
 			[
 				callTool('fork', {
 					source: 'templates/firmware-sketch',
@@ -193,7 +195,7 @@ describe('the Workbench repositories', () => {
 				}),
 				say(`Started: ${step.results[1]?.text}`, 'assistant'),
 			][step.results.length];
-		const check = (step: Step): Reply | undefined => {
+		const check = (step: ScriptStep): Reply | undefined => {
 			const handle = step.results[0]?.text.match(/bash-[0-9a-f]{12}/)?.[0];
 			return [
 				callTool('ps'),

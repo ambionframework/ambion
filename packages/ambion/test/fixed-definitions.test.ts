@@ -172,9 +172,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			seats,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context, _agent, call) => {
+				stream: scriptedStream((context, _agent, request) => {
 					prompts.push(context.systemPrompt ?? '');
-					return call === 1 ? callTool('inspect', {}) : quiet();
+					return request === 1 ? callTool('inspect', {}) : quiet();
 				}),
 			}),
 		});

@@ -31,7 +31,7 @@ export interface CodexExecutionOptions extends HomeOptions {
  * Codex answers in its own final message when a prompt does not say
  * otherwise. The room hears only `say`, so the seat text says so first.
  */
-export const HARNESS_NOTE =
+export const RESUMED_NOTE =
 	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
 	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
@@ -40,7 +40,7 @@ export const HARNESS_NOTE =
  * are fixed for an activation, so the first pass supplies them.
  */
 export function seatText(pass: Pick<Pass, 'mechanism' | 'agent'>): string {
-	return `${HARNESS_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}`;
+	return `${RESUMED_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}`;
 }
 
 /** The Codex executor a definition names, or an error that names its kind. */

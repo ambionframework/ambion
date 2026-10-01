@@ -9,15 +9,15 @@
 export { type FakeClock, fakeClock } from './testing/clock.ts';
 export {
 	byAgent,
-	type Call,
 	callTool,
 	isSummarizing,
 	quiet,
 	type Reply,
-	type Result,
 	type Script,
+	type ScriptCall,
 	ScriptedFailure,
-	type Step,
+	type ScriptResult,
+	type ScriptStep,
 	say,
 	schedule,
 	scripted,

@@ -6,8 +6,8 @@
  */
 import { it } from 'vitest';
 import { executorConformance } from '../../../ambion/src/conformance.ts';
-import { codexExecutorHarness, live } from './support.ts';
+import { codexExecutorFixture, live } from './support.ts';
 
 live('the executor suite on a real codex', () => {
-	for (const c of executorConformance(codexExecutorHarness())) it(c.name, c.run);
+	for (const c of executorConformance(codexExecutorFixture())) it(c.name, c.run);
 });

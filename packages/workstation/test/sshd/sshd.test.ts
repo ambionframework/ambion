@@ -17,7 +17,7 @@ import {
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import {
-	type ConformanceHarness,
+	type ConformanceFixture,
 	type WorkspaceConformanceStore,
 	workspaceConformance,
 } from '@ambionframework/workspace/conformance';
@@ -29,7 +29,7 @@ import { type Backend, configPath, options, run, WIPE, withEnv } from '../suppor
 
 const ctx = BACKGROUND_CONTEXT;
 
-const harness: ConformanceHarness<WorkspaceConformanceStore> = {
+const fixture: ConformanceFixture<WorkspaceConformanceStore> = {
 	name: 'workstation on OpenSSH',
 	async open() {
 		const backend = workstationBackend(await options());
@@ -39,8 +39,8 @@ const harness: ConformanceHarness<WorkspaceConformanceStore> = {
 };
 
 describe.skipIf(configPath === undefined)('integration tier', () => {
-	describe(harness.name, () => {
-		for (const c of workspaceConformance(harness)) it(c.name, c.run);
+	describe(fixture.name, () => {
+		for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 	});
 
 	let backend: Backend;

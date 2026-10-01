@@ -6,6 +6,6 @@ import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { describe, it } from 'vitest';
 import { backends } from './support/backends.ts';
 
-describe.each(backends)('$name', (harness) => {
-	for (const c of workspaceConformance(harness)) it(c.name, c.run);
+describe.each(backends)('$name', (fixture) => {
+	for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });

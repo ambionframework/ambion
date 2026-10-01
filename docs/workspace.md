@@ -593,8 +593,8 @@ owner, and the git owner, in that order, so a use that starts after
 
 **A new object backend passes `objectConformance`** from
 `@ambionframework/workspace/conformance`. A
-`ConformanceHarness<ObjectConformanceStore>` opens a store and gives the
-backend. A harness that can open the same store again gives `reopen`.
+`ConformanceFixture<ObjectConformanceStore>` opens a store and gives the
+backend. A fixture that can open the same store again gives `reopen`.
 
 - `put` then `get` gives the same bytes: 1 byte, bytes with zeros, 0 bytes,
   and 1 MiB.
@@ -1021,8 +1021,8 @@ distinct name under `/tmp` for each temporary file or directory.
 
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
-`workspaceConformance(harness)` takes a
-`ConformanceHarness<WorkspaceConformanceStore>`: a name and an `open()` that
+`workspaceConformance(fixture)` takes a
+`ConformanceFixture<WorkspaceConformanceStore>`: a name and an `open()` that
 returns a `WorkspaceConformanceStore`, a fresh `BashBackend` with a
 `dispose()`. It returns the cases:
 
@@ -1030,14 +1030,14 @@ returns a `WorkspaceConformanceStore`, a fresh `BashBackend` with a
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { describe, it } from 'vitest';
 
-describe.each(backends)('$name', (harness) => {
-  for (const c of workspaceConformance(harness)) it(c.name, c.run);
+describe.each(backends)('$name', (fixture) => {
+  for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });
 ```
 
-**One harness type serves every conformance suite.**
-`ConformanceHarness<Subject>` has a `name` and an `open()` that
-returns the subject of one case. `conformanceSuite(harness, cases)` opens the
+**One fixture type serves every conformance suite.**
+`ConformanceFixture<Subject>` has a `name` and an `open()` that
+returns the subject of one case. `conformanceSuite(fixture, cases)` opens the
 subject for each case, runs the body, and disposes the subject after, also
 when the body throws. `check(condition, what)` throws `what` when the
 condition fails. The entries `@ambionframework/journal/conformance`,
@@ -1050,7 +1050,7 @@ before it takes on tool-specific tests of its own. The workspace package
 runs the suite on the memory backend to test the suite itself
 (`packages/workspace/test/conformance.test.ts`).
 
-**The SQL cases of a `SqlBackend` run in the SQLite tests.** A harness
+**The SQL cases of a `SqlBackend` run in the SQLite tests.** A fixture
 has the same shape, with an `open()` that returns a fresh `SqlBackend`.
 The cases check the rows of the last statement, NULL as `null`, a last
 statement with no result, a refused statement as an outcome that stops

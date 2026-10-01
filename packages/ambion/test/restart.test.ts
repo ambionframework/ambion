@@ -56,17 +56,17 @@ const agents = [alpha, beta, assistant];
 /** The assistant writes once when it holds `summarise`, or fails when told to. */
 const writes =
 	(text: string, failures = 0): PiScript =>
-	(context, _name, call) => {
+	(context, _name, request) => {
 		if (!isClosingContext(context)) return quiet();
-		if (call <= failures) throw new Error('the model failed');
-		return call === failures + 1 ? summarise(text) : quiet();
+		if (request <= failures) throw new Error('the model failed');
+		return request === failures + 1 ? summarise(text) : quiet();
 	};
 
 /** A seat that holds its first activation until the promise settles, then stays quiet. */
 const holds =
 	(until: Promise<unknown>): PiScript =>
-	async (_c, _n, call) => {
-		if (call === 1) await until;
+	async (_c, _n, request) => {
+		if (request === 1) await until;
 		return quiet();
 	};
 

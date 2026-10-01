@@ -30,8 +30,8 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
-import { HARNESS_NOTE } from '../src/options.ts';
-import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL } from './binary.ts';
+import { RESUMED_NOTE } from '../src/options.ts';
+import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL, SKILL_MARKER } from './binary.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
 
 /** How long a test may take. The binary starts in about a second, and a loaded host takes longer. */
@@ -243,7 +243,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// Today Codex puts that message in the input, and the top-level `instructions` stays empty.
 					expect(first.instructions ?? '').toBe('');
 					const developer = textsOf(first, 'developer');
-					expect(developer[0]?.startsWith(HARNESS_NOTE)).toBe(true);
+					expect(developer[0]?.startsWith(RESUMED_NOTE)).toBe(true);
 					expect(developer[0]).toContain(MECHANISM);
 					expect(developer[0]).toContain('Answer in one sentence.');
 					expect(developer.filter((text) => text.startsWith('You are Codex'))).toEqual([]);
@@ -253,7 +253,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// The last user message holds the view alone.
 					const prompt = textsOf(first, 'user').at(-1);
 					expect(prompt).toContain('Is the plan ready?');
-					expect(prompt?.startsWith(HARNESS_NOTE)).toBe(false);
+					expect(prompt?.startsWith(RESUMED_NOTE)).toBe(false);
 					expect(prompt).not.toContain(MECHANISM);
 					expect(prompt).not.toContain('Answer in one sentence.');
 
@@ -270,6 +270,11 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// and the instructions of the host appear in no request.
 					expect(on.leaked()).toBe(false);
 					expect(JSON.stringify(on.responses.requests)).not.toContain(HOST_MARKER);
+					// The private HOME hides the skills of the host user: Codex discovers skills under
+					// `$HOME/.agents/skills`, and the seat HOME holds none.
+					expect(JSON.stringify(on.responses.requests)).not.toContain(SKILL_MARKER);
+					expect(JSON.stringify(on.responses.requests)).not.toContain('host-trap');
+					expect(existsSync(join(on.home, 'home'))).toBe(true);
 					expect(on.outbound).toEqual([]);
 
 					// Codex warns about the setting it does not know, and the trace keeps the warning.
@@ -485,7 +490,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 			async () => {
 				const texts = await developerTexts();
 				// The seat text replaces the prompt of Codex, and it is the first text.
-				expect(texts[0]?.startsWith(HARNESS_NOTE)).toBe(true);
+				expect(texts[0]?.startsWith(RESUMED_NOTE)).toBe(true);
 				expect(texts[0]).toContain(AWKWARD);
 				expect(texts.filter((text) => text.startsWith('You are Codex'))).toEqual([]);
 			},
@@ -595,7 +600,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(messagesOf(three).slice(0, first.length)).toEqual(first);
 					const delta = textsOf(three as ResponsesRequest, 'user').at(-1);
 					expect(delta).toContain('Also name the owner.');
-					expect(delta?.startsWith(HARNESS_NOTE)).toBe(false);
+					expect(delta?.startsWith(RESUMED_NOTE)).toBe(false);
 				} finally {
 					await on.close();
 				}

@@ -672,7 +672,7 @@ the real driver over a scripted room, and checks the room calls and the
 steps the logger receives. It checks nothing an executor says beyond its
 neutral plans.
 
-An adapter supplies an `ExecutorHarness`. `open(plan, definition)` builds
+An adapter supplies an `ExecutorFixture`. `open(plan, definition)` builds
 the executor for one `ExecutorPlan`, using a fake model or a fake
 executable. `can` is an `ExecutorCapabilities` value with `steer`, `usage`,
 and `permanentFailure`. The suite drops each case that a false capability
@@ -683,15 +683,15 @@ received.
 Three runs exist as evidence. The scripted executor runs the suite in
 `packages/ambion/test/executor-conformance.test.ts`. The Pi executor runs
 it on a scripted stream in `packages/pi/test/executor-conformance.test.ts`,
-through `piExecutorHarness` from `@ambionframework/pi/testing`. The Claude
+through `piExecutorFixture` from `@ambionframework/pi/testing`. The Claude
 executor runs it against a fake Claude Code executable in
 `packages/claude/test/executor-conformance.test.ts`, through
-`claudeExecutorHarness` from `@ambionframework/claude/testing`. No run
+`claudeExecutorFixture` from `@ambionframework/claude/testing`. No run
 needs a key or a network.
 
 The Codex executor runs the suite in its live tier, on a real `codex` and a
 real model, in `packages/codex/test/live/conformance.test.ts`, through
-`codexExecutorHarness` in its live support. The model follows each plan
+`codexExecutorFixture` in its live support. The model follows each plan
 from its instructions. It declares no steer and no usage, because Codex
 takes no steer and a real model spends no planned usage. The run needs
 `CODEX_API_KEY` and skips without it. A fake `codex` proves only that the

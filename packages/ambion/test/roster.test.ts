@@ -89,12 +89,13 @@ describe('ordinary participation', () => {
 			available: [surveyor],
 			seats: { product: 'broadcast', greeter: 'presence' },
 			script: byAgent({
-				product: (context, _name, call) => {
+				product: (context, _name, request) => {
 					contexts.push(contextText(context));
 					tools.push(toolNames(context));
-					return call === 1 ? seat(surveyor.name) : quiet();
+					return request === 1 ? seat(surveyor.name) : quiet();
 				},
-				surveyor: (_context, _name, call) => (call === 1 ? say('11.7 tonnes on site.') : quiet()),
+				surveyor: (_context, _name, request) =>
+					request === 1 ? say('11.7 tonnes on site.') : quiet(),
 				greeter: () => quiet(),
 			}),
 		});
@@ -123,11 +124,11 @@ describe('ordinary participation', () => {
 		const session = await open({
 			agents: [product],
 			script: byAgent({
-				product: (context, _name, call) => {
-					if (call === 2) recalled.push(...toolResultTexts(context));
+				product: (context, _name, request) => {
+					if (request === 2) recalled.push(...toolResultTexts(context));
 					// The ask line names the URI of the question.
 					const uri = /The opening message's URI is (\S+)\./.exec(contextText(context))?.[1];
-					return call === 1 && uri !== undefined ? callTool('recall', { refs: [uri] }) : quiet();
+					return request === 1 && uri !== undefined ? callTool('recall', { refs: [uri] }) : quiet();
 				},
 			}),
 		});
@@ -144,8 +145,8 @@ describe('ordinary participation', () => {
 			agents: [product],
 			available: [surveyor, architect, greeter],
 			script: byAgent({
-				product: (_context, _name, call) => {
-					const next = [surveyor, architect, greeter][call - 1];
+				product: (_context, _name, request) => {
+					const next = [surveyor, architect, greeter][request - 1];
 					return next === undefined ? quiet() : seat(next.name);
 				},
 			}),
@@ -171,16 +172,16 @@ describe('ordinary participation', () => {
 			agents: [product, surveyor],
 			available: [architect],
 			script: byAgent({
-				product: async (context, _name, call) => {
+				product: async (context, _name, request) => {
 					contexts.push(contextText(context));
-					if (call === 1) {
+					if (request === 1) {
 						await held.promise;
 						return seat(architect.name);
 					}
 					return quiet();
 				},
-				surveyor: (_context, _name, call) =>
-					call === 1 ? say('The drawings will settle this.', product.name) : quiet(),
+				surveyor: (_context, _name, request) =>
+					request === 1 ? say('The drawings will settle this.', product.name) : quiet(),
 			}),
 		});
 		const events = collect(session);
@@ -209,11 +210,11 @@ describe('ordinary unseating and host membership', () => {
 			agents: [product, surveyor],
 			summary: true,
 			script: byAgent({
-				product: (context, _name, call) => {
+				product: (context, _name, request) => {
 					contexts.push(contextText(context));
-					if (call === 1) return callTool('seat', { name: surveyor.name });
-					if (call === 2) return callTool('unseat', { name: writer.name });
-					return call === 3 ? callTool('unseat', { name: surveyor.name }) : quiet();
+					if (request === 1) return callTool('seat', { name: surveyor.name });
+					if (request === 2) return callTool('unseat', { name: writer.name });
+					return request === 3 ? callTool('unseat', { name: surveyor.name }) : quiet();
 				},
 				surveyor: () => quiet(),
 			}),

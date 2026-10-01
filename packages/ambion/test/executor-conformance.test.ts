@@ -1,10 +1,10 @@
 /**
- * The executor suite on the scripted executor. The harness maps each neutral
+ * The executor suite on the scripted executor. The fixture maps each neutral
  * plan of the suite to a script.
  */
 import { describe, it } from 'vitest';
 import {
-	type ExecutorHarness,
+	type ExecutorFixture,
 	type ExecutorPlan,
 	executorConformance,
 } from '../src/conformance.ts';
@@ -39,11 +39,11 @@ function scriptOf(plan: ExecutorPlan): Script {
 	}
 }
 
-const harness: ExecutorHarness = {
+const fixture: ExecutorFixture = {
 	open: (plan, definition) => scriptedOpener(scriptOf(plan), definition),
 	can: { steer: false, usage: true, permanentFailure: true },
 };
 
 describe('scriptedOpener', () => {
-	for (const c of executorConformance(harness)) it(c.name, c.run);
+	for (const c of executorConformance(fixture)) it(c.name, c.run);
 });

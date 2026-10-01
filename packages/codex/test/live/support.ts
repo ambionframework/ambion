@@ -24,7 +24,7 @@ import {
 	type TracedStep,
 	type TraceStep,
 } from '@ambionframework/ambion';
-import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
@@ -148,9 +148,9 @@ function instructionsOf(plan: ExecutorPlan): string {
  * each plan from its instructions. A permanent failure is a key that the
  * provider refuses. A transient failure is a `codex` binary that does not
  * exist. Codex takes no steer, and a real model spends no planned usage, so
- * the harness declares neither.
+ * the fixture declares neither.
  */
-export function codexExecutorHarness(): ExecutorHarness {
+export function codexExecutorFixture(): ExecutorFixture {
 	const dir = dumpDirectory();
 	const dump = dir === undefined ? undefined : liveDump(dir);
 	return {

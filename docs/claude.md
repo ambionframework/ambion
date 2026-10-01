@@ -397,8 +397,8 @@ Claude Code login.
 ## Testing
 
 **A fake Claude Code executable tests the executor with no key.**
-`@ambionframework/claude/testing` exports `claudeExecutorHarness` and
-`scenarioOf`. The harness runs the executor suite of
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`scenarioOf`. The fixture runs the executor suite of
 `@ambionframework/ambion/conformance` through the real driver. The SDK
 spawns `test/fake/claude-executable.mjs` through
 `pathToClaudeCodeExecutable`. The fake reads a scenario from `AMBION_FAKE`,
@@ -408,14 +408,14 @@ stream-json protocol of the SDK over stdio.
 
 ```ts
 import { executorConformance } from '@ambionframework/ambion/conformance';
-import { claudeExecutorHarness } from '@ambionframework/claude/testing';
+import { claudeExecutorFixture } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 describe('claude executor', () => {
-  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+  for (const c of executorConformance(claudeExecutorFixture({ executable }))) it(c.name, c.run);
 });
 ```
 

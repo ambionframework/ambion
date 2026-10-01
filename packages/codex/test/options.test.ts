@@ -32,7 +32,7 @@ import { codex } from '../src/define.ts';
 import { seatHome } from '../src/home.ts';
 import {
 	clientOptions,
-	HARNESS_NOTE,
+	RESUMED_NOTE,
 	seatText,
 	serverPath,
 	threadOptions,
@@ -45,7 +45,7 @@ if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');
 describe('seatText', () => {
 	it('joins the harness note, the mechanism, and the agent part, in that order', () => {
 		expect(seatText({ mechanism: 'How a room works.', agent: 'Who the seat is.' })).toBe(
-			`${HARNESS_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
+			`${RESUMED_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
 		);
 	});
 });
@@ -87,7 +87,7 @@ describe('clientOptions', () => {
 });
 
 describe('clientOptions environment', () => {
-	it('gives the binary the environment of the execution with the home of the seat', () => {
+	it('gives the binary the environment of the seat: the overlay, then its own home variables', () => {
 		const home = seatHome({
 			home: '/srv/seat',
 			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
@@ -98,7 +98,7 @@ describe('clientOptions environment', () => {
 				clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'auto', scratch),
 			).toMatchObject({
 				codexPathOverride: '/bin/codex',
-				env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
+				env: { PATH: '/bin', HOME: '/srv/seat/home', CODEX_HOME: '/srv/seat' },
 			});
 			expect(clientOptions({}, home, '/tmp/room.sock', 'auto', scratch).env).not.toHaveProperty(
 				'GONE',

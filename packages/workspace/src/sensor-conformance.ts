@@ -1,8 +1,8 @@
-/** The cases every sensor server must pass. The harness supplies raw replies. */
+/** The cases every sensor server must pass. The probe fixture supplies raw replies. */
 import { isDeepStrictEqual } from 'node:util';
 import {
 	type ConformanceCase,
-	type ConformanceHarness,
+	type ConformanceFixture,
 	check,
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
@@ -298,10 +298,10 @@ async function filesCase(probe: SensorConformanceProbe, fixture: SensorConforman
 
 /**
  * Returns stable cases for the expected fixtures in `fixture`. Each case
- * opens one probe. Network and process details belong to the harness.
+ * opens one probe. Network and process details belong to the probe fixture.
  */
 export function sensorConformance(
-	harness: ConformanceHarness<SensorConformanceProbe>,
+	probeFixture: ConformanceFixture<SensorConformanceProbe>,
 	fixture: SensorConformanceFixture,
 ): readonly ConformanceCase[] {
 	check(
@@ -347,5 +347,5 @@ export function sensorConformance(
 		]);
 	}
 	cases.push(['GET /files verifies every expected digest', (probe) => filesCase(probe, fixture)]);
-	return conformanceSuite(harness, cases);
+	return conformanceSuite(probeFixture, cases);
 }
