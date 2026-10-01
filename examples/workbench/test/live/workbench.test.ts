@@ -147,8 +147,8 @@ async function answerOf(workbench: Workbench, room: string, index: number, perso
 	while (Date.now() < deadline) {
 		const { messages, exchanges } = await workbench.read(room, 0);
 		const exchange = exchanges.filter((one) => one.status === 'closed')[index];
-		if (exchange?.status === 'closed' && exchange.summary.status !== 'pending') {
-			if (exchange.summary.status === 'published') return exchange.summary.summary.text;
+		if (exchange?.status === 'closed' && exchange.summary.kind !== 'pending') {
+			if (exchange.summary.kind === 'published') return exchange.summary.summary.text;
 			const next = exchanges[exchanges.indexOf(exchange) + 1]?.from ?? Number.POSITIVE_INFINITY;
 			const said = messages.filter(
 				(message) =>

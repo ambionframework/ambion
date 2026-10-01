@@ -281,7 +281,7 @@ class Cluster {
 		await this.clock.advance(ms);
 	}
 
-	/** Time moves until nothing is live: every lease expires, every backoff passes, every draft is due. */
+	/** Time moves until nothing is live: every lease expires, every backoff passes, every summary activation is due. */
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;

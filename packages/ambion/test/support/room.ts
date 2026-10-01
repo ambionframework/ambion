@@ -156,7 +156,7 @@ export function assistantEnded(session: Room): Promise<void> {
 /**
  * The place of the last message before `seq`: what a summary stands through.
  * One counter gives out every place, so the message before a summary is not
- * at `seq - 1`; the room's own entries about the draft sit between them.
+ * at `seq - 1`; the room's own entries about the summary activation sit between them.
  */
 export const messageBefore = (messages: readonly Message[], seq: number): number | undefined =>
 	messages.filter((message) => message.seq < seq).at(-1)?.seq;

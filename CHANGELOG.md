@@ -8,6 +8,16 @@ package exported the type as `JournalEntry`. The core imported it as
 now has one name, `Entry`, in the journal package and in the core. The
 room's union is `RoomEntry`. The `journal` package no longer exports
 `JournalEntry`.
+**Outcomes use one discriminator, `kind`, and `wake` names only the port
+request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
+`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
+exchange read model. The room calls the activation that it owes a seat a due
+activation, after `RoomState.due`. In the core, `PendingActivation` becomes
+`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
+`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
+`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
+`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
+body changes.
 **`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
 describes one activation. The main entry and the hosting entry export the
 new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
