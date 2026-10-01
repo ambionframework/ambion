@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Fifteen reductions have landed.** `pnpm check` passes on them, and the
+**Sixteen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -49,6 +49,7 @@ changelog names each change to an export and to a behavior.
 | One option type for the Pi services (E4)    | `ExecutionServicesOptions`, the unread `clock`, `call`, `trace` fields   | `pi/src/services.ts`                     |
 | The hosting entry exports what is used (K4) | 28 exports with no user outside the core                                 | `hosting.ts`                             |
 | One scripted test language (E7)             | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
+| One copy of each small rule (W9)            | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -152,7 +153,7 @@ definition runs on different executions in
 | W6  | The sensor connections keep a second liveness table                    | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
 | W7  | Two owners close the sensor connections (kept)                         | `workspace.ts:364` and `workspace.ts:517`                               | 0       | High   | —    |
 | W8  | The backends label themselves under four names                         | `database`, `server`, `store`, `hostname`                               | 2       | Medium | 4    |
-| W9  | Refs, logs, and constants repeat                                       | See the list below                                                      | 5       | High   | 15   |
+| W9  | Refs, logs, and constants repeat (done)                                | See the list below                                                      | 5       | High   | 15   |
 | W10 | `ProcessKind` has one value                                            | `process-files.ts:23`; backlog D5 holds the question                    | 1       | Medium | 2    |
 
 **W1 is larger than the re-export.** The workspace also takes its

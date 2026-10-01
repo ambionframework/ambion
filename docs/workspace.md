@@ -985,6 +985,7 @@ them.
 | `HomeEnv`                                          | A base class: the file members, over `FileOperations` and `classify`     |
 | `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
 | `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
+| `MAX_TIMER_SECONDS`                                | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
 | `boundedView`, `deliverView`                       | Build the bounded output view, and hand it to `onUpdate` with the result |
 | `TMP`, `randomName`, `tempDirPath`, `tempFilePath` | Name the temporary paths under `/tmp`                                    |
 | `runScript`                                        | Runs one script, and gives its exit code and its output as text          |

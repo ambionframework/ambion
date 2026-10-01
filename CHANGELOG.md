@@ -10,16 +10,23 @@ a threshold that is not positive and finite now starts with `rotateBytes`.
 Before, it started with `maxBytes`. A host that sets `audit: { maxBytes }`
 sets `audit: { rotateBytes }`.
 
-**One formatter writes the sizes in refusals.**
-A size prints whole when its unit divides it evenly, and with one decimal
-otherwise. The units are GiB, MiB, and KiB, and a size below 1 KiB prints
-in bytes. The import refusal of a file now reads `40 MiB`, where it read
-`40.0 MiB`, and it names a size from 1 KiB to 1 MiB in KiB, where it named
-bytes. The object-size refusal reads `5.0 GiB` for a value just over the
-limit and `5 GiB` for the limit, where it read `5.0 GiB` for both. The
-audit guidance names a threshold that is not a whole KiB in KiB with one
-decimal, where it named bytes. The guidance for the default 5 MiB and the
-SQL guidance of 32 MiB do not change.
+**One formatter writes the sizes in refusals and guidance.**
+A size prints in the largest unit that fits: GiB, MiB, or KiB. It prints
+whole when the unit divides it evenly, and with one decimal otherwise. A
+value that rounds to 1024 of a unit prints in the next unit, so 1 MiB
+less 1 byte reads `1.0 MiB`. A size below 1 KiB prints in bytes. The
+import refusal of a file reads `40 MiB` where it read `40.0 MiB`, and it
+names a size from 1 KiB to 1 MiB in KiB where it named bytes. The audit
+guidance names a threshold in the same way. Before, it named bytes for a
+threshold that was not a whole KiB, and MiB for 1 GiB and above, so
+10,000,000 bytes now reads `9.5 MiB` where it read `10000000 bytes`, and
+1 GiB reads `1 GiB` where it read `1024 MiB`. The guidance for the default
+5 MiB and the SQL guidance of 32 MiB do not change.
+
+**The object-size refusal names the limit once.**
+The refusal of an object over 5 GiB now reads `/big holds 5.0 GiB, more
+than the 5 GiB that an object holds.` Before, it read `/big holds 5.0 GiB,
+and an object holds at most 5.0 GiB.`
 
 **`@ambionframework/workspace` exports `MAX_TIMER_SECONDS`.**
 The constant is 2,147,483, the most seconds that a Node timer holds. The

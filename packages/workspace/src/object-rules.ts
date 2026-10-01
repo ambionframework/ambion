@@ -40,7 +40,7 @@ export function assertDigest(digest: string): void {
 export function assertObjectSize(what: string, bytes: number): void {
 	if (bytes > MAX_OBJECT_BYTES)
 		throw new Error(
-			`${what} holds ${formatBytes(bytes)}, and an object holds at most ${formatBytes(MAX_OBJECT_BYTES)}.`,
+			`${what} holds ${formatBytes(bytes)}, more than the ${formatBytes(MAX_OBJECT_BYTES)} that an object holds.`,
 		);
 }
 
