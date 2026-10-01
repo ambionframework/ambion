@@ -8,7 +8,8 @@
  * them. Each one carries a comment that starts with "Today".
  */
 
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	createRuntime,
@@ -25,8 +26,8 @@ import { memoryJournals } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { HARNESS_NOTE } from '../src/executor.ts';
-import { codex } from '../src/index.ts';
+import { type CodexOptions, codex } from '../src/index.ts';
+import { HARNESS_NOTE } from '../src/options.ts';
 import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL } from './binary.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
 
@@ -34,6 +35,15 @@ import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.t
 const TEST_MS = 60_000;
 
 const NAMESPACE = 'mcp__ambion';
+
+/**
+ * Under nativeTools 'codex' the binary keeps its plugin features. They sync a marketplace
+ * from GitHub and ask chatgpt.com. The home of the test switches them off.
+ */
+const NO_SYNC = '[features]\nplugins = false\nremote_plugin = false\n';
+
+/** A sentence of the mechanism text of the room. It marks the seat text. */
+const MECHANISM = 'You are an agent seated in a room';
 
 const priya = defineHuman({ name: 'priya', identity: 'Project manager. Asks the questions.' });
 
@@ -47,7 +57,10 @@ const lookup = defineTool({
 const say = (text: string): Reply => ({ call: 'say', namespace: NAMESPACE, args: { text } });
 
 /** Open a room with one default seat on the binary. The room stops when the test ends. */
-async function roomOn(execution: Execution, options: { tools?: boolean } = {}) {
+async function roomOn(
+	execution: Execution,
+	options: { tools?: boolean; native?: Partial<CodexOptions>; instructions?: string } = {},
+) {
 	const steps: TraceStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
@@ -58,9 +71,10 @@ async function roomOn(execution: Execution, options: { tools?: boolean } = {}) {
 		name: 'gpt',
 		identity: 'Answers what is asked.',
 		executor: codex({
-			instructions: 'Answer in one sentence.',
+			instructions: options.instructions ?? 'Answer in one sentence.',
 			model: MODEL,
 			...(options.tools ? { tools: [lookup] } : {}),
+			...options.native,
 		}),
 	});
 	const room = stopAtEnd(
@@ -78,6 +92,34 @@ function textsOf(request: ResponsesRequest, role: string): string[] {
 			? [(item.content as { text?: string }[]).map((part) => part.text ?? '').join('')]
 			: [],
 	);
+}
+
+/** The text of each part of each input item with a role, in order. Codex can join several parts in one item. */
+function partsOf(request: ResponsesRequest, role: string): string[] {
+	return request.input.flatMap((item) =>
+		item.role === role && Array.isArray(item.content)
+			? (item.content as { text?: string }[]).map((part) => part.text ?? '')
+			: [],
+	);
+}
+
+/** An instruction text with the characters that a config string and a file could mangle. */
+const AWKWARD =
+	'Say "yes" or \\no\\.\nSecond line: tab\t, quote \', café, 日本語, 🙂, \\n, # not a comment.';
+
+/** Run one exchange on the binary, and give the developer texts of its first request. */
+async function developerTexts(native: Partial<CodexOptions>): Promise<string[]> {
+	const on = await codexOn([say('hello room'), { text: 'done' }], undefined, { config: NO_SYNC });
+	try {
+		const { visit } = await roomOn(on.execution, { instructions: AWKWARD, native });
+		await (await visit.send({ text: 'Is the plan ready?' })).waitForClose();
+		const [request] = on.responses.requests as [ResponsesRequest];
+		expect(on.responses.others).toEqual([]);
+		expect(on.outbound).toEqual([]);
+		return partsOf(request, 'developer');
+	} finally {
+		await on.close();
+	}
 }
 
 /** The message items of a request. The tool list changes between requests, and the messages do not. */
@@ -155,16 +197,23 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// Today Codex lists the tools in an `additional_tools` input item, and `tools` stays empty.
 					expect(first.tools).toEqual([]);
 
-					// Today Codex sends its own prompt as the first developer message.
+					// The instructions file replaces the base prompt of Codex. The seat text is the first
+					// developer message, and none starts with "You are Codex".
+					// Today Codex puts that message in the input, and the top-level `instructions` stays empty.
 					expect(first.instructions ?? '').toBe('');
-					expect(textsOf(first, 'developer')[0]).toMatch(/^You are Codex/);
+					const developer = textsOf(first, 'developer');
+					expect(developer[0]?.startsWith(HARNESS_NOTE)).toBe(true);
+					expect(developer[0]).toContain(MECHANISM);
+					expect(developer[0]).toContain('Answer in one sentence.');
+					expect(developer.filter((text) => text.startsWith('You are Codex'))).toEqual([]);
 					// Today Codex adds the skills of its home as a developer message.
-					expect(textsOf(first, 'developer').join('\n')).toContain('<skills_instructions>');
-					// Today the part of the seat arrives in the last user message, after the harness note.
+					expect(developer.join('\n')).toContain('<skills_instructions>');
+					// The last user message holds the view alone.
 					const prompt = textsOf(first, 'user').at(-1);
-					expect(prompt?.startsWith(HARNESS_NOTE)).toBe(true);
-					expect(prompt).toContain('Answer in one sentence.');
 					expect(prompt).toContain('Is the plan ready?');
+					expect(prompt?.startsWith(HARNESS_NOTE)).toBe(false);
+					expect(prompt).not.toContain(MECHANISM);
+					expect(prompt).not.toContain('Answer in one sentence.');
 
 					// The model called the room tool by name and namespace, and the result reached it.
 					expect(second.input.slice(-2)).toEqual([
@@ -182,6 +231,32 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(on.outbound).toEqual([]);
 				} finally {
 					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'sends the seat text as one developer text in both modes of native tools, whatever characters it holds',
+			async () => {
+				const work = mkdtempSync(join(tmpdir(), 'ambion-codex-work-'));
+				try {
+					const none = await developerTexts({ nativeTools: 'none' });
+					const native = {
+						nativeTools: 'codex',
+						workingDirectory: work,
+						approvalPolicy: 'never',
+					} as const;
+					const codex = await developerTexts(native);
+					// Under 'none' the seat text replaces the prompt of Codex, and it is the first text.
+					const seat = none[0];
+					expect(seat?.startsWith(HARNESS_NOTE)).toBe(true);
+					expect(seat).toContain(AWKWARD);
+					// Under 'codex' the same text follows the prompt of Codex, which teaches the native tools.
+					expect(codex[0]).toMatch(/^You are Codex/);
+					expect(codex).toContain(seat);
+				} finally {
+					rmSync(work, { recursive: true, force: true });
 				}
 			},
 			TEST_MS,
