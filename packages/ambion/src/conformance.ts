@@ -42,7 +42,7 @@ export { type ConformanceCase, type ConformanceHarness, check, conformanceSuite 
 export interface PortHarness {
 	/**
 	 * Serve `room` to the seat side and connect one seat's port. In process,
-	 * `room` is the argument to `ExecutionConnector.connect`. Over a boundary, the
+	 * `room` is the argument to `connect` of the connector of an `Execution`. Over a boundary, the
 	 * harness installs `room` where the seat's `view`, `commit`, and `lease`
 	 * arrive, so the suite observes every call the seat makes.
 	 *

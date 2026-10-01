@@ -13,7 +13,8 @@ to use them. These 17 values leave: `DEFAULT_TRACE`, `DEFAULT_TRACE_LIMITS`,
 `ExecutionConnector`, `Clock`, `EndReason`, `RoomToolResult`,
 `ActivationPurpose`, `CollaborationContext`, `ContextParticipant`,
 `CommitOutcome`, and `Stale`. The core keeps each symbol that it still uses
-internally. `PERMANENT_STATUS` and `callLimits` have no other user, so their
+internally. `Clock` stays in the main entry. `PERMANENT_STATUS` and
+`callLimits` have no other user, so their
 modules no longer export them. `hostingOf` still returns the same value. A
 host reads its fields without a name for its type.
 
