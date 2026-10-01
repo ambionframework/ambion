@@ -152,6 +152,11 @@ describe('loggedToolResult', () => {
 			],
 			details: undefined,
 		});
+		// The Claude and Codex executors log the content parts with no record around them.
+		expect(loggedToolResult(result.content)).toEqual([
+			{ type: 'text', text: 'Read image file [image/png]' },
+			{ type: 'image', mimeType: 'image/png', bytes: 3 },
+		]);
 	});
 
 	it('leaves a value with no content array unchanged', () => {

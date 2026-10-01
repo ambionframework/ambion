@@ -105,8 +105,9 @@ function base64Bytes(base64: string): number {
 
 /**
  * A tool result's image content, with each image's data replaced by its byte
- * count. A record that does not hold a `content` array passes through
- * unchanged, and so does every other content part.
+ * count. The content is a `content` array of a record, or the array itself:
+ * the Claude and Codex executors log the content parts with no record. Any
+ * other value passes through unchanged, and so does every other content part.
  *
  * A tool result can carry an image inline as base64
  * (`ToolResult.content`, `types.ts`). Writing that image whole into the log
@@ -115,6 +116,7 @@ function base64Bytes(base64: string): number {
  * the bytes.
  */
 export function loggedToolResult(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(loggedContentPart);
 	if (!isRecord(value) || !Array.isArray(value.content)) return value;
 	return { ...value, content: value.content.map(loggedContentPart) };
 }
