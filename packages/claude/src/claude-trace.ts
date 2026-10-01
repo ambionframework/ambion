@@ -115,9 +115,9 @@ function deltaStep(kind: 'text' | 'thinking', delta: StreamEvent['delta']): Step
  * The step holds the room tools by their plain names, and leaves out the
  * skills, the agents, the plugins, and the slash commands.
  */
-function harnessOf(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): Step {
+function sessionStep(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): Step {
 	return {
-		type: 'harness',
+		type: 'session',
 		name: 'claude',
 		version: init.claude_code_version,
 		model: init.model,
@@ -144,7 +144,7 @@ export class ClaudeSteps {
 	steps(message: SDKMessage): Step[] {
 		switch (message.type) {
 			case 'system':
-				return message.subtype === 'init' ? [harnessOf(message)] : [];
+				return message.subtype === 'init' ? [sessionStep(message)] : [];
 			case 'stream_event':
 				return message.parent_tool_use_id === null ? this.stream(message.event as StreamEvent) : [];
 			case 'assistant':

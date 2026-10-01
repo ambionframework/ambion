@@ -355,7 +355,7 @@ class Activation implements RunningActivation {
 	 * The init message names the version of the executable. An executable
 	 * below the floor would read files that user text names, so the pass
 	 * fails at once and the query closes before any model turn runs. The
-	 * `harness` step is already recorded.
+	 * `session` step is already recorded.
 	 */
 	private checked(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): void {
 		const refusal = floorRefusal(init.claude_code_version);

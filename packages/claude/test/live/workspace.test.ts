@@ -58,10 +58,10 @@ live('workspace', () => {
 			expect(files.find((file) => file.path === PATH)?.text).not.toContain('ALPHA-5521');
 
 			// The session holds the room tools and the workspace tools, and no built-in tool.
-			const [harness] = stepsOfType(steps, 'harness');
-			expect(harness?.tools.filter((name) => BUILT_IN.includes(name))).toEqual([]);
+			const [opened] = stepsOfType(steps, 'session');
+			expect(opened?.tools.filter((name) => BUILT_IN.includes(name))).toEqual([]);
 			for (const name of ['say', 'write', 'edit', 'read', 'bash'])
-				expect(harness?.tools).toContain(name);
+				expect(opened?.tools).toContain(name);
 		} finally {
 			await session.stop();
 			await drive.dispose();

@@ -184,7 +184,7 @@ activation sends the whole view in its first pass.
 ## Steps, usage, and failures
 
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
-`tool_result`, `harness`, `steer`, and `usage`.
+`tool_result`, `session`, `steer`, and `usage`.
 
 **Usage.** One `usage` step follows each SDK `result`, with the cost that the
 SDK reports. `maxBudgetUsd` caps one activation. A spent budget is a permanent

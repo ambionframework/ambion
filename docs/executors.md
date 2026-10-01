@@ -417,19 +417,19 @@ each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
 
-| Step          | Recorded by | Meaning                                                                                           |
-| ------------- | ----------- | ------------------------------------------------------------------------------------------------- |
-| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                     |
-| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                   |
-| `text`        | executor    | A block of model text. `final` closes the block.                                                  |
-| `tool_call`   | executor    | A tool starts, with its input.                                                                    |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                    |
-| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`. |
-| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                   |
-| `harness`     | executor    | What the harness ran with: its name, model, `cwd`, tools, and servers. Claude records it.         |
-| `usage`       | executor    | Tokens and cost.                                                                                  |
-| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.   |
-| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.    |
+| Step          | Recorded by | Meaning                                                                                             |
+| ------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                       |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                     |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                    |
+| `tool_call`   | executor    | A tool starts, with its input.                                                                      |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                      |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.   |
+| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                     |
+| `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude records it. |
+| `usage`       | executor    | Tokens and cost.                                                                                    |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.     |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.      |
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map
@@ -612,7 +612,7 @@ executor kind. `@ambionframework/claude` is the worked example, and
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
 4. **Record the steps you own.** Call `trace.record` of the activation for
-   `thinking`, `text`, `tool_call`, `tool_result`, `harness` when the
+   `thinking`, `text`, `tool_call`, `tool_result`, `session` when the
    harness reports its session, and `usage`. The driver records `pass`, `room`, and `end`. The core records
    `steer`, and it raises the tool events from the steps.
 5. **Report what the model consumed.** Call `read(range)` when the model

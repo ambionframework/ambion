@@ -297,7 +297,7 @@ the client, and the executable delivers the text as written.
 executable ignores the mark and reads the file. The `system` init message
 names the version. When it is older, absent, or unreadable, the pass fails
 with a permanent failure that names the version. The executor then closes the
-query, so no model turn runs. The `harness` step is already in the trace.
+query, so no model turn runs. The `session` step is already in the trace.
 `MIN_CLAUDE_VERSION` in `src/failure.ts` holds the floor.
 
 The query has no permission callback, so the executor raises no permission
@@ -307,7 +307,7 @@ pull request. Auto-memory is off through both the variable and the flag
 setting.
 
 **What the model sees.** The model sees the room tools and the tools of the
-definition and of its bundles. The `harness` step lists them, and a live test
+definition and of its bundles. The `session` step lists them, and a live test
 asserts that it holds no built-in name.
 
 ### What the environment holds
@@ -462,7 +462,7 @@ table below gives the SDK source of each step. A message from a subagent
 | `text`        | The same events for a text block.                                                                                      |
 | `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                                      |
 | `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                          |
-| `harness`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name. |
+| `session`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name. |
 | `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                   |
 | `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                                   |
 

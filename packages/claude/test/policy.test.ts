@@ -283,14 +283,14 @@ it('keeps the config home of the seat when the env of the host names another', a
 	expect(basename(String(env.values.CLAUDE_CONFIG_DIR))).toBe('config');
 });
 
-it('records one harness step from the init message, with the room tools by their plain names', async () => {
+it('records one session step from the init message, with the room tools by their plain names', async () => {
 	const run = open({ turns: [[]], initTools: ['mcp__ambion__say'], apiKeySource: 'none' });
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
-	const steps = run.steps.filter((step) => step.type === 'harness');
+	const steps = run.steps.filter((step) => step.type === 'session');
 	expect(steps).toEqual([
 		{
-			type: 'harness',
+			type: 'session',
 			name: 'claude',
 			version: '2.1.284',
 			model: 'claude-fake',

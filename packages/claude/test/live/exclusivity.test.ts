@@ -1,7 +1,7 @@
 /**
  * The room defines the seat. A Claude seat holds the room tools and the
  * tools of its definition. It holds no built-in tool of Claude Code, and the
- * harness step of its session says so.
+ * session step of its session says so.
  */
 
 import { expect, it } from 'vitest';
@@ -34,8 +34,8 @@ live('exclusivity', () => {
 			const steps = stepsOf(activation);
 			const called = stepsOfType(steps, 'tool_call').map((s) => s.name);
 			expect(called.filter((n) => !ROOM_TOOLS.includes(n))).toEqual([]);
-			const [harness] = stepsOfType(steps, 'harness');
-			expect(new Set(harness?.tools)).toEqual(new Set(ROOM_TOOLS));
+			const [opened] = stepsOfType(steps, 'session');
+			expect(new Set(opened?.tools)).toEqual(new Set(ROOM_TOOLS));
 			const said = (await messagesOf(session))
 				.filter(isSaid)
 				.filter((m) => m.from === 'bare')

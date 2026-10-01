@@ -88,18 +88,18 @@ describe('stepsView', () => {
 		expect(stepsView({ activation: 'a', passes: [] })).toEqual([]);
 	});
 
-	it('shows the harness of a session and the failure of an activation', () => {
+	it('shows the session of a seat and the failure of an activation', () => {
 		const lines = stepsView(
 			read([
 				[
 					{
-						type: 'harness',
+						type: 'session',
 						name: 'claude',
 						model: 'claude-fake',
 						tools: ['say', 'bash'],
 						servers: [],
 					},
-					{ type: 'harness', name: 'claude', tools: [], servers: [] },
+					{ type: 'session', name: 'claude', tools: [], servers: [] },
 					{
 						type: 'end',
 						stop: 'cut',

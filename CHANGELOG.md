@@ -27,7 +27,7 @@ closes the query, so no model turn runs.
 
 **The `approval` step is gone.** No executor writes it. Pi and Codex never
 wrote it, and the Claude executor wrote it only for a permission request,
-which no seat raises now. The step vocabulary has ten kinds, with `harness`
+which no seat raises now. The step vocabulary has ten kinds, with `session`
 in the place of `approval`. The Workbench no longer draws an `approval` line.
 
 **A Claude seat has its own config home, home directory, and environment.**
@@ -67,9 +67,9 @@ failed result waits 50 milliseconds for the stderr, and it settles at once
 when the process ends or `close` runs. The failure class still comes from the
 result or the original error.
 
-**The trace has a `harness` step.** It records what the harness ran with.
+**The trace has a `session` step.** It records what the vendor session opened with.
 `Step` gains
-`{ type: 'harness'; name; version?; model?; cwd?; session?; auth?;
+`{ type: 'session'; name; version?; model?; cwd?; session?; auth?;
 permissionMode?; tools; servers }`.
 The Claude executor records one for each `system` init message. `tools` holds
 the room tools by plain name. `servers` holds each MCP server with its

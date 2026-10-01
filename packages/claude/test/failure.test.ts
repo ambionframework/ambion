@@ -179,7 +179,7 @@ it('refuses an executable below the floor with a permanent failure, and runs no 
 	expect(result.message).toContain(`needs Claude Code ${MIN_CLAUDE_VERSION} or later`);
 	// The trace shows what ran, and the model did nothing.
 	expect(run.steps).toContainEqual(
-		expect.objectContaining({ type: 'harness', version: '2.1.100' }),
+		expect.objectContaining({ type: 'session', version: '2.1.100' }),
 	);
 	expect(run.steps.some((step) => step.type === 'tool_call')).toBe(false);
 	expect(run.commits).toEqual([]);

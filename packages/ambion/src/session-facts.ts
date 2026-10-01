@@ -1,12 +1,12 @@
-/** What a harness reports about the session it opened. */
+/** What a vendor session reports about how it opened. */
 
 /**
- * The facts of the `harness` step. An executor that can read them records
+ * The facts of the `session` step. An executor that can read them records
  * one step for each session it opens. `auth` names the source of the
  * credential and never holds it. `tools` holds the room tools by their plain
  * names.
  */
-export interface HarnessFacts {
+export interface SessionFacts {
 	name: string;
 	version?: string;
 	model?: string;

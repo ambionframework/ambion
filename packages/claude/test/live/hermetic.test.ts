@@ -190,11 +190,11 @@ live('hermetic seat', () => {
 			await untilQuiet(session);
 			const steps = stepsOf(activation);
 
-			// The harness step shows what the seat ran with: the room tools, and the room server alone.
-			const [harness] = stepsOfType(steps, 'harness');
-			expect(new Set(harness?.tools)).toEqual(new Set(ROOM_TOOLS));
-			expect(harness?.servers).toEqual([{ name: 'ambion', status: 'connected' }]);
-			expect(harness?.cwd).toBe(work);
+			// The session step shows what the seat ran with: the room tools, and the room server alone.
+			const [opened] = stepsOfType(steps, 'session');
+			expect(new Set(opened?.tools)).toEqual(new Set(ROOM_TOOLS));
+			expect(opened?.servers).toEqual([{ name: 'ambion', status: 'connected' }]);
+			expect(opened?.cwd).toBe(work);
 
 			// The process holds no host variable, and its directories are the directories of the seat.
 			const starts = await startsIn(wireLog);
