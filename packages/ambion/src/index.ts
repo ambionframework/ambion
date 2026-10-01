@@ -11,11 +11,13 @@ export type {
 	Reminder,
 	ReminderSeat,
 	ToolBundle,
+	ToolContent,
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,
 	ToolUpdate,
 } from './bundle.ts';
+export { contentText } from './bundle.ts';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
@@ -88,7 +90,7 @@ export type {
 	TraceStep,
 	Usage,
 } from './types.ts';
-export { isPosted, isPresence, isSpoken, isSummary } from './types.ts';
+export { addUsage, isPosted, isPresence, isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

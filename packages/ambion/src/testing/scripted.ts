@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult } from '../bundle.ts';
+import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
 	Executor,
@@ -97,9 +97,7 @@ export const isClosing = (view: ActivationView): boolean => view.spec.purpose.ki
 const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
 
 const textOf = (result: string | ToolResult): string =>
-	typeof result === 'string'
-		? result
-		: result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	typeof result === 'string' ? result : contentText(result.content);
 
 const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
 

@@ -15,29 +15,20 @@
  * for when the activation ends, live here once.
  */
 
-import type { AmbionTool, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
+import type { AmbionTool, ToolContent, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
-import {
-	type ActivationView,
-	type CommitResult,
-	classifyCommit,
-	type Intent,
-	type RoomProtocol,
-	type Unchanged,
-} from '../protocol.ts';
+import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import { refusal, summaryToolDescription } from './render.ts';
 
-/** One part of what a tool hands back to the model. */
-export type RoomToolContent =
-	| { readonly type: 'text'; readonly text: string }
-	| { readonly type: 'image'; readonly data: string; readonly mimeType: string };
+/** The name of the MCP server that serves the room tools to a harness. */
+export const ROOM_SERVER = 'ambion';
 
 /** What a room tool or an agent tool hands back to the model. */
 export interface RoomToolResult {
-	readonly content: readonly RoomToolContent[];
+	readonly content: readonly ToolContent[];
 	/** The model reads the content as an error. */
 	readonly isError?: true;
 	/** The activation has nothing more to do: the executor may end its model loop. */
@@ -204,15 +195,14 @@ function toolResultOf(value: string | ToolResult): RoomToolResult {
 /** What the model reads for a commit the room answered. */
 function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResult {
 	if ('committed' in response || 'unchanged' in response) return text(landedLine(response));
-	const outcome = classifyCommit(response);
-	if (outcome.kind === 'refused') return text(outcome.why, true);
+	if ('refused' in response) return text(response.refused, true);
 	binding.abort();
-	if (outcome.kind === 'unknown') {
+	if ('unknown' in response) {
 		// The message may already be on the record, so the activation ends here. A
 		// second say under a new key would land the same message twice.
 		return ended('The room did not confirm your message, and it may already hold it.');
 	}
-	const why = outcome.kind === 'ended' ? outcome.why : 'the room moved';
+	const why = 'stale' in response ? response.stale : 'the room moved';
 	return ended(`Your turn ended: ${why}.`);
 }
 

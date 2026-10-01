@@ -5,7 +5,11 @@
  * none of the fields Claude adds; the Claude executor does.
  */
 import type { AgentExecutor } from '@ambionframework/ambion';
-import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
+import {
+	type AgentExecutorBaseOptions,
+	describeExecutor,
+	pickPresent,
+} from '@ambionframework/ambion/hosting';
 import type { CanUseTool, PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 
 /** What the harness may do. The executor passes each field to the Claude Agent SDK unchanged. */
@@ -51,18 +55,11 @@ const POLICY = [
 	'additionalDirectories',
 ] as const;
 
-/** The policy fields the caller set. */
-function policyOf(options: ClaudePolicy): ClaudePolicy {
-	return Object.fromEntries(
-		POLICY.filter((key) => options[key] !== undefined).map((key) => [key, options[key]]),
-	);
-}
-
 /** The Claude executor: the Claude Agent SDK's loop, model, instructions, tools and policy. */
 export function claude(options: ClaudeOptions): ClaudeExecutor {
 	return Object.freeze({
 		...describeExecutor({ ...options, kind: 'claude' }),
-		...policyOf(options),
+		...pickPresent(options, POLICY),
 		kind: 'claude' as const,
 		model: options.model,
 	});

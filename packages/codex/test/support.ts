@@ -7,15 +7,16 @@ import { readFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
-import type {
-	ActivationView,
-	AgentDefinition,
-	CommitRequest,
-	CommitResult,
-	ExecutionEvent,
-	Executor,
-	RoomProtocol,
-	StepSink,
+import {
+	type ActivationView,
+	type AgentDefinition,
+	type CommitRequest,
+	type CommitResult,
+	type ExecutionEvent,
+	type Executor,
+	ROOM_SERVER,
+	type RoomProtocol,
+	type StepSink,
 } from '@ambionframework/ambion/hosting';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -27,7 +28,6 @@ import type {
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
-import { ROOM_SERVER } from '../src/codex-trace.ts';
 import { createCodexExecutor } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
 import { citing, type RoomTool, servedTools } from '../src/tools.ts';

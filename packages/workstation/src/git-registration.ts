@@ -19,7 +19,11 @@
  */
 
 import { randomName, type SourceFiles } from '@ambionframework/workspace';
-import type { RegistrationSteps } from '@ambionframework/workspace/git';
+import {
+	BACKEND_AUTHOR,
+	DEFAULT_BRANCH,
+	type RegistrationSteps,
+} from '@ambionframework/workspace/git';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type GitAccount, runIn, tagged } from './git-account.ts';
 import type { SshEnv } from './ssh-env.ts';
@@ -54,6 +58,12 @@ const SHARED_EXISTS_SCRIPT = [
 	'',
 ].join('\n');
 
+/** The lines that make the next commit come from the backend author. */
+const AS_BACKEND = [
+	`export GIT_AUTHOR_NAME=${BACKEND_AUTHOR.name} GIT_AUTHOR_EMAIL=${BACKEND_AUTHOR.email}`,
+	`export GIT_COMMITTER_NAME=${BACKEND_AUTHOR.name} GIT_COMMITTER_EMAIL=${BACKEND_AUTHOR.email}`,
+];
+
 /** Commit the files of the staging folder to a new bare repository, and rename it into `templates`. */
 const BUILD_SCRIPT = [
 	'set -euo pipefail',
@@ -65,11 +75,10 @@ const BUILD_SCRIPT = [
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
 	'git add -A --force',
 	'tree=$(git write-tree)',
-	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
-	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
+	...AS_BACKEND,
 	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree")`,
-	'git update-ref refs/heads/main "$commit"',
-	'git symbolic-ref HEAD refs/heads/main',
+	`git update-ref refs/heads/${DEFAULT_BRANCH} "$commit"`,
+	`git symbolic-ref HEAD refs/heads/${DEFAULT_BRANCH}`,
 	'git config core.logAllRefUpdates always',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
 	`[ -z "$AMBION_DESCRIPTION" ] || printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
@@ -93,15 +102,14 @@ const UPDATE_SCRIPT = [
 	'stage="$root/.staging/$AMBION_STAGE"',
 	'repo="$root/templates/$AMBION_NAME.git"',
 	'mkdir -p "$stage/files"',
-	'old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/main || true)',
+	`old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/${DEFAULT_BRANCH} || true)`,
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
 	'git add -A --force',
 	'tree=$(git write-tree)',
-	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
-	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
+	...AS_BACKEND,
 	'if [ -n "$old" ]; then set -- -p "$old"; else set --; fi',
 	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree" "$@")`,
-	'if ! refused=$(git update-ref refs/heads/main "$commit" "$old" 2>&1); then',
+	`if ! refused=$(git update-ref refs/heads/${DEFAULT_BRANCH} "$commit" "$old" 2>&1); then`,
 	String.raw`  printf 'AMBION_REFUSED %s\n' "$(printf '%s' "$refused" | base64 -w0)"`,
 	'fi',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
@@ -120,11 +128,10 @@ const SHARED_BUILD_SCRIPT = [
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
 	'git add -A --force',
 	'tree=$(git write-tree)',
-	'export GIT_AUTHOR_NAME=ambion GIT_AUTHOR_EMAIL=ambion@ambion.invalid',
-	'export GIT_COMMITTER_NAME=ambion GIT_COMMITTER_EMAIL=ambion@ambion.invalid',
+	...AS_BACKEND,
 	String.raw`commit=$(printf 'Register the shared repository %s\n' "$AMBION_NAME" | git commit-tree "$tree")`,
-	'git update-ref refs/heads/main "$commit"',
-	'git symbolic-ref HEAD refs/heads/main',
+	`git update-ref refs/heads/${DEFAULT_BRANCH} "$commit"`,
+	`git symbolic-ref HEAD refs/heads/${DEFAULT_BRANCH}`,
 	'git config core.logAllRefUpdates always',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
 	`[ -z "$AMBION_DESCRIPTION" ] || printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,

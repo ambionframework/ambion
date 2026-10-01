@@ -39,10 +39,7 @@ export interface OwedFacts {
 	cancelledAt: Seq | undefined;
 }
 
-/** The close that an owed summary answers, as `summaryCompletion` reads it. */
-type OwedClose = SummaryClose;
-
-const closeOf = (owed: Owed): OwedClose => ({
+const closeOf = (owed: Owed): SummaryClose => ({
 	person: owed.person,
 	from: owed.from,
 	through: owed.position,
@@ -51,7 +48,7 @@ const closeOf = (owed: Owed): OwedClose => ({
 
 /** The summary a close owes, or nothing when the close owes no draft for good. */
 export function judgeOwed(
-	close: OwedClose,
+	close: SummaryClose,
 	facts: OwedFacts,
 	options: PendingActivationOptions,
 ): Owed | undefined {

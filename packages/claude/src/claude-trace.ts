@@ -8,10 +8,10 @@
  * send arrives whole from the assistant message. The sink joins the deltas.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
+import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 
 /** The prefix the SDK gives a tool of the in-process room server. */
-export const ROOM_SERVER = 'ambion';
 const ROOM_PREFIX = `mcp__${ROOM_SERVER}__`;
 
 /** The name a step and an event show: the tool without the server prefix. */

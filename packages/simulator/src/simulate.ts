@@ -17,6 +17,7 @@
  */
 import {
 	AmbionError,
+	addUsage,
 	type ClosedExchangeView,
 	type Room,
 	type RoomNotification,
@@ -247,17 +248,7 @@ function total(usages: readonly (Usage | undefined)[]): Usage {
 	let sum = ZERO;
 	for (const usage of usages) {
 		if (usage === undefined) continue;
-		const cost =
-			sum.cost === undefined && usage.cost === undefined
-				? undefined
-				: (sum.cost ?? 0) + (usage.cost ?? 0);
-		sum = {
-			input: sum.input + usage.input,
-			output: sum.output + usage.output,
-			cacheRead: sum.cacheRead + usage.cacheRead,
-			cacheWrite: sum.cacheWrite + usage.cacheWrite,
-			...(cost === undefined ? {} : { cost }),
-		};
+		sum = addUsage(sum, usage);
 	}
 	return sum;
 }

@@ -81,7 +81,10 @@ export function coveringSummary(
 	);
 }
 
-/** A close as the summary completion reads it: a writer comes with the person it writes for. */
+/**
+ * A close as the summary completion reads it: a writer comes with the person
+ * it writes for. It holds no `at`, so the room can rebuild it from an `Owed`.
+ */
 export type SummaryClose = Pick<Close, 'from' | 'through'> &
 	({ summary: string; person: string } | { summary?: undefined });
 

@@ -188,20 +188,21 @@ states the commit-freshness promise.
 main entry names none of it. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
 
-| Export             | What it is                                                                                                                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Execution`        | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                   |
-| `ExecutionHost`    | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                         |
-| `ConnectorRequest` | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                          |
-| `AgentPort`        | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
-| `RoomProtocol`     | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
-| `AgentRunner`      | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
-| `defineExecution`  | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
-| `localExecution`   | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
-| `hostingOf`        | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
-| `visitOf`          | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
-| `describeExecutor` | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
-| `Executor`         | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
+| Export                   | What it is                                                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Execution`              | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                   |
+| `ExecutionHost`          | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                         |
+| `ConnectorRequest`       | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                          |
+| `AgentPort`              | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
+| `RoomProtocol`           | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
+| `AgentRunner`            | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
+| `defineExecution`        | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
+| `localExecution`         | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
+| `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
+| `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
+| `describeExecutor`       | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
+| `present`, `pickPresent` | The option fields that hold a value, which a family spreads into its executor                                                                                  |
+| `Executor`               | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,

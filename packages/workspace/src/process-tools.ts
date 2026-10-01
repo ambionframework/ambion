@@ -17,7 +17,12 @@
  * while it waits for a process. `docs/processes.md` states the texts.
  */
 
-import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
+import {
+	type AmbionTool,
+	contentText,
+	defineTool,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
 	DEFAULT_MAX_BYTES,
@@ -452,7 +457,7 @@ function handlesOf(params: WaitParams): readonly string[] {
 }
 
 function textOf(result: AgentToolResult<unknown>): string {
-	return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	return contentText(result.content);
 }
 
 /** The `ps` result: the table of the caller's running processes. */

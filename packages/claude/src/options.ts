@@ -5,9 +5,15 @@
  * `CLAUDE.md` or settings file on disk reaches the model. The tools are the
  * room tools, the agent's own tools, and the built-in tools the policy names.
  */
-import { type AgentExecutor, executorOfKind, type StepSink } from '@ambionframework/ambion/hosting';
+import {
+	type AgentExecutor,
+	executorOfKind,
+	present,
+	ROOM_SERVER,
+	type StepSink,
+} from '@ambionframework/ambion/hosting';
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import { plainName, ROOM_SERVER } from './claude-trace.ts';
+import { plainName } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
 
 /** The services a Claude execution brings: where the executable is and what it runs with. */
@@ -121,13 +127,6 @@ export interface QueryInput {
 	readonly runtime: ClaudeRuntime;
 	/** The session to resume, when the room named one in `spec.resume`. */
 	readonly resume?: string;
-}
-
-/** The entries of `fields` that hold a value. */
-function present<T extends object>(fields: T): Partial<T> {
-	return Object.fromEntries(
-		Object.entries(fields).filter(([, value]) => value !== undefined),
-	) as Partial<T>;
 }
 
 export function queryOptions(input: QueryInput): Options {

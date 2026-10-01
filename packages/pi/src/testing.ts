@@ -8,6 +8,8 @@
  * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
  * no model.
  */
+
+import { contentText } from '@ambionframework/ambion';
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
@@ -134,9 +136,7 @@ export const toolNames = (context: Context) => (context.tools ?? []).map((tool) 
 /** Every tool result the model has been shown so far, as text, oldest first. */
 export function toolResultTexts(context: Context): string[] {
 	return context.messages.flatMap((message) =>
-		message.role === 'toolResult'
-			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
-			: [],
+		message.role === 'toolResult' ? [contentText(message.content)] : [],
 	);
 }
 

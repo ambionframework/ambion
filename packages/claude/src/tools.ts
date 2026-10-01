@@ -10,12 +10,11 @@
  * the schemas of the agent's tools are TypeBox values, which are JSON
  * Schema, so `shapeOf` reads each property through `z.fromJSONSchema`.
  */
-import type { RoomTool } from '@ambionframework/ambion/hosting';
+import { ROOM_SERVER, type RoomTool } from '@ambionframework/ambion/hosting';
 import type { SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { TSchema } from 'typebox';
 import { z } from 'zod';
-import { ROOM_SERVER } from './claude-trace.ts';
 
 /** The id of the next call of a tool. The core takes it from the steps the stream named. */
 export type CallId = (tool: string) => string;

@@ -88,6 +88,21 @@ export function executorOfKind<T extends AgentExecutor & { readonly model: strin
 	throw new Error(`Cannot run an executor of kind '${executor.kind}': this seat needs '${kind}'.`);
 }
 
+/** The entries of `fields` that hold a value. */
+export function present<T extends object>(fields: T): Partial<T> {
+	return Object.fromEntries(
+		Object.entries(fields).filter(([, value]) => value !== undefined),
+	) as Partial<T>;
+}
+
+/** The fields of `options` that `keys` name and that hold a value. */
+export function pickPresent<T extends object, K extends keyof T>(
+	options: T,
+	keys: readonly K[],
+): Partial<Pick<T, K>> {
+	return present(Object.fromEntries(keys.map((key) => [key, options[key]]))) as Partial<Pick<T, K>>;
+}
+
 /**
  * The neutral half of an executor: validated, flattened, and frozen. An
  * executor family adds its own fields to the value this returns.
