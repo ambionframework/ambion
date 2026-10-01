@@ -92,23 +92,32 @@ const ENV_ALLOWLIST = [
 	'NODE_EXTRA_CA_CERTS',
 	'SSL_CERT_FILE',
 	'SSL_CERT_DIR',
+	'CODEX_API_KEY',
+	'CODEX_ACCESS_TOKEN',
+	'CODEX_CA_CERTIFICATE',
 ] as const;
 
 /**
  * The prefixes of the variables of the host that a seat inherits as well.
- * `CODEX_` holds `CODEX_API_KEY`. `OPENAI_` holds `OPENAI_API_KEY` and
- * `OPENAI_BASE_URL`, which the default provider of Codex reads. A provider
- * with another `env_key` needs the `env` option.
+ * `OPENAI_` holds `OPENAI_API_KEY` and `OPENAI_BASE_URL`, which the default
+ * provider of Codex reads. A provider with another `env_key` needs the `env`
+ * option. No `CODEX_` prefix: Codex reads other `CODEX_` variables that move
+ * its state, its sandbox, and its servers out of the seat.
  */
-const ENV_PREFIXES = ['CODEX_', 'OPENAI_', 'LC_'] as const;
+const ENV_PREFIXES = ['OPENAI_', 'LC_'] as const;
 
 type Variables = Readonly<Record<string, string | undefined>>;
 
-/** Whether the allowlist admits a variable name. */
+/**
+ * Whether the allowlist admits a variable name. Windows compares the names
+ * of variables without case, and spells some in mixed case (`Path`,
+ * `SystemRoot`, `ComSpec`), so the comparison there uses upper case.
+ */
 function allowed(name: string): boolean {
+	const key = process.platform === 'win32' ? name.toUpperCase() : name;
 	return (
-		(ENV_ALLOWLIST as readonly string[]).includes(name) ||
-		ENV_PREFIXES.some((prefix) => name.startsWith(prefix))
+		(ENV_ALLOWLIST as readonly string[]).includes(key) ||
+		ENV_PREFIXES.some((prefix) => key.startsWith(prefix))
 	);
 }
 

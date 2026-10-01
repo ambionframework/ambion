@@ -129,6 +129,9 @@ describe('seatHome', () => {
 		['LANG', true],
 		['LC_ALL', true],
 		['CODEX_API_KEY', true],
+		['CODEX_CA_CERTIFICATE', true],
+		['CODEX_SQLITE_HOME', false],
+		['CODEX_SANDBOX', false],
 		['OPENAI_API_KEY', true],
 		['OPENAI_BASE_URL', true],
 		['SHELL', false],
@@ -142,6 +145,24 @@ describe('seatHome', () => {
 		vi.stubEnv(name, 'value-of-the-host');
 		const env = seatHome({ home: '/seats', env: {} }).env;
 		expect(env[name]).toBe(reaches ? 'value-of-the-host' : undefined);
+	});
+
+	it.each([
+		['Path', true],
+		['SystemRoot', true],
+		['ComSpec', true],
+		['Https_Proxy', true],
+		['Shell', false],
+	])('on Windows, compares the name %s without case: %s', (name, reaches) => {
+		const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+		Object.defineProperty(process, 'platform', { value: 'win32' });
+		try {
+			vi.stubEnv(name, 'value-of-the-host');
+			const env = seatHome({ home: '/seats', env: {} }).env;
+			expect(env[name]).toBe(reaches ? 'value-of-the-host' : undefined);
+		} finally {
+			if (platform) Object.defineProperty(process, 'platform', platform);
+		}
 	});
 
 	it('lays the env over the allowlisted variables: it adds, replaces, and removes', () => {

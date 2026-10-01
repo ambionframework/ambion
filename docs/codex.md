@@ -213,12 +213,18 @@ binary, including the `codex debug models` run for the catalog.
 | `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, lowercase forms        | A host behind a proxy reaches the provider                          |
 | `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`                       | A host with its own certificate store verifies the provider         |
 | `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `COMSPEC`, `PATHEXT` | The binary starts on Windows                                        |
-| `CODEX_*`                                                                    | `CODEX_API_KEY` is the key of Codex                                 |
+| `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, `CODEX_CA_CERTIFICATE`                | The key, the token, and the certificate of Codex                    |
 | `OPENAI_*`                                                                   | `OPENAI_API_KEY` and `OPENAI_BASE_URL` serve the default provider   |
 | `LC_*`                                                                       | The locale                                                          |
 
+**On Windows the allowlist compares names without case.** Windows spells
+some variables in mixed case, such as `Path` and `SystemRoot`, and the
+binary needs them to open a socket.
+
 **Every other variable stays with the host.** `SHELL` and `TERM` are not on
-the list, because a seat has no native tool and no terminal. A cloud key, a
+the list, because a seat has no native tool and no terminal. Other `CODEX_`
+variables, such as `CODEX_SQLITE_HOME` and `CODEX_SANDBOX`, move the state,
+the sandbox, or a server of Codex out of the seat. A cloud key, a
 token of a code host, and the socket of an SSH agent reach neither the
 binary nor the room tools server that Codex starts. A provider with another
 `env_key` in the `config.toml` of `home` needs that variable in `env`.

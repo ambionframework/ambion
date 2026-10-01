@@ -103,8 +103,9 @@ golden journals do not change.
 longer replaces the environment. It lays over the allowlisted variables of
 `process.env`: a value adds or replaces a variable, and `undefined` removes
 one. The base holds the path, locale, temporary directory, proxy, and
-certificate variables, and the variables with the prefixes
-`CODEX_`, `OPENAI_`, and `LC_`. A secret of the host, such as a cloud key or a
+certificate variables, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`,
+`CODEX_CA_CERTIFICATE`, and the variables with the prefixes `OPENAI_` and
+`LC_`. On Windows the names compare without case. A secret of the host, such as a cloud key or a
 token, reaches neither the binary nor the room tools server. A provider with
 another `env_key` needs its variable in `env`.
 
