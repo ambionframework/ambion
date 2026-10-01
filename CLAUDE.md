@@ -1,243 +1,228 @@
-# CLAUDE.md
-
-Guidance for Claude Code in this repository.
-
-## Project
+# Agent guide
 
 Ambion is a collaboration kernel for agents and humans. A room is a shared
-journal with rules for taking part. People ask questions and read results.
-Agents speak when they have something to add and stay silent when they do
-not. The kernel keeps the record and the rules. A restart loses nothing.
+journal with rules for taking part. The kernel keeps the record and the
+rules, and a restart loses nothing. [`README.md`](README.md) holds the
+positioning and the current surface; no other page states it twice.
 
-pnpm workspace, ESM only, TypeScript. Every library package needs Node
-22.19 or newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI
-floor.
+pnpm workspace, ESM only, TypeScript. Library packages need Node 22.19 or
+newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
+`AGENTS.md` is a symbolic link to `CLAUDE.md`. Edit `CLAUDE.md`.
 
-| Path                      | What                                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/ambion`         | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                                                                    |
-| `packages/assistant`      | The default assistant definition: membership guidance and closing summaries over the core                                                                            |
-| `packages/simulator`      | Evals: `simulate()` drives a room as a person, one exchange at a time, and returns the run that checks read                                                          |
-| `packages/cloudflare`     | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                                                         |
-| `packages/journal`        | An append-only journal: one queue, fenced by run, with conditional commits                                                                                           |
-| `packages/pi`             | The Pi executor: `pi()` and `piExecution()` over Pi's AgentHarness; the kernel imports no model library                                                              |
-| `packages/claude`         | The Claude Agent SDK executor: `claude()` and `claudeExecution()`, tested on a fake executable                                                                       |
-| `packages/codex`          | The Codex SDK executor: `codex()` and `codexExecution()`, over a stdio room tools server; live-tested, no fake                                                       |
-| `packages/workspace`      | A workspace resource and its tools, the helpers a bash backend builds on, an optional SQL backend interface, and the git helpers in `/git`                           |
-| `packages/just-bash`      | The just-bash workspace backends: `memoryBackend` and `directoryBackend`, and `justGitBackend` in `/git`, a `just-git` server in process                             |
-| `packages/workstation`    | A workspace bash backend over SSH to one server, one Unix account for each agent, and `workstationGitBackend`. Tested on an in-process server and on OpenSSH in CI   |
-| `docs/trust.md`           | Design contract for what one owner guarantees another, and what the kernel does not defend — read before exposing a room to untrusted agents                         |
-| `docs/agent.md`           | Design contract for the core — read before changing the runtime                                                                                                      |
-| `docs/assistant.md`       | Design contract for the default assistant package and the `assistant` room option — read with `agent.md`                                                             |
-| `docs/exchange.md`        | Design contract for the exchange, the room's unit of work — read with `agent.md`                                                                                     |
-| `docs/presence.md`        | Design contract for presence and visits — read with `agent.md`                                                                                                       |
-| `docs/summary.md`         | Design contract for optional summaries of closed exchanges                                                                                                           |
-| `docs/simulator.md`       | Design contract for the simulator: the loop, the actor, the run, the judge, and the validation on the assistant's live suite                                         |
-| `docs/workspace.md`       | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                                                                 |
-| `docs/skills.md`          | Design contract for the fixed skills of each agent: `loadSkills`, the checks, the guidance, and the copy in the home — read with `workspace.md`                      |
-| `docs/processes.md`       | Design contract for background processes: `bash`, `ps`, `status`, `wait`, `cancel`, handles, output files, the host's view, and reminders — read with `workspace.md` |
-| `docs/workstation.md`     | Design contract for the workspace backend over SSH to one remote server, one Unix account for each agent — read with `workspace.md`                                  |
-| `docs/git.md`             | Design contract for the git backend: read-only templates, forks, clones into the home, and pushes — read with `workspace.md`                                         |
-| `docs/workstation-git.md` | Design contract for the git backend on the workstation: one account for the repositories, git over SSH — read with `git.md`                                          |
-| `docs/example.md`         | The one runnable example, an agentic lab workspace, and what it must show                                                                                            |
-| `docs/roster.md`          | Design contract for a roster that changes while the room runs — read with `agent.md`                                                                                 |
-| `docs/sensors.md`         | Design contract for the versioned sensor API, workstation connections, observations, and retained evidence — read with `workspace.md`                                |
-| `docs/actuators.md`       | Actuators as a pattern over processes: the controller contract and the controller template — read with `processes.md`                                                |
-| `docs/durability.md`      | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                                                            |
-| `docs/deployment.md`      | Host placement, storage, reconnect, and the recovery evidence — read with `durability.md`                                                                            |
-| `docs/formal.md`          | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                                                          |
-| `docs/toolchain.md`       | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                                                                       |
-| `examples/workbench`      | Runnable example: rooms and an OpenTUI terminal in one process                                                                                                       |
-| `planning/`               | `next.md`: the scope and plan for 0.5.0; `0.6.0.md`: the work lined up for 0.6.0; `backlog.md`: everything else                                                      |
+## Packages
 
-## Positioning
+- `packages/ambion`: the runtime. One file per concern, in layers that Biome
+  holds. `room.ts` composes them.
+- `packages/journal`: the append-only journal. One queue, fenced by run, with
+  conditional commits.
+- `packages/assistant`: the default assistant definition. Membership guidance
+  and closing summaries over the core.
+- `packages/simulator`: evals. `simulate()` drives a room as a person and
+  returns the run that checks read.
+- `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
+  exports `<name>()` and `<name>Execution()`. The kernel imports no model
+  library. `claude` runs on a fake executable in tests; `codex` has live
+  tests only.
+- `packages/cloudflare`: a room as Durable Objects, one for each room and one
+  for each seat. Tests run in workerd.
+- `packages/workspace`: the workspace resource and its tools, the helpers of
+  a bash backend, an optional SQL backend interface, and git helpers in
+  `/git`.
+- `packages/just-bash`: `memoryBackend`, `directoryBackend`, and
+  `justGitBackend` in `/git`.
+- `packages/workstation`: a bash backend over SSH to one server, one Unix
+  account for each agent, and `workstationGitBackend`.
+- `examples/workbench`: rooms and an OpenTUI terminal in one process.
+- `planning/`: `next.md` is the 0.5.0 scope and plan, `0.6.0.md` is the next
+  release, `backlog.md` is everything else.
 
-**`README.md` holds the positioning.** It states what Ambion is, the key
-technical facts, and what is new, and it describes the current surface. Every
-other page links to it and states nothing twice. `planning/next.md` names
-which parts of that surface are still open.
+## Read before you change
 
-There is no compatibility promise before 1.0.0. Any release may change an
-export, a journal body, or a stored format. Add no re-export, deprecated
-alias, reader for an older format, or compatibility test. Update the export
-snapshot and the golden journals in the same commit, and name the change in
-the changelog. The note at the top of [`planning/next.md`](planning/next.md)
-holds the rule.
+| Change                                  | Read first                                             |
+| --------------------------------------- | ------------------------------------------------------ |
+| The runtime                             | `docs/agent.md`, then `exchange`, `presence`, `roster` |
+| The record under failure                | `docs/durability.md`, `docs/deployment.md`             |
+| A `rules.verified.ts`                   | `docs/formal.md`                                       |
+| The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                 |
+| The simulator                           | `docs/simulator.md`                                    |
+| The workspace or its tools              | `docs/workspace.md`, then `skills`, `processes`, `git` |
+| The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`       |
+| Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                 |
+| A room open to untrusted agents         | `docs/trust.md`                                        |
+| `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                    |
+| The example                             | `docs/example.md`                                      |
 
-The sensor wire API of [Sensors](docs/sensors.md#the-sensor-api) carries
-a version number. A supplied server does not upgrade with the host.
-A breaking change raises `api`, and a client refuses a server at another `api`. Reducer
-state belongs to the server implementation. The workspace retains observed
-evidence through existing snapshot refs. Measurement timestamps are the
-source of truth; host time governs host interactions.
-Sensor definitions start as Git templates. The agent forks, customizes,
-validates, commits, and pushes before running a saved version. Replacement
-and rollback use the existing Git and process tools.
-
-Ambient means a room remains available between interactions. A scheduled say
-lets an agent come back to its work on the room's clock. A host that wants a
-wake calls `room.post`.
-
-[`planning/next.md`](planning/next.md) defines the 0.5.0 scope and owns the
-work and its evidence. [`planning/0.6.0.md`](planning/0.6.0.md) lines up
-the release after it. [`planning/backlog.md`](planning/backlog.md) holds
-everything else. `docs/` document current capabilities and label
-pending release changes explicitly. Keep the examples in `docs/` on the
-implemented API until the corresponding change lands.
+[`docs/README.md`](docs/README.md) indexes every page.
 
 ## Commands
 
 ```sh
 pnpm install
-pnpm check     # format, build, typecheck, lint, test — the gate CI runs
-pnpm format    # biome --write, then prettier --write
-pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
-AMBION_HARNESS=<pi|claude|codex> pnpm test:live # one harness; claude needs ANTHROPIC_API_KEY, codex needs CODEX_API_KEY
-pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
-pnpm check:lemmascript # prove every *.verified.ts and *.proofs.dfy with Dafny; CI runs it, a contributor needs Dafny on PATH
-pnpm rule:check <file> # regenerate and prove one rules file after an edit
+pnpm format             # Biome fixes, then Prettier writes
+pnpm check              # the gate; run it, after pnpm format, before every push
+pnpm check lint types   # only the named steps
+pnpm --filter @ambionframework/<pkg> exec vitest run [file]   # one package or file
+node --test scripts/<name>.test.mjs                            # one report check
+pnpm rule:check <file>  # regenerate and prove one rules file; needs Dafny
+pnpm check:lemmascript  # prove every rules and proofs file; needs Dafny
+pnpm chaos              # the failure sweeps on both storages, 200 seeds
+pnpm test:live          # a real model; costs money, see below
 ```
 
-Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
+**`pnpm check` prints one line for each step that passes.** A failed step
+prints its findings with paths from the repository root, then a `fix:` line.
+The last line names the steps to run again. Every step runs, so one run
+reports every failure. A failed build skips `types` and `test`.
+
+**A failed step prints at most 60 lines.** The full output of each step is
+in `.cache/check/<step>.log`.
+
+| Step      | Checks                                                | Fix                               |
+| --------- | ----------------------------------------------------- | --------------------------------- |
+| `format`  | Prettier                                              | `pnpm format`                     |
+| `lint`    | Biome, warnings as errors                             | `pnpm format:lint` for safe fixes |
+| `knip`    | Unused files, exports, and dependencies               | Delete them, or record in knip    |
+| `rules`   | Each `.dfy` equals its generation from the contracts  | `pnpm rule:check <file>`          |
+| `reports` | `scripts/*.test.mjs`: docs, links, budgets, packaging | Read the assertion                |
+| `build`   | tsdown, through turbo                                 | Read the error                    |
+| `types`   | `tsc` in each package                                 | Read the error                    |
+| `test`    | Vitest, the scripted tier of each package             | Run the one file again            |
+
+Turbo and Vitest print only failures. Vitest picks its agent reporter when
+it detects an agent.
 
 ### Live runs cost money
 
-**Treat every live run as spend.** `pnpm test:live` and `pnpm chaos` on the
-live tier call a real provider and bill a real account. Be conservative and
-thoughtful.
+**Treat every live run as spend.** `pnpm test:live` and the live tier of
+`pnpm chaos` bill a real provider account.
 
-- **Run the smallest thing that answers the question.** Prefer one test file or
-  one case (`pnpm --filter @ambionframework/ambion exec vitest run --config
-vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
-  full live suite only when a person asks for release evidence.
+- **Run the smallest thing that answers the question.** Run one file:
+  `pnpm --filter @ambionframework/ambion exec vitest run --config
+vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
+  only when a person asks for release evidence.
 - **Prove the code first without a provider.** Run the scripted tier and
-  `pnpm check` before any live run. A live run confirms the real-model path, not
-  basic correctness.
+  `pnpm check` before any live run.
 - **Never repeat a live run to chase a flake.** Read the failure first. A
-  provider error (a credit or authentication message) is not a code defect.
-- **Never commit a key.** Pass a provider key through the environment for one
-  command. Do not write it to a file, a workflow, or the record.
-- **CI runs the live tier on `main` and on a weekly schedule, not on a pull
-  request.** Do not add a live run to a pull request workflow.
+  credit or authentication message is a provider error, not a code defect.
+- **Never commit a key.** Pass a key through the environment for one command.
+- **CI runs the live tier on `main` and weekly.** Add no live run to a pull
+  request workflow.
+
+`AMBION_HARNESS=<pi|claude|codex>` selects the harness of the live seats.
+`pi` and `claude` read `ANTHROPIC_API_KEY`; `codex` reads `CODEX_API_KEY`.
+
+## Product rules
+
+- **No compatibility promise before 1.0.0.** Any release may change an
+  export, a journal body, or a stored format. Add no re-export, deprecated
+  alias, reader for an older format, or compatibility test. Update the export
+  snapshot and the golden journals in the same commit, and name the change in
+  the changelog. [`planning/next.md`](planning/next.md) holds the rule.
+- **The sensor wire API carries a version number.** A breaking change raises
+  `api`, and a client refuses a server at another `api`. Reducer state
+  belongs to the server. Measurement timestamps are the source of truth; host
+  time governs host interactions.
+- **A sensor definition starts as a Git template.** The agent forks,
+  customizes, validates, commits, and pushes before it runs a saved version.
+  Replacement and rollback use the Git and process tools.
+- **Ambient means a room stays available between interactions.** A scheduled
+  say brings an agent back on the room's clock. A host wakes a room with
+  `room.post`.
+- **`docs/` describe the implemented API.** Label a pending change
+  explicitly. `planning/next.md` owns open work and its evidence.
 
 ## Code rules
 
-- Pi's AgentHarness (`@earendil-works/pi-agent-core`) owns the model loop, the
-  session and compaction.
-  `packages/workspace` owns the workspace port, resource, tools, and the
-  helpers a bash backend builds on. `packages/just-bash` owns the just-bash
-  filesystem and shell. The core composes ordinary tools.
-  `packages/journal` owns the journal: the queue, the fence and the envelope
-  every entry shares. A harness keeps its own session, best effort, for one
-  exchange. Ambion owns only participants-as-values and the room. A third concern is a
-  design failure: push it into a dependency or drop it. `execution/render.ts` formats
-  structured collaboration context for Pi. Summary guidance belongs with the
-  seat executor; the room owns summary assignment and provenance.
-  Both stay pure and stateless. What the room says to a developer stays with
-  the mechanism that says it.
-- The core is laid out in layers (`docs/toolchain.md` §1), and an import
-  points down only. Biome refuses the rest; a new file goes in the layer
-  that may reach what it needs, and never above `room.ts`.
+- **Each concern has one owner.** Pi's AgentHarness
+  (`@earendil-works/pi-agent-core`) owns the model loop, the session, and
+  compaction. `packages/workspace` owns the workspace port, resource, tools,
+  and backend helpers. `packages/just-bash` owns the just-bash filesystem and
+  shell. `packages/journal` owns the queue, the fence, and the entry
+  envelope. A harness keeps its own session, best effort, for one exchange.
+  Ambion owns only participants as values and the room. A third concern is a
+  design failure: push it into a dependency or drop it.
+- **Rendering and summary guidance stay pure and stateless.**
+  `execution/render.ts` formats collaboration context for Pi. Summary
+  guidance belongs to the seat executor; the room owns summary assignment and
+  provenance. A message to a developer stays with the mechanism that sends it.
+- **Imports point down the layers** (`docs/toolchain.md` §1). Biome refuses
+  the rest. Put a new file in the layer that reaches what it needs, never
+  above `room.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
-- `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
-- A pure rule the journal or the room decides by lives in the layer's
-  `*.verified.ts` file, with `//@ requires` and `//@ ensures` contracts,
-  and the caller runs its body. After every edit run `pnpm rule:check
-<file>`; `pnpm check` fails on a stale generation and on an exported
-  rule with no binding case. A hand-written proof goes in the
-  `.proofs.dfy` beside the rules. [`docs/formal.md`](docs/formal.md)
-  holds the mechanism and the envelope a rule must stay inside;
-  [`planning/backlog.md`](planning/backlog.md) holds the proofs still
-  open.
+- `packages/ambion/src` writes nothing to stdout. A host passes a logger in.
+- **A pure rule of the journal or the room lives in the layer's
+  `*.verified.ts`**, with `//@ requires` and `//@ ensures` contracts, and the
+  caller runs its body. Run `pnpm rule:check <file>` after every edit.
+  `pnpm check` fails on a stale generation and on an exported rule with no
+  binding case. A hand-written proof goes in the `.proofs.dfy` beside the
+  rules.
+  [`docs/formal.md`](docs/formal.md) holds the mechanism;
+  [`planning/backlog.md`](planning/backlog.md) holds the open proofs.
 - Cognitive complexity: max 10 in source, 15 in tests.
-- Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
-- Tests are vitest. A scripted execution from `@ambionframework/ambion/testing`
-  makes a room deterministic; `settled(room)` waits for it. The kernel entry
-  imports no model library. A scripted Pi stream comes from
-  `@ambionframework/pi/testing`.
+- Prettier formats (tabs, single quotes, width 100, semicolons). Biome lints.
 
-## Writing tests
+## Tests
 
 - **Run the real thing.** A test starts a real room over a real journal, a
   real filesystem, or a real SQLite file. The scripted model stream is the
-  one standard stand-in. It replaces the provider, and every other part of
-  the path runs as it does in production.
-- **Mock only what a test cannot run.** `vi.mock` and `vi.spyOn` are for a
-  dependency that needs a network or a key, and for a binding case, where
-  the sentinel rule is the mechanism under test. To record calls, pass a
-  plain function that pushes to an array.
-- **One path, one test.** Before you add a test, find the test that already
-  runs the same path, and add your assertion to it. Delete a test that
-  asserts nothing another test does not assert.
+  one standard stand-in for the provider.
+- **Mock only what a test cannot run.** Use `vi.mock` and `vi.spyOn` for a
+  dependency that needs a network or a key, and for a binding case. To record
+  calls, pass a plain function that pushes to an array.
+- **One path, one test.** Add an assertion to the test that already runs the
+  path. Delete a test that asserts nothing new.
 - **A table for cases that differ only in data.** Use `it.each` or
-  `describe.each` over a list of inputs and expected results. Keep one body.
-- **Shared setup lives in `test/support`.** In the core,
-  `scriptedAgent(name)` defines a seat on the scripted model, and
-  `stopAtEnd(room)` stops a room when the test ends. Use them in place of a
-  local `defineAgent` and a `try`/`finally`.
-- **Coverage holds when tests shrink.** A change that merges or deletes
-  tests keeps every line, branch and function the suite covered before.
-  Run `pnpm exec vitest run --coverage.enabled --coverage.reporter=json` in
-  the package before and after the change, and compare the two
+  `describe.each` with one body.
+- **Shared setup lives in `test/support`.** In the core, `scriptedAgent(name)`
+  defines a seat on the scripted model, and `stopAtEnd(room)` stops a room at
+  the end of a test.
+- **The scripted executor makes a room deterministic.** It comes from
+  `@ambionframework/ambion/testing`; `settled(room)` waits for the room. A
+  scripted Pi stream comes from `@ambionframework/pi/testing`.
+- **Coverage holds when tests shrink.** Before and after a change that merges
+  or deletes tests, run `pnpm exec vitest run --coverage.enabled
+--coverage.reporter=json` in the package. Compare the two
   `coverage/coverage-final.json` files.
 
-## Writing documentation
+## Writing
 
-Write all documentation, code comments, and commit messages in **ASD-STE100
-Simplified Technical English**. It is the controlled-language standard for
-technical writing: one meaning per word, one instruction per sentence.
+Write documentation, code comments, and commit messages in **ASD-STE100
+Simplified Technical English**: one meaning per word, one instruction per
+sentence. `README.md` and `docs/` follow these rules.
 
-Rules that carry the most weight here:
-
-1. **Active voice.** "The room stamps provenance", not "provenance is
-   stamped".
-2. **Short sentences.** Max 20 words for an instruction, 25 for a description.
-3. **One topic per paragraph**, max 6 sentences.
-4. **One word, one meaning.** Pick a term and keep it. An activation is always
-   an activation, never a trigger, a call, a wake — or a turn. The room has two
-   spans and two words: an **activation** is the room waking one seat, an
-   **exchange** is a person's question and every activation until the room goes
-   quiet. `turn` belongs to Pi, where it means one request to a provider, and
-   `round` belongs to nobody. What the journal holds is an **entry**. `row`
-   belongs to SQL, so use it only about a database table.
-5. **Simple tenses.** Present for how things work, imperative for instructions.
-6. **Keep articles and relative pronouns.** "The agent that waits", not "agent
-   waits".
+1. **Active voice.** "The room stamps provenance".
+2. **Short sentences.** Max 20 words for an instruction, 25 for a
+   description.
+3. **One topic per paragraph**, max 6 sentences and under six lines.
+4. **One word, one meaning.** An **activation** is the room waking one seat.
+   An **exchange** is a person's question and every activation until the
+   room goes quiet. What the journal holds is an **entry**. `turn` belongs to
+   Pi (one request to a provider). `row` belongs to SQL. Nobody uses `round`,
+   `trigger`, `call`, or `wake` for an activation.
+5. **Simple tenses.** Present for how things work, imperative for
+   instructions.
+6. **Keep articles and relative pronouns.** "The agent that waits".
 7. **No noun clusters over three words.** Break them with prepositions.
 8. **No slang, no metaphor, no ellipsis.** State the mechanism.
+9. **State facts.** Say plainly that a command or feature does not exist yet.
 
-Also: state facts, not claims. If a command or feature does not exist yet, say
-so plainly. Wrap Markdown prose at about 78 columns; Prettier preserves it.
+**Shape a page for a reader who scans.** A bold lead names each point, and
+the bold leads alone carry the page's claims. An enumeration is a list.
+Tabular facts are a table. A Mermaid diagram is welcome when it shows the
+mechanism. Wrap Markdown prose at about 78 columns.
 
-Optimize every page for a human scanning it:
-
-- A bold lead names each point. A reader of only the bold leads gets the
-  page's claims.
-- An enumeration is a bulleted or numbered list. Tabular facts are a table.
-- A paragraph stays under six lines of prose. Split at the natural break.
-- A diagram is welcome when it shows the mechanism. GitHub renders Mermaid.
-
-### Voice
-
-Write to get the job done. Do not educate, persuade, or lecture along the way.
-The reader wants the mechanism, once, and then the next mechanism.
-
-The reader has built an agent and has not yet met the scaling problems this
-project tackles. Ground a claim in what they have lived, then extrapolate to
-the scale they have not. Keep the field's vocabulary; do not flatten it to
-plain English.
+**Voice.** Give the mechanism once, then the next mechanism. Do not educate,
+persuade, or lecture. The reader has built an agent and has not met the
+scaling problems of this project: ground a claim in what they have lived,
+then extend it. Keep the field's vocabulary.
 
 - Banned words: "load-bearing", "seam".
-- No contrastive framing as a rhetorical device: avoid "X, not Y",
-  "X rather than Y", "X instead of Y", "X — never Y". Say what a thing is or
-  does. A plain negative fact is fine when the reader needs it ("A human has
+- No contrastive framing as a device: "X, not Y", "X rather than Y", "X
+  instead of Y", "X — never Y". A plain negative fact is fine ("A human has
   no tools").
-- Do not restate a point in a second formulation. One statement per point.
-
-`README.md` and `docs/` follow these rules. Hold every edit to the same
-standard.
+- One statement per point. Do not restate it.
 
 ## Git
 
-- Develop on a feature branch; push with `git push -u origin <branch>`.
-- Do not open a pull request unless asked.
+Develop on a feature branch. Push with `git push -u origin <branch>`. Open a
+pull request only when a person asks.

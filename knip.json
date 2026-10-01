@@ -1,24 +1,20 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"ignoreBinaries": ["wrangler", "setsid", "flock"],
+	"ignoreBinaries": ["setsid", "flock"],
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{version,publish,release,journal-smoke,projection-envelope}.mjs"],
+			"entry": ["scripts/{check,version,publish,release,journal-smoke,projection-envelope}.mjs"],
 			"project": ["scripts/*.mjs"],
 			"ignoreDependencies": ["@vitest/coverage-v8", "vitest"]
 		},
 		"packages/*": {
 			"project": ["src/**/*.ts"]
 		},
-		"packages/claude": {
-			"project": ["src/**/*.ts"],
-			"ignoreDependencies": ["@ambionframework/journal"]
-		},
 		"examples/workbench": {
 			"project": ["src/**/*.ts"]
 		},
 		"packages/cloudflare": {
-			"entry": ["test/worker.ts", "test/**/*.test.ts"],
+			"entry": ["test/**/*.test.ts"],
 			"project": ["src/**/*.ts", "test/**/*.ts"],
 			"ignoreDependencies": ["cloudflare"]
 		}

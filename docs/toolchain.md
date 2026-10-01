@@ -114,7 +114,9 @@ for the library packages and `examples/workbench` together.
 
 `pnpm-workspace.yaml` deliberately sets `minimumReleaseAge: 1440` (24 hours)
 and an empty `onlyBuiltDependencies` allowlist. Do not bypass either setting
-without a reviewed reason. CI uses `--frozen-lockfile`, and workflow checkouts
+without a reviewed reason. `ignoredBuiltDependencies` names each package
+whose install script pnpm skips, so an install prints no warning. A new
+package with a script goes in one of the two lists. CI uses `--frozen-lockfile`, and workflow checkouts
 set `persist-credentials: false`.
 
 Two channels publish under the `@ambionframework` scope: dev builds to
@@ -142,26 +144,49 @@ dev          persistent and uncached
 Type checking and tests consume emitted dependency declarations, matching the
 published-consumer path. The graph is defined in [`turbo.jsonc`](../turbo.jsonc).
 
+**A task prints its log only when it fails.** `build`, `check:types`, and
+`test` set `outputLogs: errors-only`. The root scripts `check:types` and
+`test:packages` pass `--continue=dependencies-successful`, so one run reports
+the failure of every package. `agentGuidance: false` stops turbo from writing
+its block into `AGENTS.md`. `globalPassThroughEnv` passes the variables that
+Vitest reads to detect an agent; with them, Vitest picks its agent reporter,
+which prints only failures.
+
 ## 6. Script contract
 
 Use these commands at the repository root:
 
-| Command                      | Purpose                                                                |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `pnpm build`                 | Build every package through Turborepo                                  |
-| `pnpm check:types`           | Type-check every package after its build                               |
-| `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
-| `pnpm check:format`          | Verify Prettier formatting                                             |
-| `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |
-| `pnpm check:lemmascript`     | Verify every listed rules file and every proofs file with Dafny        |
-| `pnpm rule:check <file>`     | Regenerate and verify one rules file and its proofs file               |
-| `pnpm check:lemmascript:gen` | Regenerate the Dafny and fail on a stale file                          |
-| `pnpm check`                 | Format → build/types → lint → Dafny regeneration → report checks/tests |
-| `pnpm format`                | Apply Biome then Prettier                                              |
-| `pnpm test:live`             | Run provider-backed live suites                                        |
-| `pnpm chaos`                 | Run widened failure sweeps (`AMBION_SEEDS=200`)                        |
-| `pnpm version:set <x.y.z>`   | Set all publishable package versions                                   |
-| `pnpm publish:packages`      | Pack or publish to one channel (`--channel dev` or `release`)          |
+| Command                      | Purpose                                                         |
+| ---------------------------- | --------------------------------------------------------------- |
+| `pnpm build`                 | Build every package through Turborepo                           |
+| `pnpm check:types`           | Type-check every package after its build                        |
+| `pnpm test`                  | Run `test:reports`, then `test:packages`                        |
+| `pnpm test:reports`          | Run `scripts/*.test.mjs` with the dot reporter                  |
+| `pnpm test:packages`         | Run the scripted Vitest suite of every package                  |
+| `pnpm check:format`          | Verify Prettier formatting                                      |
+| `pnpm check:lint`            | Run Biome with warnings as errors, one line per finding         |
+| `pnpm check:knip`            | Find unused files, exports, and dependencies                    |
+| `pnpm check:lemmascript`     | Verify every listed rules file and every proofs file with Dafny |
+| `pnpm rule:check <file>`     | Regenerate and verify one rules file and its proofs file        |
+| `pnpm check:lemmascript:gen` | Regenerate the Dafny and fail on a stale file                   |
+| `pnpm check [step...]`       | Run the gate, or the named steps of it                          |
+| `pnpm format`                | Apply Biome then Prettier                                       |
+| `pnpm test:live`             | Run provider-backed live suites                                 |
+| `pnpm chaos`                 | Run widened failure sweeps (`AMBION_SEEDS=200`)                 |
+| `pnpm version:set <x.y.z>`   | Set all publishable package versions                            |
+| `pnpm publish:packages`      | Pack or publish to one channel (`--channel dev` or `release`)   |
+
+**`pnpm check` runs [`scripts/check.mjs`](../scripts/check.mjs).** It runs
+one root script for each step: `format`, `lint`, `knip`, `rules`, and
+`reports` together, then `build`, `types`, and `test` in turn. A failed
+build skips `types` and `test`. Every other step runs, so one run reports
+every failure. The runner keeps the output of each step in
+`.cache/check/<step>.log`. A step that passes prints one line. A step that
+fails prints at most 60 lines of findings, then a `fix:` line. The filter in
+[`scripts/check-lib.mjs`](../scripts/check-lib.mjs) removes banners,
+timings, passing tests, and stack frames inside `node_modules`. It puts a
+header over the lines of each turbo task and makes each path relative to
+the root. The last line names the failed steps, for `pnpm check <step...>`.
 
 LemmaScript source, its generated `.dfy.gen` and `.dfy`, and a hand-written
 `.proofs.dfy` are kept together. The `.dfy` equals the generation, so
@@ -171,6 +196,9 @@ the generated file. `pnpm check` runs `lsc gen-check`, which regenerates
 and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
 proof and `check-extra.sh`, which verifies every proofs file, and needs
 Dafny on `PATH`. `pnpm rule:check <file>` does both for one file.
+`lsc gen-check` writes each `.dfy.gen` and exits 0, so
+[`scripts/rules-fresh.sh`](../scripts/rules-fresh.sh) compares each listed
+`.dfy` with its fresh generation and names the stale file.
 
 `LemmaScript-files.txt` lists what CI verifies, one `path [timeout] [dafny
 flags]` per line. A timeout above 60 turns the batch check into a generation
@@ -190,7 +218,8 @@ check:lemmascript` reads. It then installs the workspace dependencies. The
 script is idempotent, so a second run skips a tool that is already present.
 On the web, the SessionStart hook at `.claude/hooks/session-start.sh` runs
 the script, and the tool paths reach every later shell through
-`CLAUDE_ENV_FILE`.
+`CLAUDE_ENV_FILE`. The hook adds its stdout to the context of the agent, so
+the script sends every line to stderr.
 
 `pnpm test:live-local-workstation` needs a running Docker daemon. It copies
 the checkout into a disposable `node:26.10-bookworm` container, installs
@@ -226,7 +255,7 @@ repository jobs plus the LemmaScript reusable workflow:
 
 | Job                  | Checks                                                                    |
 | -------------------- | ------------------------------------------------------------------------- |
-| `check`              | format, types, lint, Knip, and package hygiene, on Node 26.4.0            |
+| `check`              | format, types, lint, Knip, Dafny generation, and package hygiene          |
 | `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench`  |
 | `test-library-floor` | scripted tests on Node 22.19.0, library packages only                     |
 | `workstation`        | the workstation integration tier against OpenSSH, with root on the runner |
