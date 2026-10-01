@@ -8,7 +8,7 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isSpoken, startRoom } from '@ambionframework/ambion';
+import { isSaid, startRoom } from '@ambionframework/ambion';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type AssistantMessageEventStream,
@@ -17,7 +17,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { quiet, scriptedStream, speak } from '../../ambion/test/support/scripted.ts';
+import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { stubModel } from '../src/services.ts';
 import { defaultSessionDir } from '../src/sessions.ts';
@@ -67,15 +67,13 @@ afterAll(async () => {
 
 describe('default provider runtime', () => {
 	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory of the user', async () => {
-		catalog.stream = scriptedStream((_context, _agent, call) =>
-			call === 1 ? speak('42') : quiet(),
-		);
+		catalog.stream = scriptedStream((_context, _agent, call) => (call === 1 ? say('42') : quiet()));
 		const name = roomName('pi-default');
 		const room = stopAtEnd(await startRoom({ name, agents: [scriptedAgent('worker')] }));
 		const visit = await room.visit(andrei);
 		const exchange = await visit.send({ text: 'What is the answer?' });
 		const messages = await exchange.waitForClose();
-		expect(messages.filter(isSpoken).map((message) => [message.from, message.text])).toEqual([
+		expect(messages.filter(isSaid).map((message) => [message.from, message.text])).toEqual([
 			['andrei', 'What is the answer?'],
 			['worker', '42'],
 		]);

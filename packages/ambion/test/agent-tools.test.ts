@@ -35,8 +35,8 @@ import {
 	callTool,
 	type PiScript,
 	quiet,
+	say,
 	scriptedStream,
-	speak,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
@@ -320,7 +320,7 @@ describe('a running tool', () => {
 				prompts.push(context.systemPrompt ?? '');
 				reads.push(JSON.stringify(context.messages));
 				if (call <= 2) return callTool('probe', {});
-				return call === 3 ? speak('done') : quiet();
+				return call === 3 ? say('done') : quiet();
 			},
 			true,
 		);

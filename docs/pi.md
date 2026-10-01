@@ -119,7 +119,7 @@ validates the shared fields. Pi adds `model` and `compaction`.
 | `model`                | Yes      | None                          | A Pi model id, `provider/model-id`.                                              |
 | `tools`                | No       | None                          | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
 | `bundles`              | No       | None                          | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                                    |
+| `speaking`             | No       | `DEFAULT_SPEAKING`            | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit` | No       | The whole record              | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`       | No       | `'length'`                    | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `compaction`           | No       | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session. Pi's `CompactionSettings`.                |
@@ -466,14 +466,14 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 `@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
+`@ambionframework/ambion/testing`: `say`, `callTool`, `later`, `seat`,
 `quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
 `Models` collection, which holds the model of the seat under its provider
 and id.
 
 ```ts
-import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
-import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
+import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
+import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream } from '@ambionframework/pi/testing';
 
@@ -485,7 +485,7 @@ const inventory = defineAgent({
 
 const stream = scriptedStream(
   byAgent({
-    inventory: (_context, _agent, call) => (call === 1 ? speak('42 units in stock.') : quiet()),
+    inventory: (_context, _agent, call) => (call === 1 ? say('42 units in stock.') : quiet()),
   }),
 );
 
@@ -498,7 +498,7 @@ const room = await startRoom({
 try {
   const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Asks.' }));
   const exchange = await visit.send({ text: 'How many units?' });
-  const said = (await exchange.waitForClose()).filter(isSpoken);
+  const said = (await exchange.waitForClose()).filter(isSaid);
   console.log(said.map((message) => message.text));
 } finally {
   await room.stop();

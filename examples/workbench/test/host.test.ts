@@ -1,7 +1,7 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say } from '@ambionframework/ambion/testing';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workbench } from '../src/workbench.ts';
@@ -41,7 +41,7 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 const designScript = byAgent({
 	design: (_step, _seat, call) => {
 		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
-		if (call === 2) return speak('Resistor chosen.', 'assistant');
+		if (call === 2) return say('Resistor chosen.', 'assistant');
 		return quiet();
 	},
 });

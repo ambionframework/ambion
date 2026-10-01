@@ -171,7 +171,7 @@ policy, as it renders the guidance of every bundle
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_GUIDANCE`. The text follows:
+option replaces `DEFAULT_SPEAKING`. The text follows:
 
 ```text
 compose joins your tools in one call. Put the tools that you use in

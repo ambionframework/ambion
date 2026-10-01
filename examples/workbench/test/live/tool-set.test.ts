@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	createRuntime,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -140,7 +140,7 @@ async function ask(room: Room, seat: string, text: string): Promise<string> {
 	await untilQuiet(room);
 	const messages: readonly Message[] = (await room.read()).messages.slice(before);
 	return messages
-		.filter(isSpoken)
+		.filter(isSaid)
 		.filter((message) => message.from === seat)
 		.map((message) => message.text)
 		.join('\n');

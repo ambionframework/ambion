@@ -31,9 +31,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	says,
 	scriptedStream,
-	speak,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -176,7 +176,7 @@ describe('exchange completion handles', () => {
 			for (const cue of ['ci: build 412', 'Was the build green?']) {
 				if (!contextText(context).includes(cue) || answered.has(cue)) continue;
 				answered.add(cue);
-				return speak(`Seen: ${cue}`);
+				return say(`Seen: ${cue}`);
 			}
 			return quiet();
 		};
@@ -282,7 +282,7 @@ describe('exchange completion handles', () => {
 				laterAgentStarted.resolve();
 				await laterAgentRelease.promise;
 			}
-			return speak(`${agent} answer ${count + 1}.`);
+			return say(`${agent} answer ${count + 1}.`);
 		};
 		const { runtime } = await memoryRuntime();
 		const room = await summaryRoom(
@@ -336,7 +336,7 @@ describe('exchange completion handles', () => {
 				const count = answers.get(agent) ?? 0;
 				if (count >= 2) return quiet();
 				answers.set(agent, count + 1);
-				return speak(`${agent} answer ${count + 1}.`);
+				return say(`${agent} answer ${count + 1}.`);
 			},
 			[alpha, beta],
 		);

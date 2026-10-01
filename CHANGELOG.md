@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**The verb `say` names the message type, its guard, the test verb, and the
+speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
+kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
+`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
+`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
+`AgentExecutor.speaking`. `AgentExecutor.guidance` keeps its name. The
+callback `RoomToolOptions.spoke` is now `said`. The kind string, the
+journal bodies, and the text that a model reads do not change.
 **Three names in the process and credential options change.** The option
 `tokenTtl` of `justGitBackend` and the option `keyTtl` of
 `workstationGitBackend` are now `credentialTtl`, the name that

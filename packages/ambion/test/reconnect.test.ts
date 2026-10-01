@@ -9,7 +9,7 @@ import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	resumeRoom,
@@ -241,7 +241,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 			await clock.advance(30_000);
 			await waitForRoom(resumed);
 			expect(await recovered?.waitForClose()).toEqual(expect.any(Array));
-			expect((await messagesOf(resumed)).filter(isSpoken)).toHaveLength(1);
+			expect((await messagesOf(resumed)).filter(isSaid)).toHaveLength(1);
 		},
 	);
 });

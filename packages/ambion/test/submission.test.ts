@@ -14,7 +14,7 @@ import {
 	createRuntime,
 	defineHuman,
 	isPresence,
-	isSpoken,
+	isSaid,
 	isSummary,
 	resumeRoom,
 	startRoom,
@@ -150,7 +150,7 @@ describe('a room in doubt', () => {
 		await waitForRoom(session);
 		const record = await messagesOf(session);
 		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
-		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
+		expect(record.filter(isSaid).filter((m) => m.from === alpha.name)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'message' && e.message.key === 'q1')).toHaveLength(1);
 		// and a retry under the same key lands nothing new
 		await visit.send({ text: 'First?', key: 'q1' });

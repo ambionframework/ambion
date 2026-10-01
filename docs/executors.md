@@ -236,7 +236,7 @@ the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
 
 **A definition can replace the speaking policy.** The main entry exports
-`DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
+`DEFAULT_SPEAKING`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
 The core resolves the `reminders` of the bundles once for each respond
 activation, when `record()` has something to send. Each reminder has 5
@@ -321,7 +321,7 @@ harness.** Each executor kind adapts them to its own tool shape.
   read position and the cut of the activation. A call of a tool of the
   definition reads the view of the pass that runs it.
 - **`session.roomTools`** is a `RoomToolOptions` value that adds to a say
-  and to a schedule: `refs` changes the refs it cites, and `spoke` runs
+  and to a schedule: `refs` changes the refs it cites, and `said` runs
   when the room takes an ordinary say or a scheduled say.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
   `ToolContext` of one call of a definition tool, for an executor that

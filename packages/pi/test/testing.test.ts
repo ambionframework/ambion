@@ -1,6 +1,6 @@
 /** The `/testing` subpath: the scripted stream, and the stub model it routes on. */
 
-import { byAgent, callTool, later, quiet, speak, spend } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, later, quiet, say, spend } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, normalizeContext } from '@earendil-works/pi-ai';
 import { expect, expectTypeOf, it } from 'vitest';
@@ -36,7 +36,7 @@ it('answers an already aborted signal with an aborted message', async () => {
 	controller.abort();
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scriptedStream(() => speak('never'))(model, normalizeContext({ messages: [] }), {
+		await scriptedStream(() => say('never'))(model, normalizeContext({ messages: [] }), {
 			signal: controller.signal,
 		})
 	).result();

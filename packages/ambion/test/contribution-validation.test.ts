@@ -25,7 +25,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, scriptedStream, speak, toolResultTexts } from './support/scripted.ts';
+import { quiet, say, scriptedStream, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 
@@ -136,7 +136,7 @@ describe('the message byte limit', () => {
 				sessions: 'memory',
 				stream: scriptedStream((context) => {
 					results.push(toolResultTexts(context));
-					return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+					return toolResultTexts(context).length === 0 ? say(long) : quiet();
 				}),
 			}),
 		});

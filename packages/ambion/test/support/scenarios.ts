@@ -12,7 +12,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
@@ -30,9 +30,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	scriptedStream,
 	seat,
-	speak,
 	summarise,
 	toolNames,
 	toolResultTexts,
@@ -94,7 +94,7 @@ function composes(names: string[], summary: string): PiScript {
 
 /** Two answers to every question, then silence until the next. */
 const twoAnswersEach: PiScript = (_context, _name, call) =>
-	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
+	call % 3 === 0 ? quiet() : say(`answer ${call}`);
 
 export async function finish(
 	session: Room,
@@ -128,7 +128,7 @@ export const oneExchange: Scenario = {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await waitForRoom(session);
 		const record = await messagesOf(session);
-		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
+		expect(record.filter(isSaid).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
 		expect(summary).toMatchObject({ to: 'priya', text: 'The one message.' });
 		await finish(session, events, runtime);
@@ -206,7 +206,7 @@ export const seatFromReserve: Scenario = {
 						byAgent({
 							assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
 							product: (_context, _name, call) =>
-								call <= 3 ? speak('The pour is Saturday.') : quiet(),
+								call <= 3 ? say('The pour is Saturday.') : quiet(),
 							surveyor: insists('11.7 tonnes on site.'),
 						}),
 					),
@@ -222,7 +222,7 @@ export const seatFromReserve: Scenario = {
 			from: 'assistant',
 			subject: 'surveyor',
 		});
-		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
+		expect(record.filter(isSaid).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
 		expect((await participantsOf(session)).map((s) => s.name)).toContain('surveyor');
 		await finish(session, events, runtime);

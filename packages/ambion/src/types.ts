@@ -179,7 +179,7 @@ interface Landed {
 }
 
 /** What a participant said. */
-export interface SpokenMessage extends Landed {
+export interface SaidMessage extends Landed {
 	kind: 'said';
 	/**
 	 * URIs the message cites. The room validates and stores them and never reads
@@ -295,14 +295,14 @@ export interface DismissedMessage extends Landed {
 }
 
 export type Message =
-	SpokenMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
+	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {
 	return structuredClone(message);
 }
 
-export function isSpoken(message: Message): message is SpokenMessage {
+export function isSaid(message: Message): message is SaidMessage {
 	return message.kind === 'said';
 }
 
@@ -557,7 +557,7 @@ export interface AgentExecutor {
 	readonly guidance?: string;
 	/** The reminders of the agent's tool bundles, in bundle order. */
 	readonly reminders?: readonly Reminder[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the room

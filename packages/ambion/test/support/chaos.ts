@@ -22,7 +22,7 @@ import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	type HumanDefinition,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Room,
@@ -72,7 +72,7 @@ export async function outcome(
 		expect(landed[0]).toMatchObject({ kind: 'said', from: question.person.name });
 		for (const answer of cast.answers(question)) {
 			const answers = record
-				.filter(isSpoken)
+				.filter(isSaid)
 				.filter((m) => m.from === answer.seat && m.text === answer.text);
 			expect(answers, `${answer.seat} on ${question.key}: ${answer.text}`).toHaveLength(1);
 		}

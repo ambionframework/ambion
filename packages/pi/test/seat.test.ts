@@ -24,7 +24,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
-import { contextText, quiet, scriptedStream, speak } from '../../ambion/test/support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 
@@ -441,7 +441,7 @@ describe('runner liveness', () => {
 		const events: string[] = [];
 		const { actor, clock, room } = playSeat({
 			stream: scriptedStream((_context, _agent, call) =>
-				call === 1 ? speak('recorded before the reply is lost') : quiet(),
+				call === 1 ? say('recorded before the reply is lost') : quiet(),
 			),
 			call: { attempts: 1, timeout: 100 },
 			commit: () => {

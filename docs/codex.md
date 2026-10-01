@@ -66,7 +66,7 @@ clients. Read its terms first.
 ## A complete example
 
 ```ts
-import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
 import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
@@ -88,7 +88,7 @@ const room = await startRoom({
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'Is the plan ready?' });
 const messages = await exchange.waitForClose();
-console.log(messages.filter(isSpoken).map((message) => message.text));
+console.log(messages.filter(isSaid).map((message) => message.text));
 await room.stop();
 ```
 
@@ -106,7 +106,7 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `model`                 | Required           | A Codex model identifier                                     |
 | `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server |
 | `bundles`               | None               | Tool bundles with guidance                                   |
-| `speaking`              | `DEFAULT_GUIDANCE` | The speaking policy that replaces the default                |
+| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                |
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
 | `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens  |
 | `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |

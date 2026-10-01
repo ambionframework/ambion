@@ -26,8 +26,8 @@ import {
 	later,
 	type PiScript,
 	quiet,
+	say,
 	scriptedStream,
-	speak,
 	toolResultTexts,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -47,7 +47,7 @@ const checksLater: PiScript = (context) => {
 	if (last !== undefined) results.push(last);
 	if (last?.startsWith('said #') || last?.startsWith('scheduled')) return quiet();
 	if (contextText(context).includes('[posted → worker, returns'))
-		return speak('The build passed.', 'priya');
+		return say('The build passed.', 'priya');
 	return callTool('schedule', {
 		text: 'Check the build.',
 		refs: ['file:///builds/out.log'],
@@ -65,7 +65,7 @@ const changesItsMind: PiScript = (context) => {
 	if (last !== undefined) results.push(last);
 	const seq = /^scheduled #(\d+):/.exec(last ?? '')?.[1];
 	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
-	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
+	if (last?.startsWith('dismissed')) return say('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
 	return later('Check the build.', AFTER);
 };

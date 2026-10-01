@@ -67,7 +67,7 @@ The core has four published entries:
 - `@ambionframework/ambion/conformance` for the port suite and the
   executor suite.
 - `@ambionframework/ambion/testing` for the scripted executor, the script
-  verbs (`speak`, `callTool`, `later`, `seat`, `spend`, `quiet`, `byAgent`),
+  verbs (`say`, `callTool`, `later`, `seat`, `spend`, `quiet`, `byAgent`),
   `settled`, and `fakeClock`. It imports no model library.
   `@ambionframework/pi/testing` holds the scripted Pi stream, which reads the
   same verbs.

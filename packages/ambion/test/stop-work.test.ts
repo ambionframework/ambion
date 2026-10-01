@@ -28,7 +28,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { isClosingContext, quiet, scriptedStream, speak } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
@@ -219,7 +219,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const drafted = deferred();
 		let summaryCalls = 0;
 		const stream = scriptedStream((context, agent, call) => {
-			if (agent === worker.name) return call === 1 ? speak('answer') : quiet();
+			if (agent === worker.name) return call === 1 ? say('answer') : quiet();
 			if (!isClosingContext(context)) return quiet();
 			summaryCalls += 1;
 			drafted.resolve();
@@ -281,7 +281,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const resumed = await resume(
 			room,
 			createRuntime({ storage: opened.storage }),
-			scriptedStream((_context, _agent, call) => (call === 1 ? speak('the answer') : quiet())),
+			scriptedStream((_context, _agent, call) => (call === 1 ? say('the answer') : quiet())),
 		);
 		await waitForRoom(resumed, 'quiet');
 		expect(await messagesOf(resumed)).toContainEqual(

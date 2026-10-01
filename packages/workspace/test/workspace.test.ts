@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	defineTool,
-	isSpoken,
+	isSaid,
 	snapshotUri,
 	startRoom,
 	type ToolContext,
@@ -26,8 +26,8 @@ import {
 	byAgent,
 	callTool,
 	quiet,
+	say,
 	scriptedStream,
-	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
@@ -84,7 +84,7 @@ describe('the built-in tools', () => {
 					if (call === 2) return callTool('bash', { command: 'pwd; cat ~/notes.txt; ls /home' });
 					if (call > 3) return quiet();
 					writerDone.resolve();
-					return speak('written');
+					return say('written');
 				},
 				reader: async (context, who, call) => {
 					results[who] = toolResults(context);
@@ -107,9 +107,7 @@ describe('the built-in tools', () => {
 		);
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
-		expect((await session.read()).messages.filter(isSpoken).map((m) => m.text)).toContain(
-			'written',
-		);
+		expect((await session.read()).messages.filter(isSaid).map((m) => m.text)).toContain('written');
 		await session.stop();
 		await site.dispose();
 		expect(await readFile(join(root, 'home', 'writer', 'notes.txt'), 'utf8')).toBe(
@@ -163,7 +161,7 @@ describe('the built-in tools', () => {
 				if (call > 4) return quiet();
 				after = toolResults(context);
 				custom = after.at(-1)?.text;
-				return speak('still here');
+				return say('still here');
 			},
 		});
 		expect(after[0]).toMatchObject({ tool: 'write', failed: false });
@@ -291,7 +289,7 @@ describe('a workspace beside a running room', () => {
 							if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
 							if (call === 2) return callTool('snapshot', { paths: ['notes.txt'] });
 							if (call === 3) return callTool('say', { text: 'first', refs: [ref] });
-							return call === 4 ? speak('second') : quiet();
+							return call === 4 ? say('second') : quiet();
 						},
 					}),
 				),

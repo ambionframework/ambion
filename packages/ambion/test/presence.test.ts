@@ -4,7 +4,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Room,
 	readRoom,
 	startRoom,
@@ -85,7 +85,7 @@ describe('presence', () => {
 		// the visit stamps the arrival
 		const arrival = (await messagesOf(session))[0];
 		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
-		expect(arrival && isSpoken(arrival)).toBe(false);
+		expect(arrival && isSaid(arrival)).toBe(false);
 		expect(arrival && 'text' in arrival).toBe(false);
 	});
 
@@ -138,7 +138,7 @@ describe('presence', () => {
 		await two.send({ text: 'from mara' });
 		await waitForRoom(session);
 
-		const said = (await messagesOf(session)).filter(isSpoken);
+		const said = (await messagesOf(session)).filter(isSaid);
 		expect(said.map((m) => [m.from, m.text])).toEqual([
 			['andrei', 'from andrei'],
 			['mara', 'from mara'],
@@ -184,7 +184,7 @@ describe('presence', () => {
 
 		// the roster folds from the record, nothing stands up, and everybody the record knows is absent
 		const view = await readRoom(first.name, { runtime });
-		expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['noting that I was here']);
+		expect(view.messages.filter(isSaid).map((m) => m.text)).toEqual(['noting that I was here']);
 		expect(
 			view.participants.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]),
 		).toEqual([

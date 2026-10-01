@@ -19,7 +19,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -127,11 +127,11 @@ export async function untilQuiet(session: Room): Promise<void> {
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((m) => m.from === name);
+	messages.filter(isSaid).filter((m) => m.from === name);
 
 /** What agents contributed through ordinary speech. */
 export const saidByAgents = (messages: readonly Message[], people: string[]) =>
-	messages.filter(isSpoken).filter((m) => !people.includes(m.from));
+	messages.filter(isSaid).filter((m) => !people.includes(m.from));
 
 /** What happened to one seat's activations, for an assertion message: starts, ends, errors, and abandons. */
 export const trailOf = (events: RoomNotification[], name: string): string =>

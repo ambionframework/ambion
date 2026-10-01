@@ -44,7 +44,7 @@ import {
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, scriptedStream, speak } from './support/scripted.ts';
+import { quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 
@@ -382,7 +382,7 @@ describe('the steps the driver owns', () => {
 	] as const)('records a %s commit as a room step', async (result, answer) => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scriptedStream((_c, _a, call) => (call === 1 ? speak('Hi.') : quiet())),
+			scriptedStream((_c, _a, call) => (call === 1 ? say('Hi.') : quiet())),
 			log.logger,
 		);
 		room.answer = answer;

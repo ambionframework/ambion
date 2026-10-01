@@ -24,7 +24,7 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { quiet, speak } from '@ambionframework/ambion/testing';
+import { quiet, say } from '@ambionframework/ambion/testing';
 import {
 	BACKGROUND_CONTEXT,
 	type CompactionSettings,
@@ -250,7 +250,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	it('refuses a say against a record that moved', async () => {
 		const room = new TwoQuestions(3);
 		const { run } = seatOn(room, await store(), (_context, _agent, call) =>
-			call === 2 ? speak('Yes.') : quiet(),
+			call === 2 ? say('Yes.') : quiet(),
 		);
 		const first = await run('message:1:product:1');
 		await run('message:2:product:1', { resume: first.session });
