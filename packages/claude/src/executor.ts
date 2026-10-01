@@ -283,7 +283,7 @@ class Activation implements ExecutorSession {
 	private handle(message: SDKMessage): void {
 		this.heard = true;
 		const session = sessionOf(message);
-		if (session !== undefined) this.reported = session.id;
+		if (session !== undefined) this.reported = session;
 		for (const step of this.steps.steps(message)) {
 			this.trace.record(step);
 			// The SDK reports a tool result as the model reads it next.

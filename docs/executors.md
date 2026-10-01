@@ -144,7 +144,7 @@ members:
 
 **The core records the session under the executor kind.** The release
 records `{ harness, id }`, where `harness` is `definition.executor.kind`,
-such as `pi`. A session that reports no `session` records none.
+such as `pi`. An executor session with no `session` id records none.
 
 **`pass` returns a `PassResult`.** It has these members:
 
@@ -435,11 +435,11 @@ the cap applies. The sum holds when the host passes no logger.
 ## The trace log
 
 **The trace goes to the host's logger.** The driver opens a `TraceSink` for
-each activation, and passes the executor its `record` with the
-activation, as a `StepSink`. The driver keeps the passes, the usage, and the close. The sink
-gives each step to the `logger` that the host passes to `createRuntime`, as
-one `TraceRecord`: `room`, `seat`, and the stamped step. With no logger, the
-sink drops the steps. The record and the trace never share an entry.
+each activation, and passes the executor its `record` with the activation,
+as a `StepSink`. The driver keeps the passes, the usage, and the close. The
+sink gives each step to the `logger` that the host passes to
+`createRuntime`, as one `TraceRecord`: `room`, `seat`, and the stamped step.
+With no logger, the sink drops the steps. The record and the trace never share an entry.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-activation-trace-dark.svg">

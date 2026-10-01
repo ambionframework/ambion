@@ -212,7 +212,7 @@ export interface AgentExecutionContext {
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	/** Opens one session per activation. Pi today; a later model family gets its own. */
+	/** The executor of the seat: a function that opens one session per activation. */
 	readonly executor: Executor;
 	readonly emit?: (event: ExecutionEvent) => void;
 	/** Opens the trace sink of each activation. The driver closes it. */
