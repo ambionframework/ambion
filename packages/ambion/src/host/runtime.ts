@@ -110,9 +110,9 @@ export interface Limits {
 	 */
 	readonly message: { readonly bytes: number };
 	/**
-	 * The bounds on a scheduled say: `after` from `minAfter` to `maxAfter`
-	 * seconds, and at most `pending` says of one seat that wait to return.
-	 * `maxAfter` and `pending` may be `Infinity`.
+	 * The bounds on a scheduled say: `delaySeconds` from `minDelaySeconds` to
+	 * `maxDelaySeconds`, and at most `pending` says of one seat that wait to
+	 * return. `maxDelaySeconds` and `pending` may be `Infinity`.
 	 */
 	readonly schedule: ScheduleLimits;
 	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
@@ -244,8 +244,8 @@ function validateCaps(limits: Limits): void {
 	for (const [name, value] of [
 		['context.messages', limits.context.messages],
 		['message.bytes', limits.message.bytes],
-		['schedule.minAfter', limits.schedule.minAfter],
-		['schedule.maxAfter', limits.schedule.maxAfter],
+		['schedule.minDelaySeconds', limits.schedule.minDelaySeconds],
+		['schedule.maxDelaySeconds', limits.schedule.maxDelaySeconds],
 		['schedule.pending', limits.schedule.pending],
 	] as const) {
 		if (value !== Number.POSITIVE_INFINITY && !(Number.isSafeInteger(value) && value > 0)) {
@@ -255,11 +255,13 @@ function validateCaps(limits: Limits): void {
 }
 
 /** A scheduled say waits a finite least time, and the most is at least the least. */
-function validateSchedule({ minAfter, maxAfter }: ScheduleLimits): void {
-	if (!Number.isFinite(minAfter))
-		throw new Error('Runtime limits.schedule.minAfter must be a positive integer.');
-	if (maxAfter < minAfter)
-		throw new Error('Runtime limits.schedule.maxAfter must be at least limits.schedule.minAfter.');
+function validateSchedule({ minDelaySeconds, maxDelaySeconds }: ScheduleLimits): void {
+	if (!Number.isFinite(minDelaySeconds))
+		throw new Error('Runtime limits.schedule.minDelaySeconds must be a positive integer.');
+	if (maxDelaySeconds < minDelaySeconds)
+		throw new Error(
+			'Runtime limits.schedule.maxDelaySeconds must be at least limits.schedule.minDelaySeconds.',
+		);
 }
 
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
@@ -279,7 +281,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: callLimits(given.call),
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
-		schedule: { minAfter: 60, maxAfter: 604_800, pending: 4, ...given.schedule },
+		schedule: { minDelaySeconds: 60, maxDelaySeconds: 604_800, pending: 4, ...given.schedule },
 		trace: { ...DEFAULT_TRACE_LIMITS, ...given.trace },
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.

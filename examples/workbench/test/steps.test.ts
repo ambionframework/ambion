@@ -88,13 +88,18 @@ describe('stepsView', () => {
 		expect(stepsView({ activation: 'a', passes: [] })).toEqual([]);
 	});
 
-	it('shows the failure of an activation and the harness permission steps', () => {
+	it('shows the session of a seat and the failure of an activation', () => {
 		const lines = stepsView(
 			read([
 				[
-					{ type: 'approval', call: 'c', name: 'bash' },
-					{ type: 'approval', call: 'c', name: 'bash', decision: 'deny' },
-					{ type: 'approval', call: 'd', name: 'edit', decision: 'allow' },
+					{
+						type: 'session',
+						name: 'claude',
+						model: 'claude-fake',
+						tools: ['say', 'bash'],
+						servers: [],
+					},
+					{ type: 'session', name: 'claude', tools: [], servers: [] },
 					{
 						type: 'end',
 						stop: 'cut',
@@ -104,9 +109,8 @@ describe('stepsView', () => {
 			]),
 		)[0]?.lines;
 		expect(lines?.map((line) => line.text)).toEqual([
-			'bash: waiting for the harness permission',
-			'bash: harness permission denied',
-			'edit: harness permission allowed',
+			'claude claude-fake: 2 tools',
+			'claude: 0 tools',
 			'ended: provider down',
 		]);
 	});

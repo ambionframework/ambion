@@ -51,6 +51,7 @@ export type {
 } from './room.ts';
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type { ScheduledSay } from './scheduling.ts';
+export type { SessionFacts } from './session-facts.ts';
 export type {
 	ActivationEvent,
 	ActivationOutcome,

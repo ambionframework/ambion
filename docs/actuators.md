@@ -236,7 +236,10 @@ template tests, then removes the stop handlers and checks that the
 ```ts
 bash({ command: 'bash ~/bath-control/start', grace: 5, name: 'bath-hold', timeout: 3900, wait: 0 });
 // Result: process bash-3f9a2c1d0b7e is running.
-schedule({ after: 900, text: 'Check bath-hold, read its log, and observe bath/temperature.' });
+schedule({
+  delaySeconds: 900,
+  text: 'Check bath-hold, read its log, and observe bath/temperature.',
+});
 ```
 
 ## Combine the capabilities
