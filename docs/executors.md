@@ -582,7 +582,7 @@ anticipated executor kind. No package for it exists yet.
 | Pi `AgentHarness`         | `@ambionframework/pi`     | Harness    | Yes, through `lane.steer`           | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
 | Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
-| Anthropic SDK tool runner | None                      | Caller     | Between turns                       | Anticipated |
+| Anthropic SDK tool runner | None                      | Caller     | Between passes                      | Anticipated |
 
 The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 

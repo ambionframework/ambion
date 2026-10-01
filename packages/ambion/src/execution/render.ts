@@ -179,7 +179,7 @@ export interface RenderedPrompt {
  */
 export const DEFAULT_SPEAKING = [
 	`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
-	`your turn without saying anything, and no mark is left. Speak only when your reply`,
+	`your activation without saying anything, and no mark is left. Speak only when your reply`,
 	`adds something the record does not already hold — new information, a decision moved`,
 	`forward, or a genuinely different perspective. A point already made does not need a`,
 	`second voice; restating it in your own words is repetition, not contribution — stay`,
@@ -187,7 +187,7 @@ export const DEFAULT_SPEAKING = [
 	`attention costs money. When a colleague holds the answer, ask them directly with one`,
 	`directed say — never announce to the room what you are about to do, and never pose a`,
 	`question undirected that only one participant can answer: a say is a message, not a`,
-	`thought. Messages arriving mid-turn are marked [new]; fold them into what you are`,
+	`thought. Messages arriving during your activation are marked [new]; fold them into what you are`,
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
 	`the room moved while you were speaking: the failure lists what you missed — read`,
 	`it, and speak again only if your reply still adds something.`,
@@ -294,7 +294,7 @@ function renderTurnContext(
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
 		`nothing reaches it and you cannot address it. A closing assignment writes the one`,
 		`message a person reads when their exchange closes.`,
-		`(active: taking a turn now; idle: at rest.)`,
+		`(active: in an activation now; idle: at rest.)`,
 		renderAgents(context.participants),
 		...(view.spec.purpose.kind === 'summarize' || context.reserve === undefined
 			? []
@@ -379,7 +379,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = openingLine(view, def.name);
 	return (
-		`${open}Take your turn, ${def.name}: this is ordinary work. ` +
+		`${open}Begin your activation, ${def.name}: this is ordinary work. ` +
 		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
 		`and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
@@ -393,14 +393,14 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 /** What a seat does with a presence line that lands while it is working. */
 const AUDIENCE_PARAGRAPH = [
 	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
-	`[new] line mid-turn, and wakes you outright if your seat watches for it. It is never a`,
+	`[new] line during your activation, and wakes you outright if your seat watches for it. It is never a`,
 	`request — nobody asked you anything by opening the room —`,
 	`so it never means start something new, and you`,
 	`never greet, never say that you noticed, and never summarise the record back to the`,
 	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
 	`actually reading now, say the part that needs them while they are still there, and`,
 	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
-	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
+	`activation, ignore it. When nobody is in the room, work for the record: state what you`,
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
@@ -427,7 +427,7 @@ const SUMMARY_DUTIES = [
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
 	`Put the URI of the message that opened the exchange, and of any result that the exchange`,
 	`made, in the refs of the say.`,
-	`Ending your turn without calling say leaves the range whole for whoever reads it.`,
+	`Ending your activation without calling say leaves the range whole for whoever reads it.`,
 ];
 
 /** The description of the `say` tool that a closing seat holds. Every executor gives this one. */
@@ -436,8 +436,8 @@ export function summaryToolDescription(
 	people: readonly string[] = [person],
 ): string {
 	if (people.length > 1)
-		return `Write the message one person reads for this exchange. Call it once for each of ${people.join(', ')}, and set \`to\` to that person. End your turn to leave a range whole. Put the URI of what the message cites in refs.`;
-	return `Write the one message ${person} reads for this exchange. Use the assigned recipient and exchange. Call it once, or end your turn to leave the range whole. Put the URI of what the message cites in refs.`;
+		return `Write the message one person reads for this exchange. Call it once for each of ${people.join(', ')}, and set \`to\` to that person. End your activation to leave a range whole. Put the URI of what the message cites in refs.`;
+	return `Write the one message ${person} reads for this exchange. Use the assigned recipient and exchange. Call it once, or end your activation to leave the range whole. Put the URI of what the message cites in refs.`;
 }
 
 /**
@@ -476,6 +476,6 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
-		? 'Speak, seat or unseat a colleague, use your tools, or end your turn.'
-		: 'Write the one message with say, or end your turn.';
+		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
+		: 'Write the one message with say, or end your activation.';
 }

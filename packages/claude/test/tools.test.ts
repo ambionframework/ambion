@@ -31,7 +31,7 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 	});
 	const run = open(
 		{
-			turns: [
+			passes: [
 				[{ call: { tool: 'lookup', args: { id: 'r1' } } }, { call: { tool: 'broken', args: {} } }],
 			],
 		},

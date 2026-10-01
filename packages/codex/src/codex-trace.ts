@@ -7,7 +7,7 @@
  * steps hold the growth of the text: one delta for each update, then a
  * closing step. An `mcp_tool_call` item becomes a `tool_call` and a
  * `tool_result`. A diagnostic of Codex (an `error` item or an `error` event)
- * is a `notice`. The terminal failure of a turn is no notice: the pass result
+ * is a `notice`. The terminal failure of a pass is no notice: the pass result
  * carries it to the `end` step.
  *
  * An item of any other type is a native tool that the seat should not have.
@@ -44,9 +44,9 @@ function warning(text: string): Step {
 }
 
 /**
- * The tokens of a turn as ambion counts them. Codex counts the tokens it
+ * The tokens of a pass as ambion counts them. Codex counts the tokens it
  * read from the cache and the tokens it wrote to the cache inside its input
- * tokens, and reports no cost. The recorded turns show it: a first turn
+ * tokens, and reports no cost. The recorded passes show it: a first pass
  * reports 12387 input tokens with 12384 of them written to the cache.
  */
 export function usageOf(usage: {
@@ -70,15 +70,15 @@ export function usageOf(usage: {
  * Turns thread events into the steps they stand for. One instance serves one
  * activation.
  *
- * A real `codex` numbers the items of each turn from `item_0`, so an item id
+ * A real `codex` numbers the items of each pass from `item_0`, so an item id
  * is unique only inside one turn. The id of a step is the scope, the number
- * of the turn, and the item id. A room tool takes that id as the key of its
+ * of the pass, and the item id. A room tool takes that id as the key of its
  * commit, and the room keeps one message for each key.
  */
 export class CodexSteps {
 	/** What makes an id unique in the room: the id of the activation. */
 	private readonly scope: string;
-	/** The number of the turn in flight. It moves on each `turn.started`. */
+	/** The number of the pass in flight. It moves on each `turn.started`. */
 	private turn = 0;
 	/** How much of each text item the steps already hold, by step id. */
 	private readonly sent = new Map<string, number>();
@@ -89,7 +89,7 @@ export class CodexSteps {
 		this.scope = scope;
 	}
 
-	/** The id of the steps of an item in the turn in flight. */
+	/** The id of the steps of an item in the pass in flight. */
 	private idOf(item: ThreadItem): string {
 		return `${this.scope}:${this.turn}:${item.id}`;
 	}

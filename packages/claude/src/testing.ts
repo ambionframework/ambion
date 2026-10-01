@@ -5,19 +5,19 @@
  *
  * The fake is a script the SDK spawns through `pathToClaudeCodeExecutable`.
  * It reads its scenario from the `AMBION_FAKE` environment variable: a
- * JSON object with one list of actions for each turn. The fixture maps each
+ * JSON object with one list of actions for each pass. The fixture maps each
  * plan of the suite to such a scenario.
  */
 import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { claude } from './define.ts';
 import { createClaudeOpener } from './executor.ts';
 
-/** One thing the fake does in a turn. `test/fake/claude-executable.mjs` lists them. */
+/** One thing the fake does in a pass. `test/fake/claude-executable.mjs` lists them. */
 export type FakeAction = Record<string, unknown>;
 
-/** What the fake plays: one list of actions for each turn. */
+/** What the fake plays: one list of actions for each pass. */
 export interface FakeScenario {
-	readonly turns: readonly (readonly FakeAction[])[];
+	readonly passes: readonly (readonly FakeAction[])[];
 	/** A file that takes one JSON line for each fact the fake records. */
 	readonly log?: string;
 }
@@ -26,20 +26,20 @@ export interface FakeScenario {
 export function scenarioOf(plan: ExecutorPlan): FakeScenario {
 	switch (plan.kind) {
 		case 'sayOnce':
-			return { turns: [[{ say: plan.text }]] };
+			return { passes: [[{ say: plan.text }]] };
 		case 'holdSay':
 		case 'missThenResay':
 			// A `missed` answer leaves the seat a second say.
-			return { turns: [[{ sayUntilLanded: plan.text }]] };
+			return { passes: [[{ sayUntilLanded: plan.text }]] };
 		case 'sayEachPass':
-			return { turns: [[{ say: plan.text }], [{ say: plan.text }]] };
+			return { passes: [[{ say: plan.text }], [{ say: plan.text }]] };
 		case 'awaitSteer':
-			return { turns: [[{ awaitUser: 2 }, { say: plan.text }]] };
+			return { passes: [[{ awaitUser: 2 }, { say: plan.text }]] };
 		case 'usage':
-			return { turns: [[{ usage: { ...plan.usage } }, { say: plan.text }]] };
+			return { passes: [[{ usage: { ...plan.usage } }, { say: plan.text }]] };
 		case 'fail':
 			return {
-				turns: [
+				passes: [
 					[
 						{
 							fail:

@@ -191,7 +191,7 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 		return ended('The room did not confirm your message, and it may already hold it.');
 	}
 	const why = 'stale' in response ? response.stale : 'the room moved';
-	return ended(`Your turn ended: ${why}.`);
+	return ended(`Your activation ended: ${why}.`);
 }
 
 /**
@@ -223,7 +223,7 @@ function scheduledLine(message: Message): string {
 
 /** The result that tells the model its activation has ended. */
 function ended(why: string): RoomToolResult {
-	return { ...text(`${why} This turn is over.`, true), terminate: true };
+	return { ...text(`${why} This activation is over.`, true), terminate: true };
 }
 
 /** The refs a say cites: each trimmed, none empty. */
@@ -365,7 +365,7 @@ function missedSay(
 		refusal(
 			'Not delivered — the room moved while you were speaking. New on the record:',
 			[...missed],
-			'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+			'Speak again only if your reply still adds something the room has not heard; otherwise end your activation.',
 		),
 		true,
 	);

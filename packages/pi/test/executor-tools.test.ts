@@ -74,7 +74,7 @@ const summarize: Purpose = {
 };
 
 const at = '2026-01-01T00:00:00.000Z';
-const blank = 'The message is empty. Say something, or end your turn instead.';
+const blank = 'The message is empty. Say something, or end your activation instead.';
 const said = (seq: number, text: string): CommitResult => ({
 	committed: { kind: 'said', seq, at, from: 'worker', text },
 });

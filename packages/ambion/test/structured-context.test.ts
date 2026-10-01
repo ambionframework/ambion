@@ -183,7 +183,7 @@ describe('structured activation context', () => {
 		expect(response.agent).toContain('PRIVATE PRODUCT INSTRUCTIONS.');
 		expect(response.context).toContain('Later.');
 		expect(response.context).toContain('The reserve: agents not in the room.');
-		expect(response.context).toContain('Take your turn, product:');
+		expect(response.context).toContain('Begin your activation, product:');
 		expect(summary.agent).toContain('PRIVATE WORKER INSTRUCTIONS.');
 		expect(summary.agent).not.toContain('assistant in the room');
 		expect(summary.agent).toContain('The exchange is over. Write the one message');

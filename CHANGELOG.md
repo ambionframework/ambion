@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The prompts of the room say "activation" where they said "turn".** The
+word `turn` belongs to Pi, where it is one request to a provider. The room
+tells a model to end its activation, and says that a message arrives during
+its activation. The tool results of `say` and the refusal of an empty message
+use the same word. The prompt for ordinary work says "Begin your activation"
+where it said "Take your turn". The roster line says "in an activation now".
+This changes model-facing text, and the prompt snapshots hold the new words.
+A live case on a real model is owed before the release. The Codex pages and
+comments say "pass" for one Codex turn. The Claude test fixture
+`FakeScenario.turns` becomes `FakeScenario.passes`.
+
 **Three words name the three ways work ends.** A stop ends this run of the
 room, and the next run resumes from the record. `room.stop()` keeps its
 name. A cancel ends the open work, and the `cancel` entry keeps that fact.

@@ -10,7 +10,7 @@ import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { RESUMED_NOTE } from '../src/executor.ts';
 import { fakeRoom, viewOf } from './support.ts';
 
-const SAY = { turns: [[{ say: 'Saturday.' }]] };
+const SAY = { passes: [[{ say: 'Saturday.' }]] };
 
 const resumeOf = (argv: string[] = []) =>
 	argv.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
@@ -121,7 +121,7 @@ describe('exchange continuity', () => {
 			starts: 1,
 		},
 	])('$what', async ({ fail, rejectResumeResult, result, starts }) => {
-		const room = fakeRoom({ turns: [[{ fail }]], rejectResumeResult });
+		const room = fakeRoom({ passes: [[{ fail }]], rejectResumeResult });
 		const activation = room.activate('message:3:sonnet:1');
 		const answer = await activation.pass({
 			kind: 'view',

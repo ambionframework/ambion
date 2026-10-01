@@ -12,7 +12,7 @@ async function argvOf(
 	options: Parameters<typeof seat>[0] = {},
 	host: Readonly<Record<string, string>> = {},
 ) {
-	const run = open({ turns: [[]] }, seat(options), host);
+	const run = open({ passes: [[]] }, seat(options), host);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
 	const lines = run.log();
@@ -79,7 +79,7 @@ it('records one approval step for each request, with the answer of canUseTool', 
 				: { behavior: 'deny', message: 'No shell.' };
 		},
 	});
-	const run = open({ turns: [[{ permission: read }, { permission: bash }]] }, definition);
+	const run = open({ passes: [[{ permission: read }, { permission: bash }]] }, definition);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	expect(asked).toEqual(['Read', 'Bash']);
 	expect(approvals(run.steps)).toEqual([
@@ -94,7 +94,7 @@ it('records one approval step for each request, with the answer of canUseTool', 
 
 it('answers for a room tool without an approval step, and denies a request when the application gave no canUseTool', async () => {
 	const say = { tool: 'mcp__ambion__say', input: { text: 'hello' } };
-	const run = open({ turns: [[{ permission: say }, { permission: bash }]] });
+	const run = open({ passes: [[{ permission: say }, { permission: bash }]] });
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	expect(approvals(run.steps)).toEqual([
 		{ type: 'approval', call: expect.any(String), name: 'Bash', decision: 'deny' },
@@ -108,7 +108,7 @@ it('denies a request when canUseTool throws', async () => {
 			throw new Error('The policy is down.');
 		},
 	});
-	const run = open({ turns: [[{ permission: read }]] }, definition);
+	const run = open({ passes: [[{ permission: read }]] }, definition);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	expect(approvals(run.steps)).toMatchObject([{ name: 'Read', decision: 'deny' }]);
 	run.session.close?.();

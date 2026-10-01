@@ -4,8 +4,8 @@
  * `pathToClaudeCodeExecutable` and speaks its stream-json control protocol
  * over stdio. The fake plays a scenario and touches no network.
  *
- * The scenario is JSON in `AMBION_FAKE`: `{ turns, log }`. `turns` holds one
- * list of actions for each turn the fake runs. A turn starts when a user
+ * The scenario is JSON in `AMBION_FAKE`: `{ passes, log }`. `passes` holds one
+ * list of actions for each pass the fake runs. A pass starts when a user
  * message waits, and it ends with a `result`. `log` names a file that takes
  * one JSON line for the arguments, the initialize request, and each
  * permission answer.
@@ -22,14 +22,14 @@
  * - `{ text, stream }` and `{ thinking, stream }`: one block, sent whole or as deltas.
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
- * - `{ fail: { status, text } }`: end the turn with an error result.
+ * - `{ fail: { status, text } }`: end the pass with an error result.
  * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
  * - `{ own: { name, input, output } }`: a tool the executable runs itself.
  */
 import { appendFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
-const config = JSON.parse(process.env.AMBION_FAKE ?? '{"turns":[]}');
+const config = JSON.parse(process.env.AMBION_FAKE ?? '{"passes":[]}');
 const args = process.argv.slice(2);
 const resumed = args.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
 const session = resumed ?? config.session ?? `fake-session-${process.pid}`;
@@ -50,7 +50,7 @@ const envelope = (fields) => ({
 
 const users = [];
 let consumed = 0;
-let turn = 0;
+let pass = 0;
 let running = false;
 let cut = false;
 let mcpReady = false;
@@ -261,12 +261,12 @@ async function run() {
 	running = true;
 	consumed = users.length;
 	try {
-		await play(config.turns[turn] ?? []);
+		await play(config.passes[pass] ?? []);
 	} catch (error) {
 		if (!cut) throw error;
 		result({ subtype: 'error_during_execution', is_error: true, errors: ['interrupted'] });
 	}
-	turn += 1;
+	pass += 1;
 	cut = false;
 	running = false;
 	if (users.length > consumed) void run();

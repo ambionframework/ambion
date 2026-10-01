@@ -294,7 +294,7 @@ class Activation implements RunningActivation {
 
 	/**
 	 * A result ends the pass when no sent message still waits for its echo and
-	 * no queued turn follows. Otherwise the pass waits for that turn's result.
+	 * no queued message follows. Otherwise the pass waits for its result.
 	 */
 	private answered(message: Extract<SDKMessage, { type: 'result' }>): void {
 		if (this.stopped) return;

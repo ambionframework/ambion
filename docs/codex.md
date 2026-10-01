@@ -313,7 +313,8 @@ the agent instructions, in that order, with a blank line between them. The
 core fixes all three for an activation, so the executor builds the text once,
 from the first pass. The first prompt holds the whole view. A later pass sends
 the delta, the lines that landed since the pass read, as the next run of the
-same thread. The `turn.*` events of Codex mark each run.
+same thread. A pass runs one Codex turn. The `turn.*` events of Codex mark
+each pass.
 
 **The seat text is an instructions file.** The config key
 `model_instructions_file` names a file in the scratch directory of the
@@ -323,12 +324,12 @@ from the base prompt. The SDK passes the path, and Codex reads the file as
 written, so quotes, backslashes, newlines, and non-ASCII characters arrive
 unchanged. The binary tier proves it.
 
-**A run ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
+**A pass ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
 events for trouble that it survives, such as a reconnect. An `error` event
-ends the run only when nothing else does.
+ends the pass only when nothing else does.
 
 **`turn.started` is the signal that the model read the prompt.** The model
-reads the prompt when a run starts, so the executor calls `read` with the
+reads the prompt when a pass starts, so the executor calls `read` with the
 range of the view or the delta then. A tool result reaches the model when
 the tool returns, so the executor calls `delivered` at once. A missed say
 moves the position to the last of the messages it carries, and a
@@ -341,13 +342,13 @@ states what an executor kind without steering does. The Codex session has no
 records the `steer` step of that line with `consumed: false`; see
 [Executors](executors.md#how-an-activation-runs).
 
-**A cut signals the run.** The signal of the activation signals the run in
+**A cut signals the pass.** The signal of the activation signals the pass in
 flight. `close` stops the socket and the server. A late cut signals no dead
 process.
 
 **A host that dies takes `codex exec` with it.** The SDK closes the input of
 `codex exec` at once. When the host process dies (SIGKILL, out of memory, a
-crash), the OS gives `codex exec` to init and the process runs its turn to the
+crash), the OS gives `codex exec` to init and the process runs its pass to the
 end. It keeps calling the model and keeps writing the thread. The
 room tools server sees the host socket close. If `codex exec` is still its
 parent, the server sends it SIGTERM and then exits. A `codex exec` that
@@ -379,8 +380,8 @@ then a closing step.
 | `turn.failed`       | No step; the failure goes to the `end` step                                                     |
 
 **The id of a step is unique in the room.** A real `codex` numbers the items
-of each turn from `item_0`. The id of a step holds the activation id, the
-number of the turn, and the item id, as in `message:3:gpt:1:1:item_1`. A room
+of each pass from `item_0`. The id of a step holds the activation id, the
+number of the pass, and the item id, as in `message:3:gpt:1:1:item_1`. A room
 tool takes that id as the key of its commit, so the say of each activation
 lands under its own key.
 
@@ -402,7 +403,7 @@ the item type. The executor maps nothing else from such an item.
 **A notice never gates the activation.** Codex reports its own diagnostics
 as `error` items and `error` events, such as an unknown setting in the
 config or "Reconnecting... 1/5". The trace keeps each one as a `notice` at
-level `warning`. A turn that fails ends with an `error` event and then
+level `warning`. A pass that fails ends with an `error` event and then
 `turn.failed`. The `end` step carries that failure, and the `error` event
 also shows as a `notice` with the same text.
 
@@ -411,7 +412,7 @@ its policy and reports none through the SDK.
 
 ## Usage
 
-**One `usage` step ends each run.** `turn.completed` reports input, cached,
+**One `usage` step ends each pass.** `turn.completed` reports input, cached,
 and output tokens. [Executors](executors.md#the-step-vocabulary) states how
 the driver sums the steps at release. The activation reports the sum on
 `activation_end`.
@@ -442,7 +443,7 @@ runs do not show whether `output_tokens` includes them. A field that an older
 `createRuntime` a function that keeps the steps. Each activation logs its
 `thinking`, `text`, `tool_call`, and `tool_result` steps, the `room`
 answers, and the `usage`. The `end` step
-holds the failure of a turn that failed.
+holds the failure of a pass that failed.
 
 **The reasoning summary feeds `thinking`.** Codex shows no raw reasoning.
 It shows a summary that the model writes when the request asks for one. The
@@ -461,7 +462,7 @@ has the text "Codex thread" and the level `info`. Its `data` holds the
 `thread` id, the `home` of the seat, and the `rollout` path. The rollout is
 the file `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`. It
 holds the instructions, every input and output item, the reasoning, and the
-tool calls. The executor looks for the file after the turn starts. It leaves
+tool calls. The executor looks for the file after the pass starts. It leaves
 out `rollout` when it finds none. Each thread has one notice for the
 activation.
 
@@ -473,7 +474,7 @@ visible when the run succeeds.
 
 [Executors](executors.md#failure-classification) states the shared rule.
 
-**Codex reports a failed run as text, with no status field.** The
+**Codex reports a failed pass as text, with no status field.** The
 `turn.failed` and `error` events carry a message only. The classification
 pulls a three-digit HTTP status out of the text when the text names one,
 such as "status 401", and applies the shared status rule to it.
@@ -788,7 +789,7 @@ fixture `catalog-0.158.0.json` comes from the bundled 0.158.0 binary. The
 tests map the events to steps and count usage. Pure parts have their own tests: the wire framing, the
 room tools, the options, and the failure classification. A replay client
 runs the executor on the recorded events to test exchange continuity. A
-turn of the replay client can also call `say` through the socket of the
+pass of the replay client can also call `say` through the socket of the
 bridge, as the room tools server does.
 
 **The live tier proves the claims that a scripted model cannot.** Each file
@@ -800,7 +801,7 @@ holds the smallest room that proves one claim.
 | `test/live/tools.test.ts`       | A seat writes a file and runs a command through the workspace tools, and says what the command read |
 | `test/live/exclusive.test.ts`   | A seat has exactly the room tools and its own; it reads no host file                                |
 | `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color            |
-| `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                        |
+| `test/live/steer.test.ts`       | A line sent during a pass is held, and the next pass reads it                                       |
 | `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                           |
 | `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                               |
 | `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file         |

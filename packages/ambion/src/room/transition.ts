@@ -240,7 +240,7 @@ function oversizeRefusal(body: Body<Message>, bytes?: number): { refusal: Refusa
 function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
 	if (!('text' in body) || ('returns' in body && body.returns !== undefined)) return undefined;
 	if (body.text.trim() === '')
-		return refused('The message is empty. Say something, or end your turn instead.');
+		return refused('The message is empty. Say something, or end your activation instead.');
 	if (body.refs === undefined) return undefined;
 	const reason = refsRefusal(body.refs);
 	return reason === undefined ? undefined : refused(reason);
