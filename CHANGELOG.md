@@ -40,21 +40,32 @@ pass in flight holds is `consumed: true`. A line that lands in a pass whose
 executor has no `steer` is `consumed: false`. A line that the executor
 delivers is `consumed: true` when the executor calls `read` for its range,
 `{ after, through: seq }`, and `consumed: false` when the pass ends first.
-A line that lands before the first pass waits for that pass, and then
-follows the same rule. The executor records no `steer` step. The `steer`
-member of `ExecutorSession` only delivers the line, and the core calls it
-after it calls `pass`. The Pi and Claude executors lose their own stamps.
-Three steps change. A
-Codex seat and a scripted seat now record a `steer` step with
-`consumed: false`. Before, they recorded none. A Pi line that lands before
-the first pass is now `consumed: true` when the first view holds it, as a
-Claude line was before. A Pi line past the first view now joins the first
-prompt, and it is `consumed: true` when the first request holds it. Before,
-Pi dropped it with `consumed: false`. A Claude steer that finds no echo
-when its pass ends now records `consumed: false`. Before, it recorded no
-step. The conformance case `holds a steer for the record when the executor
-cannot steer` now requires a `steer` step with `consumed: false` for the
-line.
+A `steer` that throws leaves the line `consumed: false`. A line that lands
+before the first pass waits for that pass, and then follows the same rule.
+When no first pass runs, because of a cut, a view of another seat, or a
+failed claim, the line is `consumed: false`, and its step comes before the
+`end` step. `ActivationState` has a new public method, `dropEarly`, and the
+runner calls it.
+
+The executor records no `steer` step. The `steer` member of
+`ExecutorSession` only delivers the line. The core calls it at any moment
+after it calls `pass` and before that pass settles, also before the body of
+`pass` reaches its first `await`. The executor holds a line that its harness
+cannot take yet, delivers it when the harness can, and drops what it holds
+when `pass` settles. The Pi and Claude executors lose their own stamps.
+The Claude executor now holds a line from the start of a pass until the
+pass sends its prompt, on every pass.
+
+Four steps change. A Codex seat and a scripted seat now record a `steer`
+step with `consumed: false`. Before, they recorded none. A Pi line that
+lands before the first pass is now `consumed: true` when the first view
+holds it, as a Claude line was before. A Pi line past the first view now
+joins the first prompt, and it is `consumed: true` when the first request
+holds it. Before, Pi dropped it with `consumed: false`. A Claude steer that
+finds no echo when its pass ends now records `consumed: false`. Before, it
+recorded no step. The conformance case `holds a steer for the record when
+the executor cannot steer` now requires a `steer` step with
+`consumed: false` for the line.
 
 **`HomeEnv` implements the file members of `ExecutionEnv`.**
 `@ambionframework/workspace` exports two new types: `FileOperations` and

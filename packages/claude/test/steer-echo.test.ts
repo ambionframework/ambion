@@ -51,6 +51,38 @@ it('sends a steer that arrives before the first pass with the view', async () =>
 	run.session.close?.();
 });
 
+it('sends a line that lands while a later pass renders its record, and counts it on its echo', async () => {
+	const run = open({
+		turns: [[{ text: 'First.' }], [{ awaitUser: 3 }, { text: 'Second.' }]],
+	});
+	await run.session.pass({ kind: 'view', view: viewOf(1) });
+	const first = viewOf(1);
+	const view = {
+		...first,
+		through: 2,
+		context: {
+			...first.context,
+			messages: [
+				...first.context.messages,
+				{
+					kind: 'said' as const,
+					seq: 2,
+					at: new Date(0).toISOString(),
+					from: 'priya',
+					text: 'And the permit?',
+				},
+			],
+		},
+	};
+	const second = run.session.pass({ kind: 'delta', since: 1, view });
+	// The pass has not sent its prompt yet: the executor holds the line, and sends it after the prompt.
+	run.session.steer(2, 3, '[3] priya: One more thing.');
+	expect(await second).toEqual({ failed: false });
+	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: true });
+	expect(run.session.readThrough).toBe(3);
+	run.session.close?.();
+});
+
 it('takes no line that lands outside a pass', async () => {
 	const run = open({ turns: [[{ say: 'Saturday.' }]] });
 	await run.session.pass({ kind: 'view', view: viewOf(1) });

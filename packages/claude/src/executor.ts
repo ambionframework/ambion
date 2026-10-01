@@ -64,7 +64,7 @@ export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
 	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
 }
 
-/** A steered line held until its pass starts. */
+/** A steered line held until its pass sends its prompt. */
 interface Held {
 	readonly after: Seq;
 	readonly seq: Seq;
@@ -80,7 +80,7 @@ class Activation implements ExecutorSession {
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
-	/** The steers held before the query starts. */
+	/** The steers held until the pass sends its prompt. */
 	private held: Held[] = [];
 	/** The messages sent and not yet echoed. A restart of the query sends them again. */
 	private readonly outbox = new Map<string, SDKUserMessage>();
@@ -117,14 +117,14 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * A line landed while a pass runs. Before the query starts it waits for
-	 * the query. Once the pass sends its prompt, the line joins the input, and
-	 * the echo confirms it. A line that lands at any other time waits for the
-	 * record: the next delta has it.
+	 * A line landed while a pass runs. Until the pass sends its prompt, the
+	 * line waits: the pass sends it right after the prompt. Once the pass sent
+	 * its prompt, the line joins the input, and the echo confirms it. A line
+	 * still held when the pass settles waits for the next delta.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.stream === undefined) this.held.push({ after, seq, line });
-		else if (this.settle !== undefined) this.send(line, { after, through: seq });
+		if (this.settle === undefined) this.held.push({ after, seq, line });
+		else this.send(line, { after, through: seq });
 	}
 
 	/** The activation was cut: interrupt the query. The pass in flight ends. */
@@ -180,7 +180,7 @@ class Activation implements ExecutorSession {
 			: record;
 	}
 
-	/** The steers held before the query started join the input. */
+	/** The steers held until the pass sent its prompt join the input. */
 	private flush(): void {
 		for (const held of this.held.splice(0)) {
 			this.send(held.line, { after: held.after, through: held.seq });

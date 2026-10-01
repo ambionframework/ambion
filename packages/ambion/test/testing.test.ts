@@ -351,8 +351,8 @@ describe('scriptedExecutor', () => {
 	/**
 	 * The core state of one activation over an executor whose sessions run
 	 * `pass`. The pass gets the state and the activation. The session
-	 * steers only when `canSteer`, and `steered` holds the position of each
-	 * line it took.
+	 * takes a steer, has none, throws on it, or reads the line and then
+	 * throws. `steered` holds the position of each line it took.
 	 */
 	function around(
 		pass: (
@@ -360,7 +360,7 @@ describe('scriptedExecutor', () => {
 			handle: { readonly state: ActivationState; readonly activation: ExecutorActivation },
 		) => Promise<PassResult>,
 		tools: AgentExecutor['tools'] = [],
-		canSteer = true,
+		steering: 'takes' | 'none' | 'throws' | 'readsThenThrows' = 'takes',
 	) {
 		const opened: ExecutorActivation[] = [];
 		const passes: Pass[] = [];
@@ -376,12 +376,14 @@ describe('scriptedExecutor', () => {
 						return pass(one, { state, activation });
 					},
 				};
-				if (!canSteer) return session;
+				if (steering === 'none') return session;
 				return {
 					...session,
-					steer: (_after, seq) => {
+					steer: (after, seq) => {
 						if (passes.length === 0) throw new Error('The core steered before the pass.');
 						steered.push(seq);
+						if (steering === 'readsThenThrows') activation.read({ after, through: seq });
+						if (steering !== 'takes') throw new Error('The executor cannot take the line.');
 					},
 				};
 			},
@@ -430,7 +432,8 @@ describe('scriptedExecutor', () => {
 	);
 
 	it('refuses a view of another seat, and runs no pass', async () => {
-		const { state, passes, events } = around(async () => ({ failed: false }));
+		const { state, passes, events, steps } = around(async () => ({ failed: false }));
+		state.steer(3, 4, 'early');
 		const other = { ...respond, spec: { ...respond.spec, seat: 'b' } };
 		await expect(state.pass(input(other))).resolves.toMatchObject({
 			failed: true,
@@ -439,6 +442,7 @@ describe('scriptedExecutor', () => {
 		});
 		expect(passes).toEqual([]);
 		expect(events).toHaveLength(1);
+		expect(steps).toEqual([steer(4, false)]);
 	});
 
 	it('runs no pass and takes no steer once cut, and the session sees the cut', async () => {
@@ -450,7 +454,8 @@ describe('scriptedExecutor', () => {
 		expect(activation.signal.aborted).toBe(true);
 		expect(passes).toEqual([]);
 		expect(steered).toEqual([]);
-		expect(steps).toEqual([]);
+		// The line that landed before the cut waits for the next delta.
+		expect(steps).toEqual([steer(4, false)]);
 	});
 
 	type Handle = Parameters<Parameters<typeof around>[0]>[1];
@@ -485,6 +490,23 @@ describe('scriptedExecutor', () => {
 			forwarded: [4],
 		},
 		{
+			name: 'a line before the first pass when the executor has no steer',
+			steering: 'none',
+			early: [[3, 4]],
+			seen: [steer(4, false)],
+			steps: [steer(4, false)],
+			forwarded: [],
+		},
+		{
+			name: 'a line before the first pass when the pass throws before it starts',
+			early: [[3, 4]],
+			startThrows: true,
+			seen: [],
+			steps: [steer(4, false)],
+			forwarded: [],
+			failed: true,
+		},
+		{
 			name: 'a line after a pass',
 			late: [[3, 4]],
 			seen: [],
@@ -500,7 +522,7 @@ describe('scriptedExecutor', () => {
 		},
 		{
 			name: 'a line in flight when the executor has no steer',
-			canSteer: false,
+			steering: 'none',
 			during: ({ state }: Handle) => state.steer(3, 4, 'no steer'),
 			seen: [steer(4, false)],
 			steps: [steer(4, false)],
@@ -537,6 +559,22 @@ describe('scriptedExecutor', () => {
 			forwarded: [6, 5],
 		},
 		{
+			name: 'a line in flight when the executor throws on the steer',
+			steering: 'throws',
+			during: ({ state }: Handle) => state.steer(3, 4, 'refused'),
+			seen: [steer(4, false)],
+			steps: [steer(4, false)],
+			forwarded: [4],
+		},
+		{
+			name: 'a line in flight when the executor reads it and then throws',
+			steering: 'readsThenThrows',
+			during: ({ state }: Handle) => state.steer(3, 4, 'read, then refused'),
+			seen: [steer(4, true)],
+			steps: [steer(4, true)],
+			forwarded: [4],
+		},
+		{
 			name: 'a line in flight when the pass throws',
 			during: ({ state }: Handle) => {
 				state.steer(3, 4, 'lost');
@@ -549,7 +587,8 @@ describe('scriptedExecutor', () => {
 		},
 	] satisfies {
 		name: string;
-		canSteer?: boolean;
+		steering?: 'takes' | 'none' | 'throws' | 'readsThenThrows';
+		startThrows?: boolean;
 		early?: [number, number][];
 		late?: [number, number][];
 		during?: (handle: Handle) => void;
@@ -560,18 +599,21 @@ describe('scriptedExecutor', () => {
 	}[])('records the steer step of $name', async (one) => {
 		let seen: Step[] = [];
 		const { state, steered, steps } = around(
-			async (_pass, handle) => {
-				// A harness takes a tick to start, and the core places the early lines in it.
-				await Promise.resolve();
-				try {
-					one.during?.(handle);
-				} finally {
-					seen = [...steps];
-				}
-				return { failed: false };
+			(_pass, handle) => {
+				if (one.startThrows) throw new Error('The pass broke before its first await.');
+				return (async () => {
+					// A harness takes a tick to start, and the core places the early lines in it.
+					await Promise.resolve();
+					try {
+						one.during?.(handle);
+					} finally {
+						seen = [...steps];
+					}
+					return { failed: false };
+				})();
 			},
 			[],
-			one.canSteer,
+			one.steering,
 		);
 		for (const [after, seq] of one.early ?? []) state.steer(after, seq, `line ${seq}`);
 		const result = await state.pass(input(respond));

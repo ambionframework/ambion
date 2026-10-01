@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Eleven reductions have landed.** `pnpm check` passes on them, and the
+**Twelve reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -45,6 +45,7 @@ changelog names each change to an export and to a behavior.
 | One file adapter for the backends (B3)      | Two `attempt` helpers, two `FileResult` types, 26 member bodies          | `workspace/src/execution-env.ts`         |
 | One rule for a thrown pass (E2)             | `UnknownModel`, a second `PermanentError`, six copies of the conversion  | `execution/failure.ts` (`failedPass`)    |
 | One function opens a session (E3)           | `Executor.harness`, `Executor.open`, three public `create*Executor`      | `execution/executor.ts`, `activation.ts` |
+| The core stamps every steer (E1)            | Two `Held` stampers, Pi `early` and `drop`, the Claude echo stamp        | `execution/activation.ts`                |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -113,7 +114,7 @@ concepts, high confidence.
 
 | ID  | Finding                                                        | Evidence                                                                                    | Removes | Conf.  | Rank |
 | --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
-| E1  | The steer bookkeeping is in each executor                      | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
+| E1  | The steer bookkeeping is in each executor (done)               | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
 | E2  | A thrown error becomes a transient pass in five places (done)  | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
 | E3  | `Executor.harness` always equals the executor kind (done)      | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
 | E4  | Pi has three option types for its services                     | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
@@ -236,8 +237,8 @@ bash server each accept pushes, so each enforces the policy.
   `thinking` option exists in `pi/src/define.ts:27`.
 - `docs/codex.md:326` said that a missing binary is a transient failure.
   E2 fixed it.
-- `docs/executors.md:275` says that every family stamps a `steer` step. A
-  Codex seat stamps none (E1).
+- `docs/executors.md:275` said that every family stamps a `steer` step. A
+  Codex seat stamped none. E1 fixed it: the core stamps every step.
 
 **Two planning records are missing from the CLAUDE.md table.** The
 table names `next.md` and `backlog.md`. `review-0.5.0.md` and this page

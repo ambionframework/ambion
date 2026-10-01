@@ -281,16 +281,21 @@ it. The core decides by the moment the line lands:
 | The line lands                                     | The core records                                                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Before the first pass                              | Nothing yet. The line waits for the first pass, and then follows the rules below.                            |
+| Before a first pass that never runs                | `consumed: false` when the pass would have started: a cut, a view of another seat, or a failed claim.        |
 | Between two passes                                 | `consumed: false` at once.                                                                                   |
 | In a pass, and the view of the pass holds the line | `consumed: true` at once.                                                                                    |
 | In a pass, and the executor has no `steer`         | `consumed: false` at once.                                                                                   |
 | In a pass, and the executor has `steer`            | `consumed: true` when the executor calls `read` for the line, or `consumed: false` when the pass ends first. |
+| In a pass, and `steer` throws                      | `consumed: false` at once, unless the executor read the line first.                                          |
 
-The executor delivers a line when its harness can take it. It calls
-`read({ after, through: seq })` when the model consumes the line, with the
-`after` and the `seq` that `steer` received. It records no `steer` step.
-Each family page states the moment its executor calls `read`, because the
-moment differs by family.
+The core calls `steer` at any moment after it calls `pass` and before that
+pass settles. That includes the moment before the body of `pass` reaches its
+first `await`. The executor holds a line that its harness cannot take yet,
+delivers it when the harness can, and drops what it holds when `pass`
+settles. It calls `read({ after, through: seq })` when the model consumes
+the line, with the `after` and the `seq` that `steer` received. It records
+no `steer` step. Each family page states the moment its executor calls
+`read`, because the moment differs by family.
 
 **The room applies the activation token limit.** It keeps the newest
 messages that fit `activationTokenLimit`, and keeps the open exchange
@@ -621,10 +626,13 @@ family. `@ambionframework/claude` is the worked example, and
    consumes a range, and `delivered(call)` when a tool result reaches it,
    and on nothing earlier. [How an activation runs](#how-an-activation-runs)
    states the events. Declare `steer` only when the harness takes a line
-   into a live pass. For a line that `steer` delivers, call
-   `read({ after, through: seq })` when the model consumes it, and record
-   no `steer` step. [The core rule](#how-an-activation-runs) sets
-   `consumed`.
+   into a live pass. The core calls `steer` at any moment after it calls
+   `pass` and before that pass settles, also before the body of `pass`
+   reaches its first `await`. Hold a line that the harness cannot take yet,
+   deliver it when the harness can, and drop what you hold when `pass`
+   settles. Call `read({ after, through: seq })` when the model consumes a
+   line, and record no `steer` step.
+   [The core rule](#how-an-activation-runs) sets `consumed`.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
    with `classifyCause`. Throw `PermanentError` for a fault that a retry
    cannot clear, such as a model that the registry does not hold, and

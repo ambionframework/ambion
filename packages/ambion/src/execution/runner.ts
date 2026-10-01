@@ -164,7 +164,9 @@ export class AgentRunner implements AgentPort {
 		} finally {
 			// The sink logs each step as it comes. Close logs the block in progress.
 			// The activation holds the seat until its sink closes, so a wake that
-			// lands during the close queues behind it.
+			// lands during the close queues behind it. A claim that failed ran no
+			// pass, so the lines that waited for one record their step first.
+			state.dropEarly();
 			await trace.close();
 			state.close();
 			if (this.current === current) this.current = undefined;
@@ -197,6 +199,8 @@ export class AgentRunner implements AgentPort {
 			// now runs next, and never beside the activation that is releasing.
 			current.over = true;
 			const failed = current.expired || (last?.failed ?? false);
+			// A line that waited for a first pass that never ran gets its step before the end.
+			current.state.dropEarly();
 			current.trace.record(endStep(current, last));
 			await this.release(
 				id,

@@ -447,6 +447,27 @@ describe('the steps the driver owns', () => {
 		await tick();
 	});
 
+	it('records the steer of a line that waited for a claim the room refused', async () => {
+		const log = collectSteps();
+		const { room, actor } = play(
+			scripted(() => quiet('nothing')),
+			log.logger,
+		);
+		room.lease = async () => ({ stale: 'gone' });
+		const done = actor.run(id);
+		await actor.steer({
+			room: 'played',
+			seat: 'product',
+			activation: id,
+			after: 1,
+			message: said(2),
+		});
+		await done;
+		expect(log.of(id).filter((step) => step.type === 'steer')).toEqual([
+			expect.objectContaining({ seq: 2, consumed: false }),
+		]);
+	});
+
 	it.each([
 		[
 			'a permanent failure with its cause',

@@ -141,9 +141,13 @@ export class ActivationState {
 
 	/** One pass over the record. A pass that throws is a failed pass: `failedPass` sets its cause. */
 	async pass(input: PassInput): Promise<PassResult> {
-		if (this.cancelled) return { failed: false };
+		if (this.cancelled) {
+			this.dropEarly();
+			return { failed: false };
+		}
 		const { seat } = input.view.spec;
 		if (seat !== this.input.definition.name) {
+			this.dropEarly();
 			const message = `Activation names another seat: '${seat}'.`;
 			return this.report({ failed: true, cause: 'transient', message });
 		}
@@ -159,6 +163,7 @@ export class ActivationState {
 			result = failedPass(error);
 		}
 		this.running = undefined;
+		this.dropEarly();
 		this.expire();
 		return this.report(result);
 	}
@@ -177,6 +182,18 @@ export class ActivationState {
 		return result;
 	}
 
+	/**
+	 * End the wait of the lines that landed before the first pass: no pass
+	 * took them, so each waits for the next delta and records
+	 * `consumed: false`, in order. The runner calls it when an activation
+	 * ends with no pass, before the `end` step.
+	 */
+	dropEarly(): void {
+		const early = this.early ?? [];
+		this.early = undefined;
+		for (const { seq } of early) this.stamp(seq, false);
+	}
+
 	/** The first pass runs: each line that waited for it now lands in that pass, in order. */
 	private placeEarly(): void {
 		const early = this.early ?? [];
@@ -193,9 +210,19 @@ export class ActivationState {
 		if (this.running === undefined) this.stamp(seq, false);
 		else if (seq <= this.running.view.through) this.stamp(seq, true);
 		else if (this.executor.steer === undefined) this.stamp(seq, false);
-		else {
-			this.forwarded.set(seq, after);
-			this.executor.steer(after, seq, line);
+		else this.forward(after, seq, line);
+	}
+
+	/**
+	 * Hand a line to the executor. A `steer` that throws leaves the line to
+	 * the next delta, unless the executor already read it.
+	 */
+	private forward(after: Seq, seq: Seq, line: string): void {
+		this.forwarded.set(seq, after);
+		try {
+			this.executor.steer?.(after, seq, line);
+		} catch {
+			if (this.forwarded.delete(seq)) this.stamp(seq, false);
 		}
 	}
 

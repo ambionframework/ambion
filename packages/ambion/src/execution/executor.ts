@@ -132,12 +132,16 @@ export interface ExecutorSession {
 	pass(pass: Pass): Promise<PassResult>;
 	/**
 	 * Deliver a line to the pass in flight, when the harness can take it. The
-	 * core calls it after it called `pass` and before that pass ends. The core
-	 * records the `steer` step, and the executor records none. The executor
-	 * reads `{ after, through: seq }` when the model consumes the line. A line
-	 * that the pass does not read waits for the next delta, and the step says
-	 * so. A family that cannot steer mid-run leaves `steer` out. The record
-	 * already holds the line, and the next pass reads it.
+	 * core calls `steer` at any moment after it calls `pass` and before that
+	 * pass settles, also before the body of `pass` reaches its first `await`.
+	 * Hold a line that the harness cannot take yet, deliver it when the harness
+	 * can, and drop what you hold when `pass` settles. The core records the
+	 * `steer` step, and the executor records none. The executor reads
+	 * `{ after, through: seq }` when the model consumes the line. A line that
+	 * the pass does not read waits for the next delta, and the step says so. A
+	 * `steer` that throws counts as a line the pass does not read. A family
+	 * that cannot steer mid-run leaves `steer` out. The record already holds
+	 * the line, and the next pass reads it.
 	 */
 	steer?(after: Seq, seq: Seq, line: string): void;
 	/**
