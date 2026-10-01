@@ -233,7 +233,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const running = session.pass({ kind: 'view', view: viewOf(first, 1) });
 		await started.promise;
 		session.steer?.(1, 2, '[priya] And the pump?');
-		session.cancel();
+		session.cut();
 		expect(await running).toEqual({ failed: false });
 		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
 		expect(session.cancelled).toBe(true);
@@ -263,7 +263,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const running = session.pass({ kind: 'view', view: viewOf(first, 1) });
 		await resolving.promise;
 		session.steer?.(1, 2, '[priya] And the pump?');
-		session.cancel();
+		session.cut();
 		ready.resolve();
 		expect(await running).toEqual({ failed: false });
 		expect(steps).toEqual([{ type: 'steer', seq: 2, consumed: false }]);

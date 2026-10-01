@@ -179,7 +179,7 @@ interface.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
   or room, create a room, search workspace files in a side panel, watch and cancel the agents'
-  background processes with `/ps`, and stop, resume, or abort. It shows
+  background processes with `/ps`, and stop, resume, or cancel. It shows
   the refs of each message. It previews a snapshot, a commit, a file, or a
   lab table, and opens a room or a message from one (see the
   [Workbench README](../examples/workbench/README.md)). `/attach` copies a

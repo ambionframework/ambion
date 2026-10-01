@@ -56,7 +56,7 @@ export class ActivationState {
 	readonly id: string;
 	private readonly input: ActivationInput;
 	private readonly freshness = new Freshness();
-	private readonly cut = new AbortController();
+	private readonly controller = new AbortController();
 	private readonly opened: RunningActivation;
 	private tools: readonly RoomTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
@@ -78,7 +78,7 @@ export class ActivationState {
 		this.opened = opener({
 			id: input.id,
 			trace: calls.watching(input.trace),
-			signal: this.cut.signal,
+			signal: this.controller.signal,
 			get readThrough() {
 				return freshness.readThrough;
 			},
@@ -95,7 +95,7 @@ export class ActivationState {
 
 	/** Whether the activation was cut. A cut activation earns no further room call. */
 	get cancelled(): boolean {
-		return this.cut.signal.aborted;
+		return this.controller.signal.aborted;
 	}
 
 	/** The vendor session to record with the release, when the executor reported one. */
@@ -120,8 +120,8 @@ export class ActivationState {
 	}
 
 	/** Cut the activation. The pass in flight ends, and the driver runs no other. */
-	cancel(): void {
-		this.cut.abort();
+	cut(): void {
+		this.controller.abort();
 	}
 
 	/** Release what the session holds. A close that throws changes no outcome. */
@@ -303,11 +303,11 @@ export class ActivationState {
 			},
 			acknowledgeThrough: (seq) => freshness.acknowledgeThrough(seq),
 			resultExpected: (call, seq) => freshness.resultExpected(call, seq),
-			abort: () => this.cancel(),
+			cut: () => this.cut(),
 		};
 		this.tools = [
 			...roomTools(view, binding),
-			...agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
+			...agentTools(view, this.input.definition, this.controller.signal, () => this.view ?? view),
 		];
 		return this.tools;
 	}

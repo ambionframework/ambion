@@ -276,15 +276,15 @@ describe('startRoom', () => {
 		expect(faultEvents.some((e) => e.type === 'error' && e.seat === 'solo')).toBe(true);
 		expect(spoken(await messagesOf(faulty))).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
-		// backoff, so the room is still working, and only an abort settles it now
-		await faulty.abort();
+		// backoff, so the room is still working, and only a cancel settles it now
+		await faulty.cancel();
 		await waitForRoom(faulty);
 	});
 
-	it('aborts a hung activation to a quiet room, and never rebuilds it for a queued steer', async () => {
+	it('cancels a hung activation to a quiet room, and never rebuilds it for a queued steer', async () => {
 		let calls = 0;
 		const started = deferred();
-		const session = await open('abort-steer', { solo: 'broadcast' }, () => {
+		const session = await open('cancel-steer', { solo: 'broadcast' }, () => {
 			calls += 1;
 			started.resolve();
 			return new Promise<never>(() => {});
@@ -294,7 +294,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'hang' });
 		await started.promise;
 		await visit.send({ text: 'mid-turn note' }); // queues a steer into the hung run
-		await session.abort();
+		await session.cancel();
 		await waitForRoom(session);
 		expect(calls).toBe(1);
 		expect(events.some((e) => e.type === 'error')).toBe(false);
@@ -453,7 +453,7 @@ describe('startRoom', () => {
 		const visit = await enter(session);
 		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
-		await session.abort();
+		await session.cancel();
 		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);

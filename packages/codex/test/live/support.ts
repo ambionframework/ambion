@@ -110,7 +110,7 @@ export async function untilQuiet(room: Room): Promise<void> {
 	try {
 		await settled(room, { timeout: QUIET_MS });
 	} catch (error) {
-		await room.abort().catch(() => {});
+		await room.cancel().catch(() => {});
 		throw error;
 	}
 }

@@ -69,7 +69,7 @@ function fakeRoom(
 			throw new Error('not implemented in this double');
 		},
 		stop: async () => {},
-		abort: async () => {},
+		cancel: async () => {},
 		seat: async () => {},
 		unseat: async () => {},
 		reconcile: async () => {},

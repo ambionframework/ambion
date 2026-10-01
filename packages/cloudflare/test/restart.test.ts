@@ -87,7 +87,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// Two runs took the name, and the seat's message was written by the second:
 	// the commit crossed the restart, and the room that came back took it. A
-	// message the first run wrote would mean the abort landed too late.
+	// message the first run wrote would mean the cancel landed too late.
 	const runs = await writers(again, 'run');
 	expect(runs).toHaveLength(2);
 	expect(new Set(runs).size).toBe(2);

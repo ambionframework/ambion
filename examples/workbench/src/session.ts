@@ -307,7 +307,7 @@ export class Session {
 			case 'try':
 				if (this.view?.prompt) return { type: 'compose', text: this.view.prompt };
 				return void this.say('This room has no suggested question.');
-			case 'abort':
+			case 'cancel':
 			case 'stop':
 			case 'resume':
 				return void (await this.control(name));

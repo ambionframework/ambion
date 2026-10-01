@@ -111,8 +111,8 @@ export class AgentRunner implements AgentPort {
 	}
 
 	/**
-	 * The room ended this activation's lease. The activation is aborted, and
-	 * the actor moves on at once: a run that ignores the abort is left to
+	 * The room ended this activation's lease. The activation is cut, and
+	 * the actor moves on at once: a run that ignores the cut is left to
 	 * finish on its own, and every call it still makes is answered stale.
 	 */
 	async cut(activation: string): Promise<void> {
@@ -130,14 +130,14 @@ export class AgentRunner implements AgentPort {
 	}
 
 	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
-	abort(): void {
+	cutAll(): void {
 		this.cutCurrent();
 	}
 
 	private cutCurrent(): void {
 		const current = this.current;
 		if (current === undefined) return;
-		current.state.cancel();
+		current.state.cut();
 		current.cut();
 	}
 
@@ -187,7 +187,7 @@ export class AgentRunner implements AgentPort {
 		try {
 			if (!current.expired) {
 				// The cut ends the wait, and never the run: a run that ignores the
-				// abort finishes on its own, past a seat that took its next wake.
+				// cut finishes on its own, past a seat that took its next wake.
 				last = await Promise.race([
 					this.runPasses(id, current.state, current.trace, current.cutOff),
 					current.cutOff.then(() => undefined),
@@ -217,7 +217,7 @@ export class AgentRunner implements AgentPort {
 	 * Pass over the record until the activation stops: an executor failure, a
 	 * summarize purpose (which never rebuilds), a cut activation, or nothing
 	 * left the executor or the room needs it to see again. A cut activation
-	 * earns no further room call on its behalf: an abort mid-pass is not a
+	 * earns no further room call on its behalf: a cut mid-pass is not a
 	 * provider failure, but it still ends the loop here, before the freshness
 	 * check would otherwise renew a lease this activation no longer holds. A
 	 * room call this loop cannot recover from (a lost view or renewal) ends
@@ -528,10 +528,10 @@ function roomStep(request: CommitRequest, response: CommitResult): Step {
 	return { ...base, result: 'unknown' };
 }
 
-/** How the activation stopped. A cut or an expired lease is `aborted`. */
+/** How the activation stopped. A cut or an expired lease is `cut`. */
 function endStep(current: Current, last: PassResult | undefined): Step {
-	const aborted = current.expired || current.state.cancelled;
-	const stop = aborted ? 'aborted' : (last?.stop ?? 'stopped');
+	const cut = current.expired || current.state.cancelled;
+	const stop = cut ? 'cut' : (last?.stop ?? 'stopped');
 	if (last?.failed === true) {
 		const failure = {
 			cause: last.cause ?? 'transient',

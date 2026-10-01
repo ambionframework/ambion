@@ -125,8 +125,8 @@ export interface Room {
 	 */
 	post(input: people.PostInput): Promise<waits.ExchangeHandle>;
 	stop(): Promise<void>;
-	/** Cancel work at one durable journal boundary. The room keeps running. */
-	abort(): Promise<void>;
+	/** Cancel the open work at one durable journal boundary. The room keeps running. */
+	cancel(): Promise<void>;
 	/**
 	 * Put a registered agent on the roster while the room runs. The seating lands on the record, and it wakes the seat it names.
 	 */
@@ -191,8 +191,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
 	private stopInFlight: Promise<void> | undefined;
 	/** A cancellation append in flight, with its key retained across uncertainty. */
-	abortInFlight: Promise<void> | undefined;
-	abortKey: string | undefined;
+	cancelInFlight: Promise<void> | undefined;
+	cancelKey: string | undefined;
 	private fold: { length: number; projection: RoomProjection; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
@@ -544,8 +544,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		return control.reconcile(this);
 	}
 
-	abort(): Promise<void> {
-		return control.abort(this);
+	cancel(): Promise<void> {
+		return control.cancel(this);
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */

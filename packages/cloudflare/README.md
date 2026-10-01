@@ -19,7 +19,7 @@ What is built:
 - **`RoomObject`** runs the room. Its constructor resumes an initialized room
   unless explicitly stopped; an uninitialized named record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
-  `unseat`, `abort`, `read`, `exchange`, `dismiss`,
+  `unseat`, `cancel`, `read`, `exchange`, `dismiss`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its runtime reaches each seat through `rpcExecution`, an
   execution with no kind whose port calls the seat object over RPC. Its

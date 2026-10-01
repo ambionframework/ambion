@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**Three words name the three ways work ends.** A stop ends this run of the
+room, and the next run resumes from the record. `room.stop()` keeps its
+name. A cancel ends the open work, and the `cancel` entry keeps that fact.
+`Room.abort()` becomes `Room.cancel()`, and the same rename applies to the
+`RoomObject` of the Cloudflare package and to the `/abort` command of the
+workbench, which becomes `/cancel`. A cut ends one running activation
+through its port. `AgentRunner.abort()` becomes `AgentRunner.cutAll()`.
+`ActivationState.cancel()` and `RoomToolBinding.abort()` become `cut()`. The
+`end` step of the trace reports `stop: 'cut'` where it reported
+`stop: 'aborted'`. `abort` now names only `AbortSignal` and
+`AbortController`. The journal bodies do not change.
+
 **Four stored bodies change field names, and Ambion does not read a
 journal of an earlier release.** A message body holds `activation` for
 `activationId`. An ended `lease` body holds `session: { kind, id }` for

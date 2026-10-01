@@ -134,7 +134,7 @@ positioning and the current capabilities.
 - Tools can act before a contribution commits. Applications own effect
   idempotency; conversation freshness does not make external effects
   transactional.
-- Await `abort()` or `stop()` to confirm their durable room-wide work. A
+- Await `cancel()` or `stop()` to confirm their durable room-wide work. A
   graceful stop ends running leases and keeps pending work for the next run.
   See the [cancellation contract](durability.md#cancellation).
 - A process crash records no departure. Hosts reconcile durable presence

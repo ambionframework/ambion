@@ -108,7 +108,7 @@ export function within<T>(promise: Promise<T>, ms: number, what: string): Promis
 }
 
 /**
- * The room goes quiet, or the test fails and aborts it. A room that keeps
+ * The room goes quiet, or the test fails and cancels it. A room that keeps
  * waking itself is the gap `docs/agent.md` §7 names, and a live model is the
  * only place it shows.
  */
@@ -120,7 +120,7 @@ export async function untilQuiet(session: Room): Promise<void> {
 			`'${session.name}' going quiet`,
 		);
 	} catch (error) {
-		await session.abort().catch(() => {});
+		await session.cancel().catch(() => {});
 		throw error;
 	}
 }

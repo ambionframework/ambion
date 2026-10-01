@@ -162,7 +162,7 @@ function groupsOf(input: TimelineInput): Group[] {
 				source,
 				summary: published ? exchange.summary.summary : undefined,
 				// One agent reply shows directly. A lone person's message is not a reply, so an
-				// exchange that holds only that, such as an aborted one, keeps its closing mark.
+				// exchange that holds only that, such as a cancelled one, keeps its closing mark.
 				direct: source.length === 1 && !input.humans.has(source[0]?.from ?? ''),
 			};
 		});

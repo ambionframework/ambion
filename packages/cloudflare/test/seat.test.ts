@@ -150,7 +150,7 @@ it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	const { room, seat, exchange } = await asked('cut-test');
 
 	// The room records the cancellation and writes off the unclaimed wake.
-	await room.abort();
+	await room.cancel();
 	const cancelled = await room.read({ messages: false });
 	expect(cancelled.exchange).toBeUndefined();
 	expect(cancelled.exchanges).toContainEqual(

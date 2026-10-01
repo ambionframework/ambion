@@ -171,7 +171,7 @@ const cancelled = (): Promise<readonly Entry[]> =>
 			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
 			await tick();
 			await tick();
-			await room.abort();
+			await room.cancel();
 		},
 	});
 

@@ -693,7 +693,7 @@ describe('closing summaries', () => {
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		await drafting.promise;
-		await session.abort();
+		await session.cancel();
 		await waitForRoom(session);
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(await currentExchange(session)).toBeUndefined();
@@ -712,7 +712,7 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
-		// Shutdown while the room still owes a summary: the activation is aborted,
+		// Shutdown while the room still owes a summary: the activation is cut,
 		// and completion for this unfinished exchange rejects.
 		const waiting = exchange.waitForClose();
 		await session.stop();

@@ -227,15 +227,15 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Simulati
    Both waits share one deadline, `exchangeMs` after the send, because the
    summary is the answer a person reads. In a room with no summary writer,
    `waitForSummary()` returns `undefined` when the close lands.
-6. At the deadline, call `room.abort()`. Before the close, the abort
+6. At the deadline, call `room.cancel()`. Before the close, the cancel
    writes a close with the outcome `cancelled`, and the summary wait
-   returns `undefined`. After the close, the abort fails the pending
-   summary, and `waitForSummary()` rejects. The loop waits for the abort
+   returns `undefined`. After the close, the cancel fails the pending
+   summary, and `waitForSummary()` rejects. The loop waits for the cancel
    to land, so it cancels no later work. The loop ends with
    `ended: 'timeout'` after operation 7 when the outcome is `cancelled`, or
-   when the landed abort cut the summary. The closed view then shows the
-   summary as `failed`. An exchange that ended by itself before the abort
-   landed keeps its summary, and the loop goes on. An abort that rejects,
+   when the landed cancel cut the summary. The closed view then shows the
+   summary as `failed`. An exchange that ended by itself before the cancel
+   landed keeps its summary, and the loop goes on. A cancel that rejects,
    or a close that does not land in a second period of `exchangeMs`, ends
    the loop with `ended: 'failed'`.
 7. Read the closed `Exchange` from `room.read()`. Add the exchange to
@@ -702,11 +702,11 @@ a `scriptedActor`. The judge is a function.
 | The actor reaches the limit        | `ended: 'limit'` after `exchanges` messages               |
 | A seat keeps the exchange open     | `ended: 'timeout'`, and the last outcome is `cancelled`   |
 | The summary outlasts the deadline  | `ended: 'timeout'`, and the summary shows as `failed`     |
-| The abort at the deadline rejects  | `ended: 'failed'`, with the reason                        |
-| No close follows the abort         | `ended: 'failed'` after a second period                   |
+| The cancel at the deadline rejects | `ended: 'failed'`, with the reason                        |
+| No close follows the cancel        | `ended: 'failed'` after a second period                   |
 | The room refuses a send            | `ended: 'failed'`, with the refusal                       |
 | The message joins an open exchange | `ended: 'failed'`, and no exchange in the simulation      |
-| The room stops before the abort    | `ended: 'failed'`, with the refused abort                 |
+| The room stops before the cancel   | `ended: 'failed'`, with the refused cancel                |
 | The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
 | A bound is not valid               | `simulate` rejects before the person arrives              |
 | The room stops during an exchange  | `ended: 'failed'`, with the error                         |

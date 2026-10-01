@@ -13,7 +13,7 @@ export const HELP = [
 	'                    and cancel one with x, twice',
 	'  /attach <path>    copy a local file into the workspace and cite it in your next message',
 	'  /try              fill the composer with the room’s suggested question',
-	'  /abort            cancel the open exchange in this room',
+	'  /cancel           cancel the open exchange in this room',
 	'  /dismiss <n>      dismiss the say n that waits to return. The agent does not come back to it.',
 	'  /stop             stop the room. /resume starts it again.',
 	'  /steps [n]        show the steps of the newest activation of exchange n, oldest first.',
@@ -31,7 +31,7 @@ export const HELP = [
 ].join('\n');
 
 export const DONE: Record<RoomAction, (room: string) => string> = {
-	abort: (room) => `Aborted the open exchange in ${room}.`,
+	cancel: (room) => `Cancelled the open exchange in ${room}.`,
 	stop: (room) => `Stopped ${room}. Use /resume to start it again.`,
 	resume: (room) => `Resumed ${room}.`,
 };
@@ -42,9 +42,9 @@ export const errorText = (error: unknown): string =>
 /** The reason an action does not apply to the room, or undefined when it does. */
 export function refusal(action: RoomAction, view: RoomView | undefined): string | undefined {
 	if (!view) return 'No room is open.';
-	if (action === 'abort') {
+	if (action === 'cancel') {
 		if (view.status !== 'running') return `${view.name} is not running. Use /resume first.`;
-		return view.exchange ? undefined : `Nothing to abort. ${view.name} has no open exchange.`;
+		return view.exchange ? undefined : `Nothing to cancel. ${view.name} has no open exchange.`;
 	}
 	if (action === 'stop')
 		return view.status === 'stopped' ? `${view.name} is already stopped.` : undefined;

@@ -133,15 +133,15 @@ describe('Session on the real host', () => {
 		expect(session.awaitingGoal).toBeUndefined();
 	});
 
-	it('sends as the person, enters first when not present, aborts, stops, resumes, and leaves', async () => {
+	it('sends as the person, enters first when not present, cancels, stops, resumes, and leaves', async () => {
 		const { workbench, session, calls } = await onHost('mira', { stream: idleStream });
-		await session.submit('/abort');
-		expect(session.notice).toBe('Nothing to abort. bringup has no open exchange.');
+		await session.submit('/cancel');
+		expect(session.notice).toBe('Nothing to cancel. bringup has no open exchange.');
 		await session.submit('Which resistor?');
 		await vi.waitFor(() => expect(session.view?.exchange).toBeDefined());
-		await session.submit('/abort');
-		expect(calls).toContain('control:bringup:abort');
-		expect(session.notice).toBe('Aborted the open exchange in bringup.');
+		await session.submit('/cancel');
+		expect(calls).toContain('control:bringup:cancel');
+		expect(session.notice).toBe('Cancelled the open exchange in bringup.');
 
 		await workbench.leave('bringup', 'mira');
 		await session.submit('Are you there?');

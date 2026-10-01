@@ -359,12 +359,12 @@ executor kind reports it as a tool event.
 
 **The room answer tells the adapter what to do:**
 
-| Room answer                | What the adapter does                                                           |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `committed` or `unchanged` | The adapter delivers the result.                                                |
-| `refused`                  | The adapter raises the room message as a tool error.                            |
-| `missed`                   | The adapter raises a tool error that lists the new messages.                    |
-| `unknown` or `stale`       | The adapter aborts the activation. The message may already stand on the record. |
+| Room answer                | What the adapter does                                                         |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `committed` or `unchanged` | The adapter delivers the result.                                              |
+| `refused`                  | The adapter raises the room message as a tool error.                          |
+| `missed`                   | The adapter raises a tool error that lists the new messages.                  |
+| `unknown` or `stale`       | The adapter cuts the activation. The message may already stand on the record. |
 
 **A seat without the authority of its activation hears `stale`.** The
 authority is a live lease and the grant that the record gives the
@@ -417,19 +417,19 @@ each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
 
-| Step          | Recorded by | Meaning                                                                                            |
-| ------------- | ----------- | -------------------------------------------------------------------------------------------------- |
-| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                      |
-| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                    |
-| `text`        | executor    | A block of model text. `final` closes the block.                                                   |
-| `tool_call`   | executor    | A tool starts, with its input.                                                                     |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
-| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
-| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
-| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
-| `usage`       | executor    | Tokens and cost.                                                                                   |
-| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.    |
-| `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
+| Step          | Recorded by | Meaning                                                                                           |
+| ------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                     |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                   |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                  |
+| `tool_call`   | executor    | A tool starts, with its input.                                                                    |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                    |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`. |
+| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                   |
+| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                       |
+| `usage`       | executor    | Tokens and cost.                                                                                  |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.   |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.    |
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map

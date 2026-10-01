@@ -97,8 +97,8 @@ live('the model and the loop', () => {
 			const exchange = await visit.send({ text: 'What is the status of order 7781?' });
 			await within(ended, 60_000, 'the activation ending');
 			// the failed activation is one attempt, and the room would wake the seat
-			// again after the backoff: the abort writes that wake off
-			await session.abort();
+			// again after the backoff: the cancel writes that wake off
+			await session.cancel();
 			await within(exchange.waitForClose(), 60_000, 'the exchange closing');
 
 			const errors = errorsIn(events);
