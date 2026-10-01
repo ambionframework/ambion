@@ -706,7 +706,7 @@ a `scriptedActor`. The judge is a function.
 | No close follows the cancel        | `ended: 'failed'` after a second period                   |
 | The room refuses a send            | `ended: 'failed'`, with the refusal                       |
 | The message joins an open exchange | `ended: 'failed'`, and no exchange in the simulation      |
-| The room stops before the abort    | `ended: 'failed'`, with the refused abort                 |
+| The room stops before the cancel   | `ended: 'failed'`, with the refused cancel                |
 | The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
 | A bound is not valid               | `simulate` rejects before the person arrives              |
 | The room stops during an exchange  | `ended: 'failed'`, with the error                         |

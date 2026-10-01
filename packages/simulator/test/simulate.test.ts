@@ -218,7 +218,7 @@ describe('simulate', () => {
 			exchangeMs: 2_000,
 		});
 		expect(simulation.ended).toBe('failed');
-		expect(simulation.error).toMatch(/abort at the deadline failed: .*stopped/);
+		expect(simulation.error).toMatch(/cancel at the deadline failed: .*stopped/);
 	});
 
 	it('ends with `failed` when the room refuses a send', async () => {

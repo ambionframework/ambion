@@ -264,10 +264,10 @@ describe('Workbench host', () => {
 		await workbench.join('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
 		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();
-		const aborted = await workbench.control('bringup', 'abort');
-		expect(aborted.exchange).toBeUndefined();
-		expect(aborted.status).toBe('running');
-		expect(aborted.exchanges).toContainEqual(
+		const cancelled = await workbench.control('bringup', 'cancel');
+		expect(cancelled.exchange).toBeUndefined();
+		expect(cancelled.status).toBe('running');
+		expect(cancelled.exchanges).toContainEqual(
 			expect.objectContaining({ status: 'closed', summary: { kind: 'silent' } }),
 		);
 	});

@@ -56,7 +56,7 @@ export class ActivationState {
 	readonly id: string;
 	private readonly input: ActivationInput;
 	private readonly freshness = new Freshness();
-	private readonly cut = new AbortController();
+	private readonly controller = new AbortController();
 	private readonly opened: RunningActivation;
 	private tools: readonly RoomTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
@@ -307,7 +307,7 @@ export class ActivationState {
 		};
 		this.tools = [
 			...roomTools(view, binding),
-			...agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
+			...agentTools(view, this.input.definition, this.controller.signal, () => this.view ?? view),
 		];
 		return this.tools;
 	}
