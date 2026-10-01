@@ -1,51 +1,22 @@
 /** The Pi execution: Pi's model services and one Pi executor for each seat. */
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
-import { createExecutionServices, type SessionPlace } from './services.ts';
-
-export interface PiExecutionOptions {
-	/**
-	 * The model call. Absent, Pi's registry answers, keyed from the environment.
-	 * A scripted stream makes every room deterministic; the model then
-	 * resolves to a stub, because a custom stream never reads it.
-	 */
-	readonly stream?: StreamFn;
-	/**
-	 * Where each seat keeps its Pi harness sessions. Absent, `'disk'`.
-	 * `'memory'` keeps them for as long as the connector lives, as a test does.
-	 */
-	readonly sessions?: SessionPlace;
-	/**
-	 * The directory on the local disk for the sessions. Absent,
-	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
-	 */
-	readonly sessionDir?: string;
-}
+import { createExecutionServices, type PiExecutionOptions } from './services.ts';
 
 /**
  * The Pi execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
- * clock, limits, and logger when it builds the connector. It serves the
+ * clock when it builds the connector. It serves the
  * seats of kind `pi`. It does not change the default of that kind. Loading
  * the package defines that default, with no options.
  */
 export const piExecution = defineExecution<PiExecutionOptions>('pi', (host, options = {}) => {
-	const services = createExecutionServices({
-		clock: host.clock,
-		call: host.limits.call,
-		trace: host.limits.trace,
-		...(options.stream === undefined ? {} : { stream: options.stream }),
-		...(options.sessions === undefined ? {} : { sessions: options.sessions }),
-		...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
-	});
+	const services = createExecutionServices(options);
 	return (request) =>
 		createPiExecutor({
+			...services,
 			definition: request.definition,
-			model: services.model,
-			stream: services.stream,
 			now: () => host.clock.now(),
-			sessions: services.sessions,
 		});
 });

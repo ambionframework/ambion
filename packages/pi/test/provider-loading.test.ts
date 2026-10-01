@@ -79,9 +79,8 @@ describe('provider loading', () => {
 		'loads the catalog when the default model resolver is first used',
 		async () => {
 			const result = await runFreshProcess(
-				`const { systemClock } = await import('@ambionframework/ambion');
-			const { createExecutionServices } = await import(${JSON.stringify(entry)});
-			const services = createExecutionServices({ clock: systemClock() });
+				`const { createExecutionServices } = await import(${JSON.stringify(entry)});
+			const services = createExecutionServices();
 			const model = await services.model('anthropic/claude-sonnet-4-5', 'test');
 			if (model.id !== 'claude-sonnet-4-5' || model.provider !== 'anthropic') {
 				throw new Error('unexpected model');

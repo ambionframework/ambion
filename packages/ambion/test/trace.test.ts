@@ -343,18 +343,12 @@ function play(
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
-	const services = createExecutionServices({ clock, stream });
+	const services = createExecutionServices({ stream, sessions: 'memory' });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
 	const events: ExecutionEvent[] = [];
 	const executor =
-		stub ??
-		createPiExecutor({
-			definition: product,
-			model: services.model,
-			stream: services.stream,
-			now: () => clock.now(),
-		});
+		stub ?? createPiExecutor({ ...services, definition: product, now: () => clock.now() });
 	const actor = new AgentRunner(room, {
 		clock,
 		call: hosting.limits.call,

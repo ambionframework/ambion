@@ -47,7 +47,7 @@ import type {
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
-import type { AgentMessage, HarnessEvent, Session, StreamFn } from '@earendil-works/pi-agent-core';
+import type { AgentMessage, HarnessEvent, Session } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, getOrUndefined } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, Message, Model } from '@earendil-works/pi-ai';
 import { compactionOf, modelOf, thinkingOf } from './define.ts';
@@ -56,21 +56,17 @@ import { provided, providerMessages, READ, recordMessage } from './freshness.ts'
 import { type OpenHarness, openHarness } from './harness.ts';
 import { streamModels } from './models.ts';
 import { PiSteps } from './pi-trace.ts';
-import type { ModelResolver } from './services.ts';
-import { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';
+import type { ExecutionServices } from './services.ts';
+import type { PiSessions, SessionScope } from './sessions.ts';
 import { toolsFor } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
 
-/** What builds a Pi executor for one seat: its definition, and the room's model services. */
-export interface PiExecutorOptions {
+/** What builds a Pi executor for one seat: its definition, and the room's services. */
+export interface PiExecutorOptions extends ExecutionServices {
 	readonly definition: AgentDefinition;
-	readonly model: ModelResolver;
-	readonly stream: StreamFn;
 	/** The room's clock. The session stamps every range of the record with it. */
 	readonly now: () => number;
-	/** Where the seat keeps its sessions. Absent, in memory for as long as the executor lives. */
-	readonly sessions?: PiSessions;
 }
 
 /** What the activations of one seat share. */
@@ -82,7 +78,7 @@ interface Seat {
 
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
-	const seat: Seat = { sessions: options.sessions ?? memorySessions(), closing: new Map() };
+	const seat: Seat = { sessions: options.sessions, closing: new Map() };
 	return (activation: ExecutorActivation): ExecutorSession =>
 		new Activation(activation, options, seat);
 }

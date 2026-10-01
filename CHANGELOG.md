@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**`ExecutionServices` holds what the executor reads.**
+`@ambionframework/pi` exports `ExecutionServices` with `stream`, `model`,
+and `sessions`. The `clock`, `call`, and `trace` fields are gone, because
+no code read them. The executor takes its clock from the host.
+`createExecutionServices` takes `PiExecutionOptions`: `stream`, `sessions`,
+and `sessionDir`. The `clock`, `call`, and `trace` options are gone.
+`PiExecutionOptions` is the one option type of the Pi execution and its
+services. `ExecutionServicesOptions` and `SessionPlace` leave the entry of
+`@ambionframework/pi`.
+
 **`Executor` is a function of the activation.**
 `@ambionframework/ambion/hosting` exports `Executor` as
 `(activation: ExecutorActivation) => ExecutorSession`. Before, it was an
