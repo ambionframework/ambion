@@ -29,7 +29,7 @@ async function argvOf(
 	host: Readonly<Record<string, string>> = {},
 	extra: Parameters<typeof open>[3] = {},
 ) {
-	const run = open({ turns: [[]] }, seat(options), host, extra);
+	const run = open({ passes: [[]] }, seat(options), host, extra);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
 	const lines = run.log();
@@ -251,7 +251,7 @@ it('gives each seat a config home that it keeps across activations, and gives tw
 	const root = mkdtempSync(join(tmpdir(), 'ambion-root-'));
 	const homes = async (name: string) => {
 		const run = open(
-			{ turns: [[], []] },
+			{ passes: [[], []] },
 			seat(),
 			{},
 			{ configRoot: root, room: 'lab', seat: name },
@@ -284,7 +284,7 @@ it('keeps the config home of the seat when the env of the host names another', a
 });
 
 it('records one session step from the init message, with the room tools by their plain names', async () => {
-	const run = open({ turns: [[]], initTools: ['mcp__ambion__say'], apiKeySource: 'none' });
+	const run = open({ passes: [[]], initTools: ['mcp__ambion__say'], apiKeySource: 'none' });
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
 	const steps = run.steps.filter((step) => step.type === 'session');

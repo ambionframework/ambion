@@ -491,7 +491,8 @@ export class AgentRunner implements AgentPort {
 	 * The commit key is the tool call id, so a retry under it is idempotent:
 	 * the room returns the message it already holds. A commit no attempt
 	 * confirms is unknown; it may or may not have landed. The tool then ends
-	 * the turn. A second say under a new key would land the same message twice.
+	 * the activation. A second say under a new key would land the same message
+	 * twice.
 	 */
 	private async commitOnce(
 		request: CommitRequest,

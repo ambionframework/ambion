@@ -43,7 +43,7 @@ const holder = (name: string, identity: string, fact: string) =>
 			The one fact you hold: ${fact}
 			When a question turns on it, state it once with one say, in one
 			sentence. When a colleague has already said it, or the question does
-			not turn on it, end your turn without calling say.
+			not turn on it, end your activation without calling say.
 		`,
 	});
 
@@ -124,7 +124,7 @@ live('the exchange', () => {
 			identity: 'Front desk. Answers general questions.',
 			instructions: `
 				Answer a general question with one say, in one sentence. A question
-				about building permits is for the permits liaison: end your turn
+				about building permits is for the permits liaison: end your activation
 				without calling say. Do not call seat or unseat: the assistant
 				decides who takes part.
 			`,
@@ -139,7 +139,8 @@ live('the exchange', () => {
 		});
 		const catering = agent('catering', {
 			identity: 'Canteen desk. Knows menus and meal times.',
-			instructions: 'Answer questions about meals with one say. For anything else, end your turn.',
+			instructions:
+				'Answer questions about meals with one say. For anything else, end your activation.',
 		});
 		const { session, events } = await open('reserve', {
 			agents: [frontdesk, permits, catering, assistant],

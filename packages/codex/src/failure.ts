@@ -1,8 +1,8 @@
 /**
- * How the end of a Codex turn maps to a pass result: the failure it
+ * How the end of a Codex pass maps to a pass result: the failure it
  * reports, its cause, and the length stop.
  *
- * Codex reports a failed turn as text in a `turn.failed` or `error` event.
+ * Codex reports a failed pass as text in a `turn.failed` or `error` event.
  * The text is the only evidence, so the classification reads it.
  */
 import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
@@ -27,8 +27,8 @@ export function causeOf(text: string, status?: number | null): FailureCause {
 }
 
 /**
- * The pass result a turn stands for. `error` is the text of the failure the
- * turn reported, or nothing when the turn completed. A full context window
+ * The pass result a pass stands for. `error` is the text of the failure the
+ * pass reported, or nothing when the pass completed. A full context window
  * is a length stop. Any other failure is transient unless its text or
  * status names a refusal a retry cannot clear.
  */

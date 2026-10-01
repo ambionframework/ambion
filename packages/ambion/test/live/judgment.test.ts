@@ -35,7 +35,7 @@ live('judgment', () => {
 			identity: 'Payroll desk. Answers questions about pay and timesheets only.',
 			instructions: `
 				You answer questions about pay and timesheets. For any other
-				question, end your turn without calling say.
+				question, end your activation without calling say.
 			`,
 		});
 		const { session, events } = await open('declines', { agents: [weather, payroll] });
@@ -78,7 +78,7 @@ live('judgment', () => {
 				You hold no inventory. When somebody asks how many units of a SKU
 				are in stock, ask the colleague named stock with one directed say:
 				set \`to\` to "stock" and quote the SKU. Do nothing else. Once stock
-				has answered, end your turn without calling say.
+				has answered, end your activation without calling say.
 			`,
 		});
 		const { session, events } = await open('directed', {

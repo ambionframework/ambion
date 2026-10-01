@@ -96,6 +96,12 @@ passes every import in silence. `scripts/import-rules.test.mjs` lints one
 probe file for each case in a copy of the tree. Add a case with each new
 rule.
 
+**One table holds the core layers.** `scripts/core-layers.mjs` lists each
+layer as a set of globs, and names the layers that it may import. The test
+derives one probe for each pair of layers from the table. It fails when a
+file of the core matches no layer, and when `biome.jsonc` disagrees with the
+table. Add a new layer or file to the table first.
+
 ## 2. Toolchain choices
 
 | Concern                | Tool                                                       |

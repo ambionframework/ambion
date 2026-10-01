@@ -11,7 +11,7 @@ import {
 	SensorErrorSchema,
 	type SensorIndex,
 	SensorIndexSchema,
-} from './sensors.ts';
+} from './sensor-api.ts';
 
 /** An HTTP response that reports a valid sensor error envelope. */
 export class SensorHttpError extends Error {

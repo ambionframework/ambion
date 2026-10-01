@@ -517,7 +517,7 @@ Claude Code login.
 `@ambionframework/ambion/conformance` through the real driver. The SDK
 spawns `test/fake/claude-executable.mjs` through
 `pathToClaudeCodeExecutable`. The fake reads a scenario from `AMBION_FAKE`,
-a JSON object whose `turns` field holds one list of actions for each user
+a JSON object whose `passes` field holds one list of actions for each user
 message, and speaks the
 stream-json protocol of the SDK over stdio.
 
