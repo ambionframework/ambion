@@ -3,11 +3,11 @@ import {
 	byAgent,
 	callTool,
 	quiet,
+	type Reply,
 	type Step,
 	scripted,
 	settled,
 	speak,
-	type Turn,
 } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -188,8 +188,8 @@ describe('the Workbench repositories', () => {
 			const said = step.view.context.messages.filter((message) => message.kind === 'said');
 			return said.at(-1);
 		};
-		// Each list holds the turns of one ask, by the count of results so far.
-		const start = (step: Step): Turn | undefined =>
+		// Each list holds the replies of one ask, by the count of results so far.
+		const start = (step: Step): Reply | undefined =>
 			[
 				callTool('fork', {
 					source: 'templates/firmware-sketch',
@@ -203,7 +203,7 @@ describe('the Workbench repositories', () => {
 				}),
 				speak(`Started: ${step.results[1]?.text}`, 'assistant'),
 			][step.results.length];
-		const check = (step: Step): Turn | undefined => {
+		const check = (step: Step): Reply | undefined => {
 			const handle = step.results[0]?.text.match(/bash-[0-9a-f]{12}/)?.[0];
 			return [
 				callTool('ps'),

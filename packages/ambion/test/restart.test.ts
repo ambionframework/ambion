@@ -39,9 +39,9 @@ import {
 } from './support/room.ts';
 import {
 	byAgent,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	says,
 	scripted,
 	summarise,
@@ -55,16 +55,16 @@ const agents = [alpha, beta, assistant];
 
 /** The assistant writes once when it holds `summarise`, or fails when told to. */
 const writes =
-	(text: string, failures = 0): Script =>
+	(text: string, failures = 0): PiScript =>
 	(context, _name, call) => {
-		if (!isClosing(context)) return quiet();
+		if (!isClosingContext(context)) return quiet();
 		if (call <= failures) throw new Error('the model failed');
 		return call === failures + 1 ? summarise(text) : quiet();
 	};
 
 /** A seat that holds its first activation until the promise settles, then stays quiet. */
 const holds =
-	(until: Promise<unknown>): Script =>
+	(until: Promise<unknown>): PiScript =>
 	async (_c, _n, call) => {
 		if (call === 1) await until;
 		return quiet();
@@ -81,7 +81,7 @@ interface World {
 const wraps = new WeakMap<Runtime, (execution: Execution) => Execution>();
 
 /** The execution of a room on `runtime`: the scripted Pi execution, through the faults of the runtime. */
-function executionOn(runtime: Runtime, script: Script): Execution {
+function executionOn(runtime: Runtime, script: PiScript): Execution {
 	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
 	return wraps.get(runtime)?.(execution) ?? execution;
 }
@@ -106,7 +106,7 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 function open(
 	runtime: Runtime,
 	name: string,
-	script: Script = byAgent({}),
+	script: PiScript = byAgent({}),
 	seated: AgentDefinition[] = [alpha],
 ): Promise<Room> {
 	return startRoom({
@@ -122,7 +122,7 @@ function open(
 	});
 }
 
-const resume = (name: string, runtime: Runtime, script: Script = byAgent({})) =>
+const resume = (name: string, runtime: Runtime, script: PiScript = byAgent({})) =>
 	resumeRoom(name, {
 		runtime,
 		agents,
@@ -347,8 +347,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 	it('writes off a draft the last run revoked at its stop, and goes quiet with nothing owed', async () => {
 		const { clock, runtime } = await world(storage);
 		const drafting = deferred();
-		const hangs: Script = (context) => {
-			if (!isClosing(context)) return quiet();
+		const hangs: PiScript = (context) => {
+			if (!isClosingContext(context)) return quiet();
 			drafting.resolve();
 			return new Promise<never>(() => {});
 		};

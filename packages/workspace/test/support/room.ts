@@ -7,7 +7,7 @@ import { type AgentDefinition, type Room, startRoom } from '@ambionframework/amb
 import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Context } from '@earendil-works/pi-ai';
 import { enter, roomName as name, scriptedAgent } from '../../../ambion/test/support/room.ts';
-import { byAgent, type Script, scripted } from '../../../ambion/test/support/scripted.ts';
+import { byAgent, type PiScript, scripted } from '../../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../../ambion/test/support/stop.ts';
 
 /** Every tool result the model has been shown so far, oldest first. */
@@ -24,7 +24,10 @@ export const agent = (agentName: string, options: Partial<PiOptions> = {}) =>
 	scriptedAgent(agentName, undefined, options);
 
 /** One room, one question, and the seats' scripts; resolves at the exchange close. */
-export async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
+export async function run(
+	agents: AgentDefinition[],
+	seats: Record<string, PiScript>,
+): Promise<Room> {
 	const session = stopAtEnd(
 		await startRoom({
 			name: name('workspace'),

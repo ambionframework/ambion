@@ -28,9 +28,9 @@ import {
 import {
 	byAgent,
 	contextText,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	says,
 	scripted,
 	speak,
@@ -45,7 +45,7 @@ const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 /** A room where each named specialist answers at `broadcast` and the assistant writes the summary. */
-const summaryRoom = async (runtime: Runtime, script: Script, specialists = [alpha]) =>
+const summaryRoom = async (runtime: Runtime, script: PiScript, specialists = [alpha]) =>
 	stopAtEnd(
 		await startRoom({
 			name: roomName('exchange'),
@@ -64,7 +64,7 @@ const outcomes = ['published', 'silent', 'failed'] as const;
 type Outcome = (typeof outcomes)[number];
 
 const summaryFor =
-	(outcome: Outcome): Script =>
+	(outcome: Outcome): PiScript =>
 	(_context, _agent, call) => {
 		if (outcome === 'failed') throw new Error('Summary failed.');
 		return outcome === 'published' && call === 1 ? summarise('Recorded result.') : quiet();
@@ -78,7 +78,7 @@ async function expectOutcome(exchange: ExchangeHandle | undefined, outcome: Outc
 	else await expect(summary).resolves.toBeUndefined();
 }
 
-const resumeWith = async (room: Room, runtime: Runtime, script: Script) =>
+const resumeWith = async (room: Room, runtime: Runtime, script: PiScript) =>
 	stopAtEnd(
 		await resumeRoom(room.name, {
 			runtime,
@@ -170,8 +170,9 @@ describe('exchange completion handles', () => {
 
 	it('opens an exchange with a post of the host, retries its key, and joins an open exchange', async () => {
 		const answered = new Set<string>();
-		const script: Script = (context, agent) => {
-			if (agent === assistant.name) return isClosing(context) ? summarise('For priya.') : quiet();
+		const script: PiScript = (context, agent) => {
+			if (agent === assistant.name)
+				return isClosingContext(context) ? summarise('For priya.') : quiet();
 			for (const cue of ['ci: build 412', 'Was the build green?']) {
 				if (!contextText(context).includes(cue) || answered.has(cue)) continue;
 				answered.add(cue);
@@ -263,7 +264,7 @@ describe('exchange completion handles', () => {
 		const specialists = new Map<string, number>();
 		let summarised = false;
 		const summaryReply = async (context: Context) => {
-			if (!isClosing(context) || summarised) return quiet();
+			if (!isClosingContext(context) || summarised) return quiet();
 			summarised = true;
 			firstSummaryStarted.resolve();
 			await firstSummaryRelease.promise;
@@ -326,7 +327,7 @@ describe('exchange completion handles', () => {
 			runtime,
 			async (context, agent) => {
 				if (agent === assistant.name) {
-					if (!isClosing(context)) return quiet();
+					if (!isClosingContext(context)) return quiet();
 					summaryStarted.resolve();
 					await summaryRelease.promise;
 					throw new Error('summary failed');

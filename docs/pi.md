@@ -397,16 +397,19 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 ## Testing
 
 **A scripted stream tests the room with no model and no key.**
-`@ambionframework/pi/testing` exports `scripted`, `byAgent`, `speak`,
-`quiet`, `callTool`, `seat`, `isClosing`, `contextText`, `toolNames`,
-`toolResultTexts`, `scriptOf`, and `piExecutorHarness`. The executor puts
-the stream in one provider of a Pi `Models` collection, which holds the
-model of the seat under its provider and id.
+`@ambionframework/pi/testing` exports `scripted`, `PiScript`,
+`isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
+`scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
+`@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
+`quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
+`Models` collection, which holds the model of the seat under its provider
+and id.
 
 ```ts
 import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
+import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { byAgent, quiet, scripted, speak } from '@ambionframework/pi/testing';
+import { scripted } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -442,6 +445,18 @@ serves. `scripted` counts calls for each seat, answers an abort with an
 aborted message, and turns a script that throws into an error message. A
 test that needs no Pi imports `scripted` from
 `@ambionframework/ambion/testing`, which runs a script with no model at all.
+
+**The stream turns a reply into a message.** A reply with calls becomes one
+message with one tool call for each call, and the stop reason `toolUse`. An
+empty reply becomes a text message that ends the run. A script can also
+return a Pi `AssistantMessage`, which the stream passes on unchanged. A test
+uses a message for an error, a length stop, or a usage report.
+
+**A reply that Pi cannot carry becomes an error message.** A `spend` reply
+has no Pi meaning.
+A script that needs a usage report returns a message with a `usage` field.
+A call whose arguments JSON cannot hold also fails, because Pi tool calls
+carry JSON.
 
 **`piExecutorHarness()` runs the executor suite.** It maps each plan of
 `@ambionframework/ambion/conformance` to a script, and declares steering,

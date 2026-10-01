@@ -2,13 +2,16 @@
  * The deterministic tools for a room on Pi: a scripted `StreamFn` that
  * `piExecution({ stream })` takes, the helpers that read what the model was
  * shown, and the harness that runs the executor suite of
- * `@ambionframework/ambion/conformance` on the Pi executor. A test that
- * needs no Pi imports `scripted` from `@ambionframework/ambion/testing`,
- * which runs a script with no model.
+ * `@ambionframework/ambion/conformance` on the Pi executor. A script answers
+ * with the verbs of `@ambionframework/ambion/testing`: `speak`, `callTool`,
+ * `later`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
+ * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
+ * no model.
  */
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Context, JsonObject } from '@earendil-works/pi-ai';
+import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -20,26 +23,63 @@ import { scriptContext } from './script-context.ts';
 import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';
 
-/** One activation's answer: the model's message, given the context and which call this is. */
-export type Script = (
+/**
+ * One activation's answer, given the context, the seat, and which call this
+ * is. A `Reply` is the usual answer. A message passes through unchanged, for
+ * a test that needs an error, a length stop, or a usage report.
+ */
+export type PiScript = (
 	context: Context,
-	agent: string,
+	seat: string,
 	call: number,
-) => AssistantMessage | Promise<AssistantMessage>;
+) => Reply | AssistantMessage | Promise<Reply | AssistantMessage>;
+
+/** The value as JSON data. A value that JSON cannot hold, such as `undefined`, is an error. */
+function jsonValue(value: unknown): JsonValue {
+	if (value === null) return value;
+	if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+		return value;
+	}
+	if (Array.isArray(value)) return value.map(jsonValue);
+	if (typeof value === 'object') return jsonObject(value);
+	throw new Error(`A Pi script call carries a value that is not JSON: ${String(value)}.`);
+}
+
+function jsonObject(value: object): JsonObject {
+	return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, jsonValue(item)]));
+}
+
+/**
+ * The message a reply stands for. A reply with calls is one message with one
+ * tool call each. An empty reply is a message that ends the run with a text.
+ * Pi has no step to record usage in, so a `spend` call is an error.
+ */
+function messageOf(output: Reply | AssistantMessage): AssistantMessage {
+	if ('role' in output) return output;
+	if (output.length === 0) return fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
+	if (output.some((call) => call.tool === 'usage')) {
+		throw new Error('A Pi script cannot spend. Return a message with a `usage` field.');
+	}
+	return fauxAssistantMessage(
+		output.map((call) => fauxToolCall(call.tool, jsonObject(call.args))),
+		{ stopReason: 'toolUse' },
+	);
+}
 
 /**
  * A deterministic stream. It routes on the seat that the stub model names
  * (`model.name`), so no script reads the prompt to find out who it is. It
  * counts calls per seat, answers an abort with an aborted message, and turns
- * a script that throws into an error on the stream.
+ * a script that throws into an error on the stream. It turns a reply into a
+ * message: one tool call for each call, or a text that ends the run.
  */
-export function scripted(script: Script): StreamFn {
+export function scripted(script: PiScript): StreamFn {
 	const calls = new Map<string, number>();
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
-		const agent = model.name;
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
+		const seat = model.name;
+		const call = (calls.get(seat) ?? 0) + 1;
+		calls.set(seat, call);
 		let finished = false;
 		const finish = (message: AssistantMessage) => {
 			if (finished) return;
@@ -60,7 +100,7 @@ export function scripted(script: Script): StreamFn {
 		}
 		options?.signal?.addEventListener('abort', aborted, { once: true });
 		void Promise.resolve()
-			.then(() => script(scriptContext(context), agent, call))
+			.then(async () => messageOf(await script(scriptContext(context), seat, call)))
 			.catch((error: unknown) =>
 				fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }),
 			)
@@ -69,30 +109,9 @@ export function scripted(script: Script): StreamFn {
 	};
 }
 
-/**
- * Route a script by seat: one entry per agent that has lines, `quiet()` for the
- * rest. Keeping the seats apart is what keeps each one readable; a single
- * callback branching on `agent` buries the scenario in an if-chain.
- */
-export const byAgent = (seats: Record<string, Script>): Script => {
-	const table = new Map(Object.entries(seats));
-	return (context, agent, call) => (table.get(agent) ?? (() => quiet()))(context, agent, call);
-};
-
-export const callTool = (tool: string, args: JsonObject) =>
-	fauxAssistantMessage([fauxToolCall(tool, args)], { stopReason: 'toolUse' });
-
-export const speak = (text: string, to?: string) => callTool('say', to ? { to, text } : { text });
-
-export const later = (text: string, after: number) => callTool('schedule', { text, after });
-
-export const quiet = (thought = 'nothing to add') =>
-	fauxAssistantMessage(thought, { stopReason: 'stop' });
-
-export const isClosing = (context: Context) =>
+/** True when the system prompt of the context asks for the summary of a closed exchange. */
+export const isClosingContext = (context: Context) =>
 	context.systemPrompt?.includes('The exchange is over.') ?? false;
-
-export const seat = (name: string) => callTool('seat', { name });
 
 /** Everything the model was shown below the system prompt, as one string. */
 export function contextText(context: Context): string {
@@ -146,7 +165,7 @@ const LOOKS = 500;
  * does not hold: the harness answers with an error result, and the run takes
  * the next request, which holds any line steered since.
  */
-async function awaitSteer(context: Context, text: string): Promise<AssistantMessage> {
+async function awaitSteer(context: Context, text: string): Promise<Reply> {
 	if (sayResults(context).length > 0) return quiet();
 	if (contextText(context).includes('[new] ')) return speak(text);
 	const looks = context.messages.filter((message) => message.role === 'toolResult').length;
@@ -162,7 +181,7 @@ const FAILURES = {
 } as const;
 
 /** The script that performs one plan of the suite. */
-export function scriptOf(plan: ExecutorPlan): Script {
+export function scriptOf(plan: ExecutorPlan): PiScript {
 	switch (plan.kind) {
 		case 'sayOnce':
 			return (context) => (sayResults(context).length === 0 ? speak(plan.text) : quiet());
@@ -191,7 +210,7 @@ export function scriptOf(plan: ExecutorPlan): Script {
 					totalTokens: input + output + cacheRead + cacheWrite,
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				};
-				return { ...speak(plan.text), usage };
+				return { ...messageOf(speak(plan.text)), usage };
 			};
 		case 'fail':
 			return () => {

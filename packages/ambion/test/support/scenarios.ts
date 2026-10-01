@@ -27,9 +27,9 @@ import {
 	byAgent,
 	contextText,
 	insists,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	seat,
 	speak,
@@ -82,18 +82,18 @@ const surveyor = agent('surveyor', 'Quantity surveyor. Holds the tonnage.');
 const holding = (context: Context, tool: string) => toolNames(context).includes(tool);
 
 /** An assistant that seats every name given at an open, and writes once at a close. */
-function composes(names: string[], summary: string): Script {
+function composes(names: string[], summary: string): PiScript {
 	return (context) => {
 		if (holding(context, 'seat')) {
 			const next = names.shift();
 			return next ? seat(next) : quiet();
 		}
-		return isClosing(context) ? summarise(summary) : quiet();
+		return isClosingContext(context) ? summarise(summary) : quiet();
 	};
 }
 
 /** Two answers to every question, then silence until the next. */
-const twoAnswersEach: Script = (_context, _name, call) =>
+const twoAnswersEach: PiScript = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
 export async function finish(
@@ -158,7 +158,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 							assistant: (context) => {
 								const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
 								if (
-									!isClosing(context) ||
+									!isClosingContext(context) ||
 									toolResultTexts(context).some((text) => text.startsWith('said #'))
 								) {
 									return quiet();

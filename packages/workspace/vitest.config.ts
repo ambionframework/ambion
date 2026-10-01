@@ -27,6 +27,8 @@ const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
 const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.meta.url));
 /** The core's conformance entry, which the suites here build on. */
 const conformance = fileURLToPath(new URL('../ambion/src/conformance.ts', import.meta.url));
+/** The core's test entry, which the Pi test entry reads. */
+const testing = fileURLToPath(new URL('../ambion/src/testing.ts', import.meta.url));
 /** The core's source names the journal; one module, the way the core's own suite reads it. */
 const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 /** The journal's conformance entry, which the core's conformance entry names. */
@@ -39,6 +41,7 @@ const own = (entry: string) => fileURLToPath(new URL(`./src/${entry}`, import.me
 export const alias = [
 	{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 	{ find: '@ambionframework/ambion/conformance', replacement: conformance },
+	{ find: '@ambionframework/ambion/testing', replacement: testing },
 	{ find: '@ambionframework/ambion', replacement: core },
 	{ find: '@ambionframework/pi', replacement: pi },
 	{ find: '@ambionframework/journal/conformance', replacement: journalConformance },

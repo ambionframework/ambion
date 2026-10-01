@@ -42,5 +42,5 @@ export async function open(
 	return room;
 }
 
-/** A script turn that never ends: the seat keeps its exchange open. */
-export const forever = <T>(): Promise<T> => new Promise<T>(() => {});
+/** A script answer that never arrives: the seat keeps its exchange open. */
+export const forever = (): Promise<never> => new Promise<never>(() => {});

@@ -85,7 +85,7 @@ const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {})
 			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {
 					stopReason: 'toolUse',
 				})
-			: quiet('done'),
+			: quiet(),
 	);
 
 describe('the trace of a room activation', () => {
@@ -403,7 +403,7 @@ describe('the steps the driver owns', () => {
 				started.resolve();
 				await release.promise;
 			}
-			return quiet('nothing');
+			return quiet();
 		});
 		const log = collectSteps();
 		const { room, actor } = play(stream, log.logger);
@@ -444,7 +444,7 @@ describe('the steps the driver owns', () => {
 	it('records the steer of a line that waited for a claim the room refused', async () => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scripted(() => quiet('nothing')),
+			scripted(() => quiet()),
 			log.logger,
 		);
 		room.lease = async () => ({ stale: 'gone' });

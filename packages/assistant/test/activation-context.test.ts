@@ -4,8 +4,9 @@
  * and do not evaluate model judgment.
  */
 import { defineAgent, defineHuman, type Room, startRoom } from '@ambionframework/ambion';
+import { quiet, seat, speak } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { quiet, scripted, seat, speak, toolNames } from '@ambionframework/pi/testing';
+import { scripted, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
 import { expect, it, onTestFinished } from 'vitest';
 import { defineAssistant } from '../src/index.ts';
@@ -68,7 +69,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		const key = `${name}:${phase}`;
 		const message = planned.get(key);
 		planned.delete(key);
-		return message ?? quiet('');
+		return message ?? quiet();
 	});
 	const room = stopAtEnd(
 		await startRoom({
@@ -153,7 +154,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		return snapshot?.messages.some((m) => m.kind === 'said' && m.from === 'inventory') ?? false;
 	};
 	const inventory = () => {
-		if (specialistAnswered) return quiet('');
+		if (specialistAnswered) return quiet();
 		specialistAnswered = true;
 		return speak('There are 8 units in stock.', 'assistant');
 	};
@@ -162,12 +163,12 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		const tail = context.messages.at(-1);
 		if (tail?.role === 'user' && lastText(context).startsWith('[')) {
 			captured = { system: context.systemPrompt ?? '', steered: lastText(context) };
-			return quiet('');
+			return quiet();
 		}
 		if (tail?.role !== 'toolResult') return speak('Check the stock of SKU A.', 'inventory');
 		for (let wait = 0; wait < 200 && !(await specialistSpoke()); wait += 1) await sleep(10);
 		await sleep(50);
-		return quiet('');
+		return quiet();
 	};
 	const stream = scripted((context, name) =>
 		name === 'inventory' ? inventory() : assistant(context),

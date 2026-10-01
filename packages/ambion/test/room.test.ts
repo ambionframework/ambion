@@ -26,7 +26,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, quiet, type Script, scripted, speak } from './support/scripted.ts';
+import { byAgent, contextText, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -39,7 +39,7 @@ type Options = Partial<Parameters<typeof startRoom>[0]>;
 async function open(
 	label: string,
 	seats: Record<string, Attention>,
-	script: Script = () => quiet(),
+	script: PiScript = () => quiet(),
 	options: Options = {},
 ): Promise<Room> {
 	return stopAtEnd(
@@ -77,7 +77,7 @@ describe('startRoom', () => {
 				beta: async (context, _agent, call) => {
 					if (call === 1) {
 						await alphaSaid.promise;
-						return quiet('waiting');
+						return quiet();
 					}
 					betaContexts.push(contextText(context));
 					if (betaAcked || !contextText(context).includes('the answer is 42')) return quiet();
@@ -346,7 +346,7 @@ describe('startRoom', () => {
 			byAgent({
 				first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
 				second: async (_context, _agent, call) => {
-					if (call !== 1) return quiet('point already made');
+					if (call !== 1) return quiet();
 					await firstSaid.promise;
 					return speak('me too');
 				},
@@ -366,7 +366,7 @@ describe('startRoom', () => {
 	});
 
 	it('refuses a delivery to the assistant, lands a repeated key once, and leaves no mark of a decline', async () => {
-		const session = await open('keys', { shy: 'broadcast' }, () => quiet('not for me'));
+		const session = await open('keys', { shy: 'broadcast' }, () => quiet());
 		const events = collect(session);
 		const visit = await enter(session);
 		// the assistant wakes for nothing said, and nothing lands
@@ -425,7 +425,7 @@ describe('startRoom', () => {
 		const hangs = deferred();
 		// a port of the host's own: the room reaches it through the wire alone
 		const cuts: string[] = [];
-		const script: Script = async () => {
+		const script: PiScript = async () => {
 			hangs.resolve();
 			return new Promise<never>(() => {});
 		};

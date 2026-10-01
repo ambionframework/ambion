@@ -28,7 +28,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
+import { isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,
@@ -220,7 +220,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		let summaryCalls = 0;
 		const stream = scripted((context, agent, call) => {
 			if (agent === worker.name) return call === 1 ? speak('answer') : quiet();
-			if (!isClosing(context)) return quiet();
+			if (!isClosingContext(context)) return quiet();
 			summaryCalls += 1;
 			drafted.resolve();
 			return new Promise<never>(() => {});

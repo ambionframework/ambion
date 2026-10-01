@@ -5,6 +5,7 @@
 import { defineAgent, defineTool, type Message } from '@ambionframework/ambion';
 import type { ActivationView } from '@ambionframework/ambion/hosting';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
+import { quiet } from '@ambionframework/ambion/testing';
 import {
 	type AgentMessage,
 	BACKGROUND_CONTEXT,
@@ -28,7 +29,7 @@ import { openHarness } from '../src/harness.ts';
 import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, isClosing, quiet, type Script, scripted } from '../src/testing.ts';
+import { contextText, isClosingContext, type PiScript, scripted } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -81,7 +82,7 @@ const closing = (messages: Message[]): ActivationView => ({
 });
 
 /** The requests the stream received, with their options. */
-function recording(script: Script) {
+function recording(script: PiScript) {
 	const requests: {
 		context: Context;
 		options: SimpleStreamOptions | undefined;
@@ -159,7 +160,7 @@ describe('the harness of an activation', () => {
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
 		// The closing activation continues the session with fewer tools and its own prompt.
 		expect(names(closed?.context as Context)).toEqual(['say']);
-		expect(isClosing(closed?.context as Context)).toBe(true);
+		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
 		expect(last.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
 	});
@@ -168,8 +169,10 @@ describe('the harness of an activation', () => {
 		const summarizing = (context: Context) =>
 			context.systemPrompt?.startsWith('You are a context summarization assistant') ?? false;
 		const { requests, stream } = recording((context) => {
-			if (summarizing(context)) return quiet('The pump question is open.');
-			const answer = quiet();
+			if (summarizing(context)) {
+				return fauxAssistantMessage('The pump question is open.', { stopReason: 'stop' });
+			}
+			const answer = fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
 			return { ...answer, usage: { ...answer.usage, input: 50, totalTokens: 50 } };
 		});
 		const session = seat(stream, {
