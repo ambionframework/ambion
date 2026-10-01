@@ -449,6 +449,23 @@ most 8 channels. A process that outlives the wait of its stop meets the
 backend's own deadline later, and that stop opens one more signal
 channel ([Processes](processes.md#a-process)).
 
+**`dispose()` stops the processes of one agent at the same time, so the
+signal channels can overlap.** The bash owner has drained, so the owner holds
+no channel. The client holds the SFTP channel and up to 4 command
+channels. On the chain, `dispose()` writes `stop` for one process at a
+time, with one short `exec`, and then aborts it. The abort opens a
+`SIGTERM` channel at once. The `SIGKILL` channel opens `grace` seconds
+later, on a timer of the host. Take the worst case, where each signal
+channel stays open longer than the chain needs for the next process. While
+the chain writes `stop` for the fourth process, 3 `SIGTERM` channels are
+open, so the client holds 1 + 4 + 1 + 3 = 9 channels. After the fourth
+abort, 4 `SIGTERM` channels are open and the chain is idle, so the client
+holds 1 + 4 + 4 = 9 channels. A `SIGKILL` channel opens after the grace,
+when the `SIGTERM` channels have closed. The final read of each process
+(`settleOwned`, `finalStatus`, `readFiles`: one listing `exec`) runs after
+the command channel of that process closed, so it does not raise the
+count. The count stays under 10.
+
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits
 on the network. A `bash` process runs off the owner, so a long command delays

@@ -484,4 +484,34 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			await workspace.dispose();
 		}
 	});
+
+	it('disposes 4 processes of one agent that ignore TERM in about one grace, inside the channel limit', async () => {
+		const { workspace } = await nextRun();
+		const checker = workstationBackend(await options());
+		try {
+			await withEnv(checker, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			const names = ['one', 'two', 'three', 'four'];
+			for (const name of names) {
+				const command = `trap '' TERM\nsleep 300 &\necho "$!" > child-${name}\nwait`;
+				await call(workspace, 'bash', { command, wait: 1 });
+			}
+			const began = Date.now();
+			await workspace.dispose();
+			const elapsed = Date.now() - began;
+			expect(elapsed).toBeGreaterThanOrEqual(10_000);
+			expect(elapsed).toBeLessThan(25_000);
+			await withEnv(checker, OWNER, async (env) => {
+				const pids: number[] = [];
+				for (const name of names) {
+					const child = await env.readTextFile(`child-${name}`, ctx);
+					if (!child.ok) throw child.error;
+					pids.push(Number(child.value.trim()));
+				}
+				expect(await allEnded(env, pids)).toBe(true);
+			});
+		} finally {
+			await workspace.dispose();
+			await checker.dispose?.();
+		}
+	}, 60_000);
 });
