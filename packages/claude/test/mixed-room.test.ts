@@ -1,15 +1,15 @@
 /**
- * One room, two executor families: a seat on Pi and a seat on the Claude
+ * One room, two executor kinds: a seat on Pi and a seat on the Claude
  * Agent SDK. Pi runs on a scripted stream, and Claude on the fake
  * executable. The record holds the say of each, whether the room names its
- * execution or routes each seat to the default of its family.
+ * execution or routes each seat to the default of its kind.
  */
 import { defineAgent, isSpoken, type Room, startRoom } from '@ambionframework/ambion';
 import { defineExecution } from '@ambionframework/ambion/hosting';
 import { createExecutionServices, piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { quiet, scriptedStream, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { createPiExecutor } from '../../pi/src/executor.ts';
 import { createClaudeExecutor } from '../src/executor.ts';
@@ -26,7 +26,7 @@ const agents = [
 ];
 
 const pilotStream = () =>
-	scripted((_context, _agent, call) =>
+	scriptedStream((_context, _agent, call) =>
 		call === 1 ? speak('The pour is Saturday, says Pi.') : quiet(),
 	);
 
@@ -60,7 +60,7 @@ it('runs a Pi seat and a Claude seat in one room, and the record holds both says
 	await expectBothSay(await startRoom({ name: roomName('mixed'), agents, execution }));
 });
 
-it('routes a Pi seat and a Claude seat to the default of each family, which a built execution keeps', async () => {
+it('routes a Pi seat and a Claude seat to the default of each kind, which a built execution keeps', async () => {
 	// A definition of an execution makes it the default of its kind.
 	defineExecution('pi', (host) => {
 		const services = createExecutionServices({ sessions: 'memory', stream: pilotStream() });
@@ -76,7 +76,10 @@ it('routes a Pi seat and a Claude seat to the default of each family, which a bu
 		() => (request) => createClaudeExecutor({ definition: request.definition, ...sonnetOptions() }),
 	);
 	// An execution that a host builds for one room does not change the default.
-	piExecution({ sessions: 'memory', stream: scripted(() => speak('Leaked from another room.')) });
+	piExecution({
+		sessions: 'memory',
+		stream: scriptedStream(() => speak('Leaked from another room.')),
+	});
 	claudeExecution({ pathToClaudeCodeExecutable: 'no-such-executable' });
 	await expectBothSay(await startRoom({ name: roomName('mixed-default'), agents }));
 });

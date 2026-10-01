@@ -1,6 +1,6 @@
 # The workstation
 
-**The workstation forwards ports through SSH.** See
+**The workstation forwards endpoints through SSH.** See
 [Workstation ports](sensors.md#workstation-ports) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
@@ -31,7 +31,7 @@ const lab = openWorkspace({
   name: 'lab',
   backend: {
     bash: workstationBackend({
-      host: 'lab.internal',
+      server: 'lab.internal',
       hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
       layout: {
         audit: '/srv/ambion/lab/audit/audit.jsonl',
@@ -49,7 +49,7 @@ const lab = openWorkspace({
 ```
 
 **The example names each account after its agent.** It reads each
-private key from a file on the Ambion host. `lab.host.name` is `lab-host`, so
+private key from a file on the Ambion host. `lab.mirrorAgent.name` is `lab-host`, so
 the server has an account and a key of that name too.
 
 **The package reaches the workspace through its root entry.** That entry
@@ -64,19 +64,19 @@ and no `node:sqlite`. The workstation does not depend on
 workspace supplies everything that holds on every backend
 ([The resource contract](workspace.md#the-resource-contract)).
 
-| Part                                      | Owner                                                           |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `connect()` and `dispose()`               | The workstation                                                 |
-| `SshEnv`, the transport of each call      | The workstation                                                 |
-| `layout`: the audit log, rooms, snapshots | The workstation, from its options                               |
-| `guidance` about the shell and hostname   | The workstation                                                 |
-| `ports.open()` for loopback services      | The workstation                                                 |
-| `read`, `write`, `edit`                   | The workspace: the three file tools                             |
-| `bash`, `ps`, `status`, `wait`, `cancel`  | The workspace: the process tools ([Processes](processes.md))    |
-| `snapshot`, `restore`                     | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
-| `sql`                                     | The workspace, when `backend.sql` is set                        |
-| Path rule, deadline, output view          | The workspace: the environment helpers                          |
-| Audit log, room mirror, snapshot copies   | The workspace, at the paths that `layout` names                 |
+| Part                                        | Owner                                                           |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| `connect()` and `dispose()`                 | The workstation                                                 |
+| `SshEnv`, the transport of each call        | The workstation                                                 |
+| `layout`: the audit log, rooms, snapshots   | The workstation, from its options                               |
+| `guidance` about the shell and hostname     | The workstation                                                 |
+| `endpoints.forward()` for loopback services | The workstation                                                 |
+| `read`, `write`, `edit`                     | The workspace: the three file tools                             |
+| `bash`, `ps`, `status`, `wait`, `cancel`    | The workspace: the process tools ([Processes](processes.md))    |
+| `snapshot`, `restore`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
+| `sql`                                       | The workspace, when `backend.sql` is set                        |
+| Path rule, deadline, output view            | The workspace: the environment helpers                          |
+| Audit log, room mirror, snapshot copies     | The workspace, at the paths that `layout` names                 |
 
 **The workstation adds no tools.** The file tools and the process tools cover
 every file and shell operation on a server.
@@ -131,7 +131,7 @@ interface WorkstationCredential {
 }
 
 interface WorkstationOptions {
-  readonly host: string;
+  readonly server: string;
   readonly port?: number;
   /** The server's host key fingerprint, as `ssh-keygen -lf` prints it. */
   readonly hostKey: string;
@@ -142,7 +142,7 @@ interface WorkstationOptions {
 }
 ```
 
-**The resolver answers for every agent and for `workspace.host`.** A
+**The resolver answers for every agent and for `workspace.mirrorAgent`.** A
 `WorkspaceAgent` holds `name` alone. `openWorkspace` builds the host
 agent `<name>-host`, and `mirror()` writes as it
 ([The layout and the host identity](workspace.md#the-layout-and-the-host-identity)).
@@ -226,7 +226,7 @@ mode `0600`, and a temporary directory with mode `0700`.
 goes over SFTP. Each `exec` opens one channel on the SSH client. The root
 entry's helpers supply the rest:
 
-- `HomeEnv` for the file members: `SshEnv` supplies the SFTP operations and
+- `HomeEnv` for the file methods: `SshEnv` supplies the SFTP operations and
   the error classifier, and overrides `renameFile` to classify an `invalid`
   error against the destination
 - `resolvePath` for `~` and a relative path
@@ -430,10 +430,10 @@ call adds network round trips to every tool call.
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client with no open
-  environment or port transport for `idleTimeout` seconds closes. The
+  environment or endpoint for `idleTimeout` seconds closes. The
   default is 300. A background process holds an environment of its own for
-  its whole run ([Processes](processes.md#backends)). An open port transport
-  holds a client until its caller closes the transport. The timer starts
+  its whole run ([Processes](processes.md#backends)). An open endpoint
+  holds a client until its caller closes the endpoint. The timer starts
   when the last lease ends. The next `connect()` for that agent builds a
   new client. A long workspace run holds a client only for an agent that works.
 - **`dispose()` closes every client and port listener.** The backend deletes

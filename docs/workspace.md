@@ -1,6 +1,6 @@
 # The workspace
 
-> **Sensor tools are available when the bash backend has workstation ports.**
+> **Sensor tools are available when the bash backend has workstation endpoints.**
 > `connect` discovers a running server, and `observe` reads a qualified sensor
 > and retains its verified evidence through the existing snapshot store.
 > `workspace.tools({ images: false })` returns image export paths while keeping
@@ -65,13 +65,13 @@ default. `memoryBackend` and `directoryBackend` name the same layout:
 its own layout; nothing in the neutral layer fixes a path of its own.
 
 **`openWorkspace` builds one host agent, `<name>-host`, and `mirror()` and
-`snapshot()` write as it.** `Workspace.host` exposes this identity. A
+`snapshot()` write as it.** `Workspace.mirrorAgent` exposes this identity. A
 backend with real accounts gives it credentials, the same as any other agent
 it connects.
 
 ```ts
 const drive = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
-console.log(drive.host); // { name: 'town-host' }
+console.log(drive.mirrorAgent); // { name: 'town-host' }
 ```
 
 ## Give the resource to an agent
@@ -81,12 +81,12 @@ binds three file tools first: `read`, `write`, and `edit`. The five process
 tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle reminds each seat of its processes
-and lists captured sensor discovery when the backend has ports. `snapshot`
+and lists captured sensor discovery when the backend has endpoints. `snapshot`
 and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
-A backend with `ports` adds `connect` to validate and discover a running
+A backend with `endpoints` adds `connect` to validate and discover a running
 sensor server owned by the caller, and `observe` to read a qualified sensor
 and retain its returned evidence. Network requests run outside the shell
 owner; only process checks and export or audit writes use that owner. Passing
@@ -323,7 +323,7 @@ await session.stop();
 await mirror.stop();
 ```
 
-`mirror()` writes as `workspace.host`, the `<name>-host` agent `openWorkspace`
+`mirror()` writes as `workspace.mirrorAgent`, the `<name>-host` agent `openWorkspace`
 built (see [The layout and the host identity](#the-layout-and-the-host-identity)),
 so a caller names only the room. Stop the room before the mirror. The room's
 own shutdown commits a `left` message for every present visitor; a mirror
@@ -410,7 +410,7 @@ makes the snapshot, and its object backend keeps the bytes
 
 **`workspace.snapshot(paths)` gives one ref for each path, in order.** The
 host calls it. `options.agent` names the agent that reads the files, and the
-default is `workspace.host`. A relative path resolves against the working
+default is `workspace.mirrorAgent`. A relative path resolves against the working
 directory of that agent. `workspace.readSnapshot(ref)` gives the bytes back.
 
 ```ts
@@ -495,8 +495,8 @@ interface ObjectEnv extends ResourceEnv {
 }
 
 interface ObjectBackend extends ResourceBackend<ObjectEnv> {
-  /** The store that errors name, with no credential: a folder or a bucket URL. */
-  readonly store: string;
+  /** The label that errors use for the store, with no credential: a folder or a bucket URL. */
+  readonly label: string;
 }
 ```
 
@@ -872,15 +872,15 @@ const sql = sqliteBackend('./data/lab.db', {
 
 ### The SqlBackend interface
 
-**`SqlBackend` holds four members, and `SqlEnv` holds two.** A new SQL
+**`SqlBackend` holds four properties, and `SqlEnv` holds two.** A new SQL
 backend, such as a database server with one account for each agent,
 implements them.
 
-| Member                              | Meaning                                                                |
+| Property                            | Meaning                                                                |
 | ----------------------------------- | ---------------------------------------------------------------------- |
 | `connect(agent, files, signal?)`    | An `SqlEnv` for one agent. A backend with accounts connects as it      |
 | `dispose()`                         | Optional. Release local handles, and keep the data                     |
-| `database`                          | The name the tool reports and the guidance states, with no credential  |
+| `label`                             | The name the tool reports and the guidance states, with no credential  |
 | `guidance`                          | Optional. The dialect and the limits of the database                   |
 | `SqlEnv.run(sql, options, context)` | Run the statements in order, and give a preview of the last one's rows |
 | `SqlEnv.cleanup()`                  | The owner calls it after each operation                                |
@@ -967,7 +967,7 @@ binds them to its `use` method. It also opens
 the process table and builds the five process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
 processes of this run ([The host's view](processes.md#the-hosts-view)).
-`Workspace` adds `tools()`, `host`, and `mirror()` to the resource surface.
+`Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
 Direct operations and tool calls share one queue and one lifecycle.
 
 **A new backend implements `connect()` and an `ExecutionEnv`, over the
@@ -982,7 +982,7 @@ them.
 | Helper                                             | What it does                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------ |
 | `resolvePath`                                      | Holds the `~` and relative path rule                                     |
-| `HomeEnv`                                          | A base class: the file members, over `FileOperations` and `classify`     |
+| `HomeEnv`                                          | A base class: the file methods, over `FileOperations` and `classify`     |
 | `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
 | `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
 | `MAX_TIMER_SECONDS`                                | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
@@ -991,14 +991,14 @@ them.
 | `runScript`                                        | Runs one script, and gives its exit code and its output as text          |
 | `shellQuote`                                       | Puts one word in single quotes for `bash`                                |
 
-**`HomeEnv` implements the file members once.** A backend supplies two
-abstract members: `files`, a `FileOperations` with one throwing storage
-operation for each member, and `classify`, which turns what an operation
+**`HomeEnv` implements the file methods once.** A backend supplies two
+abstract properties: `files`, a `FileOperations` with one throwing storage
+operation for each method, and `classify`, which turns what an operation
 threw into a `FileError`. `HomeEnv` resolves the path, returns `aborted`
 when the context's signal is aborted, runs the operation, and calls
 `classify` with the path and a `FileExpect` hint: `file` for a read or a
 write, `directory` for `listDir`, and `any` for the rest. `classify` can
-return a promise. A backend can override a member that needs more than one
+return a promise. A backend can override a method that needs more than one
 operation. `HomeEnv` also implements `cwd`, `absolutePath`, `joinPath`,
 `readTextLines`, and `openTextLineReader`.
 
@@ -1078,6 +1078,21 @@ owner. The owner serializes those operations, so such nesting would wait
 for the callback that is already running.
 
 ## Backends and limits
+
+**Both deployments provide the core workspace tools.** A backend with ports
+also provides a private transport for sensor servers.
+
+| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
+| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
+| Network                        | None                                                                 | The server's network                                       |
+| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
+| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
+| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
+| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
+| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
+| Sensor servers                 | No port transport; no `connect` or `observe` tools                   | Workstation provides loopback forwarding over SSH          |
 
 `memoryBackend()` keeps files in process. Its optional seed writes files
 before the first use, and `readFiles()` supports host inspection. Disposal

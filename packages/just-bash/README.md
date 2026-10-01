@@ -37,7 +37,7 @@ free.
 the root when an operation needs it. `drive.dispose()` releases the handle
 and keeps the root and its files. A host deletes the data it owns.
 
-Neither backend exposes workstation ports. A workspace using these backends
+Neither backend exposes workstation endpoints. A workspace using these backends
 has no `connect` or `observe` tools.
 
 Agents connected to one workspace share every file. just-bash is single-user,

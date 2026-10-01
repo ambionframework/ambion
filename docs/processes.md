@@ -1,7 +1,7 @@
 # Processes
 
 > [Sensor servers](sensors.md#run-a-server-from-git) use these existing
-> process tools. A ports-enabled workspace adds `connect`, which attaches a
+> process tools. A workspace with endpoints adds `connect`, which attaches a
 > server port and changes no process timeout or disposal rule.
 >
 > [Actuators](actuators.md) describes a device controller that runs as a

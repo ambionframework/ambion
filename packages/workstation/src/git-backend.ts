@@ -36,7 +36,7 @@ const ALIAS = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
 
 export interface WorkstationGitOptions {
 	/** The address of the server that holds the git account. */
-	readonly host: string;
+	readonly server: string;
 	/** The server's SSH port. The default is 22. An agent reaches the same port on the loopback address. */
 	readonly port?: number;
 	/** The server's host key fingerprint, as `ssh-keygen -lf` prints it: `SHA256:` and then base64. */
@@ -110,7 +110,7 @@ export function workstationGitBackend(
 ): GitBackend & { readonly access: WorkstationGitAccess } {
 	const { port, idleMs, root, alias, credentialTtl } = checked(options);
 	const account = new GitAccount(
-		{ host: options.host, port, hostKey: options.hostKey },
+		{ host: options.server, port, hostKey: options.hostKey },
 		options.account,
 		idleMs,
 	);
@@ -153,7 +153,7 @@ export function workstationGitBackend(
 
 	return Object.freeze({
 		access,
-		server: `ssh://${alias}`,
+		label: `ssh://${alias}`,
 		connect: async (agent: WorkspaceAgent): Promise<GitEnv> => {
 			await ready(agent);
 			return repositories.envFor(agent);

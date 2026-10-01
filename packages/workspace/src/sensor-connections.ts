@@ -1,6 +1,6 @@
 /** The one-host-run registry for sensor processes connected to a workspace. */
 
-import type { WorkspacePort, WorkspacePorts } from './backend.ts';
+import type { WorkspaceEndpoint, WorkspaceEndpoints } from './backend.ts';
 import type { ProcessRecord } from './process-files.ts';
 import type { ProcessEvent, ProcessTable } from './process-table.ts';
 import type { WorkspaceAgent } from './resource.ts';
@@ -50,7 +50,7 @@ interface MutableConnection extends RegisteredSensorConnection {
 	process: ProcessRecord;
 	client: SensorClient;
 	available: boolean;
-	transport: WorkspacePort;
+	transport: WorkspaceEndpoint;
 }
 
 interface Attempt {
@@ -58,18 +58,18 @@ interface Attempt {
 	readonly promise: Promise<unknown>;
 }
 
-/** Open the in-memory registry over the process table and optional port transport. */
+/** Open the in-memory registry over the process table and the endpoints of the backend. */
 export function createSensorConnections(
-	ports: WorkspacePorts,
+	endpoints: WorkspaceEndpoints,
 	processes: ProcessTable,
 ): SensorConnections {
 	const byName = new Map<string, MutableConnection>();
 	const attempts = new Set<Attempt>();
-	const transports = new Set<WorkspacePort>();
-	const closeInFlight = new WeakMap<WorkspacePort, Promise<void>>();
+	const transports = new Set<WorkspaceEndpoint>();
+	const closeInFlight = new WeakMap<WorkspaceEndpoint, Promise<void>>();
 	let closing: Promise<void> | undefined;
 
-	const closeTransport = (transport: WorkspacePort): Promise<void> => {
+	const closeTransport = (transport: WorkspaceEndpoint): Promise<void> => {
 		const pending = closeInFlight.get(transport);
 		if (pending !== undefined) return pending;
 		const closingTransport = transport.close().then(
@@ -91,7 +91,7 @@ export function createSensorConnections(
 		connection: MutableConnection,
 		process: ProcessRecord,
 		index: SensorIndex,
-		transport: WorkspacePort,
+		transport: WorkspaceEndpoint,
 	): Promise<RegisteredSensorConnection> => {
 		const oldTransport = connection.transport;
 		connection.transport = transport;
@@ -243,7 +243,7 @@ export function createSensorConnections(
 		input: { readonly name: string; readonly process: string; readonly port: number },
 		process: ProcessRecord,
 		index: SensorIndex,
-		transport: WorkspacePort,
+		transport: WorkspaceEndpoint,
 	): MutableConnection => {
 		const source = freezeSource(index.source);
 		const connection: MutableConnection = {
@@ -251,7 +251,7 @@ export function createSensorConnections(
 			owner: agent.name,
 			process,
 			port: input.port,
-			hostname: ports.hostname,
+			hostname: endpoints.machine,
 			source,
 			index: freezeIndex(index, source),
 			client: createSensorClient(transport.url),
@@ -267,7 +267,7 @@ export function createSensorConnections(
 		input: { readonly name: string; readonly process: string; readonly port: number },
 		process: ProcessRecord,
 		index: SensorIndex,
-		transport: WorkspacePort,
+		transport: WorkspaceEndpoint,
 		active: AbortSignal,
 	): Promise<RegisteredSensorConnection> => {
 		const current = byName.get(input.name);
@@ -287,10 +287,10 @@ export function createSensorConnections(
 	): Promise<{
 		readonly process: ProcessRecord;
 		readonly index: SensorIndex;
-		readonly transport: WorkspacePort;
+		readonly transport: WorkspaceEndpoint;
 	}> => {
 		const before = await assertRunning(agent, input.process, signal);
-		const transport = await ports.open(agent, input.port, signal);
+		const transport = await endpoints.forward(agent, input.port, signal);
 		transports.add(transport);
 		try {
 			const index = await createSensorClient(transport.url).index(signal);

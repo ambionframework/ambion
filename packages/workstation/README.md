@@ -30,7 +30,7 @@ const lab = openWorkspace({
   name: 'lab',
   backend: {
     bash: workstationBackend({
-      host: 'lab.internal',
+      server: 'lab.internal',
       hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
       layout: {
         audit: '/srv/ambion/lab/audit/audit.jsonl',
@@ -47,28 +47,28 @@ const lab = openWorkspace({
 });
 ```
 
-| Option          | What it is                                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `host`          | The configured workstation hostname                                                                              |
-| `port`          | The SSH login port. It is 22 by default                                                                          |
-| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                  |
-| `layout`        | The path of the audit log, the folder of the room mirror, and the folder of the snapshots on the server          |
-| `idleTimeout`   | Seconds a connection may stay with no environment or port open. Processes and open ports hold it. 300 by default |
-| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                   |
+| Option          | What it is                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `server`        | The address of the workstation                                                                                           |
+| `port`          | The SSH login port. It is 22 by default                                                                                  |
+| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other                                          |
+| `layout`        | The path of the audit log, the folder of the room mirror, and the folder of the snapshots on the server                  |
+| `idleTimeout`   | Seconds a connection may stay with no environment or endpoint open. Processes and open endpoints hold it. 300 by default |
+| `credentialFor` | The username and private key of an agent, or of the host account `<name>-host`                                           |
 
-**A workstation exposes a private port transport.** The `hostname` field
-names `host`. The port passed to `ports.open` is the remote HTTP service
+**A workstation exposes private endpoints.** The `machine` field
+names `server`. The port passed to `endpoints.forward` is the remote HTTP service
 port. `options.port` is the SSH login port. The transport URL uses a
 temporary host loopback port. The private URL is an HTTP root. The workspace
-exports the `WorkspacePort` and `WorkspacePorts` types from its root entry.
+exports the `WorkspaceEndpoint` and `WorkspaceEndpoints` types from its root entry.
 The owner manages a sensor server as an ordinary process from its Git
 repository.
 
 ```ts
 const backend = workstationBackend(options);
-if (!backend.ports) throw new Error('This backend has no port transport.');
+if (!backend.endpoints) throw new Error('This backend has no endpoints.');
 
-const transport = await backend.ports.open({ name: 'instruments' }, 43127);
+const transport = await backend.endpoints.forward({ name: 'instruments' }, 43127);
 try {
   const response = await fetch(transport.url);
   await response.text();
@@ -95,14 +95,14 @@ import { fromDirectory } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
 // `layout` and `credentialFor` are the options of the example above.
-const server = { host: 'lab.internal', hostKey: 'SHA256:<fingerprint>' };
+const access = { server: 'lab.internal', hostKey: 'SHA256:<fingerprint>' };
 
 const lab = openWorkspace({
   name: 'lab',
   backend: {
-    bash: workstationBackend({ ...server, layout, credentialFor }),
+    bash: workstationBackend({ ...access, layout, credentialFor }),
     git: workstationGitBackend({
-      ...server,
+      ...access,
       account: {
         username: 'lab-git',
         privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
@@ -118,16 +118,16 @@ const lab = openWorkspace({
 });
 ```
 
-| Option          | What it is                                                                             |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `host`, `port`  | The address of the server, the same as for the bash backend. The port is 22 by default |
-| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other        |
-| `account`       | The username and private key of the git account                                        |
-| `root`          | The folder of the repositories, in the account's home. `repos` by default              |
-| `alias`         | The host name in every clone URL. `ambion-git` by default                              |
-| `templates`     | The templates, by name                                                                 |
-| `credentialTtl` | Whole seconds an agent key lives. 3600 by default                                      |
-| `idleTimeout`   | Seconds the git account's client may stay unused. 300 by default                       |
+| Option           | What it is                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| `server`, `port` | The address of the server, the same as for the bash backend. The port is 22 by default |
+| `hostKey`        | The SHA-256 fingerprint of the server's host key. The backend refuses any other        |
+| `account`        | The username and private key of the git account                                        |
+| `root`           | The folder of the repositories, in the account's home. `repos` by default              |
+| `alias`          | The host name in every clone URL. `ambion-git` by default                              |
+| `templates`      | The templates, by name                                                                 |
+| `credentialTtl`  | Whole seconds an agent key lives. 3600 by default                                      |
+| `idleTimeout`    | Seconds the git account's client may stay unused. 300 by default                       |
 
 **The git backend issues and rotates the git key of each agent.** At each
 `connect`, the bash backend writes the key, a `known_hosts` file, and an

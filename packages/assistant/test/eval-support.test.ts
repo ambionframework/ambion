@@ -11,7 +11,7 @@ import {
 	contextText,
 	isClosingContext,
 	type PiScript,
-	scripted,
+	scriptedStream,
 } from '@ambionframework/pi/testing';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 import { describe, expect, it } from 'vitest';
@@ -40,7 +40,7 @@ type Route = 'quiet' | 'ask' | 'seat';
 
 const scriptedAssistant = (route: Route, seen: string[] = []) => ({
 	model: 'scripted/assistant',
-	execution: piExecution({ stream: scripted(assistant(route, seen)), sessions: 'memory' }),
+	execution: piExecution({ stream: scriptedStream(assistant(route, seen)), sessions: 'memory' }),
 });
 
 describe('the eval support', () => {

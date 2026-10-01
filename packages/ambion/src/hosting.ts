@@ -7,7 +7,7 @@
  * side the room calls back. An `Execution` connects one to the other: its
  * connector returns the port of each seat. `localExecution` builds the
  * execution of one executor kind, whose port is an `AgentRunner` in this
- * process. `defineExecution` defines an executor family: the executions of
+ * process. `defineExecution` defines an executor kind: the executions of
  * one kind by options, and the default of that kind. An executor package
  * calls it once. A host that puts the seats somewhere else writes an
  * execution whose port crosses the boundary, and runs an `AgentRunner`

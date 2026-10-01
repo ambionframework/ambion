@@ -22,7 +22,13 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import {
+	byAgent,
+	callTool,
+	quiet,
+	scriptedStream,
+	speak,
+} from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace } from '../src/index.ts';
@@ -279,7 +285,7 @@ describe('a workspace beside a running room', () => {
 			agents: [agent('worker', { bundles: [site.tools()] })],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(
+				stream: scriptedStream(
 					byAgent({
 						worker: (_context, _who, call) => {
 							if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
@@ -311,7 +317,7 @@ describe('a workspace beside a running room', () => {
 		expect(spoken[0]?.refs).toEqual([ref]);
 		expect(new TextDecoder().decode(await site.readSnapshot(ref))).toBe('done\n');
 		expect(
-			await site.use(site.host, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
+			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
 		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 		expect(lines).toHaveLength((await session.read()).messages.length);

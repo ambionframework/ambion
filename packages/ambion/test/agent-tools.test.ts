@@ -30,7 +30,14 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, callTool, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
+import {
+	byAgent,
+	callTool,
+	type PiScript,
+	quiet,
+	scriptedStream,
+	speak,
+} from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -289,7 +296,10 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, 
 			summary: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },
 			agents: [worker({ tools: [probe], bundles: [bundle] }), assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({ worker: script })) }),
+			execution: piExecution({
+				sessions: 'memory',
+				stream: scriptedStream(byAgent({ worker: script })),
+			}),
 		}),
 	);
 	const events = collect(room);

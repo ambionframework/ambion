@@ -41,7 +41,7 @@ it('names the types of the git backend', () => {
 		},
 	};
 	const options: main.WorkstationGitOptions = {
-		host: 'lab.internal',
+		server: 'lab.internal',
 		hostKey: 'SHA256:unused',
 		account: { username: 'lab-git', privateKey: 'unused' },
 	};
