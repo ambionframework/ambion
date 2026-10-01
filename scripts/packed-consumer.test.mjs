@@ -41,7 +41,12 @@ function namesIn(projects) {
 const piPackages = (names) => [...names].filter((name) => name.startsWith(PI)).sort();
 
 const output = (command, args, options = {}) =>
-	execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
+	execFileSync(command, args, {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+		stdio: ['ignore', 'pipe', 'pipe'],
+		...options,
+	});
 
 test('the closure finder reads every depth, and finds a Pi package', () => {
 	const tree = [

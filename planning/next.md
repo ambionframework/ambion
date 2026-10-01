@@ -563,8 +563,9 @@ The export snapshots and the changelog name every changed export.
 workspace, the workstation, or just-bash names `@earendil-works/*`. Their
 tests may reach Pi through devDependencies. The five overrides of the
 workspace, the workstation, and just-bash refuse `@earendil-works/**`,
-with a probe each. A new packed-consumer check installs the workspace
-tarball in an empty project and finds no `@earendil-works` package. The
+with a probe each. A new packed-consumer check packs the workspace tarball,
+reads its manifest and its production closure, and finds no
+`@earendil-works` package. The
 workspace conformance, the backend suites, the matrix cases, and the SN35
 lifecycle on OpenSSH pass.
 

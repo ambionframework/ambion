@@ -5,7 +5,7 @@
  * would sit in the memory of the Ambion host. `Capture` keeps a window twice
  * the size of `maxBytes` on the side the view retains, and it counts the
  * bytes and lines of the whole output. It trims the window when the window
- * grows past twice its size, The `bash` tool
+ * grows past twice its size. The `bash` tool
  * keeps the whole output in a process file on the server.
  *
  * With no `maxBytes`, the window is `NO_LIMIT_WINDOW_BYTES`. An output past

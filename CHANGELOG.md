@@ -25,7 +25,8 @@ drops `spill`. These exports change on the root entry of the workspace:
   `runScript`, `SqlEnv.run`, `WorkspaceFiles`, `WorkspaceLog.append`,
   `AuditLog.append`, `sqlImport`, and `sqlResult` take a signal in place of
   a `Context`. `HomeEnv` drops `joinPath`, `readTextLines`, and
-  `openTextLineReader`.
+  `openTextLineReader`. The `record` of `WorkspaceLog.append` is an `object`
+  in place of the `JsonValue` of Pi.
 
 `workspaceConformance` drops the case for temporary names. A new check packs
 the three packages and finds no Pi package in their manifests or in their
