@@ -1,6 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
@@ -96,9 +95,9 @@ async function endedUnseen(workspace: Workspace, command: string): Promise<strin
 	expect(started.details.process.state).toBe('running');
 	handle = started.details.process.handle;
 	await workspace.use({ name: 'alpha' }, async (env) => {
-		const path = await env.absolutePath(gate, BACKGROUND_CONTEXT);
+		const path = await env.absolutePath(gate);
 		if (!path.ok) throw path.error;
-		const written = await env.writeFile(path.value, '', BACKGROUND_CONTEXT);
+		const written = await env.writeFile(path.value, '');
 		if (!written.ok) throw written.error;
 	});
 	const running = await workspace.processes.list({ running: true });
@@ -112,7 +111,7 @@ async function endedUnseen(workspace: Workspace, command: string): Promise<strin
 
 async function fileOf(workspace: Workspace, agent: string, path: string): Promise<string> {
 	return workspace.use({ name: agent }, async (env) => {
-		const read = await env.readTextFile(path, BACKGROUND_CONTEXT);
+		const read = await env.readTextFile(path);
 		if (!read.ok) throw read.error;
 		return read.value;
 	});
@@ -155,7 +154,7 @@ describe('bash', () => {
 		expect(again.details.read).toEqual({ from: 5, to: 5 });
 		// Output past the cursor comes back alone, with the byte it starts at.
 		await workspace.use({ name: 'alpha' }, (env) =>
-			env.writeFile(waited.details.process.output, 'done\nmore\n', BACKGROUND_CONTEXT),
+			env.writeFile(waited.details.process.output, 'done\nmore\n'),
 		);
 		const more = await call(workspace, 'status', { handle });
 		expect(more.text).toMatch(
@@ -191,7 +190,7 @@ describe('bash', () => {
 			expect(details.truncation?.totalBytes).toBe(whole.length);
 			// A small new part of a long file comes back alone, from the cursor.
 			await workspace.use({ name: 'alpha' }, (env) =>
-				env.writeFile(details.process.output, `${whole}extra\n`, BACKGROUND_CONTEXT),
+				env.writeFile(details.process.output, `${whole}extra\n`),
 			);
 			const next = await call(workspace, 'status', { handle: details.process.handle });
 			expect(next.text.startsWith('extra\n\n[Process')).toBe(true);
@@ -457,9 +456,7 @@ describe('the host view', () => {
 		const seen = await workspace.processes.list();
 		expect(seen.find((one) => one.handle === late.handle)?.state).toBe('exited');
 		expect(events).toHaveLength(3);
-		await workspace.use({ name: 'alpha' }, (env) =>
-			env.exec('touch ~/gate', undefined, BACKGROUND_CONTEXT),
-		);
+		await workspace.use({ name: 'alpha' }, (env) => env.exec('touch ~/gate', undefined));
 		await ended.promise;
 		expect(events).toEqual([
 			`started ${handle}`,

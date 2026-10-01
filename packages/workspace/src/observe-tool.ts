@@ -1,7 +1,6 @@
 /** Read a connected sensor and retain its complete response before returning it. */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
-import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { Capability } from './capability.ts';
 import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
@@ -16,6 +15,7 @@ import type { RegisteredSensorConnection, SensorConnections } from './sensor-con
 import { boundedSensorReminder } from './sensor-reminder.ts';
 import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
 import type { SnapshotStore } from './snapshots.ts';
+import type { DetailedResult } from './tools.ts';
 
 const observeSchema = Type.Object(
 	{
@@ -68,7 +68,7 @@ async function executeObserve(
 		readonly connections: SensorConnections;
 		readonly store: SnapshotStore;
 	},
-): Promise<AgentToolResult<ObserveDetails>> {
+): Promise<DetailedResult<ObserveDetails>> {
 	const connection = await options.connections.get(params.sensor, ctx.signal);
 	if (connection === undefined)
 		throw new Error(
@@ -200,9 +200,9 @@ function renderResult(
 	response: ObserveResponse,
 	fileBytes: ReadonlyMap<string, Uint8Array>,
 	retained: RetainedOutput,
-): AgentToolResult<ObserveDetails> {
+): DetailedResult<ObserveDetails> {
 	const filePaths = new Map(retained.files.map((file) => [file.digest, file.path]));
-	const blocks: AgentToolResult<ObserveDetails>['content'] = [];
+	const blocks: DetailedResult<ObserveDetails>['content'] = [];
 	const text: string[] = [`Observed ${metadata.sensor}.`];
 	for (const [observationIndex, observation] of response.observations.entries()) {
 		text.push(`Observation ${observationIndex + 1} at ${observation.at}:`);
@@ -237,7 +237,7 @@ function renderPart(
 	fileBytes: ReadonlyMap<string, Uint8Array>,
 	manifestPath: string,
 	text: string[],
-	blocks: AgentToolResult<ObserveDetails>['content'],
+	blocks: DetailedResult<ObserveDetails>['content'],
 ): void {
 	switch (part.kind) {
 		case 'text':

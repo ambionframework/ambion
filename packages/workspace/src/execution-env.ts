@@ -1,55 +1,41 @@
 /**
- * The rules every `ExecutionEnv` backend needs, independent of the
+ * The rules every `WorkspaceEnv` backend needs, independent of the
  * filesystem behind it.
  *
- * Seven rules live here: `resolvePath`, the `~` and relative path rule that
+ * Six rules live here: `resolvePath`, the `~` and relative path rule that
  * every backend resolves a path with; `HomeEnv`, which implements the file
  * members once over the storage operations and the error classifier of a
  * backend; `Deadline` and `withDeadline`, which tell an abort apart from a
  * timeout; `boundedView` and `deliverView`, the bounded output view that a
- * shell command's caller reads before `exec` resolves; the temporary names
- * and paths under `/tmp` that a temp file and a temp directory share; and
- * `runScript` and `shellQuote`, which run one script and quote one word in
- * it.
+ * shell command's caller reads before `exec` resolves; `randomName`, the
+ * short name that keeps two temporary names apart; and `runScript` and
+ * `shellQuote`, which run one script and quote one word in it.
  *
- * A backend writes no spill file: every `bash` call writes its whole output
- * to a process file. This module imports no `just-bash`.
+ * A backend keeps the bounded view of an output and no more: every `bash`
+ * call writes its whole output to a process file. This module imports no
+ * `just-bash`.
  */
 
 import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
-import type {
-	Context,
-	ExecutionEnv,
-	FileInfo,
-	Result,
-	ShellExecOptions,
-	ShellExecResult,
-	ShellOutputLimits,
-	ShellOutputUpdate,
-	ShellOutputView,
-} from '@earendil-works/pi-agent-core';
-import { ExecutionError, err, FileError, ok } from '@earendil-works/pi-agent-core';
+import type { WorkspaceEnv } from './backend.ts';
+import {
+	ExecutionError,
+	err,
+	FileError,
+	type FileInfo,
+	type FileResult,
+	ok,
+	type Result,
+	type ShellExecResult,
+	type ShellOutputLimits,
+	type ShellOutputView,
+	type WorkspaceExecOptions,
+} from './port.ts';
 import { truncateHead, truncateTail } from './truncate.ts';
 
-/**
- * The options of one command on a workspace environment: Pi's options, and the
- * grace of a stop.
- */
-export interface WorkspaceExecOptions extends ShellExecOptions {
-	/**
-	 * Seconds from `SIGTERM` to `SIGKILL` when an abort or the timeout stops
-	 * the command. Absent or 0, the stop sends `SIGKILL` at once. A backend
-	 * with no signals, such as just-bash, ends the command at once.
-	 */
-	grace?: number;
-}
-
-/** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
+/** What a command gets when its caller names no timeout. The `bash` tool names none by default. */
 export const DEFAULT_TIMEOUT_SECONDS = 30;
-
-/** The directory every backend's temporary names and paths sit under. */
-export const TMP = '/tmp';
 
 /** A short random component that keeps two temporary names apart. */
 export function randomName(): string {
@@ -68,7 +54,7 @@ export type FileExpect = 'file' | 'directory' | 'any';
 
 /**
  * The storage operations of a backend, one for each file member of
- * `ExecutionEnv`. Each operation takes a resolved absolute path and throws
+ * `WorkspaceEnv`. Each operation takes a resolved absolute path and throws
  * what the storage throws. `HomeEnv` resolves the path, checks the abort
  * signal, and classifies the error.
  */
@@ -85,24 +71,18 @@ export interface FileOperations {
 	exists(path: string): Promise<boolean>;
 	makeDir(path: string, recursive: boolean): Promise<void>;
 	/**
-	 * Takes the context because a backend can remove a tree through `exec`.
+	 * Takes the signal because a backend can remove a tree through `exec`.
 	 * The workstation runs `rm -rf`.
 	 */
 	remove(
 		path: string,
-		options: Parameters<ExecutionEnv['remove']>[1],
-		context: Context,
+		options: Parameters<WorkspaceEnv['remove']>[1],
+		signal: AbortSignal | undefined,
 	): Promise<void>;
-	/** Create the directory at `path`. `HomeEnv` chose the path. */
-	makeTempDir(path: string): Promise<void>;
-	/** Create the empty file at `path`. `HomeEnv` chose the path. */
-	makeTempFile(path: string): Promise<void>;
 }
 
-type FileResult<T> = Promise<Result<T, FileError>>;
-
 /**
- * The members of an `ExecutionEnv` that follow from the agent's home, the
+ * The file members of a `WorkspaceEnv` that follow from the agent's home, the
  * working directory, and the file operations of a backend. `cwd` is the home
  * for the life of the env.
  *
@@ -135,14 +115,14 @@ export abstract class HomeEnv {
 		return resolvePath(this.home, this.cwd, path);
 	}
 
-	/** Run one operation. An aborted context gives `aborted`, and a throw goes to `classify`. */
+	/** Run one operation. An aborted signal gives `aborted`, and a throw goes to `classify`. */
 	private async attempt<T>(
 		path: string,
 		expect: FileExpect,
-		context: Context,
+		signal: AbortSignal | undefined,
 		run: () => Promise<T>,
 	): FileResult<T> {
-		if (context.abortSignal?.aborted) {
+		if (signal?.aborted) {
 			return err(new FileError('aborted', 'Operation aborted', path));
 		}
 		try {
@@ -152,153 +132,78 @@ export abstract class HomeEnv {
 		}
 	}
 
-	async absolutePath(path: string): Promise<Result<string, FileError>> {
+	async absolutePath(path: string): FileResult<string> {
 		return ok(this.resolve(path));
 	}
 
-	async joinPath(parts: string[]): Promise<Result<string, FileError>> {
-		return ok(posix.join(...parts));
+	readTextFile(path: string, signal?: AbortSignal): FileResult<string> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', signal, () => this.files.readText(resolved));
 	}
 
-	readTextFile(path: string, context: Context): FileResult<string> {
+	readBinaryFile(path: string, signal?: AbortSignal): FileResult<Uint8Array> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.files.readText(resolved));
+		return this.attempt(resolved, 'file', signal, () => this.files.readBinary(resolved));
 	}
 
-	readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
+	writeFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.files.readBinary(resolved));
+		return this.attempt(resolved, 'file', signal, () => this.files.write(resolved, content));
 	}
 
-	writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
+	appendFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.files.write(resolved, content));
-	}
-
-	appendFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'file', context, () => this.files.append(resolved, content));
+		return this.attempt(resolved, 'file', signal, () => this.files.append(resolved, content));
 	}
 
 	/** An error carries the source path. */
-	renameFile(sourcePath: string, destinationPath: string, context: Context): FileResult<void> {
+	renameFile(sourcePath: string, destinationPath: string, signal?: AbortSignal): FileResult<void> {
 		const source = this.resolve(sourcePath);
 		const destination = this.resolve(destinationPath);
-		return this.attempt(source, 'any', context, () => this.files.rename(source, destination));
+		return this.attempt(source, 'any', signal, () => this.files.rename(source, destination));
 	}
 
-	fileInfo(path: string, context: Context): FileResult<FileInfo> {
+	fileInfo(path: string, signal?: AbortSignal): FileResult<FileInfo> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, () => this.files.info(resolved));
+		return this.attempt(resolved, 'any', signal, () => this.files.info(resolved));
 	}
 
-	listDir(path: string, context: Context): FileResult<FileInfo[]> {
+	listDir(path: string, signal?: AbortSignal): FileResult<FileInfo[]> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'directory', context, () => this.files.list(resolved));
+		return this.attempt(resolved, 'directory', signal, () => this.files.list(resolved));
 	}
 
-	canonicalPath(path: string, context: Context): FileResult<string> {
+	canonicalPath(path: string, signal?: AbortSignal): FileResult<string> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, () => this.files.canonical(resolved));
+		return this.attempt(resolved, 'any', signal, () => this.files.canonical(resolved));
 	}
 
-	exists(path: string, context: Context): FileResult<boolean> {
+	exists(path: string, signal?: AbortSignal): FileResult<boolean> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, () => this.files.exists(resolved));
+		return this.attempt(resolved, 'any', signal, () => this.files.exists(resolved));
 	}
 
 	createDir(
 		path: string,
 		options: { recursive?: boolean } | undefined,
-		context: Context,
+		signal?: AbortSignal,
 	): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, () =>
+		return this.attempt(resolved, 'any', signal, () =>
 			this.files.makeDir(resolved, options?.recursive ?? true),
 		);
 	}
 
 	remove(
 		path: string,
-		options: Parameters<ExecutionEnv['remove']>[1],
-		context: Context,
+		options: Parameters<WorkspaceEnv['remove']>[1],
+		signal?: AbortSignal,
 	): FileResult<void> {
 		const resolved = this.resolve(path);
-		return this.attempt(resolved, 'any', context, () =>
-			this.files.remove(resolved, options, context),
+		return this.attempt(resolved, 'any', signal, () =>
+			this.files.remove(resolved, options, signal),
 		);
 	}
-
-	createTempDir(prefix: string | undefined, context: Context): FileResult<string> {
-		const dir = tempDirPath(prefix);
-		return this.attempt(dir, 'any', context, async () => {
-			await this.files.makeTempDir(dir);
-			return dir;
-		});
-	}
-
-	createTempFile(
-		options: { prefix?: string; suffix?: string } | undefined,
-		context: Context,
-	): FileResult<string> {
-		const file = tempFilePath(options);
-		return this.attempt(file, 'any', context, async () => {
-			await this.files.makeTempFile(file);
-			return file;
-		});
-	}
-
-	async readTextLines(
-		path: string,
-		options: { maxLines?: number } | undefined,
-		context: Context,
-	): Promise<Result<string[], FileError>> {
-		const text = await this.readTextFile(path, context);
-		if (!text.ok) return text;
-		const lines = text.value.split('\n');
-		return ok(options?.maxLines === undefined ? lines : lines.slice(0, options.maxLines));
-	}
-
-	async openTextLineReader(
-		path: string,
-		context: Context,
-	): Promise<Result<TextLineReader, FileError>> {
-		const text = await this.readTextFile(path, context);
-		if (!text.ok) return text;
-		return ok(textLineReader(text.value));
-	}
-}
-
-/** Pi exports no name for the reader that `openTextLineReader` opens. */
-type TextLineReader = Extract<
-	Awaited<ReturnType<ExecutionEnv['openTextLineReader']>>,
-	{ ok: true }
->['value'];
-type TextLine = NonNullable<
-	Extract<Awaited<ReturnType<TextLineReader['readLine']>>, { ok: true }>['value']
->;
-
-/** A reader over text already in memory. A final line with no `\n` is not terminated. */
-function textLineReader(text: string): TextLineReader {
-	const lines: TextLine[] = text
-		.split('\n')
-		.map((line, index, all) => ({ text: line, terminated: index < all.length - 1 }));
-	if (lines.at(-1)?.text === '') lines.pop();
-	let next = 0;
-	return {
-		readLine: async () => ok(lines[next++]),
-		close: async () => {},
-	};
-}
-
-/** A path for a new temporary directory. Neither filesystem starts with `/tmp`. */
-export function tempDirPath(prefix: string | undefined): string {
-	return posix.join(TMP, `${prefix ?? 'tmp-'}${randomName()}`);
-}
-
-/** A path for a new temporary file. */
-export function tempFilePath(options: { prefix?: string; suffix?: string } | undefined): string {
-	return posix.join(TMP, `${options?.prefix ?? ''}${randomName()}${options?.suffix ?? ''}`);
 }
 
 /**
@@ -319,26 +224,6 @@ export function boundedView(
 	return { text: content, truncation };
 }
 
-/** The view that `update` makes of `current`. */
-function applyShellOutputUpdate(
-	current: ShellOutputView | undefined,
-	update: ShellOutputUpdate,
-): ShellOutputView {
-	switch (update.kind) {
-		case 'replace':
-			return update.output;
-		case 'append':
-			return { text: `${current?.text ?? ''}${update.text}`, ...update.metadata };
-		case 'slide':
-			return {
-				text: `${current?.text.slice(update.drop) ?? ''}${update.text}`,
-				...update.metadata,
-			};
-		case 'metadata':
-			return { text: current?.text ?? '', ...update.metadata };
-	}
-}
-
 /**
  * Hand the one view of a command's output to the caller's `onUpdate`, and
  * return the result that names the exit code and the truncation.
@@ -346,10 +231,9 @@ function applyShellOutputUpdate(
 export function deliverView(
 	view: ShellOutputView,
 	exitCode: number,
-	options: ShellExecOptions | undefined,
-	context: Context,
+	options: WorkspaceExecOptions | undefined,
 ): ShellExecResult {
-	options?.onUpdate?.({ kind: 'replace', output: view }, context);
+	options?.onUpdate?.(view);
 	return { exitCode, truncation: view.truncation };
 }
 
@@ -435,21 +319,21 @@ export interface ScriptRun extends ShellExecResult {
  * caller checks the exit code and the truncation.
  */
 export async function runScript(
-	env: Pick<ExecutionEnv, 'exec'>,
+	env: Pick<WorkspaceEnv, 'exec'>,
 	script: string,
 	options: Omit<WorkspaceExecOptions, 'onUpdate'> | undefined,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<Result<ScriptRun, ExecutionError>> {
 	let view: ShellOutputView | undefined;
 	const ran = await env.exec(
 		script,
 		{
 			...options,
-			onUpdate: (update) => {
-				view = applyShellOutputUpdate(view, update);
+			onUpdate: (output) => {
+				view = output;
 			},
 		},
-		context,
+		signal,
 	);
 	if (!ran.ok) return ran;
 	return ok({ ...ran.value, output: view?.text ?? '' });

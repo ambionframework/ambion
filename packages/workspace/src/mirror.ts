@@ -22,8 +22,6 @@
 
 import { posix } from 'node:path';
 import type { Message, Room, RoomRead, Seq } from '@ambionframework/ambion';
-import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { bestEffort, isLogFile, openLog } from './log.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
@@ -79,11 +77,11 @@ export function roomMirrorPath(root: string, roomName: string): string {
 
 /** The `seq` field of the last non-empty line in `path`, or undefined. */
 async function lastLineSeq(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<Seq | undefined> {
-	const read = await env.readTextFile(path, context);
+	const read = await env.readTextFile(path, signal);
 	if (!read.ok) return undefined;
 	const lines = read.value.split('\n').filter((line) => line !== '');
 	const last = lines.at(-1);
@@ -108,12 +106,12 @@ function higher(a: Seq | undefined, b: Seq | undefined): Seq | undefined {
  * every file it has rotated to. A missing directory has recorded nothing.
  */
 async function lastRecordedSeq(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	dir: string,
 	fileName: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<Seq | undefined> {
-	const listed = await env.listDir(dir, context);
+	const listed = await env.listDir(dir, signal);
 	if (!listed.ok) {
 		if (listed.error.code === 'not_found') return undefined;
 		throw listed.error;
@@ -121,7 +119,7 @@ async function lastRecordedSeq(
 	let max: Seq | undefined;
 	for (const entry of listed.value) {
 		if (entry.kind !== 'file' || !isLogFile(entry.name, fileName)) continue;
-		const seq = await lastLineSeq(env, posix.join(dir, entry.name), context);
+		const seq = await lastLineSeq(env, posix.join(dir, entry.name), signal);
 		max = higher(max, seq);
 	}
 	return max;
@@ -160,7 +158,7 @@ export async function mirrorRoom(
 	const log = openLog({ path, rotateBytes: options.rotateBytes });
 
 	let appendedSeq: Seq | undefined = await drive.use(agent, (env) =>
-		lastRecordedSeq(env, dir, fileName, BACKGROUND_CONTEXT),
+		lastRecordedSeq(env, dir, fileName),
 	);
 	let pending: Promise<void> = Promise.resolve();
 	let stopped = false;
@@ -170,16 +168,7 @@ export async function mirrorRoom(
 		if (appendedSeq !== undefined && message.seq <= appendedSeq) return;
 		appendedSeq = message.seq;
 		const entry: RoomMessageEntry = { ...message, room: room.name };
-		// Message is already required to survive structuredClone as journal
-		// data (docs/durability.md §2); JsonValue's index signature is the
-		// one thing a named interface never satisfies structurally.
-		pending = bestEffort(
-			() =>
-				drive.use(agent, (env) =>
-					log.append(env, entry as unknown as JsonValue, BACKGROUND_CONTEXT),
-				),
-			options.onError,
-		);
+		pending = bestEffort(() => drive.use(agent, (env) => log.append(env, entry)), options.onError);
 	};
 
 	let held: Message[] | undefined = [];

@@ -29,7 +29,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
-import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
+import type { WorkspaceEnv } from './backend.ts';
 
 /** Bytes a log may hold before the next append rotates it, when a caller names none. */
 const DEFAULT_ROTATE_BYTES = 8 * 1024 * 1024;
@@ -71,33 +71,37 @@ export function isLogFile(name: string, fileName: string): boolean {
 }
 
 /** Create the parent directory of `path`. */
-export async function ensureDir(env: ExecutionEnv, path: string, context: Context): Promise<void> {
-	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
+export async function ensureDir(
+	env: WorkspaceEnv,
+	path: string,
+	signal?: AbortSignal,
+): Promise<void> {
+	const made = await env.createDir(posix.dirname(path), { recursive: true }, signal);
 	if (!made.ok) throw made.error;
 }
 
 /** Append `text` to `path`. The parent directory must exist. */
 export async function appendOnly(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	text: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
-	const appended = await env.appendFile(path, text, context);
+	const appended = await env.appendFile(path, text, signal);
 	if (!appended.ok) throw appended.error;
 }
 
 /** Rename `path` aside under a timestamped name once it has reached `rotateBytes`. */
 export async function rotateIfDue(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	rotateBytes: number,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
-	const info = await env.fileInfo(path, context);
+	const info = await env.fileInfo(path, signal);
 	if (!info.ok) throw info.error;
 	if (info.value.size < rotateBytes) return;
-	const renamed = await env.renameFile(path, rotatedName(path), context);
+	const renamed = await env.renameFile(path, rotatedName(path), signal);
 	if (!renamed.ok) throw renamed.error;
 }
 
@@ -133,7 +137,7 @@ export interface WorkspaceLog {
 	readonly path: string;
 	readonly rotateBytes: number;
 	/** Append one JSON-compatible record as one line over `env`. */
-	append(env: ExecutionEnv, record: JsonValue, context: Context): Promise<void>;
+	append(env: WorkspaceEnv, record: object, signal?: AbortSignal): Promise<void>;
 }
 
 /**
@@ -149,10 +153,10 @@ export function openLog(options: WorkspaceLogOptions): WorkspaceLog {
 	const log: WorkspaceLog = {
 		path,
 		rotateBytes,
-		async append(env, record, context) {
-			await ensureDir(env, path, context);
-			await appendOnly(env, path, `${JSON.stringify(record)}\n`, context);
-			await rotateIfDue(env, path, rotateBytes, context);
+		async append(env, record, signal) {
+			await ensureDir(env, path, signal);
+			await appendOnly(env, path, `${JSON.stringify(record)}\n`, signal);
+			await rotateIfDue(env, path, rotateBytes, signal);
 		},
 	};
 	return Object.freeze(log);

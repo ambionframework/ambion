@@ -6,7 +6,7 @@
 > A frame reaches the model as an image, and the text of the result names its
 > export path.
 
-**The workspace is the Pi binding of the resource contract.** The optional
+**The workspace is a resource that holds files and a shell.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
 tools. The package `@ambionframework/just-bash` provides the memory and
 directory backends over just-bash. A workspace has one bash backend,
@@ -190,16 +190,14 @@ threshold: the active file is renamed aside under a timestamped name, and a
 fresh file starts at the same path. A record is never split by a rotation.
 
 ```ts
-import { BACKGROUND_CONTEXT, openLog, openWorkspace } from '@ambionframework/workspace';
+import { openLog, openWorkspace } from '@ambionframework/workspace';
 import { directoryBackend } from '@ambionframework/just-bash';
 
 const drive = openWorkspace({ name: 'town', backend: { bash: directoryBackend('./data') } });
 const host = { name: 'host' };
 const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 
-await drive.use(host, (env) =>
-  journal.append(env, { kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT),
-);
+await drive.use(host, (env) => journal.append(env, { kind: 'said', text: 'hi' }));
 ```
 
 **A log names one absolute path, not a directory.** `path` must be
@@ -282,7 +280,7 @@ resource refuses the record of that call, the same as any operation queued after
 The log's `onError` receives an error that names the tool and the call id.
 
 **A cut or aborted call is still recorded.** The record runs after the call
-ends, whatever ended it, over its own unconditional context. It does not
+ends, whatever ended it, with no abort signal. It does not
 depend on the caller's abort signal. A room that cuts an activation mid-call
 still leaves a trace of what that call was doing.
 
@@ -886,18 +884,18 @@ implements them.
 | `dispose()`                         | Optional. Release local handles, and keep the data                     |
 | `label`                             | The name the tool reports and the guidance states, with no credential  |
 | `guidance`                          | Optional. The dialect and the limits of the database                   |
-| `SqlEnv.run(sql, options, context)` | Run the statements in order, and give a preview of the last one's rows |
+| `SqlEnv.run(sql, options, signal?)` | Run the statements in order, and give a preview of the last one's rows |
 | `SqlEnv.cleanup()`                  | The resource calls it after each operation                             |
 
 **`files` is the agent's view of the bash backend.** `WorkspaceFiles` has
 two methods. Each call is one operation on the bash resource, as the calling
 agent, and each resolves `~` and a relative path under the agent's home.
 
-- **`writeFile(path, chunks, context)`** creates missing directories, and
+- **`writeFile(path, chunks, signal?)`** creates missing directories, and
   writes the chunks to a temporary file beside `path`, which it then
   renames onto `path`. The rename stays in one folder, so it stays on one
   filesystem. It gives the absolute path.
-- **`readFile(path, maxBytes, context)`** follows a symbolic link, checks
+- **`readFile(path, maxBytes, signal?)`** follows a symbolic link, checks
   the size of the file, and then reads its UTF-8 text. A missing file, a
   path that is not a file, a file that the agent cannot read, and a file
   over `maxBytes` give `{ ok: false, message }`. An abort rejects.
@@ -960,10 +958,10 @@ backend exists. That backend moves them back to the conformance entry
 
 The contract lives in [Resources](resources.md).
 
-The memory and directory backends are the Pi binding. They export from the
-package `@ambionframework/just-bash`, which depends on the workspace. The root
-entry names `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
-`cleanup()`. `BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
+The memory and directory backends export from the package
+`@ambionframework/just-bash`, which depends on the workspace. The root entry
+names `WorkspaceEnv`, the port of a bash backend ([The port](#the-port)).
+`BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
 optional guidance about the backend's own shell and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)). A
 backend adds no tool: the workspace binds the same tools over every backend.
@@ -975,52 +973,88 @@ processes of this run ([The host's view](processes.md#the-hosts-view)).
 `Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
 Direct operations and tool calls share one queue and one lifecycle.
 
-**A new backend implements `connect()` and an `ExecutionEnv`, over the
+**A new backend implements `connect()` and a `WorkspaceEnv`, over the
 shared helpers below, and names its own `layout`.** It adds only the tools
 and the guidance beyond the ten tools every workspace has, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
-**The root entry also exports the environment helpers a new `ExecutionEnv`
+**The root entry also exports the environment helpers a new `WorkspaceEnv`
 backend needs.** The just-bash backends and the workstation both build on
 them.
 
-| Helper                                             | What it does                                                             |
-| -------------------------------------------------- | ------------------------------------------------------------------------ |
-| `resolvePath`                                      | Holds the `~` and relative path rule                                     |
-| `HomeEnv`                                          | A base class: the file methods, over `FileOperations` and `classify`     |
-| `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
-| `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
-| `MAX_TIMER_SECONDS`                                | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
-| `boundedView`, `deliverView`                       | Build the bounded output view, and hand it to `onUpdate` with the result |
-| `TMP`, `randomName`, `tempDirPath`, `tempFilePath` | Name the temporary paths under `/tmp`                                    |
-| `runScript`                                        | Runs one script, and gives its exit code and its output as text          |
-| `shellQuote`                                       | Puts one word in single quotes for `bash`                                |
+| Helper                       | What it does                                                             |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `resolvePath`                | Holds the `~` and relative path rule                                     |
+| `HomeEnv`                    | A base class: the file methods, over `FileOperations` and `classify`     |
+| `Deadline`, `withDeadline`   | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
+| `DEFAULT_TIMEOUT_SECONDS`    | The 30 seconds a command gets when its caller names no timeout           |
+| `MAX_TIMER_SECONDS`          | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
+| `boundedView`, `deliverView` | Build the bounded output view, and hand it to `onUpdate` with the result |
+| `randomName`                 | Names a temporary file beside its target                                 |
+| `runScript`                  | Runs one script, and gives its exit code and its output as text          |
+| `shellQuote`                 | Puts one word in single quotes for `bash`                                |
 
 **`HomeEnv` implements the file methods once.** A backend supplies two
 abstract properties: `files`, a `FileOperations` with one throwing storage
 operation for each method, and `classify`, which turns what an operation
 threw into a `FileError`. `HomeEnv` resolves the path, returns `aborted`
-when the context's signal is aborted, runs the operation, and calls
+when the signal is aborted, runs the operation, and calls
 `classify` with the path and a `FileExpect` hint: `file` for a read or a
 write, `directory` for `listDir`, and `any` for the rest. `classify` can
 return a promise. A backend can override a method that needs more than one
-operation. `HomeEnv` also implements `cwd`, `absolutePath`, `joinPath`,
-`readTextLines`, and `openTextLineReader`.
+operation. `HomeEnv` also implements `cwd` and `absolutePath`.
 
 **A backend writes no spill file.** Every `bash` call writes its whole
-output to a process file ([Processes](processes.md)), so a backend ignores
-`capture.spill`.
+output to a process file ([Processes](processes.md)). A backend keeps the
+bounded view of an output and no more.
 
 These helpers import no just-bash, so a backend over any filesystem builds
-an `ExecutionEnv` on them.
+a `WorkspaceEnv` on them.
+
+## The port
+
+**The workspace owns its port.** `WorkspaceEnv` is the files and the shell of
+one agent. `backend.ts` declares it, and `port.ts` declares the values that
+it passes. The root entry exports both, so a host that runs a Claude or a
+Codex seat installs no Pi package to use a workspace.
+
+**Every operation returns a `Result` and never throws.** A file operation
+gives `Result<T, FileError>`, and `exec` gives
+`Result<ShellExecResult, ExecutionError>`. `ok` and `err` build a `Result`.
+`FileError` has a `code`: `aborted`, `not_found`, `permission_denied`,
+`not_directory`, `is_directory`, `invalid`, `not_supported`, or `unknown`.
+`ExecutionError` has the code `aborted`, `timeout`, `spawn_error`, or
+`unknown`.
+
+**Every operation takes an optional `AbortSignal` as its last argument.** An
+aborted signal ends the operation with the code `aborted`. `cleanup` takes no
+signal. A caller that has no signal passes none.
+
+| Name                                | What it does                                                   |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `cwd`                               | The home of the agent, and the directory of a relative path    |
+| `absolutePath`, `canonicalPath`     | The absolute path, and the path with every link resolved       |
+| `readTextFile`, `readBinaryFile`    | Read a file as text or as bytes                                |
+| `writeFile`, `appendFile`           | Create or extend a file, and create each missing parent        |
+| `renameFile`, `remove`, `createDir` | Move a path, remove a path, and make a directory               |
+| `fileInfo`, `listDir`, `exists`     | The facts of a path, the children of a directory, and presence |
+| `exec(command, options, signal?)`   | Run a command, and give the exit code and the truncation       |
+| `cleanup()`                         | Release what the operation held                                |
+
+`exec` options are `cwd`, `env`, `timeout`, `grace`, `capture`, and
+`onUpdate`. `capture.limits` bounds the output view. `onUpdate` receives
+the one `ShellOutputView` after the command ends and before `exec` resolves.
+
+**The port holds only what the repository calls.** It has no `joinPath`,
+`readTextLines`, `openTextLineReader`, `createTempDir`, or `createTempFile`.
+The shapes derive from the harness types of Pi (MIT License).
 
 ## The conformance suite
 
-`@ambionframework/workspace/conformance` holds the `ExecutionEnv` rules the
+`@ambionframework/workspace/conformance` holds the `WorkspaceEnv` rules the
 built-in tools need: a rename that replaces an existing target, a recursive
 `createDir`, a forced and a recursive `remove`, the file error codes, `~`
-expansion, an abort apart from a timeout, the bounded output view, and a
-distinct name under `/tmp` for each temporary file or directory.
+expansion, an abort apart from a timeout, and the bounded output view.
 
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
@@ -1122,8 +1156,8 @@ and authorization for external services.
 Backends perform raw filesystem I/O below the resource. They do not keep a
 second operation queue.
 
-**A new backend follows one recipe.** It implements `connect()` and an
-`ExecutionEnv` over the shared helpers (see [The resource
+**A new backend follows one recipe.** It implements `connect()` and a
+`WorkspaceEnv` over the shared helpers (see [The resource
 contract](#the-resource-contract)), names its own `layout`, and adds only
 the tools and the shell guidance beyond the ten tools every workspace
 already has. It passes `@ambionframework/workspace/conformance` and loads

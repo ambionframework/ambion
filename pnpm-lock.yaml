@@ -257,9 +257,6 @@ importers:
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../workspace
-      '@earendil-works/pi-agent-core':
-        specifier: ^0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.31.0(zod@4.6.5))(ws@8.22.0)(zod@4.6.5)
       just-bash:
         specifier: ^3.4.2
         version: 3.4.2
@@ -338,9 +335,6 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../ambion
-      '@earendil-works/pi-agent-core':
-        specifier: ^0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.31.0(zod@4.6.5))(ws@8.22.0)(zod@4.6.5)
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
@@ -375,9 +369,6 @@ importers:
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../workspace
-      '@earendil-works/pi-agent-core':
-        specifier: ^0.87.1
-        version: 0.87.1(@modelcontextprotocol/sdk@1.31.0(zod@4.6.5))(ws@8.22.0)(zod@4.6.5)
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0

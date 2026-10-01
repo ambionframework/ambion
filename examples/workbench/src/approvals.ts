@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, type SqlEnv } from '@ambionframework/workspace';
+import type { SqlEnv } from '@ambionframework/workspace';
 import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { instruments } from './scenarios.ts';
 
@@ -27,11 +27,7 @@ ORDER BY id`;
 /** The requested operations of one room that have no answer. The lab records them apart from the journal. */
 export function readApprovals(lab: WorkspaceResource<SqlEnv>, room: string): Promise<Approval[]> {
 	return lab.use(reader, async (env) => {
-		const outcome = await env.run(
-			pending(room),
-			{ maxRows: Number.MAX_SAFE_INTEGER },
-			BACKGROUND_CONTEXT,
-		);
+		const outcome = await env.run(pending(room), { maxRows: Number.MAX_SAFE_INTEGER });
 		if (!outcome.ok) throw new Error(outcome.message);
 		return outcome.rows.map((row) => ({
 			id: Number(row.id),

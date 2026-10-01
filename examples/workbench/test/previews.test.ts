@@ -8,12 +8,11 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { commitUri } from '@ambionframework/ambion';
 import { memoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT, openWorkspace, type Workspace } from '@ambionframework/workspace';
+import { openWorkspace, type Workspace } from '@ambionframework/workspace';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { readCommitFile, readSnapshotFile } from '../src/previews.ts';
 import { labRepositories } from '../src/repositories.ts';
 
-const ctx = BACKGROUND_CONTEXT;
 const bench = { name: 'bench' };
 
 function lab(): Workspace {
@@ -29,17 +28,13 @@ function lab(): Workspace {
 async function sh(workspace: Workspace, command: string): Promise<string> {
 	let output = '';
 	const ran = await workspace.use(bench, (env) =>
-		env.exec(
-			command,
-			{
-				timeout: 60,
-				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
-				onUpdate: (update) => {
-					if (update.kind === 'replace') output = update.output.text;
-				},
+		env.exec(command, {
+			timeout: 60,
+			capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
+			onUpdate: (view) => {
+				output = view.text;
 			},
-			ctx,
-		),
+		}),
 	);
 	if (!ran.ok || ran.value.exitCode !== 0) throw new Error(`${command} failed: ${output}`);
 	return output;
@@ -69,8 +64,8 @@ describe('the preview of a snapshot', () => {
 		const workspace = lab();
 		const content = await bytes();
 		await workspace.use(bench, async (env) => {
-			await env.createDir('/shared', { recursive: true }, ctx);
-			await env.writeFile(path, content, ctx);
+			await env.createDir('/shared', { recursive: true });
+			await env.writeFile(path, content);
 		});
 		const [ref = ''] = await workspace.snapshot([path]);
 		const shown = await readSnapshotFile(workspace, ref);

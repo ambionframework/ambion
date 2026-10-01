@@ -1,6 +1,6 @@
 /**
  * The output of a process as a handle tool gives it: the part after the
- * cursor, bounded to Pi's default view of 2000 lines or 50 KB.
+ * cursor, bounded to the default view of 2000 lines or 50 KB.
  *
  * The `cursor` file of a process holds the byte offset up to which the
  * results of its owner agent already showed the output. Each read gives the
@@ -15,17 +15,17 @@
  * one at the end of each read, and no byte shows twice.
  */
 
-import { BACKGROUND_CONTEXT, type ShellOutputTruncation } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript, shellQuote } from './execution-env.ts';
+import type { ShellOutputTruncation } from './port.ts';
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } from './truncate.ts';
 
-/** The most bytes one read takes from the file. Pi's view then keeps at most 50 KB of them. */
+/** The most bytes one read takes from the file. The view then keeps at most 50 KB of them. */
 const READ_BYTES = 4 * DEFAULT_MAX_BYTES;
 
 /** What one read of the output gives. */
 export interface OutputRead {
-	/** The new output, bounded to Pi's default view. */
+	/** The new output, bounded to the default view. */
 	readonly text: string;
 	readonly truncation: ShellOutputTruncation;
 	/** The byte offset where the read started: the cursor before the read. */
@@ -41,7 +41,7 @@ export interface OutputRead {
  */
 export async function readOutput(env: WorkspaceEnv, dir: string): Promise<OutputRead> {
 	const path = `${dir}/out`;
-	const info = await env.fileInfo(path, BACKGROUND_CONTEXT);
+	const info = await env.fileInfo(path);
 	const size = info.ok ? info.value.size : 0;
 	const cursor = await readCursor(env, dir);
 	const from = cursor > size ? 0 : cursor;
@@ -66,7 +66,7 @@ export async function readOutput(env: WorkspaceEnv, dir: string): Promise<Output
 
 /** The byte offset in `cursor`, or 0 when the file is absent or does not parse. */
 async function readCursor(env: WorkspaceEnv, dir: string): Promise<number> {
-	const read = await env.readTextFile(`${dir}/cursor`, BACKGROUND_CONTEXT);
+	const read = await env.readTextFile(`${dir}/cursor`);
 	if (!read.ok) return 0;
 	const offset = Number.parseInt(read.value, 10);
 	return Number.isSafeInteger(offset) && offset > 0 ? offset : 0;
@@ -74,7 +74,7 @@ async function readCursor(env: WorkspaceEnv, dir: string): Promise<number> {
 
 /** Write the cursor. Best-effort: a failed write makes the next read give the same bytes again. */
 async function writeCursor(env: WorkspaceEnv, dir: string, offset: number): Promise<void> {
-	await env.writeFile(`${dir}/cursor`, `${offset}\n`, BACKGROUND_CONTEXT).catch(() => undefined);
+	await env.writeFile(`${dir}/cursor`, `${offset}\n`).catch(() => undefined);
 }
 
 /**
@@ -99,7 +99,6 @@ async function bytesOf(
 				limits: { maxBytes: READ_BYTES, maxLines: Number.MAX_SAFE_INTEGER, retain: 'tail' },
 			},
 		},
-		BACKGROUND_CONTEXT,
 	);
 	return ran.ok ? ran.value.output : '';
 }

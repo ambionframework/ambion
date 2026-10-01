@@ -8,15 +8,9 @@
  * `docs/processes.md` is the design contract.
  */
 
-import {
-	BACKGROUND_CONTEXT,
-	type ExecutionError,
-	type Result,
-	type ShellExecResult,
-	withAbortSignal,
-} from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript } from './execution-env.ts';
+import type { ExecutionError, Result, ShellExecResult } from './port.ts';
 import {
 	type ProcessRecord,
 	type ProcessSpec,
@@ -95,10 +89,10 @@ export async function runBash(
 				grace,
 				capture: { limits: SHELL_OUTPUT },
 			},
-			withAbortSignal(signal, BACKGROUND_CONTEXT),
+			signal,
 		);
 		if (result.ok && result.value.output !== '') {
-			await env.appendFile(`${dir}/out`, result.value.output, BACKGROUND_CONTEXT);
+			await env.appendFile(`${dir}/out`, result.value.output);
 		}
 		return result;
 	} catch (thrown) {

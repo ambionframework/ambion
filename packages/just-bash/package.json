@@ -51,7 +51,6 @@
 	},
 	"dependencies": {
 		"@ambionframework/workspace": "workspace:*",
-		"@earendil-works/pi-agent-core": "^0.87.1",
 		"just-bash": "^3.4.2",
 		"just-git": "1.8.2"
 	},

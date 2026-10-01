@@ -22,7 +22,7 @@ import {
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { justGitBackend, sqliteGitStorage } from '../../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
-import { BACKGROUND_CONTEXT, openWorkspace, runScript } from '../../src/index.ts';
+import { openWorkspace, runScript } from '../../src/index.ts';
 
 const FIRST = 'scribe-a';
 const SECOND = 'scribe-b';
@@ -68,9 +68,7 @@ async function runScriptOrThrow(
 	seat: string,
 	command: string,
 ): Promise<string> {
-	const result = await workspace.use({ name: seat }, (env) =>
-		runScript(env, command, undefined, BACKGROUND_CONTEXT),
-	);
+	const result = await workspace.use({ name: seat }, (env) => runScript(env, command, undefined));
 	if (!result.ok) throw result.error;
 	if (result.value.exitCode !== 0)
 		throw new Error(`Host staging failed (${result.value.exitCode}): ${result.value.output}`);

@@ -713,6 +713,10 @@
 									{
 										"group": ["just-bash", "@ambionframework/just-bash", "**/just-bash/**"],
 										"message": "The workspace is neutral. The just-bash backends are the package @ambionframework/just-bash, which depends on this one."
+									},
+									{
+										"group": ["@earendil-works", "@earendil-works/**"],
+										"message": "The workspace owns its port. The workspace and its backends import no Pi package."
 									}
 								]
 							}
@@ -755,6 +759,10 @@
 									{
 										"group": ["just-bash", "@ambionframework/just-bash", "**/just-bash/**"],
 										"message": "The workspace is neutral. The just-bash backends are the package @ambionframework/just-bash, which depends on this one."
+									},
+									{
+										"group": ["@earendil-works", "@earendil-works/**"],
+										"message": "The workspace owns its port. The workspace and its backends import no Pi package."
 									}
 								]
 							}
@@ -823,6 +831,10 @@
 											"node:sqlite"
 										],
 										"message": "Reach the workspace through its root entry, `/resource`, or `/git`. The workstation loads no just-bash and no SQLite."
+									},
+									{
+										"group": ["@earendil-works", "@earendil-works/**"],
+										"message": "The workspace owns its port. The workspace and its backends import no Pi package."
 									}
 								]
 							}
@@ -861,6 +873,10 @@
 											"node:sqlite"
 										],
 										"message": "Reach the workspace through its root entry or `/resource`. A bash backend loads no SQLite."
+									},
+									{
+										"group": ["@earendil-works", "@earendil-works/**"],
+										"message": "The workspace owns its port. The workspace and its backends import no Pi package."
 									}
 								]
 							}
@@ -905,6 +921,10 @@
 											"@ambionframework/just-bash/**"
 										],
 										"message": "Reach the workspace through its root entry, `/resource`, or `/git`. The git backend loads no just-bash."
+									},
+									{
+										"group": ["@earendil-works", "@earendil-works/**"],
+										"message": "The workspace owns its port. The workspace and its backends import no Pi package."
 									}
 								]
 							}

@@ -5,14 +5,11 @@
  * credential resolver that fails.
  */
 
-import type { WorkspaceEnv } from '@ambionframework/workspace';
-import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
+import type { ShellOutputView, WorkspaceEnv } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workstationBackend } from '../src/index.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -59,15 +56,15 @@ describe.skipIf(!hasSetsid)('a dropped connection', () => {
 		started.dropClients();
 		await idle(200);
 		const calls: Array<Promise<{ ok: boolean }>> = [
-			env.readTextFile('a.txt', ctx),
-			env.writeFile('a.txt', 'x', ctx),
-			env.createDir('d', undefined, ctx),
-			env.exec('true', undefined, ctx),
+			env.readTextFile('a.txt'),
+			env.writeFile('a.txt', 'x'),
+			env.createDir('d', undefined),
+			env.exec('true', undefined),
 		];
 		for (const result of await within(Promise.all(calls))) expect(result.ok).toBe(false);
 		await env.cleanup();
 		const again = await backend.connect({ name: 'ada' });
-		expect(await again.exec('true', undefined, ctx)).toMatchObject({ ok: true });
+		expect(await again.exec('true', undefined)).toMatchObject({ ok: true });
 		await again.cleanup();
 		expect(started.logins.get('ada')).toBe(2);
 	});
@@ -76,7 +73,7 @@ describe.skipIf(!hasSetsid)('a dropped connection', () => {
 		const started = await server();
 		const backend = backendFor(started);
 		const env = await backend.connect({ name: 'ada' });
-		const running = env.exec('sleep 5; echo late', undefined, ctx);
+		const running = env.exec('sleep 5; echo late', undefined);
 		await idle(300);
 		started.dropClients();
 		expect(await within(running)).toMatchObject({ ok: false, error: { code: 'unknown' } });
@@ -89,21 +86,17 @@ describe.skipIf(!hasSetsid)('a large output', () => {
 		const started = await server();
 		const backend = backendFor(started);
 		const env: WorkspaceEnv = await backend.connect({ name: 'ada' });
-		const updates: ShellOutputUpdate[] = [];
-		const result = await env.exec(
-			'seq 1 300000',
-			{
-				capture: { limits: { maxBytes: 2_000, maxLines: 50 } },
-				onUpdate: (update) => updates.push(update),
-			},
-			ctx,
-		);
+		const updates: ShellOutputView[] = [];
+		const result = await env.exec('seq 1 300000', {
+			capture: { limits: { maxBytes: 2_000, maxLines: 50 } },
+			onUpdate: (view) => updates.push(view),
+		});
 		await env.cleanup();
 		if (!result.ok) throw result.error;
 		expect(result.value.truncation).toMatchObject({ truncated: true, totalLines: 300_000 });
 		const view = updates[0];
-		if (view?.kind !== 'replace') throw new Error('no view');
-		expect(view.output.text.split('\n').at(-1)).toBe('300000');
+		if (view === undefined) throw new Error('no view');
+		expect(view.text.split('\n').at(-1)).toBe('300000');
 	});
 });
 
@@ -112,19 +105,18 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		const started = await server();
 		const backend = backendFor(started);
 		const env = await backend.connect({ name: 'ada' });
-		const updates: ShellOutputUpdate[] = [];
+		const updates: ShellOutputView[] = [];
 		const began = Date.now();
-		const result = await env.exec(
-			'sleep 3 & echo started',
-			{ timeout: 10, onUpdate: (update) => updates.push(update) },
-			ctx,
-		);
+		const result = await env.exec('sleep 3 & echo started', {
+			timeout: 10,
+			onUpdate: (view) => updates.push(view),
+		});
 		const took = Date.now() - began;
 		await env.cleanup();
 		expect(result).toMatchObject({ ok: true, value: { exitCode: 0 } });
 		expect(took).toBeLessThan(2_000);
 		const view = updates[0];
-		expect(view?.kind === 'replace' && view.output.text).toBe('started\n');
+		expect(view?.text).toBe('started\n');
 	});
 
 	it('gives the exit status of a command that exits before its deadline, while a child keeps writing', async () => {
@@ -144,18 +136,14 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 			[quiet, 20, false, 700, 4_300],
 		] as const) {
 			if (stall > 0) setTimeout(() => blockFor(stall), at);
-			const updates: ShellOutputUpdate[] = [];
+			const updates: ShellOutputView[] = [];
 			const began = Date.now();
-			const result = await env.exec(
-				command,
-				{ timeout, onUpdate: (update) => updates.push(update) },
-				ctx,
-			);
+			const result = await env.exec(command, { timeout, onUpdate: (view) => updates.push(view) });
 			const took = Date.now() - began;
 			expect(result).toMatchObject({ ok: true, value: { exitCode: 0 } });
 			expect(took).toBeLessThan(10_000);
 			const view = updates[0];
-			const text = view?.kind === 'replace' ? view.output.text : '';
+			const text = view?.text ?? '';
 			expect(text.includes('closed the output 5 seconds after the command exited')).toBe(notice);
 		}
 		await env.cleanup();
@@ -166,7 +154,7 @@ describe.skipIf(!hasSetsid)('a command that ends early', () => {
 		const backend = backendFor(started);
 		const env = await backend.connect({ name: 'ada' });
 		for (const timeout of [0, -1, Number.NaN, 3_000_000]) {
-			expect(await env.exec('true', { timeout }, ctx)).toMatchObject({
+			expect(await env.exec('true', { timeout })).toMatchObject({
 				ok: false,
 				error: { code: 'timeout' },
 			});
@@ -188,7 +176,7 @@ describe.skipIf(!hasSetsid)('a credential resolver that fails', () => {
 		});
 		await expect(backend.connect({ name: 'ada' })).rejects.toThrow('The vault is sealed.');
 		const env = await backend.connect({ name: 'ada' });
-		expect(await env.exec('true', undefined, ctx)).toMatchObject({ ok: true });
+		expect(await env.exec('true', undefined)).toMatchObject({ ok: true });
 		await env.cleanup();
 	});
 });

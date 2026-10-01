@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { directoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT } from '@ambionframework/workspace';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import type { BashBackend, WorkspaceEnv } from '../../../packages/workspace/src/backend.ts';
 import type { ObjectEnv } from '../../../packages/workspace/src/object-backend.ts';
@@ -129,7 +128,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		);
 		const manifestPath = (restored as { details: { path: string } }).details.path;
 		const manifestBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-			const read = await env.readBinaryFile(manifestPath, BACKGROUND_CONTEXT);
+			const read = await env.readBinaryFile(manifestPath);
 			if (!read.ok) throw read.error;
 			return read.value;
 		});
@@ -165,7 +164,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		);
 		const imagePath = (restoredFile as { details: { path: string } }).details.path;
 		const restoredBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-			const read = await env.readBinaryFile(imagePath, BACKGROUND_CONTEXT);
+			const read = await env.readBinaryFile(imagePath);
 			if (!read.ok) throw read.error;
 			return read.value;
 		});

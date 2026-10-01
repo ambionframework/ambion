@@ -23,17 +23,17 @@ import {
 	defineTool,
 	type ToolContext,
 } from '@ambionframework/ambion';
-import type { AgentToolResult, ShellOutputTruncation } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
+import type { ShellOutputTruncation } from './port.ts';
 import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessRecord } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { ToolFailure } from './tools.ts';
+import { type DetailedResult, ToolFailure } from './tools.ts';
 import { DEFAULT_MAX_BYTES, formatSize } from './truncate.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
@@ -291,7 +291,7 @@ async function started(
 	options: ProcessToolOptions,
 	params: BashParams,
 	ctx: ToolContext,
-): Promise<AgentToolResult<ProcessDetails>> {
+): Promise<DetailedResult<ProcessDetails>> {
 	const timeout = checkedSeconds(params.timeout, DEFAULT_TIMEOUT_SECONDS, MAX_TIMER_SECONDS);
 	if (timeout === 0) throw new Error('Invalid timeout: give a number of seconds above 0.');
 	const asked = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
@@ -327,7 +327,7 @@ async function waited(
 	options: ProcessToolOptions,
 	params: WaitParams,
 	ctx: ToolContext,
-): Promise<AgentToolResult<ProcessDetails | WaitDetails>> {
+): Promise<DetailedResult<ProcessDetails | WaitDetails>> {
 	const handles = handlesOf(params);
 	const asked = checkedSeconds(params.timeout, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS);
 	const wait = withinActivation(asked, ctx);
@@ -353,7 +353,7 @@ async function waitedOnSeveral(
 	first: ProcessRecord,
 	wait: WaitWindow,
 	ctx: ToolContext,
-): Promise<AgentToolResult<WaitDetails>> {
+): Promise<DetailedResult<WaitDetails>> {
 	const ended = processes.filter((process) => process.state !== 'running');
 	const running = processes.filter((process) => process.state === 'running');
 	const { shown, held } = await describedWithin(options, ended, ctx);
@@ -388,8 +388,8 @@ async function describedWithin(
 	options: ProcessToolOptions,
 	ended: readonly ProcessRecord[],
 	ctx: ToolContext,
-): Promise<{ shown: AgentToolResult<ProcessDetails>[]; held: ProcessRecord[] }> {
-	const shown: AgentToolResult<ProcessDetails>[] = [];
+): Promise<{ shown: DetailedResult<ProcessDetails>[]; held: ProcessRecord[] }> {
+	const shown: DetailedResult<ProcessDetails>[] = [];
 	const held: ProcessRecord[] = [];
 	let bytes = 0;
 	for (const process of ended) {
@@ -417,9 +417,9 @@ function dropLine(ended: readonly ProcessRecord[]): string {
  * cancel ended can read `exited`, when its command ended inside the grace.
  */
 function cancelResult(
-	result: AgentToolResult<ProcessDetails>,
+	result: DetailedResult<ProcessDetails>,
 	cancelled: boolean,
-): AgentToolResult<ProcessDetails> {
+): DetailedResult<ProcessDetails> {
 	const { process } = result.details;
 	if (cancelled || process.state === 'running') return result;
 	const lead = `Process ${process.handle} had ended before the cancel, so the cancel stopped nothing.`;
@@ -440,9 +440,9 @@ function endedBadly(process: ProcessRecord): boolean {
  * badly. The text holds the output and the state, so the agent can act on it.
  */
 function failedOr<D>(
-	result: AgentToolResult<D>,
+	result: DetailedResult<D>,
 	reported: readonly ProcessRecord[],
-): AgentToolResult<D> {
+): DetailedResult<D> {
 	if (reported.some(endedBadly)) throw new ToolFailure(textOf(result), result.details);
 	return result;
 }
@@ -452,12 +452,12 @@ function handlesOf(params: WaitParams): readonly string[] {
 	return [...new Set(params.handles)];
 }
 
-function textOf(result: AgentToolResult<unknown>): string {
+function textOf(result: DetailedResult<unknown>): string {
 	return contentText(result.content);
 }
 
 /** The `ps` result: the table of the caller's running processes. */
-async function listed(table: ProcessTable, ctx: ToolContext): Promise<AgentToolResult<PsDetails>> {
+async function listed(table: ProcessTable, ctx: ToolContext): Promise<DetailedResult<PsDetails>> {
 	const all = await table.list(ctx.agent, ctx.signal);
 	const processes = all.filter((process) => process.state === 'running');
 	const text = processes.length > 0 ? psTable(processes, Date.now()) : 'No running processes.';
@@ -474,7 +474,7 @@ async function described(
 	process: ProcessRecord,
 	ctx: ToolContext,
 	note = '',
-): Promise<AgentToolResult<ProcessDetails>> {
+): Promise<DetailedResult<ProcessDetails>> {
 	const dir = process.output.slice(0, process.output.lastIndexOf('/'));
 	const read = await options.bash(
 		ctx.agent,

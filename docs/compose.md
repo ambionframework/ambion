@@ -346,7 +346,7 @@ and a missing field from a declared tool.
 
 **Existing callers keep compiling.** `fromPiTool` calls
 `defineTool<TSchema>` with one type argument, so only the first overload
-applies. `recordedOnShell` returns a pi-agent-core `AgentToolResult<D>`,
+applies. `recordedOnShell` returns a tool result with typed `details`,
 and its content parts fit `ToolResult<Static<O>>`.
 
 **The schema is the one source of the type.** A workspace tool derives its
@@ -356,7 +356,7 @@ drift. `SqlDetails`, `SnapshotDetails`, `ProcessDetails`, `PsDetails`,
 `WaitDetails`, and `ForkDetails` each become such a type.
 
 **Two details need care.** `ProcessDetails.truncation` holds the
-pi-agent-core type `ShellOutputTruncation`. Its schema lists the fields of
+workspace type `ShellOutputTruncation`. Its schema lists the fields of
 that type, and a type test pins that the two stay assignable. A `Static`
 type holds mutable arrays, so a tool copies a readonly array into its
 details, as `wait` already does with `[...processes]`.

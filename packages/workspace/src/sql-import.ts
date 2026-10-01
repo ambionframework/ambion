@@ -22,7 +22,6 @@
  * This module imports no database driver.
  */
 
-import type { Context } from '@earendil-works/pi-agent-core';
 import type { SqlImported, SqlImportTable, WorkspaceFiles } from './sql-backend.ts';
 import { NULL_SENTINEL } from './sql-result.ts';
 
@@ -42,8 +41,7 @@ class CsvRefusal extends Error {}
 const yieldTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** Reject when the caller aborted, or a time limit fired. */
-function throwIfAborted(context: Context): void {
-	const signal = context.abortSignal;
+function throwIfAborted(signal?: AbortSignal): void {
 	if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 }
 
@@ -155,7 +153,7 @@ async function stageRows(
 	reader: CsvReader,
 	width: number,
 	table: SqlImportTable,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<number> {
 	let count = 0;
 	let batch: (string | null)[][] = [];
@@ -166,7 +164,7 @@ async function stageRows(
 			await table.insert(batch);
 			batch = [];
 			await yieldTurn();
-			throwIfAborted(context);
+			throwIfAborted(signal);
 		}
 	}
 	if (batch.length > 0) await table.insert(batch);
@@ -183,16 +181,16 @@ export async function sqlImport(
 	path: string,
 	files: WorkspaceFiles,
 	table: SqlImportTable,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<({ ok: true } & SqlImported) | { ok: false; message: string }> {
-	const read = await files.readFile(path, MAX_IMPORT_BYTES, context);
+	const read = await files.readFile(path, MAX_IMPORT_BYTES, signal);
 	if (!read.ok) return read;
-	throwIfAborted(context);
+	throwIfAborted(signal);
 	try {
 		const reader = new CsvReader(read.text);
 		const columns = headerOf(reader);
 		await table.create(columns);
-		const rows = await stageRows(reader, columns.length, table, context);
+		const rows = await stageRows(reader, columns.length, table, signal);
 		return { ok: true, path: read.path, rows };
 	} catch (error) {
 		if (!(error instanceof CsvRefusal)) throw error;

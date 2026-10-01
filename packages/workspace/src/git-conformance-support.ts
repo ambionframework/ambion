@@ -3,13 +3,10 @@
  * the git resource and the bash resource as one agent.
  */
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { runScript } from './execution-env.ts';
 import type { GitEnv } from './git-backend.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import type { Workspace } from './workspace.ts';
-
-export const ctx = BACKGROUND_CONTEXT;
 
 export const ANALYST: WorkspaceAgent = { name: 'analyst' };
 export const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
@@ -36,16 +33,11 @@ export async function sh(
 	command: string,
 ): Promise<{ code: number; output: string }> {
 	const ran = await workspace.use(agent, (env) =>
-		runScript(
-			env,
-			command,
-			{
-				timeout: 120,
-				env: authorOf(agent),
-				capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
-			},
-			ctx,
-		),
+		runScript(env, command, {
+			timeout: 120,
+			env: authorOf(agent),
+			capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
+		}),
 	);
 	if (!ran.ok) throw ran.error;
 	return { code: ran.value.exitCode, output: ran.value.output };

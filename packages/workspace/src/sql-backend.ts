@@ -17,7 +17,6 @@
  * driver. `docs/workspace.md` states the contract.
  */
 
-import type { Context } from '@earendil-works/pi-agent-core';
 import type { ResourceEnv, WorkspaceAgent } from './resource.ts';
 
 /** A value that a SQL database stores. */
@@ -50,7 +49,7 @@ export interface WorkspaceFiles {
 	 * bytes. `~` and a relative path resolve under the agent's home. The
 	 * read follows a symbolic link, and checks the size before it reads.
 	 */
-	readFile(path: string, maxBytes: number, context: Context): Promise<WorkspaceRead>;
+	readFile(path: string, maxBytes: number, signal?: AbortSignal): Promise<WorkspaceRead>;
 	/**
 	 * Write `chunks` to `path`, and give its absolute path. `~` and a
 	 * relative path resolve under the agent's home, and missing parent
@@ -60,7 +59,7 @@ export interface WorkspaceFiles {
 	writeFile(
 		path: string,
 		chunks: Iterable<string> | AsyncIterable<string>,
-		context: Context,
+		signal?: AbortSignal,
 	): Promise<string>;
 }
 
@@ -151,10 +150,10 @@ export interface SqlEnv extends ResourceEnv {
 	 * `WorkspaceFiles`. With `options.import`, the backend reads that CSV
 	 * file through `WorkspaceFiles` into the table `import.rows` first, and
 	 * drops the table after the run. The run stops at the first statement
-	 * that fails. An aborted `context.abortSignal` rejects before the next
+	 * that fails. An aborted `signal` rejects before the next
 	 * statement runs.
 	 */
-	run(sql: string, options: SqlRunOptions, context: Context): Promise<SqlOutcome>;
+	run(sql: string, options: SqlRunOptions, signal?: AbortSignal): Promise<SqlOutcome>;
 }
 
 /**

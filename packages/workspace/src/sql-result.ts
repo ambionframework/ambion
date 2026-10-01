@@ -18,7 +18,6 @@
  * This module imports no database driver.
  */
 
-import type { Context } from '@earendil-works/pi-agent-core';
 import type { SqlOutcome, SqlRow, SqlRunOptions, SqlValue, WorkspaceFiles } from './sql-backend.ts';
 
 /** The CSV text for a NULL value. */
@@ -72,8 +71,7 @@ async function* csvChunks(
 }
 
 /** Reject when the caller aborted, or a time limit fired. */
-function throwIfAborted(context: Context): void {
-	const signal = context.abortSignal;
+function throwIfAborted(signal?: AbortSignal): void {
 	if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 }
 
@@ -96,10 +94,10 @@ class Tally {
 async function* counted(
 	rows: Iterable<SqlRow>,
 	tally: Tally,
-	context: Context,
+	signal?: AbortSignal,
 ): AsyncGenerator<SqlRow> {
 	for (const row of rows) {
-		throwIfAborted(context);
+		throwIfAborted(signal);
 		if (tally.add(row) % ROWS_PER_TURN === 0) await yieldTurn();
 		yield row;
 	}
@@ -120,10 +118,10 @@ export async function sqlResult(
 	rows: Iterable<SqlRow>,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<SqlOutcome> {
 	const tally = new Tally(previewSize(options.maxRows));
-	const stream = counted(rows, tally, context);
+	const stream = counted(rows, tally, signal);
 	if (options.export === undefined) {
 		for await (const _ of stream) {
 			// `counted` fills the tally as each row passes.
@@ -131,6 +129,6 @@ export async function sqlResult(
 		return { ok: true, columns, rows: tally.preview, rowCount: tally.count };
 	}
 	const chunks = columns.length === 0 ? [] : csvChunks(columns, stream);
-	const path = await files.writeFile(options.export, chunks, context);
+	const path = await files.writeFile(options.export, chunks, signal);
 	return { ok: true, columns, rows: tally.preview, rowCount: tally.count, export: path };
 }

@@ -9,7 +9,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { snapshotUri } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { AwsClient } from 'aws4fetch';
 import { beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
@@ -19,7 +18,6 @@ import { type S3ObjectBackendOptions, s3ObjectBackend } from '../../src/s3-entry
 import { callAs, toolOf } from '../support/backends.ts';
 
 const configPath = process.env.AMBION_S3;
-const ctx = BACKGROUND_CONTEXT;
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
 async function settings(): Promise<S3ObjectBackendOptions> {
@@ -88,14 +86,12 @@ describe.skipIf(configPath === undefined)('the object backend on MinIO', () => {
 		});
 		onTestFinished(() => workspace.dispose());
 		await workspace.use({ name: 'analyst' }, (env) =>
-			env.writeFile('/home/analyst/plan.md', 'pour on Thursday\n', ctx),
+			env.writeFile('/home/analyst/plan.md', 'pour on Thursday\n'),
 		);
 		const [ref = ''] = await workspace.snapshot(['plan.md'], { agent: { name: 'analyst' } });
 		const digest = sha256('pour on Thursday\n');
 		expect(ref).toBe(snapshotUri('lab', digest, '/home/analyst/plan.md'));
-		expect(
-			await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots', ctx)),
-		).toEqual({
+		expect(await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots'))).toEqual({
 			ok: true,
 			value: false,
 		});

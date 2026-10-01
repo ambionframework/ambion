@@ -25,7 +25,7 @@ import {
 } from '@ambionframework/ambion';
 import { memoryJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
@@ -436,7 +436,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 
 					// The file exists in the workspace, in the home of the seat. The port reads it back.
 					const note = await workspace.use({ name: 'gpt' }, (env) =>
-						env.readTextFile('/home/gpt/note.txt', BACKGROUND_CONTEXT),
+						env.readTextFile('/home/gpt/note.txt'),
 					);
 					expect(note).toMatchObject({ ok: true, value: 'pour at noon' });
 

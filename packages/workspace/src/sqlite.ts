@@ -48,7 +48,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
-import { type Context, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { Deadline } from './execution-env.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
 import type {
@@ -239,12 +238,12 @@ function lastResult(
 	statement: StatementSync,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<SqlOutcome> {
 	const columns = columnsOf(statement);
 	if (columns.length === 0) runOne(handle, statement);
 	const rows = columns.length === 0 ? [] : (statement.iterate() as Iterable<SqlRow>);
-	return sqlResult(columns, rows, options, files, context);
+	return sqlResult(columns, rows, options, files, signal);
 }
 
 /** Run every statement of `sql` in order, and give the outcome of the last one. */
@@ -253,18 +252,17 @@ async function runStatements(
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<SqlOutcome> {
 	let rest = sql;
 	while (!blank(rest)) {
-		const signal = context.abortSignal;
 		if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 		const next = prepare(handle, rest);
 		rest = next.rest;
-		if (blank(rest)) return lastResult(handle, next.statement, options, files, context);
+		if (blank(rest)) return lastResult(handle, next.statement, options, files, signal);
 		runOne(handle, next.statement);
 	}
-	return sqlResult([], [], options, files, context);
+	return sqlResult([], [], options, files, signal);
 }
 
 /** Run `body` in one transaction, and roll it back when `body` throws. */
@@ -309,14 +307,14 @@ async function runWithImport(
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<SqlOutcome> {
 	// SQLite stops reading at a NUL, so the statements after one would not run.
 	if (sql.includes('\0')) throw new Refusal('The SQL holds a NUL character. Remove it.');
-	if (options.import === undefined) return runStatements(handle, sql, options, files, context);
-	const staged = await sqlImport(options.import, files, importTable(handle.db), context);
+	if (options.import === undefined) return runStatements(handle, sql, options, files, signal);
+	const staged = await sqlImport(options.import, files, importTable(handle.db), signal);
 	if (!staged.ok) return staged;
-	const outcome = await runStatements(handle, sql, options, files, context);
+	const outcome = await runStatements(handle, sql, options, files, signal);
 	if (!outcome.ok) return outcome;
 	return { ...outcome, import: { path: staged.path, rows: staged.rows } };
 }
@@ -352,6 +350,11 @@ function resetHandle(db: DatabaseSync): string | undefined {
 	return rolledBack;
 }
 
+/** The signal that a call watches: the caller's abort keeps its reason, and the deadline adds its own. */
+function stopOf(caller: AbortSignal | undefined, deadline: AbortSignal): AbortSignal {
+	return caller === undefined ? deadline : AbortSignal.any([caller, deadline]);
+}
+
 /**
  * Run one call under its time limit, with the provenance of its options. A
  * statement error and a timeout are `ok: false` outcomes. An abort by the
@@ -363,21 +366,15 @@ async function runCall(
 	sql: string,
 	options: SqlRunOptions,
 	files: WorkspaceFiles,
-	context: Context,
+	signal: AbortSignal | undefined,
 	timeout: number,
 ): Promise<SqlOutcome> {
 	const { db, guard } = handle;
-	const deadline = new Deadline(context.abortSignal, timeout);
+	const deadline = new Deadline(signal, timeout);
 	guard.current = options.provenance;
 	let outcome: SqlOutcome;
 	try {
-		outcome = await runWithImport(
-			handle,
-			sql,
-			options,
-			files,
-			withAbortSignal(deadline.signal, context),
-		);
+		outcome = await runWithImport(handle, sql, options, files, stopOf(signal, deadline.signal));
 	} catch (error) {
 		const stop = deadline.error();
 		if (stop?.code === 'timeout') {
@@ -470,12 +467,11 @@ export function sqliteBackend(location: string, options: SqliteBackendOptions = 
 		return next;
 	};
 	const envFor = (files: WorkspaceFiles): SqlEnv => ({
-		run: (sql, runOptions, context) =>
+		run: (sql, runOptions, signal) =>
 			serial(async () => {
-				const signal = context.abortSignal;
 				if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 				handle ??= open(location, options);
-				return runCall(handle, sql, runOptions, files, context, timeout);
+				return runCall(handle, sql, runOptions, files, signal, timeout);
 			}),
 		cleanup: async () => undefined,
 	});

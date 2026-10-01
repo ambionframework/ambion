@@ -242,14 +242,17 @@ of sent to Priya. The ignored run evidence is under
 - [x] **6.** The room-host core imports none of its mechanisms. Needs 3.
       (LB6)
 - [x] **7.** No cycle of value imports. (LB7)
-- [ ] **8.** The workspace owns its port. Needs 4. (LB8)
+- [x] **8.** The workspace owns its port. Needs 4. (LB8)
 - [ ] **9.** The tests pass under full parallel load. (LB9)
 
 **Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
 one layer table and probes every pair of layers. A test fails on any cycle
 of value imports in `packages/*/src`. No source file and no `dependencies`
 field of the workspace, the workstation, or just-bash names
-`@earendil-works/*`. `pnpm check` passes, and `turbo run test --force`
+`@earendil-works/*`. Five Biome overrides refuse `@earendil-works` in those
+packages, with a probe each. `scripts/packed-consumer.test.mjs` packs the
+three packages and finds no Pi package in their tarball manifests or their
+dependency closure. `pnpm check` passes, and `turbo run test --force`
 passes five runs in a row on Linux.
 
 ## The items
@@ -560,8 +563,9 @@ The export snapshots and the changelog name every changed export.
 workspace, the workstation, or just-bash names `@earendil-works/*`. Their
 tests may reach Pi through devDependencies. The five overrides of the
 workspace, the workstation, and just-bash refuse `@earendil-works/**`,
-with a probe each. A new packed-consumer check installs the workspace
-tarball in an empty project and finds no `@earendil-works` package. The
+with a probe each. A new packed-consumer check packs the workspace tarball,
+reads its manifest and its production closure, and finds no
+`@earendil-works` package. The
 workspace conformance, the backend suites, the matrix cases, and the SN35
 lifecycle on OpenSSH pass.
 
