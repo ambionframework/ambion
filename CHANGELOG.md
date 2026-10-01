@@ -96,6 +96,26 @@ The read field `scheduled` and the tool `schedule` already used the new name.
 This renames the one remaining shape and adds no shape. The journal and the
 golden journals do not change.
 
+**The Codex binary runs with an allowlisted environment and a private
+`HOME`.** Before, `codexExecution` passed the whole environment of the host to
+`codex exec` and to `codex debug models`, with only `CODEX_HOME` replaced. The
+`env` option of `codexExecution` and `HomeOptions` changes meaning. It no
+longer replaces the environment. It lays over the allowlisted variables of
+`process.env`: a value adds or replaces a variable, and `undefined` removes
+one. The base holds the path, locale, temporary directory, proxy, and
+certificate variables, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`,
+`CODEX_CA_CERTIFICATE`, and the variables with the prefixes `OPENAI_` and
+`LC_`. On Windows the names compare without case. A secret of the host, such as a cloud key or a
+token, reaches neither the binary nor the room tools server. A provider with
+another `env_key` needs its variable in `env`.
+
+**The seat sets `HOME` and `USERPROFILE`.** Both name `home/home`, a private
+directory that `openHome` creates with the mode `0700`. `CODEX_HOME` stays
+`home`. Codex finds skills under `$HOME/.agents/skills`, so a skill of the
+host user no longer reaches the prompt of a seat. The defaults of `home` and
+`login` still read the `HOME` and the `CODEX_HOME` of the host, which are
+`process.env` with `env` laid over it. `SeatHome` gains `privateHome`.
+
 **A Codex seat has no native tools, ever.** Files and a shell come only from
 the workspace tools, behind the workspace port, so it makes no difference
 whether the workspace is in memory, a directory, or a remote workstation.
