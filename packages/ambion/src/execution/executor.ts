@@ -12,7 +12,7 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import type { FailureCause, Seq } from '../types.ts';
-import type { RoomTool, RoomToolOptions } from './room-tools.ts';
+import type { RoomTool } from './room-tools.ts';
 import type { StepSink } from './trace.ts';
 
 /** A range of the record: the messages after `after`, through `through`. */
@@ -125,8 +125,6 @@ export interface ExecutorSession {
 	 * `spec.resume`. It never reads the id.
 	 */
 	readonly session?: string;
-	/** What the executor adds to a say and a schedule. The core reads it once, on the first pass. */
-	readonly roomTools?: RoomToolOptions;
 	/**
 	 * Run one pass. A pass that throws is a failed pass: a `PermanentError`
 	 * is permanent, and every other error is transient. A pass that the cut

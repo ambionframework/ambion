@@ -488,7 +488,7 @@ refuses only `../execution/runner*`.
 Move the executor contract into the vocabulary, beside `AgentPort` in
 `protocol.ts`. The types are `Executor`, `ExecutorActivation`,
 `ExecutorSession`, `Pass`, `PassInput`, `PassRecord`, `PassResult`,
-`RoomTool`, `RoomToolOptions`, `StepSink`, `TraceSink`, and `TraceOpener`.
+`RoomTool`, `StepSink`, `TraceSink`, and `TraceOpener`.
 `execution/` keeps the driver, the room tool bodies, and the sink. Then
 make the host rule refuse `../execution/*`.
 
