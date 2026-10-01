@@ -11,6 +11,78 @@ The limits `schedule.minAfter` and `schedule.maxAfter` are now
 room and of the runtime name the new fields. The two process texts that tell
 a model to call `schedule` name `delaySeconds`. The kernel does not read a
 journal of an earlier release. The golden journals change in this one key.
+**A Claude seat has no built-in tool.** This breaks a host that set a Claude
+policy option. `ClaudePolicy` keeps `effort` and `maxBudgetUsd`. The options
+`permissionMode`, `allowedTools`, `disallowedTools`, `canUseTool`, `cwd`, and
+`additionalDirectories` are gone. The query always passes `tools: []`, an
+allow list of the tools of the seat, the mode `dontAsk`, and no permission
+callback. Its `cwd` is the `work` directory of the seat. A seat reaches files
+and a shell only through the workspace tools of its bundles. Those tools run
+behind the workspace port. The seat reaches the filesystem that the backend
+serves: memory, one directory of the host, or a remote server. The executor
+passes `toolAliases` for `Bash`, `Read`, `Write`, and `Edit`. Each alias goes
+to the tool of the seat with the matching name. An alias redirects the name
+and converts no argument.
+
+**A Claude query is verbatim.** The query passes `verbatimPrompts: true`. The
+executable read the file that an `@path` mention in a user message named. It
+did this with no tool call and no permission check, from the host
+filesystem. A participant of a room could pull any file of the host user into
+a seat. It also ran a message that started with `/` as a slash command. Each
+user message now reaches the model as written. An older executable ignores
+the mark. The executor reads the version in the `system` init message and
+fails the pass with a permanent failure when it is below 2.1.248. It then
+closes the query, so no model turn runs.
+
+**The `approval` step is gone.** No executor writes it. Pi and Codex never
+wrote it, and the Claude executor wrote it only for a permission request,
+which no seat raises now. The step vocabulary has eleven kinds, with `session`
+in the place of `approval`. The Workbench no longer draws an `approval` line.
+
+**A Claude seat has its own config home, home directory, and environment.**
+This breaks a host that relied on `claude login`. The executor sets
+`CLAUDE_CONFIG_DIR`, `HOME`, and `USERPROFILE` to directories of the seat.
+It does this after it reads `env`, so no option shares the config home of the
+host user.
+The sign-in of `claude login` cannot reach a seat. Pass `ANTHROPIC_API_KEY`,
+or the token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`.
+`claudeExecution({ configRoot })` places the seat directories at
+`<configRoot>/<room>/<seat>`. Without it, each seat gets a private
+directory in the temporary directory, and a restart loses its sessions.
+
+**The `env` option of `claudeExecution` adds variables.** This breaks a host
+that passed a whole environment. The base is the allowlisted variables of the
+host process. They are `PATH`, `HOME`, the locale, the proxy and certificate
+variables, `CLAUDE_CODE_OAUTH_TOKEN`, and the `ANTHROPIC_` and `LC_`
+prefixes. A value in `env` adds or replaces a variable, and `undefined`
+removes one. The variables of the seat win over `env`. The executor then
+removes the variables of a Claude Code session of the host. A host on
+Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*` does not
+cover must pass the variables that provider needs. The allowlist holds no
+`AWS_` or `GOOGLE_` prefix. The shell of the seat reads no file of the host
+user.
+
+**A Claude query passes a settings overlay.** The flag tier turns auto-memory
+off and empties the commit, pull request, and session-link attribution.
+`settingSources` stays empty, and the query passes `skills: []`. The executor
+also sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, which holds before any
+settings tier, and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. A managed
+`attribution` can still add text.
+
+**A failed Claude pass carries the end of the process stderr.** Every failed
+pass adds the last 2,000 characters of the stderr to the message. This holds
+for a failed result, a query that ends early, and a query that throws. A
+failed result waits 50 milliseconds for the stderr, and it settles at once
+when the process ends or `close` runs. The failure class still comes from the
+result or the original error.
+
+**The trace has a `session` step.** It records what the vendor session opened with.
+`Step` gains
+`{ type: 'session'; name; version?; model?; cwd?; session?; auth?;
+permissionMode?; tools; servers }`.
+The Claude executor records one for each `system` init message. `tools` holds
+the room tools by plain name. `servers` holds each MCP server with its
+status. `auth` names the source of the credential. Pi and Codex record none.
 
 **Three words name the three ways work ends.** A stop ends this run of the
 room, and the next run resumes from the record. `room.stop()` keeps its

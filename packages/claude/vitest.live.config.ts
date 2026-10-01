@@ -23,6 +23,8 @@ export default defineConfig({
 			},
 			{ find: '@ambionframework/journal', replacement: source('../journal/src/index.ts') },
 			{ find: '@ambionframework/pi', replacement: source('../pi/src/index.ts') },
+			{ find: '@ambionframework/just-bash', replacement: source('../just-bash/src/index.ts') },
+			{ find: '@ambionframework/workspace', replacement: source('../workspace/src/index.ts') },
 		],
 	},
 	test: {

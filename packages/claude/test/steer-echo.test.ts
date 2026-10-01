@@ -80,6 +80,10 @@ it('sends a line that lands while a later pass renders its record, and counts it
 	expect(await second).toEqual({ failed: false });
 	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: true });
 	expect(run.session.readThrough).toBe(3);
+	// The first view, the delta, and the steer reach the executable as written: no file mention, no slash command.
+	const users = run.log().filter((line) => 'user' in line);
+	expect(users).toHaveLength(3);
+	expect(users.every((line) => line.composed === true)).toBe(true);
 	run.session.close?.();
 });
 

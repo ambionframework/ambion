@@ -40,9 +40,9 @@ positioning and the current capabilities.
   and Claude adapters on fakes. The Codex adapter runs the real binary on
   a scripted model, and runs the suite live.
 - **Speech through `say` only; everything else into a trace.** Every
-  activation gives its steps to the host's logger as they happen: thinking,
-  text, tool calls, room calls, steers, approvals, and usage. The release
-  entry keeps the usage sum.
+  activation gives its steps to the host's logger as they happen. The steps
+  are thinking, text, tool calls, room calls, steers, the harness session, and
+  usage. The release entry keeps the usage sum.
 - **Artifacts by reference.** A message and a summary carry `refs`, URIs the
   kernel validates, stores, and renders, and never reads behind. A room, each
   message, each snapshot of a workspace file, and each commit of a workspace
