@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+**The workspace owns its port.** `@ambionframework/workspace`,
+`@ambionframework/workstation`, and `@ambionframework/just-bash` import no
+Pi package and declare no dependency on `@earendil-works/pi-agent-core`. A
+host with Claude or Codex seats installs no Pi package to use a workspace.
+`WorkspaceEnv` no longer extends the `ExecutionEnv` of Pi. Every member takes
+an optional `signal?: AbortSignal` in place of a Pi `Context`, and `onUpdate`
+receives one `ShellOutputView` in place of a `ShellOutputUpdate`.
+The port drops the members that nothing calls: `joinPath`, `readTextLines`,
+`openTextLineReader`, `createTempDir`, and `createTempFile`. `ShellExecResult`
+and `ShellOutputView` drop `spillPath` and `lastLineBytes`, and `capture`
+drops `spill`. These exports change on the root entry of the workspace:
+
+- Removed: `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and `tempFilePath`.
+- Added values: `ok`, `err`, `FileError`, and `ExecutionError`.
+- Added types: `Result`, `FileResult`, `FileErrorCode`, `ExecutionErrorCode`,
+  `FileInfo`, `ShellExecResult`, `ShellOutputLimits`, `ShellOutputTruncation`,
+  and `ShellOutputView`.
+- Changed: `WorkspaceExecOptions` is declared in full and no longer extends a
+  Pi type. `FileOperations.remove` takes a signal, and `makeTempDir` and
+  `makeTempFile` are removed. `deliverView` loses its `context` argument.
+  `runScript`, `SqlEnv.run`, `WorkspaceFiles`, `WorkspaceLog.append`,
+  `AuditLog.append`, `sqlImport`, and `sqlResult` take a signal in place of
+  a `Context`. `HomeEnv` drops `joinPath`, `readTextLines`, and
+  `openTextLineReader`.
+
+`workspaceConformance` drops the case for temporary names. A new check packs
+the three packages and finds no Pi package in their manifests or in their
+dependency closure.
+
+
 **Breaking: each word of the vocabulary has one meaning.** A rename pass
 gave each overloaded term one meaning. The glossary in `docs/room.md` lists
 the terms, and `scripts/vocabulary.test.mjs` refuses the old names in
@@ -56,6 +86,7 @@ The exported names change as follows.
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `ProcessRecord`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
+
 **The workspace implements its own file tools.** `read`, `write`, and
 `edit` run over the workspace port in place of the factories of Pi. They keep
 the names, the parameters, and the results of the Pi tools. A `read` of a BMP file

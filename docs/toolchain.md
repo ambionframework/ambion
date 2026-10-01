@@ -60,6 +60,14 @@ export and pack-list correctness, and on `pnpm run test` for the built
 `dist/**` that `check:types` type-checks against; neither installs a
 tarball in an external project the way the two smoke checks do.
 
+**A packed consumer of the workspace installs no Pi package.**
+`scripts/packed-consumer.test.mjs` packs the workspace, the workstation, and
+just-bash as their tarballs. It reads the manifest of each tarball, and it
+lists the production dependencies of the package from the lockfile. The
+check needs no network. It fails on a package of the scope
+`@earendil-works` in either place. Biome refuses the same imports in `src`
+of the three packages.
+
 The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.

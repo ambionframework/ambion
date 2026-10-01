@@ -242,14 +242,17 @@ of sent to Priya. The ignored run evidence is under
 - [x] **6.** The room-host core imports none of its mechanisms. Needs 3.
       (LB6)
 - [x] **7.** No cycle of value imports. (LB7)
-- [ ] **8.** The workspace owns its port. Needs 4. (LB8)
+- [x] **8.** The workspace owns its port. Needs 4. (LB8)
 - [ ] **9.** The tests pass under full parallel load. (LB9)
 
 **Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
 one layer table and probes every pair of layers. A test fails on any cycle
 of value imports in `packages/*/src`. No source file and no `dependencies`
 field of the workspace, the workstation, or just-bash names
-`@earendil-works/*`. `pnpm check` passes, and `turbo run test --force`
+`@earendil-works/*`. Five Biome overrides refuse `@earendil-works` in those
+packages, with a probe each. `scripts/packed-consumer.test.mjs` packs the
+three packages and finds no Pi package in their tarball manifests or their
+dependency closure. `pnpm check` passes, and `turbo run test --force`
 passes five runs in a row on Linux.
 
 ## The items
