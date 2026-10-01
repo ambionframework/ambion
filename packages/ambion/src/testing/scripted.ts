@@ -1,11 +1,11 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassResult,
+	RunningActivation,
 } from '../execution/executor.ts';
 import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
@@ -132,7 +132,7 @@ function failureOf(thrown: unknown): PassResult {
 }
 
 /** One activation of the scripted executor. */
-class ScriptedSession implements ExecutorSession {
+class ScriptedActivation implements RunningActivation {
 	private readonly results: ScriptResult[] = [];
 	/** Set when a closing say landed. The activation has nothing more to do. */
 	private done = false;
@@ -246,14 +246,14 @@ class ScriptedSession implements ExecutorSession {
 }
 
 /**
- * A scripted executor for one seat. It implements the `Executor` contract
- * with no model: the script says what the seat does, and the session calls
- * the room tools of the pass the way a model loop does. The executor
- * conformance suite runs it.
+ * A scripted opener for one seat. It follows the `ActivationOpener` contract
+ * with no model: the script says what the seat does, and the running
+ * activation calls the room tools of the pass the way a model loop does. The
+ * executor conformance suite runs it.
  */
-export function scriptedExecutor(script: Script, definition: AgentDefinition): Executor {
+export function scriptedOpener(script: Script, definition: AgentDefinition): ActivationOpener {
 	const counts = new Map<string, number>();
-	return (activation) => new ScriptedSession(activation, definition, script, counts);
+	return (activation) => new ScriptedActivation(activation, definition, script, counts);
 }
 
 /**
@@ -268,7 +268,7 @@ export function scripted(script: Script): Execution {
 			return localConnector(
 				host,
 				(request) => (activation) =>
-					new ScriptedSession(activation, request.definition, script, counts),
+					new ScriptedActivation(activation, request.definition, script, counts),
 			);
 		},
 	};

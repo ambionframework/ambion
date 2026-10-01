@@ -8,14 +8,7 @@ import {
 	type ExecutorPlan,
 	executorConformance,
 } from '../src/conformance.ts';
-import {
-	quiet,
-	type Script,
-	ScriptedFailure,
-	say,
-	scriptedExecutor,
-	spend,
-} from '../src/testing.ts';
+import { quiet, type Script, ScriptedFailure, say, scriptedOpener, spend } from '../src/testing.ts';
 
 /** The script that performs one plan. A script runs once for each step of a pass. */
 function scriptOf(plan: ExecutorPlan): Script {
@@ -47,10 +40,10 @@ function scriptOf(plan: ExecutorPlan): Script {
 }
 
 const fixture: ExecutorFixture = {
-	open: (plan, definition) => scriptedExecutor(scriptOf(plan), definition),
+	open: (plan, definition) => scriptedOpener(scriptOf(plan), definition),
 	can: { steer: false, usage: true, permanentFailure: true },
 };
 
-describe('scriptedExecutor', () => {
+describe('scriptedOpener', () => {
 	for (const c of executorConformance(fixture)) it(c.name, c.run);
 });

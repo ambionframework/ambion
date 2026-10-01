@@ -7,12 +7,7 @@
  */
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type {
-	AgentDefinition,
-	AgentExecutor,
-	Message,
-	ReminderSeat,
-} from '@ambionframework/ambion';
+import type { AgentDefinition, Executor, Message, ReminderSeat } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -34,7 +29,7 @@ import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createPiExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../src/executor.ts';
 import { createExecutionServices, stubModel } from '../src/index.ts';
 import {
 	defaultSessionDir,
@@ -109,7 +104,7 @@ class TwoQuestions implements RoomProtocol {
 /** The seat on compaction settings that `pi()` refuses, as a host could build it by hand. */
 const withCompaction = (compaction: CompactionSettings): AgentDefinition => {
 	const definition = scriptedAgent('product');
-	return { ...definition, executor: { ...definition.executor, compaction } as AgentExecutor };
+	return { ...definition, executor: { ...definition.executor, compaction } as Executor };
 };
 
 /** The session that the activation `message:<seq>:product:1` began. */
@@ -131,7 +126,7 @@ function seatOn(
 ) {
 	const seen: Context[] = [];
 	const errors: string[] = [];
-	const executor = createPiExecutor({
+	const opener = createPiOpener({
 		definition,
 		model: stubModel,
 		stream: scriptedStream((context, agent, request) => {
@@ -148,7 +143,7 @@ function seatOn(
 	) => {
 		const answer = await room.view(id);
 		if (!('view' in answer)) throw new Error('The room answered stale.');
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id,
 			room,
 			emit: (event) => {
@@ -165,7 +160,7 @@ function seatOn(
 		session.close?.();
 		return recorded;
 	};
-	return { seen, errors, run, executor, definition };
+	return { seen, errors, run, opener, definition };
 }
 
 const stores: [string, () => Promise<PiSessions>][] = [
@@ -260,8 +255,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('records no session for an activation that ran no pass', async () => {
-		const { executor, definition } = seatOn(new TwoQuestions(), await store());
-		const cut = stateOf(executor, definition, {
+		const { opener, definition } = seatOn(new TwoQuestions(), await store());
+		const cut = stateOf(opener, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
 		});
@@ -275,12 +270,12 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 
 	it('resolves a pass with no failure when it is cut and closed during the model request', async () => {
 		const requested = deferred();
-		const { executor, definition } = seatOn(new TwoQuestions(), await store(), async () => {
+		const { opener, definition } = seatOn(new TwoQuestions(), await store(), async () => {
 			requested.resolve();
 			await new Promise(() => {});
 			return quiet();
 		});
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id: 'message:1:product:1',
 			room: new TwoQuestions(),
 		});
@@ -399,14 +394,14 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const sessions = await store();
 		await seatOn(new TwoQuestions(), sessions).run('message:1:product:1');
 		const definition = withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 });
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
 			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions,
 		});
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
 		});

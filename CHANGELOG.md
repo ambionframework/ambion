@@ -14,6 +14,18 @@ it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
 and `Result`, so `Step` names the trace step alone. The request counter of a
 script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
 `AMBION_HARNESS`.
+**`Executor` now names one thing: the value in an agent definition.** The
+word named three things before. The hosting entry renames the function type
+`Executor` to `ActivationOpener`. It renames `ExecutorSession` to
+`RunningActivation`. The main and hosting entries rename the value type
+`AgentExecutor` to `Executor`. The hosting entry renames
+`AgentExecutorBaseOptions` to `ExecutorBaseOptions`. The `/testing` entry
+renames `scriptedExecutor` to `scriptedOpener`. The fields that hold an
+`ActivationOpener` take the name `opener`: `AgentExecutionContext.executor`
+becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
+`createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
+`createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
+`ExecutorActivation`, and `ExecutorOptions` keep their names.
 **`@ambionframework/journal` exports its entry type as `Entry`.** The
 package exported the type as `JournalEntry`. The core imported it as
 `Envelope`, and the room named its own entry union `Entry`. The stored shape
@@ -195,7 +207,7 @@ speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
 kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
 `isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
 `say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
-`AgentExecutor.speaking`. `AgentExecutor.guidance` keeps its name. The
+`Executor.speaking`. `Executor.guidance` keeps its name. The
 callback `RoomToolOptions.spoke` is now `said`. The kind string, the
 journal bodies, and the text that a model reads do not change.
 **Three names in the process and credential options change.** The option

@@ -1,6 +1,6 @@
 /**
- * The Codex executor: one activation's session, from the pass the driver
- * hands it until the activation stops.
+ * The Codex opener: it opens one running activation, which takes each pass
+ * the driver hands it until the activation stops.
  *
  * The Codex SDK owns the loop. One activation holds one Codex thread. A
  * pass runs one turn of it: the first pass sends the whole view, and a
@@ -40,13 +40,13 @@
  *   the socket and the room tools server.
  */
 import type {
+	ActivationOpener,
 	AgentDefinition,
-	Executor,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
 import {
@@ -84,8 +84,8 @@ interface CodexClientLike {
 	resumeThread(id: string, options?: ThreadOptions): CodexThreadLike;
 }
 
-/** What builds a Codex executor for one seat: its definition, and the options that run it. */
-export interface CodexExecutorOptions extends CodexExecutionOptions {
+/** What builds a Codex opener for one seat: its definition, and the options that run it. */
+export interface CodexOpenerOptions extends CodexExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** Builds the client. Absent, the SDK's own `Codex`. */
 	readonly client?: (options: CodexOptions) => CodexClientLike;
@@ -93,9 +93,9 @@ export interface CodexExecutorOptions extends CodexExecutionOptions {
 	readonly catalog?: CatalogSource;
 }
 
-/** The Codex executor. One instance per seat, for as long as the room runs. */
-export function createCodexExecutor(options: CodexExecutorOptions): Executor {
-	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
+/** The Codex opener. One instance per seat, for as long as the room runs. */
+export function createCodexOpener(options: CodexOpenerOptions): ActivationOpener {
+	return (activation: ExecutorActivation): RunningActivation => new Activation(activation, options);
 }
 
 /**
@@ -124,10 +124,10 @@ class Ending {
 }
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-class Activation implements ExecutorSession {
+class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly options: CodexExecutorOptions;
+	private readonly options: CodexOpenerOptions;
 	/** The thread Codex reported last. */
 	private reported: string | undefined;
 	/** The thread this activation asked Codex to resume. Cleared when the resume fails. */
@@ -150,7 +150,7 @@ class Activation implements ExecutorSession {
 	private home: SeatHome | undefined;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: CodexExecutorOptions) {
+	constructor(activation: ExecutorActivation, options: CodexOpenerOptions) {
 		this.activation = activation;
 		this.steps = new CodexSteps(activation.id);
 		this.definition = options.definition;

@@ -11,11 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
 	type ActivationEvent,
+	type ActivationOpener,
 	type ActivationView,
 	type AgentDefinition,
 	type CommitRequest,
 	type CommitResult,
-	type Executor,
 	ROOM_SERVER,
 	type RoomProtocol,
 	type StepSink,
@@ -30,7 +30,7 @@ import type {
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
-import { createCodexExecutor } from '../src/executor.ts';
+import { createCodexOpener } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
 import { type CodexTool, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
@@ -255,7 +255,7 @@ export function open(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createCodexExecutor({
+	const opener = createCodexOpener({
 		definition,
 		client,
 		catalog,
@@ -264,14 +264,14 @@ export function open(
 	});
 	/** The core state of one activation, as the driver opens it. */
 	const activate = (id = 'message:1:gpt:1') =>
-		new ActivationState(executor, {
+		new ActivationState(opener, {
 			id,
 			room,
 			definition,
 			emit: (event) => void events.push(event),
 			trace,
 		});
-	return { executor, steps, commits, events, activate, seen };
+	return { opener, steps, commits, events, activate, seen };
 }
 
 /** A room tools server behind a real socket, and an MCP client of it. */
@@ -297,7 +297,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 	let served: CodexTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
-	const executor: Executor = (activation) => {
+	const opener: ActivationOpener = (activation) => {
 		signal = activation.signal;
 		return {
 			pass: async (pass) => {
@@ -310,7 +310,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 			},
 		};
 	};
-	const state = new ActivationState(executor, {
+	const state = new ActivationState(opener, {
 		id: view.spec.id,
 		room,
 		definition,

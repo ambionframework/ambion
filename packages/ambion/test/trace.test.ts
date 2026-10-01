@@ -8,7 +8,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createPiExecutor } from '../../pi/src/executor.ts';
+import { createPiOpener } from '../../pi/src/executor.ts';
 import { createExecutionServices, pi, piExecution } from '../../pi/src/index.ts';
 import {
 	loggedToolResult,
@@ -17,9 +17,9 @@ import {
 	traceOpener,
 } from '../src/execution/trace.ts';
 import {
+	type ActivationOpener,
 	AgentRunner,
 	type CommitResult,
-	type Executor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
@@ -380,7 +380,7 @@ function play(
 	stream: StreamFn,
 	logger: TraceLogger = collectSteps().logger,
 	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
-	stub?: Executor,
+	stub?: ActivationOpener,
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
@@ -388,15 +388,15 @@ function play(
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
 	const events: ActivationEvent[] = [];
-	const executor =
-		stub ?? createPiExecutor({ ...services, definition: product, now: () => clock.now() });
+	const opener =
+		stub ?? createPiOpener({ ...services, definition: product, now: () => clock.now() });
 	const actor = new AgentRunner(room, {
 		clock,
 		call: hosting.limits.call,
 		definition: product,
 		room: 'played',
 		seat: 'product',
-		executor,
+		opener,
 		emit: (event) => events.push(event),
 		trace: wrap(
 			traceOpener({
@@ -529,7 +529,9 @@ describe('the steps the driver owns', () => {
 
 	it('ends a failure that names no message, and raises one error event for it', async () => {
 		const log = collectSteps();
-		const failing: Executor = () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) });
+		const failing: ActivationOpener = () => ({
+			pass: async () => ({ failed: true, cause: 'permanent' }),
+		});
 		const { actor, events } = play(
 			scriptedStream(() => quiet()),
 			log.logger,

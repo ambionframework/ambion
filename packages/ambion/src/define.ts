@@ -18,7 +18,7 @@ import type {
 	ToolResult,
 } from './bundle.ts';
 import { AmbionError } from './errors.ts';
-import type { AgentDefinition, AgentExecutor, HumanDefinition, TracePolicy } from './types.ts';
+import type { AgentDefinition, Executor, HumanDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a room and on the record. */
@@ -26,7 +26,7 @@ export interface DefineAgentOptions {
 	/** The agent's public face — injected into every participant's context as part of the roster. */
 	identity: string;
 	/** The executor this agent runs on. Build one with the executor package, such as `pi()`. */
-	executor: AgentExecutor;
+	executor: Executor;
 	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE_POLICY`. */
 	trace?: TracePolicy;
 }
@@ -51,7 +51,7 @@ function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePol
 }
 
 /** The neutral half of an executor, as an executor kind's own options declare it. */
-export interface AgentExecutorBaseOptions {
+export interface ExecutorBaseOptions {
 	/** The private half: the agent's own voice, and the home of all judgment. */
 	readonly instructions: string;
 	/** The agent's own normalized tools. */
@@ -70,7 +70,7 @@ export interface AgentExecutorBaseOptions {
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
-export interface ExecutorOptions extends AgentExecutorBaseOptions {
+export interface ExecutorOptions extends ExecutorBaseOptions {
 	readonly kind: string;
 }
 
@@ -78,8 +78,8 @@ export interface ExecutorOptions extends AgentExecutorBaseOptions {
  * The executor a definition names, narrowed to one kind and its model.
  * Throws when the executor's kind does not match.
  */
-export function executorOfKind<T extends AgentExecutor & { readonly model: string }>(
-	executor: AgentExecutor,
+export function executorOfKind<T extends Executor & { readonly model: string }>(
+	executor: Executor,
 	kind: T['kind'],
 ): T {
 	if (executor.kind === kind && 'model' in executor && typeof executor.model === 'string') {
@@ -107,7 +107,7 @@ export function pickPresent<T extends object, K extends keyof T>(
  * The neutral half of an executor: validated, flattened, and frozen. An
  * executor kind adds its own fields to the value this returns.
  */
-export function describeExecutor(options: ExecutorOptions): AgentExecutor {
+export function describeExecutor(options: ExecutorOptions): Executor {
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
 	const reminders = remindersOf(options.bundles);
@@ -165,7 +165,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
  * Capture one executor at a room boundary. The copy is deep, so a field an
  * executor kind adds, such as a model, survives without a name here.
  */
-function captureExecutor(executor: AgentExecutor): AgentExecutor {
+function captureExecutor(executor: Executor): Executor {
 	const tools = Object.freeze(
 		executor.tools.map((tool) => {
 			assertTool(tool);

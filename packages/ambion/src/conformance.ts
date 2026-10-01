@@ -20,7 +20,12 @@ import {
 } from '@ambionframework/journal/conformance';
 import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import { claims, leases, operations, pause, released, until } from './conformance-support.ts';
-import type { Executor, ExecutorActivation, ExecutorSession, Pass } from './execution/executor.ts';
+import type {
+	ActivationOpener,
+	ExecutorActivation,
+	Pass,
+	RunningActivation,
+} from './execution/executor.ts';
 import type {
 	AgentPort,
 	CommitRequest,
@@ -60,12 +65,12 @@ export interface PortFixture {
 const SAID = 'The pour is Saturday.';
 
 /**
- * An executor for an in-process fixture. One pass reads the view, then calls
+ * An opener for an in-process fixture. One pass reads the view, then calls
  * `say` once under the key `${activation}:say`, and stops. `steer` records
  * the line.
  */
-export function speakOnce(): Executor {
-	return (activation: ExecutorActivation): ExecutorSession => {
+export function speakOnce(): ActivationOpener {
+	return (activation: ExecutorActivation): RunningActivation => {
 		const lines: string[] = [];
 		return {
 			async pass({ view, tools }: Pass) {

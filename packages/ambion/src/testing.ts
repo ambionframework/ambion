@@ -21,7 +21,7 @@ export {
 	say,
 	schedule,
 	scripted,
-	scriptedExecutor,
+	scriptedOpener,
 	seat,
 	spend,
 } from './testing/scripted.ts';
