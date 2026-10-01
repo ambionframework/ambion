@@ -5,7 +5,11 @@
  * none of the fields Codex adds; the Codex executor does.
  */
 import type { AgentExecutor } from '@ambionframework/ambion';
-import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
+import {
+	type AgentExecutorBaseOptions,
+	describeExecutor,
+	pickPresent,
+} from '@ambionframework/ambion/hosting';
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/codex-sdk';
 
 /**
@@ -57,13 +61,6 @@ const POLICY = [
 	'additionalDirectories',
 ] as const;
 
-/** The policy fields the caller set. */
-function policyOf(options: CodexPolicy): CodexPolicy {
-	return Object.fromEntries(
-		POLICY.filter((key) => options[key] !== undefined).map((key) => [key, options[key]]),
-	);
-}
-
 /**
  * A network setting that Codex would not apply. Codex reads it only under
  * `workspace-write`, and with no sandbox a command has the network.
@@ -82,7 +79,7 @@ export function codex(options: CodexOptions): CodexExecutor {
 	checkNetwork(options);
 	return Object.freeze({
 		...describeExecutor({ ...options, kind: 'codex' }),
-		...policyOf(options),
+		...pickPresent(options, POLICY),
 		kind: 'codex' as const,
 		model: options.model,
 		nativeTools: options.nativeTools ?? 'none',

@@ -4,6 +4,8 @@
  * An ID is `<namespace>/<name>`. `templates` holds the read-only templates,
  * `shared` holds writable repositories common to the workspace, and every
  * other namespace is the name of an agent. No agent takes a reserved name.
+ * The file also holds the default branch and the author of the commits that
+ * a backend writes itself.
  */
 
 import type { GitCommit, GitRevision } from './git-backend.ts';
@@ -14,6 +16,12 @@ export const TEMPLATES = 'templates';
 
 /** The namespace of the repositories shared by every agent. */
 export const SHARED = 'shared';
+
+/** The default branch of a repository whose `HEAD` names none, and of every repository that a backend creates. */
+export const DEFAULT_BRANCH = 'main';
+
+/** The author of every commit that a backend writes. */
+export const BACKEND_AUTHOR = Object.freeze({ name: 'ambion', email: 'ambion@ambion.invalid' });
 
 /** The rule for the name of a repository, 1 to 64 characters, as the source of a pattern. */
 export const NAME_PATTERN = '^[a-z0-9][a-z0-9._-]{0,63}$';

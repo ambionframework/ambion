@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**`addUsage` joins the main entry.** `@ambionframework/ambion` exports
+`addUsage(total, step)`, which adds a step to a total, which may be absent.
+The core already held this function. The Pi executor held a second copy as
+`sum`. The simulator held a third as `total`. Both now call `addUsage`.
+
+**The main entry exports `ToolContent` and `contentText`.** `ToolContent` is
+one part of what a tool hands back to the model, and `ToolResult.content`
+holds a list of them. `contentText(content)` joins the text parts of such a
+list. `ToolContent` replaces `RoomToolContent`, which the hosting entry
+exported. The hosting entry no longer exports it. The content union was
+written in `bundle.ts`, in `room-tools.ts`, and in `wire.ts` of the Codex
+package. The text join was written in the core test language, twice in the
+Pi executor, and twice in the workspace.
+
+**The hosting entry holds the helpers that executor families shared.**
+`@ambionframework/ambion/hosting` adds `present`, `pickPresent`, and
+`ROOM_SERVER`. The Claude and Codex packages each held a copy of
+`ROOM_SERVER`. They each held a copy of `present`. They each held a copy of
+the policy pick, which `pickPresent` replaces.
+
+**`@ambionframework/workspace/git` exports `DEFAULT_BRANCH` and
+`BACKEND_AUTHOR`.** The just-bash and workstation backends import them.
+Each backend wrote its own copy before.
+
 **`hostingOf` returns the state of the runtime.** `hostingOf(runtime)`
 returns the runtime's own state, as an `ExecutionHost` that also holds
 `journals`, `executions`, and `evict`. Before, it built a copy with

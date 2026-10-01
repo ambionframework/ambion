@@ -11,6 +11,7 @@
  * request holds. The core keeps the position read. A user message with the
  * same text never counts: only the custom type and its details do.
  */
+import { contentText } from '@ambionframework/ambion';
 import type { ExecutorActivation, ReadRange, Seq } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, CustomMessage } from '@earendil-works/pi-agent-core';
 import { convertToLlm, createCustomMessage } from '@earendil-works/pi-agent-core';
@@ -51,7 +52,7 @@ function rangeOf(message: AgentMessage): Range | undefined {
 /** The text of a custom message. */
 function textOf(message: CustomMessage): string {
 	if (typeof message.content === 'string') return message.content;
-	return message.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+	return contentText(message.content);
 }
 
 /**

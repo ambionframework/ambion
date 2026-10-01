@@ -6,10 +6,14 @@
  * `mcp_servers` config of the client.
  */
 import { fileURLToPath } from 'node:url';
-import { type AgentExecutor, executorOfKind } from '@ambionframework/ambion/hosting';
+import {
+	type AgentExecutor,
+	executorOfKind,
+	present,
+	ROOM_SERVER,
+} from '@ambionframework/ambion/hosting';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
-import { ROOM_SERVER } from './codex-trace.ts';
 import type { CodexExecutor } from './define.ts';
 
 /** The services a Codex execution brings: where the executable is and what it runs with. */
@@ -35,13 +39,6 @@ export function codexOf(executor: AgentExecutor): CodexExecutor {
 export function serverPath(from: string | URL = import.meta.url): string {
 	const built = new URL(from).pathname.endsWith('.ts') ? 'ts' : 'mjs';
 	return fileURLToPath(new URL(`./room-tools-server.${built}`, from));
-}
-
-/** The entries of `fields` that hold a value. */
-function present<T extends object>(fields: T): Partial<T> {
-	return Object.fromEntries(
-		Object.entries(fields).filter(([, value]) => value !== undefined),
-	) as Partial<T>;
 }
 
 /**

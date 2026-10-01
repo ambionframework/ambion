@@ -8,10 +8,8 @@
  * item that Codex reports only at its end gives both steps at once.
  */
 import type { Step, Usage } from '@ambionframework/ambion';
+import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
-
-/** The name of the MCP server that holds the room tools. */
-export const ROOM_SERVER = 'ambion';
 
 /** The name a step shows for an item. A tool of the room server shows without its server. */
 function nameOf(item: ThreadItem): string {

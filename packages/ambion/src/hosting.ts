@@ -29,7 +29,7 @@
  */
 
 export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
-export { describeExecutor, executorOfKind } from './define.ts';
+export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
 export type {
 	Executor,
 	ExecutorActivation,
@@ -41,8 +41,8 @@ export type {
 	ReadRange,
 } from './execution/executor.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
-export type { RoomTool, RoomToolContent, RoomToolOptions } from './execution/room-tools.ts';
-export { toolContext } from './execution/room-tools.ts';
+export type { RoomTool, RoomToolOptions } from './execution/room-tools.ts';
+export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { StepSink, TraceOpener, TraceSink } from './execution/trace.ts';

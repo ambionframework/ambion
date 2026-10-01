@@ -9,13 +9,8 @@
  * keep their Pi fields: the harness prepares and checks the arguments, and
  * passes the signal of the run and the updates.
  */
-import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
-import type {
-	ActivationView,
-	AgentDefinition,
-	RoomTool,
-	RoomToolContent,
-} from '@ambionframework/ambion/hosting';
+import type { AmbionTool, ToolContent, ToolContext, ToolUpdate } from '@ambionframework/ambion';
+import type { ActivationView, AgentDefinition, RoomTool } from '@ambionframework/ambion/hosting';
 import { toolContext } from '@ambionframework/ambion/hosting';
 import type { AgentHarnessTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
@@ -40,7 +35,7 @@ function fromRoomTool(tool: RoomTool): PiTool {
 }
 
 /** The text of one part of a result. A room tool gives text only. */
-function textOf(part: RoomToolContent): string {
+function textOf(part: ToolContent): string {
 	return part.type === 'text' ? part.text : '';
 }
 
