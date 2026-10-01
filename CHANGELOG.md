@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**One function holds the decisions of repository registration.**
+`@ambionframework/workspace/git` exports two new names:
+`registerRepositories(steps, { templates, shared })` and the type
+`RegistrationSteps`. The function registers the templates, then the shared
+repositories, each in name order. It checks each name and each source path,
+chooses create, update, or no write, and reads each repository after a
+write. A backend supplies five storage steps: `template`, `createTemplate`,
+`updateTemplate`, `shared`, and `seedShared`. `justGitBackend` and
+`workstationGitBackend` now implement only those steps. Two behaviours of
+`justGitBackend` change. It now refuses a source path with an empty part,
+`.`, `..`, or `.git`, as `workstationGitBackend` did. Before, it stored such
+a path in the tree. It also reads each repository after its registration
+writes it, so a repository that did not land fails with its name. When an
+update step throws, the function reads the tip again. If the tip holds the
+source, another host process landed the same files, and the registration
+succeeds. Otherwise the function throws the error of the step. The
+refusal of a moved `main` in `workstationGitBackend` now reads
+`The template '<name>' did not move to its new source: git update-ref failed:
+<message>`. It is the same text as in `justGitBackend`, with the git message
+after it. The path error of a shared repository now reads
+`The shared repository '<name>' holds the path ...`.
+
 **A stop gives a process time to clean up.** `cancel`, the timeout, a
 cancel by the host, and `dispose()` now send `SIGTERM` to the process
 group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a

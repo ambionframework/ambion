@@ -154,6 +154,7 @@ it.each([
 			'hashesOf',
 			'namespaceOf',
 			'readOnly',
+			'registerRepositories',
 			'revisionOf',
 			'sameFiles',
 			'validName',

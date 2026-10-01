@@ -30,6 +30,7 @@ import {
 	byPath,
 	namespaceOf,
 	type RepositoryRegistration,
+	registerRepositories,
 	revisionOf,
 	validName,
 	writableBy,
@@ -45,13 +46,7 @@ import {
 } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
 import type { GitCredential, GitFetch, JustGitAccess } from './access.ts';
-import {
-	DEFAULT_BRANCH,
-	registerShared,
-	registerTemplates,
-	SOURCES,
-	settleAll,
-} from './registration.ts';
+import { DEFAULT_BRANCH, registrationSteps, SOURCES, settleAll } from './registration.ts';
 import { openServer, repositoryOfPath } from './server.ts';
 import type { GitStorage, OpenGitStorage, RegistryRow } from './storage.ts';
 import { signToken, type TokenClaims } from './tokens.ts';
@@ -140,8 +135,10 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 	const ready = (): Promise<Opened> => {
 		const current = open();
 		registering ??= (async () => {
-			await registerTemplates(current.store, current.server, options.templates ?? {});
-			await registerShared(current.store, current.server, options.shared ?? {});
+			await registerRepositories(registrationSteps(current.store, current.server), {
+				templates: options.templates,
+				shared: options.shared,
+			});
 			await settleAll(current.store, current.server);
 		})().catch((error: unknown) => {
 			registering = undefined;
