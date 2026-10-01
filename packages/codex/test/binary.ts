@@ -97,6 +97,8 @@ async function refusingProxy(): Promise<{ seen: string[]; url: string; close(): 
 	});
 	server.on('connect', (request, socket) => {
 		seen.push(`CONNECT ${request.url}`);
+		// A client that dies mid-CONNECT resets the socket. The refusal stands either way.
+		socket.on('error', () => undefined);
 		socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
 	});
 	await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -137,6 +139,8 @@ export interface CodexOnScript {
 	readonly home: string;
 	/** The home of the host user. Its `.codex` holds the traps. */
 	readonly hostHome: string;
+	/** The environment of the binary. A host in another process builds its execution from it. */
+	readonly env: Readonly<Record<string, string | undefined>>;
 	/** Whether the server in the config of the host started. */
 	readonly leaked: () => boolean;
 	/** The connections that the binary tried outside the loopback interface. */
@@ -193,6 +197,7 @@ export async function codexOn(
 		responses,
 		home,
 		hostHome,
+		env,
 		leaked: () => existsSync(spawned),
 		outbound: proxy.seen,
 		close: async () => {

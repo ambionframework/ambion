@@ -85,6 +85,18 @@ The word `Runtime` now names the core `Runtime` alone.
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
 
+**A Codex seat stops when its host dies.** The SDK closes the input of
+`codex exec` at once. A host that died by SIGKILL or out of memory left
+`codex exec` running, with the model request in flight. The process ran its
+turn to the end, spent on the model, and under `nativeTools: 'codex'` ran
+native commands and wrote the thread in the seat home. The room tools server
+now sends SIGTERM to its parent `codex exec` when the host socket closes or
+fails. On Linux and macOS it sends nothing when `codex exec` has exited
+first, because `ppid` is then another process. On Windows, Node cannot tell
+that the parent is gone. `codex exec` ends its native commands on SIGTERM. A test
+kills a real host in the middle of a model request and in the middle of a
+native command.
+
 **Breaking: the seat text of a Codex seat leaves the first user message.**
 The Codex SDK has no system prompt option, so the executor put the harness
 note, the mechanism, and the agent instructions in front of the view in the
