@@ -27,7 +27,7 @@ closes the query, so no model turn runs.
 
 **The `approval` step is gone.** No executor writes it. Pi and Codex never
 wrote it, and the Claude executor wrote it only for a permission request,
-which no seat raises now. The step vocabulary has ten kinds, with `session`
+which no seat raises now. The step vocabulary has eleven kinds, with `session`
 in the place of `approval`. The Workbench no longer draws an `approval` line.
 
 **A Claude seat has its own config home, home directory, and environment.**
