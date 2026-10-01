@@ -29,7 +29,7 @@ const summary = 'R-19: draft supplied; no files edited.';
 const agent = (name: string, identity: string, instructions: string) =>
 	defineAgent({ name, identity, executor: pi({ instructions, model: `scripted/${name}` }) });
 
-const isClosing = (context: Context) => {
+const isSummarizing = (context: Context) => {
 	const tools = toolNames(context);
 	return tools.length === 1 && tools[0] === 'say';
 };
@@ -56,7 +56,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		['writer:1', answer()],
 	]);
 	const stream = scriptedStream((context, name) => {
-		const closing = isClosing(context);
+		const closing = isSummarizing(context);
 		captures.push({
 			agent: name,
 			phase,
@@ -159,7 +159,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		return say('There are 8 units in stock.', 'assistant');
 	};
 	const assistant = async (context: Context) => {
-		if (isClosing(context)) return say('8 units.');
+		if (isSummarizing(context)) return say('8 units.');
 		const tail = context.messages.at(-1);
 		if (tail?.role === 'user' && lastText(context).startsWith('[')) {
 			captured = { system: context.systemPrompt ?? '', steered: lastText(context) };

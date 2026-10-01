@@ -102,7 +102,7 @@ See the [assistant contract](https://github.com/ambionframework/ambion/blob/main
 
 Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
 in the separate `bundles` field. The current `agents` list supplies every
-ordinary definition. The optional `seats` map sets initial members; definitions
+ordinary definition. The optional `seats` map sets the initial seats; definitions
 absent from that map form the reserve. If omitted, every agent starts at
 `broadcast`. Any live agent can use `seat` and `unseat`.
 Attention controls idle agents; active agents receive new context.

@@ -1,5 +1,5 @@
 /**
- * The live workflow runs a matrix on the harness. It never runs on a pull
+ * The live workflow runs a matrix on the executor kind. It never runs on a pull
  * request, because a live run costs money. The test reads the file as text.
  */
 import { readFileSync } from 'node:fs';
@@ -19,17 +19,17 @@ describe('the live workflow', () => {
 		expect(workflow).not.toContain('pull_request');
 	});
 
-	it('runs a matrix on the three harnesses', () => {
-		expect(workflow).toContain('harness: [pi, claude, codex]');
-		expect(workflow).toMatch(/AMBION_EXECUTOR: \$\{\{ matrix\.harness \}\}/);
+	it('runs a matrix on the three executor kinds', () => {
+		expect(workflow).toContain('kind: [pi, claude, codex]');
+		expect(workflow).toMatch(/AMBION_EXECUTOR: \$\{\{ matrix\.kind \}\}/);
 	});
 
-	it('gives each harness the secret it reads', () => {
-		expect(workflow).toContain("matrix.harness != 'codex' && secrets.ANTHROPIC_API_KEY");
-		expect(workflow).toContain("matrix.harness == 'codex' && secrets.CODEX_API_KEY");
+	it('gives each executor kind the secret it reads', () => {
+		expect(workflow).toContain("matrix.kind != 'codex' && secrets.ANTHROPIC_API_KEY");
+		expect(workflow).toContain("matrix.kind == 'codex' && secrets.CODEX_API_KEY");
 	});
 
-	it('skips the steps of a harness whose secret is empty', () => {
+	it('skips the steps of an executor kind whose secret is empty', () => {
 		expect(workflow).toContain("if: steps.key.outputs.present == 'true'");
 		expect(workflow).not.toMatch(/exit 1/);
 	});

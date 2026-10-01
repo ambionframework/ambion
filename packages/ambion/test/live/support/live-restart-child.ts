@@ -18,7 +18,7 @@ import {
 import { around } from '../../support/ports.ts';
 import { messagesOf, participantsOf } from '../../support/room.ts';
 import { nodeSql } from '../../support/storage.ts';
-import { executionFor, executorFor } from './harness.ts';
+import { executionFor, executorFor } from './kind.ts';
 
 const [phase, directory] = process.argv.slice(2);
 if (directory === undefined || (phase !== 'start' && phase !== 'resume')) {
