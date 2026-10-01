@@ -27,9 +27,9 @@ import {
 	type ViewResponse,
 } from '../src/hosting.ts';
 import type {
+	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
-	ExecutionEvent,
 	TraceLogger,
 	TraceStep,
 } from '../src/index.ts';
@@ -346,7 +346,7 @@ function play(
 	const services = createExecutionServices({ stream, sessions: 'memory' });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const executor =
 		stub ?? createPiExecutor({ ...services, definition: product, now: () => clock.now() });
 	const actor = new AgentRunner(room, {

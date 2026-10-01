@@ -123,7 +123,7 @@ export const saidBy = (messages: readonly Message[], name: string) =>
 /** The activations that a seat started, in order. */
 export const activationsOf = (events: readonly RoomNotification[], agent: string): string[] =>
 	events.flatMap((event) =>
-		event.type === 'activation_start' && event.agent === agent ? [event.activation] : [],
+		event.type === 'activation_start' && event.seat === agent ? [event.activation] : [],
 	);
 
 /** The failures a room reported. A live claim holds only when the list is empty. */

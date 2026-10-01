@@ -49,7 +49,7 @@ async function host(storage: Storage) {
 function started(room: Room, agent: string): Promise<void> {
 	return new Promise((resolve) => {
 		const off = room.subscribe((event) => {
-			if (event.type !== 'activation_start' || event.agent !== agent) return;
+			if (event.type !== 'activation_start' || event.seat !== agent) return;
 			off();
 			resolve();
 		});

@@ -39,7 +39,7 @@ live('a message during a turn', () => {
 			const visit = await room.visit(person);
 			const running = new Promise<void>((resolve) => {
 				room.subscribe((event) => {
-					if (event.type === 'tool_execution_start') resolve();
+					if (event.type === 'tool_call') resolve();
 				});
 			});
 			await visit.send({

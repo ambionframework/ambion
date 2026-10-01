@@ -48,7 +48,7 @@ interface CatalogEntry {
 interface Activity {
 	at: string;
 	type: string;
-	agent?: string;
+	seat?: string;
 	text: string;
 }
 type HostLifecycle =
@@ -421,15 +421,15 @@ function describeEvent(event: RoomNotification): Omit<Activity, 'at'> | undefine
 	switch (event.type) {
 		case 'error':
 		case 'delivery_error':
-			return { type: event.type, agent: event.agent, text: event.error.message };
+			return { type: event.type, seat: event.seat, text: event.error.message };
 		case 'activation_start':
-			return { type: event.type, agent: event.agent, text: 'Reading and working' };
+			return { type: event.type, seat: event.seat, text: 'Reading and working' };
 		case 'activation_end':
-			return { type: event.type, agent: event.agent, text: 'Finished activation' };
-		case 'tool_execution_start':
-			return { type: event.type, agent: event.agent, text: `Using ${event.toolName}` };
+			return { type: event.type, seat: event.seat, text: 'Finished activation' };
+		case 'tool_call':
+			return { type: event.type, seat: event.seat, text: `Using ${event.name}` };
 		case 'abandoned':
-			return { type: event.type, agent: event.agent, text: 'Retry limit reached' };
+			return { type: event.type, seat: event.seat, text: 'Retry limit reached' };
 		default:
 			return undefined;
 	}

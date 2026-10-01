@@ -149,7 +149,7 @@ export async function storedOf(
 export function assistantEnded(session: Room): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== 'assistant') return;
+			if (event.type !== 'activation_end' || event.seat !== 'assistant') return;
 			off();
 			resolve();
 		});

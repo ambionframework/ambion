@@ -62,7 +62,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		await waitForRoom(room);
 		expect(calls).toBe(cause === 'permanent' ? 1 : hostingOf(runtime).limits.activation.attempts);
 		expect(events.filter((event) => event.type === 'abandoned')).toEqual([
-			expect.objectContaining({ agent: worker.name, cause }),
+			expect.objectContaining({ seat: worker.name, cause }),
 		]);
 		const errors = events.filter((event) => event.type === 'error');
 		expect(errors.length).toBeGreaterThan(0);

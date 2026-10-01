@@ -100,7 +100,7 @@ describe('presence', () => {
 		await session.visit(andrei);
 		await waitForRoom(session);
 
-		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.agent);
+		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.seat);
 		expect(woke).toEqual(['greeter']);
 		// the roster tells every seat which of them watches for this
 		expect(contexts.at(-1)).toContain('- greeter (active, watches arrivals)');

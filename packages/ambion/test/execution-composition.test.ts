@@ -175,7 +175,7 @@ describe('the execution a room chooses', () => {
 			expect(failures.length).toBeGreaterThan(0);
 			expect(failures[0]).toMatchObject({
 				cause: 'permanent',
-				agent: 'worker',
+				seat: 'worker',
 				error: { code: 'no_execution', message: reason },
 			});
 			const seen = events.length;

@@ -41,7 +41,7 @@ live('approval', () => {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'activation_start' && e.agent === 'runner') resolve(e.activation);
+					if (e.type === 'activation_start' && e.seat === 'runner') resolve(e.activation);
 				});
 			});
 			await visit.send({
