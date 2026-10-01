@@ -41,9 +41,12 @@ export function classifyCause(input: {
 /**
  * A fault of the executor that a retry cannot clear, because the retry runs
  * the same configuration. A model that the registry does not hold is one.
- * `failedPass` gives a thrown `PermanentError` the cause `permanent`.
+ * `failedPass` gives a thrown `PermanentError` the cause `permanent`. It
+ * reads the name, so an error from a second copy of this package counts.
  */
-export class PermanentError extends Error {}
+export class PermanentError extends Error {
+	override name = 'PermanentError';
+}
 
 /**
  * A pass that threw, as a failed `PassResult`. The cause is `permanent` for
@@ -54,7 +57,7 @@ export function failedPass(thrown: unknown): PassResult {
 	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
 	return {
 		failed: true,
-		cause: error instanceof PermanentError ? 'permanent' : 'transient',
+		cause: error.name === 'PermanentError' ? 'permanent' : 'transient',
 		message: error.message,
 		error,
 	};

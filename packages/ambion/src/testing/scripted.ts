@@ -7,6 +7,7 @@ import type {
 	Pass,
 	PassResult,
 } from '../execution/executor.ts';
+import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
@@ -115,9 +116,10 @@ function answer(response: CommitResult): { text: string; over: boolean } {
 
 /** What a script that throws ends the pass with: the cause a `ScriptedFailure` names, or transient. */
 function failureOf(thrown: unknown): PassResult {
-	const error = thrown instanceof Error ? thrown : new Error(String(thrown));
-	const cause = error instanceof ScriptedFailure ? error.failure : 'transient';
-	return { failed: true, cause, message: error.message, error };
+	const result = failedPass(thrown);
+	return result.error instanceof ScriptedFailure
+		? { ...result, cause: result.error.failure }
+		: result;
 }
 
 /** One activation of the scripted executor. */

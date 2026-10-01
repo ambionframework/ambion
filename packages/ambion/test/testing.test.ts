@@ -388,6 +388,12 @@ describe('scriptedExecutor', () => {
 			new PermanentError('no model'),
 			'permanent',
 		],
+		[
+			'a permanent error of another copy of the package',
+			Object.assign(new Error('no model'), { name: 'PermanentError' }),
+			Object.assign(new Error('no model'), { name: 'PermanentError' }),
+			'permanent',
+		],
 	] as const)(
 		'reports a pass that throws %s as one failure',
 		async (_name, thrown, error, cause) => {

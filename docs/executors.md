@@ -516,7 +516,7 @@ room does with the cause.
 | An error text that names a credit, a quota, a usage limit, a credential, a login, or a permission refusal | `permanent` |
 | A status of 400, 401, 402, 403, 404, 405, or 422                                                          | `permanent` |
 | An executor fault that a retry cannot clear, such as a model that the registry does not hold              | `permanent` |
-| An error of the executor, such as a lost room call or a lost process                                      | `transient` |
+| Every other error of the executor, such as a lost room call or a lost process                             | `transient` |
 | Every other failure                                                                                       | `transient` |
 
 **One classifier serves every family.** `classifyCause({ text, status })`
@@ -528,16 +528,17 @@ current quota`, `authentication_error`, `permission_error`,
 `permission denied`, `not logged in`, and `missing bearer`. OpenAI sends a
 spent quota with a 429, and only the text tells it from a rate limit.
 
+**A status decides the cause when no text matches.** An uncertain failure
+is transient, so the room retries it.
+
 **One rule turns a thrown error into a failed pass.** `failedPass(thrown)`
 from `@ambionframework/ambion/hosting` builds the failed `PassResult`. The
 cause is `permanent` for a `PermanentError` and `transient` for every other
-value. The result always carries `error`. The core calls it when a session
-throws, and an executor calls it for a fault of its own. A fault that the
-retry meets again, because the retry runs the same configuration, is a
-`PermanentError`.
-
-**A status decides the cause when no text matches.** An uncertain failure
-is transient, so the room retries it.
+value. The rule reads the name of the error, so a second copy of the
+package gives the same cause. The result always carries `error`. The core
+calls it when a session throws, and an executor calls it for a fault of its
+own. A fault that the retry meets again, because the retry runs the same
+configuration, is a `PermanentError`.
 
 **The message of a failure names the provider's words.** A provider error
 often arrives as a status and a JSON body. `providerMessage` from
