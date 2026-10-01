@@ -53,6 +53,14 @@ The exported names change as follows.
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `ProcessRecord`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
+**The workspace implements its own file tools.** `read`, `write`, and
+`edit` run over the workspace port in place of the factories of Pi. They keep
+the names, the parameters, and the results of the Pi tools. A `read` of a BMP file
+tells the model to convert the file with bash. A workspace tool
+is a core `AmbionTool`, so the workspace needs no wrapper for a Pi tool.
+The workspace copies the truncation helpers, the shell output update, and
+the skill list that it used from Pi. It depends on `diff` for the `edit`
+patch. No export changes.
 
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,

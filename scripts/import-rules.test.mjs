@@ -161,6 +161,9 @@ const CASES = [
 	['packages/workstation/src', '@ambionframework/just-bash', true],
 	['packages/workstation/src', '@ambionframework/ambion', true],
 	['packages/workstation/src', 'node:sqlite', true],
+	['packages/workstation/src', 'just-bash/browser', true],
+	['packages/workstation/src', '@ambionframework/just-bash/git', true],
+	['packages/workstation/src', '@ambionframework/ambion/hosting', true],
 	// The just-bash backends know the workspace interface and no room.
 	['packages/just-bash/src', '@ambionframework/workspace', false],
 	['packages/just-bash/src', '@ambionframework/workspace/resource', false],
@@ -181,9 +184,14 @@ const CASES = [
 	['packages/just-bash/src/git', '@ambionframework/workspace/sqlite', true],
 	['packages/just-bash/src/git', '@ambionframework/just-bash', true],
 	['packages/just-bash/src/git', '@ambionframework/ambion', true],
+	['packages/just-bash/src/git', 'just-bash/browser', true],
+	['packages/just-bash/src/git', '@ambionframework/just-bash/git', true],
+	['packages/just-bash/src/git', '@ambionframework/ambion/hosting', true],
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],
+	['packages/journal/src', '@earendil-works/pi-ai/providers/all', true],
+	['packages/journal/src', '@ambionframework/workspace/resource', true],
 	// The core cases come from the table of layers.
 	...coreCases(),
 	// `room-host/core.ts` holds the rules of its layer, and imports no file

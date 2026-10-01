@@ -1,38 +1,15 @@
 import {
 	type AmbionTool,
-	defineTool,
 	loggedToolResult,
 	type ToolContext,
 	type ToolResult,
 } from '@ambionframework/ambion';
-import type {
-	AgentHarnessTool,
-	AgentHarnessToolInvocation,
-	ExecutionToolContext,
-} from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { AuditEntry, AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { callEnvelope } from './call-envelope.ts';
 import { bestEffort } from './log.ts';
 import type { WorkspaceResource } from './resource.ts';
-
-type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
-
-/**
- * A room owns its own idempotency through the journal, so a harness tool over
- * the workspace keeps no durable replay memo: `getMemo` reads nothing and
- * `setMemo` drops its value.
- */
-function invocationOf(callId: string): AgentHarnessToolInvocation {
-	return {
-		invocationId: callId,
-		operationId: callId,
-		turnId: callId,
-		getMemo: async () => undefined,
-		setMemo: async () => undefined,
-	};
-}
 
 /**
  * A failure that keeps the details of its result. The model reads the
@@ -132,43 +109,4 @@ export function audited(
 			return outcome.result;
 		},
 	});
-}
-
-/** Bind a Pi harness tool through the whole-operation queue of the resource. */
-function bindTool(tool: HarnessTool, use: WorkspaceResource<WorkspaceEnv>['use']): AmbionTool {
-	return defineTool({
-		name: tool.name,
-		description: tool.description,
-		parameters: tool.parameters,
-		...(tool.label === undefined ? {} : { label: tool.label }),
-		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
-		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
-		execute: async (params, ctx: ToolContext) => {
-			const context =
-				ctx.signal === undefined
-					? BACKGROUND_CONTEXT
-					: withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
-			return use(
-				ctx.agent,
-				(env) =>
-					tool.execute(
-						ctx.callId,
-						params,
-						ctx.onUpdate ?? (() => undefined),
-						{ env },
-						invocationOf(ctx.callId),
-						context,
-					),
-				ctx.signal,
-			);
-		},
-	});
-}
-
-/** Bind Pi harness tools through the whole-operation queue of the resource. */
-export function bindTools(
-	tools: readonly HarnessTool[],
-	use: WorkspaceResource<WorkspaceEnv>['use'],
-): readonly AmbionTool[] {
-	return Object.freeze(tools.map((tool) => bindTool(tool, use)));
 }

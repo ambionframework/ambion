@@ -237,7 +237,7 @@ of sent to Priya. The ignored run evidence is under
 - [x] **2.** Refuse model libraries and platform modules in every core
       layer. (LB2, #419)
 - [x] **3.** One table of the core layers drives the probes. (LB3)
-- [ ] **4.** The overrides outside the core refuse subpaths. (LB4)
+- [x] **4.** The overrides outside the core refuse subpaths. (LB4)
 - [x] **5.** The host layer imports no execution file. Needs 3. (LB5)
 - [x] **6.** The room-host core imports none of its mechanisms. Needs 3.
       (LB6)
