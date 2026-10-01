@@ -274,7 +274,7 @@ describe('a journal', () => {
 		).rejects.toThrow(/decision must return/);
 		expect(journal.entries).toEqual([]);
 		await expect(journal.append('empty', { decide: () => body(undefined) })).rejects.toThrow(
-			/\$ is a undefined/,
+			/\$ holds undefined/,
 		);
 		expect(journal.entries).toEqual([]);
 	});
@@ -412,20 +412,33 @@ describe('the entry and storage cursor', () => {
 		expect(journal.entries).toEqual([]);
 	});
 
+	const sparse = [1];
+	sparse[2] = 3;
+	const shared = { n: 1 };
+	const cycle: Record<string, unknown> = {};
+	cycle.self = cycle;
 	it.each([
-		['a undefined field', { to: undefined }, /\$\.to is undefined/],
-		['a Date', { at: new Date() }, /\$\.at is a Date/],
-		['a Map', { seats: new Map() }, /is a Map/],
-		['a bigint', { count: 1n }, /is a bigint/],
+		['an undefined field', { to: undefined }, /\$\.to holds undefined/],
+		['a Date', { at: new Date() }, /\$\.at holds an instance of Date/],
+		['a Map', { seats: new Map() }, /holds an instance of Map/],
+		['a bigint', { count: 1n }, /holds a bigint/],
 		['a NaN', { expiry: Number.NaN }, /finite/],
-		['a function', { fire: () => {} }, /is a function/],
-		['an Error', { error: new Error('boom') }, /is a Error/],
-		['a nested undefined', { list: [{ gone: undefined }] }, /\$\.list\.0\.gone is undefined/],
-	])('names the path of %s, and accepts the JSON around it', (_name, value, refusal) => {
+		['a function', { fire: () => {} }, /holds a function/],
+		['an Error', { error: new Error('boom') }, /holds an instance of Error/],
+		['a nested undefined', { list: [{ gone: undefined }] }, /\$\.list\.0\.gone holds undefined/],
+		['a sparse array', { list: sparse }, /\$\.list\.1 holds undefined/],
+		['a cycle', cycle, /\$\.self is a cycle/],
+	])('refuses %s with the path of the fault', (_name, value, refusal) => {
 		expect(() => assertJson(value)).toThrow(refusal);
-		expect(() =>
-			assertJson({ text: 'a', n: 1, ok: true, none: null, list: [{ deep: [] }] }),
-		).not.toThrow();
+	});
+
+	it.each([
+		['a plain tree', { text: 'a', n: 1, ok: true, none: null, list: [{ deep: [] }] }],
+		['an own key named constructor', { constructor: { name: 'Date' } }],
+		['a shared reference', { left: shared, right: shared, list: [shared, shared] }],
+		['an object with no prototype', Object.assign(Object.create(null), { a: 1 })],
+	])('accepts %s', (_name, value) => {
+		expect(() => assertJson(value)).not.toThrow();
 	});
 
 	it('does not replay an entry when its reaction throws after the cursor advances', async () => {

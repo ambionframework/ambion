@@ -223,7 +223,7 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 			activation,
 			key: 'original',
 			readThrough: response.view.through,
-			intent: { kind: 'said', text: 'Original contribution.' },
+			intent: { kind: 'said', text: 'Original contribution.', to: undefined },
 		};
 		const request = structuredClone(original);
 		const committing = calls.commit(request);
