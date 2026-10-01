@@ -2,14 +2,19 @@
  * Native tools off. The seat reaches the world only through the room tools
  * and the tools the application gives it.
  *
- * Codex 0.155.1 gives a seat native tools that no sandbox setting removes.
- * Code Mode, a JavaScript runtime, reads host files under a read-only
- * sandbox with no network. The model catalog turns it on, so a feature flag
- * cannot turn it off. A custom catalog can. This file holds the recipe:
+ * Codex gives a seat native tools that no sandbox setting removes. Code
+ * Mode, a JavaScript runtime, read host files under a read-only sandbox
+ * with no network on 0.155.1. On 0.158.0 the catalog entry of the model
+ * still lists the Code Mode tools `exec` and `wait` when every feature is
+ * off. The model catalog turns Code Mode on, so a feature flag cannot turn
+ * it off. A custom catalog can. This file holds the recipe, and its
+ * facts belong to Codex 0.158.0:
  *
  * 1. `exclusiveEntry` patches the catalog entry of the model.
- * 2. `exclusiveConfig` turns off every feature and tool the config controls.
- * 3. `Scratch` holds the patched catalog and an empty working directory.
+ * 2. `exclusiveConfig` turns off every feature and tool the config controls,
+ *    and the skills block.
+ * 3. `Scratch` holds the patched catalog, the instructions file of the seat,
+ *    and an empty working directory.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,16 +29,20 @@ const run = promisify(execFile);
 /** One model of the catalog that `codex debug models` prints. The executor reads only `slug`. */
 export type CatalogEntry = Readonly<Record<string, unknown>> & { readonly slug: string };
 
-/** The catalog fields that give a model a native tool, and the value that removes it. */
+/**
+ * The catalog fields that give a model a native tool, and the value that removes it.
+ * The patch leaves `input_modalities` and `supports_image_detail_original` as the
+ * entry has them. An image from a tool of the seat then reaches a model that reads
+ * images. No native tool reads an image, because the `view_image` feature is off.
+ * A model with no image input stays text-only, and Codex shows a placeholder.
+ */
 const NO_NATIVE_TOOLS = {
 	tool_mode: null,
 	apply_patch_tool_type: null,
-	input_modalities: ['text'],
 	supports_search_tool: false,
 	experimental_supported_tools: [],
 	node_repl_disabled: true,
 	multi_agent_version: null,
-	supports_image_detail_original: false,
 	include_apps_usage_instructions: false,
 	include_plugin_usage_instructions: false,
 	include_skills_usage_instructions: false,
@@ -44,7 +53,29 @@ export function exclusiveEntry(entry: CatalogEntry): CatalogEntry {
 	return { ...entry, ...structuredClone(NO_NATIVE_TOOLS) };
 }
 
-/** The features of Codex 0.155.1 that give a seat a native tool. Each is off. */
+/**
+ * The features of Codex 0.158.0 that give a seat a native tool, or that act
+ * on the host or the network. Each is off.
+ * `shell_snapshot` runs the shell of the host user at the start of a session
+ * and writes its environment to a file in the seat home. `daemon_auto_start`
+ * starts a background server on the host, `workspace_dependencies` fetches
+ * runtime dependencies, `worktrees` creates Git worktrees, and
+ * `realtime_conversation` opens a voice session on the network. `memories`
+ * writes notes from past threads outside the journal and reads them into a
+ * later prompt. It is off by default. The entry stops the `config.toml` of
+ * the seat home from turning it on. These features give no tool, and a seat
+ * has no use for them.
+ *
+ * The features that stay on by default give no tool and reach nothing:
+ * the app features (`in_app_chat`, `in_app_dictation`,
+ * `in_app_local_automation`, `in_app_updates`, `mentions_v2`), the approval
+ * features (`guardian_approval`, `guardian_reuse_parent_compaction`,
+ * `write_stdin_approval`), the wire features (`compaction_image_budget`,
+ * `content_item_kinds`, `enable_request_compression`,
+ * `system_proxy_fallback`, `unbounded_connection_retries`),
+ * `auth_elicitation`, and `fast_mode`. A feature that is off by default
+ * stays off unless the `config.toml` of the seat home turns it on.
+ */
 export const EXCLUSIVE_FEATURES: readonly string[] = [
 	'shell_tool',
 	'apps',
@@ -77,7 +108,22 @@ export const EXCLUSIVE_FEATURES: readonly string[] = [
 	'code_mode_prewarm',
 	'tool_call_mcp_elicitation',
 	'skill_mcp_dependency_install',
+	'shell_snapshot',
+	'daemon_auto_start',
+	'workspace_dependencies',
+	'worktrees',
+	'realtime_conversation',
+	'memories',
 ];
+
+/**
+ * The skills of Codex off. The `skills_instructions` developer message lists
+ * the system skills with absolute paths in the seat home, even when the
+ * catalog entry has `include_skills_usage_instructions: false`.
+ * `include_instructions` removes that message. `bundled.enabled` stops Codex
+ * from installing the system skills in the home.
+ */
+const NO_SKILLS = { include_instructions: false, bundled: { enabled: false } } as const;
 
 /** The bundled JavaScript REPL server. Codex adds it beside the servers the config names. */
 export const NODE_REPL = 'node_repl';
@@ -85,14 +131,22 @@ export const NODE_REPL = 'node_repl';
 /** The server entry that disables the bundled `node_repl` by name. */
 export const NODE_REPL_OFF = { command: 'true', enabled: false } as const;
 
-/** The config keys of the client that turn off the native tools. `mcp_servers` is separate. */
+/**
+ * The config keys of the client that turn off the native tools and the
+ * traffic and the state that a seat does not need: the update check, the
+ * analytics, the feedback upload, and the memories. `mcp_servers` is separate.
+ */
 export function exclusiveConfig(catalogPath: string): Record<string, unknown> {
 	return {
 		model_catalog_json: catalogPath,
 		features: Object.fromEntries(EXCLUSIVE_FEATURES.map((name) => [name, false])),
 		web_search: 'disabled',
+		check_for_update_on_startup: false,
+		analytics: { enabled: false },
+		feedback: { enabled: false },
+		memories: { generate_memories: false, use_memories: false },
+		skills: structuredClone(NO_SKILLS),
 		tools: {
-			view_image: false,
 			update_plan: { enabled: false },
 			experimental_request_user_input: { enabled: false },
 		},
@@ -145,24 +199,29 @@ function codexBinary(codexPath?: string): string {
 	return found;
 }
 
-/** The catalogs that `codex debug models` printed, by binary. A failed run leaves no entry. */
+/** The catalogs that `codex debug models` printed, by binary and environment. A failed run leaves no entry. */
 const catalogs = new Map<string, Promise<readonly CatalogEntry[]>>();
 
 /** How long `codex debug models` may run. A hung binary would hold the first pass for ever. */
 const CATALOG_TIMEOUT_MS = 30_000;
 
-/** Run `codex debug models` once for each binary in this process. */
+/**
+ * Run `codex debug models` once for each binary and environment in this
+ * process. The environment holds the Codex home, so two homes keep two
+ * catalogs.
+ */
 function catalogOf(
 	binary: string,
-	env: Readonly<Record<string, string | undefined>> | undefined,
+	env: Readonly<Record<string, string>>,
 	timeout: number,
 ): Promise<readonly CatalogEntry[]> {
-	const cached = catalogs.get(binary);
+	const key = JSON.stringify([binary, Object.entries(env).sort()]);
+	const cached = catalogs.get(key);
 	if (cached !== undefined) return cached;
 	const pending = run(binary, ['debug', 'models'], {
 		maxBuffer: 256 * 1024 * 1024,
 		timeout,
-		env: { ...process.env, ...env },
+		env: { ...env },
 	}).then(({ stdout }) => {
 		try {
 			const parsed = JSON.parse(stdout) as { models?: readonly CatalogEntry[] };
@@ -171,18 +230,21 @@ function catalogOf(
 			throw new Error(`'${binary} debug models' printed text that is not JSON.`);
 		}
 	});
-	catalogs.set(binary, pending);
-	pending.catch(() => catalogs.delete(binary));
+	catalogs.set(key, pending);
+	pending.catch(() => catalogs.delete(key));
 	return pending;
 }
 
 /** What answers the catalog entry of a model. The executor takes one so a test can supply the entries. */
 export type CatalogSource = (model: string) => Promise<CatalogEntry | undefined>;
 
-/** The catalog entry of `model` from the installed binary, or nothing when the catalog has none. */
+/**
+ * The catalog entry of `model` from the installed binary, or nothing when
+ * the catalog has none. `env` is the whole environment of the binary.
+ */
 export function installedCatalog(
 	codexPath: string | undefined,
-	env: Readonly<Record<string, string | undefined>> | undefined,
+	env: Readonly<Record<string, string>>,
 	timeout: number = CATALOG_TIMEOUT_MS,
 ): CatalogSource {
 	return async (model) => {
@@ -200,15 +262,17 @@ function removeAll(): void {
 	open.clear();
 }
 
-/** A patched catalog and an empty working directory, for one activation. */
+/** A patched catalog, the instructions file of the seat, and an empty working directory, for one activation. */
 export class Scratch {
 	/** The path of the patched catalog. */
 	readonly catalog: string;
+	/** The path of the file that holds the seat text. Codex reads it in place of its own base prompt. */
+	readonly instructions: string;
 	/** An empty directory, so no host file is the default context. */
 	readonly directory: string;
 	private readonly root: string;
 
-	constructor(entry: CatalogEntry) {
+	constructor(entry: CatalogEntry, instructions: string) {
 		this.root = mkdtempSync(join(tmpdir(), 'ambion-codex-'));
 		open.add(this.root);
 		if (!hooked) {
@@ -216,9 +280,11 @@ export class Scratch {
 			process.once('exit', removeAll);
 		}
 		this.catalog = join(this.root, 'models.json');
+		this.instructions = join(this.root, 'instructions.md');
 		this.directory = join(this.root, 'work');
 		mkdirSync(this.directory);
 		writeFileSync(this.catalog, JSON.stringify({ models: [exclusiveEntry(entry)] }));
+		writeFileSync(this.instructions, instructions);
 	}
 
 	/** Remove both. Safe to call again. */
@@ -228,14 +294,18 @@ export class Scratch {
 	}
 }
 
-/** The scratch for `model`. A model with no catalog entry fails as permanent, so native tools never stay on. */
-export async function scratchFor(model: string, source: CatalogSource): Promise<Scratch> {
+/** The scratch for `model`, with the seat text in its instructions file. A model with no catalog entry fails as permanent, so native tools never stay on. */
+export async function scratchFor(
+	model: string,
+	source: CatalogSource,
+	instructions: string,
+): Promise<Scratch> {
 	const entry = await source(model);
 	if (entry === undefined) {
 		throw new PermanentError(
-			`The model '${model}' has no entry in the Codex catalog, and nativeTools 'none' needs one. ` +
-				`Set nativeTools: 'codex', or use a model that 'codex debug models' lists.`,
+			`The model '${model}' has no entry in the Codex catalog, and a Codex seat needs one. ` +
+				`Use a model that 'codex debug models' lists.`,
 		);
 	}
-	return new Scratch(entry);
+	return new Scratch(entry, instructions);
 }

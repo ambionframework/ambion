@@ -1,6 +1,6 @@
 # Sensors
 
-> **Sensor reads require a backend with ports.** Such a workspace exposes
+> **Sensor reads require a backend with endpoints.** Such a workspace exposes
 > `connect` and `observe`. Observation reads use the connected server, retain
 > verified bytes and the manifest through snapshots, and export the result
 > into the observing agent's home. The version 1 schemas and client are
@@ -34,7 +34,7 @@ be stateful. The API prescribes no internal storage or checkpoint format.
 | Connect        | Call `connect` with that handle and port               | Qualified sensor names in the workspace              |
 | Observe        | Call `observe`, then cite its snapshot ref             | Retained measurements and files                      |
 | Revise or stop | Cancel; edit, validate, save, and start again          | An explicit replacement or an inactive sensor        |
-| Roll back      | Stop; check out a previous commit and start it         | A previous implementation, with a new process handle |
+| Roll back      | Cancel; check out a previous commit and start it       | A previous implementation, with a new process handle |
 
 **A branch holds ongoing work; a commit identifies a saved version.**
 Pushing code does not change an already-running server. Template updates
@@ -67,7 +67,7 @@ flowchart LR
 | Repository, launch command, installation, source configuration | Server implementation and the agent that manages it |
 | Acquisition, reducer state, measurements, history              | Server implementation                               |
 | Process handle, status, timeout, cancellation, adoption        | Existing workspace process table                    |
-| Workstation hostname, SSH credentials, port transport          | Workstation backend                                 |
+| Workstation hostname, SSH credentials, endpoints               | Workstation backend                                 |
 | Connection names, sensor discovery, observation rendering      | Workspace                                           |
 | Retained evidence bytes and snapshot refs                      | Existing workspace object store                     |
 | Messages and collaboration                                     | Room                                                |
@@ -136,13 +136,13 @@ observe({ sensor: 'bench/room-temperature' });
 ```
 
 The `fork` and process commands use existing workspace tools. `connect` and
-`observe` are available on a backend with ports.
+`observe` are available on a backend with endpoints.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
 Each successful latest-read request appends an observation record. Its
 fixtures declare `spans: false`, so a span request returns 422. Cancelling
-the process stops the server through the existing process group mechanism.
+the process ends the server through the existing process group mechanism.
 
 **Stop before editing the files used by a running version.** The template
 uses no hot reload. After a change, start a new process and reconnect.
@@ -164,7 +164,7 @@ namespace and a Git repository name. A commit uses a full lowercase
 later does not relabel an earlier observation as a clean run. Validate,
 commit, push, and restart to produce a saved working version.
 
-**Rollback selects code, not acquisition data.** Stop the current process,
+**Rollback selects code, not acquisition data.** Cancel the current process,
 check out a previous commit, and run it again. This template writes its
 initial acquisition to `acquisition.json` once, appends successful requests
 to `observations.jsonl`, and stores frame bytes under `blobs/<sha256>`. The
@@ -181,7 +181,7 @@ its lifetime. Child acquisition programs belong to that process group.
 
 **Existing process behavior stays in force.** The default timeout is
 600 seconds. A long session therefore supplies an explicit timeout,
-as above. `connect` changes no timeout. A workspace disposal stops its
+as above. `connect` changes no timeout. A workspace disposal cancels its
 managed processes. A crash can leave a workstation process available for
 adoption. [Processes](processes.md) states these rules.
 
@@ -226,7 +226,7 @@ interface ConnectInput {
 - `port` is an integer from 1 through 65535 on the workstation.
 
 **The workspace checks readiness before registering the connection.** It
-checks that the caller owns a running process, opens the port transport, and
+checks that the caller owns a running process, opens the endpoint, and
 reads the server index through `createSensorClient`. It validates API
 version 1, launch source metadata, unique sensor names, and the listed names.
 It checks the same process again before committing. A failure closes the
@@ -266,11 +266,20 @@ agent reads `ps`, adopts a surviving process through the existing table,
 and calls `connect` again. This avoids a second durable service registry.
 
 **A process end makes its connection unavailable.** The process table's end
-event or a process check marks it unavailable and closes its port transport.
-The registry remembers the ended process identity for this host run, so a
-stale read cannot revive it. Reconnecting a replacement is an explicit owner
-call and does not reuse the old registration's transport. A listener that
-later reuses the port is never attached silently.
+event or a process check marks it unavailable and closes its endpoint.
+The process table remembers each process it saw end for this host run, so a
+stale read cannot revive it. The table has no record of a process that ended
+in an earlier host run. For such a process, `connect` reads the state on each
+call and refuses any state other than `running`.
+
+**A connect can commit before the table records an end.** The process writes
+its exit, and the table records the end later. The `ended` event then marks
+that connection unavailable at once, as for a process that ends just after
+`connect` returns.
+
+**A replacement is an explicit owner call.** It does not reuse the old
+registration's transport. A listener that later reuses the port is never
+attached silently.
 
 **Sensor readers use one internal registry boundary.** The source
 module `sensor-connections.ts` exposes
@@ -290,37 +299,38 @@ give the configured workstation hostname. They distinguish the remote
 sensor port from the SSH login port and any local transport address.
 The agent does not need to construct a tunnel command.
 
-**The bash backend exposes one optional port capability.** This transport
+**The bash backend exposes one optional endpoint capability.** This transport
 contract is separate from its existing environment `connect` method:
 
 ```ts
-interface WorkspacePort {
+interface WorkspaceEndpoint {
   readonly url: string; // private HTTP root reachable by the host
   close(): Promise<void>;
 }
 
-interface WorkspacePorts {
-  readonly hostname: string; // the machine where workspace commands run
-  open(
+interface WorkspaceEndpoints {
+  readonly machine: string; // the machine where workspace commands run
+  forward(
     agent: { readonly name: string },
     port: number,
     signal?: AbortSignal,
-  ): Promise<WorkspacePort>;
+  ): Promise<WorkspaceEndpoint>;
 }
 
-// Optional member of BashBackend:
-// readonly ports?: WorkspacePorts;
+// Optional property of BashBackend:
+// readonly endpoints?: WorkspaceEndpoints;
 ```
 
 **The workstation implements the capability through SSH forwarding.**
-`hostname` is the configured workstation hostname. The `port` argument is
+`machine` is `WorkstationOptions.server`, the configured workstation hostname.
+The `port` argument is
 the remote HTTP service port on workstation `127.0.0.1`. `WorkstationOptions.port`
 is the SSH login port. The remote service port must be an integer from 1 to 65535. The returned URL uses a private host loopback address and an
 automatically assigned local port. It contains no SSH credentials and is
 temporary. It is not a ref or stored identity. The transport reuses the
 process owner's credentials and host-key verification.
 
-**The caller owns the open transport.** `open` holds an SSH session reference
+**The caller owns the open transport.** `forward` holds an SSH session reference
 until `close` completes. Its optional signal cancels establishment and releases
 partial resources. After success, the caller must call `close`. Closing is
 safe more than once. An aborted request does not close this shared transport.
@@ -341,7 +351,7 @@ arbitrary TCP listener belongs to that PID. This initial deployment
 trusts the workstation and the server implementation supplied by its
 owner. Agents that manage the server code also control that code.
 
-**Backends without ports expose no sensor tools.** The just-bash
+**Backends without endpoints expose no sensor tools.** The just-bash
 backends do not gain a real network or a native server runtime. A
 host-side daemon fixture can test the protocol in isolation. The actual
 process-to-sensor path must pass on the workstation backend.
@@ -564,10 +574,11 @@ short description and an exported data path. File parts render as paths.
 Source text is marked as sensor data. The audit entry holds the request,
 connection facts, and the returned snapshot ref.
 
-**Text-only executors receive paths for images.**
-`workspace.tools({ images: false })` disables image rendering for that
-bundle. It changes no wire request and drops no retained bytes. The
-initial `observe` schema has no per-call image override.
+**Every image result states its path as text.** A frame returns as an
+image part, and the text of the result names its export path. A model that
+cannot read images, such as a model with no image input, still learns where
+the file is. The bundle has one form for every executor. The `observe`
+schema has no image option.
 
 ## Failure and lifecycle
 
@@ -598,7 +609,7 @@ validates it, commits, and pushes a branch. It starts the saved version,
 connects through SSH, observes the changed result, and cites its snapshot.
 A second agent restores the evidence in its own home.
 
-**Replacement and rollback are part of acceptance.** The run stops the
+**Replacement and rollback are part of acceptance.** The run cancels the
 server, saves and starts another version, and observes its changed result.
 It then starts the earlier commit and observes the earlier behavior.
 The snapshots of both versions remain readable after both processes stop,
@@ -627,7 +638,7 @@ Git repositories.
 - Frame, series, text, and file bytes survive server and host shutdown.
 - A failed file fetch or snapshot write cannot produce a successful result.
 - Measurement timestamps remain unchanged, including in snapshots.
-- A text-only bundle retains images and returns their paths.
+- A frame result holds the image part and the export path in its text.
 
 **A scripted seat proves transport and storage.** One optional live case
 checks that a model follows the workflow and cites the returned ref.

@@ -107,7 +107,7 @@ live('a workspace picture', () => {
 		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
-			e.type === 'tool_execution_start' && e.agent === 'curator' ? [e.toolName] : [],
+			e.type === 'tool_call' && e.seat === 'curator' ? [e.name] : [],
 		);
 		expect(tools).toContain('read');
 		const answer = saidBy((await session.read()).messages, 'curator');

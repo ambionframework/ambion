@@ -49,11 +49,12 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Repl
 ];
 
 /** A reply that calls `say`, to one seat or to the room. */
-export const speak = (text: string, to?: string): Reply =>
+export const say = (text: string, to?: string): Reply =>
 	callTool('say', to ? { to, text } : { text });
 
 /** A reply that calls `schedule`: the room wakes the seat with the say after `after` seconds. */
-export const later = (text: string, after: number): Reply => callTool('schedule', { text, after });
+export const schedule = (text: string, after: number): Reply =>
+	callTool('schedule', { text, after });
 
 /** A reply that calls `seat`: the seat puts the named agent in the room. */
 export const seat = (name: string): Reply => callTool('seat', { name });
@@ -91,7 +92,8 @@ export const byAgent = <Input = Step, Out = Reply>(
 };
 
 /** True when the view asks for the summary of a closed exchange. */
-export const isClosing = (view: ActivationView): boolean => view.spec.purpose.kind === 'summarize';
+export const isSummarizing = (view: ActivationView): boolean =>
+	view.spec.purpose.kind === 'summarize';
 
 /** The room tools a script calls by name. Every other call names a tool of the agent. */
 const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
@@ -159,7 +161,7 @@ class ScriptedActivation implements RunningActivation {
 
 	async pass(pass: Pass): Promise<PassResult> {
 		// The script reads the whole view, so the pass reads the record through it.
-		const after = pass.kind === 'delta' ? pass.since : 0;
+		const after = pass.kind === 'delta' ? pass.after : 0;
 		this.activation.read({ after, through: pass.view.through });
 		try {
 			while (!this.over) {
@@ -207,7 +209,7 @@ class ScriptedActivation implements RunningActivation {
 		// answer itself, so the answer comes from beside the result.
 		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
 		const outcome = answer(response);
-		if (isClosing(pass.view) && outcome.text === 'delivered') this.done = true;
+		if (isSummarizing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
 	}
 

@@ -19,7 +19,7 @@ const view = (room: string, messages: Message[]): TestView => ({ name: room, mes
 
 interface Read {
 	room: string;
-	since: number;
+	after: number;
 	resolve: (value: TestView) => void;
 	reject: (error: Error) => void;
 }
@@ -31,9 +31,9 @@ interface Read {
 function heldFeed(selected = true) {
 	const reads: Read[] = [];
 	const source: FeedSource<TestView> = {
-		read: (room, since) =>
+		read: (room, after) =>
 			new Promise<TestView>((resolve, reject) => {
-				reads.push({ room, since, resolve, reject });
+				reads.push({ room, after, resolve, reject });
 			}),
 	};
 	const feed = new RoomFeed<TestView>(source);
@@ -54,7 +54,7 @@ describe('RoomFeed', () => {
 		expect(seqs(feed)).toEqual([2, 4]);
 
 		const next = feed.refresh();
-		expect(reads[1]?.since).toBe(4);
+		expect(reads[1]?.after).toBe(4);
 		reads[1]?.resolve(view('bringup', [said(4), said(6)]));
 		await next;
 		expect(seqs(feed)).toEqual([2, 4, 6]);
@@ -65,7 +65,7 @@ describe('RoomFeed', () => {
 		const stale = feed.refresh();
 		feed.select('power');
 		const current = feed.refresh();
-		expect(reads.map((read) => [read.room, read.since])).toEqual([
+		expect(reads.map((read) => [read.room, read.after])).toEqual([
 			['bringup', 0],
 			['power', 0],
 		]);

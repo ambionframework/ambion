@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { quiet, speak } from '../../ambion/test/support/scripted.ts';
+import { quiet, say } from '../../ambion/test/support/scripted.ts';
 import { openWorkspace } from '../src/index.ts';
 import { callAs, toolOf, wrapped } from './support/backends.ts';
 import { agent, run } from './support/room.ts';
@@ -19,14 +19,14 @@ describe('sensor discovery in the activation reminder', () => {
 			name: 'sensor-reminder',
 			backend: {
 				bash: wrapped((inner) => ({
-					ports: {
-						hostname: 'configured-workstation',
-						async open(_agent, port) {
+					endpoints: {
+						machine: 'configured-workstation',
+						async forward(_agent, port) {
 							const url = port === 43127 ? firstServer.url : secondServer.url;
 							return { url, async close() {} };
 						},
 					},
-					connect(agent, signal, services) {
+					connect(agent, signal) {
 						if (hangOwnerStatus && agent.name === 'owner')
 							return new Promise((_, reject) => {
 								if (signal?.aborted) reject(signal.reason);
@@ -34,7 +34,7 @@ describe('sensor discovery in the activation reminder', () => {
 							});
 						if (failOwnerStatus && agent.name === 'owner')
 							return Promise.reject(new Error('owner process status failed'));
-						return inner.connect(agent, signal, services);
+						return inner.connect(agent, signal);
 					},
 				})),
 			},
@@ -94,7 +94,7 @@ describe('sensor discovery in the activation reminder', () => {
 				activeRoomContext.push(
 					`${context.systemPrompt ?? ''}\n${JSON.stringify(context.messages)}`,
 				);
-				return call === 1 ? speak('done') : quiet();
+				return call === 1 ? say('done') : quiet();
 			},
 		});
 		expect(activeRoomContext.join('\n')).toContain('bench-one/bench: Bench fixture.');
@@ -167,7 +167,7 @@ describe('sensor discovery in the activation reminder', () => {
 		await run([agent('observer', { bundles: [workspace.tools()] })], {
 			observer: (context, _name, call) => {
 				roomContext.push(`${context.systemPrompt ?? ''}\n${JSON.stringify(context.messages)}`);
-				return call === 1 ? speak('done') : quiet();
+				return call === 1 ? say('done') : quiet();
 			},
 		});
 		expect(roomContext.join('\n')).toContain('remote port 43127: unavailable');

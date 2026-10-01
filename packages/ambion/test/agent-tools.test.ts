@@ -30,7 +30,14 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, callTool, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
+import {
+	byAgent,
+	callTool,
+	type PiScript,
+	quiet,
+	say,
+	scriptedStream,
+} from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -289,7 +296,10 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, 
 			summary: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },
 			agents: [worker({ tools: [probe], bundles: [bundle] }), assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({ worker: script })) }),
+			execution: piExecution({
+				sessions: 'memory',
+				stream: scriptedStream(byAgent({ worker: script })),
+			}),
 		}),
 	);
 	const events = collect(room);
@@ -310,7 +320,7 @@ describe('a running tool', () => {
 				prompts.push(context.systemPrompt ?? '');
 				reads.push(JSON.stringify(context.messages));
 				if (call <= 2) return callTool('probe', {});
-				return call === 3 ? speak('done') : quiet();
+				return call === 3 ? say('done') : quiet();
 			},
 			true,
 		);
@@ -333,7 +343,7 @@ describe('a running tool', () => {
 			expect(ctx.deadline).toBeLessThanOrEqual(Date.now() + 600_000);
 		}
 		const starts = events.filter(
-			(event) => event.type === 'activation_start' && event.agent === 'worker',
+			(event) => event.type === 'activation_start' && event.seat === 'worker',
 		);
 		expect(starts.map((event) => 'activation' in event && event.activation)).toEqual([activation]);
 		expect(frozen).toEqual([true, true]);

@@ -20,13 +20,13 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { Entry as RoomEntry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases, within } from './support/chaos.ts';
 import { mulberry32 } from './support/core-failure.ts';
 import { replayState } from './support/fold.ts';
-import { type Entry, History, standing, violations } from './support/history.ts';
+import { History, type HistoryEntry, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import { type Fault, faulty, type Operation, serializing } from './support/ports.ts';
 import {
@@ -37,7 +37,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 
 const OPERATIONS: Operation[] = ['wake', 'steer', 'cut', 'view', 'commit', 'lease'];
@@ -91,7 +91,7 @@ class Cluster {
 		op: string,
 		key: string | undefined,
 		action: () => Promise<T>,
-		seen?: (value: T) => Entry['seen'],
+		seen?: (value: T) => HistoryEntry['seen'],
 	): Promise<T | undefined> {
 		const epoch = this.epoch;
 		return this.history.run(client, op, key, action, seen, () => this.epoch !== epoch);
@@ -125,7 +125,7 @@ class Cluster {
 	private execution(): Execution {
 		return serializing(
 			faulty(
-				piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+				piExecution({ sessions: 'memory', stream: scriptedStream(this.cast.script) }),
 				this.faults,
 				this.clock,
 			),
@@ -195,7 +195,7 @@ class Cluster {
 	/** Every run is held to its own bound: a run that dies is checked before the next one starts. */
 	private bounded(): void {
 		const errors = this.events.flatMap((e) =>
-			e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+			e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 		);
 		expect(errors.length, `errors on a run: ${errors.join('; ')}`).toBeLessThanOrEqual(
 			this.allowance(),
@@ -281,7 +281,7 @@ class Cluster {
 		await this.clock.advance(ms);
 	}
 
-	/** Time moves until nothing is live: every lease expires, every backoff passes, every draft is due. */
+	/** Time moves until nothing is live: every lease expires, every backoff passes, every summary activation is due. */
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;
@@ -471,7 +471,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const stored = await storedOf(opened.journals, cluster.name);
 				const errors = cluster.events.flatMap((e) =>
-					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+					e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 				);
 				const brief = cluster.events
 					.map((e) => {

@@ -7,6 +7,17 @@
  * later pass sends the delta. A turn ends on `turn.completed` or
  * `turn.failed`.
  *
+ * - **Seat text.** The SDK has no system prompt option. The harness note,
+ *   the mechanism and the agent part go in the config of the client, fixed
+ *   for the activation (`options.ts`), as an instructions file in the
+ *   scratch of the seat. Every first prompt holds the view alone.
+ * - **No native tools.** A seat has no native tool. The catalog entry, the
+ *   config, and the thread policy turn each one off (`catalog.ts`). Files and
+ *   a shell come only from the tools of the agent, which the room tools
+ *   server serves.
+ * - **Home.** Every seat runs in the Codex home of its execution, with the
+ *   login of the host linked in (`home.ts`). The config and the
+ *   instructions of the host user never reach a seat.
  * - **Room tools.** The core binds the tools. They live in a stdio MCP
  *   server that Codex spawns. The server reaches them through a local
  *   socket that the activation opens (`bridge.ts`).
@@ -22,6 +33,9 @@
  *   before `thread.started`, and the activation starts a fresh thread.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
  *   turn that runs. The driver holds the line, and the next pass reads it.
+ * - **Notice.** Codex writes every thread to a rollout file in the home. The
+ *   activation records one `notice` for each thread with the thread id, the
+ *   home, and the path of that file, so the trace joins to the full record.
  * - **Cut.** The signal of the activation signals the turn. `close` stops
  *   the socket and the room tools server.
  */
@@ -30,10 +44,8 @@ import type {
 	AgentDefinition,
 	ExecutorActivation,
 	Pass,
-	PassRecord,
 	PassResult,
 	ReadRange,
-	RoomToolOptions,
 	RunningActivation,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
@@ -46,10 +58,17 @@ import {
 } from '@openai/codex-sdk';
 import { type Bridge, startBridge } from './bridge.ts';
 import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
-import { CodexSteps, changedPaths } from './codex-trace.ts';
+import { CodexSteps } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
-import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
-import { citing, servedTools } from './tools.ts';
+import { openHome, rolloutOf, type SeatHome, seatHome } from './home.ts';
+import {
+	type CodexExecutionOptions,
+	clientOptions,
+	codexOf,
+	seatText,
+	threadOptions,
+} from './options.ts';
+import { servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
 interface CodexThreadLike {
@@ -65,23 +84,14 @@ interface CodexClientLike {
 	resumeThread(id: string, options?: ThreadOptions): CodexThreadLike;
 }
 
-/** What builds a Codex opener for one seat: its definition, and the runtime that runs it. */
-export interface CodexOpenerOptions extends CodexRuntime {
+/** What builds a Codex opener for one seat: its definition, and the options that run it. */
+export interface CodexOpenerOptions extends CodexExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** Builds the client. Absent, the SDK's own `Codex`. */
 	readonly client?: (options: CodexOptions) => CodexClientLike;
 	/** Answers the catalog entry of a model. Absent, `codex debug models` on the installed binary. */
 	readonly catalog?: CatalogSource;
 }
-
-/**
- * Codex answers in its own final message when a prompt does not say
- * otherwise. The room hears only `say`, so the first prompt of each
- * activation says so.
- */
-export const HARNESS_NOTE =
-	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
-	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
 /** The Codex opener. One instance per seat, for as long as the room runs. */
 export function createCodexOpener(options: CodexOpenerOptions): ActivationOpener {
@@ -124,22 +134,20 @@ class Activation implements RunningActivation {
 	private resuming: string | undefined;
 	/** Whether Codex reported `thread.started` for the thread in use. */
 	private heard = false;
+	/** The threads whose notice the trace holds. A thread has one notice for the activation. */
+	private readonly introduced = new Set<string>();
 	private client: CodexClientLike | undefined;
 	private readonly steps: CodexSteps;
 	/** Aborts the turn in flight. A turn that ended holds none, so a late cut never signals a dead process. */
 	private turn: AbortController | undefined;
 	/** The range of the record the turn in flight reads. The core counts it read when the turn starts. */
 	private reading: ReadRange | undefined;
-	/** The workspace paths the agent changed since its last say. The next ordinary say cites them. */
-	private readonly changed = new Set<string>();
-	/** Whether the activation responds. A closing say cites no changed path. */
-	private ordinary = true;
-	/** What a say and a schedule add: the changed paths, as refs. */
-	readonly roomTools: RoomToolOptions = citing(this.changed, () => this.ordinary);
 	private bridge: Bridge | undefined;
-	/** The patched catalog and the empty directory. Absent when nativeTools is 'codex'. */
+	/** The patched catalog, the instructions file, and the empty directory. Absent until the first pass. */
 	private scratch: Scratch | undefined;
 	private thread: CodexThreadLike | undefined;
+	/** The Codex home of the seat and the environment of the binary. Absent until the first pass. */
+	private home: SeatHome | undefined;
 	private stopped = false;
 
 	constructor(activation: ExecutorActivation, options: CodexOpenerOptions) {
@@ -171,8 +179,7 @@ class Activation implements RunningActivation {
 	/** One pass: read, act, and report where this session left off. */
 	async pass(pass: Pass): Promise<PassResult> {
 		try {
-			this.ordinary = pass.view.spec.purpose.kind !== 'summarize';
-			const prompt = await this.promptFor(pass);
+			const prompt = await pass.record();
 			if (prompt === undefined) return { failed: false };
 			const thread = await this.start(pass);
 			if (this.stopped) return { failed: false };
@@ -206,20 +213,17 @@ class Activation implements RunningActivation {
 		}
 	}
 
-	/** The prompt of a pass: the mechanism, the agent and the whole view first, then the delta, or none when nothing is new. */
-	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
-		const record = await pass.record();
-		if (record === undefined || pass.kind === 'delta' || this.thread !== undefined) return record;
-		// The thread has no system prompt of its own, so the first prompt carries it.
-		const text = `${HARNESS_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}\n\n${record.text}`;
-		return { ...record, text };
-	}
-
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
 	private async start(pass: Pass): Promise<CodexThreadLike> {
 		if (this.thread !== undefined) return this.thread;
-		// The catalog comes first. A model with no entry fails before anything opens.
-		const scratch = await this.seal();
+		// The home comes first. The catalog run and every thread read the config and the login there.
+		const home = seatHome(this.options);
+		await openHome(home);
+		this.home = home;
+		// The seat text is fixed for the activation. The client config carries it.
+		const seat = seatText(pass);
+		// The catalog comes next. A model with no entry fails before anything opens.
+		const scratch = await this.seal(seat, home);
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
 		const tools = servedTools(pass.tools, this.activation);
@@ -227,27 +231,28 @@ class Activation implements RunningActivation {
 		this.bridge = bridge;
 		if (this.stopped) {
 			bridge.close();
-			scratch?.remove();
+			scratch.remove();
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
+		const summary = codexOf(this.definition.executor).reasoningSummary ?? 'auto';
+		this.client = make(clientOptions(this.options, home, bridge.socketPath, summary, scratch));
 		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
 
-	/** The scratch of a seat with no native tools. A seat with `nativeTools: 'codex'` has none. */
-	private async seal(): Promise<Scratch | undefined> {
+	/** The scratch of the seat: the patched catalog, the empty directory, and the seat text. */
+	private async seal(seat: string, home: SeatHome): Promise<Scratch> {
 		const executor = codexOf(this.definition.executor);
-		if (executor.nativeTools === 'codex') return undefined;
-		const source =
-			this.options.catalog ?? installedCatalog(this.options.codexPath, this.options.env);
-		return scratchFor(executor.model, source);
+		const source = this.options.catalog ?? installedCatalog(this.options.codexPath, home.env);
+		return scratchFor(executor.model, source, seat);
 	}
 
 	/** Open a thread: the one to resume when `resume` names it, else a fresh one. */
 	private begin(resume: string | undefined): CodexThreadLike {
-		if (this.client === undefined) throw new Error('The Codex client is not open.');
+		if (this.client === undefined || this.scratch === undefined) {
+			throw new Error('The Codex client is not open.');
+		}
 		const options = threadOptions(codexOf(this.definition.executor), this.scratch);
 		this.heard = false;
 		return resume === undefined
@@ -276,13 +281,16 @@ class Activation implements RunningActivation {
 		const ending = new Ending();
 		for await (const event of events) {
 			this.handle(event);
+			// The rollout file exists once the turn starts. A turn that fails first gets its notice at the end.
+			if (event.type === 'turn.started') await this.introduce();
 			if (ending.over(event)) break;
 		}
+		await this.introduce();
 		if (this.stopped) return { failed: false };
 		return passResultOf(ending.failure());
 	}
 
-	/** One thread event: its steps, its changed paths, and the range the turn read. */
+	/** One thread event: its steps, and the range the turn read. */
 	private handle(event: ThreadEvent): void {
 		if (event.type === 'thread.started') {
 			this.heard = true;
@@ -291,8 +299,26 @@ class Activation implements RunningActivation {
 		if (event.type === 'turn.started' && this.reading !== undefined) {
 			this.activation.read(this.reading);
 		}
-		for (const path of changedPaths(event)) this.changed.add(path);
 		for (const step of this.steps.steps(event)) this.activation.trace.record(step);
+	}
+
+	/**
+	 * Record the notice of the thread in use: its id, the Codex home, and the
+	 * rollout file, which holds everything Codex saw and did. It joins the
+	 * trace to the record of Codex. The notice comes once for each thread.
+	 */
+	private async introduce(): Promise<void> {
+		const thread = this.reported;
+		const home = this.home?.path;
+		if (thread === undefined || home === undefined || this.introduced.has(thread)) return;
+		this.introduced.add(thread);
+		const rollout = await rolloutOf(home, thread);
+		this.activation.trace.record({
+			type: 'notice',
+			level: 'info',
+			text: 'Codex thread',
+			data: { thread, home, ...(rollout === undefined ? {} : { rollout }) },
+		});
 	}
 
 	/**

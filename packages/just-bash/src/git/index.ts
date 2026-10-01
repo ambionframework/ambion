@@ -9,21 +9,19 @@
  * import { openWorkspace } from '@ambionframework/workspace';
  * import { fromDirectory } from '@ambionframework/workspace';
  *
+ * const git = justGitBackend({
+ * 	storage: sqliteGitStorage('./data/lab-git.db'),
+ * 	secret: process.env.LAB_GIT_SECRET ?? '',
+ * 	templates: {
+ * 		'weekly-report': {
+ * 			description: 'A weekly status report: numbers, risks, and next steps.',
+ * 			source: fromDirectory('./templates/weekly-report'),
+ * 		},
+ * 	},
+ * });
  * const lab = openWorkspace({
  * 	name: 'lab',
- * 	backend: {
- * 		bash: directoryBackend('./data/lab'),
- * 		git: justGitBackend({
- * 			storage: sqliteGitStorage('./data/lab-git.db'),
- * 			secret: process.env.LAB_GIT_SECRET ?? '',
- * 			templates: {
- * 				'weekly-report': {
- * 					description: 'A weekly status report: numbers, risks, and next steps.',
- * 					source: fromDirectory('./templates/weekly-report'),
- * 				},
- * 			},
- * 		}),
- * 	},
+ * 	backend: { bash: directoryBackend('./data/lab', { git }) },
  * });
  * ```
  *

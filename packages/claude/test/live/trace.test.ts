@@ -1,5 +1,5 @@
 /**
- * One real activation logs the steps every executor family shares, with
+ * One real activation logs the steps every executor kind shares, with
  * the usage the SDK reported.
  */
 import { expect, it } from 'vitest';
@@ -19,7 +19,7 @@ live('trace and usage', () => {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'activation_start' && e.agent === 'clerk') resolve(e.activation);
+					if (e.type === 'activation_start' && e.seat === 'clerk') resolve(e.activation);
 				});
 			});
 			await visit.send({ text: 'Is Saturday a working day on site?' });
@@ -35,7 +35,7 @@ live('trace and usage', () => {
 			expect(usage.reduce((sum, u) => sum + u.input + u.output, 0)).toBeGreaterThan(0);
 			expect(stepsOfType(steps, 'end').at(-1)?.stop).toBe('stopped');
 			const ended = events.find((e) => e.type === 'activation_end' && e.activation === activation);
-			expect(ended).toMatchObject({ spoke: true });
+			expect(ended).toMatchObject({ said: true });
 		} finally {
 			await session.stop();
 		}

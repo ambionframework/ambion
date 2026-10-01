@@ -51,7 +51,6 @@ interface ObserveDetails {
 function createObserveTool(options: {
 	readonly connections: SensorConnections;
 	readonly store: SnapshotStore;
-	readonly images?: boolean;
 }): AmbionTool {
 	return defineTool({
 		name: 'observe',
@@ -68,7 +67,6 @@ async function executeObserve(
 	options: {
 		readonly connections: SensorConnections;
 		readonly store: SnapshotStore;
-		readonly images?: boolean;
 	},
 ): Promise<AgentToolResult<ObserveDetails>> {
 	const connection = await options.connections.get(params.sensor, ctx.signal);
@@ -94,7 +92,7 @@ async function executeObserve(
 		received,
 		ctx.signal,
 	);
-	return renderResult(metadata, hostname, response, received, retained, options.images !== false);
+	return renderResult(metadata, hostname, response, received, retained);
 }
 
 async function assertConnectionActive(
@@ -167,24 +165,21 @@ async function receiveFiles(
 export function sensorCapability(options: {
 	readonly connections: SensorConnections;
 	readonly store: SnapshotStore;
-	readonly images: boolean;
 }): Capability {
 	const { connections } = options;
 	return {
 		tools: [createConnectTool({ connections }), createObserveTool(options)],
-		notes: [connectToolGuidance(), observeToolGuidance(options.images)],
+		notes: [connectToolGuidance(), observeToolGuidance()],
 		remind: (_seat, signal) => boundedSensorReminder(connections, signal),
 	};
 }
 
 /** Guidance for reading connected sensor evidence. */
-function observeToolGuidance(images = true): string {
+function observeToolGuidance(): string {
 	return [
 		`observe reads one connected <connection>/<sensor> and retains its returned evidence as snapshots.`,
 		`Use span only when the sensor advertises span support. Cite the returned manifest snapshot ref; it names the complete result and all file snapshots.`,
-		images
-			? `Frames are returned as images. Sensor-provided text is marked as sensor data; exported files and series manifests are named by path.`
-			: `Frames are returned as export paths. Image bytes are still fetched and retained; sensor-provided text is marked as sensor data.`,
+		`Frames are returned as images, and the text names the export path of each. Sensor-provided text is marked as sensor data; exported files and series manifests are named by path.`,
 	].join('\n');
 }
 
@@ -205,7 +200,6 @@ function renderResult(
 	response: ObserveResponse,
 	fileBytes: ReadonlyMap<string, Uint8Array>,
 	retained: RetainedOutput,
-	images: boolean,
 ): AgentToolResult<ObserveDetails> {
 	const filePaths = new Map(retained.files.map((file) => [file.digest, file.path]));
 	const blocks: AgentToolResult<ObserveDetails>['content'] = [];
@@ -213,16 +207,7 @@ function renderResult(
 	for (const [observationIndex, observation] of response.observations.entries()) {
 		text.push(`Observation ${observationIndex + 1} at ${observation.at}:`);
 		for (const part of observation.parts) {
-			renderPart(
-				part,
-				observation.at,
-				filePaths,
-				fileBytes,
-				retained.manifestPath,
-				images,
-				text,
-				blocks,
-			);
+			renderPart(part, observation.at, filePaths, fileBytes, retained.manifestPath, text, blocks);
 		}
 	}
 	if (response.observations.length === 0) text.push('The sensor returned no observations.');
@@ -251,7 +236,6 @@ function renderPart(
 	filePaths: ReadonlyMap<string, string>,
 	fileBytes: ReadonlyMap<string, Uint8Array>,
 	manifestPath: string,
-	images: boolean,
 	text: string[],
 	blocks: AgentToolResult<ObserveDetails>['content'],
 ): void {
@@ -261,16 +245,14 @@ function renderPart(
 			return;
 		case 'frame': {
 			const path = exportPathFor(filePaths, part.file);
-			text.push(images ? `Frame at ${at}: ${path}` : `Frame at ${at}: ${path} (${part.mediaType})`);
-			if (images) {
-				const bytes = fileBytes.get(part.file);
-				if (bytes === undefined) throw new Error(`Missing retained sensor image ${part.file}.`);
-				blocks.push({
-					type: 'image',
-					data: Buffer.from(bytes).toString('base64'),
-					mimeType: part.mediaType,
-				});
-			}
+			text.push(`Frame at ${at}: ${path}`);
+			const bytes = fileBytes.get(part.file);
+			if (bytes === undefined) throw new Error(`Missing retained sensor image ${part.file}.`);
+			blocks.push({
+				type: 'image',
+				data: Buffer.from(bytes).toString('base64'),
+				mimeType: part.mediaType,
+			});
 			return;
 		}
 		case 'series': {

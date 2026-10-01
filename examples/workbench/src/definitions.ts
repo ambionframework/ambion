@@ -4,8 +4,8 @@ import { claude } from '@ambionframework/claude';
 import { codex } from '@ambionframework/codex';
 import { pi } from '@ambionframework/pi';
 import type { Workspace } from '@ambionframework/workspace';
-import { CLAUDE_MODEL, CODEX_MODEL, piModel, seatFamilies } from './families.ts';
 import type { Instrument } from './instrument.ts';
+import { CLAUDE_MODEL, CODEX_MODEL, piModel, seatKinds } from './kinds.ts';
 
 /** The people who use the Workbench. Each one reads results a different way. */
 export const people = [
@@ -93,18 +93,17 @@ export function team(workspace: Workspace, instrument: Instrument) {
 }
 
 /**
- * The executor of a specialist, on the family that `seatFamilies` names. Every
- * family gets the same options, so every seat reaches the world only through
+ * The executor of a specialist, on the executor kind that `seatKinds` names. Every
+ * kind gets the same options, so every seat reaches the world only through
  * the same bundles. Pi has no native tool. The Claude seat sets no
- * `allowedTools`, so it has no built-in tool. The Codex seat sets `nativeTools`
- * to `none` and no policy option that opens the host.
+ * `allowedTools`, so it has no built-in tool. A Codex seat has no native tool.
  */
 function executorFor(
 	name: string,
 	options: { instructions: string; bundles: ToolBundle[] },
 	model: string,
 ) {
-	switch (seatFamilies[name]) {
+	switch (seatKinds[name]) {
 		case 'claude':
 			return claude({ ...options, model: CLAUDE_MODEL });
 		case 'codex':
@@ -112,7 +111,6 @@ function executorFor(
 				...options,
 				model: CODEX_MODEL,
 				modelReasoningEffort: 'medium',
-				nativeTools: 'none',
 			});
 		default:
 			return pi({ ...options, model });

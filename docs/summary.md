@@ -5,8 +5,8 @@ exchange: the first person who spoke in it.** The room assigns a writer by
 name. The name refers to one agent in the room's `agents` definitions.
 
 The writer is an ordinary agent. It has the same identity, instructions,
-model, domain tools, membership, and attention rules as every other agent.
-The room gives it a separate closing activation after the exchange closes.
+model, domain tools, seating, and attention rules as every other agent.
+The room gives it a separate summary activation after the exchange closes.
 
 ## Shared context and compaction
 
@@ -46,16 +46,16 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every defined agent starts as a member with
+If `seats` is omitted, every defined agent starts seated with
 `broadcast` attention. `summary` must name a seated agent: `startRoom`
 rejects a `summary` name outside `seats`. The host can still unseat the
 writer later; the exchange closing at that time then has no summary
-assignment.
+activation.
 
 `startRoom({ assistant })` accepts an ordinary agent definition and supplies
-its definition entry, broadcast seat, and summary assignment. A conflicting
-explicit summary writer is refused. This shorthand preserves the closing
-activation and membership rules described here. See
+its definition entry, broadcast seat, and summary writer. A conflicting
+explicit summary writer is refused. This shorthand preserves the summary
+activation and seating rules described here. See
 [Default assistant](assistant.md) for the built-in implementation.
 
 Every exchange where a person spoke is eligible for a summary. Eligibility
@@ -64,7 +64,7 @@ person spoke, such as a returned say that nobody answers, owes no summary. A
 room with no configured summary writer still closes exchanges and retains
 their source messages.
 
-## Closing activation
+## Summary activation
 
 When the room records a close, it assigns a dedicated activation only when
 `summary` names a seated agent and the close names a `person`. The
@@ -76,15 +76,15 @@ The closing `say` may carry `refs`. The room stores them on the summary. The
 prompt gives the writer the URI of the message that opened the exchange it
 covers.
 
-The closing activation reads every message through the end of its exchange.
+The summary activation reads every message through the end of its exchange.
 A divider marks where its own exchange begins, so the writer can tell
 background history from the exchange it covers. What it may write stays
 fixed to that exchange. An `activationTokenLimit` windows this read the same
-way it windows an ordinary activation, pinning the writer's own exchange
+way it windows a respond activation, pinning the writer's own exchange
 whole and trimming the background before it. The room cap
 `limits.context.messages` pins the closing exchange whole the same way.
 
-The closing activation receives the regular `say` tool with this shape:
+The summary activation receives the regular `say` tool with this shape:
 
 ```ts
 say({ text: 'Thursday delivery is limited to eight units.', to: 'priya' });
@@ -97,42 +97,42 @@ exchange is refused, and so is a second summary for the same person.
 
 The activation ends after the writer has said one message to each person.
 The summary for the `person` completes the close. A summary for another
-person appears in `summaries` on the closed exchange view. Only the reading
+person appears in `summaries` on the closed `Exchange`. Only the reading
 preferences of the `person` reach the writer.
 
 The room stamps the writer, recipient, covered range, activation id, and
 timestamp on the stored summary. The writer cannot supply or alter those
 fields.
 
-The closing activation receives only `say`. The writer may decline by ending
+The summary activation receives only `say`. The writer may decline by ending
 without calling it; the source range then remains available to later agent
-activations. The writer uses its domain and membership tools during ordinary
+activations. The writer uses its domain and seating tools during respond
 activations.
 
 Summary publication wakes no idle agent and does not open another exchange.
 The summary is a room record entry, so replay and response queries use the
 same facts as the live room.
 [`summary.test.ts`](../packages/ambion/test/summary.test.ts) holds the tests
-of the assignment.
+of the summary work.
 
 ## Completion and reads
 
 `exchange.waitForSummary()` resolves with the stored summary or `undefined` when no
-summary is required or the writer declines. A failed or exhausted assignment
-keeps the source discussion available and reports its terminal result through
+summary is required or the writer declines. A failed or exhausted summary
+activation keeps the source discussion available and reports its terminal result through
 the existing exchange contract.
 
 Once a summary covers a closed range, later agent activations read the summary
 in place of those source messages. `exchange.waitForClose()` always returns the
 fixed source discussion for human review. The journal retains every entry.
 
-If a pending assignment is removed because its writer leaves, the assignment
-settles. Reseating that agent does not revive the old assignment. A later human
-exchange can receive a new closing activation.
+If the writer leaves while a summary activation is pending, that activation
+settles. Reseating that agent does not revive it. A later human
+exchange can receive a new summary activation.
 
-## Membership
+## Seating
 
-All ordinary activations use the same membership operations. A live ordinary
+All respond activations use the same seating operations. A live respond
 activation may call `seat({ name })` or `unseat({ name })` and may call `say`.
 The room refuses an unknown name. A request to seat an agent that is already
 seated returns the existing no-op result and writes no journal entry, wake, or
@@ -141,6 +141,6 @@ summary writer's seat is fixed by default, so it cannot unseat itself; the
 host can still unseat it through `room.unseat`. See [Roster](roster.md) for
 the fixed-seat rule.
 
-Attention controls which messages wake an idle member. It does not create a
+Attention controls which messages wake an idle seat. It does not create a
 summary role or restrict an agent's tools. There is no scheduler, role system,
 or capability framework in the room.

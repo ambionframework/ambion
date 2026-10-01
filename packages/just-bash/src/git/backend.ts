@@ -63,8 +63,8 @@ function assertJustGitAgent(agent: WorkspaceAgent): void {
 /** The base of every clone URL. `.invalid` never resolves. */
 const BASE = 'http://git.ambion.invalid';
 
-/** Seconds a token lives when the host names no `tokenTtl`. */
-const DEFAULT_TOKEN_TTL = 3600;
+/** Seconds a token lives when the host names no `credentialTtl`. */
+const DEFAULT_CREDENTIAL_TTL = 3600;
 
 export interface JustGitBackendOptions {
 	/** `sqliteGitStorage(path)`, or `sqliteGitStorage(':memory:')` for tests. */
@@ -76,7 +76,7 @@ export interface JustGitBackendOptions {
 	/** The shared repositories, by name. */
 	readonly shared?: Readonly<Record<string, RepositoryRegistration>>;
 	/** Seconds a token lives. The default is 3600. */
-	readonly tokenTtl?: number;
+	readonly credentialTtl?: number;
 	/** Called with a fault of the server that the client sees as status 500. Absent, the backend reports nothing. */
 	readonly onError?: (error: unknown) => void;
 }
@@ -101,9 +101,9 @@ async function onlyObject(repo: GitRepo, prefix: string): Promise<string | undef
 
 function checked(options: JustGitBackendOptions): number {
 	if (options.secret === '') throw new Error('justGitBackend needs a secret.');
-	const ttl = options.tokenTtl ?? DEFAULT_TOKEN_TTL;
+	const ttl = options.credentialTtl ?? DEFAULT_CREDENTIAL_TTL;
 	if (!Number.isFinite(ttl) || ttl <= 0)
-		throw new Error('tokenTtl must be a finite number above 0.');
+		throw new Error('credentialTtl must be a finite number above 0.');
 	return ttl;
 }
 
@@ -163,7 +163,6 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 	};
 
 	const access: JustGitAccess = {
-		transport: 'in-process',
 		prefix: `${BASE}/`,
 		fetch: (input, init) => open().fetch(input, init),
 		credentialFor: async (agent, url) => {
@@ -176,7 +175,7 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 
 	return Object.freeze({
 		access,
-		server: BASE,
+		label: BASE,
 		connect: async (agent: WorkspaceAgent): Promise<GitEnv> => {
 			assertJustGitAgent(agent);
 			await ready();

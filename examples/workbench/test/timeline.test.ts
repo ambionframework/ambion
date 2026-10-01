@@ -1,4 +1,4 @@
-import type { ExchangeView, Message } from '@ambionframework/ambion';
+import type { Exchange, Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
 import { type Block, buildTimeline, discussionKeys } from '../src/timeline.ts';
 
@@ -14,8 +14,8 @@ const closedExchange = (
 	from: number,
 	through: number,
 	person: string,
-	summary: object = { status: 'silent' },
-): ExchangeView =>
+	summary: object = { kind: 'silent' },
+): Exchange =>
 	({
 		from,
 		through,
@@ -25,8 +25,8 @@ const closedExchange = (
 		person,
 		at: AT,
 		summary,
-	}) as ExchangeView;
-const openExchange = (from: number): ExchangeView => ({
+	}) as Exchange;
+const openExchange = (from: number): Exchange => ({
 	from,
 	status: 'open',
 	person: 'mira',
@@ -37,7 +37,7 @@ const openExchange = (from: number): ExchangeView => ({
 const humans = new Set(['theo', 'mira']);
 const build = (
 	messages: Message[],
-	exchanges: ExchangeView[],
+	exchanges: Exchange[],
 	extra: Partial<Parameters<typeof buildTimeline>[0]> = {},
 ) =>
 	buildTimeline({
@@ -67,7 +67,7 @@ const thread = [
 	summaryOf(145, 'theo'),
 ];
 const closed = closedExchange(98, 134, 'theo', {
-	status: 'published',
+	kind: 'published',
 	summary: summaryOf(145, 'theo'),
 });
 
@@ -100,7 +100,7 @@ describe('buildTimeline', () => {
 	it('shows one reply directly, with no discussion and no summary', () => {
 		const messages = [said(59, 'mira'), said(61, 'assistant', 'mira'), summaryOf(66, 'mira')];
 		const exchange = closedExchange(59, 61, 'mira', {
-			status: 'published',
+			kind: 'published',
 			summary: summaryOf(66, 'mira'),
 		});
 		expect(shape(build(messages, [exchange]))).toEqual(['question:59', 'said:61']);
@@ -178,21 +178,21 @@ describe('buildTimeline', () => {
 		const attempt = (
 			id: string,
 			purpose: string,
-			status: string,
+			kind: string,
 			cause: string,
 			attempt = 1,
-		): object => ({ id, seat: 'assistant', purpose, attempt, outcome: { status, cause } });
+		): object => ({ id, seat: 'assistant', purpose, attempt, outcome: { kind, cause } });
 		const limit = '400 invalid_request_error: You have reached your specified API usage limits.';
 		const failures = new Map([
 			['m1', limit],
 			['s1', limit],
 		]);
-		const exhausted = (activations: object[], summary: object = { status: 'failed' }) =>
+		const exhausted = (activations: object[], summary: object = { kind: 'failed' }) =>
 			({
 				...closedExchange(75, 75, 'theo', summary),
 				outcome: { kind: 'exhausted' },
 				activations,
-			}) as ExchangeView;
+			}) as Exchange;
 
 		it.each([
 			[
@@ -200,7 +200,7 @@ describe('buildTimeline', () => {
 				exhausted([
 					attempt('m1', 'respond', 'failed', 'permanent'),
 					attempt('m2', 'respond', 'abandoned', 'permanent', 2),
-					attempt('s1', 'summary', 'failed', 'permanent'),
+					attempt('s1', 'summarize', 'failed', 'permanent'),
 				]),
 				failures,
 				`Closed, assistant failed, the room does not retry this: ${limit}`,
@@ -214,9 +214,9 @@ describe('buildTimeline', () => {
 			[
 				'names why a summary failed after a reply',
 				{
-					...closedExchange(75, 75, 'theo', { status: 'failed' }),
-					activations: [attempt('s1', 'summary', 'failed', 'permanent')],
-				} as ExchangeView,
+					...closedExchange(75, 75, 'theo', { kind: 'failed' }),
+					activations: [attempt('s1', 'summarize', 'failed', 'permanent')],
+				} as Exchange,
 				failures,
 				`Closed, summary failed: assistant failed, the room does not retry this: ${limit}`,
 			],
@@ -236,13 +236,13 @@ describe('buildTimeline', () => {
 				...closed,
 				outcome: { kind: 'exhausted' },
 				activations: [attempt('m1', 'respond', 'failed', 'permanent')],
-			} as ExchangeView;
+			} as Exchange;
 			expect(build(thread, [exchange])[1]).toMatchObject({ flag: 'assistant failed' });
 		});
 	});
 
 	it('flags a discussion whose summary is pending or failed', () => {
-		const pending = closedExchange(98, 134, 'theo', { status: 'pending' });
+		const pending = closedExchange(98, 134, 'theo', { kind: 'pending' });
 		const blocks = build(thread.slice(0, -1), [pending]);
 		expect(blocks[1]).toMatchObject({ type: 'discussion', flag: 'Summary pending' });
 	});
@@ -266,8 +266,8 @@ describe('buildTimeline', () => {
 
 describe('cost and awaiting', () => {
 	const usage = { input: 9000, output: 3300, cacheRead: 0, cacheWrite: 0 };
-	const exchangeWith = (extra: Record<string, unknown>): ExchangeView =>
-		({ ...closed, ...extra }) as ExchangeView;
+	const exchangeWith = (extra: Record<string, unknown>): Exchange =>
+		({ ...closed, ...extra }) as Exchange;
 
 	it('shows the cost of an exchange on its discussion, or its tokens, or nothing without usage', () => {
 		const blocks = build(thread, [exchangeWith({ usage: { ...usage, cost: 0.0123 } })]);
@@ -279,7 +279,7 @@ describe('cost and awaiting', () => {
 	it('reads an awaiting exchange as waiting on the person, and not as a plain close', () => {
 		const awaiting = exchangeWith({
 			outcome: { kind: 'awaiting', person: 'theo' },
-			summary: { status: 'silent' },
+			summary: { kind: 'silent' },
 		});
 		expect(build(thread.slice(0, 6), [awaiting])[1]).toMatchObject({ flag: 'Waiting on theo' });
 	});
@@ -287,7 +287,7 @@ describe('cost and awaiting', () => {
 	it('puts the waiting and the cost in the note of an exchange with no messages', () => {
 		const awaiting = exchangeWith({
 			outcome: { kind: 'awaiting', person: 'theo' },
-			summary: { status: 'silent' },
+			summary: { kind: 'silent' },
 			usage: { ...usage, cost: 0.5 },
 		});
 		const blocks = build([said(98, 'theo')], [awaiting]);

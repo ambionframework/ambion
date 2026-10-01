@@ -50,7 +50,7 @@ repository. An agent key names the agent, and `serve` grants every
 repository in that agent's namespace. Every account on the server shares
 the loopback address, and the room mirror puts the record on the same
 server. A key that an agent copies into a message lets any peer on the
-server push as that agent until the key expires, at most `keyTtl` later.
+server push as that agent until the key expires, at most `credentialTtl` later.
 [Trust](#trust) states the rows.
 
 ## The shape
@@ -95,16 +95,30 @@ import { fromDirectory } from '@ambionframework/workspace';
 import { openWorkspace } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
-const server = {
-  host: 'lab.internal',
+const access = {
+  server: 'lab.internal',
   hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
 };
+
+const git = workstationGitBackend({
+  ...access,
+  account: {
+    username: 'lab-git',
+    privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
+  },
+  templates: {
+    'weekly-report': {
+      description: 'A weekly status report: numbers, risks, and next steps.',
+      source: fromDirectory('./templates/weekly-report'),
+    },
+  },
+});
 
 const lab = openWorkspace({
   name: 'lab',
   backend: {
     bash: workstationBackend({
-      ...server,
+      ...access,
       layout: {
         audit: '/srv/ambion/lab/audit/audit.jsonl',
         rooms: '/srv/ambion/lab/rooms',
@@ -114,37 +128,25 @@ const lab = openWorkspace({
         username: agent.name,
         privateKey: await readFile(`/etc/ambion/keys/${agent.name}`, 'utf8'),
       }),
-    }),
-    git: workstationGitBackend({
-      ...server,
-      account: {
-        username: 'lab-git',
-        privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
-      },
-      templates: {
-        'weekly-report': {
-          description: 'A weekly status report: numbers, risks, and next steps.',
-          source: fromDirectory('./templates/weekly-report'),
-        },
-      },
+      git,
     }),
   },
 });
 ```
 
-| Option         | Meaning                                                                         |
-| -------------- | ------------------------------------------------------------------------------- |
-| `host`, `port` | The address of the server that holds the git account. The port is 22 by default |
-| `hostKey`      | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
-| `account`      | The username and the private key of the git account, as `WorkstationCredential` |
-| `root`         | The folder of the repositories, in the account's home. The default is `repos`   |
-| `alias`        | The host name in every clone URL. The default is `ambion-git`                   |
-| `templates`    | The registrations, by template name. The same shape as `justGitBackend`         |
-| `keyTtl`       | Whole seconds an agent key lives, 1 or more. The default is 3600                |
-| `idleTimeout`  | Seconds the git account's client may stay unused. The default is 300            |
+| Option           | Meaning                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `server`, `port` | The address of the server that holds the git account. The port is 22 by default |
+| `hostKey`        | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
+| `account`        | The username and the private key of the git account, as `WorkstationCredential` |
+| `root`           | The folder of the repositories, in the account's home. The default is `repos`   |
+| `alias`          | The host name in every clone URL. The default is `ambion-git`                   |
+| `templates`      | The registrations, by template name. The same shape as `justGitBackend`         |
+| `credentialTtl`  | Whole seconds an agent key lives, 1 or more. The default is 3600                |
+| `idleTimeout`    | Seconds the git account's client may stay unused. The default is 300            |
 
 **The git account is on the workstation, and an agent reaches it on the
-loopback address.** `host`, `port`, and `hostKey` name the one server of
+loopback address.** `server`, `port`, and `hostKey` name the one server of
 both backends, and the host passes one value to both, as the example
 does. Nothing compares the two. A git backend on a server of another host
 key fails its first operation at the host key check. A git server on a second machine waits in
@@ -199,7 +201,7 @@ digit, `.`, `_`, `-`, or `/`.
 
 **A clone URL is `ssh://<alias>/<namespace>/<name>`.** For example,
 `ssh://ambion-git/analyst/report`. The URL stays opaque to the agent
-([Git](git.md#decisions-taken)). The `server` of the backend is
+([Git](git.md#decisions-taken)). The `label` of the backend is
 `ssh://ambion-git`, and the guidance names it.
 
 **The agent's ssh configuration maps the alias to the server.** At each
@@ -345,7 +347,7 @@ that the client reads once with `realpath('.')`.
 
 **A key inside its margin counts as missing.** The margin is the smaller
 of 10 minutes and half of the key's life, the rule of the 0.2.0
-credential file. The key rotates about once each `keyTtl`, and a command
+credential file. The key rotates about once each `credentialTtl`, and a command
 that starts with a key keeps it for the length of the margin.
 
 **An old line stays until its expiry.** The backend adds the new line and
@@ -363,7 +365,7 @@ host process, so no line is lost.
 
 **A restart of the host issues new keys.** The keys live in memory. The
 first `connect` of each agent after a restart writes a new key and a new
-line. The old lines expire within `keyTtl`.
+line. The old lines expire within `credentialTtl`.
 
 ## Repositories
 
@@ -448,32 +450,29 @@ the git account, so it holds its own objects and refs.
 `template-sources`, so that a crash can resume. Here the rename gives the
 same property, and the workstation does not know that namespace.
 
-## The transport in the contract
+## The access in the contract
 
-**The core knows a transport by its name alone.**
-`@ambionframework/workspace` holds one field on each side of the pair,
-and the refusal. The access of each git backend, with its wire shape,
-lives in the package of its deployment shape, beside the bash backend
-that reads it.
+**The core knows no access type.** `@ambionframework/workspace` holds one
+field on the bash backend, `git`. The access of each git backend, with its
+wire shape, lives in the package of its deployment shape, beside the bash
+backend that reads it.
 
 ```ts
 // @ambionframework/workspace
-interface GitAccess {
-  /** The name of the transport, such as `in-process` or `ssh`. */
-  readonly transport: string;
-}
-
 interface BashBackend {
   // ...
-  /** The git transports that the shell of this backend carries. */
-  readonly gitTransports?: readonly string[];
+  /** The repositories that the shell reaches. */
+  readonly git?: GitBackend;
 }
 ```
 
 ```ts
-// @ambionframework/workstation: the access of workstationGitBackend
-interface WorkstationGitAccess extends GitAccess {
-  readonly transport: 'ssh';
+// @ambionframework/workstation: the git backend and its access
+interface WorkstationGitBackend extends GitBackend {
+  readonly access: WorkstationGitAccess;
+}
+
+interface WorkstationGitAccess {
   /** The key of `agent`. Rejects for a reserved name. */
   identityFor(agent: WorkspaceAgent): Promise<WorkstationGitIdentity>;
 }
@@ -493,27 +492,19 @@ interface WorkstationGitIdentity {
 }
 ```
 
-**A bash backend narrows the access by its transport.** It reads
-`transport`, and it casts to the access type of its own package. The
-`gitTransports` check in `openWorkspace` runs first, so the cast sees only
-a transport that the bash backend declared. `workstationBackend` also
-checks the transport at `connect`, for a caller that connects without a
-workspace. [Git](git.md#on-the-just-bash-backends) states the access of
+**`workstationBackend` takes a `WorkstationGitBackend` in `git`.** It reads
+`git.access` at each `connect`, with no cast, and it sets `BashBackend.git`
+to the same backend. `openWorkspace` opens that backend under an owner of
+its own. [Git](git.md#on-the-just-bash-backends) states the access of
 `justGitBackend`.
 
-**`openWorkspace` refuses a pair that does not match.** When `backend.git`
-is set and `backend.bash.gitTransports` does not hold its transport,
-`openWorkspace` throws. Neither backend has a name, so the error names the
-`transport` and the `server` of the git backend, and the transports that
-the bash backend carries. A bash backend with no `gitTransports` carries
-none.
+**The types check the pair.** The `git` option of `memoryBackend` and
+`directoryBackend` takes a `JustGitBackend`, and the `git` option of
+`workstationBackend` takes a `WorkstationGitBackend`. A git backend of the
+other package is a compile error, and `openWorkspace` runs no check of the
+pair.
 
-| Bash backend | `in-process`          | `ssh`                                    |
-| ------------ | --------------------- | ---------------------------------------- |
-| just-bash    | Carries it            | Refused when the workspace opens         |
-| Workstation  | Refused when it opens | Writes the key and the ssh configuration |
-
-**One decision of [Git](git.md#decisions-taken) names both transports.**
+**One decision of [Git](git.md#decisions-taken) names both accesses.**
 A credential names one agent, and it expires. The server checks each
 request against the namespace rule. The tokens of `justGitBackend` grant
 one scope on one repository. The SSH keys name the agent, and `serve`
@@ -536,12 +527,14 @@ override of the workstation allows `@ambionframework/workspace/git`.
 `scripts/import-rules.test.mjs` probes each rule.
 
 **`gitConformance` asks the harness for each credential fact.** The
-suite stays blind to transports. Four cases touch a credential, and each
+suite knows no access type. Four cases touch a credential, and each
 calls a hook of `GitConformanceBackend`, a `ConformanceHarness` of
 `GitConformanceStore`, that the package of the pair implements. Each hook
 takes the opened backend and workspace. [Tests](#tests) lists them. The
-store of each harness maps `credentialTtl` to the option of its backend:
-`tokenTtl` of `justGitBackend` or `keyTtl` of `workstationGitBackend`.
+store of each harness passes `credentialTtl` to its backend, and it opens
+a bash backend for each git backend. Both
+`justGitBackend` and `workstationGitBackend` name the option
+`credentialTtl`.
 
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
 G2.**
@@ -607,7 +600,7 @@ repository hook protects its default branch. The kernel does not.
 of [the package guide](../packages/workstation/README.md) do not change.
 
 - **One account `<workspace>-git`,** with a login shell of `bash`, a home
-  of mode `0700`, and no membership in the agents' group.
+  of mode `0700`, and no place in the group of the agents.
 - **The host's key for it** in `~/.ssh/authorized_keys`.
 - **The `Match User` block** that adds `authorized_keys.ambion`.
 - **`AllowUsers`, when it is set,** names the account.
@@ -645,7 +638,9 @@ Only the `workstation` CI job runs this tier
 **The OpenSSH harness starts each case with an empty git account.** Before
 each `open()`, it removes `~lab-git/repos` and
 `~lab-git/.ssh/authorized_keys.ambion`, as the harness of the tier already
-removes the files of each agent's home.
+removes the files of each agent's home. It wipes through a second
+`workstationBackend` with no `git`, so the connect of the git account writes
+no key.
 
 **The scripted tier tests the parts without `sshd`.**
 
@@ -724,11 +719,10 @@ is about fifteen lines of `bash`.
 4. **0.3.0 landed the work,** in #312, #314, #316, and #317.
 5. **The git account is on the workstation, on the loopback address.** A
    git server on a second machine waits in the backlog.
-6. **The core knows a transport by its name.** Each access type lives
-   with its pair, and `gitConformance` calls harness hooks.
-7. **The transports keep the names of their mechanisms:** `in-process`
-   and `ssh`.
-8. **One package for each deployment shape.** `@ambionframework/just-bash`
+6. **The core knows no access type.** Each access type lives with its
+   pair, a bash backend takes the git backend of its own package, and
+   `gitConformance` calls harness hooks.
+7. **One package for each deployment shape.** `@ambionframework/just-bash`
    holds the local pair, with the git backend in its `./git` entry.
    `@ambionframework/workstation` holds the lab pair.
 

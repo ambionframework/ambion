@@ -33,7 +33,6 @@ import { mkdir } from 'node:fs/promises';
 import { posix } from 'node:path';
 import {
 	type BashBackend,
-	type BashServices,
 	DEFAULT_AUDIT_LOG,
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
@@ -42,8 +41,9 @@ import { Bash, DefenseInDepthBox, type IFileSystem, InMemoryFs, ReadWriteFs } fr
 import { createGit } from 'just-git';
 import { BashEnv } from './bash-env.ts';
 import { DEV_DIR, withDevices } from './devices.ts';
-// A type import alone: the git module loads `node:sqlite`, and the root entry does not.
+// Type imports alone: the git module loads `node:sqlite`, and the root entry does not.
 import type { JustGitAccess } from './git/access.ts';
+import type { JustGitBackend } from './git/backend.ts';
 
 /**
  * Where the just-bash backends keep the audit log, the room mirrors, and
@@ -54,12 +54,6 @@ const JUST_BASH_LAYOUT: WorkspaceLayout = {
 	rooms: '/rooms',
 	snapshots: '/snapshots',
 };
-
-/**
- * The git transports that the shell of both backends carries. `openWorkspace`
- * checks it, so `services.git` is the access of `justGitBackend` when set.
- */
-const JUST_BASH_TRANSPORTS: readonly string[] = Object.freeze(['in-process']);
 
 /**
  * The `git` command of one agent. The identity is locked to the agent's
@@ -86,9 +80,9 @@ function gitFor(agent: WorkspaceAgent, access: JustGitAccess | undefined) {
 async function connectOver(
 	fs: IFileSystem,
 	agent: WorkspaceAgent,
-	services?: BashServices,
+	access: JustGitAccess | undefined,
 ): Promise<BashEnv> {
-	const git = gitFor(agent, services?.git as JustGitAccess | undefined);
+	const git = gitFor(agent, access);
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(
@@ -127,6 +121,12 @@ export interface SeedWriter {
 }
 
 export interface MemoryBackendOptions {
+	/**
+	 * The repositories that `git` in the shell reaches. The workspace opens
+	 * it under an owner of its own. Absent, `git` stays inside the
+	 * filesystem.
+	 */
+	git?: JustGitBackend;
 	/**
 	 * Called once, with a `SeedWriter`, before any agent connects. A seed
 	 * function reads and writes one file at a time — from disk, from a
@@ -235,10 +235,10 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBac
 		return fs;
 	});
 	return {
-		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
+		connect: async (agent) => connectOver(await resource.get(), agent, options.git?.access),
 		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
-		gitTransports: JUST_BASH_TRANSPORTS,
+		...(options.git === undefined ? {} : { git: options.git }),
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};
@@ -316,6 +316,16 @@ function checkTrustedChanges(): void {
 	}
 }
 
+/** What `directoryBackend` takes besides the directory. */
+export interface DirectoryBackendOptions {
+	/**
+	 * The repositories that `git` in the shell reaches. The workspace opens
+	 * it under an owner of its own. Absent, `git` stays inside the
+	 * filesystem.
+	 */
+	git?: JustGitBackend;
+}
+
 /**
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
@@ -324,16 +334,16 @@ function checkTrustedChanges(): void {
  *
  * This backend is the one part of this package that needs a real disk.
  */
-export function directoryBackend(root: string): BashBackend {
+export function directoryBackend(root: string, options: DirectoryBackendOptions = {}): BashBackend {
 	const resource = lazyResource(async () => {
 		checkTrustedChanges();
 		await mkdir(root, { recursive: true });
 		return new DirectoryFs({ root });
 	});
 	return {
-		connect: async (agent, _signal, services) => connectOver(await resource.get(), agent, services),
+		connect: async (agent) => connectOver(await resource.get(), agent, options.git?.access),
 		dispose: async () => resource.clear(),
-		gitTransports: JUST_BASH_TRANSPORTS,
+		...(options.git === undefined ? {} : { git: options.git }),
 		guidance: JUST_BASH_GUIDANCE,
 		layout: JUST_BASH_LAYOUT,
 	};

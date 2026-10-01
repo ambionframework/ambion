@@ -80,12 +80,11 @@ function session(inner: RunningActivation, seen: Seen): RunningActivation {
 		get session() {
 			return inner.session;
 		},
-		...(inner.roomTools === undefined ? {} : { roomTools: inner.roomTools }),
 		pass: async (pass) => {
 			const { spec, through } = pass.view;
 			const entry: Record<string, unknown> = {
 				kind: pass.kind,
-				...(pass.kind === 'delta' ? { since: pass.since } : {}),
+				...(pass.kind === 'delta' ? { after: pass.after } : {}),
 				spec,
 				through,
 				resume: pass.resume,

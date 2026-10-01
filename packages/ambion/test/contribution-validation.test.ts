@@ -25,7 +25,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
+import { quiet, say, scriptedStream, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 
@@ -67,7 +67,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	expect(await world.peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
 	const through = async () => {
 		const view = await world.peer.view(activation);
-		if (!('view' in view)) throw new Error('The ordinary activation is absent.');
+		if (!('view' in view)) throw new Error('The respond activation is absent.');
 		return view.view.through;
 	};
 	const first = await through();
@@ -91,7 +91,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	return { ...world, exchange, activation, say, first };
 }
 
-/** A room with a summary writer where the test claims the closing activation. */
+/** A room with a summary writer where the test claims the summary activation. */
 async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOptions = {}) {
 	const world = await openWorld(
 		storage,
@@ -101,7 +101,7 @@ async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOpt
 	const exchange = await (await world.room.visit(person)).send({ text: 'Question?' });
 	await world.room.reconcile();
 	const owed = stateOf(world.room).due.find((work) => work.source === 'closed');
-	if (owed === undefined) throw new Error('The room has no closing assignment.');
+	if (owed === undefined) throw new Error('The room has no summary activation.');
 	expect(await world.peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
 	const say = (key: string, text: string, extra: { refs?: string[]; to?: string } = {}) =>
 		world.peer.commit({ activation: owed.id, key, intent: { kind: 'said', text, ...extra } });
@@ -134,9 +134,9 @@ describe('the message byte limit', () => {
 			...limits,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context) => {
+				stream: scriptedStream((context) => {
 					results.push(toolResultTexts(context));
-					return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+					return toolResultTexts(context).length === 0 ? say(long) : quiet();
 				}),
 			}),
 		});
@@ -150,7 +150,7 @@ describe('the message byte limit', () => {
 		expect((await messagesOf(room)).some((m) => m.from === 'worker' && m.kind === 'said')).toBe(
 			false,
 		);
-		expect(events.some((e) => e.type === 'activation_end' && e.spoke === false)).toBe(true);
+		expect(events.some((e) => e.type === 'activation_end' && e.said === false)).toBe(true);
 	});
 });
 
@@ -314,7 +314,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			const after = await readRoom(room.name, { runtime });
 			expect(after.messages).toEqual(before.messages);
 			expect(after.exchange).toEqual(before.exchange);
-			expect(after.watermark).toBe(before.watermark);
+			expect(after.through).toBe(before.through);
 
 			const preserved = '  accepted \u00a0 ';
 			const exchange = await visit.send({ key, text: preserved });
@@ -336,7 +336,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				refused: expect.stringMatching(/message is empty/i),
 			});
 			expect(await messagesOf(room)).toEqual(before.messages);
-			expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
+			expect((await readRoom(room.name, { runtime })).through).toBe(before.through);
 
 			const preserved = '  ordinary \u00a0 ';
 			expect(await say('ordinary-blank', preserved)).toMatchObject({
@@ -355,7 +355,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				refused: expect.stringMatching(/message is empty/i),
 			});
 			expect(await messagesOf(room)).toEqual(before.messages);
-			expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
+			expect((await readRoom(room.name, { runtime })).through).toBe(before.through);
 
 			const preserved = '  summary \u00a0 ';
 			const accepted = await say(key, preserved);
@@ -400,13 +400,13 @@ describe('the room protocol on a lease', () => {
 		expect(await say('stale-blank', '', { readThrough: first })).toHaveProperty('stale');
 	});
 
-	it('releases a live activation with its usage, and refuses a draft nobody claimed', async () => {
+	it('releases a live activation with its usage, and refuses a summary activation nobody claimed', async () => {
 		const { opened, room, peer, activation, exchange } = await claimedSummary(memory, {
 			limits: { context: { messages: 1 } },
 		});
 		// The room cap holds the summary view to its last message and counts the rest.
 		const view = await peer.view(activation);
-		if (!('view' in view)) throw new Error('The closing activation is absent.');
+		if (!('view' in view)) throw new Error('The summary activation is absent.');
 		expect(view.view.context.messages.map((message) => message.seq)).toEqual([exchange.from]);
 		expect(view.view.context.omitted).toBe(
 			(await messagesOf(room)).filter((message) => message.seq < exchange.from).length,

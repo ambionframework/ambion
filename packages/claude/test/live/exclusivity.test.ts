@@ -8,7 +8,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { isSpoken } from '../../../ambion/src/index.ts';
+import { isSaid } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -36,7 +36,7 @@ async function ask(prefix: string, definition: ReturnType<typeof seat>, text: st
 		const activation = await within(started, 60_000, 'the activation starting');
 		await untilQuiet(session);
 		const said = (await messagesOf(session))
-			.filter(isSpoken)
+			.filter(isSaid)
 			.filter((m) => m.from === definition.name)
 			.map((m) => m.text)
 			.join('\n');

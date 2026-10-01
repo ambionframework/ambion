@@ -138,6 +138,22 @@ const CASES = [
 		null,
 		'types.ts',
 	],
+	// The stored bodies belong to the vocabulary, so they hold the same rule.
+	[
+		'packages/ambion/src',
+		[
+			...CORE_BANS,
+			['./host/runtime.ts', true],
+			['./journal/journal.ts', true],
+			['./room/fold.ts', true],
+			['./execution/runner.ts', true],
+			['./room-host/core.ts', true],
+			['./room.ts', true],
+			['typebox', false],
+		],
+		null,
+		'bodies.ts',
+	],
 	[
 		'packages/ambion/src/host',
 		[
@@ -161,6 +177,7 @@ const CASES = [
 			['../execution/runner.ts', true],
 			['../room.ts', true],
 			['../types.ts', false],
+			['../bodies.ts', false],
 		],
 		null,
 	],

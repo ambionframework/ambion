@@ -4,8 +4,8 @@
  * full journal replay.
  */
 import { describe, expect, it } from 'vitest';
-import type { LeaseChange } from '../src/journal/events.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { planReconciliation } from '../src/room/reconcile.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
 import { evolve } from './support/evolve.ts';
@@ -15,7 +15,7 @@ const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 const retry = { backoff: () => 0 };
 const id = 'message:2:solo:1';
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -24,13 +24,13 @@ const composition: Entry = {
 		at,
 	},
 };
-const wake = (seq: number, text = 'Question.'): Entry => ({
+const wake = (seq: number, text = 'Question.'): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'said', at, from: 'priya', text, wakes: ['solo'] },
 });
-const lease = (seq: number, body: LeaseChange): Entry => ({ kind: 'lease', seq, body });
-const held = (id: string, seq: number, readThrough: number): Entry =>
+const lease = (seq: number, body: LeaseChange): RoomEntry => ({ kind: 'lease', seq, body });
+const held = (id: string, seq: number, readThrough: number): RoomEntry =>
 	lease(seq, {
 		id,
 		phase: 'running',
@@ -38,7 +38,7 @@ const held = (id: string, seq: number, readThrough: number): Entry =>
 		at,
 		readThrough,
 	});
-const released = (id: string, seq: number, readThrough: number): Entry =>
+const released = (id: string, seq: number, readThrough: number): RoomEntry =>
 	lease(seq, {
 		id,
 		phase: 'ended',
@@ -47,10 +47,10 @@ const released = (id: string, seq: number, readThrough: number): Entry =>
 		readThrough,
 	});
 
-const event = (decision: RoomDecision<'lease'>, seq: number): Entry => {
-	if (!('event' in decision) || decision.event === undefined)
-		throw new Error('Expected a lease event.');
-	return { ...decision.event, seq };
+const entryAt = (decision: RoomDecision<'lease'>, seq: number): RoomEntry => {
+	if (!('entry' in decision) || decision.entry === undefined)
+		throw new Error('Expected a lease entry.');
+	return { ...decision.entry, seq };
 };
 
 const reconciliation = (attempts: number) => ({
@@ -67,7 +67,7 @@ describe('acknowledged lease context', () => {
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.')],
 			retry,
 		);
-		const heartbeat = event(
+		const heartbeat = entryAt(
 			decide(beforeHeartbeat, { type: 'renew', id, expiry: 60_000, deadline: 600_000 }, now),
 			5,
 		);
@@ -98,7 +98,7 @@ describe('acknowledged lease context', () => {
 		expect(pendingOf(state)).toEqual([]);
 	});
 
-	it('refuses invalid lease acknowledgements without proposing an event', () => {
+	it('refuses invalid lease acknowledgements without proposing an entry', () => {
 		const state = replayState([composition, wake(2), held(id, 3, 2)], retry);
 		for (const readThrough of [-1, 1.5, 99]) {
 			expect(
@@ -131,7 +131,7 @@ describe('acknowledged lease context', () => {
 		if (abandoned === undefined) throw new Error('Expected an abandonment.');
 		const ended = decide(releasedUnread, { type: 'end', ...abandoned }, now);
 		expect(ended).toEqual({
-			event: {
+			entry: {
 				kind: 'lease',
 				body: {
 					id: 'message:2:solo:2',
@@ -143,7 +143,7 @@ describe('acknowledged lease context', () => {
 				},
 			},
 		});
-		const stopped = evolve(releasedUnread, event(ended, 5), retry);
+		const stopped = evolve(releasedUnread, entryAt(ended, 5), retry);
 		expect(pendingOf(stopped)).toEqual([]);
 		expect(planReconciliation(stopped, reconciliation(1)).sends).toEqual([]);
 	});
@@ -157,7 +157,7 @@ describe('acknowledged lease context', () => {
 				kind: 'message',
 				seq: 4,
 				body: { kind: 'said', at, from: 'priya', text: 'Later.' },
-			} as Entry,
+			} as RoomEntry,
 		],
 	])(
 		'keeps unread work after %s through release and replay, and retains the released lease',
@@ -166,7 +166,9 @@ describe('acknowledged lease context', () => {
 			const incremental = evolve(foldRoom(entries.slice(0, -1), retry), released(id, 5, 2), retry);
 			expect(pendingOf(incremental).map((pending) => pending.id)).toEqual(['message:4:solo:1']);
 			expect(incremental.leases.get(id)).toMatchObject({ phase: 'ended', readThrough: 2 });
-			expect(foldRoom(JSON.parse(JSON.stringify(entries)) as Entry[], retry)).toEqual(incremental);
+			expect(foldRoom(JSON.parse(JSON.stringify(entries)) as RoomEntry[], retry)).toEqual(
+				incremental,
+			);
 		},
 	);
 

@@ -2,7 +2,7 @@
  * The integration tier of `workstationGitBackend`: the git account
  * `lab-git` and the agents on OpenSSH. Only a real `sshd` honors the
  * options of a line in `authorized_keys.ambion`, so this tier runs
- * `gitConformance`, with the hooks of the `ssh` transport. The expiry case
+ * `gitConformance`, with the hooks of the `ssh` access. The expiry case
  * of the suite proves that `sshd` refuses a key after its `expiry-time`.
  * The tier also proves that an agent key opens no shell, that `serve`
  * refuses a request outside its pattern, that no agent reads the git
@@ -50,7 +50,7 @@ const GIT_ACCOUNT = 'lab-git';
  * A key life between 3 and 5 seconds. `expiry-time` has a resolution of
  * one second, and the server renders it.
  */
-const KEY_TTL = 4;
+const CREDENTIAL_TTL = 4;
 
 /** Start each case with an empty git account, and agents with empty homes. */
 async function wipe(bash: Backend): Promise<void> {
@@ -66,7 +66,7 @@ async function wipe(bash: Backend): Promise<void> {
 async function gitOptions(): Promise<WorkstationGitOptions> {
 	const setup = await readSetup();
 	return {
-		host: setup.host,
+		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		account: { username: GIT_ACCOUNT, privateKey: await keyOf(setup, GIT_ACCOUNT) },
@@ -137,7 +137,7 @@ const pushTo = (url: string) =>
 
 const harness: GitConformanceBackend<GitBackend> = {
 	name: 'workstation git on OpenSSH',
-	shortestCredentialTtl: KEY_TTL,
+	shortestCredentialTtl: CREDENTIAL_TTL,
 	issueCredentials: async ({ backend, workspace }, agent) => {
 		await backend.access.identityFor(agent);
 		await workspace.use(agent, async () => undefined);
@@ -146,19 +146,21 @@ const harness: GitConformanceBackend<GitBackend> = {
 		(await shell(workspace, agent, pushTo(url))).code === 0,
 	probeCredential,
 	async open() {
-		const bash = workstationBackend(await options());
+		const ssh = await options();
+		// The housekeeping backend has no git backend, so a connect of `lab-git` writes no key.
+		const admin = workstationBackend(ssh);
 		const base = await gitOptions();
-		await wipe(bash);
+		await wipe(admin);
 		return {
-			bash,
+			bash: (git) => workstationBackend({ ...ssh, git }),
 			backend: ({ templates, shared, credentialTtl }) =>
 				workstationGitBackend({
 					...base,
 					templates: templatesOf(templates),
 					shared: sharedOf(shared),
-					...(credentialTtl === undefined ? {} : { keyTtl: credentialTtl }),
+					...(credentialTtl === undefined ? {} : { credentialTtl }),
 				}),
-			dispose: async () => bash.dispose?.(),
+			dispose: async () => admin.dispose?.(),
 		};
 	},
 };
@@ -169,19 +171,24 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 	});
 
 	describe('the checks of sshd', () => {
-		let bash: Backend;
+		let admin: Backend;
 		let workspace: Workspace;
 		let url: string;
 		let sharedUrl: string;
 		beforeAll(async () => {
-			bash = workstationBackend(await options());
-			await wipe(bash);
+			const ssh = await options();
+			// The housekeeping backend has no git backend, so a connect of `lab-git` writes no key.
+			admin = workstationBackend(ssh);
+			await wipe(admin);
 			const git = workstationGitBackend({
 				...(await gitOptions()),
 				templates: { blank: { source: { 'README.md': 'blank\n' } } },
 				shared: { notes: { source: { 'README.md': 'seed\n' } } },
 			});
-			workspace = openWorkspace({ name: 'lab', backend: { bash, git } });
+			workspace = openWorkspace({
+				name: 'lab',
+				backend: { bash: workstationBackend({ ...ssh, git }) },
+			});
 			const outcome = await workspace.git?.use(ANALYST, (env) =>
 				env.fork('templates/blank', 'mine'),
 			);
@@ -191,7 +198,10 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 			if (shared === undefined) throw new Error('The shared repository was not registered.');
 			sharedUrl = shared.url;
 		});
-		afterAll(async () => workspace.dispose());
+		afterAll(async () => {
+			await workspace.dispose();
+			await admin.dispose?.();
+		});
 
 		it.each([
 			['no command', 'ssh ambion-git'],
@@ -239,7 +249,7 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 				].join(' && '),
 			);
 			expect(pushed).toMatchObject({ code: 0 });
-			const reflog = await withEnv(bash, GIT_ACCOUNT, (env) =>
+			const reflog = await withEnv(admin, GIT_ACCOUNT, (env) =>
 				run(env, "git -C ~/repos/analyst/mine.git log -g --format='%gn %an' main"),
 			);
 			expect(reflog.output.split('\n')[0]).toBe('analyst someone');
@@ -282,7 +292,7 @@ describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
 			expect(scenario.output).toContain('non-fast-forward push to protected branch');
 			const linear = /^LINEAR=([0-9a-f]{40})$/m.exec(scenario.output)?.[1];
 			expect(linear).toBeDefined();
-			const main = await withEnv(bash, GIT_ACCOUNT, (env) =>
+			const main = await withEnv(admin, GIT_ACCOUNT, (env) =>
 				run(env, 'git -C ~/repos/shared/notes.git rev-parse refs/heads/main'),
 			);
 			expect(main.output.trim()).toBe(linear);

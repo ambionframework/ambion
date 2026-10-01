@@ -1,7 +1,7 @@
-import type { ExchangeActivation, ExchangeView, Message } from '@ambionframework/ambion';
+import type { Exchange, ExchangeActivation, Message } from '@ambionframework/ambion';
 import { formatUsage, type PassView } from './steps.ts';
 
-type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
+type ClosedView = Extract<Exchange, { status: 'closed' }>;
 
 /**
  * How a message reads in the conversation. A steer is a person's message
@@ -61,7 +61,7 @@ export type Block = MessageBlock | DiscussionBlock | NoteBlock | StepsBlock | Li
 
 export interface TimelineInput {
 	messages: readonly Message[];
-	exchanges: readonly ExchangeView[];
+	exchanges: readonly Exchange[];
 	open?: { person?: string };
 	/** The latest work an agent reported in the open exchange. */
 	activity?: string;
@@ -96,7 +96,7 @@ const lastFailed = (
 	purpose: ExchangeActivation['purpose'],
 ): ExchangeActivation | undefined =>
 	exchange.activations.findLast(
-		(activation) => activation.purpose === purpose && activation.outcome.status === 'failed',
+		(activation) => activation.purpose === purpose && activation.outcome.kind === 'failed',
 	);
 
 /** The seat whose reply the room gave up on, or undefined when the room gave up on none. */
@@ -119,10 +119,10 @@ function flagFor(exchange: ClosedView): string {
 	if (waiting) return waiting;
 	const failed = gaveUpOn(exchange);
 	if (failed) return `${failed.seat} failed`;
-	const status = exchange.summary.status;
-	if (status === 'published') return '';
-	if (status === 'pending') return 'Summary pending';
-	if (status === 'failed') return 'Summary failed';
+	const kind = exchange.summary.kind;
+	if (kind === 'published') return '';
+	if (kind === 'pending') return 'Summary pending';
+	if (kind === 'failed') return 'Summary failed';
 	return 'No summary';
 }
 
@@ -137,12 +137,12 @@ function noteFor(exchange: ClosedView, failures?: ReadonlyMap<string, string>): 
 	if (waiting) return `${waiting}${suffix}`;
 	const failed = gaveUpOn(exchange);
 	if (failed) return `Closed, ${failureText(failed, failures)}${suffix}`;
-	const status = exchange.summary.status;
-	if (status === 'pending') return `Closed, summary pending${suffix}`;
-	const summary = lastFailed(exchange, 'summary');
-	if (status === 'failed' && summary)
+	const kind = exchange.summary.kind;
+	if (kind === 'pending') return `Closed, summary pending${suffix}`;
+	const summary = lastFailed(exchange, 'summarize');
+	if (kind === 'failed' && summary)
 		return `Closed, summary failed: ${failureText(summary, failures)}${suffix}`;
-	if (status === 'failed') return `Closed, summary failed${suffix}`;
+	if (kind === 'failed') return `Closed, summary failed${suffix}`;
 	return `Closed without a summary${suffix}`;
 }
 
@@ -156,7 +156,7 @@ function groupsOf(input: TimelineInput): Group[] {
 					message.seq > exchange.from &&
 					message.seq <= exchange.through,
 			);
-			const published = exchange.summary.status === 'published';
+			const published = exchange.summary.kind === 'published';
 			return {
 				exchange,
 				source,

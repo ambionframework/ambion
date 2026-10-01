@@ -2,7 +2,7 @@
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
 import { createCodexOpener } from './executor.ts';
-import type { CodexRuntime } from './options.ts';
+import type { CodexExecutionOptions } from './options.ts';
 
 /**
  * The Codex execution for a runtime or a room. Pass it as `execution` to
@@ -10,7 +10,7 @@ import type { CodexRuntime } from './options.ts';
  * `codex`. It does not change the default of that kind. Loading the package
  * defines that default, with no options.
  */
-export const codexExecution = defineExecution<CodexRuntime>(
+export const codexExecution = defineExecution<CodexExecutionOptions>(
 	'codex',
 	(_host, options) => (request) =>
 		createCodexOpener({ definition: request.definition, ...options }),

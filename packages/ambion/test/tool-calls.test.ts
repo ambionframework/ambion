@@ -33,9 +33,7 @@ it.each([
 	trace.record(call('c1', name));
 	trace.record(result('c1'));
 	expect(recorded).toHaveLength(2);
-	expect(raised).toEqual(
-		raises ? [`tool_execution_start:${name}`, `tool_execution_end:${name}`] : [],
-	);
+	expect(raised).toEqual(raises ? [`tool_call:${name}`, `tool_result:${name}`] : []);
 });
 
 it('pairs a result with its call by id, and raises no end for a result with no call', () => {
@@ -47,10 +45,10 @@ it('pairs a result with its call by id, and raises no end for a result with no c
 	trace.record(result('c1'));
 	trace.record(result('c1'));
 	expect(raised).toEqual([
-		'tool_execution_start:lookup',
-		'tool_execution_start:fetch',
-		'tool_execution_end:fetch',
-		'tool_execution_end:lookup',
+		'tool_call:lookup',
+		'tool_call:fetch',
+		'tool_result:fetch',
+		'tool_result:lookup',
 	]);
 });
 

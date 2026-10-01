@@ -74,7 +74,7 @@ it('sends a line that lands while a later pass renders its record, and counts it
 			],
 		},
 	};
-	const second = run.session.pass({ kind: 'delta', since: 1, view });
+	const second = run.session.pass({ kind: 'delta', after: 1, view });
 	// The pass has not sent its prompt yet: the executor holds the line, and sends it after the prompt.
 	run.session.steer(2, 3, '[3] priya: One more thing.');
 	expect(await second).toEqual({ failed: false });

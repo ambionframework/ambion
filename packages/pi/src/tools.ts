@@ -7,7 +7,7 @@
  * result, so a room tool's error result becomes a thrown error here. A
  * result that ends the activation sets `terminate`. The agent's own tools
  * keep their Pi fields: the harness prepares and checks the arguments, and
- * passes the signal of the run and the updates.
+ * passes the signal of the pass and the updates.
  */
 import type { AmbionTool, ToolContent, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import type { ActivationView, AgentDefinition, RoomTool } from '@ambionframework/ambion/hosting';
@@ -88,7 +88,7 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
  *   against the schema. A `RoomTool` applies it after the check.
  * - The harness runs a batch in turn when a tool sets `executionMode` to
  *   `sequential`.
- * - The harness gives the tool `onUpdate`, and the abort signal of the run.
+ * - The harness gives the tool `onUpdate`, and the abort signal of the pass.
  * - The harness keeps `details` and `terminate` of the result. A `RoomTool`
  *   gives the content alone.
  *

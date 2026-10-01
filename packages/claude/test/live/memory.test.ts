@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
-import { isSpoken, type Step } from '../../../ambion/src/index.ts';
+import { isSaid, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { createClaudeOpener } from '../../src/executor.ts';
 import { viewOf } from '../support.ts';
@@ -46,7 +46,7 @@ async function twoQuestions() {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
 		session.subscribe((e) => {
-			if (e.type === 'activation_start' && e.agent === 'keeper') ids.push(e.activation);
+			if (e.type === 'activation_start' && e.seat === 'keeper') ids.push(e.activation);
 		});
 		await visit.send({ text: 'Please read code.txt.' });
 		await untilQuiet(session);
@@ -57,7 +57,7 @@ async function twoQuestions() {
 		expect(first).toBeDefined();
 		expect(second).toBeDefined();
 		const said = (await messagesOf(session))
-			.filter(isSpoken)
+			.filter(isSaid)
 			.filter((m) => m.from === 'keeper')
 			.map((m) => m.text);
 		const exchanges = (await session.read()).exchanges;

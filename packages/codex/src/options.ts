@@ -9,19 +9,38 @@ import { fileURLToPath } from 'node:url';
 import {
 	type Executor,
 	executorOfKind,
+	type Pass,
 	present,
 	ROOM_SERVER,
 } from '@ambionframework/ambion/hosting';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
-import type { CodexExecutor } from './define.ts';
+import type { CodexExecutor, ReasoningSummary } from './define.ts';
+import type { HomeOptions, SeatHome } from './home.ts';
 
-/** The services a Codex execution brings: where the executable is and what it runs with. */
-export interface CodexRuntime {
+/**
+ * The services a Codex execution brings: where the executable is, what it
+ * runs with, and the Codex home of its seats.
+ */
+export interface CodexExecutionOptions extends HomeOptions {
 	/** A `codex` executable to run. Absent, the SDK finds the one that `@openai/codex` ships. */
 	readonly codexPath?: string;
-	/** The environment of the executable. Absent, the environment of this process. */
-	readonly env?: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * Codex answers in its own final message when a prompt does not say
+ * otherwise. The room hears only `say`, so the seat text says so first.
+ */
+export const HARNESS_NOTE =
+	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
+	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
+
+/**
+ * The seat text: the harness note, the mechanism, and the agent part. They
+ * are fixed for an activation, so the first pass supplies them.
+ */
+export function seatText(pass: Pick<Pass, 'mechanism' | 'agent'>): string {
+	return `${HARNESS_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}`;
 }
 
 /** The Codex executor a definition names, or an error that names its kind. */
@@ -42,67 +61,52 @@ export function serverPath(from: string | URL = import.meta.url): string {
 }
 
 /**
- * The options of the thread: the model and the policy the executor names.
- * With a `scratch`, the seat has no native tools. The policy is then fixed:
- * a read-only sandbox, no network, no approval, and an empty directory.
+ * The options of the thread: the model and the fixed policy. The seat has no
+ * native tools, so the sandbox is read-only, no command may use the network,
+ * Codex asks for no approval, and the working directory is the empty scratch.
  */
-export function threadOptions(executor: CodexExecutor, scratch?: Scratch): ThreadOptions {
-	if (scratch !== undefined) {
-		return {
-			model: executor.model,
-			skipGitRepoCheck: true,
-			sandboxMode: 'read-only',
-			approvalPolicy: 'never',
-			networkAccessEnabled: false,
-			workingDirectory: scratch.directory,
-			...present({ modelReasoningEffort: executor.modelReasoningEffort }),
-		};
-	}
+export function threadOptions(executor: CodexExecutor, scratch: Scratch): ThreadOptions {
 	return {
 		model: executor.model,
-		// A room seat runs where the application puts it, which is often no git repository.
 		skipGitRepoCheck: true,
-		// Codex runs its commands with no sandbox of its own. Isolate such a seat on the host.
-		// On Linux the Codex sandbox needs user namespaces, and a host can refuse them.
-		sandboxMode: executor.sandboxMode ?? 'danger-full-access',
-		...present({
-			approvalPolicy: executor.approvalPolicy,
-			modelReasoningEffort: executor.modelReasoningEffort,
-			networkAccessEnabled: executor.networkAccessEnabled,
-			workingDirectory: executor.workingDirectory,
-			additionalDirectories: executor.additionalDirectories && [...executor.additionalDirectories],
-		}),
+		sandboxMode: 'read-only',
+		approvalPolicy: 'never',
+		networkAccessEnabled: false,
+		workingDirectory: scratch.directory,
+		...present({ modelReasoningEffort: executor.modelReasoningEffort }),
 	};
 }
 
 /**
  * The options of the client for one activation: the executable, its
- * environment, and the room tools server. With a `scratch`, the config also
+ * environment with the Codex home of the seat, the instructions file with the
+ * seat text, the reasoning summary, the room tools server, and the config that
  * turns off the native tools.
  */
 export function clientOptions(
-	runtime: CodexRuntime,
+	execution: CodexExecutionOptions,
+	home: SeatHome,
 	socketPath: string,
-	scratch?: Scratch,
+	summary: ReasoningSummary,
+	scratch: Scratch,
 ): CodexOptions {
-	const env =
-		runtime.env &&
-		Object.fromEntries(
-			Object.entries(runtime.env).filter(
-				(entry): entry is [string, string] => entry[1] !== undefined,
-			),
-		);
 	return {
-		...present({ codexPathOverride: runtime.codexPath, env }),
+		...present({ codexPathOverride: execution.codexPath }),
+		env: { ...home.env },
 		config: {
-			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
+			model_instructions_file: scratch.instructions,
+			model_reasoning_summary: summary,
+			...exclusiveConfig(scratch.catalog),
 			mcp_servers: {
-				...(scratch === undefined ? {} : { [NODE_REPL]: NODE_REPL_OFF }),
+				[NODE_REPL]: NODE_REPL_OFF,
 				[ROOM_SERVER]: {
 					command: process.execPath,
 					args: [serverPath(), socketPath],
 					// The room tools are the seat's own. Under approvalPolicy 'never', Codex denies an MCP call that needs approval.
 					default_tools_approval_mode: 'approve',
+					// Codex waits for a required server before the first model request. It waits
+					// one second for an optional server, and a loaded host needs more.
+					required: true,
 					startup_timeout_sec: 30,
 					tool_timeout_sec: 600,
 				},

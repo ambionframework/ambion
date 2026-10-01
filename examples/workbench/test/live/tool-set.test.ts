@@ -1,11 +1,11 @@
 /**
- * One tool set and one filesystem on the real families. Three claims:
+ * One tool set and one filesystem on the real executors. Three claims:
  *
  * - Each seat, the assistant included, lists the same tool names, and none of them is a native tool.
  * - One specialist writes a file with the workspace tool, and the others read it back.
  * - A request to read `/etc/hosts` reaches no tool that reads a host file.
  *
- * A family without its key skips its part. The Claude harness prefixes each
+ * An executor kind without its key skips its part. The Claude harness prefixes each
  * tool name with `mcp__ambion__`. The Codex harness adds its own prefix.
  * The test removes both. Codex adds three MCP helper tools whenever an MCP
  * server is on. They reach no resource here, and the test ignores them.
@@ -15,12 +15,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	createRuntime,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
 	startRoom,
-	type TraceRecord,
+	type TracedStep,
 } from '@ambionframework/ambion';
 import { settled } from '@ambionframework/ambion/testing';
 import { claudeExecution } from '@ambionframework/claude';
@@ -32,13 +32,13 @@ import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it } from 'vitest';
 import { people, team } from '../../src/definitions.ts';
-import { type Family, hasKey, seatFamilies } from '../../src/families.ts';
 import { openInstrument } from '../../src/instrument.ts';
+import { type ExecutorKind, hasKey, seatKinds } from '../../src/kinds.ts';
 import { instruments, labAppendOnly, labSchema } from '../../src/scenarios.ts';
 
 const QUIET_MS = 150_000;
 
-/** The assistant and the specialists, each with the family it runs on. */
+/** The assistant and the specialists, each with the executor kind it runs on. */
 const specialists = ['assistant', 'datasheets', 'design', 'experiments'] as const;
 
 /**
@@ -76,7 +76,7 @@ const LIST =
 	'List every tool you can call, one tool name per line, with no other text. ' +
 	'Use the exact name as your tool list shows it. Send the list with one say.';
 
-const familyOf = (name: string): Family => seatFamilies[name] ?? 'pi';
+const kindOf = (name: string): ExecutorKind => seatKinds[name] ?? 'pi';
 
 function asker() {
 	const [person] = people;
@@ -100,7 +100,7 @@ async function openRoom(seats: readonly string[]) {
 	const lab = workspace.sql;
 	if (lab === undefined) throw new Error('The workspace has no lab database.');
 	const built = team(workspace, openInstrument({ lab, instruments }));
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		logger: (record) => void records.push(record),
@@ -140,7 +140,7 @@ async function ask(room: Room, seat: string, text: string): Promise<string> {
 	await untilQuiet(room);
 	const messages: readonly Message[] = (await room.read()).messages.slice(before);
 	return messages
-		.filter(isSpoken)
+		.filter(isSaid)
 		.filter((message) => message.from === seat)
 		.map((message) => message.text)
 		.join('\n');
@@ -163,10 +163,10 @@ const namesIn = (text: string): string[] =>
 		),
 	].sort();
 
-/** The specialists whose family has a key. A family with no key skips its part. */
-const available = specialists.filter((seat) => hasKey(familyOf(seat)));
+/** The specialists whose executor kind has a key. A kind with no key skips its part. */
+const available = specialists.filter((seat) => hasKey(kindOf(seat)));
 
-describe.skipIf(available.length === 0)('Workbench tool set on every family', () => {
+describe.skipIf(available.length === 0)('Workbench tool set on every executor kind', () => {
 	it('lists the same tools for every seat, and no native tool', async () => {
 		const opened = await openRoom(available);
 		try {

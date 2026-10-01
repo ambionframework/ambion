@@ -1,8 +1,9 @@
 /**
- * The executor over a client that replays recorded events: the first
- * prompt, exchange continuity, and the recipe that turns native tools off.
+ * The executor over a client that replays recorded events: the seat text
+ * in the client config, exchange continuity, and the recipe that turns
+ * native tools off.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { Message } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
@@ -12,7 +13,7 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { HARNESS_NOTE } from '../src/executor.ts';
+import { HARNESS_NOTE } from '../src/options.ts';
 import { recorded } from './fixtures.ts';
 import { open, sayingTurn, seat, viewOf } from './support.ts';
 
@@ -33,7 +34,7 @@ async function run(session: ActivationState, resume?: HarnessSession) {
 }
 
 describe('exchange continuity', () => {
-	it('records the thread id, resumes only the thread the view names, and starts the first prompt with the harness note', async () => {
+	it('records the thread id, resumes only the thread the view names, and keeps the seat text out of the prompt', async () => {
 		const room = open([plain, plain, plain]);
 		const first = await run(room.activate('a1'));
 		expect(first.result).toEqual({ failed: false });
@@ -45,8 +46,7 @@ describe('exchange continuity', () => {
 			{ resume: ID },
 			{ resume: undefined },
 		]);
-		expect(room.seen.prompts[0]?.startsWith(HARNESS_NOTE)).toBe(true);
-		expect(room.seen.prompts[0]?.length).toBeGreaterThan(HARNESS_NOTE.length);
+		expect(room.seen.prompts[0]).not.toContain(HARNESS_NOTE);
 		expect(HARNESS_NOTE).toContain('`say`');
 		expect(HARNESS_NOTE).toContain('reaches no one');
 	});
@@ -66,6 +66,8 @@ describe('exchange continuity', () => {
 		const room = open([plain]);
 		await run(room.activate(), { harness, id: 'saved' });
 		expect(room.seen.opened).toEqual([{ resume }]);
+		// The seat text stays in the instructions file, also for a thread that resumes.
+		expect(room.seen.prompts[0]).not.toContain(HARNESS_NOTE);
 	});
 
 	it('starts a fresh thread when the resume fails before the thread starts', async () => {
@@ -132,25 +134,27 @@ describe('room tools', () => {
 });
 
 describe('native tools', () => {
-	it('runs a seat under the exclusive recipe by default, and removes the scratch on close', async () => {
+	it('runs a seat under the exclusive recipe, and removes the scratch on close', async () => {
 		const room = open([plain]);
 		const session = room.activate();
 		const result = await session.pass(input());
-		const config = room.seen.clients[0]?.config as { model_catalog_json: string };
+		const config = room.seen.clients[0]?.config as {
+			model_catalog_json: string;
+			model_instructions_file: string;
+		};
 		const thread = room.seen.threads[0];
 		expect(result).toEqual({ failed: false });
 		expect(existsSync(config.model_catalog_json)).toBe(true);
+		// The file holds the seat text, and the prompt holds the view alone.
+		const text = readFileSync(config.model_instructions_file, 'utf8');
+		expect(text.startsWith(HARNESS_NOTE)).toBe(true);
+		expect(text).toContain('Answer once.');
+		expect(room.seen.prompts[0]).not.toContain('Answer once.');
 		expect(thread?.workingDirectory && readdirSync(thread.workingDirectory)).toEqual([]);
 		expect(thread?.sandboxMode).toBe('read-only');
 		session.close?.();
 		expect(existsSync(config.model_catalog_json)).toBe(false);
-	});
-
-	it('leaves the client config alone with nativeTools codex', async () => {
-		const room = open([plain], seat({ nativeTools: 'codex', sandboxMode: 'workspace-write' }));
-		await run(room.activate());
-		expect(Object.keys(room.seen.clients[0]?.config ?? {})).toEqual(['mcp_servers']);
-		expect(room.seen.threads[0]?.sandboxMode).toBe('workspace-write');
+		expect(existsSync(config.model_instructions_file)).toBe(false);
 	});
 
 	it('does not start a model that the catalog lacks, and fails as permanent', async () => {

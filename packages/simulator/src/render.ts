@@ -13,13 +13,13 @@ import {
 	type ExchangeActivation,
 	type HumanDefinition,
 	isPosted,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type PostedMessage,
 	type RoomNotification,
 } from '@ambionframework/ambion';
-import type { Run, SeenExchange } from './types.ts';
+import type { SeenExchange, Simulation } from './types.ts';
 
 /**
  * One message as one line: its place, its author, its recipient, its kind,
@@ -32,7 +32,7 @@ function messageLine(message: Message): string {
 		const { from, through } = message.covers;
 		return `[${message.seq}] summary from ${message.from} to ${message.to} (covers ${from}-${through}): ${text}`;
 	}
-	if (isSpoken(message)) {
+	if (isSaid(message)) {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
 	if (isPosted(message)) return postedLine(message, text);
@@ -54,7 +54,7 @@ function postedLine(message: PostedMessage, text: string): string {
 function seenLines(exchange: SeenExchange, index: number): string[] {
 	const lines = [`Exchange ${index + 1}. You sent: ${exchange.sent}`];
 	for (const message of exchange.discussion) {
-		if (isSpoken(message)) lines.push(messageLine(message));
+		if (isSaid(message)) lines.push(messageLine(message));
 	}
 	if (exchange.summary !== undefined) lines.push(`Summary to you: ${exchange.summary.text}`);
 	return lines;
@@ -85,30 +85,30 @@ export function actorSystem(person: HumanDefinition, brief: string): string {
 function toolsByActivation(events: readonly RoomNotification[]): Map<string, string[]> {
 	const tools = new Map<string, string[]>();
 	for (const event of events) {
-		if (event.type !== 'tool_execution_start') continue;
-		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.toolName]);
+		if (event.type !== 'tool_call') continue;
+		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.name]);
 	}
 	return tools;
 }
 
 function activationLine(activation: ExchangeActivation, tools: readonly string[]): string {
-	const { status, ...rest } = activation.outcome;
+	const { kind, ...rest } = activation.outcome;
 	const detail = Object.keys(rest).length === 0 ? '' : ` ${JSON.stringify(rest)}`;
 	const called = tools.length === 0 ? 'no tools' : `tools ${tools.join(', ')}`;
-	return `- ${activation.seat}, ${activation.purpose}, ${status}${detail}, ${called}`;
+	return `- ${activation.seat}, ${activation.purpose}, ${kind}${detail}, ${called}`;
 }
 
-/** The record of a run as the judge reads it. */
-export function renderRecord(run: Run): string {
-	const tools = toolsByActivation(run.events);
+/** The record of a simulation as the judge reads it. */
+export function renderRecord(simulation: Simulation): string {
+	const tools = toolsByActivation(simulation.events);
 	const lines = [
-		`Goal of the room: ${run.room.goal ?? 'none stated'}`,
-		`The person: ${run.person.name}. ${run.person.identity}`,
+		`Goal of the room: ${simulation.room.goal ?? 'none stated'}`,
+		`The person: ${simulation.person.name}. ${simulation.person.identity}`,
 		'',
 		'Messages:',
-		...run.room.messages.map(messageLine),
+		...simulation.room.messages.map(messageLine),
 	];
-	run.exchanges.forEach((exchange, index) => {
+	simulation.exchanges.forEach((exchange, index) => {
 		const { view } = exchange;
 		lines.push(
 			'',

@@ -24,7 +24,7 @@ cannot enter the record.
 | Change the recipient or the range of a summary | The writer sets the text only. The room refuses a second summary for one person.                                                                | `coversExchange` and `coversClose` in [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), [`summary.test.ts`](../packages/ambion/test/summary.test.ts)                                                                         |
 | Schedule work as another seat or person        | A scheduled say goes to its author alone, and a returned say has no author. The say names no person.                                            | `scheduleRefusal` in [`room/scheduled.ts`](../packages/ambion/src/room/scheduled.ts), [`transition.test.ts`](../packages/ambion/test/transition.test.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts)          |
 | Post as the system                             | A seat has no tool that posts. `room.post` belongs to the host. A post has no author, and the body schema refuses `from` on one.                | `post` in [`room/transition.ts`](../packages/ambion/src/room/transition.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts), [`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts) |
-| Dismiss the say of another seat                | A seat dismisses its own pending say alone. The host dismisses any pending say, and its entry has no author.                                    | `dismissal` in [`room/scheduled.ts`](../packages/ambion/src/room/scheduled.ts), [`transition.test.ts`](../packages/ambion/test/transition.test.ts)                                                                                                    |
+| Dismiss the say of another seat                | A seat dismisses its own scheduled say alone. The host dismisses any scheduled say, and its entry has no author.                                | `dismissal` in [`room/scheduled.ts`](../packages/ambion/src/room/scheduled.ts), [`transition.test.ts`](../packages/ambion/test/transition.test.ts)                                                                                                    |
 | Read the record of another room                | `recall` reads the room of the activation alone. A ref to another room gives a line, and the room reads nothing.                                | `recallTool` in [`execution/room-tools.ts`](../packages/ambion/src/execution/room-tools.ts), [`executor-tools.test.ts`](../packages/pi/test/executor-tools.test.ts)                                                                                   |
 | Revive cancelled work                          | Work before the cancellation boundary loses publication authority.                                                                              | `survivesCancellation` and `beforeCancellation` in [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                  |
 | Unseat a fixed seat through the tool           | The room refuses. The host can still call `room.unseat`.                                                                                        | [Roster](roster.md), [`roster.test.ts`](../packages/ambion/test/roster.test.ts)                                                                                                                                                                       |
@@ -42,9 +42,9 @@ does not restrict who may address or steer whom.
 | Address anyone, including a person who is absent      | The message enters the record for that person.  | [Presence](presence.md), [`presence.test.ts`](../packages/ambion/test/presence.test.ts)                             |
 | Steer a working seat with a message it did not author | The driver delivers the line into the pass.     | [Definitions and tools](agent.md), [`steering-delivery.test.ts`](../packages/ambion/test/steering-delivery.test.ts) |
 
-## Membership authority
+## Roster authority
 
-**The room owns membership.** An agent changes it only by name, through
+**The room owns the roster.** An agent changes it only by name, through
 `seat` and `unseat`. A fixed seat resists the tool. The host always keeps
 `room.unseat`. [Roster](roster.md) owns the rules and the attention scale.
 
@@ -65,16 +65,16 @@ does not restrict who may address or steer whom.
 
 ## What each harness exposes
 
-**Every family reaches the world through the same tools.** The workbench team runs
+**Every executor kind reaches the world through the same tools.** The workbench team runs
 one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK. One
 list of `bundles` serves every seat, so every seat holds the room tools and
 the workspace tools and no other tool.
 
-| Family | On                             | Off                                    | How the package enforces it                                                               | Test that guards it                                                                                                                    |
-| ------ | ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only               | `examples/workbench/test/live/tool-set.test.ts`                                                                                        |
-| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model             |
-| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | `nativeTools: 'none'` sets the tool policy and replaces the model catalog entry           | `packages/codex/test/options.test.ts` on the options; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
+| Kind   | On                             | Off                                    | How the package enforces it                                                                 | Test that guards it                                                                                                                                                                      |
+| ------ | ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only                 | `examples/workbench/test/live/tool-set.test.ts`                                                                                                                                          |
+| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings   | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model                                                               |
+| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | The executor fixes the tool policy and replaces the model catalog entry; no option opens it | `packages/codex/test/options.test.ts` on the options; `packages/codex/test/binary.test.ts` on the wire; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
 
 **What the live tests prove.** One tool set, one filesystem, and no native
 tool rest on the live exclusivity tests. `tool-set.test.ts` lists the tools
@@ -82,13 +82,22 @@ of each seat that has a key, finds the same list for every seat with no
 native tool in it, and shows that one seat reads a file another seat wrote.
 It also shows that a seat cannot read `/etc/hosts`.
 `packages/codex/test/live/exclusive.test.ts` does the same for a Codex seat.
-Both tiers skip a family with no key, and they run only on request.
+Both tiers skip an executor kind with no key, and they run only on request.
 
-**`nativeTools: 'none'` turns off Codex Code Mode.** Its JavaScript runtime
-reads the host filesystem outside the sandbox on Codex 0.155.1. See
-[Codex](codex.md#the-trust-boundary).
+**A Codex seat has no native tools, ever.** The Code Mode runtime of Codex
+read the host filesystem outside the sandbox on Codex 0.155.1, and the
+catalog of 0.158.0 still lists its tools. The executor patches it out of
+every seat. See [Codex](codex.md#the-trust-boundary).
 
-Each family has a guide with its options and its tests. Read the
+**The `config.toml` of the seat home is the responsibility of the host.**
+The executor overrides each config key that the recipe names. A key that the
+recipe does not name survives from that file by a deep merge. An extra
+`[mcp_servers.<name>]` table starts a server with tools that reach the
+host. A `features.<name> = true` entry turns on a feature that the recipe
+does not list. The default home `~/.ambion/codex` holds no `config.toml`
+until a person writes one. Write only keys that you trust into that file.
+
+Each executor kind has a guide with its options and its tests. Read the
 [Pi](../packages/pi/README.md), [Claude](../packages/claude/README.md), and
 [Codex](codex.md) pages, and [Executors](executors.md) for the
 contract that all three meet.
@@ -101,7 +110,7 @@ same exchange. [Exchange continuity](executors.md#exchange-continuity)
 states the rule.
 
 **Freshness governs speech in a kept session.** The driver records the
-session on the `ended` lease entry, and the exchange view lists it as
+session on the `ended` lease entry, and the `Exchange` lists it as
 `ExchangeActivation.session`. [Durability](durability.md) owns the entry
 format.
 

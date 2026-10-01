@@ -41,7 +41,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/c
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
 import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
-import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
+import { approver, type ClaudeExecutionOptions, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -52,8 +52,8 @@ export const RESUMED_NOTE =
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
 
-/** What builds a Claude opener for one seat: its definition, and the runtime that runs it. */
-export interface ClaudeOpenerOptions extends ClaudeRuntime {
+/** What builds a Claude opener for one seat: its definition, and the options that run it. */
+export interface ClaudeOpenerOptions extends ClaudeExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** The SDK entry. Absent, the SDK's own `query`. */
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
@@ -75,7 +75,7 @@ interface Held {
 class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly runtime: ClaudeRuntime;
+	private readonly options: ClaudeExecutionOptions;
 	private readonly open: NonNullable<ClaudeOpenerOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
@@ -101,7 +101,7 @@ class Activation implements RunningActivation {
 	constructor(activation: ExecutorActivation, options: ClaudeOpenerOptions) {
 		this.activation = activation;
 		this.definition = options.definition;
-		this.runtime = options;
+		this.options = options;
 		this.open = options.query ?? query;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
@@ -168,7 +168,7 @@ class Activation implements RunningActivation {
 	 * The message that starts a pass: the whole view first, then the delta,
 	 * or none when nothing is new. A resumed session keeps the system prompt
 	 * it began with, so the first message of a resumed query restates the
-	 * seat's part for this activation. A closing activation gets its duties
+	 * seat's part for this activation. A summary activation gets its duties
 	 * and the reader's preferences this way.
 	 */
 	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
@@ -212,7 +212,7 @@ class Activation implements RunningActivation {
 					server,
 					names,
 					canUseTool: approver(executor, this.trace, names),
-					runtime: this.runtime,
+					options: this.options,
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),
 				}),
 			});

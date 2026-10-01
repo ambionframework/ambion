@@ -336,14 +336,14 @@ const closedExchange = (from: number, extra: Record<string, unknown> = {}) => ({
 	person: 'mira',
 	at: AT,
 	outcome: { kind: 'complete' },
-	summary: { status: 'silent' },
+	summary: { kind: 'silent' },
 	activations: [
 		{
 			id: `act-${from}`,
 			seat: 'design',
 			purpose: 'respond',
 			attempt: 1,
-			outcome: { status: 'released' },
+			outcome: { kind: 'released' },
 		},
 	],
 	...extra,
@@ -409,12 +409,12 @@ describe('Session steps', () => {
 
 	it('opens the attempt that ran, and not the attempt the room abandoned after it', async () => {
 		const { host, session } = await started();
-		const attempt = (id: string, status: string, attempt: number) => ({
+		const attempt = (id: string, kind: string, attempt: number) => ({
 			id,
 			seat: 'assistant',
 			purpose: 'respond',
 			attempt,
-			outcome: { status, cause: 'permanent' },
+			outcome: { kind, cause: 'permanent' },
 		});
 		const activations = [attempt('act-4', 'failed', 1), attempt('act-4b', 'abandoned', 2)];
 		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4, { activations })] }));

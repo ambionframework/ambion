@@ -2,7 +2,7 @@
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
 import { createClaudeOpener } from './executor.ts';
-import type { ClaudeRuntime } from './options.ts';
+import type { ClaudeExecutionOptions } from './options.ts';
 
 /**
  * The Claude execution for a runtime or a room. Pass it as `execution` to
@@ -10,7 +10,7 @@ import type { ClaudeRuntime } from './options.ts';
  * `claude`. It does not change the default of that kind. Loading the package
  * defines that default, with no options.
  */
-export const claudeExecution = defineExecution<ClaudeRuntime>(
+export const claudeExecution = defineExecution<ClaudeExecutionOptions>(
 	'claude',
 	(_host, options) => (request) =>
 		createClaudeOpener({ definition: request.definition, ...options }),

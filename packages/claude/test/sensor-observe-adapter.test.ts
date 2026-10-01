@@ -12,7 +12,7 @@ import { claude, claudeExecution } from '../src/index.ts';
 import { executable } from './support.ts';
 
 it('passes actual observe image content to the Claude SDK', async () => {
-	const sensor = await openSensorObserveRoom({ images: true });
+	const sensor = await openSensorObserveRoom();
 	onTestFinished(() => sensor.close());
 	const logDir = mkdtempSync(join(tmpdir(), 'ambion-claude-observe-'));
 	const logFile = join(logDir, 'fake.log');
@@ -23,7 +23,7 @@ it('passes actual observe image content to the Claude SDK', async () => {
 		executor: claude({
 			model: 'claude-fake',
 			instructions: 'Observe the bench once.',
-			bundles: [sensor.workspace.tools({ images: true })],
+			bundles: [sensor.workspace.tools()],
 		}),
 	});
 	const room = stopAtEnd(

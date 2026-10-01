@@ -1,5 +1,5 @@
 /**
- * The rendered prompt of one ordinary and one closing activation, part by
+ * The rendered prompt of one respond and one summary activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
  * The speaking policy of a definition replaces the default in the agent part.
  * The resolved reminders of the definition's bundles join the context of a
@@ -9,7 +9,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import type { ReminderSeat } from '../src/bundle.ts';
 import { REMINDER_TIMEOUT_MS, resolveReminders } from '../src/execution/reminders.ts';
-import { DEFAULT_GUIDANCE, renderActivation } from '../src/execution/render.ts';
+import { DEFAULT_SPEAKING, renderActivation } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
@@ -100,10 +100,10 @@ describe('the rendered prompt', () => {
 		expect(renderActivation(respond, other).mechanism).toBe(mechanism);
 		for (const text of ['worker', 'site', 'Is the pour on?', 'Work carefully.'])
 			expect(mechanism).not.toContain(text);
-		expect(renderActivation(respond, worker).agent).toContain(DEFAULT_GUIDANCE);
+		expect(renderActivation(respond, worker).agent).toContain(DEFAULT_SPEAKING);
 		const policy = renderActivation(respond, other).agent;
 		expect(policy).toContain('Be brief.');
-		expect(policy).not.toContain(DEFAULT_GUIDANCE);
+		expect(policy).not.toContain(DEFAULT_SPEAKING);
 	});
 
 	it('resolves the bundle reminders of a respond activation, drops a throw, a rejection, blank text, and a late one, and places them before the ask line', async () => {

@@ -19,7 +19,7 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { quiet, speak } from '@ambionframework/ambion/testing';
+import { quiet, say } from '@ambionframework/ambion/testing';
 import {
 	BACKGROUND_CONTEXT,
 	type CompactionSettings,
@@ -38,7 +38,7 @@ import {
 	type PiSessions,
 	privateDirectory,
 } from '../src/sessions.ts';
-import { contextText, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 import { tempDir } from './support/temp.ts';
 
@@ -97,7 +97,7 @@ class TwoQuestions implements RoomProtocol {
 
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		if (lease.operation === 'release') this.releases.push(lease);
-		return { ok: { expiresAt: Date.now() + 60_000, lastSeq: this.last } };
+		return { ok: { expiresAt: Date.now() + 60_000, through: this.last } };
 	}
 }
 
@@ -129,7 +129,7 @@ function seatOn(
 	const opener = createPiOpener({
 		definition,
 		model: stubModel,
-		stream: scripted((context, agent, call) => {
+		stream: scriptedStream((context, agent, call) => {
 			seen.push({ ...context, messages: [...context.messages] });
 			return script(context, agent, call);
 		}),
@@ -177,8 +177,8 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, prompts the reminders, the pending says, and the delta, and records it', async () => {
-		// A bundle reminder and the pending says reach the model on a continued session too, before the delta.
+	it('continues the session the room names, prompts the reminders, the scheduled says, and the delta, and records it', async () => {
+		// A bundle reminder and the scheduled says reach the model on a continued session too, before the delta.
 		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
 		const { seen, run } = seatOn(new TwoQuestions(), await store(), undefined, definition);
@@ -245,7 +245,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	it('refuses a say against a record that moved', async () => {
 		const room = new TwoQuestions(3);
 		const { run } = seatOn(room, await store(), (_context, _agent, call) =>
-			call === 2 ? speak('Yes.') : quiet(),
+			call === 2 ? say('Yes.') : quiet(),
 		);
 		const first = await run('message:1:product:1');
 		await run('message:2:product:1', { resume: first.session });
@@ -319,7 +319,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		await run('message:2:product:1');
 		const closing = await run('closed:1:product:1', { purpose: summary, resume: began(1) });
 		expect(closing.session).toEqual(began(1));
-		// The closing activation continued the first session, and it reads the whole view.
+		// The summary activation continued the first session, and it reads the whole view.
 		const prompts = texts(seen.at(-1) as Context);
 		expect(prompts.length).toBeGreaterThan(1);
 		expect(prompts.at(-1)).toContain("The record of 'memory' so far:");
@@ -394,7 +394,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const opener = createPiOpener({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions,
 		});
@@ -579,7 +579,7 @@ describe('exchange continuity on the local disk', () => {
 		expect(dir).toBe(join(temporary, `ambion-pi-sessions-${process.getuid?.()}`));
 		expect((await stat(dir)).mode & 0o777).toBe(0o700);
 		// With no option, every stream keeps its sessions there.
-		const services = createExecutionServices({ stream: scripted(() => quiet()) });
+		const services = createExecutionServices({ stream: scriptedStream(() => quiet()) });
 		const scope = { room: 'room', seat: 'seat' };
 		await (
 			await services.sessions.create(scope, 'kept', BACKGROUND_CONTEXT)
@@ -617,7 +617,7 @@ describe('exchange continuity on the local disk', () => {
 		const dir = await tempDir('ambion-services-');
 		const services = () =>
 			createExecutionServices({
-				stream: scripted(() => quiet()),
+				stream: scriptedStream(() => quiet()),
 				...(named ? { sessionDir: dir } : { sessions: 'memory' }),
 			});
 		const scope = { room: 'room', seat: 'seat' };

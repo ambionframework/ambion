@@ -15,13 +15,13 @@ import {
 	defineAgent,
 	defineHuman,
 	type Execution,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
 	type StartRoomOptions,
 	startRoom,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 } from '@ambionframework/ambion';
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
@@ -67,7 +67,6 @@ export function seat(
 			instructions: 'Answer through one say, in one sentence.',
 			model: MODEL,
 			modelReasoningEffort: 'medium',
-			approvalPolicy: 'never',
 			...rest,
 		}),
 	});
@@ -81,7 +80,7 @@ export async function open(
 	options: RoomOptions & { execution?: Execution | readonly Execution[] } = {},
 ) {
 	const { execution, ...rest } = options;
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		execution: execution ?? codexExecution(),
@@ -118,12 +117,12 @@ export async function untilQuiet(room: Room): Promise<void> {
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((message) => message.from === name);
+	messages.filter(isSaid).filter((message) => message.from === name);
 
 /** The activations that a seat started, in order. */
 export const activationsOf = (events: readonly RoomNotification[], agent: string): string[] =>
 	events.flatMap((event) =>
-		event.type === 'activation_start' && event.agent === agent ? [event.activation] : [],
+		event.type === 'activation_start' && event.seat === agent ? [event.activation] : [],
 	);
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
@@ -161,14 +160,14 @@ export function codexExecutorHarness(): ExecutorHarness {
 				instructions: instructionsOf(plan),
 				model: MODEL,
 				modelReasoningEffort: 'medium',
-				approvalPolicy: 'never',
-				// A binary that does not exist fails before Codex reads the catalog.
-				...(failing === 'transient' ? { nativeTools: 'codex' as const } : {}),
 			});
 			const options: CodexOpenerOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
-					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
+					? {
+							env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' },
+							login: false as const,
+						}
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
 			};

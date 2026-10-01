@@ -39,7 +39,7 @@ describe('exchange continuity', () => {
 		const second = await run(room.activate('message:2:sonnet:1'), viewWith(1, first));
 		expect(second).toEqual(first);
 		await run(room.activate('message:3:sonnet:1'), viewWith(1));
-		// A closing activation resumes the session of the exchange it summarizes.
+		// A summary activation resumes the session of the exchange it summarizes.
 		const closing = viewWith(1, first);
 		await run(room.activate('closed:1:sonnet:1'), {
 			...closing,

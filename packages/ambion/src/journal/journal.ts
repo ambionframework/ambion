@@ -1,7 +1,7 @@
 /**
  * The room's record, as the vocabulary its journal is written in.
  *
- * `@ambionframework/journal` holds the machinery and the envelope: one
+ * `@ambionframework/journal` holds the machinery and the entry: one
  * serial queue, the fence between runs, the idempotency key, and the read that settles a write in doubt. It reads no body.
  *
  * What lives here is the part that is the room's: the five kinds of entry it
@@ -12,13 +12,13 @@
 import {
 	type CloneableJournal,
 	type Entries,
-	type JournalEntry as Envelope,
+	type Entry,
 	Journal,
 	type JournalStorage,
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message, Without } from '../types.ts';
-import type { Cancellation, Close, Composition, Fence, LeaseChange } from './events.ts';
+import type { Cancellation, Close, Composition, Fence, LeaseChange } from './entries.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The entry kinds the room writes to its journal. */
@@ -54,7 +54,7 @@ const WORDS: Vocabulary<Kind> = {
 };
 
 /** One entry on the room's journal: its kind, and the body that kind carries. */
-export type Entry = Entries<Kind, Bodies>;
+export type RoomEntry = Entries<Kind, Bodies>;
 
 /**
  * The space a caller's token lives in. The journal's own idempotency index is
@@ -70,8 +70,8 @@ export const spaced = (space: KeySpace, key: string): string => `${space}:${key}
 export const SPACE_PREFIX = /^(?:delivery|commit|post):/;
 const unspaced = (key: string): string => key.replace(SPACE_PREFIX, '');
 
-/** One record entry as the room reads it: the body, joined to its envelope. */
-export const placed = (entry: Envelope<Bodies['message']>): Message =>
+/** One record entry as the room reads it: the body, joined to its journal entry. */
+export const placed = (entry: Entry<Bodies['message']>): Message =>
 	({
 		...entry.body,
 		seq: entry.seq,
@@ -89,7 +89,7 @@ export type RoomJournal = CloneableJournal<Kind, Bodies>;
 
 export const roomJournal = (
 	open: Promise<JournalStorage>,
-	hear?: (entry: Entry) => void,
+	hear?: (entry: RoomEntry) => void,
 	run?: string,
 	lost?: () => void,
 ): RoomJournal => new Journal<Kind, Bodies>(open, WORDS, hear, run, lost);

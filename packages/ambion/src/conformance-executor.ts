@@ -24,13 +24,13 @@ import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
 import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
 import {
+	type ActivationEvent,
 	type AgentDefinition,
 	addUsage,
-	type ExecutionEvent,
 	type FailureCause,
 	type HarnessSession,
 	type Message,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 	type Usage,
 } from './types.ts';
@@ -52,7 +52,7 @@ export type ExecutorPlan =
 	/** Record `usage` once, then say `text`. */
 	| { kind: 'usage'; text: string; usage: Usage };
 
-/** What one executor family can do. The suite drops a case that a capability gates. */
+/** What one executor kind can do. The suite drops a case that a capability gates. */
 export interface ExecutorCapabilities {
 	/** The executor takes a steer into a live pass. When false, a steer waits for the record. */
 	readonly steer: boolean;
@@ -72,7 +72,7 @@ export interface ExecutorCapabilities {
 export interface ExecutorHarness {
 	/**
 	 * Build the opener for one seat, ready to perform `plan`. The scripted
-	 * family maps the plan to a script, and a model family maps it to a fake
+	 * kind maps the plan to a script, and a model kind maps it to a fake
 	 * model stream or a fake executable.
 	 */
 	open(
@@ -92,13 +92,13 @@ export interface ExecutorCaseReport {
 	readonly calls: readonly Call[];
 	/** What would not survive the wire, one line for each request or answer. */
 	readonly violations: readonly string[];
-	readonly records: readonly TraceRecord[];
+	readonly records: readonly TracedStep[];
 }
 
 interface Run {
 	readonly port: AgentPort;
 	readonly room: ScriptedRoom;
-	readonly events: ExecutionEvent[];
+	readonly events: ActivationEvent[];
 	readonly names: { room: string; seat: string };
 	readonly activation: string;
 	readonly patience: number;
@@ -181,10 +181,7 @@ const baseCases: readonly ExecutorCase[] = [
 			check(stepsOf(steps, 'pass')[0]?.input === 'view', 'the first pass does not read the view');
 			check(room.length === 1 && room[0]?.result === 'committed', 'no committed room step');
 			check(stepsOf(steps, 'end')[0]?.stop === 'stopped', 'the activation did not stop');
-			check(
-				!run.events.some((event) => event.type === 'tool_execution_start'),
-				'a say raised a tool event',
-			);
+			check(!run.events.some((event) => event.type === 'tool_call'), 'a say raised a tool event');
 		},
 	},
 	{
@@ -445,8 +442,8 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		const names = { room: `executor-${suite}-${count}`, seat: 'product' };
 		const room = scriptedRoom(names.room, names.seat, one.room);
 		const activation = `message:1:${names.seat}:1`;
-		const events: ExecutionEvent[] = [];
-		const records: TraceRecord[] = [];
+		const events: ActivationEvent[] = [];
+		const records: TracedStep[] = [];
 		const definition = defineAgent({
 			name: names.seat,
 			identity: 'Says a plan.',
@@ -454,7 +451,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		});
 		try {
 			const opener = await harness.open(one.plan, definition);
-			const emit = (event: ExecutionEvent) => void events.push(event);
+			const emit = (event: ActivationEvent) => void events.push(event);
 			const port = new AgentRunner(
 				room.protocol,
 				seatContext({

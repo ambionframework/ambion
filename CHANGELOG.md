@@ -26,6 +26,289 @@ becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
 `createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
 `createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
 `ExecutorActivation`, and `ExecutorOptions` keep their names.
+**`@ambionframework/journal` exports its entry type as `Entry`.** The
+package exported the type as `JournalEntry`. The core imported it as
+`Envelope`, and the room named its own entry union `Entry`. The stored shape
+now has one name, `Entry`, in the journal package and in the core. The
+room's union is `RoomEntry`. The `journal` package no longer exports
+`JournalEntry`.
+**A bash backend takes its git backend, and the types check the pair.**
+`memoryBackend` takes `git` in its options, and `directoryBackend(root,
+options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
+`WorkstationOptions` gets `git`, of the new exported type
+`WorkstationGitBackend`. `BashBackend` gets `readonly git?: GitBackend`, and
+`openWorkspace` opens `bash.git` under its own owner. A git backend of
+another package is now a compile error. Each bash backend reads the access
+of its git backend with no cast. Every tool text, guidance text, and
+credential flow stays the same.
+
+**The pairing checks are gone.** `WorkspaceBackends.git`, `BashServices`,
+the third parameter `services` of `BashBackend.connect`,
+`BashBackend.gitTransports`, `GitAccess`, `GitBackend.access`, and the field
+`transport` of `JustGitAccess` and `WorkstationGitAccess` no longer exist.
+`openWorkspace` no longer throws for a git backend whose transport the bash
+backend does not carry. `justGitBackend` still has `access: JustGitAccess`,
+and `workstationGitBackend` still has `access: WorkstationGitAccess`, on the
+types of their own packages. `@ambionframework/just-bash` exports the new
+type `DirectoryBackendOptions`.
+
+**`GitConformanceStore.bash` is a function.** `bash(git)` opens a bash
+backend for one git backend, in place of the field `bash`. The registration
+cases open a new bash backend for each workspace, so the suite no longer
+borrows one bash backend with a disposal that does nothing.
+
+**The purpose of an activation has one pair of values, and `ParticipantInfo`
+becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
+activation that writes a summary. It now holds `summarize`, the value that
+`ActivationPurpose.kind` already used. The prose names the two purposes a
+respond activation and a summary activation. `isClosing` in
+`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
+`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
+`AgentParticipant`, and `HumanParticipant`. The activation source and the
+activation ids do not change.
+
+**The body schemas are the one source of the body types.** The new file
+`packages/ambion/src/bodies.ts` holds the schema of each stored body.
+Before, a type and a schema each stated the body, and the two drifted.
+`SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
+`DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
+`FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`, `Close`,
+`Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
+schemas with `Static`.
+
+**Each derived type keeps its name and its fields.** The fields, the
+optional keys, and the `readonly` marks stay the same. An interface stays an
+interface, and an alias stays an alias. The `.d.ts` of a type refers to its
+schema, and the schema carries the doc comment of each field.
+
+**The release request takes its fields from the ended lease.** The
+`release` variant of `LeaseRequest` takes `reason`, `readThrough`, `cause`,
+`usage`, and `session` from the schema of the ended lease. It lists them
+once.
+
+**The ended lease refuses an invalid `cause`.** The schema of an ended lease
+did not name `cause`, so any value passed. The schema now holds `permanent`
+or `transient`. A journal that holds another value stops at replay with an
+error that names `body.cause`.
+
+**Three types, one method, and two fields change name.**
+`@ambionframework/simulator` exports `Simulation` and `SimulationExchange`
+in place of `Run` and `RunExchange`. A run now means one run of a room over
+its journal. `@ambionframework/ambion` exports `TracedStep` in place of
+`TraceRecord`, and the parameter of `TraceLogger` is `traced`.
+`AuditLog.record` of `@ambionframework/workspace` is `append`, the name that
+`WorkspaceLog.append` has for the same act. `RoomProjection.record` and
+`OwedFacts.record` are `summaryFacts`, because a record is the messages
+that participants read. The internal constant `DEFAULT_TRACE` is
+`DEFAULT_TRACE_POLICY`. No journal body changes.
+**A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
+person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
+now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
+The read field `scheduled` and the tool `schedule` already used the new name.
+This renames the one remaining shape and adds no shape. The journal and the
+golden journals do not change.
+
+**A Codex seat has no native tools, ever.** Files and a shell come only from
+the workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The option `nativeTools` of `codex()` is gone, and so is the mode
+`'codex'`. The policy options `sandboxMode`, `approvalPolicy`,
+`networkAccessEnabled`, `workingDirectory`, and `additionalDirectories` are
+gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
+`reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
+runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
+no network, no approval, an empty working directory, and the seat text in
+`model_instructions_file`. The seat no longer uses `developer_instructions`,
+and a seat text has no size limit from a command argument. A seat that needed
+a shell or file edits now takes the workspace tools in `bundles`. The trace
+maps only the items that a seat can produce: `agent_message`, `reasoning`,
+`mcp_tool_call`, `error`, and the usage of a turn. An item of any other type
+becomes a warning `notice` that names the type. A say no longer cites the
+paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
+type `RoomToolOptions`, because only the Codex executor used them.
+
+**`View` names only what a seat receives, and a read position is `through`
+or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
+that the `exchange_closed` event carries, is now `ExchangeRange`.
+`ClosedExchangeView` is gone from the main entry. Write
+`Extract<Exchange, { readonly status: 'closed' }>` in its place.
+`RoomRead.watermark` and `ExchangeRead.watermark` are now `through`. The
+`ok` of a `LeaseResponse` holds `through` where it held `lastSeq`. The
+selection `read({ messages: { since } })` is now `{ after }`, and the delta
+of a `PassInput` holds `after` where it held `since`. The wire carries the
+new names. The journal and the golden journals do not change.
+**Outcomes use one discriminator, `kind`, and `wake` names only the port
+request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
+`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
+exchange read model. The room calls the activation that it owes a seat a due
+activation, after `RoomState.due`. In the core, `PendingActivation` becomes
+`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
+`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
+`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
+`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
+body changes.
+
+**`workspace.tools({ images: false })` is removed.** Every executor kind
+carries image parts, so a workspace has one tool bundle. `observe` returns
+each frame as an image part, and `read` of an image returns the image part.
+Each result also states the path of the image in text: the export path in
+`observe`, and `Image path: <path>` in `read`. A model that cannot read
+images still learns where the file is. This is a breaking change for a
+caller that passes `images`. Remove the option. `WorkspaceToolsOptions`
+keeps `skills`.
+
+**An image from a tool reaches a default Codex seat.** The catalog patch of
+`nativeTools: 'none'` no longer sets `input_modalities` and
+`supports_image_detail_original`. The model keeps its own modalities, so a
+workspace `read` of a picture and the frames of `observe` reach it as images.
+The tool list does not change, because `view_image` stays off. A model with
+no image input stays text-only, and Codex shows a placeholder.
+
+**The Codex recipe matches `codex` 0.158.0.** `exclusiveConfig` no longer
+sets `tools.view_image`. Codex 0.158.0 does not know the key, and it
+reported two warnings for every run. The `view_image` feature still turns the
+tool off. The config sets `skills.include_instructions` and
+`skills.bundled.enabled` to `false`, so no `skills_instructions` message
+reaches the model and Codex installs no system skill in the seat home. The
+catalog flag `include_skills_usage_instructions` did not remove that message.
+The config also sets `check_for_update_on_startup`, `analytics.enabled`,
+`feedback.enabled`, `memories.generate_memories`, and
+`memories.use_memories` to `false`, so a seat sends no analytics or
+feedback and keeps no memory. `codex exec` starts no update check, and the
+update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
+`shell_snapshot`, `daemon_auto_start`,
+`workspace_dependencies`, `worktrees`, `realtime_conversation`, and
+`memories`. Each acts on the host or the network, or writes state outside
+the journal. `shell_snapshot` ran the shell of the host
+user and wrote its environment into the seat home. The binary tier now
+asserts that a default seat produces no warning `notice` and no skills
+block. The catalog fixture is `catalog-0.158.0.json`. The recorded event
+streams stay as recorded on 0.155.1. Docs state that the `config.toml` of
+the seat home is the responsibility of the host, because a key that the
+recipe does not name survives from it.
+
+**The trace logs the size of an image in a tool result of every executor.**
+`loggedToolResult` replaced the bytes of an image with their count only in
+the `content` array of a record. The Claude and Codex executors log the
+content parts with no record, so their images went into the log whole. The
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
+**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
+describes one activation. The main entry and the hosting entry export the
+new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
+member names its seat in `seat`, where the members said `agent` and the
+`conflict` member said `author`. The tool members use `name` in place of
+`toolName`. The member types `tool_execution_start` and `tool_execution_end`
+are now `tool_call` and `tool_result`, the names that `Step` uses. The
+`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
+log line carries the new member types in its `event` field.
+**The verb `say` names the message type, its guard, the test verb, and the
+speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
+kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
+`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
+`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
+`Executor.speaking`. `Executor.guidance` keeps its name. The
+callback `RoomToolOptions.spoke` is now `said`. The kind string, the
+journal bodies, and the text that a model reads do not change.
+**Three names in the process and credential options change.** The option
+`tokenTtl` of `justGitBackend` and the option `keyTtl` of
+`workstationGitBackend` are now `credentialTtl`, the name that
+`GitConformanceOptions` already used. The exported type `ProcessStatus` is
+now `ProcessRecord`. A tool call or the host that ends a process cancels
+it, and the code now says so: `process-stop.ts` is `process-cancel.ts`, and
+`ProcessTable.cancel` gives `cancelled` where it gave `stopped`. The `stop`
+file in the directory of a process keeps its name. The tool names and the
+text for the model do not change.
+**The workspace packages name an endpoint, a label, and a server.** The word
+`host` now names the application that embeds a room, and the word `port`
+names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
+`WorkspacePorts` becomes `WorkspaceEndpoints`. Its method `open` becomes
+`forward`, and its field `hostname` becomes `machine`. The field `ports` of
+`BashBackend` becomes `endpoints`. `GitBackend.server`,
+`ObjectBackend.store`, and `SqlBackend.database` become `label`.
+`Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
+`<name>-host` stays. `WorkstationOptions.host` and
+`WorkstationGitOptions.host` become `server`.
+**The executor options and the Pi test stream get their own names.**
+`@ambionframework/claude` exports `ClaudeExecutionOptions`, and
+`@ambionframework/codex` exports `CodexExecutionOptions`. They replace
+`ClaudeRuntime` and `CodexRuntime`, and they match `PiExecutionOptions`.
+The word `Runtime` now names the core `Runtime` alone.
+`@ambionframework/pi/testing` exports `scriptedStream` in place of
+`scripted`. The core testing entry keeps `scripted`, the scripted
+execution. The Codex tool that the stdio server lists is `CodexTool`. It
+replaces a `RoomTool` that shadowed the core type of the same name.
+
+**A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
+Codex 0.158 shows no reasoning unless the request asks for a summary, and
+the catalog of some models turns the summary off. The new option
+`reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
+`none`. The default is `auto`. The executor passes it as
+`model_reasoning_summary` in both modes of `nativeTools`, and the summary
+arrives as `thinking` steps. The default trace policy keeps 280 characters of
+each thinking block. `defineAgent({ trace: { thinking: 'full', toolOutput:
+'full' } })` keeps all of it. A `todo_list` item now gives a `tool_call`
+named `update_plan` and its `tool_result`.
+
+**Breaking: the step vocabulary has an eleventh kind, `notice`.** A `notice`
+is a non-fatal diagnostic of the harness:
+`{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
+gates an activation. A consumer that switches on the step type must handle
+the new kind. The Codex executor records a `notice` at level `warning` for
+each `error` item and each `error` event, such as an unknown setting in the
+config or a reconnect. `turn.failed` stays in the `end` step.
+
+**A Codex trace names the thread and the rollout file.** The executor
+records one `notice` at level `info`, with the text "Codex thread", for each
+thread of an activation. Its `data` holds the `thread` id, the `home` of the
+seat, and the `rollout` path, `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`.
+Codex writes the instructions, every item, the reasoning, and the tool calls
+there. The binary tier proves the path and the notice.
+
+**A Codex seat has the room tools on its first model request.** Codex
+starts an MCP server in the background and waits one second for an optional
+server. A loaded host starts the room tools server in more time, so the first
+request of a turn listed no `mcp__ambion` tool. A real model could not call
+`say` on that request and could answer in text that the room never hears.
+The executor now sets `required = true` on the room tools server. Codex waits
+for it, up to 30 seconds, before the first model request. A server that
+cannot start now ends `codex exec` with "required MCP servers failed to
+initialize" before any model request, and the activation fails as transient.
+The test endpoint no longer answers a request that lacks a tool with a probe.
+A request without `say` now fails the test.
+
+**A Codex seat stops when its host dies.** The SDK closes the input of
+`codex exec` at once. A host that died by SIGKILL or out of memory left
+`codex exec` running, with the model request in flight. The process ran its
+turn to the end, spent on the model, and under `nativeTools: 'codex'` ran
+native commands and wrote the thread in the seat home. The room tools server
+now sends SIGTERM to its parent `codex exec` when the host socket closes or
+fails. On Linux and macOS it sends nothing when `codex exec` has exited
+first, because `ppid` is then another process. On Windows, Node cannot tell
+that the parent is gone. `codex exec` ends its native commands on SIGTERM. A test
+kills a real host in the middle of a model request and in the middle of a
+native command.
+
+**Breaking: the seat text of a Codex seat leaves the first user message.**
+The Codex SDK has no system prompt option, so the executor put the harness
+note, the mechanism, and the agent instructions in front of the view in the
+first user message, under the base prompt of Codex, about 18 KB. The executor now
+passes that text in the config of the client, fixed for the activation. The
+first user message holds the view alone. A seat with `nativeTools: 'none'`
+gets the text in a file in the scratch directory, named by
+`model_instructions_file`. The file replaces the base prompt of Codex, so the
+first developer message is the seat text and no message starts with "You are
+Codex". A seat with `nativeTools: 'codex'` gets the text as
+`developer_instructions` after the base prompt, which teaches its native
+tools.
+
+**A resumed `codex` thread keeps its developer message.** Codex 0.158.0
+keeps the `developer_instructions` that a thread started with, and ignores a
+new value on resume. The seat text depends on the purpose of the activation.
+The first prompt of a `nativeTools: 'codex'` activation that resumes a thread
+therefore carries the seat text, then the view. A fresh thread and every
+`nativeTools: 'none'` activation send the view alone. A resumed `'none'`
+activation uses its own instructions file.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
@@ -33,6 +316,54 @@ the room tools alone. Claude and Codex joined the two lists at once, and
 they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
 tools that the definition does not name, and builds the tools of the
 definition from their `AmbionTool`s as before.
+
+**Breaking: a Codex seat no longer reads `~/.codex`.** The executor never
+set `CODEX_HOME`, so every seat ran in the Codex home of the host user. The
+`[mcp_servers.*]` of its `config.toml` started on every pass beside the room
+tools server, its `model_provider` rerouted the model traffic of the seat,
+and its `AGENTS.md` joined every request. `codexExecution()` now gives its
+seats a Codex home of their own and sets `CODEX_HOME` to it, for each run of
+the binary and for the `codex debug models` run of the catalog. The default
+is `.ambion/codex` under the `HOME` of `env`, with the mode `0700`, and the
+new option `home` names another. The new option `login` names the `auth.json` to link into the
+home. The default is the login file of the host, and `false` links nothing.
+
+**The seat home links the login of the host and never copies it.** A seat
+on a ChatGPT sign-in keeps working with no extra step. The first activation
+makes a symbolic link `auth.json` in the home, or a hard link where symbolic
+links fail. Codex writes the file in place and reads it again before it
+refreshes a token, so the host and the seats share one login. A home that
+holds its own `auth.json` keeps it. If no link can be made, the activation
+fails as permanent.
+
+**Three changes need action.**
+
+- A thread that an earlier version started lives in `~/.codex/sessions`.
+  Threads now live in `sessions` in the seat home, so such a thread starts
+  fresh.
+- A login in the OS keyring cannot be shared, because Codex keys it by a hash
+  of the `CODEX_HOME` path. Set `cli_auth_credentials_store = "file"` and run
+  `codex login` again, or run `CODEX_HOME=~/.ambion/codex codex login`.
+- The `CODEX_HOME` of `env` now names the Codex home of the host, and only
+  sets the default `login`. The binary never gets it. Pass `home` to place the
+  seat home.
+
+**The binary tier proves the isolation and the link.** The host home of
+`test/binary.ts` holds a `config.toml` that reroutes the provider and starts
+an MCP server, and an `AGENTS.md` with a marker. A test asserts that none of
+them reaches a seat. Another test runs a provider on the linked login, with a
+proxy that refuses every outbound connection.
+
+**The Codex package tests the real `codex` binary on a scripted model.**
+`codex` accepts a custom model provider through its config. A local endpoint
+in `packages/codex/test/responses.ts` speaks the Responses API and plays a
+script of replies. `test/binary.test.ts` runs the bundled binary against it,
+in a temporary Codex home, with a minimal environment. It proves that a seat
+speaks through `say`, that the activation reports the usage of the endpoint,
+that the model sees the room tools, the tools of the seat, and the three
+MCP resource tools and no native tool, and that a second pass resumes the
+same thread. This tier runs in the unit tier and needs no key. The executor
+does not change.
 
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
@@ -716,7 +1047,7 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   summary goes to the `person` of the exchange. Before this change, the
   model decided, and a question followed by a departure sometimes closed
   with no answer. See
-  [Default assistant](docs/assistant.md#membership-and-completion).
+  [Default assistant](docs/assistant.md#seating-and-completion).
 - **A Codex seat lands a say in each activation.** A real `codex` numbers
   the items of each turn from `item_0`, and a room tool took the item id as
   the key of its commit. The say of a later activation then had the key of

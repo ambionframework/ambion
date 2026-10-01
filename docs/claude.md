@@ -4,7 +4,7 @@
 page holds what is specific to the Claude adapter. [Executors](executors.md)
 holds the shared contract: the activation flow, the room tools, exchange
 continuity, failure classification, the step vocabulary, and the trace. [The
-Pi guide](pi.md) covers a second shipped family, and [the
+Pi guide](pi.md) covers a second shipped executor kind, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -137,7 +137,7 @@ unchanged.
 | `model`                 | Yes      | None                              | A Claude model id. The executor passes it as `--model`.                          |
 | `tools`                 | No       | None                              | The tools of the agent, from `defineTool`. They run in the host process.         |
 | `bundles`               | No       | None                              | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`              | No       | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                                    |
+| `speaking`              | No       | `DEFAULT_SPEAKING`                | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit`  | No       | The whole record                  | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`        | No       | `'length'`                        | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `permissionMode`        | No       | The SDK default, `default`        | The SDK permission mode. The executor passes it unchanged.                       |
@@ -328,7 +328,7 @@ the session that `pass.resume` names.
 resumed session keeps the system prompt it began with, and the SDK ignores
 a new `systemPrompt`. The seat's duties and instructions for the
 activation, its agent part, therefore go at the head of the first message.
-A closing activation resumes the session of the exchange it summarizes.
+A summary activation resumes the session of the exchange it summarizes.
 This message gives it the summary duties and the reader's preferences.
 When the resume fails, the fresh session gets the same message, and the
 seat's part then appears twice.
@@ -344,7 +344,7 @@ failure does.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 
@@ -448,7 +448,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | Symptom                                                             | Cause                                                                                                                                                 |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                              |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                             |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each kind.                                               |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                     |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                            |
 | The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                              |
