@@ -29,7 +29,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
