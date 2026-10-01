@@ -2,9 +2,10 @@ import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
- * The Codex suite: unit tests on the pure parts and on events that a real
- * `codex` recorded. A real model cannot be scripted, so the executor suite
- * runs in the live tier (`vitest.live.config.ts`).
+ * The Codex suite: unit tests on the pure parts, on events that a real
+ * `codex` recorded, and on the real `codex` binary against a scripted
+ * Responses endpoint (`test/binary.test.ts`). The executor suite runs on a
+ * real model in the live tier (`vitest.live.config.ts`).
  *
  * The core resolves to its source, as it does for `@ambionframework/claude`.
  * `tsconfig.check.json` maps the same specifiers for the type-checker.

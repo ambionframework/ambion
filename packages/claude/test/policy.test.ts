@@ -134,7 +134,7 @@ it('removes the same variables from the environment of this process when the hos
 			server: {} as QueryInput['server'],
 			names: [],
 			canUseTool: async () => ({ behavior: 'deny', message: '' }),
-			runtime: {},
+			options: {},
 		});
 		for (const name of PARENT_SESSION) expect(options.env).not.toHaveProperty(name);
 		expect(options.env?.PATH).toBe(process.env.PATH);

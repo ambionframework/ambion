@@ -14,7 +14,7 @@ import type {
 	Wake,
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
-import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
+import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
@@ -155,7 +155,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		},
 	},
 	refused: { refused: "'nobody' is not in the reserve." },
-	ok: { ok: { expiresAt: 1767258060000, lastSeq: 3 } },
+	ok: { ok: { expiresAt: 1767258060000, through: 3 } },
 };
 
 describe('the wire', () => {

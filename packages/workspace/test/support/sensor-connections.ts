@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
-import type { WorkspacePort, WorkspacePorts } from '../../src/backend.ts';
-import type { ProcessStatus } from '../../src/process-files.ts';
+import type { WorkspaceEndpoint, WorkspaceEndpoints } from '../../src/backend.ts';
+import type { ProcessRecord } from '../../src/process-files.ts';
 import type { ProcessEvent, ProcessTable } from '../../src/process-table.ts';
 import type { SensorIndex } from '../../src/sensors.ts';
 
@@ -19,14 +19,14 @@ export const index: SensorIndex = {
 
 export interface ConnectionRig {
 	readonly processes: ProcessTable;
-	readonly ports: WorkspacePorts;
+	readonly endpoints: WorkspaceEndpoints;
 	readonly opens: Array<{ closed: number }>;
 	readonly finds: string[];
 	readonly indexRequests: number[];
-	readonly status: ProcessStatus;
+	readonly status: ProcessRecord;
 	readonly server: Server;
 	readonly url: string;
-	setStatus(status: ProcessStatus): void;
+	setStatus(status: ProcessRecord): void;
 	failFind(error: Error): void;
 	setIndex(index: unknown): void;
 	blockIndex(count?: number): { entered: Promise<void>; release(): void };
@@ -36,7 +36,7 @@ export interface ConnectionRig {
 
 export async function connectionRig(): Promise<ConnectionRig> {
 	let body: unknown = index;
-	const statuses = new Map<string, ProcessStatus>();
+	const statuses = new Map<string, ProcessRecord>();
 	const initialStatus = status('bash-000000000001', 'owner', 'running');
 	statuses.set(`${initialStatus.agent}/${initialStatus.handle}`, initialStatus);
 	let nextFindError: Error | undefined;
@@ -92,9 +92,9 @@ export async function connectionRig(): Promise<ConnectionRig> {
 			return () => listeners.delete(listener);
 		},
 	} as unknown as ProcessTable;
-	const ports: WorkspacePorts = {
-		hostname: 'fixture-workstation',
-		async open() {
+	const endpoints: WorkspaceEndpoints = {
+		machine: 'fixture-workstation',
+		async forward() {
 			const opened = { closed: 0 };
 			opens.push(opened);
 			return {
@@ -102,12 +102,12 @@ export async function connectionRig(): Promise<ConnectionRig> {
 				async close() {
 					opened.closed += 1;
 				},
-			} satisfies WorkspacePort;
+			} satisfies WorkspaceEndpoint;
 		},
 	};
 	return {
 		processes,
-		ports,
+		endpoints,
 		opens,
 		finds,
 		indexRequests,
@@ -160,8 +160,8 @@ export async function connectionRig(): Promise<ConnectionRig> {
 export function status(
 	handle: string,
 	agent: string,
-	state: ProcessStatus['state'],
-): ProcessStatus {
+	state: ProcessRecord['state'],
+): ProcessRecord {
 	return {
 		handle,
 		kind: 'bash',

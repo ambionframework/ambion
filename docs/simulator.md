@@ -238,7 +238,7 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
    landed keeps its summary, and the loop goes on. An abort that rejects,
    or a close that does not land in a second period of `exchangeMs`, ends
    the loop with `ended: 'failed'`.
-7. Read the closed `ExchangeView` from `room.read()`. Add the exchange to
+7. Read the closed `Exchange` from `room.read()`. Add the exchange to
    `run.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
    `ended: 'limit'`.
@@ -395,7 +395,9 @@ export interface Run {
   /** Every move the actor made, in order, the last `stop` included. */
   readonly moves: readonly Move[];
   /** One entry for each message the actor sent, in order. */
-  readonly exchanges: readonly (SeenExchange & { readonly view: ClosedExchangeView })[];
+  readonly exchanges: readonly (SeenExchange & {
+    readonly view: Extract<Exchange, { readonly status: 'closed' }>;
+  })[];
   /** One `room.read()` after the last close, with every message. */
   readonly room: RoomRead;
   /** Every notification after the subscription. */
@@ -428,7 +430,7 @@ source in the run.
 | What one exchange said            | `run.exchanges[].discussion`                                |
 | Unnecessary activations           | `run.exchanges[].view.activations`, by `seat` and `purpose` |
 | An activation failed or retried   | `run.exchanges[].view.activations[].outcome` and `attempt`  |
-| A tool was called                 | `tool_execution_start` in `run.events`                      |
+| A tool was called                 | `tool_call` in `run.events`                                 |
 | The lock refused a say            | `conflict` in `run.events`                                  |
 | Complete, cancelled, or exhausted | `run.exchanges[].view.outcome.kind`                         |
 | What the person read at the close | `run.exchanges[].summary`                                   |
@@ -500,9 +502,9 @@ starts with `no evidence`. The judge has no third verdict, and a gap in
 the record reads as a gap.
 
 **The judge's model can differ from the model under test.** A judge
-favors text from its own model family. The live support names
-`JUDGE_MODEL`, and its default is `MODEL`. A suite that grades one family
-names another family for the judge.
+favors text from its own model provider. The live support names
+`JUDGE_MODEL`, and its default is `MODEL`. A suite that grades the model of one
+provider names a model of another provider for the judge.
 
 **A scripted judge is a function.** A test of the loop passes
 `async (run, criteria) => verdict`, and needs no export.
@@ -582,7 +584,7 @@ const answers =
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
-    return spoke ? quiet() : speak(fact);
+    return spoke ? quiet() : say(fact);
   };
 ```
 
@@ -624,7 +626,7 @@ check reads the second message and the judge reads the first summary.
 
 **Five cases hold the rest of the assistant's purpose.** The assistant is
 passive at `broadcast`, it answers a participant who addresses it, and it
-changes membership on request and on need only. The scripted specialist
+changes the roster on request and on need only. The scripted specialist
 reports to the room, and it addresses a participant only with a question for
 that participant. It picks its reply from the words of the person, so the
 words of an agent never change the evidence.

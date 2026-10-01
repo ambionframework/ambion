@@ -5,7 +5,7 @@ exchange: the first person who spoke in it.** The room assigns a writer by
 name. The name refers to one agent in the room's `agents` definitions.
 
 The writer is an ordinary agent. It has the same identity, instructions,
-model, domain tools, membership, and attention rules as every other agent.
+model, domain tools, seating, and attention rules as every other agent.
 The room gives it a separate closing activation after the exchange closes.
 
 ## Shared context and compaction
@@ -46,7 +46,7 @@ const room = await startRoom({
 });
 ```
 
-If `seats` is omitted, every defined agent starts as a member with
+If `seats` is omitted, every defined agent starts seated with
 `broadcast` attention. `summary` must name a seated agent: `startRoom`
 rejects a `summary` name outside `seats`. The host can still unseat the
 writer later; the exchange closing at that time then has no summary
@@ -55,7 +55,7 @@ assignment.
 `startRoom({ assistant })` accepts an ordinary agent definition and supplies
 its definition entry, broadcast seat, and summary assignment. A conflicting
 explicit summary writer is refused. This shorthand preserves the closing
-activation and membership rules described here. See
+activation and seating rules described here. See
 [Default assistant](assistant.md) for the built-in implementation.
 
 Every exchange where a person spoke is eligible for a summary. Eligibility
@@ -97,7 +97,7 @@ exchange is refused, and so is a second summary for the same person.
 
 The activation ends after the writer has said one message to each person.
 The summary for the `person` completes the close. A summary for another
-person appears in `summaries` on the closed exchange view. Only the reading
+person appears in `summaries` on the closed `Exchange`. Only the reading
 preferences of the `person` reach the writer.
 
 The room stamps the writer, recipient, covered range, activation id, and
@@ -106,7 +106,7 @@ fields.
 
 The closing activation receives only `say`. The writer may decline by ending
 without calling it; the source range then remains available to later agent
-activations. The writer uses its domain and membership tools during ordinary
+activations. The writer uses its domain and seating tools during ordinary
 activations.
 
 Summary publication wakes no idle agent and does not open another exchange.
@@ -130,9 +130,9 @@ If a pending assignment is removed because its writer leaves, the assignment
 settles. Reseating that agent does not revive the old assignment. A later human
 exchange can receive a new closing activation.
 
-## Membership
+## Seating
 
-All ordinary activations use the same membership operations. A live ordinary
+All ordinary activations use the same seating operations. A live ordinary
 activation may call `seat({ name })` or `unseat({ name })` and may call `say`.
 The room refuses an unknown name. A request to seat an agent that is already
 seated returns the existing no-op result and writes no journal entry, wake, or
@@ -141,6 +141,6 @@ summary writer's seat is fixed by default, so it cannot unseat itself; the
 host can still unseat it through `room.unseat`. See [Roster](roster.md) for
 the fixed-seat rule.
 
-Attention controls which messages wake an idle member. It does not create a
+Attention controls which messages wake an idle seat. It does not create a
 summary role or restrict an agent's tools. There is no scheduler, role system,
 or capability framework in the room.

@@ -15,14 +15,14 @@
  * that resumes rebuilds it by `replay`.
  */
 
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { PendingSay } from '../scheduling.ts';
+import type { ScheduledSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { messageDelivery } from './delivery.ts';
 import { exchangeAfter } from './exchange.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	older,
@@ -58,7 +58,7 @@ export interface RoomProjection {
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: OpenWake[];
 	readonly owed: Owed[];
-	readonly scheduled: PendingSay[];
+	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
 
@@ -315,7 +315,7 @@ function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomPro
 		leases: new Map(prev.base.leases),
 		closes: [...prev.base.closes],
 	};
-	applyEvent(base, entry, prev.exchange);
+	applyEntry(base, entry, prev.exchange);
 	const marked = {
 		...prev,
 		base,

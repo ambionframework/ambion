@@ -103,5 +103,5 @@ export function fileObjectBackend(options: FileObjectOptions): ObjectBackend {
 		},
 		cleanup: async () => undefined,
 	};
-	return Object.freeze({ store: root, connect: async () => env });
+	return Object.freeze({ label: root, connect: async () => env });
 }

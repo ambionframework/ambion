@@ -15,8 +15,8 @@ presence.
 
 ## 1. Two lifetimes
 
-Agent membership and human visits are independent. `agents` holds the executable
-definitions; `seats` chooses its initial members and attention. A person is
+Agent seating and human visits are independent. `agents` holds the executable
+definitions; `seats` chooses the initial seats and attention. A person is
 admitted through a visit. Hosts decide what “present” means for their medium and must
 reconcile multiple tabs or connections before calling Ambion. The runtime has
 no idle timer and a crash writes no departure.
@@ -110,7 +110,7 @@ before it; later deliveries cannot pass the recorded departure.
 ## 5. Arriving is a message
 
 The record has one message stream. Human presence uses `kind: 'arrived'` and
-`kind: 'left'`; agent membership uses `seated` and `unseated`; spoken messages
+`kind: 'left'`; agent seating uses `seated` and `unseated`; spoken messages
 use `said`; summaries use `summary`. Presence carries no invented text. Its
 `from` and identity come from the live visit, and its routing is stored with the
 message just like routing for speech.
@@ -119,7 +119,7 @@ Presence changes the room's projection before the message is routed: an agent
 activated by an arrival sees the person as present, and one activated by a
 departure sees them as absent. Only deliberate `visit`, `leave`, `seat`, and
 `unseat` operations create these entries. Sequence numbers are monotonic,
-strictly ordered journal positions; `room.read({ messages: { since } })` is exclusive and
+strictly ordered journal positions; `room.read({ messages: { after } })` is exclusive and
 starts after the supplied position.
 
 See [`roster.md`](roster.md) for the attention scale. A directed delivery wakes
@@ -156,7 +156,7 @@ recorded departure:
 
 ```ts
 const visit = await room.visit(andrei);
-const { messages: missed } = await room.read({ messages: { since: visit.lastDeparture } });
+const { messages: missed } = await room.read({ messages: { after: visit.lastDeparture } });
 ```
 
 The result includes room messages, including speech and presence, in journal
@@ -199,7 +199,7 @@ Both variants have `name` and `identity`. An agent has activity `status` and
 message stream. There is no separate presence event channel.
 
 Subscriptions are live only and do not replay history. Subscribe before reading
-with `room.read({ messages: { since } })`, merge an overlap by `seq`, and advance the cursor
+with `room.read({ messages: { after } })`, merge an overlap by `seq`, and advance the cursor
 only after the client consumes the ordered messages. Recreate the subscription
 and visit after a process restart; handles and subscriptions are in-memory.
 

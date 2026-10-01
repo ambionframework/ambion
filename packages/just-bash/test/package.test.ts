@@ -36,9 +36,9 @@ it.each([
 	expect(Object.keys(entry).sort()).toEqual(names);
 });
 
-it('does not offer real workstation ports', () => {
-	expect(main.memoryBackend().ports).toBeUndefined();
-	expect(main.directoryBackend('/tmp').ports).toBeUndefined();
+it('does not offer real workstation endpoints', () => {
+	expect(main.memoryBackend().endpoints).toBeUndefined();
+	expect(main.directoryBackend('/tmp').endpoints).toBeUndefined();
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */

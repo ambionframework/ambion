@@ -67,7 +67,7 @@ The core has four published entries:
 - `@ambionframework/ambion/conformance` for the port suite and the
   executor suite.
 - `@ambionframework/ambion/testing` for the scripted executor, the script
-  verbs (`speak`, `callTool`, `later`, `seat`, `spend`, `quiet`, `byAgent`),
+  verbs (`say`, `callTool`, `schedule`, `seat`, `spend`, `quiet`, `byAgent`),
   `settled`, and `fakeClock`. It imports no model library.
   `@ambionframework/pi/testing` holds the scripted Pi stream, which reads the
   same verbs.
@@ -305,7 +305,7 @@ reasoning in the Ambion, workspace, assistant, and simulator live suites. `JUDGE
 sets reasoning for assistant and simulator judges. If either variable is
 unset, each consumer uses its own default. With an
 `OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
-another model family grades the assistant. The workflow cancels a superseded
+a model from another provider grades the assistant. The workflow cancels a superseded
 run. Run it locally
 with:
 

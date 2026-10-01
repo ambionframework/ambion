@@ -15,13 +15,15 @@ import {
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
 import type { CodexExecutor } from './define.ts';
+import type { HomeOptions, SeatHome } from './home.ts';
 
-/** The services a Codex execution brings: where the executable is and what it runs with. */
-export interface CodexRuntime {
+/**
+ * The services a Codex execution brings: where the executable is, what it
+ * runs with, and the Codex home of its seats.
+ */
+export interface CodexExecutionOptions extends HomeOptions {
 	/** A `codex` executable to run. Absent, the SDK finds the one that `@openai/codex` ships. */
 	readonly codexPath?: string;
-	/** The environment of the executable. Absent, the environment of this process. */
-	readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** The Codex executor a definition names, or an error that names its kind. */
@@ -77,23 +79,18 @@ export function threadOptions(executor: CodexExecutor, scratch?: Scratch): Threa
 
 /**
  * The options of the client for one activation: the executable, its
- * environment, and the room tools server. With a `scratch`, the config also
- * turns off the native tools.
+ * environment with the Codex home of the seat, and the room tools server.
+ * With a `scratch`, the config also turns off the native tools.
  */
 export function clientOptions(
-	runtime: CodexRuntime,
+	execution: CodexExecutionOptions,
+	home: SeatHome,
 	socketPath: string,
 	scratch?: Scratch,
 ): CodexOptions {
-	const env =
-		runtime.env &&
-		Object.fromEntries(
-			Object.entries(runtime.env).filter(
-				(entry): entry is [string, string] => entry[1] !== undefined,
-			),
-		);
 	return {
-		...present({ codexPathOverride: runtime.codexPath, env }),
+		...present({ codexPathOverride: execution.codexPath }),
+		env: { ...home.env },
 		config: {
 			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
 			mcp_servers: {

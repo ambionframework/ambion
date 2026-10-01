@@ -177,7 +177,7 @@ export interface RenderedPrompt {
  * The default speaking policy. An agent definition replaces it with the
  * `speaking` option of its executor.
  */
-export const DEFAULT_GUIDANCE = [
+export const DEFAULT_SPEAKING = [
 	`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 	`your turn without saying anything, and no mark is left. Speak only when your reply`,
 	`adds something the record does not already hold — new information, a decision moved`,
@@ -215,12 +215,12 @@ export function renderSystem(
 }
 
 /**
- * What a later pass tells the model: each message that landed beyond `since`.
+ * What a later pass tells the model: each message that landed beyond `after`.
  * Each line reads as a steer does. Nothing is new when no message stands
- * beyond `since`.
+ * beyond `after`.
  */
-export function renderDelta(view: ActivationView, since: Seq): string | undefined {
-	const fresh = view.context.messages.filter((message) => message.seq > since);
+export function renderDelta(view: ActivationView, after: Seq): string | undefined {
+	const fresh = view.context.messages.filter((message) => message.seq > after);
 	if (fresh.length === 0) return undefined;
 	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
 }
@@ -251,7 +251,7 @@ function renderAgent(view: ActivationView, def: AgentDefinition): string {
 function duties(view: ActivationView, def: AgentDefinition): string[] {
 	if (view.spec.purpose.kind === 'summarize') return [...SUMMARY_DUTIES];
 	const lines = [
-		def.executor.speaking ?? DEFAULT_GUIDANCE,
+		def.executor.speaking ?? DEFAULT_SPEAKING,
 		``,
 		...AUDIENCE_PARAGRAPH,
 		``,

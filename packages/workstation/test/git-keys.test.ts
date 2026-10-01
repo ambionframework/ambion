@@ -93,7 +93,7 @@ describe.skipIf(!hasGitTools)('the agent keys', () => {
 	it('issues a new key inside the margin, and keeps the old line until its expiry', async () => {
 		const { home, options } = await gitServer();
 		// A life of 4 seconds has a margin of 2 seconds. The old line stays for 1.9 seconds more.
-		const backend = gitBackend({ ...options, keyTtl: 4 });
+		const backend = gitBackend({ ...options, credentialTtl: 4 });
 		const first = await backend.access.identityFor(ANALYST);
 		await new Promise((resolve) => setTimeout(resolve, first.expiresAt - Date.now() - 1_900));
 		const second = await backend.access.identityFor(ANALYST);

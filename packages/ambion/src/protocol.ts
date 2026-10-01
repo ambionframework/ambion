@@ -15,7 +15,7 @@
 
 import type { Static } from 'typebox';
 import type { leaseEndedSchema } from './bodies.ts';
-import type { PendingSay } from './scheduling.ts';
+import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipantInfo,
 	HarnessSession,
@@ -107,7 +107,7 @@ export interface CollaborationContext {
 	 * The says of this seat that wait to return, for a response. The seq of
 	 * each names it. Absent when none waits.
 	 */
-	readonly scheduled?: readonly PendingSay[];
+	readonly scheduled?: readonly ScheduledSay[];
 	/**
 	 * How many messages of the record this activation may read lie below the
 	 * first one in `messages`. The room reports it when the cap or the token
@@ -190,11 +190,11 @@ export type LeaseRequest =
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat
- * reads `lastSeq` against what its view held: the record moved when it grew.
+ * reads `through` against what its view held: the record moved when it grew.
  * An entry beside the record moves neither, so a renewal never reports its
  * own landing as movement.
  */
-export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
+export type LeaseResponse = { ok: { expiresAt: number; through: Seq } } | Stale;
 
 export interface RoomProtocol {
 	/**

@@ -7,7 +7,7 @@
  */
 import type { Entry } from '../../src/journal/journal.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	type RoomState,
@@ -27,6 +27,6 @@ const baseOf = (state: RoomState): BaseFacts => ({
 /** The state after one more entry, by the rules that fold a whole journal. */
 export function evolve(state: RoomState, entry: Entry, options: FoldOptions): RoomState {
 	const base = baseOf(state);
-	applyEvent(base, entry, state.exchange);
+	applyEntry(base, entry, state.exchange);
 	return project(base, options);
 }

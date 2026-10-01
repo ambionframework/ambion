@@ -56,7 +56,9 @@ describe('snapshot', () => {
 			snapshotUri(workspace.name, sha256('alpha\n'), '/shared/link.md'),
 		]);
 		expect(await workspace.snapshot(['/shared/a.md'])).toEqual(refs.slice(0, 1));
-		const copies = await workspace.use(workspace.host, (env) => env.listDir('/snapshots', ctx));
+		const copies = await workspace.use(workspace.mirrorAgent, (env) =>
+			env.listDir('/snapshots', ctx),
+		);
 		expect(copies.ok && copies.value.map((entry) => entry.name)).toEqual([sha256('alpha\n')]);
 	});
 
@@ -123,7 +125,7 @@ describe('snapshot', () => {
 		}
 		await expect(workspace.snapshot(paths)).rejects.toThrow(error);
 		expect(
-			await workspace.use(workspace.host, (env) => env.exists('/snapshots', ctx)),
+			await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots', ctx)),
 		).toMatchObject({ ok: true, value: false });
 	});
 });
@@ -204,10 +206,10 @@ describe('the object limits', () => {
 		expect(() => s3ObjectBackend({ ...options, prefix: 'p'.repeat(961) })).toThrow(RangeError);
 		for (const prefix of ['lab?x=/', 'lab#/', 'lab dir/', 'lab%2F'])
 			expect(() => s3ObjectBackend({ ...options, prefix })).toThrow(/characters S3 calls safe/);
-		expect(s3ObjectBackend({ ...options, prefix: 'lab/', pathStyle: false }).store).toBe(
+		expect(s3ObjectBackend({ ...options, prefix: 'lab/', pathStyle: false }).label).toBe(
 			'http://b.127.0.0.1:9000/lab/',
 		);
-		expect(s3ObjectBackend({ ...options, prefix: 'lab/' }).store).toBe(
+		expect(s3ObjectBackend({ ...options, prefix: 'lab/' }).label).toBe(
 			'http://127.0.0.1:9000/b/lab/',
 		);
 	});

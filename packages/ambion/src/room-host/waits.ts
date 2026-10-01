@@ -7,7 +7,7 @@
 
 import { AmbionError } from '../errors.ts';
 import { closedExchange, discussionMessages, summaryCompletion } from '../room/exchange.ts';
-import type { ClosedExchange, ExchangeRef, Message, Seq, SummaryMessage } from '../types.ts';
+import type { ExchangeRange, ExchangeRef, Message, Seq, SummaryMessage } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { RoomHostState } from './core.ts';
 
@@ -70,7 +70,7 @@ export function handleForMessage(host: RoomHostState, message: Message): Exchang
 	return handleFor(host, found, message.seq === found.from);
 }
 
-function closedFor(host: RoomHostState, from: Seq): ClosedExchange | undefined {
+function closedFor(host: RoomHostState, from: Seq): ExchangeRange | undefined {
 	const state = host.state();
 	const close = state.closes.find((candidate) => candidate.from === from);
 	if (close === undefined) return undefined;
@@ -97,7 +97,7 @@ async function until<T>(
 	}
 }
 
-function waitForClose(host: RoomHostState, from: Seq): Promise<ClosedExchange> {
+function waitForClose(host: RoomHostState, from: Seq): Promise<ExchangeRange> {
 	return until(host, () => closedFor(host, from), `Exchange '${from}' was stopped or interrupted.`);
 }
 
@@ -123,7 +123,7 @@ async function responseFor(host: RoomHostState, from: Seq): Promise<SummaryMessa
 
 function responseResult(
 	host: RoomHostState,
-	close: ClosedExchange,
+	close: ExchangeRange,
 ): SummaryMessage | 'pending' | 'silent' | 'failed' {
 	const state = host.state();
 	const recordedClose = state.closes.find((candidate) => candidate.from === close.from);
@@ -134,7 +134,7 @@ function responseResult(
 		state.leases,
 		state.cancelledAt,
 	);
-	return completion.status === 'published' ? completion.summary : completion.status;
+	return completion.kind === 'published' ? completion.summary : completion.kind;
 }
 
 /** Wake every caller that waits. Each looks at the state again. */

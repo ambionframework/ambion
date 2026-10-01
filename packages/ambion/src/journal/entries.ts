@@ -1,4 +1,4 @@
-/** The room journal event vocabulary. */
+/** The room journal entry vocabulary. */
 
 import type { Static } from 'typebox';
 import type {

@@ -480,7 +480,7 @@ describe('workspace observe integration', () => {
 
 	it('reports retention failure and does not replay the server observation', async () => {
 		const objects: ObjectBackend = {
-			store: 'fixture-refuses-writes',
+			label: 'fixture-refuses-writes',
 			async connect() {
 				return {
 					async put() {

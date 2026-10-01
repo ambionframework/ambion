@@ -15,7 +15,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Execution,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -118,12 +118,12 @@ export async function untilQuiet(room: Room): Promise<void> {
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((message) => message.from === name);
+	messages.filter(isSaid).filter((message) => message.from === name);
 
 /** The activations that a seat started, in order. */
 export const activationsOf = (events: readonly RoomNotification[], agent: string): string[] =>
 	events.flatMap((event) =>
-		event.type === 'activation_start' && event.agent === agent ? [event.activation] : [],
+		event.type === 'activation_start' && event.seat === agent ? [event.activation] : [],
 	);
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
@@ -168,7 +168,10 @@ export function codexExecutorHarness(): ExecutorHarness {
 			const options: CodexExecutorOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
-					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
+					? {
+							env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' },
+							login: false as const,
+						}
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
 			};
