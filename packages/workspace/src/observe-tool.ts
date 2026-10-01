@@ -5,16 +5,16 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { Capability } from './capability.ts';
 import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
-import type { SensorClient } from './sensor-client.ts';
-import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
-import { boundedSensorReminder } from './sensor-reminder.ts';
-import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
 import {
 	type ObserveRequest,
 	type ObserveResponse,
 	type SensorPart,
 	SensorSpanSchema,
-} from './sensors.ts';
+} from './sensor-api.ts';
+import type { SensorClient } from './sensor-client.ts';
+import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
+import { boundedSensorReminder } from './sensor-reminder.ts';
+import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
 import type { SnapshotStore } from './snapshots.ts';
 
 const observeSchema = Type.Object(

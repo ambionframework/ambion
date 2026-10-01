@@ -241,7 +241,7 @@ of sent to Priya. The ignored run evidence is under
 - [ ] **5.** The host layer imports no execution file. Needs 3. (LB5)
 - [ ] **6.** The room-host core imports none of its mechanisms. Needs 3.
       (LB6)
-- [ ] **7.** No cycle of value imports. (LB7)
+- [x] **7.** No cycle of value imports. (LB7)
 - [ ] **8.** The workspace owns its port. Needs 4. (LB8)
 - [ ] **9.** The tests pass under full parallel load. (LB9)
 
@@ -314,8 +314,8 @@ handshake leaves no registration. Replacing an ended process requires an
 explicit owner call. A request after process end cannot reuse its port.
 The focused Linux tests cover the registry and the real process-to-HTTP path
 through the in-process SSH workstation fixture; `pnpm check` passes. SN33
-was not run against the provisioned OpenSSH tier. The observe flow remains
-pending.
+was not run against the provisioned OpenSSH tier. SN6 implements the
+observe flow.
 
 **SN5. The reminder.** Show the workstation, connected process and port,
 and qualified sensor names with descriptions. Use the index captured at

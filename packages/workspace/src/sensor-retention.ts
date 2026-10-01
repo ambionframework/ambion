@@ -8,9 +8,9 @@ import { contextOf, unwrap } from './object-files.ts';
 import { sha256Hex } from './object-rules.ts';
 import { isHandle } from './process-files.ts';
 import type { WorkspaceAgent } from './resource.ts';
+import type { ObserveRequest, ObserveResponse, SensorSource } from './sensor-api.ts';
+import { isValidObserveRequest, ObserveResponseSchema, SensorSourceSchema } from './sensor-api.ts';
 import { SensorDigestError } from './sensor-client.ts';
-import type { ObserveRequest, ObserveResponse, SensorSource } from './sensors.ts';
-import { isValidObserveRequest, ObserveResponseSchema, SensorSourceSchema } from './sensors.ts';
 import type { SnapshotStore } from './snapshots.ts';
 import { retainSnapshotBuffer } from './snapshots.ts';
 
