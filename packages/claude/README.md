@@ -32,14 +32,17 @@ Every package needs Node 22.19 or newer. The packages install from npmjs with no
 from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
-**The executor sets no credential.** By default the executable inherits the
-environment of the host process, so `ANTHROPIC_API_KEY` reaches it. A value
-for `env` replaces that environment.
+**The executor sets no credential.** By default the executable gets the
+variables of the host process that an allowlist names, so `ANTHROPIC_API_KEY`
+and `CLAUDE_CODE_OAUTH_TOKEN` reach it. A value for `env` replaces that
+environment.
 
-**A Claude subscription works with no key.** Run `claude login` on the host,
-or pass the token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`.
-Leave `ANTHROPIC_API_KEY` out, because a key takes precedence. A custom `env`
-needs `HOME` for the sign-in. The reported cost is notional. The
+**A Claude subscription works with a token.** Run `claude setup-token` and
+pass the token as `CLAUDE_CODE_OAUTH_TOKEN`. Leave `ANTHROPIC_API_KEY` out,
+because a key takes precedence. Each seat has its own Claude config
+directory, so the sign-in of `claude login` does not reach it. To share the
+config home of the host, pass an `env` that names `CLAUDE_CONFIG_DIR`. A
+custom `env` needs `PATH` and `HOME`. The reported cost is notional. The
 [guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#install-and-sign-in)
 holds the limits.
 
@@ -127,8 +130,9 @@ package is loaded.
 | `cwd`                   | The working directory of the host | The working directory of the executable.                      |
 | `additionalDirectories` | None                              | Directories that the tools may reach beyond `cwd`.            |
 
-`claudeExecution({ pathToClaudeCodeExecutable, env })` takes two options. The
-first selects the executable. The second sets its environment.
+`claudeExecution({ pathToClaudeCodeExecutable, env, configRoot })` takes three
+options. The first selects the executable. The second sets its environment.
+The third names the directory that holds the config directory of each seat.
 
 ## How an activation runs
 
@@ -166,6 +170,15 @@ becomes an `approval` step with the answer. The executor denies a request when
 
 **`env` replaces the environment.** The value is not merged with
 `process.env`. Pass `PATH`, `HOME`, and the key that the executable needs.
+Without `env`, the seat gets an allowlist of the variables of the host.
+
+**Each seat has its own config directory.** The executor sets
+`CLAUDE_CONFIG_DIR` for it, turns the skills off, and sets
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`. Without `configRoot`, the
+directory is private and lives in the temporary directory, and a restart
+loses it. A seat with no built-in tool runs in a scratch directory, and the
+executor aliases a built-in name such as `Bash` to the tool of the seat with
+the same name.
 
 ## Exchange continuity
 
@@ -212,15 +225,16 @@ describe('claude executor', () => {
 The published package holds no fake. The repository keeps one at
 `packages/claude/test/fake/claude-executable.mjs`. The fake enforces nothing.
 It cannot show what the real binary does with `--tools`, the allow list, the
-settings sources, or a resume. The package has no live tier.
+settings sources, or a resume. The live tier in `test/live` runs on the real
+binary with `ANTHROPIC_API_KEY`.
 
 ## Exports
 
-| Export                                                 | Use                                                       |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| `claude(options)`                                      | The executor of an agent definition                       |
-| `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime` |
-| `claudeExecutorHarness`, `scenarioOf`                  | From `/testing`: the suite harness and its scenarios      |
+| Export                                                             | Use                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------- |
+| `claude(options)`                                                  | The executor of an agent definition                       |
+| `claudeExecution({ pathToClaudeCodeExecutable, env, configRoot })` | The `execution` value for `startRoom` and `createRuntime` |
+| `claudeExecutorHarness`, `scenarioOf`                              | From `/testing`: the suite harness and its scenarios      |
 
 ## Troubleshooting
 
@@ -228,10 +242,12 @@ settings sources, or a resume. The package has no live tier.
 - **The model cannot see `Bash`.** `allowedTools` does not name it.
 - **Every request is denied.** `canUseTool` is absent or throws.
 - **Abandoned after one attempt with an authentication text.** Check
-  `ANTHROPIC_API_KEY`, or run `claude login`. A custom `env` may have
-  dropped the key, `HOME`, or `CLAUDE_CODE_OAUTH_TOKEN`.
+  `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. The sign-in of
+  `claude login` does not reach a seat. A custom `env` may have dropped the
+  key or `HOME`.
 - **`The Claude session ended before the pass did.`** The process exited.
-  Check the executable path and `env`.
+  Check the executable path and `env`. The message ends with the last 2,000
+  characters of the process stderr.
 
 The [guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#troubleshooting)
 lists more causes.

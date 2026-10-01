@@ -23,6 +23,7 @@
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
  * - `{ fail: { status, text } }`: end the turn with an error result.
+ * - `{ crash: { stderr, code } }`: write `stderr` to standard error and exit with `code`, with no result.
  * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
  * - `{ own: { name, input, output } }`: a tool the executable runs itself.
  */
@@ -68,7 +69,15 @@ const until = async (ready) => {
 };
 
 log({ argv: process.argv.slice(2), cwd: process.cwd() });
-log({ env: { names: Object.keys(process.env), entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT } });
+// The log holds the names of the variables, and the values of these few that hold no secret.
+const LOGGED_VALUES = ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
+log({
+	env: {
+		names: Object.keys(process.env),
+		entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT,
+		values: Object.fromEntries(LOGGED_VALUES.map((name) => [name, process.env[name]])),
+	},
+});
 if (resumed !== undefined && config.rejectResume === true) {
 	process.stderr.write(`No conversation found with session ID: ${resumed}\n`);
 	process.exit(1);
@@ -196,6 +205,10 @@ const actions = {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
 	},
 	permission,
+	crash: ({ stderr, code }) => {
+		process.stderr.write(`${stderr}\n`);
+		process.exit(code);
+	},
 	own: ({ name, input, output }) =>
 		toolResult(toolUse(name, input), [{ type: 'text', text: output }], false),
 };

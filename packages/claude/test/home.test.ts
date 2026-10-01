@@ -1,0 +1,58 @@
+/** The directories of a seat: each name gives one safe path segment, and a home stays under its root. */
+import { existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative } from 'node:path';
+import { expect, it } from 'vitest';
+import { seatHome, segment } from '../src/home.ts';
+
+const names = [
+	'sonnet',
+	'..',
+	'.',
+	'',
+	'a/b',
+	'a\\b',
+	'../../etc',
+	'/abs',
+	'a\0b',
+	'a%2Fb',
+	'.hidden',
+	'C:',
+	'CON',
+	'\uD800',
+	'élan',
+];
+
+it.each(names)('gives %j a segment that stays under its parent', (name) => {
+	const one = segment(name);
+	expect(one).not.toMatch(/[/\\\0]/);
+	expect(one).not.toBe('.');
+	expect(one).not.toBe('..');
+	expect(one).not.toBe('');
+	const root = join(tmpdir(), 'root');
+	const path = relative(root, join(root, one));
+	expect(path).toBe(one);
+	expect(isAbsolute(path)).toBe(false);
+});
+
+it('gives two names two segments', () => {
+	const segments = names.map(segment);
+	expect(new Set(segments).size).toBe(names.length);
+});
+
+it('makes the directories of a seat once, under the root, and keeps them for every call', () => {
+	const root = mkdtempSync(join(tmpdir(), 'ambion-home-'));
+	const home = seatHome(root, '../lab', 'a/b');
+	expect(existsSync(join(root, segment('../lab')))).toBe(false);
+	const dirs = home();
+	expect(home()).toBe(dirs);
+	expect(dirs.config).toBe(join(root, segment('../lab'), segment('a/b'), 'config'));
+	expect(dirs.work).toBe(join(root, segment('../lab'), segment('a/b'), 'work'));
+	expect(existsSync(dirs.config) && existsSync(dirs.work)).toBe(true);
+});
+
+it('makes a different private directory for each seat when no root is named', () => {
+	const [one, two] = [seatHome(undefined, 'lab', 'a')(), seatHome(undefined, 'lab', 'a')()];
+	expect(one.config).not.toBe(two.config);
+	expect(one.config.startsWith(tmpdir())).toBe(true);
+});

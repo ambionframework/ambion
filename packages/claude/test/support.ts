@@ -19,7 +19,7 @@ import type {
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { createClaudeExecutor } from '../src/executor.ts';
+import { type ClaudeExecutorOptions, createClaudeExecutor } from '../src/executor.ts';
 import { type ClaudeOptions, claude } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
@@ -85,6 +85,7 @@ export function fakeRoom(
 	},
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
+	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
@@ -119,10 +120,13 @@ export function fakeRoom(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
+	// A host that sets its own config home would take the sessions of every test.
+	const { CLAUDE_CONFIG_DIR: _host, ...inherited } = process.env;
 	const executor = createClaudeExecutor({
 		definition,
 		pathToClaudeCodeExecutable: executable,
-		env: { ...process.env, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		env: { ...inherited, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		...extra,
 	});
 	const sessions: ExecutorSession[] = [];
 	const recording: Executor = (activation) => {
@@ -147,6 +151,11 @@ export function fakeRoom(
 		answers,
 		events,
 		log,
+		/** The environment facts of each start of the fake, in order: names, and the values it logs. */
+		envs: () =>
+			log().flatMap((line) =>
+				'env' in line ? [line.env as { names: string[]; values: Record<string, string> }] : [],
+			),
 		/** The argument list of each start of the fake, in order. */
 		argvs: () => log().flatMap((line) => ('argv' in line ? [line.argv as string[]] : [])),
 		moveRecordTo: (seq: number) => {
@@ -171,8 +180,9 @@ export function open(
 	scenario: FakeScenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
+	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
-	const room = fakeRoom(scenario, definition, env);
+	const room = fakeRoom(scenario, definition, env, extra);
 	return { ...room, session: room.activate('message:1:sonnet:1') };
 }
 

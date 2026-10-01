@@ -43,21 +43,28 @@ from GitHub Packages; see
 `@anthropic-ai/claude-agent-sdk` at an exact version.
 
 **The executor sets no credential.** The executable reads its credentials
-from its environment. By default that is the environment of the host
-process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. A sign-in
-failure is permanent; see [Failure classification](#failure-classification).
+from its environment. By default that is the allowlist of the host
+environment, so `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN` in
+`process.env` reach it; see [Policy and the trust
+boundary](#policy-and-the-trust-boundary). A sign-in failure is permanent;
+see [Failure classification](#failure-classification).
 
-**A Claude subscription works with no key.** Run `claude login` on the
-host once. The executable keeps the sign-in in the home of the host user.
-A host with no browser runs `claude setup-token` elsewhere and passes the
+**A sign-in from `claude login` does not reach a seat.** Each seat runs with
+its own [config home](#config-home), and the executable keeps that sign-in
+in the config home of the host user. Pass `ANTHROPIC_API_KEY`. A Claude
+subscription works with a token: run `claude setup-token` once, and pass the
 token as `CLAUDE_CODE_OAUTH_TOKEN`. Remove `ANTHROPIC_API_KEY` from the
-environment, because a key takes precedence over the sign-in. A custom `env`
-needs `PATH` and `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` when the sign-in came
-from `claude setup-token`. The `usage` steps report a notional cost, so
-`maxBudgetUsd` caps notional dollars. The subscription has its own usage
-limit, which is a permanent failure. A provider may restrict the
-use of a consumer subscription outside its own clients. Read its terms
-first.
+environment, because a key takes precedence over the token. To use the
+sign-in of the host, pass an `env` that names `CLAUDE_CONFIG_DIR`, for
+example the `~/.claude` directory of the host user. All seats then share
+that config home.
+
+**A custom `env` needs `PATH` and `HOME`.** It needs
+`CLAUDE_CODE_OAUTH_TOKEN` when the sign-in came from `claude setup-token`.
+The `usage` steps report a notional cost, so `maxBudgetUsd` caps notional
+dollars. The subscription has its own usage limit, which is a permanent
+failure. A provider may restrict the use of a consumer subscription outside
+its own clients. Read its terms first.
 
 **`pathToClaudeCodeExecutable` selects the binary.** Without it, the SDK
 finds the executable that it ships with.
@@ -120,7 +127,7 @@ try {
 }
 ```
 
-**A host that sets `env`, or a path to the executable, passes
+**A host that sets `env`, a config root, or a path to the executable, passes
 `claudeExecution(options)` to a room or to `createRuntime`.**
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution.
@@ -155,12 +162,13 @@ the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })
 registers other names, and a room start fails on a name the runtime does not
 hold. [History and limits](room.md#history-and-limits) states the rule.
 
-**`claudeExecution(options)` takes two options.** Both are optional.
+**`claudeExecution(options)` takes three options.** All are optional.
 
-| Option                       | Default                             | Meaning                                                                                         |
-| ---------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `pathToClaudeCodeExecutable` | The executable of the SDK           | The Claude Code executable to spawn.                                                            |
-| `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
+| Option                       | Default                                  | Meaning                                                                                         |
+| ---------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `pathToClaudeCodeExecutable` | The executable of the SDK                | The Claude Code executable to spawn.                                                            |
+| `env`                        | The allowlisted variables of the host    | The environment of the executable. A value **replaces** the environment. See the trust section. |
+| `configRoot`                 | A private directory in the temporary one | The directory that holds one config directory for each seat. See [Config home](#config-home).   |
 
 The runtime supplies the clock, the call limits, the trace limits, and the
 logger.
@@ -255,26 +263,48 @@ the privileges of the host user. Its built-in tools run in that process, in
 `cwd` and in `additionalDirectories`. `Bash` gives the model a shell. The room
 tools and the tools of the definition run in the host process.
 
-**The room defines the seat, and three fixed options enforce it.** The
-executor sets them on every query. The definition cannot change them.
+**The room defines the seat, and fixed options enforce it.** The executor
+sets them on every query. The definition cannot change them.
 
-| Option            | Value                        | Effect                                                                   |
-| ----------------- | ---------------------------- | ------------------------------------------------------------------------ |
-| `tools`           | Base names of the allow list | The built-in tools of the model. An empty allow list gives none.         |
-| `strictMcpConfig` | `true`                       | The query reads no MCP server but the room server.                       |
-| `settingSources`  | `[]`                         | The query reads no user, project, or local settings, and no `CLAUDE.md`. |
+| Option or variable                         | Value                        | Effect                                                                               |
+| ------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `tools`                                    | Base names of the allow list | The built-in tools of the model. An empty allow list gives none.                     |
+| `strictMcpConfig`                          | `true`                       | The query reads no MCP server but the room server.                                   |
+| `settingSources`                           | `[]`                         | The query reads no user, project, or local settings, and no `CLAUDE.md`.             |
+| `skills`                                   | `[]`                         | No skill joins the query. The executor adds no `Skill` entry to the allow list.      |
+| `CLAUDE_CONFIG_DIR`                        | The config home of the seat  | The sessions and settings of the seat stay in its own directory.                     |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1`                          | The executable skips the update check, telemetry, and other traffic that work omits. |
+
+A host that passes an `env` with either variable keeps its own value. A
+seat with no built-in tool gets two more settings; see [A seat with no
+built-in tool](#a-seat-with-no-built-in-tool).
 
 **What the model sees.** The model sees the room tools, the tools of the
 definition, and the built-in tools that `allowedTools` names, minus
 `disallowedTools`. A test asserts that an empty policy passes `--tools ''`.
 
-**What the environment holds.** Without `env`, the executable inherits the
-environment of the host, less the variables of a Claude Code session, and
-`Bash` can print it. With `env`, the value
-**replaces** the environment. The executor does not merge it with
-`process.env`. A `PATH`, a `HOME`, or a key that the value omits is absent.
-Pass the variables that the executable needs, as the example does. A seat
-that runs `Bash` should get no more than that.
+**What the environment holds.** Without `env`, the seat gets the variables
+of the host process that an allowlist names, and no other. `Bash` can print
+what the seat holds, so the allowlist keeps the other secrets of the host
+out of its reach.
+
+| Kind         | Names                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| Exact names  | `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TEMP`, `TMP`, `TZ`, `LANG`, `TERM` |
+| Windows      | `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `COMSPEC`, `PATHEXT`              |
+| Proxy        | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, and the same names in lower case                 |
+| Certificates | `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`                                    |
+| Credential   | `CLAUDE_CODE_OAUTH_TOKEN`                                                                 |
+| Prefixes     | `ANTHROPIC_` and `LC_`                                                                    |
+
+`ENV_ALLOWLIST` and `ENV_PREFIXES` in `src/options.ts` hold the list, and a
+test holds them. With `env`, the value **replaces** the environment. The
+executor does not merge it with `process.env`, and it applies no
+allowlist. A `PATH`, a `HOME`, or a key that the value omits is absent.
+Pass the variables that the executable needs, as the example does. In both
+cases the executor then removes the variables of a Claude Code session, and
+sets `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
+unless the environment holds them.
 
 **A seat starts outside the Claude Code session of its host.** A host that
 runs inside Claude Code holds variables such as `CLAUDE_CODE_SESSION_ID`
@@ -288,6 +318,36 @@ to `sdk-ts`. A test on the fake executable holds the list.
 `CLAUDE_CODE_REMOTE_SESSION_ID`, the executable does not wait for a rotated
 host token after a 401. A seat that authenticates with the host's token can
 then fail on a long query. Pass `ANTHROPIC_API_KEY` to such a seat.
+
+### A seat with no built-in tool
+
+**A seat whose `allowedTools` names no built-in tool runs in a scratch
+directory.** The Workbench seats are of this kind. Such a seat gets the
+`work` directory of its [config home](#config-home) as `cwd`. A definition
+that sets `cwd` keeps it. A seat that names a built-in tool keeps its `cwd`,
+or the working directory of the host.
+
+**The executor routes a built-in name to the tool of the seat with the same
+name.** A model can emit `Bash` out of habit, or because a skill text names
+it. The executor passes `toolAliases` to the SDK, so that call lands on the
+workspace tool and does not fail as unknown. The map holds seven names:
+
+| Built-in | Tool of the seat |
+| -------- | ---------------- |
+| `Bash`   | `bash`           |
+| `Read`   | `read`           |
+| `Write`  | `write`          |
+| `Edit`   | `edit`           |
+| `Grep`   | `grep`           |
+| `Glob`   | `find`           |
+| `LS`     | `ls`             |
+
+An alias exists only when the seat holds a tool of that name and does not
+hold the built-in. A seat with built-in tools gets aliases by the same rule.
+**An alias redirects the name and converts no argument.** The model sends the
+arguments of the built-in tool, such as `file_path`, and the tool of the seat
+validates them against its own schema. A mismatch is a tool error that the
+model reads.
 
 **A permission request goes to `canUseTool`.** A tool call that the allow
 list does not cover asks. The executor answers it in this order:
@@ -307,12 +367,37 @@ needs it. The tests check `acceptEdits` only.
 **`maxBudgetUsd` caps one activation.** The SDK enforces it for the query.
 A spent budget is a permanent failure.
 
+## Config home
+
+**Each seat has its own Claude config directory.** The executor sets
+`CLAUDE_CONFIG_DIR` to `<seat directory>/config` and uses
+`<seat directory>/work` as the scratch directory. It makes both with mode
+`0700`, on the first need. Every activation of the seat gets the same
+directory, because a resume reads the session store there. Two seats get two
+directories. The executable keeps its sessions, its settings, and on Linux
+its credentials in this directory.
+
+**`configRoot` places the seat directories.** The seat directory is
+`<configRoot>/<room>/<seat>`. The room name and the seat name become one
+path segment each. A prefix and a percent encoding remove every separator
+and every dot, so no name leaves the root. Without `configRoot`, each seat
+gets a private directory under the temporary directory of the host. That
+directory does not survive a restart of the process or the machine. A resume
+after the restart then falls back to a fresh session, as designed in
+[Exchange continuity](#exchange-continuity). Pass `configRoot` to keep the
+sessions of a room across restarts. The executor deletes no session file,
+and the host owns the cleanup.
+
+**An `env` that names `CLAUDE_CONFIG_DIR` opts out.** The seat then uses
+that directory, as does every seat with the same `env`. This shares the
+credentials and the sessions of the host.
+
 ## Exchange continuity
 
 [Executors](executors.md#exchange-continuity) states the rule, the recorded
 session, and the fresh start.
 
-**Every query persists its session on the local disk.** The release records
+**Every query persists its session in the config home of the seat.** The release records
 the id that the SDK reports in a `system` message or a `result`. An
 activation whose `spec.resume` names a Claude session passes it as
 `resume`, with `forkSession` off. The SDK writes one session file for each
@@ -439,24 +524,28 @@ It cannot show real token counts, real cost, the real `result` shape, the
 behavior of a real session store on resume, or a real sign-in. It never runs
 a model.
 
-**The package has no live tier of its own.** The live tests of the
-Workbench run the `design` seat on the real Claude binary. They ask each seat
+**The package has a live tier.** `packages/claude/test/live/` holds six
+files, each with one claim that the fake cannot prove: approvals, tool
+exclusivity, memory across activations, a mixed room, steering, and the
+trace. `vitest.live.config.ts` runs them on the real Claude binary with
+`ANTHROPIC_API_KEY`, and the block skips without it. A run costs money. The
+live tests of the Workbench also run the `design` seat. They ask each seat
 for its tool list and for `/etc/hosts`. See [Example](example.md).
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                                                                 |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                              |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                             |
-| The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                     |
-| Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                            |
-| The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                              |
-| A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                                                        |
-| The seat is abandoned after one attempt with an authentication text | A permanent failure. Check `ANTHROPIC_API_KEY`, or run `claude login`. A custom `env` may have dropped the key, `HOME`, or `CLAUDE_CODE_OAUTH_TOKEN`. |
-| `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The executor does not forward the stderr of the process.                            |
-| The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                       |
-| A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                                                      |
-| The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                   |
-| A resumed seat opens a new session                                  | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                               |
-| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                            |
+| Symptom                                                             | Cause                                                                                                                                                                              |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                                                           |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                                                          |
+| The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                                                  |
+| Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                                                         |
+| The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                                                           |
+| A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                     |
+| The seat is abandoned after one attempt with an authentication text | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have dropped the key or `HOME`. |
+| `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class. |
+| The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                                                    |
+| A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                                                                                   |
+| The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                                                |
+| A resumed seat opens a new session                                  | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                                                            |
+| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                                         |

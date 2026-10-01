@@ -41,6 +41,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/c
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
 import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
+import { type SeatHome, seatHome } from './home.ts';
 import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
@@ -52,16 +53,48 @@ export const RESUMED_NOTE =
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
 
+/** The most characters of standard error that a failure message holds. */
+export const STDERR_TAIL = 2_000;
+
+/** The end of what an executable wrote to its standard error. */
+class Tail {
+	private text = '';
+
+	/** Add a chunk, and keep the last `STDERR_TAIL` characters. */
+	add(data: string): void {
+		this.text = (this.text + data).slice(-STDERR_TAIL);
+	}
+
+	/** A failure message with the tail after it. The message stands alone when the tail is empty. */
+	append(message: string): string {
+		const tail = this.text.trim();
+		return tail === ''
+			? message
+			: `${message}\n\nThe standard error of the process ended with:\n${tail}`;
+	}
+}
+
 /** What builds a Claude executor for one seat: its definition, and the runtime that runs it. */
 export interface ClaudeExecutorOptions extends ClaudeRuntime {
 	readonly definition: AgentDefinition;
+	/** The room of the seat. It names the config directory. Absent, `room`. */
+	readonly room?: string;
+	/** The name of the seat. It names the config directory. Absent, the name of the definition. */
+	readonly seat?: string;
 	/** The SDK entry. Absent, the SDK's own `query`. */
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
+	// Every activation of the seat shares one config home, because a resume reads the session store there.
+	const home = seatHome(
+		options.configRoot,
+		options.room ?? 'room',
+		options.seat ?? options.definition.name,
+	);
+	return (activation: ExecutorActivation): ExecutorSession =>
+		new Activation(activation, options, home);
 }
 
 /** A steered line held until its pass sends its prompt. */
@@ -76,6 +109,7 @@ class Activation implements ExecutorSession {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly runtime: ClaudeRuntime;
+	private readonly home: SeatHome;
 	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
@@ -93,15 +127,18 @@ class Activation implements ExecutorSession {
 	/** Opens the query. Set on the first pass. */
 	private begin: (() => Query) | undefined;
 	private stream: Query | undefined;
+	/** The end of the standard error of the current query. */
+	private tail = new Tail();
 	/** Set while a pass waits for its result. It settles the pass. */
 	private settle: ((result: PassResult) => void) | undefined;
 	private grace: ReturnType<typeof setTimeout> | undefined;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
+	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions, home: SeatHome) {
 		this.activation = activation;
 		this.definition = options.definition;
 		this.runtime = options;
+		this.home = home;
 		this.open = options.query ?? query;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
@@ -204,6 +241,9 @@ class Activation implements ExecutorSession {
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));
+			// A restart opens a query with a tail of its own. The old query can write no more into it.
+			const tail = new Tail();
+			this.tail = tail;
 			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({
@@ -213,6 +253,8 @@ class Activation implements ExecutorSession {
 					names,
 					canUseTool: approver(executor, this.trace, names),
 					runtime: this.runtime,
+					home: this.home,
+					stderr: (data) => tail.add(data),
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),
 				}),
 			});
@@ -247,7 +289,7 @@ class Activation implements ExecutorSession {
 			this.finish({
 				failed: true,
 				cause: 'transient',
-				message: 'The Claude session ended before the pass did.',
+				message: this.tail.append('The Claude session ended before the pass did.'),
 			});
 		} catch (error) {
 			this.threw(stream, error);
@@ -262,7 +304,18 @@ class Activation implements ExecutorSession {
 			this.restart(this.begin);
 			return;
 		}
-		this.finish(failedPass(error));
+		this.finish(this.withTail(failedPass(error)));
+	}
+
+	/**
+	 * A failed result with the end of the standard error in its message. The
+	 * cause and the error stay as they were, so the text of the process never
+	 * changes how the core classifies the failure.
+	 */
+	private withTail(result: PassResult): PassResult {
+		return result.failed && result.message !== undefined
+			? { ...result, message: this.tail.append(result.message) }
+			: result;
 	}
 
 	/** Whether a resumed query threw before it said anything. */

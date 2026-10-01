@@ -13,5 +13,10 @@ import type { ClaudeRuntime } from './options.ts';
 export const claudeExecution = defineExecution<ClaudeRuntime>(
 	'claude',
 	(_host, options) => (request) =>
-		createClaudeExecutor({ definition: request.definition, ...options }),
+		createClaudeExecutor({
+			definition: request.definition,
+			room: request.room,
+			seat: request.seat,
+			...options,
+		}),
 );

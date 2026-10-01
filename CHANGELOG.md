@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+**A Claude seat gets its own config home and an allowlisted
+environment.** This breaks a host that relied on `claude login`. The
+executor sets `CLAUDE_CONFIG_DIR` to one directory for each seat, so the
+sign-in in the `~/.claude` directory of the host user no longer reaches a
+seat. Pass `ANTHROPIC_API_KEY`, or the token from `claude setup-token` as
+`CLAUDE_CODE_OAUTH_TOKEN`. To share the config home of the host, pass an
+`env` that names `CLAUDE_CONFIG_DIR`. `claudeExecution({ configRoot })` places
+the seat directories at `<configRoot>/<room>/<seat>`. Without it, each seat
+gets a private directory in the temporary directory, and a restart of the
+process loses its sessions. Without `env`, the seat no longer inherits the
+whole host environment. It gets `PATH`, `HOME`, the locale, the proxy and
+certificate variables, `CLAUDE_CODE_OAUTH_TOKEN`, and the `ANTHROPIC_` and
+`LC_` prefixes. An explicit `env` still replaces the environment. The
+executor also passes `skills: []` and sets
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
+
+**A Claude seat with no built-in tool runs in a scratch directory.** Its
+`cwd` is the `work` directory of its config home, unless the definition sets
+one. The executor passes `toolAliases`, which route `Bash`, `Read`, `Write`,
+`Edit`, `Grep`, `Glob`, and `LS` to the tool of the seat with the matching
+name. An alias redirects the name only and converts no argument.
+
+**A failed Claude pass carries the end of the process stderr.** A query that
+ends before the pass settles, or throws, adds the last 2,000 characters of
+the stderr to the message. The failure class still comes from the original
+error.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

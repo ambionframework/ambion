@@ -15,17 +15,26 @@ import {
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { plainName } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
+import type { SeatHome } from './home.ts';
 
 /** The services a Claude execution brings: where the executable is and what it runs with. */
 export interface ClaudeRuntime {
 	/** A Claude Code executable to run. Absent, the SDK finds the one it ships with. */
 	readonly pathToClaudeCodeExecutable?: string;
 	/**
-	 * The environment of the executable. Absent, the environment of this
-	 * process. The executor removes the variables that tie the executable to
-	 * a Claude Code session of the host.
+	 * The environment of the executable. Absent, the variables of this process
+	 * that `ENV_ALLOWLIST` and `ENV_PREFIXES` name. A value replaces the
+	 * environment whole. In both cases the executor removes the variables that
+	 * tie the executable to a Claude Code session of the host.
 	 */
 	readonly env?: Readonly<Record<string, string | undefined>>;
+	/**
+	 * The directory that holds one Claude config directory for each seat, at
+	 * `<configRoot>/<room>/<seat>/config`. Absent, each seat gets a private
+	 * directory under the temporary directory, which a restart of the process
+	 * loses.
+	 */
+	readonly configRoot?: string;
 }
 
 /**
@@ -61,13 +70,109 @@ export const PARENT_SESSION = [
 	'CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS',
 ] as const;
 
-/** The environment of a seat's executable: the host's, less the variables of its Claude Code session. */
-function seatEnv(
+/**
+ * The variables of the host that a seat inherits when the host passes no
+ * `env`. The executable needs a shell, a path, a home, a locale, a proxy, a
+ * certificate store, and a credential.
+ */
+export const ENV_ALLOWLIST = [
+	'PATH',
+	'HOME',
+	'USER',
+	'LOGNAME',
+	'SHELL',
+	'TMPDIR',
+	'TEMP',
+	'TMP',
+	'TZ',
+	'LANG',
+	'TERM',
+	'USERPROFILE',
+	'APPDATA',
+	'LOCALAPPDATA',
+	'SYSTEMROOT',
+	'COMSPEC',
+	'PATHEXT',
+	'HTTP_PROXY',
+	'HTTPS_PROXY',
+	'NO_PROXY',
+	'http_proxy',
+	'https_proxy',
+	'no_proxy',
+	'NODE_EXTRA_CA_CERTS',
+	'SSL_CERT_FILE',
+	'SSL_CERT_DIR',
+	'CLAUDE_CODE_OAUTH_TOKEN',
+] as const;
+
+/** The prefixes of the variables of the host that a seat inherits as well. */
+export const ENV_PREFIXES = ['ANTHROPIC_', 'LC_'] as const;
+
+/** Whether the allowlist admits a variable name. */
+function allowed(name: string): boolean {
+	return (
+		(ENV_ALLOWLIST as readonly string[]).includes(name) ||
+		ENV_PREFIXES.some((prefix) => name.startsWith(prefix))
+	);
+}
+
+/** The variables of an environment that the allowlist admits. */
+function allowlisted(
 	env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string | undefined> {
-	const seat = { ...env };
+	return Object.fromEntries(Object.entries(env).filter(([name]) => allowed(name)));
+}
+
+/**
+ * The environment of a seat's executable. An `env` of the host replaces the
+ * environment. Without one, the seat gets the allowlisted variables of this
+ * process. The seat never holds the variables of a Claude Code session of
+ * the host. It gets its own config home, unless `env` names one, and the
+ * executable sends no traffic that the work does not need.
+ */
+function seatEnv(
+	env: Readonly<Record<string, string | undefined>> | undefined,
+	home: SeatHome,
+): Record<string, string | undefined> {
+	const seat = env === undefined ? allowlisted(process.env) : { ...env };
 	for (const name of PARENT_SESSION) delete seat[name];
+	if (seat.CLAUDE_CONFIG_DIR === undefined || seat.CLAUDE_CONFIG_DIR === '')
+		seat.CLAUDE_CONFIG_DIR = home().config;
+	if (seat.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC === undefined)
+		seat.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
 	return seat;
+}
+
+/**
+ * The built-in tools of Claude Code, and the tool of the seat that each one
+ * stands for. The map holds the target as a plain name.
+ */
+export const TOOL_ALIASES = {
+	Bash: 'bash',
+	Read: 'read',
+	Write: 'write',
+	Edit: 'edit',
+	Grep: 'grep',
+	Glob: 'find',
+	LS: 'ls',
+} as const;
+
+/**
+ * The aliases for a seat: each built-in name the seat does not hold, mapped
+ * to the tool of the seat with the matching name. `names` are the tools of
+ * the seat as the SDK knows them. An alias changes the name of a call and
+ * leaves its arguments as they are.
+ */
+export function toolAliases(
+	names: readonly string[],
+	builtins: readonly string[],
+): Record<string, string> {
+	const aliases: Record<string, string> = {};
+	for (const [builtin, target] of Object.entries(TOOL_ALIASES)) {
+		const own = `mcp__${ROOM_SERVER}__${target}`;
+		if (names.includes(own) && !builtins.includes(builtin)) aliases[builtin] = own;
+	}
+	return aliases;
 }
 
 /** The Claude executor a definition names, or an error that names its kind. */
@@ -125,6 +230,10 @@ export interface QueryInput {
 	readonly names: readonly string[];
 	readonly canUseTool: CanUseTool;
 	readonly runtime: ClaudeRuntime;
+	/** The directories of the seat. The options ask for them when they need one. */
+	readonly home: SeatHome;
+	/** Takes the standard error of the executable. */
+	readonly stderr: (data: string) => void;
 	/** The session to resume, when the room named one in `spec.resume`. */
 	readonly resume?: string;
 }
@@ -135,6 +244,10 @@ export function queryOptions(input: QueryInput): Options {
 	const listed = executor.permissionMode === 'dontAsk' ? input.names : [];
 	const allowed = [...listed, ...(executor.allowedTools ?? [])];
 	const { resume } = input;
+	const builtins = builtinNames(executor.allowedTools ?? []);
+	const aliases = toolAliases(input.names, builtins);
+	// A seat with no built-in tool works in a scratch directory.
+	const cwd = executor.cwd ?? (builtins.length === 0 ? input.home().work : undefined);
 	return {
 		model: executor.model,
 		systemPrompt: input.systemPrompt,
@@ -146,7 +259,10 @@ export function queryOptions(input: QueryInput): Options {
 		persistSession: true,
 		mcpServers: { [ROOM_SERVER]: input.server },
 		strictMcpConfig: true,
-		tools: builtinNames(executor.allowedTools ?? []),
+		tools: builtins,
+		// An empty list turns the skills off. Without it, the executable lists the skills it finds on disk.
+		skills: [],
+		stderr: input.stderr,
 		allowedTools: allowed,
 		canUseTool: input.canUseTool,
 		...present({
@@ -156,10 +272,11 @@ export function queryOptions(input: QueryInput): Options {
 			permissionMode: executor.permissionMode,
 			maxBudgetUsd: executor.maxBudgetUsd,
 			effort: executor.effort,
-			cwd: executor.cwd,
+			cwd,
+			toolAliases: Object.keys(aliases).length === 0 ? undefined : aliases,
 			additionalDirectories: executor.additionalDirectories && [...executor.additionalDirectories],
 			pathToClaudeCodeExecutable: runtime.pathToClaudeCodeExecutable,
 		}),
-		env: seatEnv(runtime.env ?? process.env),
+		env: seatEnv(runtime.env, input.home),
 	};
 }

@@ -1,7 +1,9 @@
 /** How a result of the SDK maps to a pass result. */
 import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
+import { STDERR_TAIL } from '../src/executor.ts';
 import { passResultOf } from '../src/failure.ts';
+import { open, viewOf } from './support.ts';
 
 const result = (fields: object) =>
 	({
@@ -67,3 +69,23 @@ it.each([
 ])('ends %s', (_what, fields, expected) => {
 	expect(passResultOf(result(fields))).toEqual(expected);
 });
+
+it.each([
+	{ what: 'ends with no result', code: 0 },
+	{ what: 'exits with an error', code: 1 },
+])(
+	'puts the end of the standard error in the message of a pass when the process $what, and keeps the cause transient',
+	async ({ code }) => {
+		// The line holds a word that the shared classifier reads as a refusal. Only the original error classifies.
+		const line = 'FATAL: 401 authentication_error from the proxy';
+		const flood = 'x'.repeat(STDERR_TAIL * 2);
+		const run = open({ turns: [[{ crash: { stderr: `${flood}\n${line}`, code } }]] });
+		const result = await run.session.pass({ kind: 'view', view: viewOf() });
+		run.session.close?.();
+		expect(result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(result.message).toContain(line);
+		expect(result.message).toContain('The standard error of the process ended with:');
+		// The tail holds at most the last characters, so the flood does not fill the message.
+		expect(result.message?.split('ended with:')[1]?.trim().length).toBeLessThanOrEqual(STDERR_TAIL);
+	},
+);
