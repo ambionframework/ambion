@@ -38,9 +38,9 @@ import {
 	byAgent,
 	contextText,
 	insists,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	seat,
 	speak,
@@ -52,12 +52,12 @@ import { gatedJournals, memory } from './support/storage.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
-	(text: string): Script =>
+	(text: string): PiScript =>
 	(_context, _name, call) =>
 		call === 1 ? summarise(text) : quiet();
 
 /** An activation that fails outright: no draft, nothing written, and an error on the stream. */
-const broken: Script = () =>
+const broken: PiScript = () =>
 	fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'the model failed' });
 
 // -- the room ----------------------------------------------------------------
@@ -113,7 +113,7 @@ const clock = fakeClock();
 const runtime = createRuntime({ clock });
 
 async function open(options: {
-	script: Script;
+	script: PiScript;
 	agents?: Parameters<typeof startRoom>[0]['agents'];
 	seats?: Parameters<typeof startRoom>[0]['seats'];
 	assistant?: AgentDefinition;
@@ -155,34 +155,34 @@ const said = (record: Message[]) => record.filter(isSpoken).map((m) => m.text);
 // -- what the products say ---------------------------------------------------
 
 /** Two answers to one question, then silence. */
-const twoAnswers: Script = (_context, _name, call) => {
+const twoAnswers: PiScript = (_context, _name, call) => {
 	if (call === 1) return speak('Thursday is out: the inspector needs 48h notice.');
 	if (call === 2) return speak('Saturday works if the rebar lands Wednesday.');
 	return quiet();
 };
 
 /** Two answers to the first question, then one to each that follows. */
-const answersEach: Script = (_context, _name, call) => {
+const answersEach: PiScript = (_context, _name, call) => {
 	if (call === 3 || call === 5) return quiet();
 	return speak(`answer ${call}`);
 };
 
 /** Two answers to every question it is asked. */
-const twoAnswersEach: Script = (_context, _name, call) =>
+const twoAnswersEach: PiScript = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
 /** An assistant that writes once per activation, however many activations it takes. */
 const writesEach =
-	(text: string): Script =>
+	(text: string): PiScript =>
 	(_context, _name, call) =>
 		summarise(`${text} ${call}`);
 
 /** A product that is still reading when the room changes under it. */
-function heldUntil(held: Promise<void>): Script {
+function heldUntil(held: Promise<void>): PiScript {
 	return async (_context, _name, call) => {
 		if (call === 1) {
 			await held;
-			return quiet('still reading');
+			return quiet();
 		}
 		if (call === 2) return speak('answer 1');
 		if (call === 3) return speak('answer 2');
@@ -681,7 +681,7 @@ describe('closing summaries', () => {
 
 	it('writes off a draft the host revoked, and publishes no response', async () => {
 		const drafting = deferred();
-		const hangs: Script = () => {
+		const hangs: PiScript = () => {
 			drafting.resolve();
 			return new Promise<never>(() => {});
 		};
@@ -980,7 +980,7 @@ describe('a summary writer with domain tools', () => {
 				product: insists('Thursday is out.'),
 				colleague: insists('Nor from here.'),
 				assistant: (context) => {
-					const closing = isClosing(context);
+					const closing = isClosingContext(context);
 					held.push({ closing, tools: toolNames(context), prompt: context.systemPrompt ?? '' });
 					if (!closing && !seated) {
 						seated = true;
@@ -1064,7 +1064,7 @@ describe('ordinary and closing work on one agent', () => {
 			script: byAgent({
 				assistant: async (context) => {
 					const record = contextText(context);
-					if (isClosing(context)) {
+					if (isClosingContext(context)) {
 						closingContexts.push(record);
 						if (closingContexts.length === 1) {
 							closingStarted.resolve();

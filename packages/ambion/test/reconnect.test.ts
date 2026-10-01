@@ -24,7 +24,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, type Script, scripted } from './support/scripted.ts';
+import { type PiScript, quiet, scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, type Storage, storages } from './support/storage.ts';
 
@@ -200,7 +200,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 			const { clock, runtime } = await host(storage);
 			const held = deferred();
 			onTestFinished(held.resolve);
-			const holds: Script = async (_context, _agent, call) => {
+			const holds: PiScript = async (_context, _agent, call) => {
 				if (call === 1) await held.promise;
 				return quiet();
 			};

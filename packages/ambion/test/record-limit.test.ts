@@ -21,9 +21,9 @@ import { andrei, messagesOf, roomName, scriptedAgent, waitForRoom } from './supp
 import {
 	answersEveryQuestion,
 	contextText,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	summarise,
 } from './support/scripted.ts';
@@ -53,7 +53,7 @@ const limited = (name: string, activationTokenLimit?: number) =>
  */
 async function watched(
 	agents: AgentDefinition[],
-	script: Script,
+	script: PiScript,
 	options: { limits?: CreateRuntimeOptions['limits'] } & Partial<StartRoomOptions> = {},
 ) {
 	const { limits, ...room } = options;
@@ -98,10 +98,10 @@ async function recorded(room: Room, text: string) {
 
 /** A worker that answers every question, and a scribe that summarizes when `writes` says so. */
 const scribing =
-	(people: string[], closings: string[], writes: (context: string) => boolean): Script =>
+	(people: string[], closings: string[], writes: (context: string) => boolean): PiScript =>
 	(context, name, call) => {
 		if (name !== 'scribe') return answersEveryQuestion(people)(context, name, call);
-		if (!isClosing(context) || !writes(context.systemPrompt ?? '')) return quiet();
+		if (!isClosingContext(context) || !writes(context.systemPrompt ?? '')) return quiet();
 		closings.push(contextText(context));
 		return summarise('done');
 	};

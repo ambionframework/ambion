@@ -25,7 +25,7 @@ import {
 } from '../src/index.ts';
 import { portExecution } from './support/ports.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
-import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
+import { isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
@@ -118,7 +118,9 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			summary: writer.name,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context) => (isClosing(context) ? speak('Original result.') : quiet())),
+				stream: scripted((context) =>
+					isClosingContext(context) ? speak('Original result.') : quiet(),
+				),
 			}),
 		});
 		const exchange = await (await room.visit(andrei)).send({ text: 'Question?' });

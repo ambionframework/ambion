@@ -49,7 +49,8 @@ describe('provider loading', () => {
 			const result = await runFreshProcess(
 				`const { readRoom, startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
 			const { pi, piExecution } = await import(${JSON.stringify(entry)});
-			const { quiet, scripted } = await import(${JSON.stringify(testing)});
+			const { quiet } = await import('@ambionframework/ambion/testing');
+			const { scripted } = await import(${JSON.stringify(testing)});
 			await readRoom('lazy-provider-test');
 			const agent = (name) =>
 				defineAgent({

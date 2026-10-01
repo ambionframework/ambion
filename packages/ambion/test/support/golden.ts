@@ -21,10 +21,10 @@ import {
 	byAgent,
 	callTool,
 	contextText,
-	isClosing,
+	isClosingContext,
 	later,
+	type PiScript,
 	quiet,
-	type Script,
 	says,
 	scripted,
 	speak,
@@ -96,7 +96,7 @@ const complete = (): Promise<readonly JournalEntry[]> =>
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: says(['Thursday works.']),
-			assistant: (context) => (isClosing(context) ? summarise('Thursday works.') : quiet()),
+			assistant: (context) => (isClosingContext(context) ? summarise('Thursday works.') : quiet()),
 		}),
 		async drive(room) {
 			await (await room.visit(priya)).send({ text: 'Can I tell the client Thursday?' });
@@ -108,7 +108,7 @@ const complete = (): Promise<readonly JournalEntry[]> =>
  * The worker asks the checker, and answers when the checker replies. A
  * delivered say ends the pass.
  */
-const asksTheChecker: Script = (context) => {
+const asksTheChecker: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
 	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
 	return speak('Is the crew free on Thursday?', 'checker');
@@ -193,7 +193,7 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  * The worker schedules a check, and answers when the check comes back. A
  * delivered say or a scheduled one ends the pass.
  */
-const checksLater: Script = (context) => {
+const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
 	if (contextText(context).includes('[posted → worker, returns'))
 		return speak('The slab is poured.');
@@ -213,7 +213,7 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
 		stream: byAgent({
 			worker: checksLater,
 			assistant: (context) =>
-				isClosing(context) ? summarise('The worker checks the pour later.') : quiet(),
+				isClosingContext(context) ? summarise('The worker checks the pour later.') : quiet(),
 		}),
 		async drive(room, clock) {
 			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
@@ -227,7 +227,7 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
  * The worker schedules two checks, then dismisses the first by the handle
  * that its say result names.
  */
-const changesItsMind: Script = (context) => {
+const changesItsMind: PiScript = (context) => {
 	const results = toolResultTexts(context);
 	const [first] = results.flatMap((text) => /^scheduled #(\d+):/.exec(text)?.[1] ?? []);
 	if (results.length === 0) return later('Check the pour log.', 600);

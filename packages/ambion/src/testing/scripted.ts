@@ -13,14 +13,14 @@ import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
-/** One tool call of a scripted turn. */
+/** One tool call of a scripted reply. */
 export interface Call {
 	readonly tool: string;
 	readonly args: Record<string, unknown>;
 }
 
-/** What a seat does in one step of a pass: the calls it makes. No call ends the pass. */
-export type Turn = readonly Call[];
+/** What a seat does in one step of a pass: the calls it makes. An empty reply ends the pass. */
+export type Reply = readonly Call[];
 
 /** What one call answered. `text` is `delivered` when the room took it. */
 export interface Result {
@@ -28,7 +28,7 @@ export interface Result {
 	readonly text: string;
 }
 
-/** What a script reads to choose its next turn. */
+/** What a script reads to choose its next reply. */
 export interface Step {
 	/** The activation's latest view. The first pass reads it whole, a later pass rereads the record. */
 	readonly view: ActivationView;
@@ -37,26 +37,29 @@ export interface Step {
 }
 
 /**
- * One activation's answer: the turn for this step, given the step, the seat,
+ * One activation's answer: the reply for this step, given the step, the seat,
  * and which step this is for that seat. It runs once per step, the way a
- * model runs once per request, and the pass ends on the first empty turn.
+ * model runs once per request, and the pass ends on the first empty reply.
  */
-export type Script = (step: Step, seat: string, call: number) => Turn | Promise<Turn>;
+export type Script = (step: Step, seat: string, call: number) => Reply | Promise<Reply>;
 
-/** A turn with one call to a tool. */
-export const callTool = (tool: string, args: Record<string, unknown> = {}): Turn => [
+/** A reply with one call to a tool. */
+export const callTool = (tool: string, args: Record<string, unknown> = {}): Reply => [
 	{ tool, args },
 ];
 
-/** A turn that calls `say`, to one seat or to the room. */
-export const speak = (text: string, to?: string): Turn =>
+/** A reply that calls `say`, to one seat or to the room. */
+export const speak = (text: string, to?: string): Reply =>
 	callTool('say', to ? { to, text } : { text });
 
-/** A turn that calls `schedule`: the room wakes the seat with the say after `after` seconds. */
-export const later = (text: string, after: number): Turn => callTool('schedule', { text, after });
+/** A reply that calls `schedule`: the room wakes the seat with the say after `after` seconds. */
+export const later = (text: string, after: number): Reply => callTool('schedule', { text, after });
 
-/** A turn that records the usage of a model request as a `usage` step. */
-export const spend = (usage: Usage): Turn => callTool('usage', { ...usage });
+/** A reply that calls `seat`: the seat puts the named agent in the room. */
+export const seat = (name: string): Reply => callTool('seat', { name });
+
+/** A reply that records the usage of a model request as a `usage` step. */
+export const spend = (usage: Usage): Reply => callTool('usage', { ...usage });
 
 /**
  * An error a script throws to end the activation as a failure of a given
@@ -72,13 +75,19 @@ export class ScriptedFailure extends Error {
 	}
 }
 
-/** A turn with no call. The seat has nothing to add. */
-export const quiet = (): Turn => [];
+/** A reply with no call. The seat has nothing to add. */
+export const quiet = (): Reply => [];
 
-/** One script per seat. A seat with no entry answers `quiet()`. */
-export const byAgent = (seats: Record<string, Script>): Script => {
+/**
+ * One script per seat. A seat with no entry answers `quiet()`. `Input` is what
+ * the scripts read: a `Step` for the scripted executor, a Pi context for the
+ * Pi stream. `Out` is what they return, or what their promises resolve to.
+ */
+export const byAgent = <Input = Step, Out = Reply>(
+	seats: Record<string, (input: Input, seat: string, call: number) => Out | Promise<Out>>,
+): ((input: Input, seat: string, call: number) => Out | Reply | Promise<Out>) => {
 	const table = new Map(Object.entries(seats));
-	return (step, seat, call) => (table.get(seat) ?? (() => quiet()))(step, seat, call);
+	return (input, name, call) => table.get(name)?.(input, name, call) ?? quiet();
 };
 
 /** True when the view asks for the summary of a closed exchange. */
@@ -157,9 +166,9 @@ class ScriptedSession implements ExecutorSession {
 		try {
 			while (!this.over) {
 				const step: Step = { view: pass.view, results: this.results };
-				const turn = await this.script(step, this.definition.name, this.next());
-				if (turn.length === 0) break;
-				for (const call of turn) await this.run(call, pass);
+				const reply = await this.script(step, this.definition.name, this.next());
+				if (reply.length === 0) break;
+				for (const call of reply) await this.run(call, pass);
 			}
 			return { failed: false };
 		} catch (thrown) {

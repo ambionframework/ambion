@@ -27,8 +27,8 @@ import {
 	byAgent,
 	callTool,
 	contextText,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	seat,
 	speak,
@@ -47,7 +47,7 @@ const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const runtime = createRuntime({ clock: fakeClock() });
 
 async function open(options: {
-	script: Script;
+	script: PiScript;
 	agents?: readonly AgentDefinition[];
 	available?: readonly AgentDefinition[];
 	seats?: Readonly<Record<string, Attention>>;

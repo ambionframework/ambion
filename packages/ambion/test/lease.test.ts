@@ -51,9 +51,9 @@ import {
 	answersEveryQuestion,
 	byAgent,
 	contextText,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	says,
 	scripted,
 	speak,
@@ -74,7 +74,7 @@ interface Options {
 }
 
 async function open(
-	script: Script,
+	script: PiScript,
 	{ faults = [], limits, summary = false, runtime: own }: Options = {},
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
@@ -94,7 +94,7 @@ async function open(
 	return { session, clock, runtime };
 }
 
-const speaksOnce: Script = (_c, _a, call) => (call === 1 ? speak('hi') : quiet());
+const speaksOnce: PiScript = (_c, _a, call) => (call === 1 ? speak('hi') : quiet());
 const starts = (events: ReturnType<typeof collect>) =>
 	events.filter((e) => e.type === 'activation_start').length;
 const ends = (events: ReturnType<typeof collect>) =>
@@ -252,7 +252,7 @@ describe('a lease', () => {
 			byAgent({
 				solo: says(['I answered.', 'And again.']),
 				assistant: (context) => {
-					if (!isClosing(context)) return quiet();
+					if (!isClosingContext(context)) return quiet();
 					throw new Error('the model failed');
 				},
 			}),
@@ -512,7 +512,7 @@ describe('a lease judged where its change is written', () => {
 					return says(['a3', 'a4'])(context, name, call);
 				},
 				assistant: (context, _name, call) => {
-					if (!isClosing(context)) return quiet();
+					if (!isClosingContext(context)) return quiet();
 					if (call === 1) throw new Error('the model failed');
 					return summarise('The one message.');
 				},

@@ -2,12 +2,13 @@
  * The usage of an activation reaches the release entry, the `activation_end`
  * event, and the closed exchange. A resumed room folds the same total.
  */
+import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import type { RoomNotification, Usage } from '../src/index.ts';
 import { createRuntime, readExchange, startRoom } from '../src/index.ts';
 import { andrei, collect, roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { scripted } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 import { collectSteps } from './support/trace.ts';
@@ -54,7 +55,10 @@ describe.each(storages)('usage on $name storage', (storage) => {
 				runtime,
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(() => ({ ...quiet('done'), usage: spent })),
+					stream: scripted(() => ({
+						...fauxAssistantMessage('done', { stopReason: 'stop' }),
+						usage: spent,
+					})),
 				}),
 			}),
 		);

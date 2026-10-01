@@ -4,12 +4,13 @@
  * Every case runs on the scripted stream.
  */
 import { AmbionError, defineTool, type ToolContext } from '@ambionframework/ambion';
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { byAgent, callTool, quiet } from '@ambionframework/ambion/testing';
+import type { AssistantMessage, JsonObject } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createExecutionServices, type RunAgentRequest, runAgent } from '../src/index.ts';
-import { byAgent, callTool, quiet, type Script, scripted } from '../src/testing.ts';
+import { type PiScript, scripted } from '../src/testing.ts';
 
 /** What each tool call received, in order. */
 const seen: { tool: string; context: ToolContext }[] = [];
@@ -35,7 +36,7 @@ const finish = defineTool({
 	},
 });
 
-const services = (script: Script) =>
+const services = (script: PiScript) =>
 	createExecutionServices({ stream: scripted(script), sessions: 'memory' });
 
 const request = (overrides: Partial<RunAgentRequest> = {}): RunAgentRequest => ({
@@ -49,16 +50,19 @@ const request = (overrides: Partial<RunAgentRequest> = {}): RunAgentRequest => (
 	...overrides,
 });
 
-/** A message that spends `input` tokens. */
-const spending = (message: AssistantMessage, input: number): AssistantMessage => ({
-	...message,
-	usage: {
-		...message.usage,
-		input,
-		totalTokens: input,
-		cost: { ...message.usage.cost, total: input / 1000 },
-	},
-});
+/** A message that calls `tool` and spends `input` tokens. */
+const spending = (tool: string, args: JsonObject, input: number): AssistantMessage => {
+	const message = fauxAssistantMessage([fauxToolCall(tool, args)], { stopReason: 'toolUse' });
+	return {
+		...message,
+		usage: {
+			...message.usage,
+			input,
+			totalTokens: input,
+			cost: { ...message.usage.cost, total: input / 1000 },
+		},
+	};
+};
 
 describe('runAgent', () => {
 	beforeEach(() => {
@@ -66,10 +70,10 @@ describe('runAgent', () => {
 	});
 
 	it('returns the call that ends the run, the calls before it, and the spend of each request', async () => {
-		const script: Script = (_context, _agent, call) => {
-			if (call === 1) return spending(callTool('lookup', { key: 'thursday' }), 10);
-			if (call === 2) return spending(callTool('finish', { answer: '' }), 20);
-			return spending(callTool('finish', { answer: 'Thursday is dry.' }), 30);
+		const script: PiScript = (_context, _agent, call) => {
+			if (call === 1) return spending('lookup', { key: 'thursday' }, 10);
+			if (call === 2) return spending('finish', { answer: '' }, 20);
+			return spending('finish', { answer: 'Thursday is dry.' }, 30);
 		};
 		const result = await runAgent(services(script), request());
 		expect(result.end).toEqual({ tool: 'finish', args: { answer: 'Thursday is dry.' } });
@@ -118,7 +122,7 @@ describe('runAgent', () => {
 			},
 		});
 		let requests = 0;
-		const script: Script = () => {
+		const script: PiScript = () => {
 			requests += 1;
 			return fauxAssistantMessage(
 				[fauxToolCall('finish', { answer: 'first' }), fauxToolCall('finish', { answer: 'second' })],
@@ -132,7 +136,7 @@ describe('runAgent', () => {
 
 	it('ends after a sequential batch that holds another call before the end', async () => {
 		let requests = 0;
-		const script: Script = () => {
+		const script: PiScript = () => {
 			requests += 1;
 			if (requests > 1) return quiet();
 			return fauxAssistantMessage(
@@ -148,7 +152,7 @@ describe('runAgent', () => {
 
 	it('routes each run on its name, and shows the model the system prompt, the guidance, and the thinking level', async () => {
 		const systems: string[] = [];
-		const script = byAgent({
+		const script: PiScript = byAgent({
 			actor: (context) => {
 				systems.push(context.systemPrompt ?? '');
 				return callTool('finish', { answer: 'from the actor' });
@@ -175,7 +179,7 @@ describe('runAgent', () => {
 
 	it('rejects when the signal aborts the run', async () => {
 		const controller = new AbortController();
-		const script: Script = () => {
+		const script: PiScript = () => {
 			controller.abort(new Error('The move passed its timeout.'));
 			return new Promise<AssistantMessage>(() => {});
 		};
@@ -186,7 +190,7 @@ describe('runAgent', () => {
 
 	it('rejects a signal that aborts while the run opens, and sends no request', async () => {
 		let requests = 0;
-		const script: Script = () => {
+		const script: PiScript = () => {
 			requests += 1;
 			return callTool('finish', { answer: 'dry' });
 		};
@@ -275,7 +279,7 @@ describe('runAgent', () => {
 		],
 	] as const)('refuses %s before any request', async (_case, bad, error) => {
 		let requests = 0;
-		const script: Script = () => {
+		const script: PiScript = () => {
 			requests += 1;
 			return quiet();
 		};

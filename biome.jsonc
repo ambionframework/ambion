@@ -444,6 +444,36 @@
 			}
 		},
 		{
+			// The Pi test entry reads the verbs and the `Reply` type of the core
+			// test entry. A Biome override replaces the options of an earlier one
+			// for the same rule, so this entry repeats the group above and adds
+			// the one path it may reach.
+			"includes": ["packages/pi/src/testing.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion/**",
+											"!@ambionframework/ambion/hosting",
+											"!@ambionframework/ambion/conformance",
+											"!@ambionframework/ambion/testing",
+											"**/ambion/src/**"
+										],
+										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting`, `/conformance`, or `/testing` entry, never a file inside it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
 			// Resource ownership, and the backend and env types beneath it, are
 			// independent of the Ambion tool adapter. They are also neutral: a
 			// Biome override matches by file, and replaces rather than merges an

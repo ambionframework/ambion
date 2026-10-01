@@ -52,7 +52,7 @@ const open = async (options: Parameters<typeof startRoom>[0]) =>
 	stopAtEnd(await startRoom(options));
 
 describe('scripted', () => {
-	it('routes on the seat, counts steps per seat, runs a tool, and reads the result of a spoken turn', async () => {
+	it('routes on the seat, counts steps per seat, runs a tool, and reads the result of a spoken reply', async () => {
 		const seen: string[] = [];
 		const results: string[][] = [];
 		const record =

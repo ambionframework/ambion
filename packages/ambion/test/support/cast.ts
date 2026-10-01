@@ -16,9 +16,9 @@ import {
 	answersEveryQuestion,
 	answersLastQuestion,
 	byAgent,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	summarise,
 	toolResultTexts,
 	unanswered,
@@ -49,13 +49,13 @@ export const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 export const agents: readonly AgentDefinition[] = [assistant, product, colleague];
 const people = [priya.name, sam.name];
 
-const assistantScript: Script = (context) =>
-	isClosing(context) && !toolResultTexts(context).some((text) => text.startsWith('said #'))
+const assistantScript: PiScript = (context) =>
+	isClosingContext(context) && !toolResultTexts(context).some((text) => text.startsWith('said #'))
 		? summarise('The one message.')
 		: quiet();
 
 /** Every seat answers the last question once; the assistant writes once per draft. */
-export const script: Script = byAgent({
+export const script: PiScript = byAgent({
 	product: answersLastQuestion(people),
 	colleague: answersLastQuestion(people),
 	assistant: assistantScript,
@@ -73,7 +73,7 @@ export interface Answer {
  * of the room, the way a model does.
  */
 export interface Cast {
-	readonly script: Script;
+	readonly script: PiScript;
 	/** Every answer the record must hold once, for one question. */
 	answers(question: Question): Answer[];
 	/** The people the summaries are written for, in order. */
@@ -104,7 +104,7 @@ export const steady = (): Cast => ({
 export function troubled(): Cast {
 	const seen = new Set<string>();
 	let failed = 0;
-	const productScript: Script = (context, name, call) => {
+	const productScript: PiScript = (context, name, call) => {
 		const next = unanswered(context, name, people)[0];
 		const starting = toolResultTexts(context).length === 0;
 		if (starting && next !== undefined && !seen.has(next)) {
@@ -134,7 +134,7 @@ export function troubled(): Cast {
 
 /** The script with a wait before every answer, so a kill from outside lands mid-activation. */
 export const slowly =
-	(ms: number): Script =>
+	(ms: number): PiScript =>
 	async (context, agent, call) => {
 		await new Promise((resolve) => setTimeout(resolve, ms));
 		return script(context, agent, call);

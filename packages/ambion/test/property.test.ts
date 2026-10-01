@@ -40,7 +40,7 @@ import {
 import {
 	answersLastQuestion,
 	byAgent,
-	isClosing,
+	isClosingContext,
 	quiet,
 	scripted,
 	summarise,
@@ -66,7 +66,7 @@ const script = byAgent({
 	beta: answersLastQuestion(names),
 	gamma: answersLastQuestion(names),
 	assistant: (context) =>
-		isClosing(context) && !toolResultTexts(context).some((text) => text.startsWith('said #'))
+		isClosingContext(context) && !toolResultTexts(context).some((text) => text.startsWith('said #'))
 			? summarise('The one message.')
 			: quiet(),
 });

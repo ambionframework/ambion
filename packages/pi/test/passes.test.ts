@@ -13,6 +13,7 @@ import type {
 	Executor,
 	ExecutorSession,
 } from '@ambionframework/ambion/hosting';
+import { callTool, quiet } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,7 @@ import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiExecutor } from '../src/executor.ts';
 import { memorySessions, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { callTool, contextText, quiet, type Script, scripted } from '../src/testing.ts';
+import { contextText, type PiScript, scripted } from '../src/testing.ts';
 import { roomThatCommits, stateOf, unusedRoom } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -50,7 +51,7 @@ function viewOf(
 
 /** One activation of `worker` on a script, with the requests it made and the steps it recorded. */
 function activation(
-	script: Script,
+	script: PiScript,
 	answer?: (request: CommitRequest) => CommitResult,
 	watch: (step: Step) => void = () => {},
 ) {
@@ -205,7 +206,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		let landed = false;
 		let session: ActivationState | undefined;
 		const run = activation(
-			() => quiet('Done.'),
+			() => quiet(),
 			undefined,
 			(step) => {
 				// The line lands as the last answer of the run ends.
