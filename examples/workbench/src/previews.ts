@@ -89,7 +89,7 @@ async function nowLine(workspace: Workspace, named: CommitUri): Promise<string |
 	// An agent writes the ref, so its name can be one git refuses. The commit still shows.
 	if (!validRefName(name)) return `${label} is not a name git accepts; the ref keeps this commit.`;
 	// Only a missing name reads as gone. Any other failure is the preview's error.
-	const now = await owner.use(workspace.host, (env) => env.resolve(named.repository, at));
+	const now = await owner.use(workspace.mirrorAgent, (env) => env.resolve(named.repository, at));
 	if (now === undefined) return `${label} no longer exists; the ref keeps this commit.`;
 	return now === named.commit
 		? `${label} still names this commit.`

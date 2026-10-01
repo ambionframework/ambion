@@ -66,7 +66,7 @@ async function wipe(bash: Backend): Promise<void> {
 async function gitOptions(): Promise<WorkstationGitOptions> {
 	const setup = await readSetup();
 	return {
-		host: setup.host,
+		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		account: { username: GIT_ACCOUNT, privateKey: await keyOf(setup, GIT_ACCOUNT) },

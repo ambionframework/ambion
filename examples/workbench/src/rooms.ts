@@ -169,7 +169,9 @@ export async function openRooms(
 	try {
 		await seedWorkspace(workspacePath);
 		// The first call opens the lab database, runs its schema, and guards its tables.
-		await lab.use(workspace.host, (env) => env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT));
+		await lab.use(workspace.mirrorAgent, (env) =>
+			env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT),
+		);
 	} catch (error) {
 		await workspace.dispose().catch(() => {});
 		throw error;

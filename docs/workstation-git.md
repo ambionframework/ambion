@@ -95,8 +95,8 @@ import { fromDirectory } from '@ambionframework/workspace';
 import { openWorkspace } from '@ambionframework/workspace';
 import { workstationBackend, workstationGitBackend } from '@ambionframework/workstation';
 
-const server = {
-  host: 'lab.internal',
+const access = {
+  server: 'lab.internal',
   hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
 };
 
@@ -104,7 +104,7 @@ const lab = openWorkspace({
   name: 'lab',
   backend: {
     bash: workstationBackend({
-      ...server,
+      ...access,
       layout: {
         audit: '/srv/ambion/lab/audit/audit.jsonl',
         rooms: '/srv/ambion/lab/rooms',
@@ -116,7 +116,7 @@ const lab = openWorkspace({
       }),
     }),
     git: workstationGitBackend({
-      ...server,
+      ...access,
       account: {
         username: 'lab-git',
         privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
@@ -132,19 +132,19 @@ const lab = openWorkspace({
 });
 ```
 
-| Option         | Meaning                                                                         |
-| -------------- | ------------------------------------------------------------------------------- |
-| `host`, `port` | The address of the server that holds the git account. The port is 22 by default |
-| `hostKey`      | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
-| `account`      | The username and the private key of the git account, as `WorkstationCredential` |
-| `root`         | The folder of the repositories, in the account's home. The default is `repos`   |
-| `alias`        | The host name in every clone URL. The default is `ambion-git`                   |
-| `templates`    | The registrations, by template name. The same shape as `justGitBackend`         |
-| `keyTtl`       | Whole seconds an agent key lives, 1 or more. The default is 3600                |
-| `idleTimeout`  | Seconds the git account's client may stay unused. The default is 300            |
+| Option           | Meaning                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `server`, `port` | The address of the server that holds the git account. The port is 22 by default |
+| `hostKey`        | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
+| `account`        | The username and the private key of the git account, as `WorkstationCredential` |
+| `root`           | The folder of the repositories, in the account's home. The default is `repos`   |
+| `alias`          | The host name in every clone URL. The default is `ambion-git`                   |
+| `templates`      | The registrations, by template name. The same shape as `justGitBackend`         |
+| `keyTtl`         | Whole seconds an agent key lives, 1 or more. The default is 3600                |
+| `idleTimeout`    | Seconds the git account's client may stay unused. The default is 300            |
 
 **The git account is on the workstation, and an agent reaches it on the
-loopback address.** `host`, `port`, and `hostKey` name the one server of
+loopback address.** `server`, `port`, and `hostKey` name the one server of
 both backends, and the host passes one value to both, as the example
 does. Nothing compares the two. A git backend on a server of another host
 key fails its first operation at the host key check. A git server on a second machine waits in
@@ -199,7 +199,7 @@ digit, `.`, `_`, `-`, or `/`.
 
 **A clone URL is `ssh://<alias>/<namespace>/<name>`.** For example,
 `ssh://ambion-git/analyst/report`. The URL stays opaque to the agent
-([Git](git.md#decisions-taken)). The `server` of the backend is
+([Git](git.md#decisions-taken)). The `label` of the backend is
 `ssh://ambion-git`, and the guidance names it.
 
 **The agent's ssh configuration maps the alias to the server.** At each
@@ -504,7 +504,7 @@ workspace. [Git](git.md#on-the-just-bash-backends) states the access of
 **`openWorkspace` refuses a pair that does not match.** When `backend.git`
 is set and `backend.bash.gitTransports` does not hold its transport,
 `openWorkspace` throws. Neither backend has a name, so the error names the
-`transport` and the `server` of the git backend, and the transports that
+`transport` and the `label` of the git backend, and the transports that
 the bash backend carries. A bash backend with no `gitTransports` carries
 none.
 

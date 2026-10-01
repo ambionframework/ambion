@@ -71,7 +71,7 @@ the workspace package setup, validation, process startup, readiness, data
 storage, and rollback. Its `npm test` checks HTTP behavior, schemas, digests,
 launch metadata, and data-directory safety.
 
-The running Workbench uses `directoryBackend`, which has no port transport.
+The running Workbench uses `directoryBackend`, which has no endpoints.
 It does not add `connect` or `observe` to the terminal workspace. The
 workstation flow uses these tools with the same template. The Workbench's
 `test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and

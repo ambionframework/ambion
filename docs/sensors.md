@@ -1,6 +1,6 @@
 # Sensors
 
-> **Sensor reads require a backend with ports.** Such a workspace exposes
+> **Sensor reads require a backend with endpoints.** Such a workspace exposes
 > `connect` and `observe`. Observation reads use the connected server, retain
 > verified bytes and the manifest through snapshots, and export the result
 > into the observing agent's home. The version 1 schemas and client are
@@ -67,7 +67,7 @@ flowchart LR
 | Repository, launch command, installation, source configuration | Server implementation and the agent that manages it |
 | Acquisition, reducer state, measurements, history              | Server implementation                               |
 | Process handle, status, timeout, cancellation, adoption        | Existing workspace process table                    |
-| Workstation hostname, SSH credentials, port transport          | Workstation backend                                 |
+| Workstation hostname, SSH credentials, endpoints               | Workstation backend                                 |
 | Connection names, sensor discovery, observation rendering      | Workspace                                           |
 | Retained evidence bytes and snapshot refs                      | Existing workspace object store                     |
 | Messages and collaboration                                     | Room                                                |
@@ -136,7 +136,7 @@ observe({ sensor: 'bench/room-temperature' });
 ```
 
 The `fork` and process commands use existing workspace tools. `connect` and
-`observe` are available on a backend with ports.
+`observe` are available on a backend with endpoints.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
@@ -226,7 +226,7 @@ interface ConnectInput {
 - `port` is an integer from 1 through 65535 on the workstation.
 
 **The workspace checks readiness before registering the connection.** It
-checks that the caller owns a running process, opens the port transport, and
+checks that the caller owns a running process, opens the endpoint, and
 reads the server index through `createSensorClient`. It validates API
 version 1, launch source metadata, unique sensor names, and the listed names.
 It checks the same process again before committing. A failure closes the
@@ -266,7 +266,7 @@ agent reads `ps`, adopts a surviving process through the existing table,
 and calls `connect` again. This avoids a second durable service registry.
 
 **A process end makes its connection unavailable.** The process table's end
-event or a process check marks it unavailable and closes its port transport.
+event or a process check marks it unavailable and closes its endpoint.
 The registry remembers the ended process identity for this host run, so a
 stale read cannot revive it. Reconnecting a replacement is an explicit owner
 call and does not reuse the old registration's transport. A listener that
@@ -290,37 +290,38 @@ give the configured workstation hostname. They distinguish the remote
 sensor port from the SSH login port and any local transport address.
 The agent does not need to construct a tunnel command.
 
-**The bash backend exposes one optional port capability.** This transport
+**The bash backend exposes one optional endpoint capability.** This transport
 contract is separate from its existing environment `connect` method:
 
 ```ts
-interface WorkspacePort {
+interface WorkspaceEndpoint {
   readonly url: string; // private HTTP root reachable by the host
   close(): Promise<void>;
 }
 
-interface WorkspacePorts {
-  readonly hostname: string; // the machine where workspace commands run
-  open(
+interface WorkspaceEndpoints {
+  readonly machine: string; // the machine where workspace commands run
+  forward(
     agent: { readonly name: string },
     port: number,
     signal?: AbortSignal,
-  ): Promise<WorkspacePort>;
+  ): Promise<WorkspaceEndpoint>;
 }
 
 // Optional member of BashBackend:
-// readonly ports?: WorkspacePorts;
+// readonly endpoints?: WorkspaceEndpoints;
 ```
 
 **The workstation implements the capability through SSH forwarding.**
-`hostname` is the configured workstation hostname. The `port` argument is
+`machine` is `WorkstationOptions.server`, the configured workstation hostname.
+The `port` argument is
 the remote HTTP service port on workstation `127.0.0.1`. `WorkstationOptions.port`
 is the SSH login port. The remote service port must be an integer from 1 to 65535. The returned URL uses a private host loopback address and an
 automatically assigned local port. It contains no SSH credentials and is
 temporary. It is not a ref or stored identity. The transport reuses the
 process owner's credentials and host-key verification.
 
-**The caller owns the open transport.** `open` holds an SSH session reference
+**The caller owns the open transport.** `forward` holds an SSH session reference
 until `close` completes. Its optional signal cancels establishment and releases
 partial resources. After success, the caller must call `close`. Closing is
 safe more than once. An aborted request does not close this shared transport.
@@ -341,7 +342,7 @@ arbitrary TCP listener belongs to that PID. This initial deployment
 trusts the workstation and the server implementation supplied by its
 owner. Agents that manage the server code also control that code.
 
-**Backends without ports expose no sensor tools.** The just-bash
+**Backends without endpoints expose no sensor tools.** The just-bash
 backends do not gain a real network or a native server runtime. A
 host-side daemon fixture can test the protocol in isolation. The actual
 process-to-sensor path must pass on the workstation backend.

@@ -1,6 +1,6 @@
 # The workspace
 
-> **Sensor tools are available when the bash backend has workstation ports.**
+> **Sensor tools are available when the bash backend has workstation endpoints.**
 > `connect` discovers a running server, and `observe` reads a qualified sensor
 > and retains its verified evidence through the existing snapshot store.
 > `workspace.tools({ images: false })` returns image export paths while keeping
@@ -65,13 +65,13 @@ default. `memoryBackend` and `directoryBackend` name the same layout:
 its own layout; nothing in the neutral layer fixes a path of its own.
 
 **`openWorkspace` builds one host agent, `<name>-host`, and `mirror()` and
-`snapshot()` write as it.** `Workspace.host` exposes this identity. A
+`snapshot()` write as it.** `Workspace.mirrorAgent` exposes this identity. A
 backend with real accounts gives it credentials, the same as any other agent
 it connects.
 
 ```ts
 const drive = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
-console.log(drive.host); // { name: 'town-host' }
+console.log(drive.mirrorAgent); // { name: 'town-host' }
 ```
 
 ## Give the resource to an agent
@@ -81,12 +81,12 @@ binds three file tools first: `read`, `write`, and `edit`. The five process
 tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle reminds each seat of its processes
-and lists captured sensor discovery when the backend has ports. `snapshot`
+and lists captured sensor discovery when the backend has endpoints. `snapshot`
 and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
-A backend with `ports` adds `connect` to validate and discover a running
+A backend with `endpoints` adds `connect` to validate and discover a running
 sensor server owned by the caller, and `observe` to read a qualified sensor
 and retain its returned evidence. Network requests run outside the shell
 owner; only process checks and export or audit writes use that owner. Passing
@@ -323,7 +323,7 @@ await session.stop();
 await mirror.stop();
 ```
 
-`mirror()` writes as `workspace.host`, the `<name>-host` agent `openWorkspace`
+`mirror()` writes as `workspace.mirrorAgent`, the `<name>-host` agent `openWorkspace`
 built (see [The layout and the host identity](#the-layout-and-the-host-identity)),
 so a caller names only the room. Stop the room before the mirror. The room's
 own shutdown commits a `left` message for every present visitor; a mirror
@@ -410,7 +410,7 @@ makes the snapshot, and its object backend keeps the bytes
 
 **`workspace.snapshot(paths)` gives one ref for each path, in order.** The
 host calls it. `options.agent` names the agent that reads the files, and the
-default is `workspace.host`. A relative path resolves against the working
+default is `workspace.mirrorAgent`. A relative path resolves against the working
 directory of that agent. `workspace.readSnapshot(ref)` gives the bytes back.
 
 ```ts
@@ -495,8 +495,8 @@ interface ObjectEnv extends ResourceEnv {
 }
 
 interface ObjectBackend extends ResourceBackend<ObjectEnv> {
-  /** The store that errors name, with no credential: a folder or a bucket URL. */
-  readonly store: string;
+  /** The label that errors use for the store, with no credential: a folder or a bucket URL. */
+  readonly label: string;
 }
 ```
 
@@ -880,7 +880,7 @@ implements them.
 | ----------------------------------- | ---------------------------------------------------------------------- |
 | `connect(agent, files, signal?)`    | An `SqlEnv` for one agent. A backend with accounts connects as it      |
 | `dispose()`                         | Optional. Release local handles, and keep the data                     |
-| `database`                          | The name the tool reports and the guidance states, with no credential  |
+| `label`                             | The name the tool reports and the guidance states, with no credential  |
 | `guidance`                          | Optional. The dialect and the limits of the database                   |
 | `SqlEnv.run(sql, options, context)` | Run the statements in order, and give a preview of the last one's rows |
 | `SqlEnv.cleanup()`                  | The owner calls it after each operation                                |
@@ -967,7 +967,7 @@ binds them to its `use` method. It also opens
 the process table and builds the five process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
 processes of this run ([The host's view](processes.md#the-hosts-view)).
-`Workspace` adds `tools()`, `host`, and `mirror()` to the resource surface.
+`Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
 Direct operations and tool calls share one queue and one lifecycle.
 
 **A new backend implements `connect()` and an `ExecutionEnv`, over the

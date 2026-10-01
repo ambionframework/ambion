@@ -88,7 +88,7 @@ describe.skipIf(!hasSetsid)('connect through workstation process tools', () => {
 		if (typeof result === 'string') throw new Error('connect returned no discovery details.');
 		expect(result.details).toMatchObject({
 			name: 'bench',
-			hostname: ssh.options.host,
+			hostname: ssh.options.server,
 			port,
 			process: handle,
 			owner: 'owner',

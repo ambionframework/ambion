@@ -164,10 +164,10 @@ export interface SqlEnv extends ResourceEnv {
  */
 export interface SqlBackend {
 	/**
-	 * The name of the database that the `sql` tool reports and the guidance
+	 * The label of the database that the `sql` tool reports and the guidance
 	 * states: a file path, or an address with no credential in it.
 	 */
-	readonly database: string;
+	readonly label: string;
 	/** Guidance about this database: its dialect and its limits. */
 	readonly guidance?: string;
 	connect(agent: WorkspaceAgent, files: WorkspaceFiles, signal?: AbortSignal): Promise<SqlEnv>;

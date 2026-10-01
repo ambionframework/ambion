@@ -38,10 +38,10 @@ export type {
 	BashBackend,
 	BashServices,
 	WorkspaceBackends,
+	WorkspaceEndpoint,
+	WorkspaceEndpoints,
 	WorkspaceEnv,
 	WorkspaceLayout,
-	WorkspacePort,
-	WorkspacePorts,
 } from './backend.ts';
 export type {
 	FileExpect,

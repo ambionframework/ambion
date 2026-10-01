@@ -311,7 +311,7 @@ describe('a workspace beside a running room', () => {
 		expect(spoken[0]?.refs).toEqual([ref]);
 		expect(new TextDecoder().decode(await site.readSnapshot(ref))).toBe('done\n');
 		expect(
-			await site.use(site.host, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
+			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
 		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 		expect(lines).toHaveLength((await session.read()).messages.length);

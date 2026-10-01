@@ -19,9 +19,9 @@ describe('sensor discovery in the activation reminder', () => {
 			name: 'sensor-reminder',
 			backend: {
 				bash: wrapped((inner) => ({
-					ports: {
-						hostname: 'configured-workstation',
-						async open(_agent, port) {
+					endpoints: {
+						machine: 'configured-workstation',
+						async forward(_agent, port) {
 							const url = port === 43127 ? firstServer.url : secondServer.url;
 							return { url, async close() {} };
 						},

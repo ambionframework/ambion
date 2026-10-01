@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The workspace packages name an endpoint, a label, and a server.** The word
+`host` now names the application that embeds a room, and the word `port`
+names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
+`WorkspacePorts` becomes `WorkspaceEndpoints`. Its method `open` becomes
+`forward`, and its field `hostname` becomes `machine`. The field `ports` of
+`BashBackend` becomes `endpoints`. `GitBackend.server`,
+`ObjectBackend.store`, and `SqlBackend.database` become `label`.
+`Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
+`<name>-host` stays. `WorkstationOptions.host` and
+`WorkstationGitOptions.host` become `server`.
+
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
 The core already held this function. The Pi executor held a second copy as

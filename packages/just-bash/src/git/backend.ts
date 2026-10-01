@@ -176,7 +176,7 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 
 	return Object.freeze({
 		access,
-		server: BASE,
+		label: BASE,
 		connect: async (agent: WorkspaceAgent): Promise<GitEnv> => {
 			assertJustGitAgent(agent);
 			await ready();
