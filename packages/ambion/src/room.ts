@@ -10,7 +10,7 @@ import {
 	executionsOf,
 	type Runtime,
 	type RuntimeState,
-	stateOf,
+	runtimeStateOf,
 	tokenWindowOf,
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
@@ -115,7 +115,7 @@ async function acquire(
 	open: (state: RuntimeState, connector: ExecutionConnector) => RoomHost,
 ): Promise<Room> {
 	assertRoomName(name);
-	const state = stateOf(options.runtime ?? defaultRuntime());
+	const state = runtimeStateOf(options.runtime ?? defaultRuntime());
 	assertFree(state, name);
 	const room = open(state, connectorFor(state, options.execution));
 	state.running.set(room.name, room);
@@ -144,7 +144,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	const messages = captureMessageSelection(options.messages);
-	const state = stateOf(runtime);
+	const state = runtimeStateOf(runtime);
 	const live = state.running.get(name);
 	if (live instanceof RoomHost) return live.read({ messages });
 	const journal = roomJournal(state.journals.open(name));

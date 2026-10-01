@@ -191,14 +191,14 @@ internal. Participant views omit `sessionId`.
 | Export             | What it is                                                                                                                                                     |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Execution`        | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                   |
-| `ExecutionHost`    | What the runtime gives a connector: the clock, the storage, the limits, and the logger. A `Hosting` is an `ExecutionHost`                                      |
+| `ExecutionHost`    | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                         |
 | `ConnectorRequest` | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                          |
 | `AgentPort`        | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
 | `RoomProtocol`     | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
 | `AgentRunner`      | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
 | `defineExecution`  | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
 | `localExecution`   | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
-| `hostingOf`        | The `Hosting` of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`. It returns the state of the runtime itself             |
+| `hostingOf`        | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
 | `visitOf`          | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor` | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
 | `Executor`         | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |

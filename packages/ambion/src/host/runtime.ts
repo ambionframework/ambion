@@ -6,7 +6,7 @@
  * neither reads anything else off it. Behind the token sits one state
  * object, and each reader sees a part of it. `hostingOf` gives a host the
  * `Hosting` part: the journal namespace, the limits, the executions, and
- * `evict`. `stateOf` gives the core the whole `RuntimeState`.
+ * `evict`. `runtimeStateOf` gives the core the whole `RuntimeState`.
  *
  * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
  * outside this file can name the key it carries, so a value assembled from
@@ -129,7 +129,7 @@ export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
 
 /**
  * What a host needs beyond the application view: the execution host, the
- * journal namespace, and the executions of the runtime. `hostingOf` is the
+ * journal namespace, the executions of the runtime, and `evict`. `hostingOf` is the
  * one way to reach it from a `Runtime` value.
  */
 export interface Hosting extends ExecutionHost {
@@ -158,7 +158,7 @@ export interface RuntimeState extends Hosting {
 const stateFor = new WeakMap<Runtime, RuntimeState>();
 
 /** The whole state of a runtime, for the core. */
-export function stateOf(runtime: Runtime): RuntimeState {
+export function runtimeStateOf(runtime: Runtime): RuntimeState {
 	const found = stateFor.get(runtime);
 	if (found === undefined) throw new Error('Runtime must come from createRuntime.');
 	return found;
@@ -166,11 +166,11 @@ export function stateOf(runtime: Runtime): RuntimeState {
 
 /** The part of the state that a host reads, and that an execution reads as an `ExecutionHost`. */
 export function hostingOf(runtime: Runtime): Hosting {
-	return stateOf(runtime);
+	return runtimeStateOf(runtime);
 }
 
 export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | undefined =>
-	stateOf(runtime).running.get(name)?.calls;
+	runtimeStateOf(runtime).running.get(name)?.calls;
 
 /** The dependencies that one in-process seat needs for one captured definition. */
 export interface AgentExecutionContext {
