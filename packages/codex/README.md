@@ -60,7 +60,9 @@ no steer: a line that lands during a run waits for the next pass.
 **Items become steps.** `command_execution`, `file_change`, `mcp_tool_call`,
 and `web_search` items become `tool_call` and `tool_result` steps.
 `agent_message` and `reasoning` items become `text` and `thinking` steps.
-`turn.completed` becomes a `usage` step. Codex reports no cost. The next
+`todo_list` items become an `update_plan` tool call. `error` items and
+`error` events become `notice` steps. `turn.completed` becomes a `usage`
+step. Codex reports no cost. The next
 ordinary say cites the paths of a completed `file_change` in `refs`, as
 `file:` URIs.
 

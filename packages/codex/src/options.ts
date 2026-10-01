@@ -16,7 +16,7 @@ import {
 } from '@ambionframework/ambion/hosting';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { exclusiveConfig, NODE_REPL, NODE_REPL_OFF, type Scratch } from './catalog.ts';
-import type { CodexExecutor } from './define.ts';
+import type { CodexExecutor, ReasoningSummary } from './define.ts';
 import type { HomeOptions, SeatHome } from './home.ts';
 
 /**
@@ -121,15 +121,16 @@ export const DEVELOPER_TEXT_LIMIT = 120_000;
 
 /**
  * The options of the client for one activation: the executable, its
- * environment with the Codex home of the seat, the seat text, and the room
- * tools server. With a `scratch`, the config also turns off the native
- * tools.
+ * environment with the Codex home of the seat, the seat text, the reasoning
+ * summary, and the room tools server. With a `scratch`, the config also turns
+ * off the native tools.
  */
 export function clientOptions(
 	execution: CodexExecutionOptions,
 	home: SeatHome,
 	socketPath: string,
 	seat: string,
+	summary: ReasoningSummary,
 	scratch?: Scratch,
 ): CodexOptions {
 	return {
@@ -137,6 +138,7 @@ export function clientOptions(
 		env: { ...home.env },
 		config: {
 			...instructionConfig(seat, scratch),
+			model_reasoning_summary: summary,
 			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
 			mcp_servers: {
 				...(scratch === undefined ? {} : { [NODE_REPL]: NODE_REPL_OFF }),

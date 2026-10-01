@@ -177,7 +177,11 @@ describe('native tools', () => {
 		const room = open([plain], seat({ nativeTools: 'codex', sandboxMode: 'workspace-write' }));
 		await run(room.activate());
 		const config = room.seen.clients[0]?.config as { developer_instructions: string };
-		expect(Object.keys(config)).toEqual(['developer_instructions', 'mcp_servers']);
+		expect(Object.keys(config)).toEqual([
+			'developer_instructions',
+			'model_reasoning_summary',
+			'mcp_servers',
+		]);
 		expect(config.developer_instructions.startsWith(RESUMED_NOTE)).toBe(true);
 		expect(config.developer_instructions).toContain('Answer once.');
 		expect(room.seen.threads[0]?.sandboxMode).toBe('workspace-write');

@@ -53,15 +53,22 @@ describe('seatText', () => {
 
 describe('clientOptions', () => {
 	it('carries the seat text as developer_instructions, and serves only the approved room server, without a scratch', () => {
-		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text').config as {
+		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto')
+			.config as {
 			developer_instructions: string;
+			model_reasoning_summary: string;
 			mcp_servers: Record<
 				string,
 				{ default_tools_approval_mode?: string; required?: boolean; args: string[] }
 			>;
 		};
-		expect(Object.keys(config)).toEqual(['developer_instructions', 'mcp_servers']);
+		expect(Object.keys(config)).toEqual([
+			'developer_instructions',
+			'model_reasoning_summary',
+			'mcp_servers',
+		]);
 		expect(config.developer_instructions).toBe('seat text');
+		expect(config.model_reasoning_summary).toBe('auto');
 		const servers = Object.values(config.mcp_servers);
 		expect(servers).toHaveLength(1);
 		expect(servers[0]?.default_tools_approval_mode).toBe('approve');
@@ -72,13 +79,15 @@ describe('clientOptions', () => {
 
 	it('refuses as permanent a seat text that one command argument cannot hold', () => {
 		const long = 'x'.repeat(DEVELOPER_TEXT_LIMIT);
-		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long)).toThrow(PermanentError);
+		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long, 'auto')).toThrow(
+			PermanentError,
+		);
 	});
 
 	it('names the instructions file, adds the config, and disables node_repl beside the room server with a scratch', () => {
 		const scratch = new Scratch(luna, 'seat text');
 		try {
-			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', scratch)
+			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto', scratch)
 				.config as {
 				model_catalog_json: string;
 				model_instructions_file: string;
@@ -103,12 +112,14 @@ describe('clientOptions environment', () => {
 			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
 		});
 		expect(
-			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat'),
+			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat', 'auto'),
 		).toMatchObject({
 			codexPathOverride: '/bin/codex',
 			env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
 		});
-		expect(clientOptions({}, home, '/tmp/room.sock', 'seat').env).not.toHaveProperty('GONE');
+		expect(clientOptions({}, home, '/tmp/room.sock', 'seat', 'auto').env).not.toHaveProperty(
+			'GONE',
+		);
 	});
 });
 
@@ -191,6 +202,13 @@ describe('threadOptions', () => {
 		expect(codex({ instructions: 'x', model: 'm', nativeTools: 'codex' }).nativeTools).toBe(
 			'codex',
 		);
+	});
+
+	it('defaults reasoningSummary to auto', () => {
+		expect(codex({ instructions: 'x', model: 'm' }).reasoningSummary).toBe('auto');
+		expect(
+			codex({ instructions: 'x', model: 'm', reasoningSummary: 'none' }).reasoningSummary,
+		).toBe('none');
 	});
 });
 
