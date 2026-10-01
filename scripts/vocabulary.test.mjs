@@ -14,10 +14,10 @@ import test from 'node:test';
  * A new entry lands with the rename that removes the word. The entry names
  * the plan rows that own it.
  *
- * Pending: the `turn` entry. It refuses the whole word `turn` in a string
- * literal of `packages/ambion`. It lands with row O9, which waits for a live
- * case. Row T8 renames the `after` delay, and a regex cannot tell it from the
- * `after` position, so T8 has no entry.
+ * The `turn` entry refuses the phrases that used `turn` for an activation.
+ * A vendor turn, such as a Codex `turn.started` event, stays legal. Row T8
+ * renames the `after` delay, and a regex cannot tell it from the `after`
+ * position, so T8 has no entry.
  */
 
 const root = join(import.meta.dirname, '..');
@@ -75,6 +75,12 @@ const OLD_NAMES = [
 const entries = [
 	entry('member', ['O8'], /\bmember(?:ship)?s?\b/i, PROSE),
 	entry('family', ['O5'], /(?<!font-)\bfamil(?:y|ies)\b/i, PROSE),
+	entry(
+		'turn',
+		['O9'],
+		/\b(?:your turn|mid-turn|this turn|taking a turn|take your turn)\b/i,
+		/^(?:packages|examples)\/[^/]+\/(?:src|test\/live)\/.*\.(?:ts|tsx|mjs)$/,
+	),
 	entry('Spoken', ['T5'], /\w+Spoken\b|\bSpoken\w+/, SOURCE),
 	entry(
 		'Info',

@@ -79,7 +79,7 @@ it.each([
 		// The line holds a word that the shared classifier reads as a refusal. Only the original error classifies.
 		const line = 'FATAL: 401 authentication_error from the proxy';
 		const flood = 'x'.repeat(STDERR_TAIL * 2);
-		const run = open({ turns: [[{ crash: { stderr: `${flood}\n${line}`, code } }]] });
+		const run = open({ passes: [[{ crash: { stderr: `${flood}\n${line}`, code } }]] });
 		const result = await run.session.pass({ kind: 'view', view: viewOf() });
 		run.session.close?.();
 		expect(result).toMatchObject({ failed: true, cause: 'transient' });
@@ -106,7 +106,7 @@ it.each([
 	async ({ fail, cause }) => {
 		// For a transient result, the line holds words that the classifier reads as a refusal.
 		const line = 'model catalog: 401 authentication_error is not described here';
-		const run = open({ turns: [[{ stderr: line }, { fail }]] });
+		const run = open({ passes: [[{ stderr: line }, { fail }]] });
 		const result = await run.session.pass({ kind: 'view', view: viewOf() });
 		run.session.close?.();
 		expect(result).toMatchObject({ failed: true, cause });
@@ -136,7 +136,7 @@ it.each([
 ])(
 	'keeps the cause of $what when the process exits at once after it',
 	async ({ fail, cause, stderr }) => {
-		const run = open({ turns: [[{ fail: { ...fail, exit: 1, stderr } }]] });
+		const run = open({ passes: [[{ fail: { ...fail, exit: 1, stderr } }]] });
 		const result = await run.session.pass({ kind: 'view', view: viewOf() });
 		run.session.close?.();
 		expect(result).toMatchObject({ failed: true, cause });
@@ -146,7 +146,7 @@ it.each([
 );
 
 it('settles a parked result when close runs inside the drain, and settles once', async () => {
-	const run = open({ turns: [[{ fail: PERMANENT }]] });
+	const run = open({ passes: [[{ fail: PERMANENT }]] });
 	const pass = run.session.pass({ kind: 'view', view: viewOf() });
 	// The result arrives, and the pass waits for the end of the stderr. Closing now must not hang it.
 	await until(() => run.log().some((line) => 'user' in line), 'the fake reading the prompt');
@@ -171,7 +171,7 @@ it.each([
 });
 
 it('refuses an executable below the floor with a permanent failure, and runs no model turn', async () => {
-	const run = open({ turns: [[{ say: 'Saturday.' }]], claudeVersion: '2.1.100' });
+	const run = open({ passes: [[{ say: 'Saturday.' }]], claudeVersion: '2.1.100' });
 	const result = await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
 	expect(result).toMatchObject({ failed: true, cause: 'permanent' });

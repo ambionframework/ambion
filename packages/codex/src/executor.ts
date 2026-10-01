@@ -4,7 +4,7 @@
  *
  * The Codex SDK owns the loop. One activation holds one Codex thread. A
  * pass runs one turn of it: the first pass sends the whole view, and a
- * later pass sends the delta. A turn ends on `turn.completed` or
+ * later pass sends the delta. A pass ends on `turn.completed` or
  * `turn.failed`.
  *
  * - **Seat text.** The SDK has no system prompt option. The harness note,
@@ -22,7 +22,7 @@
  *   server that Codex spawns. The server reaches them through a local
  *   socket that the activation opens (`bridge.ts`).
  * - **Freshness.** The core keeps `readThrough`. Codex sends no echo. The
- *   model reads the prompt when a turn starts, so the activation tells the
+ *   model reads the prompt when a pass starts, so the activation tells the
  *   core that the model read the range of the prompt on `turn.started`. A
  *   tool result reaches the model when the tool returns, so the activation
  *   tells the core at once: a `missed` answer carries the missed lines.
@@ -32,7 +32,7 @@
  *   hands back inside one exchange. A resume that Codex cannot honor fails
  *   before `thread.started`, and the activation starts a fresh thread.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
- *   turn that runs. The driver holds the line, and the next pass reads it.
+ *   pass that runs. The driver holds the line, and the next pass reads it.
  * - **Notice.** Codex writes every thread to a rollout file in the home. The
  *   activation records one `notice` for each thread with the thread id, the
  *   home, and the path of that file, so the trace joins to the full record.
@@ -99,7 +99,7 @@ export function createCodexOpener(options: CodexOpenerOptions): ActivationOpener
 }
 
 /**
- * How one turn ended. A turn ends on `turn.completed` or `turn.failed`.
+ * How one pass ended. A pass ends on `turn.completed` or `turn.failed`.
  * Codex also sends `error` events for trouble it survives, such as a
  * reconnect, so an `error` event ends the turn only when nothing else does.
  */
@@ -108,7 +108,7 @@ class Ending {
 	private failed: string | undefined;
 	private notice: string | undefined;
 
-	/** Take one event. It answers whether the turn is over. */
+	/** Take one event. It answers whether the pass is over. */
 	over(event: ThreadEvent): boolean {
 		if (event.type === 'error') this.notice = event.message;
 		if (event.type === 'turn.failed') this.failed = event.error.message;
@@ -116,7 +116,7 @@ class Ending {
 		return this.complete || this.failed !== undefined;
 	}
 
-	/** The text of the failure, or nothing when the turn completed. */
+	/** The text of the failure, or nothing when the pass completed. */
 	failure(): string | undefined {
 		if (this.complete) return undefined;
 		return this.failed ?? this.notice ?? 'The Codex session ended before the turn did.';
@@ -138,9 +138,9 @@ class Activation implements RunningActivation {
 	private readonly introduced = new Set<string>();
 	private client: CodexClientLike | undefined;
 	private readonly steps: CodexSteps;
-	/** Aborts the turn in flight. A turn that ended holds none, so a late cut never signals a dead process. */
+	/** Aborts the pass in flight. A pass that ended holds none, so a late cut never signals a dead process. */
 	private turn: AbortController | undefined;
-	/** The range of the record the turn in flight reads. The core counts it read when the turn starts. */
+	/** The range of the record the pass in flight reads. The core counts it read when the pass starts. */
 	private reading: ReadRange | undefined;
 	private bridge: Bridge | undefined;
 	/** The patched catalog, the instructions file, and the empty directory. Absent until the first pass. */
@@ -163,7 +163,7 @@ class Activation implements RunningActivation {
 		return this.reported;
 	}
 
-	/** The activation was cut: signal the turn in flight. The pass ends. */
+	/** The activation was cut: signal the pass in flight. The pass ends. */
 	private abort(): void {
 		this.stopped = true;
 		this.turn?.abort();
@@ -260,7 +260,7 @@ class Activation implements RunningActivation {
 			: this.client.resumeThread(resume, options);
 	}
 
-	/** Run one turn to its end, and report how it ended. */
+	/** Run one pass to its end, and report how it ended. */
 	private async run(thread: CodexThreadLike, prompt: string): Promise<PassResult> {
 		const turn = new AbortController();
 		this.turn = turn;
@@ -281,7 +281,7 @@ class Activation implements RunningActivation {
 		const ending = new Ending();
 		for await (const event of events) {
 			this.handle(event);
-			// The rollout file exists once the turn starts. A turn that fails first gets its notice at the end.
+			// The rollout file exists once the pass starts. A pass that fails first gets its notice at the end.
 			if (event.type === 'turn.started') await this.introduce();
 			if (ending.over(event)) break;
 		}
@@ -290,7 +290,7 @@ class Activation implements RunningActivation {
 		return passResultOf(ending.failure());
 	}
 
-	/** One thread event: its steps, and the range the turn read. */
+	/** One thread event: its steps, and the range the pass read. */
 	private handle(event: ThreadEvent): void {
 		if (event.type === 'thread.started') {
 			this.heard = true;
