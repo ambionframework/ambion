@@ -42,7 +42,7 @@ jobs:
       matrix:
         harness: [pi, claude, codex]
     env:
-      AMBION_HARNESS: ${{ matrix.harness }}
+      AMBION_EXECUTOR: ${{ matrix.harness }}
       AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
       # `pi` and `claude` read the Anthropic key. `codex` reads its own key
       # and runs its own model. A job sees the key of its harness only.
@@ -54,11 +54,11 @@ jobs:
       - name: the key is present
         id: key
         run: |
-          if [ "$AMBION_HARNESS" = codex ]; then key="$CODEX_API_KEY"; else key="$ANTHROPIC_API_KEY"; fi
+          if [ "$AMBION_EXECUTOR" = codex ]; then key="$CODEX_API_KEY"; else key="$ANTHROPIC_API_KEY"; fi
           if [ -n "$key" ]; then
             echo 'present=true' >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No key for the $AMBION_HARNESS harness: the repository secret is empty, so the job skips."
+            echo "::warning::No key for the $AMBION_EXECUTOR harness: the repository secret is empty, so the job skips."
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v5

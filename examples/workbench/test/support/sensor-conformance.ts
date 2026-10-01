@@ -1,5 +1,5 @@
 import {
-	type ConformanceHarness,
+	type ConformanceFixture,
 	type SensorConformanceFixture,
 	type SensorConformanceProbe,
 	sensorConformance,
@@ -62,7 +62,9 @@ export function templateSensorFixture(
 	};
 }
 
-export function templateSensorHarness(origin: string): ConformanceHarness<SensorConformanceProbe> {
+export function templateSensorProbeFixture(
+	origin: string,
+): ConformanceFixture<SensorConformanceProbe> {
 	return {
 		name: 'landed sensor-server template',
 		async open() {
@@ -94,6 +96,6 @@ export async function runTemplateSensorConformance(
 	origin: string,
 	fixture: SensorConformanceFixture,
 ): Promise<void> {
-	for (const testCase of sensorConformance(templateSensorHarness(origin), fixture))
+	for (const testCase of sensorConformance(templateSensorProbeFixture(origin), fixture))
 		await testCase.run();
 }

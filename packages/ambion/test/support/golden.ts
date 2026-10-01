@@ -131,10 +131,10 @@ function session(): Promise<readonly JournalEntry[]> {
 		seats: { worker: 'named', checker: 'named' },
 		stream: byAgent({
 			worker: asksTheChecker,
-			checker: async (context, name, call) => {
+			checker: async (context, name, request) => {
 				await workerEnded;
 				await tick();
-				return reply(context, name, call);
+				return reply(context, name, request);
 			},
 		}),
 		async drive(room) {

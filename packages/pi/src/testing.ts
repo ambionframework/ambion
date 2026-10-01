@@ -1,7 +1,7 @@
 /**
  * The deterministic tools for a room on Pi: a scripted `StreamFn` that
  * `piExecution({ stream })` takes, the helpers that read what the model was
- * shown, and the harness that runs the executor suite of
+ * shown, and the fixture that runs the executor suite of
  * `@ambionframework/ambion/conformance` on the Pi executor. A script answers
  * with the verbs of `@ambionframework/ambion/testing`: `speak`, `callTool`,
  * `later`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
@@ -10,7 +10,7 @@
  */
 
 import { contentText } from '@ambionframework/ambion';
-import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
@@ -26,14 +26,14 @@ import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';
 
 /**
- * One activation's answer, given the context, the seat, and which call this
+ * One activation's answer, given the context, the seat, and which request this
  * is. A `Reply` is the usual answer. A message passes through unchanged, for
  * a test that needs an error, a length stop, or a usage report.
  */
 export type PiScript = (
 	context: Context,
 	seat: string,
-	call: number,
+	request: number,
 ) => Reply | AssistantMessage | Promise<Reply | AssistantMessage>;
 
 /**
@@ -80,17 +80,17 @@ function messageOf(output: Reply | AssistantMessage): AssistantMessage {
 /**
  * A deterministic stream. It routes on the seat that the stub model names
  * (`model.name`), so no script reads the prompt to find out who it is. It
- * counts calls per seat, answers an abort with an aborted message, and turns
+ * counts requests per seat, answers an abort with an aborted message, and turns
  * a script that throws into an error on the stream. It turns a reply into a
  * message: one tool call for each call, or a text that ends the run.
  */
 export function scripted(script: PiScript): StreamFn {
-	const calls = new Map<string, number>();
+	const requests = new Map<string, number>();
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
 		const seat = model.name;
-		const call = (calls.get(seat) ?? 0) + 1;
-		calls.set(seat, call);
+		const request = (requests.get(seat) ?? 0) + 1;
+		requests.set(seat, request);
 		let finished = false;
 		const finish = (message: AssistantMessage) => {
 			if (finished) return;
@@ -111,7 +111,7 @@ export function scripted(script: PiScript): StreamFn {
 		}
 		options?.signal?.addEventListener('abort', aborted, { once: true });
 		void Promise.resolve()
-			.then(async () => messageOf(await script(scriptContext(context), seat, call)))
+			.then(async () => messageOf(await script(scriptContext(context), seat, request)))
 			.catch((error: unknown) =>
 				fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }),
 			)
@@ -171,7 +171,7 @@ const LOOKS = 500;
 
 /**
  * The seat waits for the steered line. Each look calls a tool the model
- * does not hold: the harness answers with an error result, and the run takes
+ * does not hold: the fixture answers with an error result, and the run takes
  * the next request, which holds any line steered since.
  */
 async function awaitSteer(context: Context, text: string): Promise<Reply> {
@@ -229,12 +229,12 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 }
 
 /**
- * The harness that runs the executor suite on the Pi executor, over a
+ * The fixture that runs the executor suite on the Pi executor, over a
  * scripted stream and sessions in memory. It declares steering, usage,
- * permanent failure and memory: the harness takes a line during a run,
+ * permanent failure and memory: the fixture takes a line during a run,
  * reports its spend, names a refusal, and reopens a session by id.
  */
-export function piExecutorHarness(): ExecutorHarness {
+export function piExecutorFixture(): ExecutorFixture {
 	return {
 		open: (plan, definition) =>
 			createPiExecutor({

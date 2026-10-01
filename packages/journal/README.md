@@ -80,21 +80,21 @@ awaiting storage; later caller mutations do not change that append.
 `memoryJournals()` provides independent in-memory journals for one process.
 
 **A storage author proves the contract with a published suite.**
-`@ambionframework/journal/conformance` exports `storageConformance(harness)`.
+`@ambionframework/journal/conformance` exports `storageConformance(fixture)`.
 It returns cases with a stable `name` and a `run` that throws on failure. The
-suite needs no test framework. `harness` is a named
-`ConformanceHarness<OpenedBackend>`, and `harness.open()` returns
+suite needs no test framework. `fixture` is a named
+`ConformanceFixture<OpenedBackend>`, and `fixture.open()` returns
 `{ opener, dispose? }`: the `JournalOpener` under test and an optional release
 that the suite calls after the case. The same entry exports
-`conformanceSuite(harness, cases)`, which opens, runs, and disposes for a
+`conformanceSuite(fixture, cases)`, which opens, runs, and disposes for a
 table of cases, and `check(condition, what)`, which throws `what` when the
 condition fails. Run the cases in vitest like this:
 
 ```ts
 import { storageConformance } from '@ambionframework/journal/conformance';
 
-describe.each(harnesses)('$name', (harness) => {
-  for (const c of storageConformance(harness)) it(c.name, c.run);
+describe.each(fixtures)('$name', (fixture) => {
+  for (const c of storageConformance(fixture)) it(c.name, c.run);
 });
 ```
 

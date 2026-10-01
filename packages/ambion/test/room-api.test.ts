@@ -41,12 +41,13 @@ const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-const answer: PiScript = (_context, _agent, call) => (call === 2 ? speak('The answer.') : quiet());
-/** A seat script that holds its second model call until the test opens the gate. */
+const answer: PiScript = (_context, _agent, request) =>
+	request === 2 ? speak('The answer.') : quiet();
+/** A seat script that holds its second model request until the test opens the gate. */
 const heldBy =
 	(gate: Promise<void>): PiScript =>
-	async (_context, _agent, call) => {
-		if (call === 2) await gate;
+	async (_context, _agent, request) => {
+		if (request === 2) await gate;
 		return quiet();
 	};
 const withSummary = (): PiScript => {

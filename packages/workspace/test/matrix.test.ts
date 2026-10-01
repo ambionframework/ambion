@@ -60,22 +60,22 @@ const twoWorkspaces: Scenario = {
 					sessions: 'memory',
 					stream: scripted(
 						byAgent({
-							alpha: async (context, _name, call) => {
+							alpha: async (context, _name, request) => {
 								alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
-								if (call === 1)
+								if (request === 1)
 									return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
-								if (call === 2) {
+								if (request === 2) {
 									await disposed.promise;
 									return callTool('read', { path: '/home/alpha/note.txt' });
 								}
-								return call === 3 ? speak('alpha done') : quiet();
+								return request === 3 ? speak('alpha done') : quiet();
 							},
-							beta: (context, _name, call) => {
+							beta: (context, _name, request) => {
 								betaResults.push(...toolResultTexts(context).slice(betaResults.length));
-								if (call === 1)
+								if (request === 1)
 									return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
-								if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
-								return call === 3 ? speak('beta done') : quiet();
+								if (request === 2) return callTool('read', { path: '/home/beta/note.txt' });
+								return request === 3 ? speak('beta done') : quiet();
 							},
 							gamma: (context) => {
 								expect(toolNames(context)).toEqual([

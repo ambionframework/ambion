@@ -447,7 +447,7 @@ Claude have a fake model or a fake executable that plays a plan from
 adapter agrees with its own guess about the SDK, so the package has none.
 The package has no `./testing` entry for that reason. The live file
 `test/live/conformance.test.ts` runs the suite through
-`codexExecutorHarness` in `test/live/support.ts`: the model follows each
+`codexExecutorFixture` in `test/live/support.ts`: the model follows each
 plan from its instructions. A key that the provider refuses gives the
 permanent failure, and a `codex` binary that does not exist gives the
 transient one.

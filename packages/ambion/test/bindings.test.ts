@@ -30,9 +30,11 @@ describe('room bindings', () => {
 						return 'done';
 					},
 				});
-				const stream = scripted((context, _agent, call) => {
+				const stream = scripted((context, _agent, request) => {
 					prompts.push(context.systemPrompt ?? '');
-					return call === 1 && toolNames(context).includes(label) ? callTool(label, {}) : quiet();
+					return request === 1 && toolNames(context).includes(label)
+						? callTool(label, {})
+						: quiet();
 				});
 				const room = stopAtEnd(
 					await startRoom({

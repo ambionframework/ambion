@@ -200,8 +200,8 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 			const { clock, runtime } = await host(storage);
 			const held = deferred();
 			onTestFinished(held.resolve);
-			const holds: PiScript = async (_context, _agent, call) => {
-				if (call === 1) await held.promise;
+			const holds: PiScript = async (_context, _agent, request) => {
+				if (request === 1) await held.promise;
 				return quiet();
 			};
 			const firstRuntime = runtime();

@@ -93,8 +93,8 @@ function composes(names: string[], summary: string): PiScript {
 }
 
 /** Two answers to every question, then silence until the next. */
-const twoAnswersEach: PiScript = (_context, _name, call) =>
-	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
+const twoAnswersEach: PiScript = (_context, _name, request) =>
+	request % 3 === 0 ? quiet() : speak(`answer ${request}`);
 
 export async function finish(
 	session: Room,
@@ -205,8 +205,8 @@ export const seatFromReserve: Scenario = {
 					stream: scripted(
 						byAgent({
 							assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
-							product: (_context, _name, call) =>
-								call <= 3 ? speak('The pour is Saturday.') : quiet(),
+							product: (_context, _name, request) =>
+								request <= 3 ? speak('The pour is Saturday.') : quiet(),
 							surveyor: insists('11.7 tonnes on site.'),
 						}),
 					),

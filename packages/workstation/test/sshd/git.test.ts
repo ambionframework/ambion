@@ -135,7 +135,7 @@ const pushTo = (url: string) =>
 		'exit $status',
 	].join('\n');
 
-const harness: GitConformanceBackend<GitBackend> = {
+const fixture: GitConformanceBackend<GitBackend> = {
 	name: 'workstation git on OpenSSH',
 	shortestCredentialTtl: KEY_TTL,
 	issueCredentials: async ({ backend, workspace }, agent) => {
@@ -164,8 +164,8 @@ const harness: GitConformanceBackend<GitBackend> = {
 };
 
 describe.skipIf(configPath === undefined)('workstation git on OpenSSH', () => {
-	describe(harness.name, () => {
-		for (const c of gitConformance(harness)) it(c.name, c.run);
+	describe(fixture.name, () => {
+		for (const c of gitConformance(fixture)) it(c.name, c.run);
 	});
 
 	describe('the checks of sshd', () => {

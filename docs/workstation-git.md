@@ -535,12 +535,12 @@ source types are in the root entry. Both entries load `node:fs` and
 override of the workstation allows `@ambionframework/workspace/git`.
 `scripts/import-rules.test.mjs` probes each rule.
 
-**`gitConformance` asks the harness for each credential fact.** The
+**`gitConformance` asks the fixture for each credential fact.** The
 suite stays blind to transports. Four cases touch a credential, and each
-calls a hook of `GitConformanceBackend`, a `ConformanceHarness` of
+calls a hook of `GitConformanceBackend`, a `ConformanceFixture` of
 `GitConformanceStore`, that the package of the pair implements. Each hook
 takes the opened backend and workspace. [Tests](#tests) lists them. The
-store of each harness maps `credentialTtl` to the option of its backend:
+store of each fixture maps `credentialTtl` to the option of its backend:
 `tokenTtl` of `justGitBackend` or `keyTtl` of `workstationGitBackend`.
 
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
@@ -642,9 +642,9 @@ Only the `workstation` CI job runs this tier
   to that address has it as its source;
 - that the reflog of a pushed ref names the agent.
 
-**The OpenSSH harness starts each case with an empty git account.** Before
+**The OpenSSH fixture starts each case with an empty git account.** Before
 each `open()`, it removes `~lab-git/repos` and
-`~lab-git/.ssh/authorized_keys.ambion`, as the harness of the tier already
+`~lab-git/.ssh/authorized_keys.ambion`, as the fixture of the tier already
 removes the files of each agent's home.
 
 **The scripted tier tests the parts without `sshd`.**
@@ -663,7 +663,7 @@ removes the files of each agent's home.
 - The key generator: it generates again after a pair that `ssh2` cannot
   read, and it gives up after 64.
 
-**Three hooks of the harness answer the credential cases.** The suite
+**Three hooks of the fixture answer the credential cases.** The suite
 calls each hook, and the package of each pair implements it.
 `issueCredentials` must reject for an agent named `templates`, and it
 runs in a loop beside forks. `writeCredential` then checks that the owner
@@ -677,9 +677,9 @@ can write to its new fork.
 
 **The expiry case needs a longer credential life on the workstation.**
 The suite runs the case at `shortestCredentialTtl`, and it skips the case
-when that is above 5 seconds. The just-bash harness names 1 second.
+when that is above 5 seconds. The just-bash fixture names 1 second.
 `expiry-time` has a resolution of one second, and the server renders it,
-so the workstation harness names a key life of 4 seconds.
+so the workstation fixture names a key life of 4 seconds.
 
 ## Alternatives
 
@@ -725,7 +725,7 @@ is about fifteen lines of `bash`.
 5. **The git account is on the workstation, on the loopback address.** A
    git server on a second machine waits in the backlog.
 6. **The core knows a transport by its name.** Each access type lives
-   with its pair, and `gitConformance` calls harness hooks.
+   with its pair, and `gitConformance` calls fixture hooks.
 7. **The transports keep the names of their mechanisms:** `in-process`
    and `ssh`.
 8. **One package for each deployment shape.** `@ambionframework/just-bash`

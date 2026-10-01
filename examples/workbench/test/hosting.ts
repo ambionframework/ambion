@@ -37,22 +37,22 @@ export function quietStream(counter = { calls: 0 }): PiExecutionOptions['stream'
 }
 
 /** What a scripted stream answers: the seat, its request count from 1, and whether the exchange closes. */
-type Respond = (agent: string, call: number, closing: boolean) => AssistantMessage;
+type Respond = (agent: string, request: number, closing: boolean) => AssistantMessage;
 
 /**
  * A model stream that answers each request of each Pi seat from `respond`. A
  * request whose signal has aborted ends with an abort.
  */
 export function scriptedStream(respond: Respond): PiExecutionOptions['stream'] {
-	const calls = new Map<string, number>();
+	const requests = new Map<string, number>();
 	return (_model, context, options) => {
 		const output = createAssistantMessageEventStream();
 		const system = getCurrentSystemPrompt(context.messages);
 		const closing = system.includes('The exchange is over.');
 		const agent = system.match(/You are '([^']+)'/)?.[1] ?? 'assistant';
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
-		const response = respond(agent, call, closing);
+		const request = (requests.get(agent) ?? 0) + 1;
+		requests.set(agent, request);
+		const response = respond(agent, request, closing);
 		queueMicrotask(() => {
 			if (options?.signal?.aborted) {
 				output.push({

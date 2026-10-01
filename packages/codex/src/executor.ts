@@ -79,7 +79,7 @@ export interface CodexExecutorOptions extends CodexRuntime {
  * otherwise. The room hears only `say`, so the first prompt of each
  * activation says so.
  */
-export const HARNESS_NOTE =
+export const RESUMED_NOTE =
 	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
 	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
@@ -211,7 +211,7 @@ class Activation implements ExecutorSession {
 		const record = await pass.record();
 		if (record === undefined || pass.kind === 'delta' || this.thread !== undefined) return record;
 		// The thread has no system prompt of its own, so the first prompt carries it.
-		const text = `${HARNESS_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}\n\n${record.text}`;
+		const text = `${RESUMED_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}\n\n${record.text}`;
 		return { ...record, text };
 	}
 

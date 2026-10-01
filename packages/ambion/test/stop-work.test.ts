@@ -218,8 +218,8 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const time = manualClock();
 		const drafted = deferred();
 		let summaryCalls = 0;
-		const stream = scripted((context, agent, call) => {
-			if (agent === worker.name) return call === 1 ? speak('answer') : quiet();
+		const stream = scripted((context, agent, request) => {
+			if (agent === worker.name) return request === 1 ? speak('answer') : quiet();
 			if (!isClosingContext(context)) return quiet();
 			summaryCalls += 1;
 			drafted.resolve();
@@ -281,7 +281,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const resumed = await resume(
 			room,
 			createRuntime({ storage: opened.storage }),
-			scripted((_context, _agent, call) => (call === 1 ? speak('the answer') : quiet())),
+			scripted((_context, _agent, request) => (request === 1 ? speak('the answer') : quiet())),
 		);
 		await waitForRoom(resumed, 'quiet');
 		expect(await messagesOf(resumed)).toContainEqual(

@@ -135,9 +135,9 @@ describe('the Pi executor across the passes of one activation', () => {
 		const gate = deferred();
 		const started = deferred();
 		const seen: number[] = [];
-		const { session, requests, steers } = activation(async (_context, _agent, call) => {
+		const { session, requests, steers } = activation(async (_context, _agent, request) => {
 			seen.push(steers().length);
-			if (call === 1) {
+			if (request === 1) {
 				started.resolve();
 				await gate.promise;
 				return callTool('look', {});

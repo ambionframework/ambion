@@ -235,7 +235,7 @@ describe('durable cancellation', () => {
 				sessions: 'memory',
 				stream: scripted(
 					byAgent({
-						worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
+						worker: (_context, _agent, request) => (request === 1 ? speak('answer') : quiet()),
 						assistant: (context) => {
 							if (!isClosingContext(context)) return quiet();
 							summaryStarted.resolve();

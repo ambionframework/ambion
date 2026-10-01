@@ -30,8 +30,8 @@ it.each([
 			agents: [worker],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, _agent, call) => {
-					if (call === 1) return callTool('observe', { sensor: 'bench-one/bench' });
+				stream: scripted((context, _agent, request) => {
+					if (request === 1) return callTool('observe', { sensor: 'bench-one/bench' });
 					for (const message of context.messages)
 						if (message.role === 'toolResult') providerToolResults.push(message);
 					return quiet();

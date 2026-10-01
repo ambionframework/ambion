@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**A conformance fixture is a fixture, and the testing entry names its own
+script types.** `@ambionframework/ambion/conformance` exports
+`ExecutorFixture` and `PortFixture` in place of `ExecutorHarness` and
+`PortHarness`. `ConformanceHarness` is now `ConformanceFixture` in
+`@ambionframework/journal/conformance`, and in the entries that re-export
+it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`ClaudeFixtureOptions`. `@ambionframework/ambion/testing` exports
+`ScriptStep`, `ScriptCall`, and `ScriptResult` in place of `Step`, `Call`,
+and `Result`, so `Step` names the trace step alone. The request counter of a
+script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
+`AMBION_HARNESS`.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

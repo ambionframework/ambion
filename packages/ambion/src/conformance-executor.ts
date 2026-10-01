@@ -69,7 +69,7 @@ export interface ExecutorCapabilities {
 }
 
 /** What an executor under test gives the suite. */
-export interface ExecutorHarness {
+export interface ExecutorFixture {
 	/**
 	 * Build the executor for one seat, ready to perform `plan`. The scripted
 	 * family maps the plan to a script, and a model family maps it to a fake
@@ -424,10 +424,10 @@ const orderCase: ExecutorCase = {
 };
 
 /** The cases every executor must pass. The order is stable and the names are the contract. */
-export function executorConformance(harness: ExecutorHarness): readonly ConformanceCase[] {
+export function executorConformance(fixture: ExecutorFixture): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
-	const patience = harness.patience ?? 5_000;
-	const { can } = harness;
+	const patience = fixture.patience ?? 5_000;
+	const { can } = fixture;
 	const cases = [
 		...baseCases,
 		can.steer ? liveSteer : heldSteer,
@@ -450,7 +450,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			executor: describeExecutor({ kind: 'conformance', instructions: '' }),
 		});
 		try {
-			const executor = await harness.open(one.plan, definition);
+			const executor = await fixture.open(one.plan, definition);
 			const emit = (event: ExecutionEvent) => void events.push(event);
 			const port = new AgentRunner(
 				room.protocol,
@@ -487,7 +487,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			});
 		} finally {
 			room.release();
-			await harness.close?.({
+			await fixture.close?.({
 				name: one.name,
 				calls: room.calls,
 				violations: room.violations,

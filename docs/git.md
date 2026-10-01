@@ -906,12 +906,12 @@ identity of a push.
 
 ## Tests
 
-**`gitConformance(harness)` holds the cases of a `GitBackend`.** It lives
+**`gitConformance(fixture)` holds the cases of a `GitBackend`.** It lives
 in `@ambionframework/workspace/conformance`. A `GitConformanceBackend` is a
-`ConformanceHarness<GitConformanceStore>` with three credential hooks. Its
+`ConformanceFixture<GitConformanceStore>` with three credential hooks. Its
 `open()` returns a store: one bash backend, and a factory that opens a git
 backend over the same repositories each time it is called. The suite knows
-no transport. Three cases ask a hook of the harness for a credential fact,
+no transport. Three cases ask a hook of the fixture for a credential fact,
 and each hook takes the backend and the workspace that the case opened.
 
 - `list` shows each template with its description, and each fork with its
@@ -952,7 +952,7 @@ and each hook takes the backend and the workspace that the case opened.
 - A registration of a template, or of a shared repository, with a path
   that leaves its root is refused. The next call fails the same way.
 - A credential is refused after it expires (the hook `probeCredential`).
-  The harness names its shortest `credentialTtl`, and the case skips a
+  The fixture names its shortest `credentialTtl`, and the case skips a
   backend whose shortest `credentialTtl` is longer than 5 seconds.
 
 **`packages/just-bash` runs the cases on the memory and the directory

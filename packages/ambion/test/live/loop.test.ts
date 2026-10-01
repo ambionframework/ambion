@@ -1,8 +1,8 @@
 /**
  * The model, the key and the loop. `docs/agent.md` §1: without a `stream`,
  * a model resolves as `provider/model-id` from Pi's catalog, or as a Claude
- * model id under `AMBION_HARNESS=claude`, or `gpt-5.6-luna` under
- * `AMBION_HARNESS=codex`, and the key comes from the
+ * model id under `AMBION_EXECUTOR=claude`, or `gpt-5.6-luna` under
+ * `AMBION_EXECUTOR=codex`, and the key comes from the
  * environment. Nothing scripted touches that path.
  */
 import { Type } from 'typebox';

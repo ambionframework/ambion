@@ -19,8 +19,8 @@ it('routes on the seat the stub model names, whatever the model id', async () =>
 	const seen: string[] = [];
 	const stream = scripted(
 		byAgent({
-			a: (_context, seat, call) => {
-				seen.push(`${seat}:${call}`);
+			a: (_context, seat, request) => {
+				seen.push(`${seat}:${request}`);
 				return quiet();
 			},
 		}),

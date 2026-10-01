@@ -12,7 +12,7 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { HARNESS_NOTE } from '../src/executor.ts';
+import { RESUMED_NOTE } from '../src/executor.ts';
 import { recorded } from './fixtures.ts';
 import { open, sayingTurn, seat, viewOf } from './support.ts';
 
@@ -33,7 +33,7 @@ async function run(session: ActivationState, resume?: HarnessSession) {
 }
 
 describe('exchange continuity', () => {
-	it('records the thread id, resumes only the thread the view names, and starts the first prompt with the harness note', async () => {
+	it('records the thread id, resumes only the thread the view names, and starts the first prompt with the note', async () => {
 		const room = open([plain, plain, plain]);
 		const first = await run(room.activate('a1'));
 		expect(first.result).toEqual({ failed: false });
@@ -45,10 +45,10 @@ describe('exchange continuity', () => {
 			{ resume: ID },
 			{ resume: undefined },
 		]);
-		expect(room.seen.prompts[0]?.startsWith(HARNESS_NOTE)).toBe(true);
-		expect(room.seen.prompts[0]?.length).toBeGreaterThan(HARNESS_NOTE.length);
-		expect(HARNESS_NOTE).toContain('`say`');
-		expect(HARNESS_NOTE).toContain('reaches no one');
+		expect(room.seen.prompts[0]?.startsWith(RESUMED_NOTE)).toBe(true);
+		expect(room.seen.prompts[0]?.length).toBeGreaterThan(RESUMED_NOTE.length);
+		expect(RESUMED_NOTE).toContain('`say`');
+		expect(RESUMED_NOTE).toContain('reaches no one');
 	});
 
 	it.each([

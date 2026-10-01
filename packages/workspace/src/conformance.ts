@@ -11,15 +11,15 @@
  * memory and directory backends run it first (`test/conformance.test.ts`).
  *
  * ```ts
- * describe.each(backends)('$name', (harness) => {
- * 	for (const c of workspaceConformance(harness)) it(c.name, c.run);
+ * describe.each(backends)('$name', (fixture) => {
+ * 	for (const c of workspaceConformance(fixture)) it(c.name, c.run);
  * });
  * ```
  */
 
 import {
 	type ConformanceCase,
-	type ConformanceHarness,
+	type ConformanceFixture,
 	check,
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
@@ -50,7 +50,7 @@ export type {
 	SensorConformanceReply,
 } from './sensor-conformance.ts';
 export { sensorConformance } from './sensor-conformance.ts';
-export { type ConformanceCase, type ConformanceHarness, check, conformanceSuite };
+export { type ConformanceCase, type ConformanceFixture, check, conformanceSuite };
 
 /** A bash backend that a case connects to, and how the case releases it. */
 export interface WorkspaceConformanceStore {
@@ -221,10 +221,10 @@ const connected =
  * backend can mint its own temporary root and clean it up after.
  */
 export function workspaceConformance(
-	harness: ConformanceHarness<WorkspaceConformanceStore>,
+	fixture: ConformanceFixture<WorkspaceConformanceStore>,
 ): readonly ConformanceCase[] {
 	return conformanceSuite(
-		harness,
+		fixture,
 		CASES.map(([name, body]) => [name, connected(body)] as const),
 	);
 }

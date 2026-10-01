@@ -19,7 +19,7 @@ import { justGitBackend, sqliteGitStorage } from '../src/git/index.ts';
 import { openServer } from '../src/git/server.ts';
 import { signToken, tokenOf, verifyToken } from '../src/git/tokens.ts';
 import { memoryBackend } from '../src/index.ts';
-import { SECRET } from './support/git-harness.ts';
+import { SECRET } from './support/git-fixture.ts';
 
 const ANALYST = { name: 'analyst' };
 const REVIEWER = { name: 'reviewer' };

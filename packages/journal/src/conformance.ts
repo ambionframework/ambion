@@ -4,8 +4,8 @@
  * framework: a runner names each case and awaits it.
  *
  * ```ts
- * describe.each(harnesses)('$name', (harness) => {
- * 	for (const c of storageConformance(harness)) it(c.name, c.run);
+ * describe.each(fixtures)('$name', (fixture) => {
+ * 	for (const c of storageConformance(fixture)) it(c.name, c.run);
  * });
  * ```
  */
@@ -25,11 +25,11 @@ export function check(condition: boolean, what: string): asserts condition {
 
 /**
  * A subject under test, and how a case opens it. `open` runs inside every
- * case, so a harness may bind the subject to the case: a workerd harness
+ * case, so a fixture may bind the subject to the case: a workerd fixture
  * binds it to the state of the object. The suite disposes the subject after
  * the case.
  */
-export interface ConformanceHarness<Subject extends { dispose?(): void | Promise<void> }> {
+export interface ConformanceFixture<Subject extends { dispose?(): void | Promise<void> }> {
 	readonly name: string;
 	open(): Subject | Promise<Subject>;
 }
@@ -40,13 +40,13 @@ export interface ConformanceHarness<Subject extends { dispose?(): void | Promise
  * body throws. A subject that fails to open has nothing to dispose.
  */
 export function conformanceSuite<Subject extends { dispose?(): void | Promise<void> }>(
-	harness: ConformanceHarness<Subject>,
+	fixture: ConformanceFixture<Subject>,
 	cases: readonly (readonly [name: string, body: (subject: Subject) => Promise<void>])[],
 ): readonly ConformanceCase[] {
 	return cases.map(([name, body]) => ({
 		name,
 		async run() {
-			const subject = await harness.open();
+			const subject = await fixture.open();
 			try {
 				await body(subject);
 			} finally {
@@ -334,11 +334,11 @@ const cases: readonly (readonly [string, Body])[] = [
 
 /**
  * The cases every `JournalStorage` must pass. The order is stable and the
- * names are the contract. The harness may give the same storage every time:
+ * names are the contract. The fixture may give the same storage every time:
  * a case mints its own journal names and reads back only what it wrote.
  */
 export function storageConformance(
-	harness: ConformanceHarness<OpenedBackend>,
+	fixture: ConformanceFixture<OpenedBackend>,
 ): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
 	let count = 0;
@@ -347,7 +347,7 @@ export function storageConformance(
 		return `${suite}-${count}`;
 	};
 	return conformanceSuite(
-		harness,
+		fixture,
 		cases.map(([name, body]) => [name, ({ opener }) => body(opener, fresh)] as const),
 	);
 }

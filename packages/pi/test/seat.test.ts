@@ -78,9 +78,9 @@ describe('a seat actor', () => {
 		const release = deferred();
 		const contexts: string[] = [];
 		const { room, actor } = playSeat({
-			stream: scripted(async (context, _agent, call) => {
+			stream: scripted(async (context, _agent, request) => {
 				contexts.push(contextText(context));
-				if (call === 2) {
+				if (request === 2) {
 					started.resolve();
 					await release.promise;
 				}
@@ -440,8 +440,8 @@ describe('runner liveness', () => {
 		let commits = 0;
 		const events: string[] = [];
 		const { actor, clock, room } = playSeat({
-			stream: scripted((_context, _agent, call) =>
-				call === 1 ? speak('recorded before the reply is lost') : quiet(),
+			stream: scripted((_context, _agent, request) =>
+				request === 1 ? speak('recorded before the reply is lost') : quiet(),
 			),
 			call: { attempts: 1, timeout: 100 },
 			commit: () => {

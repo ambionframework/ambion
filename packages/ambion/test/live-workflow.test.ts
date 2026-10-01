@@ -21,7 +21,7 @@ describe('the live workflow', () => {
 
 	it('runs a matrix on the three harnesses', () => {
 		expect(workflow).toContain('harness: [pi, claude, codex]');
-		expect(workflow).toMatch(/AMBION_HARNESS: \$\{\{ matrix\.harness \}\}/);
+		expect(workflow).toMatch(/AMBION_EXECUTOR: \$\{\{ matrix\.harness \}\}/);
 	});
 
 	it('gives each harness the secret it reads', () => {
