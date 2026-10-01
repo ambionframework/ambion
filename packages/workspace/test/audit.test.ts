@@ -339,10 +339,10 @@ describe('audited', () => {
 });
 
 describe('openAuditLog', () => {
-	it('accumulates into one file, then rotates the whole file once it passes maxBytes', async () => {
+	it('accumulates into one file, then rotates the whole file once it passes rotateBytes', async () => {
 		const env = await bareEnv();
 		const oneLine = `${JSON.stringify(entryFor('one'))}\n`;
-		const log = openAuditLog({ path: '/workspace/audit.jsonl', maxBytes: oneLine.length + 5 });
+		const log = openAuditLog({ path: '/workspace/audit.jsonl', rotateBytes: oneLine.length + 5 });
 
 		await log.record(env, entryFor('one'), ctx);
 		expect(await readLines(env, log.path)).toHaveLength(1);

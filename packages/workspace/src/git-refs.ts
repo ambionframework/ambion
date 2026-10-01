@@ -8,9 +8,10 @@
  * host shows it to a person.
  */
 
-import { commitUri, parseCommitUri, REF_LIMITS } from '@ambionframework/ambion';
+import { commitUri, parseCommitUri } from '@ambionframework/ambion';
 import type { GitCommit, GitEnv, GitRevision } from './git-backend.ts';
 import { revisionOf } from './git-names.ts';
+import { assertRefLength, assertRefWorkspace } from './ref-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /** How a refusal names `at`: `branch 'main'`, `tag 'v1'`, or `commit abc1234`. */
@@ -38,10 +39,7 @@ export async function commitRefOf(
 	if (commit === undefined) throw new Error(`${repository} has no ${named(at)}.`);
 	const via = 'branch' in at ? { branch: at.branch } : 'tag' in at ? { tag: at.tag } : undefined;
 	const ref = commitUri(workspace, repository, commit, via);
-	if (ref.length > REF_LIMITS.length)
-		throw new Error(
-			`The ref of ${repository} ${named(at)} has ${ref.length} characters, and a ref has at most ${REF_LIMITS.length}.`,
-		);
+	assertRefLength(ref, `${repository} ${named(at)}`);
 	return ref;
 }
 
@@ -59,8 +57,7 @@ export async function readCommitOf(
 ): Promise<GitCommit> {
 	const named = parseCommitUri(ref);
 	if (named === undefined) throw new Error(`${ref} is not a commit ref.`);
-	if (named.workspace !== workspace)
-		throw new Error(`${ref} names the workspace '${named.workspace}', not '${workspace}'.`);
+	assertRefWorkspace(ref, named.workspace, workspace);
 	const commit = await git(
 		agent,
 		(env) => env.show(named.repository, named.commit, signal),

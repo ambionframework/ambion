@@ -21,13 +21,14 @@
  * either step fails the `connect`.
  */
 
-import type {
-	BashBackend,
-	BashServices,
-	WorkspaceEnv,
-	WorkspaceLayout,
-	WorkspacePort,
-	WorkspacePorts,
+import {
+	type BashBackend,
+	type BashServices,
+	MAX_TIMER_SECONDS,
+	type WorkspaceEnv,
+	type WorkspaceLayout,
+	type WorkspacePort,
+	type WorkspacePorts,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
@@ -38,8 +39,6 @@ import { SshEnv } from './ssh-env.ts';
 
 /** How long an unused session stays open when the options name no `idleTimeout`. */
 export const DEFAULT_IDLE_TIMEOUT_SECONDS = 300;
-/** The largest timeout a Node timer holds, in seconds. */
-const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 export interface WorkstationOptions {
 	/** The server's address. */
@@ -101,9 +100,9 @@ export function checkedServer(
 		throw new RangeError(`${who}: port must be an integer from 1 to 65535.`);
 	}
 	const idle = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT_SECONDS;
-	if (!(idle > 0 && idle <= MAX_TIMEOUT_SECONDS)) {
+	if (!(idle > 0 && idle <= MAX_TIMER_SECONDS)) {
 		throw new RangeError(
-			`${who}: idleTimeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
+			`${who}: idleTimeout must be more than 0 and at most ${MAX_TIMER_SECONDS} seconds.`,
 		);
 	}
 	return { port, idleMs: idle * 1000 };

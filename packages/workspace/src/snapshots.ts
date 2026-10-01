@@ -17,7 +17,6 @@
  * object owner, then writes on the bash owner.
  */
 
-import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import {
 	type AmbionTool,
@@ -33,7 +32,8 @@ import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
 import type { ObjectEnv } from './object-backend.ts';
 import { contextOf, unwrap } from './object-files.ts';
-import { assertObjectSize, MAX_OBJECT_BYTES } from './object-rules.ts';
+import { assertObjectSize, MAX_OBJECT_BYTES, sha256Hex } from './object-rules.ts';
+import { assertRefLength, assertRefWorkspace } from './ref-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /**
@@ -89,7 +89,7 @@ async function find(
 	if (info.kind !== 'file') throw new Error(`${absolute} is not a file.`);
 	assertObjectSize(absolute, info.size);
 	// Every digest has 64 digits, so a placeholder gives the length of the ref.
-	checkRef(snapshotUri(store.workspace, '0'.repeat(64), absolute), absolute);
+	assertRefLength(snapshotUri(store.workspace, '0'.repeat(64), absolute), absolute);
 	return { path: absolute, canonical };
 }
 
@@ -103,11 +103,6 @@ async function read(env: ExecutionEnv, file: Found, context: Context): Promise<U
 	return bytes;
 }
 
-/** The SHA-256 digest of `bytes`, as 64 lowercase hex digits. */
-function digestOf(bytes: Uint8Array): string {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
 /** Store verified received bytes under the same immutable object/ref contract as snapshots. */
 export async function retainSnapshotBuffer(
 	store: SnapshotStore,
@@ -116,9 +111,9 @@ export async function retainSnapshotBuffer(
 	signal?: AbortSignal,
 ): Promise<{ readonly digest: string; readonly ref: string }> {
 	assertObjectSize(path, bytes.byteLength);
-	const digest = digestOf(bytes);
+	const digest = sha256Hex(bytes);
 	const ref = snapshotUri(store.workspace, digest, path);
-	checkRef(ref, path);
+	assertRefLength(ref, path);
 	await store.objects(store.host, (env) => env.put(digest, bytes, signal), signal);
 	return { digest, ref };
 }
@@ -132,14 +127,6 @@ function checkPaths(paths: readonly unknown[]): asserts paths is readonly string
 		);
 	if (paths.some((path) => typeof path !== 'string' || path.trim() === ''))
 		throw new Error('Each snapshot path must be a nonblank string.');
-}
-
-/** Refuse a ref past the length of a ref. */
-function checkRef(ref: string, path: string): void {
-	if (ref.length > REF_LIMITS.length)
-		throw new Error(
-			`The ref of ${path} has ${ref.length} characters, and a ref has at most ${REF_LIMITS.length}.`,
-		);
 }
 
 /** Find the file of each path, in order. A message holds each ref once, so two paths of one file are refused. */
@@ -192,7 +179,7 @@ function verified(ref: string, digest: string, bytes: Uint8Array | undefined): U
 		throw new Error(
 			`The object store holds no bytes for ${ref}. Ask its author for a new snapshot.`,
 		);
-	if (digestOf(bytes) !== digest)
+	if (sha256Hex(bytes) !== digest)
 		throw new Error(
 			`The bytes of ${ref} changed after the snapshot, and the workspace refuses them.`,
 		);
@@ -204,8 +191,7 @@ function namedBy(store: SnapshotStore, ref: string): { digest: string; path: str
 	const named = parseSnapshotUri(ref);
 	if (named === undefined)
 		throw new Error(`${ref} is not a snapshot ref. Give the ref that snapshot gave.`);
-	if (named.workspace !== store.workspace)
-		throw new Error(`${ref} names the workspace '${named.workspace}', not '${store.workspace}'.`);
+	assertRefWorkspace(ref, named.workspace, store.workspace);
 	return named;
 }
 

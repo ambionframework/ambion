@@ -1,7 +1,7 @@
 /** The small HTTP client for the versioned sensor wire protocol. */
-import { createHash } from 'node:crypto';
 import type { TSchema } from 'typebox';
 import { Check } from 'typebox/value';
+import { sha256Hex } from './object-rules.ts';
 import {
 	isValidObserveRequest,
 	type ObserveRequest,
@@ -96,7 +96,7 @@ export function createSensorClient(root: string): SensorClient {
 				throw new SensorProtocolError('The file response has no media type.', response.status);
 			}
 			const bytes = new Uint8Array(await response.arrayBuffer());
-			const actual = createHash('sha256').update(bytes).digest('hex');
+			const actual = sha256Hex(bytes);
 			if (actual !== digest) throw new SensorDigestError(digest, actual);
 			return { bytes, mediaType };
 		},

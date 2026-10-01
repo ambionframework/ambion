@@ -250,8 +250,8 @@ const drive = openWorkspace({
 
 **The log is an ordinary file an agent reads.** The default path is the
 backend's `layout.audit`. Set `path` to open it somewhere else, and
-`maxBytes` to change the 5 MiB rotation threshold. `maxBytes` must be a
-positive, finite number. An agent reads the log
+`rotateBytes` to change the 5 MiB rotation threshold. `rotateBytes` must
+be a positive, finite number. An agent reads the log
 with `read` or `bash cat`, the same as any file a peer wrote, and sees every
 call any agent in any room made, including its own past calls. `jq` filters
 one entry out of many, by `room`, `tool`, `agent`, or `activation`.
@@ -985,6 +985,7 @@ them.
 | `HomeEnv`                                          | A base class: the file members, over `FileOperations` and `classify`     |
 | `Deadline`, `withDeadline`                         | Tell an abort apart from a timeout; turn a thrown error into `unknown`   |
 | `DEFAULT_TIMEOUT_SECONDS`                          | The 30 seconds a command gets when its caller names no timeout           |
+| `MAX_TIMER_SECONDS`                                | The 2,147,483 seconds a timer holds: the ceiling of each timeout         |
 | `boundedView`, `deliverView`                       | Build the bounded output view, and hand it to `onUpdate` with the result |
 | `TMP`, `randomName`, `tempDirPath`, `tempFilePath` | Name the temporary paths under `/tmp`                                    |
 | `runScript`                                        | Runs one script, and gives its exit code and its output as text          |

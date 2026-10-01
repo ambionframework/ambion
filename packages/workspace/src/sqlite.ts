@@ -50,6 +50,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { type Context, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { Deadline } from './execution-env.ts';
+import { MAX_TIMER_SECONDS } from './process-run.ts';
 import type {
 	SqlBackend,
 	SqlEnv,
@@ -95,9 +96,6 @@ const ATTACH_LITERAL = /^attach\s+(?:database\s+)?('[^']*')\s+as\s+(?:\w+|"[^"]+
  * statement `;`, and a block comment that runs to the end of the text.
  */
 const LEADING = /^(?:\s+|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|\/\*[\s\S]*$)+/;
-
-/** The largest time limit, in seconds, that a timer holds. */
-const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 const ATTACH_REFUSED = "ATTACH opens ':memory:' alone. This database cannot open another file.";
 
@@ -457,9 +455,9 @@ function guidance(timeout: number, options: SqliteBackendOptions): string {
  */
 export function sqliteBackend(location: string, options: SqliteBackendOptions = {}): SqlBackend {
 	const timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
-	if (!(timeout > 0 && timeout <= MAX_TIMEOUT_SECONDS)) {
+	if (!(timeout > 0 && timeout <= MAX_TIMER_SECONDS)) {
 		throw new RangeError(
-			`sqliteBackend: timeout must be more than 0 and at most ${MAX_TIMEOUT_SECONDS} seconds.`,
+			`sqliteBackend: timeout must be more than 0 and at most ${MAX_TIMER_SECONDS} seconds.`,
 		);
 	}
 	let handle: Handle | undefined;

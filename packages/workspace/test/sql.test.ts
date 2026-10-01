@@ -293,19 +293,23 @@ SELECT (SELECT count(*) FROM t2) AS copied,
 
 	it('reads a CSV that a script in the shell writes, with CRLF line ends', async () => {
 		const { workspace } = withSql();
-		await workspace.use({ name: 'ada' }, (env) =>
-			sh(
-				env,
-				`python3 - <<'PY'
-import csv
-with open('/home/ada/sweep.csv', 'w', newline='') as f:
-    w = csv.writer(f)
-    w.writerow(['step', 'ohms', 'ma'])
-    for step in range(10):
-        w.writerow([step, 100 + step * 10, round(3.3 / (100 + step * 10) * 1000, 3)])
-PY`,
-			),
+		const rows = [
+			'step,ohms,ma',
+			'0,100,33.0',
+			'1,110,30.0',
+			'2,120,27.5',
+			'3,130,25.385',
+			'4,140,23.571',
+			'5,150,22.0',
+			'6,160,20.625',
+			'7,170,19.412',
+			'8,180,18.333',
+			'9,190,17.368',
+		];
+		const written = await workspace.use({ name: 'ada' }, (env) =>
+			sh(env, `printf '${rows.join('\\r\\n')}\\r\\n' > /home/ada/sweep.csv`),
 		);
+		expect(written).toMatchObject({ ok: true, exitCode: 0 });
 		const result = await call(workspace, {
 			sql: `CREATE TABLE sweep (step INTEGER, ohms REAL, ma REAL);
 INSERT INTO sweep SELECT CAST(step AS INTEGER), CAST(ohms AS REAL), CAST(ma AS REAL) FROM import.rows;

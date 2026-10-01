@@ -15,6 +15,7 @@
  */
 
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { formatBytes } from './format-bytes.ts';
 import {
 	appendOnly,
 	bestEffort,
@@ -28,7 +29,7 @@ import {
 export const DEFAULT_AUDIT_LOG = '/workspace/audit.jsonl';
 
 /** Bytes the file may hold before the next entry rotates it, when the caller names none. */
-const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_AUDIT_ROTATE_BYTES = 5 * 1024 * 1024;
 
 /** One workspace tool call, as the audit log records it. */
 export interface AuditEntry {
@@ -61,7 +62,7 @@ export interface AuditLogOptions {
 	/** The JSONL file this log appends to. The default is `/workspace/audit.jsonl`. */
 	readonly path?: string;
 	/** Bytes the file may hold before the next entry rotates it. Default 5 MiB. */
-	readonly maxBytes?: number;
+	readonly rotateBytes?: number;
 	/**
 	 * Told about a directory, write, or rotation failure, and about an entry
 	 * that the bash owner refuses, as after `dispose`. The call still returns.
@@ -71,7 +72,7 @@ export interface AuditLogOptions {
 
 export interface AuditLog {
 	readonly path: string;
-	readonly maxBytes: number;
+	readonly rotateBytes: number;
 	/** The callback of the options. The workspace tells it about an entry that a refused operation loses. */
 	readonly onError?: (error: Error) => void;
 	/** Append one entry over `env`. Never throws: a failure goes to `onError` instead. */
@@ -105,14 +106,14 @@ function line(entry: AuditEntry): string {
  * Append one line, falling back to a short notice when the filesystem
  * refuses the full entry (an oversized `write` call's content, past the
  * room left on a bounded backend), so the call still leaves a trace. Rotates
- * past `maxBytes` once whichever line landed. The fallback retries the write
+ * past `rotateBytes` once whichever line landed. The fallback retries the write
  * alone: a directory failure goes to `onError`, and it never reads as an
  * entry that is too large.
  */
 async function recordEntry(
 	env: ExecutionEnv,
 	path: string,
-	maxBytes: number,
+	rotateBytes: number,
 	entry: AuditEntry,
 	context: Context,
 ): Promise<void> {
@@ -123,7 +124,7 @@ async function recordEntry(
 		const message = error instanceof Error ? error.message : String(error);
 		await appendOnly(env, path, notice(entry, 'RecordTooLarge', message), context);
 	}
-	await rotateIfDue(env, path, maxBytes, context);
+	await rotateIfDue(env, path, rotateBytes, context);
 }
 
 /**
@@ -133,22 +134,18 @@ async function recordEntry(
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');
-	const maxBytes = checkedByteThreshold(options.maxBytes ?? DEFAULT_MAX_BYTES, 'maxBytes');
+	const rotateBytes = checkedByteThreshold(
+		options.rotateBytes ?? DEFAULT_AUDIT_ROTATE_BYTES,
+		'rotateBytes',
+	);
 	const record = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
-		bestEffort(() => recordEntry(env, path, maxBytes, entry, context), options.onError);
+		bestEffort(() => recordEntry(env, path, rotateBytes, entry, context), options.onError);
 	return Object.freeze({
 		path,
-		maxBytes,
+		rotateBytes,
 		...(options.onError === undefined ? {} : { onError: options.onError }),
 		record,
 	});
-}
-
-/** `maxBytes` as whole mebibytes or kibibytes when it divides evenly, bytes otherwise. */
-function humanBytes(bytes: number): string {
-	if (bytes % (1024 * 1024) === 0) return `${bytes / (1024 * 1024)} MiB`;
-	if (bytes % 1024 === 0) return `${bytes / 1024} KiB`;
-	return `${bytes} bytes`;
 }
 
 /** Guidance telling an agent the log exists, where it lives, and what it holds. */
@@ -159,7 +156,7 @@ export function auditGuidance(log: AuditLog): string {
 		`its full arguments, and its full result or error. Read it to see what happened`,
 		`here, including calls other agents and other rooms made. Filter it with jq:`,
 		`select on room, tool, agent, or activation to find one call among many. Past`,
-		`${humanBytes(log.maxBytes)} the file rotates: it moves beside itself under a`,
+		`${formatBytes(log.rotateBytes)} the file rotates: it moves beside itself under a`,
 		`timestamped name, and a new file starts at ${log.path}.`,
 	].join('\n');
 }

@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+**The audit log names its threshold `rotateBytes`.**
+`AuditLogOptions.maxBytes` and `AuditLog.maxBytes` of
+`@ambionframework/workspace` are now `rotateBytes`, the name that
+`openLog` and the room mirror use. The default stays 5 MiB. The refusal of
+a threshold that is not positive and finite now starts with `rotateBytes`.
+Before, it started with `maxBytes`. A host that sets `audit: { maxBytes }`
+sets `audit: { rotateBytes }`.
+
+**One formatter writes the sizes in refusals and guidance.**
+A size prints in the largest unit that fits: GiB, MiB, or KiB. It prints
+whole when the unit divides it evenly, and with one decimal otherwise. A
+value that rounds to 1024 of a unit prints in the next unit, so 1 MiB
+less 1 byte reads `1.0 MiB`. A size below 1 KiB prints in bytes. The
+import refusal of a file reads `40 MiB` where it read `40.0 MiB`, and it
+names a size from 1 KiB to 1 MiB in KiB where it named bytes. The audit
+guidance names a threshold in the same way. Before, it named bytes for a
+threshold that was not a whole KiB, and MiB for 1 GiB and above, so
+10,000,000 bytes now reads `9.5 MiB` where it read `10000000 bytes`, and
+1 GiB reads `1 GiB` where it read `1024 MiB`. The guidance for the default
+5 MiB and the SQL guidance of 32 MiB do not change.
+
+**The object-size refusal names the limit once.**
+The refusal of an object over 5 GiB now reads `/big holds 5.0 GiB, more
+than the 5 GiB that an object holds.` Before, it read `/big holds 5.0 GiB,
+and an object holds at most 5.0 GiB.`
+
+**`@ambionframework/workspace` exports `MAX_TIMER_SECONDS`.**
+The constant is 2,147,483, the most seconds that a Node timer holds. The
+bash timeout, the SQLite timeout, the process table, and the workstation
+checks of `idleTimeout`, `timeout`, and `grace` read this one value. No
+limit changes, and no message changes.
+
 **Pi runs on a Claude or a ChatGPT subscription.**
 `@ambionframework/pi` exports `fileCredentials`, `loginPi`, and
 `terminalInteraction`, and `piExecution` and `createExecutionServices` take

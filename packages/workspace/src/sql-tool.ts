@@ -21,6 +21,7 @@ import {
 import { type Static, Type } from 'typebox';
 import { callEnvelope } from './call-envelope.ts';
 import type { Capability } from './capability.ts';
+import { formatBytes } from './format-bytes.ts';
 import { markdownTable } from './markdown-table.ts';
 import type { WorkspaceResource } from './resource.ts';
 import type {
@@ -94,7 +95,7 @@ function sqlToolGuidance(database: string): string {
 		`sql alone. The`,
 		`tool shows the last result as a table and keeps the data in the database. Set export to`,
 		`write the full result as a CSV file in your workspace for another tool or script.`,
-		`Set import to read a CSV file with a header from your workspace, up to ${MAX_IMPORT_BYTES / 1024 / 1024} MiB. Its rows`,
+		`Set import to read a CSV file with a header from your workspace, up to ${formatBytes(MAX_IMPORT_BYTES)}. Its rows`,
 		`are the table ${IMPORT_TABLE} for that call alone: every value is text, and \\N is NULL. Copy`,
 		`them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the`,
 		`process that writes the file before you import it.`,
