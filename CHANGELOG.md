@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**The body schemas are the one source of the body types.** The new file
+`packages/ambion/src/bodies.ts` holds the schema of each stored body.
+Before, a type and a schema each stated the body, and the two drifted.
+`SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
+`DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
+`FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`, `Close`,
+`Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
+schemas with `Static`.
+
+**Each derived type keeps its name and its fields.** The fields, the
+optional keys, and the `readonly` marks stay the same. An interface stays an
+interface, and an alias stays an alias. The `.d.ts` of a type refers to its
+schema, and the schema carries the doc comment of each field.
+
+**The release request takes its fields from the ended lease.** The
+`release` variant of `LeaseRequest` takes `reason`, `readThrough`, `cause`,
+`usage`, and `session` from the schema of the ended lease. It lists them
+once.
+
+**The ended lease refuses an invalid `cause`.** The schema of an ended lease
+did not name `cause`, so any value passed. The schema now holds `permanent`
+or `transient`. A journal that holds another value stops at replay with an
+error that names `body.cause`.
+
 **Three types, one method, and two fields change name.**
 `@ambionframework/simulator` exports `Simulation` and `SimulationExchange`
 in place of `Run` and `RunExchange`. A run now means one run of a room over

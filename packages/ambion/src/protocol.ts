@@ -13,17 +13,16 @@
  * lease the room ended.
  */
 
+import type { Static } from 'typebox';
+import type { leaseEndedSchema } from './bodies.ts';
 import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipantInfo,
-	EndReason,
-	FailureCause,
 	HarnessSession,
 	HumanParticipantInfo,
 	Intent,
 	Message,
 	Seq,
-	Usage,
 	Without,
 } from './types.ts';
 
@@ -184,15 +183,10 @@ export type CommitResult =
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
 	| { activation: string; operation: 'renew'; readThrough?: Seq }
-	| {
-			activation: string;
-			operation: 'release';
-			reason: EndReason;
-			readThrough: Seq;
-			cause?: FailureCause;
-			usage?: Usage;
-			session?: HarnessSession;
-	  };
+	| ({ activation: string; operation: 'release' } & Pick<
+			Static<typeof leaseEndedSchema>,
+			'reason' | 'readThrough' | 'cause' | 'usage' | 'session'
+	  >);
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat

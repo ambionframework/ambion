@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty-two reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-three reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                         | Files                                    |
@@ -56,6 +56,7 @@ changelog names each change to an export and to a behavior.
 | Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
 | One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
 | One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `processes.ts`, `sensor-connections.ts`  |
+| The schema is the one source of a body (K6)  | 18 hand-written body types, the third ended lease in `LeaseRequest`      | `bodies.ts`                              |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -82,7 +83,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | K3  | The commit result has two forms (done)                                             | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
 | K5  | Usage addition exists three times (done)                                           | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
-| K6  | A body shape is written as a type and again as a schema                            | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
+| K6  | A body shape is written as a type and again as a schema (done)                     | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
 | K7  | Three rules state "plain data", and they disagree                                  | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
 | K8  | Three renderers write one line of the record                                       | `record.ts:29`, `execution/render.ts:54`, `simulator/src/render.ts:29`                                   | 2       | Medium | 4    |
 | K9  | The `assistant` option restates `agents`, `seats`, and `summary`                   | `normalizeAssistant` (`room.ts:231`); the package is 70 lines over `pi()`                                | 2       | Medium | 4    |
