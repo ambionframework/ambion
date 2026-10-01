@@ -11,6 +11,15 @@ a body that is not JSON, with the path of the fault, before storage sees it.
 A `Date`, a `bigint`, and a field that holds `undefined` are refused on every
 storage. The memory journal copies a value through JSON, as SQLite does.
 
+**The workspace implements its own file tools.** `read`, `write`, and
+`edit` run over the workspace port in place of the factories of Pi. They keep
+the names, the parameters, and the results of the Pi tools. A `read` of a BMP file
+tells the model to convert the file with bash. A workspace tool
+is a core `AmbionTool`, so the workspace needs no wrapper for a Pi tool.
+The workspace copies the truncation helpers, the shell output update, and
+the skill list that it used from Pi. It depends on `diff` for the `edit`
+patch. No export changes.
+
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,
 and `RoomObject` takes the name from its id. `RoomMetadata` holds

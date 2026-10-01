@@ -15,15 +15,10 @@
  * one at the end of each read, and no byte shows twice.
  */
 
-import {
-	BACKGROUND_CONTEXT,
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	type ShellOutputTruncation,
-	truncateTail,
-} from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, type ShellOutputTruncation } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript, shellQuote } from './execution-env.ts';
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } from './truncate.ts';
 
 /** The most bytes one read takes from the file. Pi's view then keeps at most 50 KB of them. */
 const READ_BYTES = 4 * DEFAULT_MAX_BYTES;
