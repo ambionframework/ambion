@@ -203,12 +203,12 @@ the same promise twice, so each call has a purpose and no work repeats.
 
 ## The backends: `just-bash` and `workstation`
 
-| ID  | Finding                                                           | Evidence                                                           | Removes | Conf.  | Rank |
-| --- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
-| B1  | Repository registration is one state machine written twice (done) | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
+| ID  | Finding                                                                | Evidence                                                           | Removes | Conf.  | Rank |
+| --- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
+| B1  | Repository registration is one state machine written twice (done)      | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
 | B2  | A transport pairing guards a mismatch that one factory prevents (done) | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
-| B3  | The file adapter skeleton is written twice (done)                 | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
-| B4  | Git constants repeat (done)                                       | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
+| B3  | The file adapter skeleton is written twice (done)                      | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
+| B4  | Git constants repeat (done)                                            | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
 
 **B1 closed a gap.** The just-bash backend accepted a source path such
 as `../x` or `.git/config` and stored it in the tree. The shared path
