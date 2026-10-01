@@ -6,15 +6,20 @@
 import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-/** One reply of the scripted model: assistant text, or a call to a named tool. */
-export type Reply =
+/**
+ * One reply of the scripted model: assistant text, or a call to a named tool.
+ * A reply can carry the summary of reasoning, which the endpoint sends as a
+ * reasoning item before the reply item.
+ */
+export type Reply = (
 	| { readonly text: string }
 	| {
 			readonly call: string;
 			readonly args: unknown;
 			/** The namespace of an MCP tool, as Codex lists it on the wire. */
 			readonly namespace?: string;
-	  };
+	  }
+) & { readonly reasoning?: string };
 
 /** The token counts that `response.completed` reports for every reply. */
 export interface ReportedUsage {
@@ -102,6 +107,16 @@ function itemOf(reply: Reply, id: string): Record<string, unknown> {
 	};
 }
 
+/** A reasoning item with one summary part. The encrypted content is a stand-in. */
+function reasoningOf(summary: string, id: string): Record<string, unknown> {
+	return {
+		type: 'reasoning',
+		id: `rs_${id}`,
+		summary: [{ type: 'summary_text', text: summary }],
+		encrypted_content: 'opaque-reasoning-content',
+	};
+}
+
 /** The server-sent events of one reply. */
 function eventsOf(reply: Reply, id: string, used: ReportedUsage): string {
 	const usage = {
@@ -111,9 +126,14 @@ function eventsOf(reply: Reply, id: string, used: ReportedUsage): string {
 		output_tokens_details: { reasoning_tokens: used.reasoning },
 		total_tokens: used.input + used.output,
 	};
+	const reasoning = reply.reasoning === undefined ? [] : [reasoningOf(reply.reasoning, id)];
 	return [
 		{ type: 'response.created', response: { id } },
-		{ type: 'response.output_item.done', output_index: 0, item: itemOf(reply, id) },
+		...[...reasoning, itemOf(reply, id)].map((item, output_index) => ({
+			type: 'response.output_item.done',
+			output_index,
+			item,
+		})),
 		{ type: 'response.completed', response: { id, usage } },
 	]
 		.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
