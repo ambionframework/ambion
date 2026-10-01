@@ -222,7 +222,7 @@ class Activation implements ExecutorSession {
 		const scratch = await this.seal();
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
-		const tools = servedTools([...pass.tools, ...pass.agentTools], this.activation);
+		const tools = servedTools(pass.tools, this.activation);
 		const bridge = await startBridge(tools, this.activation.signal);
 		this.bridge = bridge;
 		if (this.stopped) {

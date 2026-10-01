@@ -387,7 +387,7 @@ export const RECALL = {
 };
 
 /** The names that the room supplies for an activation. An agent's own tool takes none of them. */
-const ROOM_TOOL_NAMES: readonly string[] = [
+export const ROOM_TOOL_NAMES: readonly string[] = [
 	SAY.name,
 	SCHEDULE.name,
 	RECALL.name,

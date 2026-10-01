@@ -166,11 +166,11 @@ line names that lemma.
 
 **`pnpm check` regenerates, and `pnpm check:lemmascript` proves.**
 
-| Command                  | What it runs                                                                 | Needs Dafny |
-| ------------------------ | ---------------------------------------------------------------------------- | ----------- |
-| `pnpm check`             | `lsc gen-check`: regenerate every `.dfy.gen` and fail on a stale one         | No          |
-| `pnpm rule:check <file>` | Regenerate one rules file, prove it, and prove the proofs file beside it     | Yes         |
-| `pnpm check:lemmascript` | `lsc check` on every listed file, then `check-extra.sh` on every proofs file | Yes         |
+| Command                  | What it runs                                                                           | Needs Dafny |
+| ------------------------ | -------------------------------------------------------------------------------------- | ----------- |
+| `pnpm check`             | `lsc gen-check`, then `rules-fresh.sh`: fail when a `.dfy` differs from its `.dfy.gen` | No          |
+| `pnpm rule:check <file>` | Regenerate one rules file, prove it, and prove the proofs file beside it               | Yes         |
+| `pnpm check:lemmascript` | `lsc check` on every listed file, then `check-extra.sh` on every proofs file           | Yes         |
 
 A stale generation fails at the desk and in CI. The proof itself runs in
 the `lemmascript` job of `.github/workflows/ci.yml`, which calls the

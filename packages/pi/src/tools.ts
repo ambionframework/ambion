@@ -79,10 +79,10 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
  * and the tools of the definition. `current` names the view of the running
  * pass, and defaults to the view the tools are built from.
  *
- * Pi hosts `pass.tools`, the room tools as the core bound them. It does not
- * host `pass.agentTools`. It builds each tool of the definition from its
- * `AmbionTool`, because a `RoomTool` does not carry what the Pi harness
- * does with the tool:
+ * `pass.tools` holds the room tools and the tools of the definition. Pi
+ * hosts the room tools from it: the tools that the definition does not name.
+ * It builds each tool of the definition from its `AmbionTool`, because a
+ * `RoomTool` does not carry what the Pi harness does with the tool:
  *
  * - The harness applies `prepareArguments` before it checks the arguments
  *   against the schema. A `RoomTool` applies it after the check.
@@ -100,7 +100,8 @@ export function toolsFor(
 	tools: readonly RoomTool[],
 	current: () => ActivationView = () => view,
 ): PiTool[] {
-	const room = tools.map(fromRoomTool);
+	const own = new Set(def.executor.tools.map((tool) => tool.name));
+	const room = tools.filter((tool) => !own.has(tool.name)).map(fromRoomTool);
 	if (view.spec.purpose.kind === 'summarize') return room;
 	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, current))];
 }
