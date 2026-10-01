@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
-import type { ActivationSpec, ContextParticipant } from '../src/hosting.ts';
-import { assertWire, roundTrip } from '../src/hosting.ts';
+import type { ActivationSpec } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
+import { assertWire, type ContextParticipant, roundTrip } from '../src/protocol.ts';
 import { viewOf } from '../src/room/view.ts';
 import type { Message } from '../src/types.ts';
 import { replayState } from './support/fold.ts';

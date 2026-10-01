@@ -11,6 +11,7 @@ import * as conformance from '../src/conformance.ts';
 import * as hosting from '../src/hosting.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME, type Seq } from '../src/index.ts';
+import type { CollaborationContext, ContextParticipant } from '../src/protocol.ts';
 
 const read = async (name: string) =>
 	readFile(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
@@ -75,21 +76,8 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 it('exports exactly the wire and the hosting escape hatch, and nothing an application already has', () => {
 	expect(Object.keys(hosting).sort()).toEqual([
 		'AgentRunner',
-		'DEFAULT_TRACE',
-		'DEFAULT_TRACE_LIMITS',
-		'DISMISS',
-		'PERMANENT_STATUS',
 		'PermanentError',
-		'RECALL',
-		'REMINDER_TIMEOUT_MS',
-		'SAY',
-		'SCHEDULE',
-		'SEAT',
-		'UNSEAT',
-		'assertWire',
-		'callLimits',
 		'classifyCause',
-		'classifyCommit',
 		'defineExecution',
 		'describeExecutor',
 		'executorOfKind',
@@ -97,11 +85,7 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'hostingOf',
 		'localExecution',
 		'providerMessage',
-		'refusal',
-		'renderLine',
-		'roundTrip',
 		'runningRoom',
-		'summaryToolDescription',
 		'toolContext',
 		'visitOf',
 	]);
@@ -126,7 +110,7 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<hosting.AgentExecutionContext>().toHaveProperty('executor');
 	expectTypeOf<main.Visit['lastDeparture']>().toEqualTypeOf<Seq | undefined>();
 	expectTypeOf<
-		Extract<hosting.ContextParticipant, { kind: 'human' }>['messagesSinceDeparture']
+		Extract<ContextParticipant, { kind: 'human' }>['messagesSinceDeparture']
 	>().toEqualTypeOf<number>();
 	expectTypeOf<Awaited<ReturnType<typeof main.readExchange>>>().toEqualTypeOf<
 		main.ExchangeRead | undefined
@@ -141,7 +125,7 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
 		[activation: string, message?: Seq]
 	>();
-	expectTypeOf<hosting.CollaborationContext>().not.toHaveProperty('earliest');
+	expectTypeOf<CollaborationContext>().not.toHaveProperty('earliest');
 	expectTypeOf<main.AgentExecutor['estimateTokens']>().toEqualTypeOf<string | undefined>();
 	expectTypeOf<main.CreateRuntimeOptions>().toHaveProperty('estimators');
 });

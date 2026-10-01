@@ -8,7 +8,7 @@ import type { FailureCause } from '../types.ts';
 import type { PassResult } from './executor.ts';
 
 /** HTTP statuses a retry cannot fix: a bad request and the billing and authentication refusals. */
-export const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
+const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403, 404, 405, 422]);
 
 /**
  * Error text that names a refusal a retry cannot clear: a credit, a quota, a

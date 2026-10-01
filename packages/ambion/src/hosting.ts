@@ -9,14 +9,13 @@
  * execution of one executor kind, whose port is an `AgentRunner` in this
  * process. `defineExecution` defines an executor family: the executions of
  * one kind by options, and the default of that kind. An executor package
- * calls it once. A
- * host that puts the seats somewhere else writes an execution whose port
- * crosses the boundary, and runs an `AgentRunner` there.
+ * calls it once. A host that puts the seats somewhere else writes an
+ * execution whose port crosses the boundary, and runs an `AgentRunner`
+ * there.
  * `@ambionframework/cloudflare` is one such host.
  *
- * Every shape a call carries is here, because a remote port serialises
- * them. `assertWire` and `roundTrip` hold a value to what the wire can
- * carry.
+ * Every shape a call carries is plain data, because a remote port
+ * serialises it.
  *
  * `hostingOf(runtime)` is the other half: the journal namespace, wake and
  * retry policy, and the room lifecycle registry, none of which the main
@@ -30,17 +29,7 @@
  */
 
 export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
-export {
-	DEFAULT_TRACE,
-	DISMISS,
-	describeExecutor,
-	executorOfKind,
-	RECALL,
-	SAY,
-	SCHEDULE,
-	SEAT,
-	UNSEAT,
-} from './define.ts';
+export { describeExecutor, executorOfKind } from './define.ts';
 export type {
 	Executor,
 	ExecutorActivation,
@@ -51,21 +40,8 @@ export type {
 	PassResult,
 	ReadRange,
 } from './execution/executor.ts';
-export {
-	classifyCause,
-	failedPass,
-	PERMANENT_STATUS,
-	PermanentError,
-	providerMessage,
-} from './execution/failure.ts';
-export { REMINDER_TIMEOUT_MS } from './execution/reminders.ts';
-export { refusal, summaryToolDescription } from './execution/render.ts';
-export type {
-	RoomTool,
-	RoomToolContent,
-	RoomToolOptions,
-	RoomToolResult,
-} from './execution/room-tools.ts';
+export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
+export type { RoomTool, RoomToolContent, RoomToolOptions } from './execution/room-tools.ts';
 export { toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
@@ -74,39 +50,27 @@ export type {
 	AgentExecutionContext,
 	ConnectorRequest,
 	Execution,
-	ExecutionConnector,
 	ExecutionHost,
-	Hosting,
-	Limits,
 } from './host/runtime.ts';
-export { callLimits, DEFAULT_TRACE_LIMITS, hostingOf, runningRoom } from './host/runtime.ts';
+export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
-	ActivationPurpose,
 	ActivationSpec,
 	ActivationView,
 	AgentPort,
-	CollaborationContext,
-	CommitOutcome,
 	CommitRequest,
 	CommitResult,
-	ContextParticipant,
 	Intent,
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
-	Stale,
 	Steer,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
-export { assertWire, classifyCommit, roundTrip } from './protocol.ts';
-export { renderLine } from './record.ts';
 export { visitOf } from './room.ts';
 export type {
 	AgentDefinition,
 	AgentExecutor,
-	Clock,
-	EndReason,
 	ExecutionEvent,
 	FailureCause,
 	HarnessSession,
