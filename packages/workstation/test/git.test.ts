@@ -28,7 +28,7 @@ describe('the options of workstationGitBackend', () => {
 		['a key life of 0', { keyTtl: 0 }, /keyTtl/],
 		['a key life that is not whole seconds', { keyTtl: 1.5 }, /keyTtl/],
 	])('refuses %s', (_name, change, message) => {
-		const options = { host: 'lab.internal', hostKey: FINGERPRINT, account: ACCOUNT, ...change };
+		const options = { server: 'lab.internal', hostKey: FINGERPRINT, account: ACCOUNT, ...change };
 		expect(() => workstationGitBackend(options)).toThrow(message);
 	});
 });

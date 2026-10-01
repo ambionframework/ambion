@@ -97,7 +97,7 @@ const until = async (check: () => boolean, ms = 2_000) => {
 
 describe('workstationBackend options', () => {
 	const base = {
-		host: 'lab.internal',
+		server: 'lab.internal',
 		hostKey: `SHA256:${'A'.repeat(43)}`,
 		layout: { audit: '/srv/audit.jsonl', rooms: '/srv/rooms', snapshots: '/srv/snapshots' },
 		credentialFor: () => ({ username: 'x', privateKey: 'x' }),
@@ -606,7 +606,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			'snapshot',
 			'sql',
 		]);
-		expect(workspace.host).toEqual({ name: 'lab-host' });
+		expect(workspace.mirrorAgent).toEqual({ name: 'lab-host' });
 	});
 
 	it("copies the agent's skills into its home over SFTP, and marks each script executable", async () => {

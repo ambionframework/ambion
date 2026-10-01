@@ -95,7 +95,7 @@ positioning and the current capabilities.
   process table, so a new run of the host adopts the live processes. See
   [Processes](processes.md).
 - **Sensor servers use the Git and process tools.** A workspace backend with
-  ports adds `connect` and `observe`. The workspace package owns
+  endpoints adds `connect` and `observe`. The workspace package owns
   the versioned client and schema exports. `observe` stores the response
   manifest and verified file bytes as ordinary snapshot objects. The server
   owns acquisition and reducer state.

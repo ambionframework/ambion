@@ -85,7 +85,7 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * The agent identity `mirror()` writes as: `<name>-host`, one agent this
 	 * workspace owns. A backend with real accounts can give it credentials.
 	 */
-	readonly host: WorkspaceAgent;
+	readonly mirrorAgent: WorkspaceAgent;
 	/**
 	 * The owner of the SQL backend, when the workspace has one. Host code
 	 * runs statements through its `use`. A SQL operation may wait on the
@@ -191,7 +191,7 @@ function capabilitiesOf(
 			gitCapability({
 				git: git.owner.use,
 				shell: shell.use,
-				server: git.backend.server,
+				server: git.backend.label,
 				workspace: shell.name,
 			}),
 		connections && sensorCapability({ connections, store, images }),
@@ -292,7 +292,7 @@ function assertTransport(bash: BashBackend, git: GitBackend | undefined): void {
 	if (carried.includes(transport)) return;
 	const list = carried.length === 0 ? 'no git transport' : carried.join(', ');
 	throw new Error(
-		`The bash backend cannot reach the git backend at ${git.server}: the git backend uses the transport ${transport}, and the bash backend carries ${list}.`,
+		`The bash backend cannot reach the git backend at ${git.label}: the git backend uses the transport ${transport}, and the bash backend carries ${list}.`,
 	);
 }
 
@@ -339,10 +339,10 @@ function withProcesses(
 /** The file store at `root` on the bash owner, written as the host agent. */
 function defaultObjects(
 	shell: WorkspaceResource<WorkspaceEnv>,
-	host: WorkspaceAgent,
+	mirrorAgent: WorkspaceAgent,
 	root: string,
 ): ObjectBackend {
-	return fileObjectBackend({ shell: shell.use, host, root });
+	return fileObjectBackend({ shell: shell.use, host: mirrorAgent, root });
 }
 
 /** Dispose each owner in turn, and report the first failure once every one has run. */
@@ -412,7 +412,7 @@ export function openWorkspace(options: {
 		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
 	const connections =
-		bash.ports === undefined ? undefined : createSensorConnections(bash.ports, table);
+		bash.endpoints === undefined ? undefined : createSensorConnections(bash.endpoints, table);
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
 		backend: withProcesses(shellBackend, table, connections),
@@ -435,14 +435,14 @@ export function openWorkspace(options: {
 			: openAuditLog({ ...options.audit, path: options.audit.path ?? layout.audit });
 	// The workspace's own name for a mirror and a snapshot: one agent it
 	// owns, so a caller names only the room or the paths.
-	const host: WorkspaceAgent = { name: `${options.name}-host` };
+	const mirrorAgent: WorkspaceAgent = { name: `${options.name}-host` };
 	const objects = openResource<ObjectEnv>({
 		name: options.name,
-		backend: options.backend.objects ?? defaultObjects(resource, host, layout.snapshots),
+		backend: options.backend.objects ?? defaultObjects(resource, mirrorAgent, layout.snapshots),
 	});
 	const store: SnapshotStore = {
 		workspace: options.name,
-		host,
+		host: mirrorAgent,
 		shell: resource.use,
 		objects: objects.use,
 	};
@@ -471,7 +471,7 @@ export function openWorkspace(options: {
 			: withSkills(bundle, skillSetOf(toolsOptions.skills), resource.use);
 	};
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
-		mirrorRoom(room, resource, host, layout.rooms, mirrorOptions);
+		mirrorRoom(room, resource, mirrorAgent, layout.rooms, mirrorOptions);
 	// The SQL owner goes first: a SQL operation may still write through the
 	// bash owner. The git owner goes last: a push in the active bash
 	// operation reaches the git backend, so the bash owner drains first.
@@ -492,7 +492,7 @@ export function openWorkspace(options: {
 		...resource,
 		dispose,
 		tools,
-		host,
+		mirrorAgent,
 		processes,
 		mirror,
 		snapshot: (paths: readonly string[], snapshotOptions?: SnapshotOptions) =>
@@ -509,7 +509,7 @@ export function openWorkspace(options: {
 			return commitRefOf(
 				git.owner.use,
 				options.name,
-				refOptions.agent ?? host,
+				refOptions.agent ?? mirrorAgent,
 				{ repository, at },
 				refOptions.signal,
 			);
@@ -522,7 +522,7 @@ export function openWorkspace(options: {
 			return readCommitOf(
 				git.owner.use,
 				options.name,
-				readOptions.agent ?? host,
+				readOptions.agent ?? mirrorAgent,
 				ref,
 				readOptions.signal,
 			);

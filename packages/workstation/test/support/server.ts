@@ -33,7 +33,7 @@ export interface TestServer {
 	readonly homes: ReadonlyMap<string, string>;
 	/** How many times a client has authenticated, by account. */
 	readonly logins: Map<string, number>;
-	/** Direct-tcpip channels currently held by a port transport. */
+	/** Direct-tcpip channels currently held by an endpoint. */
 	readonly forwards: Set<ServerChannel>;
 	/** Pending SSH forwarding decisions held by the fixture for cancellation tests. */
 	readonly pendingForwards: Set<() => void>;
@@ -260,7 +260,7 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 	const shared = await realpath(await mkdtemp(join(tmpdir(), 'ambion-ws-shared-')));
 	return {
 		options: {
-			host: '127.0.0.1',
+			server: '127.0.0.1',
 			port,
 			hostKey: fingerprint(parsed(hostKey.public).getPublicSSH()),
 			layout: {

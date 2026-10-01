@@ -143,15 +143,15 @@ another attention; see [Roster](docs/roster.md#configuration).
 message cites it.** Each agent has a home, and each capability is a set of
 tools.
 
-| Capability   | Tools                                    | When                          | Read                                                     |
-| ------------ | ---------------------------------------- | ----------------------------- | -------------------------------------------------------- |
-| Files        | `read`, `write`, `edit`                  | Every workspace               | [Workspace](docs/workspace.md)                           |
-| Processes    | `bash`, `ps`, `status`, `cancel`, `wait` | Every workspace               | [Processes](docs/processes.md)                           |
-| Snapshots    | `snapshot`, `restore`                    | Every workspace               | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
-| Tables       | `sql`                                    | With a SQL backend            | [Workspace](docs/workspace.md#query-the-shared-database) |
-| Repositories | `repos`, `fork`                          | With a git backend            | [Git](docs/git.md)                                       |
-| Sensors      | `connect`, `observe`                     | With a backend that has ports | [Sensors](docs/sensors.md)                               |
-| Skills       | `read`, `bash`                           | When the host passes skills   | [Skills](docs/skills.md)                                 |
+| Capability   | Tools                                    | When                              | Read                                                     |
+| ------------ | ---------------------------------------- | --------------------------------- | -------------------------------------------------------- |
+| Files        | `read`, `write`, `edit`                  | Every workspace                   | [Workspace](docs/workspace.md)                           |
+| Processes    | `bash`, `ps`, `status`, `cancel`, `wait` | Every workspace                   | [Processes](docs/processes.md)                           |
+| Snapshots    | `snapshot`, `restore`                    | Every workspace                   | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
+| Tables       | `sql`                                    | With a SQL backend                | [Workspace](docs/workspace.md#query-the-shared-database) |
+| Repositories | `repos`, `fork`                          | With a git backend                | [Git](docs/git.md)                                       |
+| Sensors      | `connect`, `observe`                     | With a backend that has endpoints | [Sensors](docs/sensors.md)                               |
+| Skills       | `read`, `bash`                           | When the host passes skills       | [Skills](docs/skills.md)                                 |
 
 **Actuators are a pattern over processes.** A controller command started
 with `bash` drives a device and stops safe on `SIGTERM`. A sensor confirms

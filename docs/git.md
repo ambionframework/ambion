@@ -159,8 +159,8 @@ interface GitEnv extends ResourceEnv {
 
 interface GitBackend extends ResourceBackend<GitEnv> {
   readonly access: GitAccess;
-  /** The server this backend names in the guidance, with no credential. */
-  readonly server: string;
+  /** The label that the guidance uses for the server of this backend, with no credential. */
+  readonly label: string;
 }
 ```
 
@@ -179,7 +179,7 @@ It resolves when that fork can be cloned, the same as a new fork.
 one registration. A failed registration rejects
 that operation with an error that names the template. The next operation
 tries again. Host code that wants the error at start calls
-`lab.git.use(lab.host, (env) => env.list())`.
+`lab.git.use(lab.mirrorAgent, (env) => env.list())`.
 
 **A bash backend receives `GitAccess` when it connects.**
 `BashBackend.connect` gets a third, optional argument, `BashServices`,
@@ -202,7 +202,7 @@ interface BashBackend {
 **`openWorkspace` refuses a pair that does not match.** When
 `backend.git` is set and `backend.bash.gitTransports` does not hold its
 `transport`, `openWorkspace` throws. Neither backend has a name, so the
-error names the `transport` and the `server` of the git backend, and the
+error names the `transport` and the `label` of the git backend, and the
 transports that the bash backend carries. A bash backend with no
 `gitTransports` carries none. This check is the only check: a bash
 backend reads the access at `connect` with no check of its own.
@@ -590,7 +590,7 @@ holds the bundle, so the git note stays at ten lines.
 8. The rooms note.
 
 **The git note states the namespaces and the rule that persists an
-edit.** The workspace writes the backend's `server` into the first line, and
+edit.** The workspace writes the backend's `label` into the first line, and
 its own name into the form of a commit ref.
 
 ```text
