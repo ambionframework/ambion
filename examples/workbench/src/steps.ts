@@ -98,6 +98,8 @@ function lineOf(step: TraceStep): StepLine {
 			return { kind: 'steer', text: `steer ${step.seq} ${step.consumed ? 'read' : 'queued'}` };
 		case 'approval':
 			return { kind: 'approval', text: `${step.name}: ${decisionOf(step)}` };
+		case 'notice':
+			return { kind: 'notice', text: `${step.level}: ${brief(step.text)}` };
 		case 'usage':
 			return { kind: 'usage', text: formatUsage(step) };
 		case 'end':

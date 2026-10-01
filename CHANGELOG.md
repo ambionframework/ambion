@@ -132,6 +132,32 @@ The word `Runtime` now names the core `Runtime` alone.
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
 
+**A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
+Codex 0.158 shows no reasoning unless the request asks for a summary, and
+the catalog of some models turns the summary off. The new option
+`reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
+`none`. The default is `auto`. The executor passes it as
+`model_reasoning_summary` in both modes of `nativeTools`, and the summary
+arrives as `thinking` steps. The default trace policy keeps 280 characters of
+each thinking block. `defineAgent({ trace: { thinking: 'full', toolOutput:
+'full' } })` keeps all of it. A `todo_list` item now gives a `tool_call`
+named `update_plan` and its `tool_result`.
+
+**Breaking: the step vocabulary has an eleventh kind, `notice`.** A `notice`
+is a non-fatal diagnostic of the harness:
+`{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
+gates an activation. A consumer that switches on the step type must handle
+the new kind. The Codex executor records a `notice` at level `warning` for
+each `error` item and each `error` event, such as an unknown setting in the
+config or a reconnect. `turn.failed` stays in the `end` step.
+
+**A Codex trace names the thread and the rollout file.** The executor
+records one `notice` at level `info`, with the text "Codex thread", for each
+thread of an activation. Its `data` holds the `thread` id, the `home` of the
+seat, and the `rollout` path, `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`.
+Codex writes the instructions, every item, the reasoning, and the tool calls
+there. The binary tier proves the path and the notice.
+
 **A Codex seat has the room tools on its first model request.** Codex
 starts an MCP server in the background and waits one second for an optional
 server. A loaded host starts the room tools server in more time, so the first

@@ -420,6 +420,8 @@ export type Step =
 	| { type: 'steer'; seq: Seq; consumed: boolean }
 	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
 	| ({ type: 'usage' } & Usage)
+	/** A non-fatal diagnostic from the harness. A notice never gates the activation. */
+	| { type: 'notice'; level: 'info' | 'warning'; text: string; data?: Record<string, unknown> }
 	/** The activation stops. `failure` is present when it failed. */
 	| {
 			type: 'end';
