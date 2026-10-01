@@ -6,7 +6,7 @@
  */
 
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { TraceRecord } from '@ambionframework/ambion';
+import type { TracedStep } from '@ambionframework/ambion';
 import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it, onTestFinished } from 'vitest';
@@ -38,7 +38,7 @@ async function asked(name: string) {
 }
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	configure({ ...configuration, logger: (record) => void records.push(record) });
 	onTestFinished(() => configure(configuration));
 	const { room, seat } = await asked('seat-test');

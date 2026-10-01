@@ -25,7 +25,7 @@ export const READ = 'ambion.read';
 
 /** One range of the record in the session. */
 interface Range extends ReadRange {
-	/** Set on a line steered into a live run. */
+	/** Set on a line steered into a live pass. */
 	readonly steer?: true;
 }
 

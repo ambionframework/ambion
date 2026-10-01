@@ -517,7 +517,7 @@ export type TraceStep = Step & {
 };
 
 /** One step of one activation, as the trace gives it to the host's logger. */
-export interface TraceRecord {
+export interface TracedStep {
 	/** The room the activation ran in. */
 	readonly room: string;
 	/** The seat that ran the activation. */
@@ -531,7 +531,7 @@ export interface TraceRecord {
  * calls it once for each step, in order, on the path of the activation, so
  * it must not block. A logger that throws or rejects changes nothing.
  */
-export type TraceLogger = (record: TraceRecord) => void;
+export type TraceLogger = (traced: TracedStep) => void;
 
 /** What the trace keeps of an agent's work. */
 export interface TracePolicy {

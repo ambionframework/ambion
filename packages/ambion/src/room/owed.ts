@@ -33,7 +33,7 @@ export interface Owed extends PendingActivation {
 /** What `judgeOwed` reads: the summary and removal messages, the closing leases, the marker. */
 export interface OwedFacts {
 	/** The summary and unseated messages. `summaryCompletion` reads no other kind. */
-	record: readonly Message[];
+	summaryFacts: readonly Message[];
 	/** The leases of closing activations, by the position they name. */
 	closedLeases: ReadonlyMap<Seq, ReadonlyMap<string, LeaseHold>>;
 	cancelledAt: Seq | undefined;
@@ -55,7 +55,7 @@ export function judgeOwed(
 	// A close with no writer owes no draft. A close with one names its person.
 	if (close.summary === undefined) return undefined;
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
-	const completion = summaryCompletion(close, facts.record, leases, facts.cancelledAt);
+	const completion = summaryCompletion(close, facts.summaryFacts, leases, facts.cancelledAt);
 	if (completion.status !== 'pending' || completion.writer === undefined) return undefined;
 	return withAttempts(close, completion.writer, leases, options);
 }

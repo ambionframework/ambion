@@ -19,7 +19,7 @@ import {
 	type PostedMessage,
 	type RoomNotification,
 } from '@ambionframework/ambion';
-import type { Run, SeenExchange } from './types.ts';
+import type { SeenExchange, Simulation } from './types.ts';
 
 /**
  * One message as one line: its place, its author, its recipient, its kind,
@@ -98,17 +98,17 @@ function activationLine(activation: ExchangeActivation, tools: readonly string[]
 	return `- ${activation.seat}, ${activation.purpose}, ${status}${detail}, ${called}`;
 }
 
-/** The record of a run as the judge reads it. */
-export function renderRecord(run: Run): string {
-	const tools = toolsByActivation(run.events);
+/** The record of a simulation as the judge reads it. */
+export function renderRecord(simulation: Simulation): string {
+	const tools = toolsByActivation(simulation.events);
 	const lines = [
-		`Goal of the room: ${run.room.goal ?? 'none stated'}`,
-		`The person: ${run.person.name}. ${run.person.identity}`,
+		`Goal of the room: ${simulation.room.goal ?? 'none stated'}`,
+		`The person: ${simulation.person.name}. ${simulation.person.identity}`,
 		'',
 		'Messages:',
-		...run.room.messages.map(messageLine),
+		...simulation.room.messages.map(messageLine),
 	];
-	run.exchanges.forEach((exchange, index) => {
+	simulation.exchanges.forEach((exchange, index) => {
 		const { view } = exchange;
 		lines.push(
 			'',

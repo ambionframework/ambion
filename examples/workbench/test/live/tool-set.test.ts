@@ -20,7 +20,7 @@ import {
 	type Room,
 	type RoomNotification,
 	startRoom,
-	type TraceRecord,
+	type TracedStep,
 } from '@ambionframework/ambion';
 import { settled } from '@ambionframework/ambion/testing';
 import { claudeExecution } from '@ambionframework/claude';
@@ -100,7 +100,7 @@ async function openRoom(seats: readonly string[]) {
 	const lab = workspace.sql;
 	if (lab === undefined) throw new Error('The workspace has no lab database.');
 	const built = team(workspace, openInstrument({ lab, instruments }));
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		logger: (record) => void records.push(record),

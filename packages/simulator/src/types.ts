@@ -1,6 +1,6 @@
 /**
  * The values of one simulation: what the actor does, what the person saw,
- * and the run that the checks and the judge read.
+ * and the simulation that the checks and the judge read.
  */
 import type {
 	ClosedExchangeView,
@@ -44,8 +44,8 @@ export interface Seen {
 /** The person's next move, from what the person has seen. */
 export type Actor = (seen: Seen) => Move | Promise<Move>;
 
-/** One exchange of a run: what the person saw, and the closed view of the room. */
-export interface RunExchange extends SeenExchange {
+/** One exchange of a simulation: what the person saw, and the closed view of the room. */
+export interface SimulationExchange extends SeenExchange {
 	readonly view: ClosedExchangeView;
 }
 
@@ -53,12 +53,12 @@ export interface RunExchange extends SeenExchange {
 export type Ended = 'stopped' | 'limit' | 'timeout' | 'failed';
 
 /** A detached record of one simulation, for checks and for a judge. */
-export interface Run {
+export interface Simulation {
 	readonly person: HumanDefinition;
 	/** Every move the actor made, in order, the last `stop` included. */
 	readonly moves: readonly Move[];
 	/** One entry for each message the actor sent, in order. */
-	readonly exchanges: readonly RunExchange[];
+	readonly exchanges: readonly SimulationExchange[];
 	/** One `room.read()` after the loop, with every message. */
 	readonly room: RoomRead;
 	/** Every notification after the subscription. */

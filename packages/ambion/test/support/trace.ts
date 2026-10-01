@@ -1,9 +1,9 @@
-import type { TraceLogger, TraceRecord, TraceStep } from '../../src/index.ts';
+import type { TracedStep, TraceLogger, TraceStep } from '../../src/index.ts';
 
-/** A logger that keeps every record it receives. The sink logs each step before the release. */
+/** A logger that keeps every traced step it receives. The sink logs each step before the release. */
 export function collectSteps() {
-	const records: TraceRecord[] = [];
-	const logger: TraceLogger = (record) => void records.push(record);
+	const records: TracedStep[] = [];
+	const logger: TraceLogger = (traced) => void records.push(traced);
 	return {
 		records,
 		logger,

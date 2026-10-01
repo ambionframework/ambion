@@ -220,8 +220,8 @@ read position and the record window. Pi adds these facts.
 **One harness serves one activation.** The first pass resolves the model,
 opens the session, binds the tools, and attaches one Pi `AgentHarness` to
 the session. Every pass of the activation prompts the lane `main` of that
-harness once, and resolves when the run ends. The harness runs with
-`thinkingLevel: 'off'`, and no option changes it.
+harness once, and resolves when the pass ends. Pi calls one such prompt a
+run. The harness runs with `thinkingLevel: 'off'`, and no option changes it.
 
 **The system prompt is the mechanism and the agent part.** The executor
 gives the harness `pass.mechanism` and `pass.agent` as the system prompt.
@@ -244,16 +244,16 @@ with the same text never counts. The room tool answers also move the
 position; see [Executors](executors.md#how-an-activation-runs).
 
 **A steer goes to the steer queue of the lane.** A line that lands during a
-run joins the queue as a `[new]` range, and the harness delivers it with
+pass joins the queue as a `[new]` range, and the harness delivers it with
 the next provider request. The executor calls `read` for the line when a
 provider request holds it. A line that lands while the pass prepares its
-run joins the prompt of the run. A line that no request holds by the end
-of the run leaves the queue. The core records the `steer` step; see
+prompt joins that prompt. A line that no request holds by the end of the
+pass leaves the queue. The core records the `steer` step; see
 [Executors](executors.md#how-an-activation-runs).
 
 **A line that lands between passes waits for the record.** The core runs a
 pass with the delta when the last position of the room is past
-`readThrough`. A delta with no message in it starts no run, and the core
+`readThrough`. A delta with no message in it starts no pass, and the core
 takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
@@ -297,11 +297,11 @@ passes the room tools, the tools of the definition, and the tools of its
 bundles as the harness `tools`, and names each one in `activeToolNames`.
 The harness adds no built-in tool, no skill, and no prompt template. The
 skills of an agent come from its workspace bundle ([Skills](skills.md)). A
-call to a tool the model does not hold gets an error result, and the run
+call to a tool the model does not hold gets an error result, and the pass
 continues. A continued session takes the tools of the activation that
 continues it: a closing activation holds `say` alone.
 
-**An `unknown` or `stale` answer ends the run.** The executor aborts the activation
+**An `unknown` or `stale` answer ends the pass.** The executor aborts the activation
 and stands the seat down. The tool result names why the turn ended, and no
 further pass follows.
 
@@ -312,7 +312,7 @@ and how a bundle adds tools and guidance. Pi adds these facts.
 
 **The executor wraps a tool as a harness tool.** Its context carries
 `agent`, `signal`, `callId`, `onUpdate`, `room`, `activation`, and
-`exchange`. The signal is the abort signal of the run. A string result
+`exchange`. The signal is the abort signal of the pass. A string result
 becomes text content. A thrown error becomes a tool error.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
@@ -366,7 +366,7 @@ records `{ harness: 'pi', id }`. An activation reopens the session only
 when `pass.resume` names that id. Its first prompt is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
-delta with no message starts no run. A closing activation reads the whole
+delta with no message starts no pass. A closing activation reads the whole
 view. `readThrough` starts at the position the session read through.
 
 **A custom entry holds the position the session read through.** After each
@@ -390,7 +390,7 @@ not continue the failed one. The retry reads the whole view.
 
 **A continued session goes back to the last position it read.** The lane
 tip moves back to the newest `ambion.read` entry, or to the root when there
-is none. A run that failed or was cut after that entry leaves the provider
+is none. A pass that failed or was cut after that entry leaves the provider
 input. A retry of a failed activation therefore gives the model each range
 of the record once.
 
@@ -514,7 +514,7 @@ test that needs no Pi imports `scripted` from
 
 **The stream turns a reply into a message.** A reply with calls becomes one
 message with one tool call for each call, and the stop reason `toolUse`. An
-empty reply becomes a text message that ends the run. A script can also
+empty reply becomes a text message that ends the pass. A script can also
 return a Pi `AssistantMessage`, which the stream passes on unchanged. A test
 uses a message for an error, a length stop, or a usage report.
 
@@ -558,7 +558,7 @@ Pi seats.
 | `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                          |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                 |
 | A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                           |
-| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                                                                             |
+| A steer shows `consumed: false`                                     | No provider request held the line before the pass ended. The next delta carries the line.                                                                            |
 | The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.                                                                         |
 | The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                           |
 | The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                           |
