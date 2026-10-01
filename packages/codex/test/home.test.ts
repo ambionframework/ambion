@@ -85,25 +85,99 @@ describe('seatHome', () => {
 		expect(home.login).toBe('/elsewhere/codex/auth.json');
 		expect(home.path).toBe('/users/ada/.ambion/codex');
 		expect(home.env.CODEX_HOME).toBe('/users/ada/.ambion/codex');
-		expect(home.env.HOME).toBe('/users/ada');
+		expect(home.env.HOME).toBe('/users/ada/.ambion/codex/home');
 	});
 
-	it('gives the binary the env without the undefined entries, plus CODEX_HOME', () => {
-		const home = seatHome({
-			home: '/seats',
-			env: { PATH: '/bin', CODEX_API_KEY: 'k', GONE: undefined },
-		});
-		expect(home.env).toEqual({ PATH: '/bin', CODEX_API_KEY: 'k', CODEX_HOME: '/seats' });
-	});
-
-	it('reads the CODEX_HOME of an explicit env as the home of the host, and the binary never gets it', () => {
+	it('reads the HOME and the CODEX_HOME of an explicit env as the host, and the binary never gets them', () => {
 		const env = { HOME: '/users/ada', CODEX_HOME: '/elsewhere/codex' };
 		const home = seatHome({ env });
 		expect(home.login).toBe('/elsewhere/codex/auth.json');
 		expect(home.path).toBe('/users/ada/.ambion/codex');
-		expect(home.env).toEqual({ HOME: '/users/ada', CODEX_HOME: '/users/ada/.ambion/codex' });
+		expect(home.env).toMatchObject({
+			HOME: '/users/ada/.ambion/codex/home',
+			USERPROFILE: '/users/ada/.ambion/codex/home',
+			CODEX_HOME: '/users/ada/.ambion/codex',
+		});
 		expect(seatHome({ env, login: '/keys/auth.json' }).login).toBe('/keys/auth.json');
 		expect(seatHome({ env, login: false }).login).toBeUndefined();
+	});
+
+	it('reads the HOME of this process for the defaults when env has none', () => {
+		vi.stubEnv('HOME', '/users/ada');
+		expect(seatHome({ env: { CODEX_API_KEY: 'k' } })).toMatchObject({
+			path: '/users/ada/.ambion/codex',
+			login: '/users/ada/.codex/auth.json',
+		});
+		expect(seatHome({ env: { HOME: undefined } }).path).toBe(join(homedir(), '.ambion/codex'));
+	});
+
+	it('sets the seat variables to the Codex home and its private home directory', () => {
+		const home = seatHome({ home: '/seats/one', env: {} });
+		expect(home.privateHome).toBe('/seats/one/home');
+		expect(home.env).toMatchObject({
+			CODEX_HOME: '/seats/one',
+			HOME: '/seats/one/home',
+			USERPROFILE: '/seats/one/home',
+		});
+	});
+
+	it.each([
+		['PATH', true],
+		['https_proxy', true],
+		['ALL_PROXY', true],
+		['NODE_EXTRA_CA_CERTS', true],
+		['LANG', true],
+		['LC_ALL', true],
+		['CODEX_API_KEY', true],
+		['OPENAI_API_KEY', true],
+		['OPENAI_BASE_URL', true],
+		['SHELL', false],
+		['TERM', false],
+		['AWS_SECRET_ACCESS_KEY', false],
+		['GITHUB_TOKEN', false],
+		['ANTHROPIC_API_KEY', false],
+		['SSH_AUTH_SOCK', false],
+		['NPM_TOKEN', false],
+	])('lets the process variable %s reach the binary: %s', (name, reaches) => {
+		vi.stubEnv(name, 'value-of-the-host');
+		const env = seatHome({ home: '/seats', env: {} }).env;
+		expect(env[name]).toBe(reaches ? 'value-of-the-host' : undefined);
+	});
+
+	it('lays the env over the allowlisted variables: it adds, replaces, and removes', () => {
+		vi.stubEnv('PATH', '/host/bin');
+		vi.stubEnv('LANG', 'C');
+		vi.stubEnv('TMPDIR', '/host/tmp');
+		const { env } = seatHome({
+			home: '/seats',
+			env: {
+				PATH: '/own/bin',
+				LANG: undefined,
+				CODEX_API_KEY: 'k',
+				AZURE_KEY: 'a',
+				GONE: undefined,
+			},
+		});
+		expect(env).toMatchObject({
+			PATH: '/own/bin',
+			CODEX_API_KEY: 'k',
+			AZURE_KEY: 'a',
+			TMPDIR: '/host/tmp',
+		});
+		expect(Object.keys(env)).not.toContain('LANG');
+		expect(Object.keys(env)).not.toContain('GONE');
+	});
+
+	it('gives the seat variables the last word over the env', () => {
+		const { env } = seatHome({
+			home: '/seats',
+			env: { HOME: '/users/ada', USERPROFILE: '/users/ada', CODEX_HOME: '/elsewhere' },
+		});
+		expect(env).toMatchObject({
+			HOME: '/seats/home',
+			USERPROFILE: '/seats/home',
+			CODEX_HOME: '/seats',
+		});
 	});
 });
 
@@ -115,7 +189,10 @@ describe('openHome', () => {
 
 		const link = join(home, 'auth.json');
 		expect(lstatSync(link).isSymbolicLink()).toBe(true);
-		if (process.platform !== 'win32') expect(lstatSync(home).mode & 0o777).toBe(0o700);
+		if (process.platform !== 'win32') {
+			expect(lstatSync(home).mode & 0o777).toBe(0o700);
+			expect(lstatSync(join(home, 'home')).mode & 0o777).toBe(0o700);
+		}
 		expect(readlinkSync(link)).toBe(login);
 		expect(realpathSync(link)).toBe(realpathSync(login));
 	});

@@ -2,8 +2,9 @@
  * The real `codex` binary on a scripted model. `codexOn` gives the
  * execution a Codex home that routes the model provider to a scripted
  * Responses endpoint. The environment of the binary holds a host home with
- * traps: a config that spawns a server and reroutes the provider, and an
- * instructions file. A seat that reads the host home shows it.
+ * traps: a config that spawns a server and reroutes the provider, an
+ * instructions file, and a skill under `.agents/skills`. A seat that reads
+ * the host home shows it.
  */
 
 import {
@@ -76,6 +77,12 @@ export function homeConfig(url: string, signIn = false, extra = ''): string {
 
 /** A text no seat may read. The instructions file of the host holds it. */
 export const HOST_MARKER = 'HOST-INSTRUCTIONS-MARKER-7f3a91';
+
+/** A text no seat may read. The description of the skill of the host holds it. */
+export const SKILL_MARKER = 'HOST-SKILL-MARKER-4c2d08';
+
+/** The skill of the host user, in the form Codex discovers under `$HOME/.agents/skills`. */
+const HOST_SKILL = `---\nname: host-trap\ndescription: ${SKILL_MARKER}\n---\n\nUse this skill never.\n`;
 
 /** The config of the host user. Each line would change a seat that read it. */
 function hostConfig(spawned: string): string {
@@ -188,6 +195,8 @@ export async function codexOn(
 	mkdirSync(join(hostHome, '.codex'), { recursive: true });
 	writeFileSync(join(hostHome, '.codex', 'config.toml'), hostConfig(spawned));
 	writeFileSync(join(hostHome, '.codex', 'AGENTS.md'), `${HOST_MARKER}\n`);
+	mkdirSync(join(hostHome, '.agents', 'skills', 'host-trap'), { recursive: true });
+	writeFileSync(join(hostHome, '.agents', 'skills', 'host-trap', 'SKILL.md'), HOST_SKILL);
 	if (options.hostLogin !== undefined) {
 		writeFileSync(join(hostHome, '.codex', 'auth.json'), options.hostLogin);
 	}

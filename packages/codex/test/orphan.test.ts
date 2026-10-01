@@ -27,13 +27,15 @@ const host = fileURLToPath(new URL('./orphan-host.ts', import.meta.url));
 
 const say: Reply = { call: 'say', namespace: 'mcp__ambion', args: { text: 'hello room' } };
 
-/** The processes that run with `home` as their `HOME`: the binary and the servers it spawned. */
+/** The processes that run with `home` as their `CODEX_HOME`: the binary and the servers it spawned. */
 function runningWith(home: string): number[] {
 	return readdirSync('/proc')
 		.filter((name) => /^\d+$/.test(name))
 		.filter((pid) => {
 			try {
-				return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').includes(`HOME=${home}`);
+				return readFileSync(`/proc/${pid}/environ`, 'utf8')
+					.split('\0')
+					.includes(`CODEX_HOME=${home}`);
 			} catch {
 				return false;
 			}
@@ -97,7 +99,7 @@ async function startHost(script: readonly Reply[], onRequest?: OnRequest) {
 	);
 	onTestFinished(async () => {
 		child.kill('SIGKILL');
-		if (process.platform === 'linux') for (const pid of runningWith(on.hostHome)) kill(pid);
+		if (process.platform === 'linux') for (const pid of runningWith(on.home)) kill(pid);
 		await exited(child);
 		await on.close();
 	});
@@ -123,7 +125,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)('a host that dies', 
 			const { on, die } = await startHost([say, { text: 'done' }], held.onRequest);
 
 			await held.open;
-			if (onLinux) expect(runningWith(on.hostHome).length).toBeGreaterThan(0);
+			if (onLinux) expect(runningWith(on.home).length).toBeGreaterThan(0);
 			await die();
 
 			// The connection of the open request closes, and no other request follows.
@@ -131,7 +133,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)('a host that dies', 
 			expect(on.responses.requests).toHaveLength(1);
 			// Neither `codex exec` nor the room tools server remains.
 			if (onLinux) {
-				await vi.waitFor(() => expect(runningWith(on.hostHome)).toEqual([]), {
+				await vi.waitFor(() => expect(runningWith(on.home)).toEqual([]), {
 					timeout: GONE_MS,
 				});
 			}
