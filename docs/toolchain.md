@@ -77,9 +77,10 @@ dependencies; Cloudflare code owns Durable Object integration.
 
 The core separates collaboration from execution. `room-host/` coordinates
 the journal and pure decisions under `room/`. Its `room.ts` holds the state
-and the phases. `core.ts` holds the state that every mechanism shares.
-`people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one mechanism
-each. `execution/` owns the agent runner, the executor contract, and
+and the phases. `core.ts` holds `RoomHostState`, the view of that state
+that every mechanism reads, and the helpers that turn a decision into an
+entry. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
+mechanism each. `execution/` owns the agent runner, the executor contract, and
 rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.

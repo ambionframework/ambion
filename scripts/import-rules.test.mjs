@@ -194,7 +194,7 @@ const CASES = [
 			['./protocol.ts', false],
 		],
 		null,
-		'conformance-probe.ts',
+		'conformance-support.ts',
 	],
 	[
 		'packages/ambion/src/testing',
@@ -249,11 +249,15 @@ test('the import rules refuse each import they name, and pass each published ent
 	const tree = mkdtempSync(join(tmpdir(), 'ambion-import-rules-'));
 	try {
 		copyFileSync(join(root, 'biome.jsonc'), join(tree, 'biome.jsonc'));
+		const paths = new Set();
 		const probes = CASES.map(([folder, value, refuse, file], index) => {
 			const path = `${folder}/${file ?? `import-probe-${index}.ts`}`;
+			assert.ok(!paths.has(path), `two cases write the probe file ${path}`);
+			paths.add(path);
 			const imports = (Array.isArray(value) ? value : [value]).map((item) =>
 				Array.isArray(item) ? item : [item, refuse],
 			);
+			assert.ok(imports.length > 0, `the case ${index} for ${path} has no import`);
 			mkdirSync(dirname(join(tree, path)), { recursive: true });
 			const source = imports
 				.map(([specifier], importIndex) => `import * as m${importIndex} from '${specifier}';`)
