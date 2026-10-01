@@ -22,11 +22,11 @@ import {
 	callTool,
 	contextText,
 	isClosingContext,
-	later,
 	type PiScript,
 	quiet,
 	say,
 	says,
+	schedule,
 	scriptedStream,
 	summarise,
 	toolResultTexts,
@@ -196,7 +196,7 @@ const exhausted = (): Promise<readonly Entry[]> =>
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
 	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
-	return later('Check the pour log.', 600);
+	return schedule('Check the pour log.', 600);
 };
 
 /**
@@ -229,8 +229,8 @@ const scheduled = (): Promise<readonly Entry[]> =>
 const changesItsMind: PiScript = (context) => {
 	const results = toolResultTexts(context);
 	const [first] = results.flatMap((text) => /^scheduled #(\d+):/.exec(text)?.[1] ?? []);
-	if (results.length === 0) return later('Check the pour log.', 600);
-	if (results.length === 1) return later('Check the crane log.', 1200);
+	if (results.length === 0) return schedule('Check the pour log.', 600);
+	if (results.length === 1) return schedule('Check the crane log.', 1200);
 	if (results.length === 2) return callTool('dismiss', { message: Number(first) });
 	return quiet();
 };

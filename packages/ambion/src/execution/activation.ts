@@ -269,7 +269,7 @@ export class ActivationState {
 
 	/**
 	 * The messages after `from`. The first pass of an activation also reads
-	 * the reminders of the bundles and the pending says, which the whole view
+	 * the reminders of the bundles and the scheduled says, which the whole view
 	 * holds. The reminders resolve only when a message is new.
 	 */
 	private async delta(input: PassInput, from: Seq): Promise<PassRecord | undefined> {

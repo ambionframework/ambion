@@ -4,7 +4,7 @@
  * shown, and the harness that runs the executor suite of
  * `@ambionframework/ambion/conformance` on the Pi executor. A script answers
  * with the verbs of `@ambionframework/ambion/testing`: `say`, `callTool`,
- * `later`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
+ * `schedule`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
  * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
  * no model.
  */

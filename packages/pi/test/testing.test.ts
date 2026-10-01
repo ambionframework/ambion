@@ -1,6 +1,6 @@
 /** The `/testing` subpath: the scripted stream, and the stub model it routes on. */
 
-import { byAgent, callTool, later, quiet, say, spend } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say, schedule, spend } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, normalizeContext } from '@earendil-works/pi-ai';
 import { expect, expectTypeOf, it } from 'vitest';
@@ -57,7 +57,7 @@ it('turns a script that throws into an error message', async () => {
 it('turns a reply into one message with one tool call for each call', async () => {
 	const model = await stubModel('anthropic/x', 'product');
 	const args = { text: 'Yes.', list: [1, 'two', null, { deep: true }] };
-	const stream = scriptedStream(() => [{ tool: 'say', args }, ...later('Soon.', 60)]);
+	const stream = scriptedStream(() => [{ tool: 'say', args }, ...schedule('Soon.', 60)]);
 	const result = await (await stream(model, normalizeContext({ messages: [] }))).result();
 	expect(result.stopReason).toBe('toolUse');
 	expect(result.content).toMatchObject([

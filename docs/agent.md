@@ -90,7 +90,7 @@ activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ after, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent name.
-`dismiss` accepts `{ message }`, the seq of a pending scheduled say. The room
+`dismiss` accepts `{ message }`, the seq of a scheduled say. The room
 validates operations at the commit boundary.
 
 **`recall` reads messages of the room by seq or by URI.** It accepts `{ refs

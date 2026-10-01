@@ -86,7 +86,7 @@ function validateSelection(selection: MessageSelection | undefined): void {
  * them and they have said nothing since. The read holds the answer, so this
  * waits for nothing and starts nothing.
  */
-export function pendingFor(
+export function awaitingFor(
 	read: RoomRead,
 	person: string,
 ): Extract<Exchange, { readonly status: 'closed' }>[] {
