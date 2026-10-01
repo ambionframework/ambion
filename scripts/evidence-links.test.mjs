@@ -6,6 +6,8 @@ import test from 'node:test';
 const root = join(import.meta.dirname, '..');
 const pages = [
 	'CLAUDE.md',
+	'README.md',
+	'docs/actuators.md',
 	'docs/sensors.md',
 	'planning/next.md',
 	'planning/backlog.md',

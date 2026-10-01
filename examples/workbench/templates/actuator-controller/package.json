@@ -1,0 +1,9 @@
+{
+	"name": "actuator-controller",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"finally": "node finally.mjs",
+		"test": "node --test"
+	}
+}

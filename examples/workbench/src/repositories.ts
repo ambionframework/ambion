@@ -1,5 +1,6 @@
 /**
- * The lab's repositories: read-only firmware and sensor server templates.
+ * The lab's repositories: read-only firmware, sensor server, and actuator
+ * controller templates.
  *
  * An agent forks the template with `fork`, clones the fork into its home,
  * and pushes its branch with `git` in `bash`. The storage is one SQLite
@@ -25,6 +26,11 @@ const templates = {
 		description:
 			'Arduino Uno firmware for the kit: a pin map, a sketch that blinks the LED and reads the HC-SR04, and a sweep of the LED resistor.',
 		source: fromDirectory(resolve(templatesDirectory, 'firmware-sketch')),
+	},
+	'actuator-controller': {
+		description:
+			'A Node controller for one actuator: stop handlers, a lock, a deadline, a JSON-lines event log, a finally script, and a simulated plant.',
+		source: fromDirectory(resolve(templatesDirectory, 'actuator-controller')),
 	},
 	'sensor-server': {
 		description: 'A small Node sensor server with deterministic numeric, frame, and text fixtures.',

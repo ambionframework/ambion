@@ -52,6 +52,16 @@ error retries to the cap.
 The terminal reads its colors from the repository brand kit in the root
 [`brand/`](../../brand) directory. The example has no HTTP interface.
 
+## Actuator controller template
+
+The lab Git backend offers an
+[`actuator-controller` template](templates/actuator-controller). It is a
+Node controller for one actuator over a simulated plant. The harness
+installs the stop handlers first, holds a deadline, logs JSON lines, and
+exits 0 only after the device is safe. `start` takes a lock and replaces
+itself with `node`. Its `npm test` sends real signals to the controller.
+[Actuators](../../docs/actuators.md) states the pattern.
+
 ## Sensor server template
 
 The lab Git backend offers a [`sensor-server` template](templates/sensor-server).
@@ -337,7 +347,7 @@ workspace resources.
 | ------------------------ | ----------------------------------------------------- |
 | `src/definitions.ts`     | The assistant, the three specialists, and the people  |
 | `src/scenarios.ts`       | The rooms, and the workspace seed                     |
-| `src/repositories.ts`    | The git backend and its firmware-sketch template      |
+| `src/repositories.ts`    | The git backend and its templates                     |
 | `src/rooms.ts`           | The host lifecycle and the room catalog               |
 | `src/workbench.ts`       | The host API the terminal calls in process            |
 | `src/files.ts`           | The workspace list, one file preview, and `/attach`   |

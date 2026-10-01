@@ -95,6 +95,9 @@ function runExec(stream: ServerChannel, command: string, home: string, noise: st
 		if (signal) stream.exit(signal.replace(/^SIG/, ''), false, '');
 		else stream.exit(code ?? 1);
 	});
+	// A delayed kill channel can start after a test removed the home. Then the
+	// spawn fails and emits no `exit`. `close` still follows and ends the channel.
+	child.on('error', () => stream.exit(127));
 	child.on('close', () => stream.end());
 }
 

@@ -3,6 +3,9 @@
 > [Sensor servers](sensors.md#run-a-server-from-git) use these existing
 > process tools. A ports-enabled workspace adds `connect`, which attaches a
 > server port and changes no process timeout or disposal rule.
+>
+> [Actuators](actuators.md) describes a device controller that runs as a
+> `bash` process, with a grace that fits the device.
 
 **Background processes are part of 0.3.0.** In 0.2.0, `bash` holds the
 call until its command ends, and a workspace has four tools.
@@ -366,6 +369,13 @@ has the same handler ([Workstation](workstation.md#commands-and-aborts)).
 | Traps `TERM`, and exits in time with a code `n` other than 143 | `n`    | `exited`, with code `n` |
 | Ends on the `SIGTERM`: code 143                                | `143`  | The cause in `stop`     |
 | Outlives the grace, and `SIGKILL` ends it                      | Absent | The cause in `stop`     |
+
+**A parent process can hide a clean stop.** The group signal reaches
+every process of the command. A parent that dies on `TERM` gives the
+wrapper 143 while its child cleans up. A probe showed it for a forking
+`flock`, and `flock -F` or `exec` passed the child's 0 through. A command
+that must report a clean stop keeps its cleaning process last, with
+`exec`. The wrapper's own subshell passed the code through in every probe.
 
 **A command that exits 0 inside the grace reads `exited` with code 0.**
 The code is the command's own answer: it cleaned up. `stop` still names

@@ -14,7 +14,7 @@ condition holds moves to the top of its section.
 | [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D23 | D1, exchange bounds                      |
+| [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
 ## Known defects
@@ -180,7 +180,8 @@ the five tools.
    seconds ([Processes](../docs/processes.md#the-stop)). No stop holds the
    chain of its agent for the grace, and the workstation opens one signal
    channel at a time for each client
-   ([Workstation](../docs/workstation.md#the-ssh-client)).
+   ([Workstation](../docs/workstation.md#the-ssh-client)). D24 builds on
+   this stop.
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
@@ -370,6 +371,27 @@ connections, automatic retention, and lifecycle acceptance in the plan.
 
 **Condition:** the core workflow has shipped, and an application needs
 one of these capabilities. No order between these items is promised.
+
+### For actuators
+
+**D24. Two process features for the actuator pattern.**
+[Actuators](../docs/actuators.md) runs a controller as an ordinary `bash`
+process, and the workbench ships `templates/actuator-controller`. Today
+the agent runs the cleanup script itself and reads the log as a file. Two
+optional features of `bash` would move that work into the workspace:
+
+1. **`finally`.** A command that runs once after an unclean end: an exit
+   code other than 0, a kill after the grace, or a lost process. A
+   `mkdir` claim in the process directory picks one runner among the
+   wrapper, the table, and a second host run.
+2. **An event log and its fold.** The workspace names a JSON-lines file
+   for each process, and folds its `target`, `observe`, `drive`, and
+   `state` lines into a status for `status`, `wait`, the reminder, and
+   the host's view.
+
+**Condition:** an application must drive
+a device from a room, and the workstation accounts hold the device
+permissions.
 
 ## Deferred by decision
 
