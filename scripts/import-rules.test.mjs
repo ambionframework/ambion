@@ -11,11 +11,26 @@ import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, normalize } from 'node:path';
 import test from 'node:test';
 
 const root = new URL('..', import.meta.url).pathname;
 const biome = join(root, 'node_modules', '.bin', 'biome');
+
+/**
+ * The model libraries and platform modules that every file of the core
+ * refuses. Each layer override repeats them, so each layer probe holds them.
+ */
+const CORE_BANS = [
+	'@earendil-works/pi-agent-core',
+	'@ambionframework/pi',
+	'cloudflare:workers',
+	'node:sqlite',
+	'node:fs',
+	'node:fs/promises',
+	'@earendil-works/pi-ai/providers/all',
+	'@ambionframework/pi/testing',
+].map((specifier) => [specifier, true]);
 
 /**
  * [the folder the probe sits in, the import, whether a rule refuses it, the
@@ -61,7 +76,7 @@ const CASES = [
 		'backend.ts',
 	],
 	// The five neutral files hold the same rule. `git-backend.ts` and
-	// `object-backend.ts` once fell to the override of the whole package.
+	// `object-backend.ts` once matched the override of the whole package.
 	...['git-backend.ts', 'object-backend.ts'].map((file) => [
 		'packages/workspace/src',
 		[
@@ -111,6 +126,7 @@ const CASES = [
 	[
 		'packages/ambion/src',
 		[
+			...CORE_BANS,
 			['./host/runtime.ts', true],
 			['./journal/journal.ts', true],
 			['./room/fold.ts', true],
@@ -125,6 +141,7 @@ const CASES = [
 	[
 		'packages/ambion/src/host',
 		[
+			...CORE_BANS,
 			['../journal/journal.ts', true],
 			['../room/fold.ts', true],
 			['../execution/runner.ts', true],
@@ -137,6 +154,7 @@ const CASES = [
 	[
 		'packages/ambion/src/journal',
 		[
+			...CORE_BANS,
 			['../host/runtime.ts', true],
 			['../protocol.ts', true],
 			['../room/fold.ts', true],
@@ -149,6 +167,7 @@ const CASES = [
 	[
 		'packages/ambion/src/room',
 		[
+			...CORE_BANS,
 			['../host/runtime.ts', true],
 			['../execution/runner.ts', true],
 			['../room-host/core.ts', true],
@@ -161,6 +180,7 @@ const CASES = [
 	[
 		'packages/ambion/src',
 		[
+			...CORE_BANS,
 			['./host/runtime.ts', true],
 			['./execution/runner.ts', true],
 			['./room-host/core.ts', true],
@@ -174,6 +194,7 @@ const CASES = [
 	[
 		'packages/ambion/src/execution',
 		[
+			...CORE_BANS,
 			['../journal/journal.ts', true],
 			['../room/fold.ts', true],
 			['../room-host/core.ts', true],
@@ -186,6 +207,7 @@ const CASES = [
 	[
 		'packages/ambion/src',
 		[
+			...CORE_BANS,
 			['./journal/journal.ts', true],
 			['./room/fold.ts', true],
 			['./room-host/core.ts', true],
@@ -199,6 +221,7 @@ const CASES = [
 	[
 		'packages/ambion/src/testing',
 		[
+			...CORE_BANS,
 			['../journal/journal.ts', true],
 			['../room/fold.ts', true],
 			['../room.ts', true],
@@ -211,6 +234,7 @@ const CASES = [
 	[
 		'packages/ambion/src/room-host',
 		[
+			...CORE_BANS,
 			['../execution/runner.ts', true],
 			['../room.ts', true],
 			['../room/fold.ts', false],
@@ -219,6 +243,8 @@ const CASES = [
 		],
 		null,
 	],
+	// The entry files hold the same ban.
+	['packages/ambion/src', CORE_BANS, null, 'hosting.ts'],
 ];
 
 /** The number of restricted-import diagnostics for each probe path. */
@@ -251,13 +277,17 @@ test('the import rules refuse each import they name, and pass each published ent
 		copyFileSync(join(root, 'biome.jsonc'), join(tree, 'biome.jsonc'));
 		const paths = new Set();
 		const probes = CASES.map(([folder, value, refuse, file], index) => {
-			const path = `${folder}/${file ?? `import-probe-${index}.ts`}`;
+			const path = normalize(`${folder}/${file ?? `import-probe-${index}.ts`}`);
 			assert.ok(!paths.has(path), `two cases write the probe file ${path}`);
 			paths.add(path);
 			const imports = (Array.isArray(value) ? value : [value]).map((item) =>
 				Array.isArray(item) ? item : [item, refuse],
 			);
 			assert.ok(imports.length > 0, `the case ${index} for ${path} has no import`);
+			assert.ok(
+				imports.every(([specifier]) => specifier !== ''),
+				`the case ${index} for ${path} has an empty import`,
+			);
 			mkdirSync(dirname(join(tree, path)), { recursive: true });
 			const source = imports
 				.map(([specifier], importIndex) => `import * as m${importIndex} from '${specifier}';`)
