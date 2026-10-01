@@ -20,24 +20,24 @@ permissions:
 jobs:
   lemmascript:
     name: Verify contracts
-    uses: midspiral/LemmaScript/.github/workflows/verify.yml@cb1dda6b958aede92a8f79e54d1a82735c8d498f
+    uses: midspiral/LemmaScript/.github/workflows/verify.yml@097f18f6bb6ca85c604441bb0aa66b9b11678063
     with:
       backend: dafny
       # The tools that regenerate and verify come from this ref. It matches
       # the `lemmascript` version in package.json, so CI and a desk generate
       # the same Dafny. Bump both together.
-      ls-ref: v0.6.1
+      ls-ref: v0.6.4
       typecheck: false
 
   check:
     name: Lint, types, and package hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           # The development version. It covers every library package and
           # examples/workbench, the one package on the higher, OpenTUI floor.
@@ -65,11 +65,11 @@ jobs:
     name: Test on Node 26.4.0 (library packages and examples/workbench)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 26.4.0
           cache: pnpm
@@ -80,7 +80,7 @@ jobs:
     name: Test on Node 22.19.0 (library packages)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -95,8 +95,8 @@ jobs:
       # 22.19.0, and the test run below is the real proof of that floor.
       - run: rm -rf examples/workbench
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.19.0
           cache: pnpm
@@ -107,11 +107,11 @@ jobs:
     name: Workstation against OpenSSH
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 26.4.0
           cache: pnpm
@@ -131,11 +131,11 @@ jobs:
     name: Object backend against MinIO
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 26.4.0
           cache: pnpm

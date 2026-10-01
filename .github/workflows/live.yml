@@ -61,13 +61,13 @@ jobs:
             echo "::warning::No key for the $AMBION_EXECUTOR harness: the repository secret is empty, so the job skips."
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.key.outputs.present == 'true'
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: steps.key.outputs.present == 'true'
         with:
           node-version: 26.4.0
@@ -105,13 +105,13 @@ jobs:
             echo "::warning::No key for the package live tiers: both repository secrets are empty, so the job skips."
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.key.outputs.present == 'true'
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: steps.key.outputs.present == 'true'
         with:
           node-version: 26.4.0
