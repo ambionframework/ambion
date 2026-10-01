@@ -206,7 +206,7 @@ domain instructions, and the terminal.
 | The assistant             | The assistant definition, seated at `broadcast`, with the summary |
 | Bring in a specialist     | Attention `named`, and a directed say                             |
 | Specialists work together | Directed says between seats                                       |
-| One answer for the person | The closing activation writes one summary                         |
+| One answer for the person | The summary activation writes one summary                         |
 | Datasheets and artifacts  | The directory workspace, read and written through its tools       |
 | History                   | The journal for collaboration; the workspace for files            |
 

@@ -2,7 +2,7 @@
  * The collaboration kernel: define agents and tools, supply fixed definitions,
  * then seat agents and address participants by name. People visit rooms and
  * their questions open exchanges. Agents can seat and unseat colleagues.
- * An optional closing activation summarizes each completed exchange. The journal preserves the facts
+ * An optional summary activation summarizes each completed exchange. The journal preserves the facts
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
@@ -55,7 +55,7 @@ export type {
 	ActivationEvent,
 	ActivationOutcome,
 	AgentDefinition,
-	AgentParticipantInfo,
+	AgentParticipant,
 	Attention,
 	Clock,
 	DismissedMessage,
@@ -67,9 +67,9 @@ export type {
 	Executor,
 	HarnessSession,
 	HumanDefinition,
-	HumanParticipantInfo,
+	HumanParticipant,
 	Message,
-	ParticipantInfo,
+	Participant,
 	PostedMessage,
 	PresenceChange,
 	PresenceMessage,

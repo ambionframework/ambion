@@ -54,7 +54,7 @@ export interface RoomProjection {
 	readonly running: Map<string, LeaseHold>;
 	/** The leases a wake claims, by seat. */
 	readonly seatLeases: LeaseIndex<string>;
-	/** The leases of closing activations, by the position they name. */
+	/** The leases of summary activations, by the position they name. */
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: OpenWake[];
 	readonly owed: Owed[];

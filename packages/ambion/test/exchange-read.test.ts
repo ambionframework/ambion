@@ -227,7 +227,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 				usage: spent(20, 0.25),
 			},
 			{
-				...activation('closed:4:assistant:1', 1, 'summary', { kind: 'revoked' }),
+				...activation('closed:4:assistant:1', 1, 'summarize', { kind: 'revoked' }),
 				usage: spent(5),
 			},
 		]);

@@ -6,7 +6,7 @@ import type { LeaseHold } from './lease.ts';
 export interface MessageDelivery {
 	/** Seats the message explicitly wakes. */
 	readonly wakes: readonly string[];
-	/** Ordinary activations that the message steers. */
+	/** Respond activations that the message steers. */
 	readonly steers: readonly MessageSteer[];
 }
 
@@ -24,7 +24,7 @@ export function messageDelivery(
 	const steered = new Map<string, string>();
 	for (const lease of leases.values()) {
 		const { source, seat } = lease.activation;
-		// A message steers an ordinary lease that was at work when it landed, and
+		// A message steers a respond lease that was at work when it landed, and
 		// never the author's seat or a seat it wakes. A post with `to` steers
 		// only its target, a post to the room steers each seat at work, and a
 		// say to oneself steers no seat. The first lease at a seat, in journal

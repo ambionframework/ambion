@@ -129,8 +129,8 @@ request, so the room refuses a say against a stale draft with the messages
 it missed. A line that lands mid-activation joins the steer queue of the
 lane, and counts when a provider request holds it.
 
-**Room tools are harness tools.** An ordinary activation receives `say`,
-`seat`, and `unseat`, and then the tools of the agent. A closing activation
+**Room tools are harness tools.** A respond activation receives `say`,
+`seat`, and `unseat`, and then the tools of the agent. A summary activation
 receives `say` only. The harness adds no built-in tool, no skill, and no
 prompt template.
 
