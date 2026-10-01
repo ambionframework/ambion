@@ -168,9 +168,9 @@ rank counts one concept, but the row fixes a package boundary. CLAUDE.md
 states that `packages/workspace` owns the workspace port. The neutral-file
 import rule of `biome.jsonc` holds it for all five neutral files.
 
-**The owner decided W1: the workspace owns its port.** The work stays in
-phase 3 for its size. Each change before it adds no import of
-`@earendil-works/pi-agent-core`.
+**The owner decided W1: the workspace owns its port.** On 2026-10-01 the
+owner moved it out of phase 3 and into 0.5.0 as [LB8](next.md). Each change before it adds no
+import of `@earendil-works/pi-agent-core`.
 
 **W3 leaves `withSkills` to W2.** `withSkills` copies the skills at the
 first call of an agent. It audits nothing.
@@ -290,8 +290,6 @@ CLAUDE.md requires for a change that merges tests.
 **Phase 3 needs a decision of the owner.** Each item changes a package
 boundary, a stored format, or a promise.
 
-- W1: the workspace owns its port, and the Pi executor adapts it. The
-  owner decided it; the size keeps it in this phase.
 - K1: the journal reads only the current format. It drops the promise of
   `docs/durability.md:272`.
 - K9: the assistant moves beside Pi, and the room option goes.
