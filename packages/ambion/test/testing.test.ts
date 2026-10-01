@@ -25,6 +25,7 @@ import {
 	quiet,
 	type Script,
 	say,
+	schedule,
 	scripted,
 	scriptedExecutor,
 	settled,

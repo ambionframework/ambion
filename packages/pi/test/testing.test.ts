@@ -1,6 +1,6 @@
 /** The `/testing` subpath: the scripted stream, and the stub model it routes on. */
 
-import { byAgent, callTool, schedule, quiet, say, spend } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say, schedule, spend } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, normalizeContext } from '@earendil-works/pi-ai';
 import { expect, expectTypeOf, it } from 'vitest';

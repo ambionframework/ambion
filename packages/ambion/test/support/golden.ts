@@ -26,6 +26,7 @@ import {
 	quiet,
 	say,
 	says,
+	schedule,
 	scriptedStream,
 	summarise,
 	toolResultTexts,

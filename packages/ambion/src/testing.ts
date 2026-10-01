@@ -19,6 +19,7 @@ export {
 	ScriptedFailure,
 	type Step,
 	say,
+	schedule,
 	scripted,
 	scriptedExecutor,
 	seat,

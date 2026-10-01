@@ -26,6 +26,7 @@ import {
 	type PiScript,
 	quiet,
 	say,
+	schedule,
 	scriptedStream,
 	toolResultTexts,
 } from './support/scripted.ts';
