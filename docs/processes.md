@@ -18,9 +18,11 @@ tools, on every bash backend.
 **The files of the bash backend are the source of truth.** Each process
 is a directory in its owner agent's home. The table reads those files for
 every answer, so a new run of the host reads the same table. Memory holds
-only what no file can: one record for each live process, with its timer.
-The record of a process that this run started also holds its environment
-and its controller. The record of an adopted process holds neither.
+only what no file can: one record for each live process, with its timer,
+and the key of each process that this run saw end. The `ended` query of the
+table answers from those keys. The record of a process that this run
+started also holds its environment and its controller. The record of an
+adopted process holds neither.
 
 **A process runs until it ends, times out, or gets a cancel.** An
 activation, an exchange, and a room do not stop a process. The host sees

@@ -295,7 +295,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 			roomTools: citing(changed, () => ordinary),
 			pass: async (pass) => {
 				activation.read({ after: 0, through: pass.view.through });
-				served = servedTools([...pass.tools, ...pass.agentTools], {
+				served = servedTools(pass.tools, {
 					callId: (tool) => `${tool}:${serial++}`,
 					delivered: (call) => activation.delivered(call),
 				});

@@ -12,7 +12,7 @@ and its evidence. [The backlog](planning/backlog.md) holds everything else.
 
 ```sh
 pnpm install
-pnpm check      # format check, build, typecheck, lint, test
+pnpm check      # format, lint, knip, rules, reports, build, types, test
 pnpm format     # biome --write, then prettier --write
 ```
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
+purpose grants, then the tools of the definition. A closing activation gets
+the room tools alone. Claude and Codex joined the two lists at once, and
+they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
+tools that the definition does not name, and builds the tools of the
+definition from their `AmbionTool`s as before.
+
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
 The core already held this function. The Pi executor held a second copy as

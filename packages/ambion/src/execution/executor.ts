@@ -90,10 +90,12 @@ export type Pass = PassInput & {
 	record(after?: Seq): Promise<PassRecord | undefined>;
 	/** The id of the harness session to resume: `spec.resume`, when it names the kind of the executor. */
 	readonly resume?: string;
-	/** The room tools that the purpose grants, bound to the activation. Every pass holds the same values. */
+	/**
+	 * The room tools that the purpose grants, then the tools of the
+	 * definition, bound to the activation. A closing activation gets the room
+	 * tools alone. Every pass holds the same values.
+	 */
 	readonly tools: readonly RoomTool[];
-	/** The tools of the definition in the same form. A closing activation gets none. */
-	readonly agentTools: readonly RoomTool[];
 };
 
 /** What one pass reports back to the driver. */
