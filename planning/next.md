@@ -188,7 +188,7 @@ resources behind.
 - [x] **1.** The connection registry and `connect` tool. (SN33)
 - [x] **2.** Discovery and the reminder. Needs 1. (SN5)
 - [x] **3.** Retain received evidence through snapshots. (SN34)
-- [x] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8)
+- [x] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8, superseded: the text-only bundle is gone)
 
 **Evidence:** focused workspace acceptance passes twelve cases. A real room
 observes numeric, text, frame, and file parts, cites the manifest ref, and
@@ -200,9 +200,8 @@ verification and during file fetch, connection replacement during an in-flight
 request, cancellation during observation and file fetch, and retention failure
 without a replay.
 Manifest timestamps and series boundaries remain exact. Adapter checks pass
-for Pi (2/2) and Claude (1/1) image-delivery fixtures; Pi also checks
-text-only output. Workspace checks separately verify text-only paths and
-restored bytes.
+for Pi (1/1) and Claude (1/1) image-delivery fixtures. Workspace checks
+separately verify image paths in text and restored bytes.
 
 ### Phase 3. The complete lifecycle and release
 
@@ -366,15 +365,16 @@ The audit result carries the manifest ref. A message can cite it through
 the existing ref validator. The initial call works without a prior
 activation reminder. Unavailable spans fail explicitly.
 
-**SN8. Text-only rendering.** `WorkspaceToolsOptions.images?: boolean`
-controls inline image content for the bundle. `false` returns paths in place
-of image content while the observe tool retains image bytes. The observe
+**SN8. Text-only rendering. Superseded.** `WorkspaceToolsOptions.images`
+is removed. Every executor kind carries image parts, so a bundle has one
+form. Each image result also states its path as text: `observe` names the
+export path of a frame, and `read` adds `Image path: <path>`. The observe
 schema stays the same for every executor.
 
-**Evidence:** Pi passes 2/2 adapter cases and Claude passes 1/1 image-delivery
-fixtures. Pi also verifies text-only output. Workspace checks verify that
-text-only results name frame paths and that restoring the manifest returns
-the exact retained image bytes. Adapter checks use no paid model call.
+**Evidence:** Pi passes 1/1 adapter case and Claude passes 1/1 image-delivery
+fixture. Workspace checks verify that an image result names its path in text
+and that restoring the manifest returns the exact retained image bytes.
+Adapter checks use no paid model call.
 
 **SN27. The sensor template.** Add `templates/sensor-server` beside the
 existing workbench templates. Its standalone Node program serves

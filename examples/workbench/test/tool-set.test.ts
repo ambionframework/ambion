@@ -23,13 +23,12 @@ function build() {
 	const workspace = openWorkspace({
 		name: 'workbench',
 		backend: {
-			bash: memoryBackend(),
+			bash: memoryBackend({ git: labRepositories(':memory:') }),
 			sql: sqliteBackend(':memory:', {
 				schema: labSchema,
 				appendOnly: labAppendOnly,
 				provenance: true,
 			}),
-			git: labRepositories(':memory:'),
 		},
 	});
 	onTestFinished(() => workspace.dispose());

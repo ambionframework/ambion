@@ -220,8 +220,8 @@ describe('the skills of a seat', () => {
 		let writes = 0;
 		const workspace = site(
 			wrapped((inner) => ({
-				connect: async (who, signal, services) => {
-					const env = await inner.connect(who, signal, services);
+				connect: async (who, signal) => {
+					const env = await inner.connect(who, signal);
 					const writeFile = env.writeFile.bind(env);
 					env.writeFile = (path, content, context) => {
 						writes += 1;
@@ -259,8 +259,8 @@ describe('the skills of a seat', () => {
 		const gate = Promise.withResolvers<void>();
 		const workspace = site(
 			wrapped((inner) => ({
-				connect: async (who, signal, services) => {
-					const env = await inner.connect(who, signal, services);
+				connect: async (who, signal) => {
+					const env = await inner.connect(who, signal);
 					const writeFile = env.writeFile.bind(env);
 					const exec = env.exec.bind(env);
 					env.writeFile = async (path, content, context) => {

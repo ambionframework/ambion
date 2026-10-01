@@ -6,7 +6,7 @@ import type {
 	ShellExecResult,
 } from '@earendil-works/pi-agent-core';
 import type { WorkspaceExecOptions } from './execution-env.ts';
-import type { GitAccess, GitBackend } from './git-backend.ts';
+import type { GitBackend } from './git-backend.ts';
 import type { ObjectBackend } from './object-backend.ts';
 import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
 import type { SqlBackend } from './sql-backend.ts';
@@ -40,15 +40,6 @@ export interface WorkspaceLayout {
 	readonly snapshots: string;
 }
 
-/**
- * What the workspace gives a bash backend when it connects: the other
- * backends that the shell reaches. `git` is set when the workspace has a
- * git backend, and its `transport` is one of the backend's `gitTransports`.
- */
-export interface BashServices {
-	readonly git?: GitAccess;
-}
-
 /** A private HTTP endpoint that reaches a service through a bash backend. */
 export interface WorkspaceEndpoint {
 	/** The transient HTTP root URL that the workspace host can reach. */
@@ -74,18 +65,15 @@ export interface WorkspaceEndpoints {
  * each agent. The workspace binds its tools over this shell.
  */
 export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
-	/** One agent's environment. `services` names the other backends that its shell reaches. */
-	connect(
-		agent: WorkspaceAgent,
-		signal?: AbortSignal,
-		services?: BashServices,
-	): Promise<WorkspaceEnv>;
+	/** One agent's environment. */
+	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<WorkspaceEnv>;
 	/**
-	 * The git transports that the shell of this backend carries, such as
-	 * `in-process` or `ssh`. `openWorkspace` refuses a git backend whose
-	 * `access.transport` is not in the list. Absent, the backend carries none.
+	 * The repositories that the shell reaches. The package of the bash
+	 * backend takes a git backend of its own type, so `git` of each agent
+	 * reaches it. `openWorkspace` opens it under an owner of its own. Absent,
+	 * the workspace has no `repos`, `clone` or `fork` tool.
 	 */
-	readonly gitTransports?: readonly string[];
+	readonly git?: GitBackend;
 	/** Optional private transport to services on the backend machine. */
 	readonly endpoints?: WorkspaceEndpoints;
 	/** Guidance for the backend's own shell: its commands, its network, and its isolation. */
@@ -96,15 +84,14 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 
 /**
  * The backends of one workspace, by kind. Every workspace has a `bash`
- * backend. Every other kind is optional.
+ * backend, and the bash backend carries the optional git backend. `sql` and
+ * `objects` are optional.
  */
 export interface WorkspaceBackends {
 	/** The shell and its filesystem. The file tools, the processes, the audit log, the room mirrors, and the snapshots run on it. */
 	readonly bash: BashBackend;
 	/** A shared database. Absent, the workspace has no `sql` tool. */
 	readonly sql?: SqlBackend;
-	/** The repositories. Absent, the workspace has no `repos`, `clone` or `fork` tool. */
-	readonly git?: GitBackend;
 	/**
 	 * Where the bytes of each snapshot live. Absent, the workspace opens a
 	 * file store at `layout.snapshots` on the bash backend.

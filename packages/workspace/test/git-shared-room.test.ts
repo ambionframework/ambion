@@ -12,11 +12,12 @@ describe('shared git in a room', () => {
 		const workspace = openWorkspace({
 			name: 'shared-room',
 			backend: {
-				bash: memoryBackend(),
-				git: justGitBackend({
-					storage: sqliteGitStorage(':memory:'),
-					secret: 'shared-room-secret',
-					shared: { notes: { source: { 'README.md': 'room notes\n' } } },
+				bash: memoryBackend({
+					git: justGitBackend({
+						storage: sqliteGitStorage(':memory:'),
+						secret: 'shared-room-secret',
+						shared: { notes: { source: { 'README.md': 'room notes\n' } } },
+					}),
 				}),
 			},
 		});

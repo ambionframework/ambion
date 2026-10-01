@@ -518,9 +518,9 @@ server.** One more account, such as `lab-git`, owns every repository, and
 the host reaches it with its own key. [Workstation git](workstation-git.md)
 describes the backend.
 
-**The bash backend carries the git transport `ssh`.** Its
-`gitTransports` is `['ssh']`. At each `connect` with the git backend, it
-asks `identityFor` for the agent's key. It writes the key, a
+**The bash backend takes the git backend in its `git` option.** The option
+has the type `WorkstationGitBackend`. At each `connect`, the bash backend
+asks `identityFor` of its access for the agent's key. It writes the key, a
 `known_hosts` file, and an ssh configuration for the alias into the
 agent's `~/.ssh` with mode `0600`, and it makes `Include ambion-git.conf`
 the first line of `~/.ssh/config`. A failure of either step fails the

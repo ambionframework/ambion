@@ -2,9 +2,9 @@
  * The fixtures of the git conformance cases: `justGitBackend` over a
  * temporary SQLite file, beside each just-bash backend. Each `backend` call
  * opens a new git backend over the same file, the way a restart of the host
- * does. The hooks answer the credential facts for the `in-process`
- * transport: they call `credentialFor` of the access, and the expiry probe
- * sends the token to the server in the process.
+ * does, and each `bash` call opens a just-bash backend for it. The hooks
+ * answer the credential facts of the access: they call `credentialFor`, and
+ * the expiry probe sends the token to the server in the process.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -71,7 +71,7 @@ async function probeCredential(pair: Pair, agent: WorkspaceAgent): Promise<GitCo
 
 function fixture(
 	name: string,
-	bash: (dir: string) => BashBackend,
+	bash: (dir: string, git: JustGitBackend) => BashBackend,
 ): GitConformanceBackend<JustGitBackend> {
 	return {
 		name,
@@ -85,7 +85,7 @@ function fixture(
 		async open() {
 			const dir = await mkdtemp(join(tmpdir(), 'ambion-git-'));
 			return {
-				bash: bash(join(dir, 'files')),
+				bash: (git) => bash(join(dir, 'files'), git),
 				backend: (options) => backendOver(join(dir, 'git.db'), options),
 				dispose: () => rm(dir, { recursive: true, force: true }),
 			};
@@ -94,6 +94,6 @@ function fixture(
 }
 
 export const fixtures: readonly GitConformanceBackend<JustGitBackend>[] = [
-	fixture('memory', () => memoryBackend()),
-	fixture('directory', (dir) => directoryBackend(dir)),
+	fixture('memory', (_dir, git) => memoryBackend({ git })),
+	fixture('directory', (dir, git) => directoryBackend(dir, { git })),
 ];

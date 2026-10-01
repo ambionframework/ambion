@@ -33,17 +33,24 @@ it('exports the two backends, the default idle timeout, and the fingerprint help
 	]);
 });
 
-it('names the types of the git backend', () => {
-	const access: main.WorkstationGitAccess = {
-		transport: 'ssh',
-		identityFor: async (): Promise<main.WorkstationGitIdentity> => {
-			throw new Error('unused');
-		},
+it('names the types of the git backend, and takes no other git backend in the bash options', () => {
+	const unused = async (): Promise<never> => {
+		throw new Error('unused');
 	};
+	const access: main.WorkstationGitAccess = {
+		identityFor: async (): Promise<main.WorkstationGitIdentity> => unused(),
+	};
+	const git: main.WorkstationGitBackend = { access, label: 'ssh://unused', connect: unused };
+	// @ts-expect-error A git backend with no workstation access does not pair.
+	const other: main.WorkstationOptions['git'] = { label: 'ssh://unused', connect: unused };
 	const options: main.WorkstationGitOptions = {
 		server: 'lab.internal',
 		hostKey: 'SHA256:unused',
 		account: { username: 'lab-git', privateKey: 'unused' },
 	};
-	expect([access.transport, options.account.username]).toEqual(['ssh', 'lab-git']);
+	expect([git.label, other?.label, options.account.username]).toEqual([
+		'ssh://unused',
+		'ssh://unused',
+		'lab-git',
+	]);
 });

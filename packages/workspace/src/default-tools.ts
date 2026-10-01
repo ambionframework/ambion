@@ -55,55 +55,41 @@ const FILES_NOTE = [
 ].join('\n');
 
 /** The file capability: the three file tools on the bash owner, and their note. */
-export function fileCapability(
-	shell: WorkspaceResource<WorkspaceEnv>['use'],
-	images: boolean,
-): Capability {
-	return { tools: bindTools(createFileTools(images), shell), notes: [FILES_NOTE] };
+export function fileCapability(shell: WorkspaceResource<WorkspaceEnv>['use']): Capability {
+	return { tools: bindTools(createFileTools(), shell), notes: [FILES_NOTE] };
 }
 
-/** Build the three file tools every workspace gets. */
-function createFileTools(images = true): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	const nativeRead = createReadTool(
-		images
-			? undefined
-			: {
-					imageProcessor: async (_bytes, mimeType) => ({
-						ok: false,
-						message: `[Image attachment omitted for this tool bundle: ${mimeType}]`,
-					}),
-				},
-	);
-	const read = images
-		? nativeRead
-		: {
-				...nativeRead,
-				description: nativeRead.description.replace(
-					'Images are sent as attachments.',
-					'Images are omitted and their paths are returned.',
-				),
-				execute: async (...args: Parameters<typeof nativeRead.execute>) => {
-					const result = await nativeRead.execute(...args);
-					if (
-						!result.content.some(
-							(item) =>
-								item.type === 'text' &&
-								item.text.includes('[Image attachment omitted for this tool bundle:'),
-						)
-					)
-						return result;
-					const params = args[1] as { readonly path: string };
-					const env = (args[3] as ExecutionToolContext).env;
-					const context = args[5];
-					const resolved = await env.absolutePath(params.path, context);
-					const path = resolved.ok ? resolved.value : params.path;
-					return {
-						...result,
-						content: result.content.map((item) =>
-							item.type === 'text' ? { ...item, text: `${item.text}\nImage path: ${path}` } : item,
-						),
-					};
-				},
+/** The first line of a `read` result for an image, with the image part or without it. */
+const IMAGE_READ = 'Read image file [';
+
+/**
+ * Build the three file tools every workspace gets. A `read` of an image
+ * returns a text part that names the path of the file, beside the image part
+ * or in place of it for a format with no image part, such as BMP.
+ */
+function createFileTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
+	const nativeRead = createReadTool();
+	const read = {
+		...nativeRead,
+		description: nativeRead.description.replace(
+			'Images are sent as attachments.',
+			'Images are sent as attachments, with the path of the file.',
+		),
+		execute: async (...args: Parameters<typeof nativeRead.execute>) => {
+			const result = await nativeRead.execute(...args);
+			const image = result.content.some(
+				(item) => item.type === 'text' && item.text.startsWith(IMAGE_READ),
+			);
+			if (!image) return result;
+			const params = args[1] as { readonly path: string };
+			const env = (args[3] as ExecutionToolContext).env;
+			const resolved = await env.absolutePath(params.path, args[5]);
+			const path = resolved.ok ? resolved.value : params.path;
+			return {
+				...result,
+				content: [...result.content, { type: 'text' as const, text: `Image path: ${path}` }],
 			};
+		},
+	};
 	return [read, createWriteTool(), createEditTool()];
 }

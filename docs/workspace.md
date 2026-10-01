@@ -3,8 +3,8 @@
 > **Sensor tools are available when the bash backend has workstation endpoints.**
 > `connect` discovers a running server, and `observe` reads a qualified sensor
 > and retains its verified evidence through the existing snapshot store.
-> `workspace.tools({ images: false })` returns image export paths while keeping
-> their bytes in the retained result.
+> A frame reaches the model as an image, and the text of the result names its
+> export path.
 
 **The workspace is the Pi binding of the resource contract.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
@@ -89,11 +89,13 @@ bytes of a cited snapshot in the agent's files
 A backend with `endpoints` adds `connect` to validate and discover a running
 sensor server owned by the caller, and `observe` to read a qualified sensor
 and retain its returned evidence. Network requests run outside the shell
-owner; only process checks and export or audit writes use that owner. Passing
-`{ images: false }` to `workspace.tools()` renders frame paths for `observe`
-and `read`. `observe` retains its frame bytes in the exports and snapshots;
-`read` returns the requested path and leaves its source file unchanged. The
-option does not change the `observe` input schema.
+owner; only process checks and export or audit writes use that owner.
+`observe` returns each frame as an image part and names its export path in
+the text of the result. `read` of an image returns the image part and a text
+part, `Image path: <path>`. A format that the tool does not attach, such as
+BMP, returns the text part alone. A model that cannot read images still learns
+where the file is. `observe` retains its frame bytes in the exports and
+snapshots, and `read` leaves its source file unchanged.
 A workspace with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend adds its own guidance
@@ -630,10 +632,10 @@ not: a 403 head and a 409 put.
 The `backend` option holds the backends by kind, as `WorkspaceBackends`.
 `backend.bash` is a `BashBackend`, and every workspace has one.
 `backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. `backend.git` is an optional
+live on the shell's filesystem. `backend.bash.git` is an optional
 `GitBackend`: the repositories of the workspace, which [Git](git.md)
-describes. `openWorkspace` throws when `bash.gitTransports` does not hold
-the transport of the git backend
+describes. The bash backend takes it as an option of its own package, so a
+wrong pair is a compile error
 ([The contract](git.md#the-contract)). With no SQL backend, the
 workspace has no `sql` tool.
 

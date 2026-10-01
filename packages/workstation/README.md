@@ -82,8 +82,8 @@ establishment. It does not close a transport after `open` succeeds.
 
 ## The git backend
 
-`workstationGitBackend(options)` returns a `GitBackend`. Pass it as
-`backend.git`, beside `workstationBackend`. One more account on the same
+`workstationGitBackend(options)` returns a `WorkstationGitBackend`. Pass it
+as the `git` option of `workstationBackend`. One more account on the same
 server owns every repository. Each agent clones and pushes with its own
 `git` over SSH to that account on the loopback address, and the host
 opens no port.
@@ -97,24 +97,23 @@ import { workstationBackend, workstationGitBackend } from '@ambionframework/work
 // `layout` and `credentialFor` are the options of the example above.
 const access = { server: 'lab.internal', hostKey: 'SHA256:<fingerprint>' };
 
+const git = workstationGitBackend({
+  ...access,
+  account: {
+    username: 'lab-git',
+    privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
+  },
+  templates: {
+    'weekly-report': {
+      description: 'A weekly status report: numbers, risks, and next steps.',
+      source: fromDirectory('./templates/weekly-report'),
+    },
+  },
+});
+
 const lab = openWorkspace({
   name: 'lab',
-  backend: {
-    bash: workstationBackend({ ...access, layout, credentialFor }),
-    git: workstationGitBackend({
-      ...access,
-      account: {
-        username: 'lab-git',
-        privateKey: await readFile('/etc/ambion/keys/lab-git', 'utf8'),
-      },
-      templates: {
-        'weekly-report': {
-          description: 'A weekly status report: numbers, risks, and next steps.',
-          source: fromDirectory('./templates/weekly-report'),
-        },
-      },
-    }),
-  },
+  backend: { bash: workstationBackend({ ...access, layout, credentialFor, git }) },
 });
 ```
 

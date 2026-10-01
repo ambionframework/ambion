@@ -8,11 +8,8 @@ import { frameBytes } from '../../workspace/test/support/sensor-blobs.ts';
 import { openSensorObserveRoom } from '../../workspace/test/support/sensor-observe-room.ts';
 import { pi, piExecution } from '../src/index.ts';
 
-it.each([
-	{ label: 'image mode', images: true },
-	{ label: 'text-only mode', images: false },
-])('passes actual observe content to the Pi provider in $label', async ({ images }) => {
-	const sensor = await openSensorObserveRoom({ images });
+it('passes actual observe content to the Pi provider', async () => {
+	const sensor = await openSensorObserveRoom();
 	onTestFinished(() => sensor.close());
 	const providerToolResults: { content: unknown[] }[] = [];
 	const worker = defineAgent({
@@ -21,7 +18,7 @@ it.each([
 		executor: pi({
 			model: 'scripted/observer',
 			instructions: 'Observe the bench once.',
-			bundles: [sensor.workspace.tools({ images })],
+			bundles: [sensor.workspace.tools()],
 		}),
 	});
 	const room = stopAtEnd(
@@ -50,13 +47,9 @@ it.each([
 			(part): part is { type: 'image'; data: string; mimeType: string } =>
 				typeof part === 'object' && part !== null && 'type' in part && part.type === 'image',
 		);
-		if (images) {
-			expect(imageParts).toHaveLength(1);
-			expect(imageParts?.[0]).toMatchObject({ mimeType: 'image/png' });
-			expect(Buffer.from(imageParts?.[0]?.data ?? '', 'base64')).toEqual(Buffer.from(frameBytes));
-		} else {
-			expect(imageParts).toHaveLength(0);
-		}
+		expect(imageParts).toHaveLength(1);
+		expect(imageParts?.[0]).toMatchObject({ mimeType: 'image/png' });
+		expect(Buffer.from(imageParts?.[0]?.data ?? '', 'base64')).toEqual(Buffer.from(frameBytes));
 		const text = content
 			?.filter(
 				(part): part is { type: 'text'; text: string } =>
@@ -66,7 +59,7 @@ it.each([
 			.join('\n');
 		expect(text).toContain('Sensor data: Supply stable at 5 V.');
 		expect(text).toContain('Snapshot ref: ambion://workspace/');
-		if (!images) expect(text).toContain('Frame at 2026-09-29T10:00:01.000Z:');
+		expect(text).toContain('Frame at 2026-09-29T10:00:01.000Z:');
 	} finally {
 		await room.stop();
 		await sensor.close();
