@@ -238,8 +238,8 @@ of sent to Priya. The ignored run evidence is under
       layer. (LB2, #419)
 - [x] **3.** One table of the core layers drives the probes. (LB3)
 - [x] **4.** The overrides outside the core refuse subpaths. (LB4)
-- [ ] **5.** The host layer imports no execution file. Needs 3. (LB5)
-- [ ] **6.** The room-host core imports none of its mechanisms. Needs 3.
+- [x] **5.** The host layer imports no execution file. Needs 3. (LB5)
+- [x] **6.** The room-host core imports none of its mechanisms. Needs 3.
       (LB6)
 - [x] **7.** No cycle of value imports. (LB7)
 - [ ] **8.** The workspace owns its port. Needs 4. (LB8)

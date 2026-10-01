@@ -15,8 +15,11 @@ import type {
 	AgentPort,
 	CommitRequest,
 	CommitResult,
+	PassInput,
+	PassResult,
 	RoomProtocol,
 	Steer,
+	TraceSink,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
@@ -31,9 +34,7 @@ import type {
 	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
-import type { PassInput, PassResult } from './executor.ts';
 import { failedPass } from './failure.ts';
-import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =
 	{ kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cancelled' };

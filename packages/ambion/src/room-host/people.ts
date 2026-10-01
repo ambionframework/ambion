@@ -12,12 +12,12 @@ import type { RoomCommand } from '../room/transition.ts';
 import type { HumanDefinition, Message, PresenceMessage, SeatOptions, Seq } from '../types.ts';
 import {
 	decideAndAppend,
+	type ExchangeHandle,
 	messageKeyConflict,
 	type RoomHostState,
 	requireSubmission,
 	saidContentMatches,
 } from './core.ts';
-import type { ExchangeHandle } from './waits.ts';
 
 export interface Visit {
 	readonly human: HumanDefinition;

@@ -10,12 +10,7 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { createPiOpener } from '../../pi/src/executor.ts';
 import { createExecutionServices, pi, piExecution } from '../../pi/src/index.ts';
-import {
-	loggedToolResult,
-	openTrace,
-	type TraceOpener,
-	traceOpener,
-} from '../src/execution/trace.ts';
+import { loggedToolResult, openTrace, traceOpener } from '../src/execution/trace.ts';
 import {
 	type ActivationOpener,
 	AgentRunner,
@@ -41,7 +36,7 @@ import {
 	startRoom,
 	type TracePolicy,
 } from '../src/index.ts';
-import { assertWire, roundTrip } from '../src/protocol.ts';
+import { assertWire, roundTrip, type TraceOpener } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { quiet, say, scriptedStream } from './support/scripted.ts';

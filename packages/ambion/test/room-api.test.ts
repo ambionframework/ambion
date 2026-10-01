@@ -105,6 +105,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			messages: [],
 			scheduled: [],
 			participants: [],
+			reserve: [],
 			exchanges: [],
 			exchange: undefined,
 			through: 0,

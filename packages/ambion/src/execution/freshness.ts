@@ -7,8 +7,8 @@
  * counts once the gap closes. An accepted say moves the position, and so
  * does a tool result that carries record once it reaches the model.
  */
+import type { ReadRange } from '../protocol.ts';
 import type { Seq } from '../types.ts';
-import type { ReadRange } from './executor.ts';
 
 export class Freshness {
 	private read: Seq = 0;

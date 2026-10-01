@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The name of a Cloudflare object is its identity, and the objects keep
+no second copy.** `StartOptions.name` is removed: the stub names the room,
+and `RoomObject` takes the name from its id. `RoomMetadata` holds
+`stopped` alone, without `name` and `definitions`. A resumed room takes the
+definitions of the agents on its record from `configure`. `RoomRead` gains
+`reserve`, the agents that no seat holds.
+`SeatMetadata` holds `activation`, `phase`, and `hold`, without `room` and
+`seat`: the seat object reads both from its name, which `seatName` builds.
+`SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
+and `SeatObject.cuts()`. A room object that no name reaches throws.
+
 **The prompts of the room say "activation" where they said "turn".** The
 word `turn` belongs to Pi, where it is one request to a provider. The room
 tells a model to end its activation, and says that a message arrives during

@@ -253,7 +253,8 @@ must be recreated after interruption.
 
 **`room.read()` returns detached state from one journal position.** It starts
 no agents and performs no reconciliation. `RoomRead` reports initialization,
-recorded goal, participants, `Exchange` values, and the journal position `through`.
+recorded goal, participants, the reserve of agents that no seat holds,
+`Exchange` values, and the journal position `through`.
 Use `readRoom(name, { runtime })` without a running handle, including stopped rooms.
 A stopped open exchange remains open until the journal records its close.
 

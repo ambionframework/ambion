@@ -15,9 +15,17 @@
  * for when the activation ends, live here once.
  */
 
-import type { AmbionTool, ToolContent, ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
+import type { ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
-import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
+import type {
+	ActivationView,
+	CommitResult,
+	Intent,
+	RoomProtocol,
+	RoomTool,
+	RoomToolResult,
+	Unchanged,
+} from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
@@ -25,24 +33,6 @@ import { refusal, summaryToolDescription } from './render.ts';
 
 /** The name of the MCP server that serves the room tools to a harness. */
 export const ROOM_SERVER = 'ambion';
-
-/** What a room tool or an agent tool hands back to the model. */
-export interface RoomToolResult {
-	readonly content: readonly ToolContent[];
-	/** The model reads the content as an error. */
-	readonly isError?: true;
-	/** The activation has nothing more to do: the executor may end its model loop. */
-	readonly terminate?: true;
-}
-
-/** One tool as a harness lists it, and what runs when the model calls it. */
-export interface RoomTool {
-	readonly name: string;
-	readonly description: string;
-	readonly parameters: AmbionTool['parameters'];
-	/** Run one call. `call` is the id the harness gave it, and the idempotency key of a commit. */
-	run(args: unknown, call: string): Promise<RoomToolResult>;
-}
 
 /** What every room tool reaches: the activation and the room. */
 export interface RoomToolBinding {

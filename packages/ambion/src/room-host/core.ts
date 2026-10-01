@@ -20,11 +20,17 @@ import {
 	type Refusal,
 	type RoomDecision,
 } from '../room/transition.ts';
-import type { AgentDefinition, Message, RoomNotification, SaidMessage, Without } from '../types.ts';
+import type {
+	AgentDefinition,
+	ExchangeRef,
+	Message,
+	RoomNotification,
+	SaidMessage,
+	SeatOptions,
+	SummaryMessage,
+	Without,
+} from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { DeliveryState } from './dispatch.ts';
-import type { CompositionDraft } from './room.ts';
-import type { ExchangeHandle } from './waits.ts';
 
 /**
  * What the mechanism files read and write of the room. `RoomHost`
@@ -219,4 +225,35 @@ export function compositionOf(cast: CompositionDraft, at: string): Without<Compo
 			})),
 		at,
 	};
+}
+
+/** What a run starts with, as definitions. The journal holds the same composition, by name. */
+export interface CompositionDraft {
+	goal: string | undefined;
+	summaryWriter: string | undefined;
+	definitions: AgentDefinition[];
+	seats: ReadonlyMap<string, SeatOptions>;
+}
+
+export interface ExchangeHandle extends ExchangeRef {
+	/**
+	 * True when the delivery that returned this handle asked the question
+	 * that opened the exchange. False when it joined one already open, or
+	 * when the handle came from `room.exchange(from)` instead of a delivery.
+	 */
+	readonly opened: boolean;
+	/**
+	 * Resolve with the fixed non-summary conversation after the durable close.
+	 * Reject if the room stops before the exchange closes.
+	 */
+	waitForClose(): Promise<Message[]>;
+	/** Resolve with the durable summary, or `undefined` when no summary is needed; reject when required work fails. */
+	waitForSummary(): Promise<SummaryMessage | undefined>;
+}
+
+export interface DeliveryState {
+	activation: string;
+	token: number;
+	pending: boolean;
+	failed: boolean;
 }
