@@ -39,7 +39,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -59,7 +59,7 @@
 					"attempt": 1,
 					"purpose": "summary",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -75,7 +75,7 @@
 				}
 			],
 			"summary": {
-				"status": "published",
+				"kind": "published",
 				"summary": {
 					"kind": "summary",
 					"text": "Thursday works.",

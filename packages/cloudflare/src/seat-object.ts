@@ -83,7 +83,7 @@ export class SeatObject extends DurableObject<Env> {
 							seat: wake.seat,
 							activation: wake.activation,
 							phase: current.phase ?? 'pending',
-							wakes: (current.wakes ?? 0) + 1,
+							wakeCount: (current.wakeCount ?? 0) + 1,
 						},
 					},
 		);
@@ -122,8 +122,8 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	/** How many wakes this seat has taken. The tests read it. */
-	async wakes(): Promise<number> {
-		return this.metadata.read().wakes ?? 0;
+	async wakeCount(): Promise<number> {
+		return this.metadata.read().wakeCount ?? 0;
 	}
 
 	/** How many cuts the room has sent this seat. The tests read it. */

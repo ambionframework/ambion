@@ -63,7 +63,7 @@ const record: readonly Written[] = [
 ];
 
 const published = {
-	status: 'published',
+	kind: 'published',
 	summary: { text: 'First answer.', covers: { from: firstFrom, through: firstFrom } },
 };
 
@@ -169,7 +169,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 
 		// Nested values are detached on every read.
 		const message = first?.messages[0];
-		if (message?.kind !== 'said' || closed.summary.status !== 'published')
+		if (message?.kind !== 'said' || closed.summary.kind !== 'published')
 			throw new Error('Expected the opening message and a published summary.');
 		message.wakes?.push('mutated');
 		closed.summary.summary.covers.from = 99;
@@ -217,23 +217,23 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		expect(closed.activations).toEqual([
 			{
 				...activation('message:4:assistant:1', 1, 'respond', {
-					status: 'failed',
+					kind: 'failed',
 					cause: 'transient',
 				}),
 				usage: spent(10, 0.5),
 			},
 			{
-				...activation('message:4:assistant:2', 2, 'respond', { status: 'released' }),
+				...activation('message:4:assistant:2', 2, 'respond', { kind: 'released' }),
 				usage: spent(20, 0.25),
 			},
 			{
-				...activation('closed:4:assistant:1', 1, 'summary', { status: 'revoked' }),
+				...activation('closed:4:assistant:1', 1, 'summary', { kind: 'revoked' }),
 				usage: spent(5),
 			},
 		]);
 		expect((await read(6))?.exchange.activations).toEqual([
-			expect.objectContaining({ id: 'message:6:assistant:1', outcome: { status: 'released' } }),
-			expect.objectContaining({ id: 'message:6:assistant:2', outcome: { status: 'running' } }),
+			expect.objectContaining({ id: 'message:6:assistant:1', outcome: { kind: 'released' } }),
+			expect.objectContaining({ id: 'message:6:assistant:2', outcome: { kind: 'running' } }),
 		]);
 	});
 });
@@ -252,7 +252,7 @@ it('marks an activation a cancellation ended', () => {
 			cancelled: true,
 			until: 6,
 		}).outcome,
-	).toEqual({ status: 'revoked', cancelled: true });
+	).toEqual({ kind: 'revoked', cancelled: true });
 });
 
 it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEGER + 1])(

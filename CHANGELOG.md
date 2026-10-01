@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**Outcomes use one discriminator, `kind`, and `wake` names only the port
+request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
+`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
+exchange read model. The room calls the activation that it owes a seat a due
+activation, after `RoomState.due`. In the core, `PendingActivation` becomes
+`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
+`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
+`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
+`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
+body changes.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

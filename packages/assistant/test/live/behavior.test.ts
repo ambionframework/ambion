@@ -546,7 +546,7 @@ live('the default assistant, driven by the simulator', () => {
 			const id = `message:${posted.from}:assistant:1`;
 			expect(closed?.activations.find((activation) => activation.id === id)).toMatchObject({
 				purpose: 'respond',
-				outcome: { status: 'released' },
+				outcome: { kind: 'released' },
 			});
 			// A post gives no direction, so silence is a valid answer. A say speaks to the event.
 			const spoken = discussion.filter(
@@ -557,7 +557,7 @@ live('the default assistant, driven by the simulator', () => {
 				expect(message.text, JSON.stringify(discussion)).toMatch(/stale|sync|stock|SKU/i);
 			// No person spoke in the work of the post, so it names no person and owes no summary.
 			expect(closed).not.toHaveProperty('person');
-			expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+			expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
 		},
 		TWO_EXCHANGES_MS,
 	);

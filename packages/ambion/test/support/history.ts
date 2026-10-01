@@ -10,7 +10,7 @@
  * once, a delivery in doubt is on it at most once, a refused one never,
  * every read is a prefix of the record, a client's reads move forward and
  * hold every delivery acknowledged before them, every seq on the storage
- * is one message, one attempt at a wake or a draft runs at a time, and
+ * is one message, one attempt of a due activation runs at a time, and
  * nothing is pending once the room drains.
  */
 
@@ -287,6 +287,6 @@ function drained(state: RoomState): string[] {
 	}
 	for (const wake of pendingOf(state)) found.push(`${wake.id} still pending after the drain`);
 	for (const owed of owedOf(state))
-		found.push(`the summary draft ${owed.id} still owed after the drain`);
+		found.push(`the summary activation ${owed.id} still owed after the drain`);
 	return found;
 }

@@ -99,7 +99,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// The lease the first run wrote is the lease the second run released, and
 	// nothing expired. Wait for this activation's own lease to end: the
-	// assistant's draft takes a lease of its own after it, and this test says
+	// assistant's summary activation takes a lease of its own after it, and this test says
 	// nothing about that one.
 	const leases = await until(async () => {
 		const held = await bodies<LeaseObservation>(again, 'lease');

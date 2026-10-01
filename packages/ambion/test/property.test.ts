@@ -264,7 +264,7 @@ class Walk {
 		this.watch();
 	}
 
-	/** Time moves until nothing is live: every lease expires, every wake is sent again, every draft is due. */
+	/** Time moves until nothing is live: every lease expires, every wake is sent again, every summary activation is due. */
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;

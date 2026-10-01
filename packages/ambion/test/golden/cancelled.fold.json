@@ -32,13 +32,13 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "revoked",
+						"kind": "revoked",
 						"cancelled": true
 					}
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "cancelled"

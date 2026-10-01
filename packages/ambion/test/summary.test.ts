@@ -301,7 +301,7 @@ describe('closing summaries', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 	});
 
-	it('keeps a draft on its closed exchange while a later question arrives', async () => {
+	it('keeps a summary on its closed exchange while a later question arrives', async () => {
 		const held = deferred();
 		const contexts: string[] = [];
 		const session = await open({
@@ -679,7 +679,7 @@ describe('closing summaries', () => {
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
 	});
 
-	it('writes off a draft the host revoked, and publishes no response', async () => {
+	it('writes off a summary activation the host revoked, and publishes no response', async () => {
 		const drafting = deferred();
 		const hangs: PiScript = () => {
 			drafting.resolve();
@@ -938,7 +938,7 @@ describe('a room without a summary writer', () => {
 	it('opens and closes an exchange, and owes no summary', async () => {
 		// Nothing holds a room to an assistant. The room closes the exchange
 		// the way it always does, and no close names a seat, so nothing is
-		// owed and nobody drafts.
+		// owed and nobody summarizes.
 		const session = stopAtEnd(
 			await startRoom({
 				name: roomName(),
@@ -1145,14 +1145,14 @@ describe('a summary for each person who spoke', () => {
 			outcome: { kind: 'awaiting', person: 'sam' },
 		});
 		if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
-		expect(exchange.summary).toMatchObject({ status: 'published', summary: { to: 'priya' } });
+		expect(exchange.summary).toMatchObject({ kind: 'published', summary: { to: 'priya' } });
 		expect(exchange.summaries?.map((s) => s.to)).toEqual(['priya', 'sam']);
 		// The first recipient is the person of the close: the first person who spoke.
 		expect(exchange.person).toBe('priya');
 		expect(exchange.summaries?.[0]?.to).toBe(exchange.person);
 		// A live read shares no value with the room, so a change to one read reaches no later read.
 		const [changed] = (await session.read()).exchanges;
-		if (changed?.status === 'closed' && changed.summary.status === 'published')
+		if (changed?.status === 'closed' && changed.summary.kind === 'published')
 			(changed.summary.summary as { text: string }).text = 'changed';
 		expect((await session.read()).exchanges).toEqual(before.exchanges);
 		const pending = pendingFor(await session.read(), 'sam');

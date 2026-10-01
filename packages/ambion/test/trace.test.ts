@@ -124,7 +124,7 @@ describe('the trace of a room activation', () => {
 				seat: 'product',
 				attempt: 1,
 				purpose: 'respond',
-				outcome: { status: 'released' },
+				outcome: { kind: 'released' },
 			}),
 		);
 	});

@@ -15,7 +15,7 @@ import { type Entry, placed } from '../journal/journal.ts';
 import type { PendingSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
-import { applyLease, type LeaseHold, type PendingActivation } from './lease.ts';
+import { applyLease, type DueActivation, type LeaseHold } from './lease.ts';
 import type { PersonState } from './presence.ts';
 import { cancelHold } from './rules.verified.ts';
 
@@ -30,8 +30,8 @@ export interface RoomState {
 	readonly cancelledAt?: Seq;
 	readonly leases: Map<string, LeaseHold>;
 	readonly deliveries: Map<Seq, MessageDelivery>;
-	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
-	readonly due: PendingActivation[];
+	/** Every activation the room owes, whatever caused it: the message activations and the summary activations as one list. */
+	readonly due: DueActivation[];
 	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
 	readonly scheduled: readonly PendingSay[];
 	readonly messages: readonly Message[];

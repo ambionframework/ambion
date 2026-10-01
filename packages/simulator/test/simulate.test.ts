@@ -143,7 +143,7 @@ describe('simulate', () => {
 		const exchange = run.exchanges[0];
 		expect(exchange?.view.outcome.kind).toBe(outcome);
 		expect(exchange?.summary).toBeUndefined();
-		if (outcome === 'complete') expect(exchange?.view.summary.status).toBe('failed');
+		if (outcome === 'complete') expect(exchange?.view.summary.kind).toBe('failed');
 		expect(run.error).toBeUndefined();
 	});
 
