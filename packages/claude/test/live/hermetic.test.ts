@@ -184,7 +184,7 @@ live('hermetic seat', () => {
 			const transcripts = await filesEnding(configRoot, '.jsonl');
 			expect(transcripts.length).toBeGreaterThan(0);
 			// The transcript sits in the project key that the test computed, so the memory file was in reach.
-			expect(transcripts.map((path) => dirname(path))).toContain(dirname(dirname(memory)));
+			expect(transcripts.map((path) => dirname(path))).toContain(dirname(memory));
 			for (const path of transcripts)
 				expect(await readFile(path, 'utf8')).not.toContain('POISON-TEXT-');
 			expect(existsSync(join(memory, 'MEMORY.md'))).toBe(true);
