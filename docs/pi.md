@@ -463,7 +463,7 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 ## Testing
 
 **A scripted stream tests the room with no model and no key.**
-`@ambionframework/pi/testing` exports `scripted`, `PiScript`,
+`@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
 `@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
@@ -475,7 +475,7 @@ and id.
 import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
 import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted } from '@ambionframework/pi/testing';
+import { scriptedStream } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -483,7 +483,7 @@ const inventory = defineAgent({
   executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
 });
 
-const stream = scripted(
+const stream = scriptedStream(
   byAgent({
     inventory: (_context, _agent, call) => (call === 1 ? speak('42 units in stock.') : quiet()),
   }),
@@ -507,7 +507,7 @@ try {
 
 **The scripted stream routes on the seat.** The stub model carries the seat
 name in `model.name`, so a script never reads the prompt to learn who it
-serves. `scripted` counts calls for each seat, answers an abort with an
+serves. `scriptedStream` counts calls for each seat, answers an abort with an
 aborted message, and turns a script that throws into an error message. A
 test that needs no Pi imports `scripted` from
 `@ambionframework/ambion/testing`, which runs a script with no model at all.

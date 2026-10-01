@@ -9,7 +9,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import { type Tap, tapped } from './support/core-failure.ts';
 import { collect, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
+import { quiet, scriptedStream, speak, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -44,7 +44,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 				execution: tapped(
 					piExecution({
 						sessions: 'memory',
-						stream: scripted((context) =>
+						stream: scriptedStream((context) =>
 							toolResultTexts(context).some((text) => text.startsWith('said #'))
 								? quiet()
 								: speak('answer'),

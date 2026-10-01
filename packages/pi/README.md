@@ -173,8 +173,8 @@ model are permanent. Every other failure is transient.
 ## Test
 
 `@ambionframework/pi/testing` exports a scripted stream and its helpers:
-`scripted`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
-`toolResultTexts`. A script answers with the verbs of
+`scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`,
+and `toolResultTexts`. A script answers with the verbs of
 `@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
 `quiet`, and `byAgent`. `piExecutorHarness()` runs the executor suite of
 `@ambionframework/ambion/conformance` on a scripted stream, and `scriptOf`
@@ -184,7 +184,7 @@ maps each plan of the suite to a script.
 import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
 import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted } from '@ambionframework/pi/testing';
+import { scriptedStream } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -192,7 +192,7 @@ const inventory = defineAgent({
   executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
 });
 
-const stream = scripted(
+const stream = scriptedStream(
   byAgent({
     inventory: (_context, _agent, call) => (call === 1 ? speak('42 units in stock.') : quiet()),
   }),

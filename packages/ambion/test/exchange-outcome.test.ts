@@ -4,7 +4,7 @@
  * does to leases and summaries.
  */
 import { describe, expect, it } from 'vitest';
-import type { Close } from '../src/journal/events.ts';
+import type { Close } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';

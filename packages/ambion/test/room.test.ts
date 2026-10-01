@@ -26,7 +26,14 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
+import {
+	byAgent,
+	contextText,
+	type PiScript,
+	quiet,
+	scriptedStream,
+	speak,
+} from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -47,7 +54,7 @@ async function open(
 			name: roomName(label),
 			seats: { ...seats, [assistant.name]: 'none' },
 			agents: [...Object.keys(seats).map((name) => scriptedAgent(name)), assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			...options,
 		}),
 	);
@@ -429,7 +436,7 @@ describe('startRoom', () => {
 			hangs.resolve();
 			return new Promise<never>(() => {});
 		};
-		const execution = around(piExecution({ sessions: 'memory', stream: scripted(script) }), {
+		const execution = around(piExecution({ sessions: 'memory', stream: scriptedStream(script) }), {
 			port: (port) => ({
 				wake: (wake) => port.wake(wake),
 				steer: (steer) => port.steer(steer),

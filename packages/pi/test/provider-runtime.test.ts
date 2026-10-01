@@ -17,7 +17,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { quiet, scriptedStream, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { stubModel } from '../src/services.ts';
 import { defaultSessionDir } from '../src/sessions.ts';
@@ -67,7 +67,9 @@ afterAll(async () => {
 
 describe('default provider runtime', () => {
 	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory of the user', async () => {
-		catalog.stream = scripted((_context, _agent, call) => (call === 1 ? speak('42') : quiet()));
+		catalog.stream = scriptedStream((_context, _agent, call) =>
+			call === 1 ? speak('42') : quiet(),
+		);
 		const name = roomName('pi-default');
 		const room = stopAtEnd(await startRoom({ name, agents: [scriptedAgent('worker')] }));
 		const visit = await room.visit(andrei);

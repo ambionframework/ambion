@@ -43,7 +43,7 @@ type Respond = (agent: string, call: number, closing: boolean) => AssistantMessa
  * A model stream that answers each request of each Pi seat from `respond`. A
  * request whose signal has aborted ends with an abort.
  */
-export function scriptedStream(respond: Respond): PiExecutionOptions['stream'] {
+export function respondingStream(respond: Respond): PiExecutionOptions['stream'] {
 	const calls = new Map<string, number>();
 	return (_model, context, options) => {
 		const output = createAssistantMessageEventStream();

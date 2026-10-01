@@ -15,8 +15,8 @@
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
-	RoomTool as CoreTool,
 	ExecutorActivation,
+	RoomTool,
 	RoomToolOptions,
 } from '@ambionframework/ambion/hosting';
 import type { TSchema } from 'typebox';
@@ -26,7 +26,7 @@ import type { Result, ToolSpec } from './wire.ts';
 export type Host = Pick<ExecutorActivation, 'callId' | 'delivered'>;
 
 /** One tool the server lists: its spec, and what runs when the model calls it. */
-export interface RoomTool {
+export interface CodexTool {
 	readonly spec: ToolSpec;
 	run(args: unknown): Promise<Result>;
 }
@@ -58,7 +58,7 @@ export function citing(changed: Set<string>, ordinary: () => boolean): RoomToolO
 }
 
 /** A tool the bridge serves, from a tool the core bound. Each call takes the id the stream named for it. */
-function served(one: CoreTool, host: Host): RoomTool {
+function served(one: RoomTool, host: Host): CodexTool {
 	return {
 		spec: { name: one.name, description: one.description, inputSchema: schemaOf(one.parameters) },
 		run: async (args) => {
@@ -74,6 +74,6 @@ function served(one: CoreTool, host: Host): RoomTool {
 }
 
 /** The tools the bridge serves for one activation. */
-export function servedTools(tools: readonly CoreTool[], host: Host): RoomTool[] {
+export function servedTools(tools: readonly RoomTool[], host: Host): CodexTool[] {
 	return tools.map((one) => served(one, host));
 }

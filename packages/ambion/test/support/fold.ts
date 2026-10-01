@@ -9,12 +9,12 @@
  * projection equal to it after every entry of a seeded walk.
  */
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
-import type { Close, Composition, Seating } from '../../src/journal/events.ts';
+import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
 import type { Entry } from '../../src/journal/journal.ts';
 import type { MessageDelivery } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	older,
@@ -48,7 +48,7 @@ export function activationOf(id: string): ActivationId {
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
 	const read = older();
 	for (const entry of entries)
-		applyEvent(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
+		applyEntry(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
 	return project(read, options);
 }
 

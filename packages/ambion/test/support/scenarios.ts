@@ -30,7 +30,7 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	seat,
 	speak,
 	summarise,
@@ -117,7 +117,7 @@ export const oneExchange: Scenario = {
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
 					),
 				}),
@@ -151,7 +151,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							product: answersLastQuestion(['priya', 'sam']),
 							colleague: answersLastQuestion(['priya', 'sam']),
@@ -202,7 +202,7 @@ export const seatFromReserve: Scenario = {
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
 							product: (_context, _name, call) =>
