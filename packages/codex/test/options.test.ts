@@ -87,7 +87,7 @@ describe('clientOptions', () => {
 });
 
 describe('clientOptions environment', () => {
-	it('gives the binary the environment of the execution with the home of the seat', () => {
+	it('gives the binary the environment of the seat: the overlay, then its own home variables', () => {
 		const home = seatHome({
 			home: '/srv/seat',
 			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
@@ -98,7 +98,7 @@ describe('clientOptions environment', () => {
 				clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'auto', scratch),
 			).toMatchObject({
 				codexPathOverride: '/bin/codex',
-				env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
+				env: { PATH: '/bin', HOME: '/srv/seat/home', CODEX_HOME: '/srv/seat' },
 			});
 			expect(clientOptions({}, home, '/tmp/room.sock', 'auto', scratch).env).not.toHaveProperty(
 				'GONE',
