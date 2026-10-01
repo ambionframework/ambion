@@ -186,16 +186,17 @@ const CASES = [
 	['packages/journal/src', '../../ambion/src/room.ts', true],
 	// The core cases come from the table of layers.
 	...coreCases(),
-	// The table works at the grain of a layer. A host reaches the executor
-	// contract of the execution layer, and no driver.
+	// `room-host/core.ts` holds the rules of its layer, and imports no file
+	// beside it.
 	[
-		`${coreSource}/host`,
+		`${coreSource}/room-host`,
 		[
-			['../execution/runner.ts', true],
-			['../execution/executor.ts', false],
+			...coreCases().find(([folder]) => folder.startsWith(`${coreSource}/room-host`))[1],
+			['./dispatch.ts', true],
+			['./waits.ts', true],
 		],
 		null,
-		'runner-probe.ts',
+		'core.ts',
 	],
 ];
 

@@ -13,16 +13,9 @@ import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
 import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { RoomHostState } from './core.ts';
+import type { DeliveryState, RoomHostState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
-
-export interface DeliveryState {
-	activation: string;
-	token: number;
-	pending: boolean;
-	failed: boolean;
-}
 
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
 export function hearEntry(host: RoomHostState, entry: RoomEntry): void {

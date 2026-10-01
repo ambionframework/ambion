@@ -13,6 +13,7 @@
  * logger.
  */
 import type { Limits } from '../host/runtime.ts';
+import type { TraceOpener, TraceSink } from '../protocol.ts';
 import {
 	addUsage,
 	type Seq,
@@ -28,33 +29,6 @@ const THINKING_START_CHARS = 280;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null;
-
-/** What the driver and the executor write to. One sink serves one activation. */
-export interface TraceSink {
-	/** Open a pass. The sink stamps this pass on every step until the next one. */
-	startPass(input: 'view' | 'delta', through: Seq): void;
-	/**
-	 * Record one raw step. The sink joins consecutive `thinking` and `text`
-	 * deltas into one block. A block ends at a `final` step or at a step of
-	 * another type.
-	 */
-	record(step: Step): void;
-	/**
-	 * The sum of every `usage` step recorded so far, or nothing when none came.
-	 * The sum counts steps the pass cap dropped, and steps with no logger.
-	 */
-	usage(): Usage | undefined;
-	/** Give the block in progress to the logger. */
-	close(): Promise<void>;
-}
-
-/** The part of a sink an executor writes to: it records the steps it owns. */
-export type StepSink = Pick<TraceSink, 'record'>;
-
-/** Opens the sink of one activation. */
-export interface TraceOpener {
-	open(activation: string): TraceSink;
-}
 
 export interface TraceOptions {
 	readonly room: string;

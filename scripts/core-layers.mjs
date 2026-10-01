@@ -32,13 +32,12 @@ export const CORE_LAYERS = [
 		name: 'protocol',
 		files: ['protocol.ts'],
 		imports: ['vocabulary'],
-		about: 'the wire shapes between the room and a seat',
+		about: 'the wire shapes between the room and a seat, and the executor contract',
 	},
 	{
 		name: 'host',
 		files: ['host/**'],
-		// LB5 removes the import of the execution layer.
-		imports: ['vocabulary', 'protocol', 'execution'],
+		imports: ['vocabulary', 'protocol'],
 		about: 'what a host owns: the runtime value',
 	},
 	{
@@ -63,7 +62,7 @@ export const CORE_LAYERS = [
 		name: 'execution',
 		files: ['execution/**'],
 		imports: ['vocabulary', 'protocol', 'host'],
-		about: 'the execution side of the wire: driver, contract, rendering',
+		about: 'the execution side of the wire: driver, rendering, tool bodies, trace',
 	},
 	{
 		name: 'conformance',
@@ -75,13 +74,13 @@ export const CORE_LAYERS = [
 		name: 'testing',
 		files: ['testing/**'],
 		imports: ['vocabulary', 'protocol', 'host', 'execution'],
-		about: 'the deterministic test tools, over the vocabulary and the execution contract',
+		about: 'the deterministic test tools, over the vocabulary and the execution side',
 	},
 	{
 		name: 'room-host',
 		files: ['room-host/**'],
 		imports: ['vocabulary', 'protocol', 'host', 'journal', 'room', 'answers'],
-		about: 'room.ts (state, phases), core.ts (shared view), one file per mechanism',
+		about: 'room.ts (state, phases), core.ts (shared view, no sibling), one file per mechanism',
 	},
 	{
 		name: 'facade',

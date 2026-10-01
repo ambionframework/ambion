@@ -1,16 +1,17 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { localConnector } from '../execution/connector.ts';
+import { failedPass } from '../execution/failure.ts';
+import { answerOf } from '../execution/room-tools.ts';
+import type { Execution } from '../host/runtime.ts';
 import type {
 	ActivationOpener,
+	ActivationView,
+	CommitResult,
 	ExecutorActivation,
 	Pass,
 	PassResult,
 	RunningActivation,
-} from '../execution/executor.ts';
-import { failedPass } from '../execution/failure.ts';
-import { answerOf } from '../execution/room-tools.ts';
-import type { Execution } from '../host/runtime.ts';
-import type { ActivationView, CommitResult } from '../protocol.ts';
+} from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
 /** One tool call of a scripted reply. */

@@ -7,8 +7,8 @@
  * cannot see the id of a call takes the id from the steps.
  */
 import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
+import type { StepSink } from '../protocol.ts';
 import type { Step } from '../types.ts';
-import type { StepSink } from './trace.ts';
 
 /**
  * The room tools whose call commits an entry to the record. The `message`

@@ -68,8 +68,11 @@ import type {
 import * as control from './control.ts';
 import {
 	acceptedEntry,
+	type CompositionDraft,
 	compositionOf,
+	type DeliveryState,
 	decideAndAppend,
+	type ExchangeHandle,
 	notificationFor,
 	type RoomHostState,
 	requireSubmission,
@@ -80,8 +83,8 @@ import * as people from './people.ts';
 import * as waits from './waits.ts';
 
 export type { RoomRead } from '../types.ts';
+export type { ExchangeHandle } from './core.ts';
 export type { PostInput, Visit } from './people.ts';
-export type { ExchangeHandle } from './waits.ts';
 
 /**
  * Where the room is in its life. One field answers every question the room
@@ -98,14 +101,6 @@ export type { ExchangeHandle } from './waits.ts';
  */
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 
-/** What a run starts with, as definitions. The journal holds the same composition, by name. */
-export interface CompositionDraft {
-	goal: string | undefined;
-	summaryWriter: string | undefined;
-	definitions: AgentDefinition[];
-	seats: ReadonlyMap<string, SeatOptions>;
-}
-
 export interface Room {
 	readonly name: string;
 	/**
@@ -116,14 +111,14 @@ export interface Room {
 	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
-	exchange(from: Seq): waits.ExchangeHandle | undefined;
+	exchange(from: Seq): ExchangeHandle | undefined;
 	visit(human: HumanDefinition): Promise<people.Visit>;
 	/**
 	 * Post a message as the system: to a seat, a person, or the room. The post
 	 * has no author, wakes and steers as the room routes it, and opens an
 	 * exchange when none is open. A repeated `key` lands once.
 	 */
-	post(input: people.PostInput): Promise<waits.ExchangeHandle>;
+	post(input: people.PostInput): Promise<ExchangeHandle>;
 	stop(): Promise<void>;
 	/** Cancel the open work at one durable journal boundary. The room keeps running. */
 	cancel(): Promise<void>;
@@ -178,7 +173,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	readonly sentAt = new Map<string, number>();
 	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
-	readonly deliveryStates = new Map<string, dispatch.DeliveryState>();
+	readonly deliveryStates = new Map<string, DeliveryState>();
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases = new Set<string>();
 	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
@@ -444,11 +439,11 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		return control.dismissSay(this, seq);
 	}
 
-	exchange(from: Seq): waits.ExchangeHandle | undefined {
+	exchange(from: Seq): ExchangeHandle | undefined {
 		return waits.exchange(this, from);
 	}
 
-	handleForMessage(message: Message): waits.ExchangeHandle {
+	handleForMessage(message: Message): ExchangeHandle {
 		return waits.handleForMessage(this, message);
 	}
 
@@ -468,7 +463,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		return people.presentVisit(this, name);
 	}
 
-	post(input: people.PostInput): Promise<waits.ExchangeHandle> {
+	post(input: people.PostInput): Promise<ExchangeHandle> {
 		return people.post(this, input);
 	}
 

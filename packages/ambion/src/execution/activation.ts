@@ -14,25 +14,26 @@
  * its step says so. The executor delivers a line when its harness can take
  * it, and records no `steer` step.
  */
-import type { ActivationView } from '../protocol.ts';
-import { sessionToResume } from '../protocol.ts';
-import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
 import type {
 	ActivationOpener,
+	ActivationView,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RoomTool,
 	RunningActivation,
-} from './executor.ts';
+	StepSink,
+} from '../protocol.ts';
+import { sessionToResume } from '../protocol.ts';
+import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
 import { resolveReminders } from './reminders.ts';
 import { renderActivation, renderDelta, renderPending, renderSystem } from './render.ts';
-import { agentTools, type RoomTool, type RoomToolBinding, roomTools } from './room-tools.ts';
+import { agentTools, type RoomToolBinding, roomTools } from './room-tools.ts';
 import { ToolCalls } from './tool-calls.ts';
-import type { StepSink } from './trace.ts';
 
 /** What the driver gives the state of one activation. */
 export interface ActivationInput {

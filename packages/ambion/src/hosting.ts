@@ -30,22 +30,10 @@
 
 export type { ExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
-export type {
-	ActivationOpener,
-	ExecutorActivation,
-	Pass,
-	PassInput,
-	PassRecord,
-	PassResult,
-	ReadRange,
-	RunningActivation,
-} from './execution/executor.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
-export type { RoomTool } from './execution/room-tools.ts';
 export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
-export type { StepSink, TraceOpener, TraceSink } from './execution/trace.ts';
 export type {
 	AgentExecutionContext,
 	ConnectorRequest,
@@ -54,16 +42,28 @@ export type {
 } from './host/runtime.ts';
 export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
+	ActivationOpener,
 	ActivationSpec,
 	ActivationView,
 	AgentPort,
 	CommitRequest,
 	CommitResult,
+	ExecutorActivation,
 	Intent,
 	LeaseRequest,
 	LeaseResponse,
+	Pass,
+	PassInput,
+	PassRecord,
+	PassResult,
+	ReadRange,
 	RoomProtocol,
+	RoomTool,
+	RunningActivation,
 	Steer,
+	StepSink,
+	TraceOpener,
+	TraceSink,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';
