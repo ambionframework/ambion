@@ -139,9 +139,9 @@ The memory store keeps the two newest sessions of each room and seat: the
 session of the open exchange, and the session of the exchange before it
 for its summary. It deletes the others.
 `createExecutionServices` takes the same `PiExecutionOptions`.
+`piExecution` takes its clock from the runtime.
 
-The runtime supplies the clock, the call limits, the trace limits, and the
-logger. `pi()` throws at definition time when `estimateTokens` has no
+`pi()` throws at definition time when `estimateTokens` has no
 `activationTokenLimit`, when the limit is not a positive integer, and when
 `estimateTokens` is not a name.
 

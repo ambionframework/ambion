@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twelve reductions have landed.** `pnpm check` passes on them, and the
+**Thirteen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -46,6 +46,7 @@ changelog names each change to an export and to a behavior.
 | One rule for a thrown pass (E2)             | `UnknownModel`, a second `PermanentError`, six copies of the conversion  | `execution/failure.ts` (`failedPass`)    |
 | One function opens a session (E3)           | `Executor.harness`, `Executor.open`, three public `create*Executor`      | `execution/executor.ts`, `activation.ts` |
 | The core stamps every steer (E1)            | Two `Held` stampers, Pi `early` and `drop`, the Claude echo stamp        | `execution/activation.ts`                |
+| One option type for the Pi services (E4)    | `ExecutionServicesOptions`, the unread `clock`, `call`, `trace` fields   | `pi/src/services.ts`                     |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -117,7 +118,7 @@ concepts, high confidence.
 | E1  | The steer bookkeeping is in each executor (done)               | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
 | E2  | A thrown error becomes a transient pass in five places (done)  | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
 | E3  | `Executor.harness` always equals the executor kind (done)      | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
-| E4  | Pi has three option types for its services                     | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
+| E4  | Pi has three option types for its services (done)              | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
 | E5  | The kind narrowing and the policy copy are written three times | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
 | E6  | A pass carries `tools` and `agentTools` apart                  | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
 | E7  | Two scripted test languages export the same six verbs          | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |

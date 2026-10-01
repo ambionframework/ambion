@@ -7,7 +7,7 @@ import { createExecutionServices, type PiExecutionOptions } from './services.ts'
 /**
  * The Pi execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
- * clock, limits, and logger when it builds the connector. It serves the
+ * clock when it builds the connector. It serves the
  * seats of kind `pi`. It does not change the default of that kind. Loading
  * the package defines that default, with no options.
  */

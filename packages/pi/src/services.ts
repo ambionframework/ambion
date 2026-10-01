@@ -24,7 +24,7 @@ export interface PiExecutionOptions {
 	readonly stream?: StreamFn;
 	/**
 	 * Where each seat keeps its Pi harness sessions. Absent, `'disk'`.
-	 * `'memory'` keeps them for as long as the connector lives, as a test does.
+	 * `'memory'` keeps them for as long as the services live, as a test does.
 	 */
 	readonly sessions?: SessionPlace;
 	/**
