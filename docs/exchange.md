@@ -247,7 +247,7 @@ the exchange. `person` can name a person other than the one who sent a
 given message, when that message joined an exchange another person opened.
 
 Live notifications include `message`, `exchange_opened`, and
-`exchange_closed` events, plus execution events. An execution event names its
+`exchange_closed` events, plus activation events. An activation event names its
 activation. Notifications and pending waits belong to the current run and
 must be recreated after interruption.
 

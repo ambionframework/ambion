@@ -24,13 +24,12 @@ import {
 	isClosing,
 	quiet,
 	type Script,
-	schedule,
+	say,
 	scripted,
 	scriptedExecutor,
 	settled,
-	speak,
 } from '../src/testing.ts';
-import type { AgentExecutor, ExecutionEvent, Step } from '../src/types.ts';
+import type { ActivationEvent, AgentExecutor, Step } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -69,7 +68,7 @@ describe('scripted', () => {
 			execution: scripted(
 				byAgent({
 					a: record('a', (_step, _seat, call) =>
-						call === 1 ? callTool('echo') : call === 2 ? speak('an answer') : quiet(),
+						call === 1 ? callTool('echo') : call === 2 ? say('an answer') : quiet(),
 					),
 					b: record('b'),
 				}),
@@ -82,12 +81,9 @@ describe('scripted', () => {
 		expect(seen).toContain('b:b:1');
 		expect(seen.every((line) => line.split(':')[0] === line.split(':')[1])).toBe(true);
 		const tools = events.filter(
-			(event) => event.type === 'tool_execution_start' || event.type === 'tool_execution_end',
+			(event) => event.type === 'tool_call' || event.type === 'tool_result',
 		);
-		expect(tools.map((event) => event.type)).toEqual([
-			'tool_execution_start',
-			'tool_execution_end',
-		]);
+		expect(tools.map((event) => event.type)).toEqual(['tool_call', 'tool_result']);
 		const { messages } = await room.read();
 		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
 		expect(results).toContainEqual(['echoed', 'delivered']);
@@ -107,7 +103,7 @@ describe('scripted', () => {
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await vi.waitFor(() => expect(events.some((event) => event.type === 'error')).toBe(true));
 		expect(events.find((event) => event.type === 'error')).toMatchObject({
-			agent: 'a',
+			seat: 'a',
 			cause: 'transient',
 		});
 		const { messages } = await room.read();
@@ -126,7 +122,7 @@ describe('isClosing', () => {
 			runtime: createRuntime(),
 			execution: scripted((step, seat, call) => {
 				flags.push(isClosing(step.view));
-				return call === 1 ? speak(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
+				return call === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
 		});
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -134,7 +130,7 @@ describe('isClosing', () => {
 		expect(flags.filter((flag) => flag).length).toBeGreaterThan(0);
 		expect(flags.at(-1)).toBe(true);
 		const read = await room.read();
-		expect(read.exchanges[0]).toMatchObject({ summary: { status: 'published' } });
+		expect(read.exchanges[0]).toMatchObject({ summary: { kind: 'published' } });
 	});
 });
 
@@ -144,7 +140,7 @@ describe('settled', () => {
 			name: roomName('testing-settled'),
 			agents: [agent('a')],
 			runtime: createRuntime(),
-			execution: scripted((_step, _seat, call) => (call === 1 ? speak('an answer') : quiet())),
+			execution: scripted((_step, _seat, call) => (call === 1 ? say('an answer') : quiet())),
 		});
 		let reads = 0;
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -225,7 +221,7 @@ describe('scriptedExecutor', () => {
 	/** The core state of one activation over `executor`, and a room that answers each commit with `commit`. */
 	function harness(commit: (request: CommitRequest) => CommitResult) {
 		const commits: CommitRequest[] = [];
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const open = (executor: Executor) =>
 			new ActivationState(executor, {
 				id: 'act-1',
@@ -253,7 +249,7 @@ describe('scriptedExecutor', () => {
 		const session = open(
 			scriptedExecutor(
 				(_step, _seat, call) =>
-					call === 1 ? speak('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
+					call === 1 ? say('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);
@@ -280,7 +276,7 @@ describe('scriptedExecutor', () => {
 		const session = open(
 			scriptedExecutor((step) => {
 				seen.push(step.results.map((result) => result.text).join(','));
-				return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
+				return step.results.some((r) => r.text === 'delivered') ? quiet() : say('again');
 			}, agent('a')),
 		);
 		await session.pass(input(respond));
@@ -292,7 +288,7 @@ describe('scriptedExecutor', () => {
 
 	it('stops when the room answers stale, and never asks again', async () => {
 		const { open, commits } = harness(() => ({ stale: 'lease ended' }));
-		const session = open(scriptedExecutor(() => speak('hi'), agent('a')));
+		const session = open(scriptedExecutor(() => say('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
@@ -326,7 +322,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => speak('summary'), agent('a')));
+		const session = open(scriptedExecutor(() => say('summary'), agent('a')));
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');
@@ -366,7 +362,7 @@ describe('scriptedExecutor', () => {
 		const passes: Pass[] = [];
 		const steered: number[] = [];
 		const steps: Step[] = [];
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const state: ActivationState = new ActivationState(
 			(activation) => {
 				opened.push(activation);
@@ -427,7 +423,7 @@ describe('scriptedExecutor', () => {
 				message: error.message,
 				error,
 			});
-			expect(events).toEqual([{ type: 'error', agent: 'a', activation: 'act-1', error, cause }]);
+			expect(events).toEqual([{ type: 'error', seat: 'a', activation: 'act-1', error, cause }]);
 		},
 	);
 
@@ -640,8 +636,8 @@ describe('scriptedExecutor', () => {
 		);
 		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(events).toEqual([
-			{ type: 'tool_execution_start', agent: 'a', activation: 'act-1', toolName: 'echo' },
-			{ type: 'tool_execution_end', agent: 'a', activation: 'act-1', toolName: 'echo' },
+			{ type: 'tool_call', seat: 'a', activation: 'act-1', name: 'echo' },
+			{ type: 'tool_result', seat: 'a', activation: 'act-1', name: 'echo' },
 		]);
 	});
 });

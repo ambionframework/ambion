@@ -9,7 +9,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
+import { callTool, quiet, scriptedStream, toolNames } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
@@ -30,7 +30,7 @@ describe('room bindings', () => {
 						return 'done';
 					},
 				});
-				const stream = scripted((context, _agent, call) => {
+				const stream = scriptedStream((context, _agent, call) => {
 					prompts.push(context.systemPrompt ?? '');
 					return call === 1 && toolNames(context).includes(label) ? callTool(label, {}) : quiet();
 				});
@@ -65,7 +65,7 @@ describe('room bindings', () => {
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		await waitForRoom(first);
 		await expect(
@@ -93,7 +93,7 @@ describe('room bindings', () => {
 			agents: [original],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		try {
 			faulty.fail(true, 'message');

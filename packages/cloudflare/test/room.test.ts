@@ -315,7 +315,7 @@ it('keeps a stopped record readable without resuming the room, and runs the alar
 		name: 'room-stopped-status',
 		initialized: true,
 		exchange: undefined,
-		exchanges: [{ status: 'closed', from: exchange.from, summary: { status: 'silent' } }],
+		exchanges: [{ status: 'closed', from: exchange.from, summary: { kind: 'silent' } }],
 	});
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
 });

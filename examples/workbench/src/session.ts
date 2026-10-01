@@ -214,7 +214,7 @@ export class Session {
 					.map((participant) => participant.name),
 			),
 			working: workingAgents(view),
-			activity: activity ? `${activity.agent ?? 'room'}: ${activity.text}` : undefined,
+			activity: activity ? `${activity.seat ?? 'room'}: ${activity.text}` : undefined,
 			expanded: this.expanded,
 			tail: this.tail(view),
 			failures: view.failures,

@@ -109,10 +109,10 @@ function sqlToolGuidance(database: string): string {
 
 /** The SQL capability: the `sql` tool over the SQL owner, its note, and the note of the backend. */
 export function sqlCapability(backend: SqlBackend, owner: WorkspaceResource<SqlEnv>): Capability {
-	const { database, guidance } = backend;
+	const { label, guidance } = backend;
 	return {
-		tools: [createSqlTool({ sql: owner.use, database })],
-		notes: [sqlToolGuidance(database), guidance],
+		tools: [createSqlTool({ sql: owner.use, database: label })],
+		notes: [sqlToolGuidance(label), guidance],
 	};
 }
 

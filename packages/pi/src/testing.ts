@@ -3,7 +3,7 @@
  * `piExecution({ stream })` takes, the helpers that read what the model was
  * shown, and the harness that runs the executor suite of
  * `@ambionframework/ambion/conformance` on the Pi executor. A script answers
- * with the verbs of `@ambionframework/ambion/testing`: `speak`, `callTool`,
+ * with the verbs of `@ambionframework/ambion/testing`: `say`, `callTool`,
  * `schedule`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
  * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
  * no model.
@@ -11,7 +11,7 @@
 
 import { contentText } from '@ambionframework/ambion';
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
-import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
+import { callTool, quiet, type Reply, say } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
 import {
@@ -84,7 +84,7 @@ function messageOf(output: Reply | AssistantMessage): AssistantMessage {
  * a script that throws into an error on the stream. It turns a reply into a
  * message: one tool call for each call, or a text that ends the run.
  */
-export function scripted(script: PiScript): StreamFn {
+export function scriptedStream(script: PiScript): StreamFn {
 	const calls = new Map<string, number>();
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
@@ -176,7 +176,7 @@ const LOOKS = 500;
  */
 async function awaitSteer(context: Context, text: string): Promise<Reply> {
 	if (sayResults(context).length > 0) return quiet();
-	if (contextText(context).includes('[new] ')) return speak(text);
+	if (contextText(context).includes('[new] ')) return say(text);
 	const looks = context.messages.filter((message) => message.role === 'toolResult').length;
 	if (looks >= LOOKS) return quiet();
 	await new Promise((resolve) => setTimeout(resolve, LOOK));
@@ -193,18 +193,18 @@ const FAILURES = {
 export function scriptOf(plan: ExecutorPlan): PiScript {
 	switch (plan.kind) {
 		case 'sayOnce':
-			return (context) => (sayResults(context).length === 0 ? speak(plan.text) : quiet());
+			return (context) => (sayResults(context).length === 0 ? say(plan.text) : quiet());
 		case 'holdSay':
 		case 'missThenResay':
 			// A `missed` answer is an error result, and it leaves the seat a second say.
 			return (context) => {
 				const results = sayResults(context);
 				return results.length === 0 || (results.length === 1 && results[0] === true)
-					? speak(plan.text)
+					? say(plan.text)
 					: quiet();
 			};
 		case 'sayEachPass':
-			return (context) => (context.messages.at(-1)?.role === 'user' ? speak(plan.text) : quiet());
+			return (context) => (context.messages.at(-1)?.role === 'user' ? say(plan.text) : quiet());
 		case 'awaitSteer':
 			return (context) => awaitSteer(context, plan.text);
 		case 'usage':
@@ -219,7 +219,7 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 					totalTokens: input + output + cacheRead + cacheWrite,
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				};
-				return { ...messageOf(speak(plan.text)), usage };
+				return { ...messageOf(say(plan.text)), usage };
 			};
 		case 'fail':
 			return () => {
@@ -244,7 +244,7 @@ export function piExecutorHarness(): ExecutorHarness {
 					executor: pi({ instructions: '', model: `scripted/${definition.name}` }),
 				},
 				model: stubModel,
-				stream: scripted(scriptOf(plan)),
+				stream: scriptedStream(scriptOf(plan)),
 				now: Date.now,
 				sessions: memorySessions(),
 			}),

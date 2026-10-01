@@ -9,10 +9,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import type {
+	ActivationEvent,
 	ActivationView,
 	AgentDefinition,
 	CommitRequest,
-	ExecutionEvent,
 	Executor,
 	ExecutorSession,
 	RoomProtocol,
@@ -90,7 +90,7 @@ export function fakeRoom(
 	const steps: Step[] = [];
 	const commits: CommitRequest[] = [];
 	const answers: ('committed' | 'missed')[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	let lastSeq = 1;
 	const room: RoomProtocol = {
 		view: async () => ({ stale: 'unused' }),

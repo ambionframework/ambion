@@ -1,7 +1,7 @@
 import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, readRoom } from '../src/index.ts';
-import type { Close } from '../src/journal/events.ts';
+import type { Close } from '../src/journal/entries.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { toRoomRead } from '../src/room/read.ts';
@@ -143,12 +143,12 @@ describe('coherent room reads', () => {
 				status: 'closed',
 				at: opening.at,
 				through: 3,
-				summary: { status: 'published', summary: published },
+				summary: { kind: 'published', summary: published },
 			}),
 			{ status: 'open', ...open, activations: [] },
 		]);
 		const closed = snapshot.exchanges[0];
-		if (closed?.status !== 'closed' || closed.summary.status !== 'published')
+		if (closed?.status !== 'closed' || closed.summary.kind !== 'published')
 			throw new Error('Expected a published summary.');
 		Reflect.set(closed.summary.summary, 'text', 'mutated');
 		expect(read().exchanges[0]).toMatchObject({ summary: { summary: { text: 'Done.' } } });
@@ -170,9 +170,9 @@ describe('coherent room reads', () => {
 			if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
 			return exchange.summary;
 		};
-		expect(outcome(pending)).toEqual({ status: 'pending', writer: 'assistant' });
-		expect(outcome(silent)).toEqual({ status: 'silent' });
-		expect(outcome(failed)).toEqual({ status: 'failed' });
+		expect(outcome(pending)).toEqual({ kind: 'pending', writer: 'assistant' });
+		expect(outcome(silent)).toEqual({ kind: 'silent' });
+		expect(outcome(failed)).toEqual({ kind: 'failed' });
 		expect(pending.through).toBe(4);
 	});
 
@@ -211,7 +211,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			const pending = await readRoom(name, { runtime });
 			const first = pending.exchanges[0];
 			expect(first?.status === 'closed' && first.summary).toEqual({
-				status: 'pending',
+				kind: 'pending',
 				writer: 'assistant',
 			});
 			await appendRecord(opened.journals, name, [
@@ -220,7 +220,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			const complete = await readRoom(name, { runtime });
 			expect(complete.messages).toHaveLength(pending.messages.length);
 			expect(complete.through).toBeGreaterThan(pending.through);
-			expect(complete.exchanges[0]).toMatchObject({ summary: { status: expected } });
+			expect(complete.exchanges[0]).toMatchObject({ summary: { kind: expected } });
 		},
 	);
 

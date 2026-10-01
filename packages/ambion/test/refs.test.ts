@@ -9,7 +9,7 @@ import {
 	commitUri,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	messageUri,
@@ -25,7 +25,7 @@ import {
 } from '../src/index.ts';
 import { isRef, REF_LIMITS, refsRefusal } from '../src/refs.ts';
 import { assistant, collect, roomName, scriptedAgent } from './support/room.ts';
-import { byAgent, callTool, isClosingContext, quiet, scripted } from './support/scripted.ts';
+import { byAgent, callTool, isClosingContext, quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -218,7 +218,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 		const opened = await storage.open();
 		const name = roomName(`refs-room-${storage.name}`);
 		let from = 0;
-		const stream = scripted(
+		const stream = scriptedStream(
 			byAgent({
 				product: (_context, _agent, call) =>
 					call === 1 ? callTool('say', { text: 'Answer.', refs: answerRefs }) : quiet(),
@@ -247,7 +247,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 		expect(await exchange.waitForSummary()).toMatchObject({ kind: 'summary', refs: cited });
 		const notified = events.flatMap((event) =>
 			event.type === 'message' &&
-			(isSpoken(event.message) || isSummary(event.message)) &&
+			(isSaid(event.message) || isSummary(event.message)) &&
 			event.message.refs !== undefined
 				? [event.message.refs]
 				: [],

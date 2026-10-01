@@ -1,5 +1,5 @@
 /**
- * One room, two executor families: a Pi seat and a Codex seat. Both speak.
+ * One room, two executor kinds: a Pi seat and a Codex seat. Both speak.
  * The file needs the Codex key and the key of the Pi model: `AMBION_MODEL`,
  * `anthropic/claude-sonnet-5` when unset.
  */

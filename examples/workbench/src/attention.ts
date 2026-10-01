@@ -9,7 +9,7 @@ import type { Approval, RoomView } from './workbench.ts';
 export function newest(exchange: Exchange | undefined): ExchangeActivation | undefined {
 	const activations = exchange?.activations ?? [];
 	return (
-		activations.findLast((activation) => activation.outcome.status !== 'abandoned') ??
+		activations.findLast((activation) => activation.outcome.kind !== 'abandoned') ??
 		activations.at(-1)
 	);
 }

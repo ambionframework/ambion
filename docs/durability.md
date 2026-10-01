@@ -193,7 +193,7 @@ execution has started.
 orders cancellation with messages and executor commits. Work before that boundary
 loses publication authority, including expired leases, pending retries, unread
 steering, and scheduled says that wait to return. Messages recorded afterward can
-start fresh work. Membership and human
+start fresh work. The roster and human
 presence remain unchanged.
 
 Cancellation closes the current exchange without assigning a summary. An existing

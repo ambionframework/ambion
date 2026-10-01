@@ -43,7 +43,7 @@ it('builds every entry the manifest names', async () => {
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
-		'DEFAULT_GUIDANCE',
+		'DEFAULT_SPEAKING',
 		'PACKAGE_NAME',
 		'REF_LIMITS',
 		'addUsage',
@@ -57,7 +57,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'defineTool',
 		'isPosted',
 		'isPresence',
-		'isSpoken',
+		'isSaid',
 		'isSummary',
 		'loggedToolResult',
 		'messageUri',
