@@ -407,7 +407,7 @@ definition:
   against the schema. A `RoomTool` applies it after the check.
 - The harness runs a batch in turn when a tool sets `executionMode` to
   `sequential`.
-- The harness gives the tool `onUpdate`, and the abort signal of the run.
+- The harness gives the tool `onUpdate`, and the abort signal of the pass.
 - The harness keeps `details` and `terminate` of the result. A `RoomTool`
   gives the content alone.
 
@@ -453,7 +453,7 @@ the cap applies. The sum holds when the host passes no logger.
 each activation, and passes the executor its `record` with the activation,
 as a `StepSink`. The driver keeps the passes, the usage, and the close. The
 sink gives each step to the `logger` that the host passes to
-`createRuntime`, as one `TraceRecord`: `room`, `seat`, and the stamped step.
+`createRuntime`, as one `TracedStep`: `room`, `seat`, and the stamped step.
 With no logger, the sink drops the steps. The record and the trace never share an entry.
 
 <picture>

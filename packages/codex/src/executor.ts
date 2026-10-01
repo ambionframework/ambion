@@ -7,6 +7,11 @@
  * later pass sends the delta. A turn ends on `turn.completed` or
  * `turn.failed`.
  *
+ * - **Seat text.** The SDK has no system prompt option. The harness note,
+ *   the mechanism and the agent part go in the config of the client, fixed
+ *   for the activation (`options.ts`). The first prompt holds the view
+ *   alone. A `codex` seat that resumes a thread is the exception: Codex
+ *   keeps the stored developer message, so that prompt carries the text.
  * - **Home.** Every seat runs in the Codex home of its execution, with the
  *   login of the host linked in (`home.ts`). The config and the
  *   instructions of the host user never reach a seat.
@@ -34,7 +39,6 @@ import type {
 	ExecutorActivation,
 	ExecutorSession,
 	Pass,
-	PassRecord,
 	PassResult,
 	ReadRange,
 	RoomToolOptions,
@@ -52,7 +56,13 @@ import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from '
 import { CodexSteps, changedPaths } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
 import { openHome, type SeatHome, seatHome } from './home.ts';
-import { type CodexExecutionOptions, clientOptions, codexOf, threadOptions } from './options.ts';
+import {
+	type CodexExecutionOptions,
+	clientOptions,
+	codexOf,
+	seatText,
+	threadOptions,
+} from './options.ts';
 import { citing, servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
@@ -77,15 +87,6 @@ export interface CodexExecutorOptions extends CodexExecutionOptions {
 	/** Answers the catalog entry of a model. Absent, `codex debug models` on the installed binary. */
 	readonly catalog?: CatalogSource;
 }
-
-/**
- * Codex answers in its own final message when a prompt does not say
- * otherwise. The room hears only `say`, so the first prompt of each
- * activation says so.
- */
-export const RESUMED_NOTE =
-	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
-	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
@@ -178,12 +179,13 @@ class Activation implements ExecutorSession {
 	async pass(pass: Pass): Promise<PassResult> {
 		try {
 			this.ordinary = pass.view.spec.purpose.kind !== 'summarize';
-			const prompt = await this.promptFor(pass);
+			const prompt = await pass.record();
 			if (prompt === undefined) return { failed: false };
+			const text = this.promptText(pass, prompt.text);
 			const thread = await this.start(pass);
 			if (this.stopped) return { failed: false };
 			this.reading = prompt.range;
-			return await this.attempt(thread, prompt.text);
+			return await this.attempt(thread, text);
 		} catch (error) {
 			return this.broke(error);
 		}
@@ -212,13 +214,16 @@ class Activation implements ExecutorSession {
 		}
 	}
 
-	/** The prompt of a pass: the mechanism, the agent and the whole view first, then the delta, or none when nothing is new. */
-	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
-		const record = await pass.record();
-		if (record === undefined || pass.kind === 'delta' || this.thread !== undefined) return record;
-		// The thread has no system prompt of its own, so the first prompt carries it.
-		const text = `${RESUMED_NOTE}\n\n${pass.mechanism}\n\n${pass.agent}\n\n${record.text}`;
-		return { ...record, text };
+	/**
+	 * The text to run. Codex keeps the developer message stored with a resumed
+	 * thread, so the config cannot replace it. The first prompt of a `codex`
+	 * seat that resumes carries the seat text. If the resume fails, the fresh
+	 * thread runs the same prompt and holds the text twice.
+	 */
+	private promptText(pass: Pass, view: string): string {
+		const resumes = this.thread === undefined && pass.resume !== undefined;
+		if (!resumes || codexOf(this.definition.executor).nativeTools !== 'codex') return view;
+		return `${seatText(pass)}\n\n${view}`;
 	}
 
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
@@ -228,8 +233,10 @@ class Activation implements ExecutorSession {
 		const home = seatHome(this.options);
 		await openHome(home);
 		this.home = home;
+		// The seat text is fixed for the activation. The client config carries it.
+		const seat = seatText(pass);
 		// The catalog comes next. A model with no entry fails before anything opens.
-		const scratch = await this.seal();
+		const scratch = await this.seal(seat);
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
 		const tools = servedTools(pass.tools, this.activation);
@@ -240,20 +247,20 @@ class Activation implements ExecutorSession {
 			scratch?.remove();
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		this.client = make(clientOptions(this.options, home, bridge.socketPath, scratch));
+		this.client = make(clientOptions(this.options, home, bridge.socketPath, seat, scratch));
 		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
 
-	/** The scratch of a seat with no native tools. A seat with `nativeTools: 'codex'` has none. */
-	private async seal(): Promise<Scratch | undefined> {
+	/** The scratch of a seat with no native tools, with the seat text in it. A seat with `nativeTools: 'codex'` has none. */
+	private async seal(seat: string): Promise<Scratch | undefined> {
 		const executor = codexOf(this.definition.executor);
 		if (executor.nativeTools === 'codex') return undefined;
 		const home = this.home;
 		if (home === undefined) throw new Error('The Codex home is not open.');
 		const source = this.options.catalog ?? installedCatalog(this.options.codexPath, home.env);
-		return scratchFor(executor.model, source);
+		return scratchFor(executor.model, source, seat);
 	}
 
 	/** Open a thread: the one to resume when `resume` names it, else a fresh one. */

@@ -14,6 +14,16 @@ it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
 and `Result`, so `Step` names the trace step alone. The request counter of a
 script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
 `AMBION_HARNESS`.
+**Three types, one method, and two fields change name.**
+`@ambionframework/simulator` exports `Simulation` and `SimulationExchange`
+in place of `Run` and `RunExchange`. A run now means one run of a room over
+its journal. `@ambionframework/ambion` exports `TracedStep` in place of
+`TraceRecord`, and the parameter of `TraceLogger` is `traced`.
+`AuditLog.record` of `@ambionframework/workspace` is `append`, the name that
+`WorkspaceLog.append` has for the same act. `RoomProjection.record` and
+`OwedFacts.record` are `summaryFacts`, because a record is the messages
+that participants read. The internal constant `DEFAULT_TRACE` is
+`DEFAULT_TRACE_POLICY`. No journal body changes.
 **A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
 person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
 now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
@@ -86,6 +96,27 @@ The word `Runtime` now names the core `Runtime` alone.
 `scripted`. The core testing entry keeps `scripted`, the scripted
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
+
+**Breaking: the seat text of a Codex seat leaves the first user message.**
+The Codex SDK has no system prompt option, so the executor put the harness
+note, the mechanism, and the agent instructions in front of the view in the
+first user message, under the base prompt of Codex, about 18 KB. The executor now
+passes that text in the config of the client, fixed for the activation. The
+first user message holds the view alone. A seat with `nativeTools: 'none'`
+gets the text in a file in the scratch directory, named by
+`model_instructions_file`. The file replaces the base prompt of Codex, so the
+first developer message is the seat text and no message starts with "You are
+Codex". A seat with `nativeTools: 'codex'` gets the text as
+`developer_instructions` after the base prompt, which teaches its native
+tools.
+
+**A resumed `codex` thread keeps its developer message.** Codex 0.158.0
+keeps the `developer_instructions` that a thread started with, and ignores a
+new value on resume. The seat text depends on the purpose of the activation.
+The first prompt of a `nativeTools: 'codex'` activation that resumes a thread
+therefore carries the seat text, then the view. A fresh thread and every
+`nativeTools: 'none'` activation send the view alone. A resumed `'none'`
+activation uses its own instructions file.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets

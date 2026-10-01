@@ -42,8 +42,9 @@ cannot be shared: use the file store, or run `codex login` with
 `CODEX_HOME` set to the seat home.
 
 **Codex owns the loop, and the room owns the record.** One Codex thread
-serves each activation. The first pass sends the mechanism, the agent
-instructions, and the whole view. A later pass sends the delta.
+serves each activation. The seat text, which holds the mechanism and the
+agent instructions, goes in the client config. The first pass sends the whole
+view. A later pass sends the delta.
 
 **Room tools reach Codex through a stdio server.** Codex spawns
 `dist/room-tools-server.mjs`. The server forwards each call over a local
