@@ -1079,6 +1079,21 @@ for the callback that is already running.
 
 ## Backends and limits
 
+**Both deployments provide the core workspace tools.** A backend with ports
+also provides a private transport for sensor servers.
+
+| What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Where the files are            | In the host's memory, or in a directory on the host                  | On the server                                              |
+| Isolation between agents       | None: every agent reads and writes every home                        | One Unix account for each agent, and a private home        |
+| Network                        | None                                                                 | The server's network                                       |
+| Commands                       | A simulated shell with a fixed set                                   | A real bash with the server's commands                     |
+| Output of a running process    | Shows when the process ends                                          | Shows while the process runs                               |
+| Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
+| Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
+| Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
+| Sensor servers                 | No port transport; no `connect` or `observe` tools                   | Workstation provides loopback forwarding over SSH          |
+
 `memoryBackend()` keeps files in process. Its optional seed writes files
 before the first use, and `readFiles()` supports host inspection. Disposal
 releases its cached filesystem, so a disposed resource does not recreate a
