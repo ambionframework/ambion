@@ -23,10 +23,10 @@ import { crash, roomName, scriptedAgent, stateOf, waitForRoom } from './support/
 import {
 	callTool,
 	contextText,
-	later,
 	type PiScript,
 	quiet,
 	say,
+	schedule,
 	scriptedStream,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -67,7 +67,7 @@ const changesItsMind: PiScript = (context) => {
 	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
 	if (last?.startsWith('dismissed')) return say('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
-	return later('Check the build.', AFTER);
+	return schedule('Check the build.', AFTER);
 };
 
 const kinds = (messages: readonly Message[]) =>

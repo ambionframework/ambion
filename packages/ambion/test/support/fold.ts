@@ -34,7 +34,7 @@ import { advancePeople, type PersonState } from '../../src/room/presence.ts';
 import { projectState, replay } from '../../src/room/projection.ts';
 import { coversAttempt } from '../../src/room/rules.verified.ts';
 import { changesScheduled, scheduleStep } from '../../src/room/scheduled.ts';
-import type { PendingSay } from '../../src/scheduling.ts';
+import type { ScheduledSay } from '../../src/scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../../src/types.ts';
 
 /** The fields an id encodes, as the fold decodes them for a lease that a test writes by hand. */
@@ -122,8 +122,8 @@ function openExchange(
 }
 
 /** The says that wait to return, folded over the record after the last cancellation. */
-function foldScheduled(messages: readonly Message[], cancelledAt: Seq | undefined): PendingSay[] {
-	let list: PendingSay[] = [];
+function foldScheduled(messages: readonly Message[], cancelledAt: Seq | undefined): ScheduledSay[] {
+	let list: ScheduledSay[] = [];
 	for (const message of after(messages, cancelledAt)) {
 		if (changesScheduled(message)) list = scheduleStep(list, message);
 	}

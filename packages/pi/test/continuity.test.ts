@@ -182,8 +182,8 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, prompts the reminders, the pending says, and the delta, and records it', async () => {
-		// A bundle reminder and the pending says reach the model on a continued session too, before the delta.
+	it('continues the session the room names, prompts the reminders, the scheduled says, and the delta, and records it', async () => {
+		// A bundle reminder and the scheduled says reach the model on a continued session too, before the delta.
 		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
 		const { seen, run } = seatOn(new TwoQuestions(), await store(), undefined, definition);

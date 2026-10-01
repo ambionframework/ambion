@@ -1,4 +1,4 @@
-import type { ParticipantInfo, PendingSay } from '@ambionframework/ambion';
+import type { ParticipantInfo, ScheduledSay } from '@ambionframework/ambion';
 import type { Block } from './timeline.ts';
 import type { RoomAction, RoomView } from './workbench.ts';
 
@@ -65,12 +65,12 @@ export function emptyText(view: RoomView): string {
 
 /** The notes after the closed exchanges: what waits on the person, then each say that waits. */
 export function notesOf(attention: readonly string[], view: RoomView): Block[] {
-	const notes = [...attention, ...view.scheduled.map(pendingLine)];
+	const notes = [...attention, ...view.scheduled.map(scheduledLine)];
 	return notes.map((text) => ({ type: 'note', text }));
 }
 
 /** One say that waits to return, as the conversation notes it. */
-function pendingLine(say: PendingSay): string {
+function scheduledLine(say: ScheduledSay): string {
 	const due = new Date(say.due);
 	const later = due.valueOf() - Date.now() > 86_400_000;
 	const time = Number.isNaN(due.valueOf())

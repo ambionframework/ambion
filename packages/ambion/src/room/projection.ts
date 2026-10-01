@@ -17,7 +17,7 @@
 
 import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { PendingSay } from '../scheduling.ts';
+import type { ScheduledSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { messageDelivery } from './delivery.ts';
 import { exchangeAfter } from './exchange.ts';
@@ -58,7 +58,7 @@ export interface RoomProjection {
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: OpenWake[];
 	readonly owed: Owed[];
-	readonly scheduled: PendingSay[];
+	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
 

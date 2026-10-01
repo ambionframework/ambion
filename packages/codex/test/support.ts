@@ -3,8 +3,10 @@
  * one activation opened over a room that records what the seat commits, and
  * a client of the room tools server.
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
@@ -235,6 +237,10 @@ function replay(turns: readonly Turn[]) {
 	return { client, seen };
 }
 
+/** The Codex home of the executors in this file. The replay client never reads it, and it never holds a login. */
+const SEAT_HOME = mkdtempSync(join(tmpdir(), 'ambion-codex-seat-'));
+process.once('exit', () => rmSync(SEAT_HOME, { recursive: true, force: true }));
+
 /** An executor of `definition` over a replay client, and a way to open its activations. */
 export function open(
 	turns: readonly Turn[],
@@ -249,7 +255,13 @@ export function open(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createCodexExecutor({ definition, client, catalog });
+	const executor = createCodexExecutor({
+		definition,
+		client,
+		catalog,
+		home: SEAT_HOME,
+		login: false,
+	});
 	/** The core state of one activation, as the driver opens it. */
 	const activate = (id = 'message:1:gpt:1') =>
 		new ActivationState(executor, {

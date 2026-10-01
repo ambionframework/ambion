@@ -8,7 +8,7 @@ import type { Close } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import { pendingFor, toRoomRead } from '../src/room/read.ts';
+import { awaitingFor, toRoomRead } from '../src/room/read.ts';
 import type { Exchange, Message, RoomRead, SummaryMessage } from '../src/types.ts';
 import { evolve } from './support/evolve.ts';
 import { activationOf, foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
@@ -125,7 +125,7 @@ describe('exchange outcomes', () => {
 		const awaited = outcome?.kind === 'awaiting' ? outcome.person : undefined;
 		expect(awaited).toBe(kind === 'awaiting' ? 'sam' : undefined);
 		for (const person of ['priya', 'sam'])
-			expect(pendingFor(readOf(entries), person).map((exchange) => exchange.from)).toEqual(
+			expect(awaitingFor(readOf(entries), person).map((exchange) => exchange.from)).toEqual(
 				person === awaited ? [4] : [],
 			);
 	});
@@ -144,7 +144,7 @@ describe('exchange outcomes', () => {
 		// A returned say has no author, so a report to a person asks that person.
 		const report = [...room, returned, said(5, 'worker', 'priya'), closeOf(5)];
 		expect(outcomes(report)).toEqual([{ kind: 'awaiting', person: 'priya' }]);
-		expect(pendingFor(readOf(report), 'priya').map((exchange) => exchange.from)).toEqual([4]);
+		expect(awaitingFor(readOf(report), 'priya').map((exchange) => exchange.from)).toEqual([4]);
 		// sam asks back and becomes the person of the exchange, and the approval still waits.
 		const approval = [
 			...room,

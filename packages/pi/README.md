@@ -175,7 +175,7 @@ model are permanent. Every other failure is transient.
 `@ambionframework/pi/testing` exports a scripted stream and its helpers:
 `scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
 `toolResultTexts`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `say`, `callTool`, `later`, `seat`,
+`@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
 `quiet`, and `byAgent`. `piExecutorFixture()` runs the executor suite of
 `@ambionframework/ambion/conformance` on a scripted stream, and `scriptOf`
 maps each plan of the suite to a script.

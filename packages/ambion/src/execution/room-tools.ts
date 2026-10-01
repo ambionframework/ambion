@@ -411,7 +411,7 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 	};
 }
 
-/** The room tool that dismisses one pending say of the seat, by its seq. */
+/** The room tool that dismisses one scheduled say of the seat, by its seq. */
 function dismissTool(binding: RoomToolBinding): RoomTool {
 	return {
 		name: DISMISS.name,
