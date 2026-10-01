@@ -139,7 +139,7 @@ members:
 | `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
 | `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
 | `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
-| `steer?(after, seq, line)` | Takes a line into a live pass. Absent when the family cannot.                       |
+| `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the family cannot.                      |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
 **The core records the session under the executor kind.** The release
@@ -273,11 +273,29 @@ arrive does not change the position.
 **The core decides on another pass.** It runs one when the record stands
 past `readThrough` and the activation was not cut.
 
-**Every family stamps a `steer` step with `consumed`.** `consumed: true`
-marks a line the pass will deliver. `consumed: false` marks a line that the
-pass could not use before it ended, and the next delta carries it. Each
-family page states the moment its executor sets `consumed: true`, because
-the moment differs by family.
+**The core records the `steer` step of every line, with `consumed`.**
+`consumed: true` marks a line the pass delivers. `consumed: false` marks a
+line that the pass does not use before it ends, and the next delta carries
+it. The core decides by the moment the line lands:
+
+| The line lands                                     | The core records                                                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Before the first pass                              | Nothing yet. The line waits for the first pass, and then follows the rules below.                            |
+| Before a first pass that never runs                | `consumed: false` when the pass would have started: a cut, a view of another seat, or a failed claim.        |
+| Between two passes                                 | `consumed: false` at once.                                                                                   |
+| In a pass, and the view of the pass holds the line | `consumed: true` at once.                                                                                    |
+| In a pass, and the executor has no `steer`         | `consumed: false` at once.                                                                                   |
+| In a pass, and the executor has `steer`            | `consumed: true` when the executor calls `read` for the line, or `consumed: false` when the pass ends first. |
+| In a pass, and `steer` throws                      | `consumed: false` at once, unless the executor read the line first.                                          |
+
+The core calls `steer` at any moment after it calls `pass` and before that
+pass settles. That includes the moment before the body of `pass` reaches its
+first `await`. The executor holds a line that its harness cannot take yet,
+delivers it when the harness can, and drops what it holds when `pass`
+settles. It calls `read({ after, through: seq })` when the model consumes
+the line, with the `after` and the `seq` that `steer` received. It records
+no `steer` step. Each family page states the moment its executor calls
+`read`, because the moment differs by family.
 
 **The room applies the activation token limit.** It keeps the newest
 messages that fit `activationTokenLimit`, and keeps the open exchange
@@ -415,7 +433,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `tool_call`   | executor    | A tool starts, with its input.                                                                     |
 | `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
-| `steer`       | executor    | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
+| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
 | `usage`       | executor    | Tokens and cost.                                                                                   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
@@ -576,7 +594,8 @@ anticipated family. No package for it exists yet.
 The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 
 **A family that cannot steer still passes.** Its `readThrough` advances at
-the pass boundary, and the driver holds a steer for the next pass. What a
+the pass boundary, and the driver holds a steer for the next pass. The
+core records that line as `consumed: false`. What a
 harness remembers between activations is in [Trust](trust.md).
 
 ## How to write an adapter
@@ -600,14 +619,20 @@ family. `@ambionframework/claude` is the worked example, and
    [The room tools](#the-room-tools) states the commit key and the room
    answers.
 4. **Record the steps you own.** Call `trace.record` of the activation for
-   `thinking`, `text`, `tool_call`, `tool_result`, `steer`, `approval`, and
-   `usage`. The driver records `pass`, `room`, and `end`, and the core
-   raises the tool events from the steps.
+   `thinking`, `text`, `tool_call`, `tool_result`, `approval`, and
+   `usage`. The driver records `pass`, `room`, and `end`. The core records
+   `steer`, and it raises the tool events from the steps.
 5. **Report what the model consumed.** Call `read(range)` when the model
    consumes a range, and `delivered(call)` when a tool result reaches it,
    and on nothing earlier. [How an activation runs](#how-an-activation-runs)
    states the events. Declare `steer` only when the harness takes a line
-   into a live pass.
+   into a live pass. The core calls `steer` at any moment after it calls
+   `pass` and before that pass settles, also before the body of `pass`
+   reaches its first `await`. Hold a line that the harness cannot take yet,
+   deliver it when the harness can, and drop what you hold when `pass`
+   settles. Call `read({ after, through: seq })` when the model consumes a
+   line, and record no `steer` step.
+   [The core rule](#how-an-activation-runs) sets `consumed`.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
    with `classifyCause`. Throw `PermanentError` for a fault that a retry
    cannot clear, such as a model that the registry does not hold, and

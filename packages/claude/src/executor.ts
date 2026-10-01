@@ -11,9 +11,10 @@
  *   that the model read a range when the SDK echoes the user message back,
  *   and on nothing earlier. It tells the core that a tool result reached
  *   the model when the SDK reports that result.
- * - **Steer.** A line that lands mid-pass joins the streaming input. The
- *   activation records it as consumed on its echo. A steer that finds no
- *   pass in flight waits for the record: the next delta carries it.
+ * - **Steer.** A line that lands mid-pass joins the streaming input, and
+ *   its echo tells the core that the model read it. The core records the
+ *   `steer` step ([`executors.md`](../../../docs/executors.md)), and a line
+ *   with no echo waits for the next delta.
  * - **Cut.** The signal of the activation interrupts the query. `close` ends
  *   the input and the process, and the driver calls it when the activation
  *   is over.
@@ -63,7 +64,7 @@ export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
 	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
 }
 
-/** A steered line held until its pass starts. */
+/** A steered line held until its pass sends its prompt. */
 interface Held {
 	readonly after: Seq;
 	readonly seq: Seq;
@@ -79,7 +80,7 @@ class Activation implements ExecutorSession {
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
-	/** The steers held before the query starts. */
+	/** The steers held until the pass sends its prompt. */
 	private held: Held[] = [];
 	/** The messages sent and not yet echoed. A restart of the query sends them again. */
 	private readonly outbox = new Map<string, SDKUserMessage>();
@@ -116,18 +117,14 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * A line landed while this activation worked. A pass in flight takes it
-	 * into the input, and the echo confirms it. Before the first pass it
-	 * waits. Between passes it waits for the record: the next delta has it.
+	 * A line landed while a pass runs. Until the pass sends its prompt, the
+	 * line waits: the pass sends it right after the prompt. Once the pass sent
+	 * its prompt, the line joins the input, and the echo confirms it. A line
+	 * still held when the pass settles waits for the next delta.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.stream === undefined) {
-			this.held.push({ after, seq, line });
-		} else if (this.settle === undefined) {
-			this.trace.record({ type: 'steer', seq, consumed: false });
-		} else {
-			this.send(line, { range: { after, through: seq }, steer: true });
-		}
+		if (this.settle === undefined) this.held.push({ after, seq, line });
+		else this.send(line, { after, through: seq });
 	}
 
 	/** The activation was cut: interrupt the query. The pass in flight ends. */
@@ -154,13 +151,15 @@ class Activation implements ExecutorSession {
 				this.settle = resolve;
 			});
 			this.start(pass);
-			this.send(prompt.text, { range: prompt.range, steer: false });
-			this.flush(pass.view.through);
+			this.send(prompt.text, prompt.range);
+			this.flush();
 			return await done;
 		} catch (error) {
 			return failedPass(error);
 		} finally {
 			this.settle = undefined;
+			// A line the query never took waits for the next delta.
+			this.held = [];
 			clearTimeout(this.grace);
 		}
 	}
@@ -181,24 +180,17 @@ class Activation implements ExecutorSession {
 			: record;
 	}
 
-	/**
-	 * The steers held before the query started. A line the view already
-	 * holds reached the model as part of it. Any other joins the input.
-	 */
-	private flush(through: Seq): void {
+	/** The steers held until the pass sent its prompt join the input. */
+	private flush(): void {
 		for (const held of this.held.splice(0)) {
-			if (held.seq <= through) {
-				this.trace.record({ type: 'steer', seq: held.seq, consumed: true });
-			} else {
-				this.send(held.line, { range: { after: held.after, through: held.seq }, steer: true });
-			}
+			this.send(held.line, { after: held.after, through: held.seq });
 		}
 	}
 
 	/** Push one user message into the input. Its echo tells the core that the model read its range. */
-	private send(text: string, sent: { range: ReadRange; steer: boolean }): void {
+	private send(text: string, range: ReadRange): void {
 		const uuid = crypto.randomUUID();
-		this.echoes.expect(uuid, sent);
+		this.echoes.expect(uuid, range);
 		const message = userMessage(text, uuid);
 		this.outbox.set(uuid, message);
 		this.inbox.push(message);
@@ -295,11 +287,10 @@ class Activation implements ExecutorSession {
 
 	/** The SDK sent a user message back: the model has it, so the core counts its range read. */
 	private echoed(message: Extract<SDKMessage, { type: 'user' }>): void {
-		const sent = this.echoes.confirm(message.uuid);
-		if (sent === undefined) return;
+		const range = this.echoes.confirm(message.uuid);
+		if (range === undefined) return;
 		if (message.uuid !== undefined) this.outbox.delete(message.uuid);
-		this.activation.read(sent.range);
-		if (sent.steer) this.trace.record({ type: 'steer', seq: sent.range.through, consumed: true });
+		this.activation.read(range);
 	}
 
 	/**

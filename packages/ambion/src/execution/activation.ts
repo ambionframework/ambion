@@ -7,6 +7,12 @@
  * raises the tool events from the steps, and raises the `error` event of a
  * failure once. The executor session runs its harness over what the state
  * hands it, and reports when the model consumed input.
+ *
+ * The state also records the `steer` step of every steered line. A line is
+ * consumed when the pass in flight reads it in its view, or when the executor
+ * reads its range through `read`. Any other line waits for the next delta, and
+ * its step says so. The executor delivers a line when its harness can take
+ * it, and records no `steer` step.
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
@@ -18,6 +24,7 @@ import type {
 	PassInput,
 	PassRecord,
 	PassResult,
+	ReadRange,
 } from './executor.ts';
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
@@ -44,6 +51,13 @@ interface Tools {
 	readonly agent: readonly RoomTool[];
 }
 
+/** A line that landed while the activation worked. */
+interface Steered {
+	readonly after: Seq;
+	readonly seq: Seq;
+	readonly line: string;
+}
+
 export class ActivationState {
 	readonly id: string;
 	private readonly input: ActivationInput;
@@ -53,6 +67,12 @@ export class ActivationState {
 	private tools: Tools | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
+	/** The pass in flight. Absent between passes. */
+	private running: PassInput | undefined;
+	/** The lines that landed before the first pass, in order. Absent once that pass starts. */
+	private early: Steered[] | undefined = [];
+	/** The lines the executor holds, by position, with the `after` of each. They have no step yet. */
+	private readonly forwarded = new Map<Seq, Seq>();
 
 	constructor(executor: Executor, input: ActivationInput) {
 		this.id = input.id;
@@ -68,7 +88,7 @@ export class ActivationState {
 			get readThrough() {
 				return freshness.readThrough;
 			},
-			read: (range) => freshness.consumedRange(range),
+			read: (range) => this.consume(range),
 			delivered: (call) => freshness.delivered(call),
 			callId: (tool) => calls.callId(tool),
 		});
@@ -95,9 +115,14 @@ export class ActivationState {
 		return !this.cancelled && lastSeq > this.readThrough;
 	}
 
-	/** A line landed while the activation worked. A cut activation takes none. */
+	/**
+	 * A line landed while the activation worked. A cut activation takes none.
+	 * A line that lands before the first pass waits for that pass.
+	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (!this.cancelled) this.executor.steer?.(after, seq, line);
+		if (this.cancelled) return;
+		if (this.early === undefined) this.place({ after, seq, line });
+		else this.early.push({ after, seq, line });
 	}
 
 	/** Cut the activation. The pass in flight ends, and the driver runs no other. */
@@ -116,19 +141,30 @@ export class ActivationState {
 
 	/** One pass over the record. A pass that throws is a failed pass: `failedPass` sets its cause. */
 	async pass(input: PassInput): Promise<PassResult> {
-		if (this.cancelled) return { failed: false };
+		if (this.cancelled) {
+			this.dropEarly();
+			return { failed: false };
+		}
 		const { seat } = input.view.spec;
 		if (seat !== this.input.definition.name) {
+			this.dropEarly();
 			const message = `Activation names another seat: '${seat}'.`;
 			return this.report({ failed: true, cause: 'transient', message });
 		}
 		this.view = input.view;
+		this.running = input;
 		let result: PassResult;
 		try {
-			result = await this.executor.pass(this.passOf(input));
+			const done = this.executor.pass(this.passOf(input));
+			// The executor has started the pass: a line that waited can reach it now.
+			this.placeEarly();
+			result = await done;
 		} catch (error) {
 			result = failedPass(error);
 		}
+		this.running = undefined;
+		this.dropEarly();
+		this.expire();
 		return this.report(result);
 	}
 
@@ -144,6 +180,69 @@ export class ActivationState {
 			});
 		}
 		return result;
+	}
+
+	/**
+	 * End the wait of the lines that landed before the first pass: no pass
+	 * took them, so each waits for the next delta and records
+	 * `consumed: false`, in order. The runner calls it when an activation
+	 * ends with no pass, before the `end` step.
+	 */
+	dropEarly(): void {
+		const early = this.early ?? [];
+		this.early = undefined;
+		for (const { seq } of early) this.stamp(seq, false);
+	}
+
+	/** The first pass runs: each line that waited for it now lands in that pass, in order. */
+	private placeEarly(): void {
+		const early = this.early ?? [];
+		this.early = undefined;
+		for (const steered of early) this.place(steered);
+	}
+
+	/**
+	 * Decide a line by the moment it lands, and record its `steer` step when
+	 * that moment decides it. A line the executor holds waits for its `read`.
+	 */
+	private place(steered: Steered): void {
+		const { after, seq, line } = steered;
+		if (this.running === undefined) this.stamp(seq, false);
+		else if (seq <= this.running.view.through) this.stamp(seq, true);
+		else if (this.executor.steer === undefined) this.stamp(seq, false);
+		else this.forward(after, seq, line);
+	}
+
+	/**
+	 * Hand a line to the executor. A `steer` that throws leaves the line to
+	 * the next delta, unless the executor already read it.
+	 */
+	private forward(after: Seq, seq: Seq, line: string): void {
+		this.forwarded.set(seq, after);
+		try {
+			this.executor.steer?.(after, seq, line);
+		} catch {
+			if (this.forwarded.delete(seq)) this.stamp(seq, false);
+		}
+	}
+
+	/** The model consumed `range`. A range that equals a held line also consumed that line. */
+	private consume(range: ReadRange): void {
+		this.freshness.consumedRange(range);
+		if (this.forwarded.get(range.through) !== range.after) return;
+		this.forwarded.delete(range.through);
+		this.stamp(range.through, true);
+	}
+
+	/** The pass ended. Each line the executor still holds waits for the next delta. */
+	private expire(): void {
+		const left = [...this.forwarded.keys()].sort((a, b) => a - b);
+		this.forwarded.clear();
+		for (const seq of left) this.stamp(seq, false);
+	}
+
+	private stamp(seq: Seq, consumed: boolean): void {
+		this.input.trace.record({ type: 'steer', seq, consumed });
 	}
 
 	private passOf(input: PassInput): Pass {

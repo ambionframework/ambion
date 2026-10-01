@@ -269,8 +269,10 @@ const heldSteer: ExecutorCase = {
 		check(run.room.landed().length === 1, `${run.room.landed().length} says landed, expected 1`);
 		check(say !== undefined && say.seq > line.seq, 'the say landed before the steered line');
 		check(releaseWith(run).readThrough >= line.seq, 'the release does not read the steered line');
+		const steers = stepsOf(await run.trace(), 'steer').filter((step) => step.seq === line.seq);
+		check(steers.length > 0, 'the trace holds no steer step for the line');
 		check(
-			stepsOf(await run.trace(), 'steer').every((step) => !step.consumed),
+			steers.every((step) => !step.consumed),
 			'a steer shows as consumed',
 		);
 	},

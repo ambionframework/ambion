@@ -14,8 +14,9 @@
  *   tool result that the request holds.
  * - **Steer.** A line that lands during a run goes to the lane as a steer.
  *   It counts as consumed when a provider request holds it. A line that
- *   lands before the run starts joins the prompt. A line that finds no pass
- *   waits for the record: the next delta carries it.
+ *   lands before the run starts joins the prompt. The core records the
+ *   `steer` step ([`executors.md`](../../../docs/executors.md)), and a line
+ *   the run does not read waits for the next delta.
  * - **Cut.** The signal of the activation aborts the run. `close` closes the
  *   harness and the session, and the driver calls it when the activation is
  *   over.
@@ -117,17 +118,14 @@ class Activation implements ExecutorSession {
 	/** The view of the running pass. The tools read the room and exchange from it. */
 	private view: ActivationView | undefined;
 	/**
-	 * Where the pass stands: no pass, a pass that prepares its run, or a run.
-	 * A steer takes a different path in each.
+	 * Where the pass stands: `starting` prepares its run, `running` is its
+	 * run, and `idle` is any other time. A steer takes a different path in
+	 * each.
 	 */
 	private phase: 'idle' | 'starting' | 'running' = 'idle';
-	/** How many passes began. */
-	private passes = 0;
-	/** The steers that landed before the first pass. */
-	private early: Seq[] = [];
 	/** The steers that landed while a pass prepared its run. */
 	private held: Held[] = [];
-	/** The steered lines no provider request has held yet, by position, with their queue entry. */
+	/** The queue entry of each steered line that no provider request holds yet, by position. */
 	private readonly steered = new Map<Seq, Promise<string | undefined>>();
 	/** The last assistant message of the running run. */
 	private last: AssistantMessage | undefined;
@@ -159,19 +157,13 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * A line landed while this activation worked. A run takes it as a steer.
-	 * A pass that prepares its run adds it to the prompt. With no pass, it
-	 * waits for the record: the next delta has it.
+	 * A line landed while a pass runs. A run takes it as a steer. A pass that
+	 * prepares its run adds it to the prompt. After the run, the line waits
+	 * for the record: the next delta has it.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.phase === 'idle' && this.passes === 0) {
-			// The first pass reads the record as it stands then.
-			this.early.push(seq);
-		} else if (this.phase === 'idle') {
-			this.trace.record({ type: 'steer', seq, consumed: false });
-		} else if (this.phase === 'starting' || this.opened === undefined) {
-			this.held.push({ after, seq, line });
-		} else {
+		if (this.phase === 'starting') this.held.push({ after, seq, line });
+		else if (this.phase === 'running' && this.opened !== undefined) {
 			this.send(this.opened, { after, seq, line });
 		}
 	}
@@ -193,8 +185,6 @@ class Activation implements ExecutorSession {
 
 	/** One pass: read, act, and report where this session left off. */
 	async pass(pass: Pass): Promise<PassResult> {
-		this.passes += 1;
-		this.drop(this.early.splice(0));
 		this.phase = 'starting';
 		this.view = pass.view;
 		this.systemPrompt = `${pass.mechanism}\n\n${pass.agent}`;
@@ -208,7 +198,8 @@ class Activation implements ExecutorSession {
 			return failedPass(error);
 		} finally {
 			this.phase = 'idle';
-			this.drop(this.held.splice(0).map((held) => held.seq));
+			// A line the run never prompted waits for the next delta.
+			this.held = [];
 		}
 	}
 
@@ -223,15 +214,10 @@ class Activation implements ExecutorSession {
 		const now = this.options.now();
 		const prompt = [
 			...(record === undefined ? [] : [recordMessage(record.range, record.text, now)]),
-			...this.flush(pass.view.through),
+			...this.flush(),
 		];
 		if (prompt.length === 0) return this.nothingNew(opened);
 		return this.run(opened, prompt);
-	}
-
-	/** Steers that reached no model. The record holds them for the next pass. */
-	private drop(seqs: readonly Seq[]): void {
-		for (const seq of seqs) this.trace.record({ type: 'steer', seq, consumed: false });
 	}
 
 	/**
@@ -343,20 +329,10 @@ class Activation implements ExecutorSession {
 		this.activation.read({ after: 0, through });
 	}
 
-	/**
-	 * The steers held while the pass prepared its run. A line the view holds
-	 * reached the model with it. Any other joins the prompt.
-	 */
-	private flush(through: Seq): AgentMessage[] {
+	/** The steers held while the pass prepared its run join the prompt. */
+	private flush(): AgentMessage[] {
 		const now = this.options.now();
-		return this.held.splice(0).flatMap((held) => {
-			if (held.seq <= through) {
-				this.trace.record({ type: 'steer', seq: held.seq, consumed: true });
-				return [];
-			}
-			this.steered.set(held.seq, Promise.resolve(undefined));
-			return [steerMessage(held, now)];
-		});
+		return this.held.splice(0).map((held) => steerMessage(held, now));
 	}
 
 	/** Queue a steer on the running lane. */
@@ -391,12 +367,11 @@ class Activation implements ExecutorSession {
 	 * lane queue, and the record holds it for the next delta.
 	 */
 	private async settle(opened: Opened): Promise<void> {
-		const left = [...this.steered];
+		const left = [...this.steered.values()];
 		this.steered.clear();
-		for (const [seq, queued] of left) {
+		for (const queued of left) {
 			const entryId = await queued;
 			if (entryId !== undefined) await opened.lane.cancelQueued(entryId, CONTEXT).catch(noop);
-			this.trace.record({ type: 'steer', seq, consumed: false });
 		}
 	}
 
@@ -421,9 +396,7 @@ class Activation implements ExecutorSession {
 
 	/** The provider messages of one request, and what they hold of the record. */
 	private provide(messages: AgentMessage[]): Message[] {
-		for (const seq of provided(messages, this.activation)) {
-			if (this.steered.delete(seq)) this.trace.record({ type: 'steer', seq, consumed: true });
-		}
+		for (const seq of provided(messages, this.activation)) this.steered.delete(seq);
 		return providerMessages(messages);
 	}
 

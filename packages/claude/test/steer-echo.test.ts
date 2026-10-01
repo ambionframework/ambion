@@ -42,34 +42,54 @@ it('holds a steered line whose echo arrives before the gap before it closes, and
 	run.session.close?.();
 });
 
-it.each([
-	{
-		what: 'sends a held steer with the view',
-		turn: [{ awaitUser: 2 }, { say: 'Saturday.' }],
-		through: 1,
-	},
-	{
-		what: 'takes a held steer that the view already holds as read and sends nothing',
-		turn: [{ say: 'Saturday.' }],
-		through: 2,
-	},
-])('$what, when the steer arrives before the first pass', async ({ turn, through }) => {
-	const run = open({ turns: [turn] });
+it('sends a steer that arrives before the first pass with the view', async () => {
+	const run = open({ turns: [[{ awaitUser: 2 }, { say: 'Saturday.' }]] });
 	run.session.steer?.(1, 2, '[2] priya: Also bring the forms.');
-	await run.session.pass({ kind: 'view', view: viewOf(through) });
+	await run.session.pass({ kind: 'view', view: viewOf(1) });
 	expect(run.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
 	expect(run.commits[0]?.readThrough).toBe(2);
 	run.session.close?.();
 });
 
-it('does not advance readThrough before the echo of the first view, and records a steer that finds no pass in flight as not consumed', async () => {
-	const run = open({ turns: [[{ say: 'Saturday.' }]] });
-	expect(run.session.readThrough).toBe(0);
+it('sends a line that lands while a later pass renders its record, and counts it on its echo', async () => {
+	const run = open({
+		turns: [[{ text: 'First.' }], [{ awaitUser: 3 }, { text: 'Second.' }]],
+	});
 	await run.session.pass({ kind: 'view', view: viewOf(1) });
-	expect(run.commits[0]?.readThrough).toBe(1);
-	run.session.steer?.(1, 3, '[3] priya: One more thing.');
-	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: false });
-	expect(run.session.shouldRefresh(3)).toBe(true);
+	const first = viewOf(1);
+	const view = {
+		...first,
+		through: 2,
+		context: {
+			...first.context,
+			messages: [
+				...first.context.messages,
+				{
+					kind: 'said' as const,
+					seq: 2,
+					at: new Date(0).toISOString(),
+					from: 'priya',
+					text: 'And the permit?',
+				},
+			],
+		},
+	};
+	const second = run.session.pass({ kind: 'delta', since: 1, view });
+	// The pass has not sent its prompt yet: the executor holds the line, and sends it after the prompt.
+	run.session.steer(2, 3, '[3] priya: One more thing.');
+	expect(await second).toEqual({ failed: false });
+	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: true });
+	expect(run.session.readThrough).toBe(3);
+	run.session.close?.();
+});
+
+it('takes no line that lands outside a pass', async () => {
+	const run = open({ turns: [[{ say: 'Saturday.' }]] });
+	await run.session.pass({ kind: 'view', view: viewOf(1) });
+	// The core never steers outside a pass. The executor still sends nothing then.
+	run.sessions[0]?.steer?.(1, 2, '[2] priya: Late.');
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	expect(run.log().filter((line) => 'user' in line)).toHaveLength(1);
 	run.session.close?.();
 });
 

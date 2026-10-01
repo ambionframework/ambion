@@ -222,7 +222,9 @@ moves the position to the last of the messages it carries, and a
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
 states what a family without steering does. The Codex session has no
-`steer` member, and the seat reads a line on the next delta pass.
+`steer` member, and the seat reads a line on the next delta pass. The core
+records the `steer` step of that line with `consumed: false`; see
+[Executors](executors.md#how-an-activation-runs).
 
 **A cut signals the run.** The signal of the activation signals the run in
 flight. `close` stops the socket and the server. A late cut signals no dead
