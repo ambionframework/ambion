@@ -35,8 +35,8 @@ This scope incorporates the owner's response to the review of `origin/main`
 `0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
 [The review disposition](review-0.5.0.md) records the changed decisions.
 
-**0.5.0 also closes the layer boundaries that a review of `main` found on
-2026-10-01.** The review read the import graph of every source file and
+**0.5.0 also holds the layer boundaries that a review of `main` found
+open on 2026-10-01.** The review read the import graph of every source file and
 probed every import rule of `biome.jsonc`. LB1 and LB2 are done. LB3 to
 LB9 remain, in [Phase 4](#phase-4-the-layer-boundaries).
 
@@ -91,13 +91,13 @@ exchange limit, journal body, sensor URI, or scheduling rule. It adds no
 layer imports only what its place in the layers allows, and an import rule
 refuses every other import. A rule that matches nothing fails a test.
 
-| Location                                                     | Change                                                  |
-| ------------------------------------------------------------ | ------------------------------------------------------- |
-| `biome.jsonc`, `scripts/`                                    | One table of the core layers; complete rules and probes |
-| `@ambionframework/ambion`                                    | The executor and trace shapes move into the vocabulary  |
-| `@ambionframework/workspace`                                 | Its own port; the sensor schemas leave the client cycle |
-| `@ambionframework/just-bash`, `@ambionframework/workstation` | Build on the workspace port with no Pi import           |
-| `@ambionframework/pi`                                        | Adapts the workspace port                               |
+| Location                                                     | Change                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `biome.jsonc`, `scripts/`                                    | One table of the core layers; complete rules and probes  |
+| `@ambionframework/ambion`                                    | The executor contract types move into the vocabulary     |
+| `@ambionframework/workspace`                                 | Its own port; the sensor schemas leave the client cycle  |
+| `@ambionframework/just-bash`, `@ambionframework/workstation` | Build on the workspace port with no Pi import            |
+| `examples/workbench`                                         | Uses the workspace port in place of `BACKGROUND_CONTEXT` |
 
 ## Decisions taken
 
@@ -124,8 +124,8 @@ refuses every other import. A rule that matches nothing fails a test.
 - Server acquisition and unobserved history remain server responsibilities.
 - Existing process timeout and disposal behavior remain unchanged.
 - The initial transport supports workstation loopback through SSH.
-- The workspace owns its port in 0.5.0, and the Pi executor adapts it
-  (W1). The owner moved this item from phase 3 of
+- The workspace owns its port in 0.5.0, and a workspace tool is a core
+  tool (W1). The owner moved this item from phase 3 of
   [the simplification](simplification.md) on 2026-10-01.
 - The core imports no Node built-in, no Cloudflare module, and no model
   library, in every layer (LB2).
@@ -142,7 +142,7 @@ refuses every other import. A rule that matches nothing fails a test.
 - Automatic service restart or persistent connection discovery.
 - A second bench or a catalog of instrument scenarios.
 
-**The layer work leaves three known facts as they are.**
+**The layer work leaves four known facts as they are.**
 
 - The import rules and the review read `src` only. The core's tests read
   the Pi source by relative path, and the core lists Pi as a
@@ -154,6 +154,8 @@ refuses every other import. A rule that matches nothing fails a test.
   holds the assistant.
 - `examples/workbench/src/brand.ts` reads `brand/tokens` at the
   repository root. The example is private.
+- `packages/codex/src/room-tools-server.ts` is a build entry that the
+  Codex executor starts by path. The manifest exports it under no name.
 
 **SK1 and SK2 leave the release.** D1 holds exchange bounds. Snapshot refs
 remove the need for SK2. D22 remains deferred. No deferred limit is used
@@ -236,19 +238,20 @@ of sent to Priya. The ignored run evidence is under
 - [x] **2.** Refuse model libraries and platform modules in every core
       layer. (LB2, #419)
 - [ ] **3.** One table of the core layers drives the probes. (LB3)
-- [ ] **4.** Subpaths outside the core. (LB4)
-- [ ] **5.** The host layer imports no execution file. (LB5)
-- [ ] **6.** The room-host core imports none of its mechanisms. (LB6)
-- [ ] **7.** No import cycle at run time. (LB7)
-- [ ] **8.** The workspace owns its port. Needs 3. (LB8)
+- [ ] **4.** The overrides outside the core refuse subpaths. (LB4)
+- [ ] **5.** The host layer imports no execution file. Needs 3. (LB5)
+- [ ] **6.** The room-host core imports none of its mechanisms. Needs 3.
+      (LB6)
+- [ ] **7.** No cycle of value imports. (LB7)
+- [ ] **8.** The workspace owns its port. Needs 4. (LB8)
 - [ ] **9.** The tests pass under full parallel load. (LB9)
 
 **Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
-one layer table and probes every pair of layers. A test fails on any
-import cycle at run time in `packages/*/src`. No file of the workspace,
-the workstation, or just-bash imports `@earendil-works/*`, and no
-manifest of the three lists it. `pnpm check` passes, and
-`turbo run test --force` passes five runs in a row on Linux.
+one layer table and probes every pair of layers. A test fails on any cycle
+of value imports in `packages/*/src`. No source file and no `dependencies`
+field of the workspace, the workstation, or just-bash names
+`@earendil-works/*`. `pnpm check` passes, and `turbo run test --force`
+passes five runs in a row on Linux.
 
 ## The items
 
@@ -428,43 +431,50 @@ in the changelog. Keep the current package count at eleven.
 `pnpm check` and the OpenSSH scenario pass. A live model run is optional
 confirmation, not a prerequisite for protocol or transport correctness.
 
-**LB1. The neutral and published-surface rules.** Done in #417. The two
-neutral backend files, `git-backend.ts` and `object-backend.ts`, keep
+**LB1. The neutral and published-surface rules.** #417 closed it. The
+two neutral backend files, `git-backend.ts` and `object-backend.ts`, keep
 their own rule. `packages/assistant` reaches the core through its
 published entries. The dead `tools/` rules are gone, and every core layer
 override has probe cases. Backlog K6 is closed.
 
-**LB2. The core ban in every layer.** Done in #419. Biome replaces the
-options of a rule for overlapping overrides, so most core layers had lost
+**LB2. The core-wide ban in every layer.** #419 closed it. Biome replaces
+the options of a rule for overlapping overrides, so most core layers lost
 the core-wide ban. Each layer override now repeats it. The ban refuses
 `node:*`, `cloudflare:*`, `@earendil-works/**`, and `@ambionframework/pi`,
 with their subpaths.
 
-**LB3. One table of the core layers.** The core layer order is written
-three times: in `biome.jsonc`, in its comment, and in `docs/toolchain.md`
-§1. The overrides name the forbidden targets by hand. No override names
-`answers.ts`, `testing/`, `testing.ts`, or `conformance*.ts` as a target.
-So `room/` can import `../answers.ts`, and `execution/` can import
-`../testing/scripted.ts`, with no lint error. The core-wide ban is also
-written in ten copies since LB2.
+**LB3. One table of the core layers.** The `biome.jsonc` comment writes
+the core layer order, and the overrides repeat it by hand. The comment
+omits `conformance*.ts`, and `docs/toolchain.md` §1 names four of the
+layers. No override names `answers.ts`, `testing/`, `testing.ts`, or
+`conformance*.ts` as a target. So `room/` can import `../answers.ts`, and
+`execution/` can import `../testing/scripted.ts`, with no lint error. LB2
+wrote the core-wide ban in ten copies.
 
-Write the layer order once, as a table in `scripts/`. The probe test
-derives a case for every pair of layers from it, and fails when
-`biome.jsonc` disagrees. Add probe cases for the neutral files
-`resource.ts` and `resource-entry.ts`, which have none.
+Write the layer order once, as a table in `scripts/`. The table names a
+layer by a glob, so one file such as `answers.ts` or `room-host/core.ts`
+is a layer. The probe test derives a case for every pair of layers from
+the table, and fails when `biome.jsonc` disagrees. Add probe cases for the
+neutral files `resource.ts` and `resource-entry.ts`, which have none.
 
-**Evidence:** every forbidden pair of layers is refused, and every allowed
-pair passes. Delete one pattern from one layer override: the test fails
-on that pair. The probe test names each layer of the table that its
-comment or §1 omits.
+A case with `null` for its refusal must list pairs only. A bare specifier
+in such a case always fails, so make the test refuse that form. Add a pass
+case for the override of `packages/ambion/src/**` alone, in a file that no
+layer override matches.
+
+**Evidence:** the rules refuse every forbidden pair of layers and pass
+every allowed pair. Delete one pattern from one layer override, and the
+test fails on that pair. The `biome.jsonc` comment lists every layer of
+the table.
 
 **LB4. Subpaths outside the core.** A Biome group reads as a gitignore
-pattern, and `*` does not cross `/`. Three overrides refuse a package
-root and pass its subpaths. The journal override passes
+pattern, and `*` does not cross `/`. Three overrides refuse a package root
+and pass its subpaths. The journal override passes
 `@earendil-works/pi-ai/providers/all` and
 `@ambionframework/workspace/resource`. The workstation and just-bash/git
 overrides pass `just-bash/browser` and `@ambionframework/just-bash/git`.
 No package declares these dependencies, so no such import resolves today.
+Add the `/**` form beside each root in the three groups.
 
 **Evidence:** each of the three overrides refuses one subpath probe for
 each group.
@@ -473,68 +483,97 @@ each group.
 imports the types `Executor` from `execution/executor.ts` and
 `TraceOpener` from `execution/trace.ts`. Four execution files import
 `host/runtime.ts`. The host layer sits below execution, and its rule
-refuses only `../execution/runner*`. Move the two shapes into the
-vocabulary, beside `AgentPort` in `protocol.ts`. Then make the host rule
-refuse `../execution/*`.
+refuses only `../execution/runner*`.
 
-**Evidence:** no file of `host/` imports `execution/`. A probe from
-`host/` to `../execution/executor.ts` is refused. The export snapshot is
+Move the executor contract into the vocabulary, beside `AgentPort` in
+`protocol.ts`. The types are `Executor`, `ExecutorActivation`,
+`ExecutorSession`, `Pass`, `PassInput`, `PassRecord`, `PassResult`,
+`RoomTool`, `RoomToolOptions`, `StepSink`, `TraceSink`, and `TraceOpener`.
+`execution/` keeps the driver, the room tool bodies, and the sink. Then
+make the host rule refuse `../execution/*`.
+
+**Evidence:** no file of `host/` imports `execution/`. The rules refuse a
+probe from `host/` to `../execution/executor.ts`. The export snapshot is
 unchanged, or the changelog names each change.
 
 **LB6. The room-host core imports none of its mechanisms.**
-`room-host/core.ts` holds the view that every mechanism shares. It
-imports the types `DeliveryState` from `dispatch.ts`, `ExchangeHandle`
-from `waits.ts`, and `CompositionDraft` from `room.ts`. Those files
-import `core.ts`, so the six room-host files form one cycle. Declare the
-three shapes in `core.ts`, or in a file that imports no mechanism.
+`room-host/core.ts` holds the view that every mechanism shares. It imports
+the types `DeliveryState` from `dispatch.ts`, `ExchangeHandle` from
+`waits.ts`, and `CompositionDraft` from `room.ts`. Those files import
+`core.ts`, so the six room-host files form one cycle. Declare the three
+types in `core.ts`.
 
 **Evidence:** `core.ts` imports no other room-host file. An override
 refuses an import of a room-host sibling from `core.ts`, with a probe.
 
-**LB7. No import cycle at run time.** `workspace/src/sensors.ts` is the
+**LB7. No cycle of value imports.** `workspace/src/sensors.ts` is the
 `/sensors` entry and defines the wire schemas. It re-exports the client
 from `sensor-client.ts`, which imports the schemas back. This is the only
 cycle of value imports in `src`. It works because the client reads the
 schemas inside functions only. Move the schemas into their own module,
-which both files import. Add a test that fails on any cycle of value
-imports in `packages/*/src`.
+which both files import.
 
-**Evidence:** the test finds no cycle. A probe pair of modules that
-import each other fails it. Type-only cycles stay allowed. The review
-found seven besides LB6: the vocabulary, `journal/`, the Cloudflare objects, the
-workstation git files, the workspace git conformance files, and two in
+Add `scripts/import-cycles.test.mjs`. It reads the relative `import` and
+`export … from` lines of `packages/*/src` and `examples/*/src`, drops
+`import type` and lists of `type` specifiers, and fails on any cycle.
+
+**Evidence:** the test finds no cycle. A probe pair of modules that import
+each other fails it. Type-only cycles stay allowed. The review found seven
+besides LB5 and LB6: the vocabulary, `journal/`, the Cloudflare objects,
+the workstation git files, the workspace git conformance files, and two in
 the Workbench.
 
-**LB8. The workspace owns its port.** Simplification W1. 36 source files
-of the workspace, the workstation, and just-bash import
-`@earendil-works/pi-agent-core`. The backend contract `WorkspaceEnv` is
-Pi's `ExecutionEnv`. The file and shell results and errors, the context,
-and `withAbortSignal` come from Pi. The default read, write, and edit
-tools are Pi's own factories. The root entry re-exports
-`BACKGROUND_CONTEXT`. So a host with only Claude or Codex seats installs
-and loads Pi to use a workspace.
+**LB8. The workspace owns its port.** This is simplification W1. 36 source
+files of the workspace, the workstation, and just-bash import
+`@earendil-works/pi-agent-core`. The backend contract `WorkspaceEnv`
+extends Pi's `ExecutionEnv`. The file and shell results and errors, the
+context, and `withAbortSignal` come from Pi. The default read, write, and
+edit tools are Pi's own factories, and `bindTools` wraps a Pi tool into a
+core tool. The root entry re-exports `BACKGROUND_CONTEXT`. So a host with
+only Claude or Codex seats installs and loads Pi to use a workspace.
 
-The workspace defines its port and the helpers that a backend builds on.
-The workstation and just-bash build on that port. The Pi executor adapts
-the port where it needs a Pi type. The item decides where the read,
-write, and edit tools live, and `docs/workspace.md` records the choice.
+The item takes these decisions:
+
+- **The port takes an `AbortSignal` in place of Pi's `Context`.** The
+  root entry stops exporting `BACKGROUND_CONTEXT`.
+- **The workspace declares its own file and shell types.** These replace
+  `ExecutionEnv`, `Result`, `ok`, `err`, `FileError`, `FileErrorCode`,
+  `FileInfo`, `ExecutionError`, the `ShellExec` and `ShellOutput` types,
+  `JsonValue`, and `AgentToolResult`.
+- **The workspace copies the helpers that it uses.** These are
+  `applyShellOutputUpdate`, `truncateHead`, `truncateTail`,
+  `DEFAULT_MAX_BYTES`, `DEFAULT_MAX_LINES`, `formatSize`, and
+  `formatSkillsForSystemPrompt`.
+- **The workspace implements `read`, `write`, and `edit` over its port.**
+  They keep the parameters and output of Pi's factories.
+  `packages/workspace/test/matrix.test.ts` pins them on every executor.
+- **A workspace tool is a core `AmbionTool`.** `bindTools` and the Pi
+  invocation stub go. The Pi executor needs no adapter.
+- **The consumers move with the port.** The workstation, just-bash, and
+  `examples/workbench/src/files.ts` use the new port.
+- **The docs name the port.** `docs/workspace.md`, `docs/resources.md`,
+  `docs/workstation.md`, and `docs/compose.md` drop the Pi binding.
+
 The export snapshots and the changelog name every changed export.
 
-**Evidence:** no source file and no manifest of the workspace, the
-workstation, or just-bash names `@earendil-works/*`. The neutral and
-workspace overrides refuse `@earendil-works/**`, with probes. The packed
-workspace tarball installs with no `@earendil-works` package. The
-workspace conformance, the backend suites, the Pi, Claude, and Codex
-adapter cases, and the SN35 lifecycle on OpenSSH pass.
+**Evidence:** no source file and no `dependencies` field of the
+workspace, the workstation, or just-bash names `@earendil-works/*`. Their
+tests may reach Pi through devDependencies. The five overrides of the
+workspace, the workstation, and just-bash refuse `@earendil-works/**`,
+with a probe each. A new packed-consumer check installs the workspace
+tarball in an empty project and finds no `@earendil-works` package. The
+workspace conformance, the backend suites, the matrix cases, and the SN35
+lifecycle on OpenSSH pass.
 
-**LB9. The tests pass under full parallel load.** Three tests timed out
-in full parallel test runs on 2026-10-01 and passed alone:
+**LB9. The tests pass under full parallel load.** Three tests timed out in
+full parallel test runs on 2026-10-01 and passed alone:
 `examples/workbench/test/sensor-retention-source.test.ts`,
-`packages/just-bash/test/just-bash.test.ts` ("ends a change that the
-host asks for while the last change of a script runs"), and
+`packages/just-bash/test/just-bash.test.ts` ("ends a change that the host
+asks for while the last change of a script runs"), and
 `packages/workspace/test/sensor-workstation.test.ts`. Find the cause of
 each. A longer timeout is a fix only when the cause is the time the work
 needs.
 
 **Evidence:** each fix names its cause. `turbo run test --force` passes
-five runs in a row on Linux at the default concurrency.
+five runs in a row on Linux at the default concurrency, and the test jobs
+of `.github/workflows/ci.yml` pass.
