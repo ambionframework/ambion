@@ -12,7 +12,7 @@ import { decodeActivationId } from '../src/activation-id.ts';
 import { speakOnce } from '../src/conformance.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import {
-	type ExecutionEvent,
+	type ActivationEvent,
 	hostingOf,
 	type LeaseResponse,
 	localExecution,
@@ -228,7 +228,7 @@ describe('a lease', () => {
 
 		// the room gives up: the attempt it does not make is on the record, once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
+			{ type: 'abandoned', seat: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
 		]);
 		const gaveUp = (await leaseChanges(runtime, session)).filter(
 			(lease) => lease.phase === 'ended' && lease.reason === 'abandoned',
@@ -274,8 +274,8 @@ describe('a lease', () => {
 		// the room gives up on the summary, and says so once
 		const abandoned = events.filter((e) => e.type === 'abandoned');
 		expect(abandoned).toHaveLength(1);
-		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
-		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
+		const givenUp = (abandoned[0] as { seat: string; activation: string }).activation;
+		expect(abandoned[0]).toMatchObject({ seat: 'assistant' });
 		expect(decodeActivationId(givenUp)).toMatchObject({
 			source: 'closed',
 			seat: 'assistant',
@@ -404,7 +404,7 @@ describe('a lease', () => {
 		const peer = runningRoom(runtime, session.name);
 		if (peer === undefined) throw new Error('The room is absent.');
 		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const runner = (room: RoomProtocol) =>
 			localExecution('recover', () => () => speakOnce())
 				.connector(hostingOf(runtime))

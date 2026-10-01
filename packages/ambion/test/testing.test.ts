@@ -30,7 +30,7 @@ import {
 	scriptedExecutor,
 	settled,
 } from '../src/testing.ts';
-import type { AgentExecutor, ExecutionEvent, Step } from '../src/types.ts';
+import type { ActivationEvent, AgentExecutor, Step } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -82,12 +82,9 @@ describe('scripted', () => {
 		expect(seen).toContain('b:b:1');
 		expect(seen.every((line) => line.split(':')[0] === line.split(':')[1])).toBe(true);
 		const tools = events.filter(
-			(event) => event.type === 'tool_execution_start' || event.type === 'tool_execution_end',
+			(event) => event.type === 'tool_call' || event.type === 'tool_result',
 		);
-		expect(tools.map((event) => event.type)).toEqual([
-			'tool_execution_start',
-			'tool_execution_end',
-		]);
+		expect(tools.map((event) => event.type)).toEqual(['tool_call', 'tool_result']);
 		const { messages } = await room.read();
 		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
 		expect(results).toContainEqual(['echoed', 'delivered']);
@@ -107,7 +104,7 @@ describe('scripted', () => {
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await vi.waitFor(() => expect(events.some((event) => event.type === 'error')).toBe(true));
 		expect(events.find((event) => event.type === 'error')).toMatchObject({
-			agent: 'a',
+			seat: 'a',
 			cause: 'transient',
 		});
 		const { messages } = await room.read();
@@ -225,7 +222,7 @@ describe('scriptedExecutor', () => {
 	/** The core state of one activation over `executor`, and a room that answers each commit with `commit`. */
 	function harness(commit: (request: CommitRequest) => CommitResult) {
 		const commits: CommitRequest[] = [];
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const open = (executor: Executor) =>
 			new ActivationState(executor, {
 				id: 'act-1',
@@ -366,7 +363,7 @@ describe('scriptedExecutor', () => {
 		const passes: Pass[] = [];
 		const steered: number[] = [];
 		const steps: Step[] = [];
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const state: ActivationState = new ActivationState(
 			(activation) => {
 				opened.push(activation);
@@ -427,7 +424,7 @@ describe('scriptedExecutor', () => {
 				message: error.message,
 				error,
 			});
-			expect(events).toEqual([{ type: 'error', agent: 'a', activation: 'act-1', error, cause }]);
+			expect(events).toEqual([{ type: 'error', seat: 'a', activation: 'act-1', error, cause }]);
 		},
 	);
 
@@ -640,8 +637,8 @@ describe('scriptedExecutor', () => {
 		);
 		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(events).toEqual([
-			{ type: 'tool_execution_start', agent: 'a', activation: 'act-1', toolName: 'echo' },
-			{ type: 'tool_execution_end', agent: 'a', activation: 'act-1', toolName: 'echo' },
+			{ type: 'tool_call', seat: 'a', activation: 'act-1', name: 'echo' },
+			{ type: 'tool_result', seat: 'a', activation: 'act-1', name: 'echo' },
 		]);
 	});
 });

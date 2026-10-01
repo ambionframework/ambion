@@ -8,11 +8,11 @@ import { connect as connectSocket } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
+	type ActivationEvent,
 	type ActivationView,
 	type AgentDefinition,
 	type CommitRequest,
 	type CommitResult,
-	type ExecutionEvent,
 	type Executor,
 	ROOM_SERVER,
 	type RoomProtocol,
@@ -243,7 +243,7 @@ export function open(
 	catalog: CatalogSource = recordedCatalog,
 ) {
 	const steps: Step[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const { room, commits } = roomOf(answer);
 	const { client, seen } = replay(turns);
 	const trace: StepSink = {

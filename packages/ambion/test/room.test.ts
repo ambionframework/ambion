@@ -95,7 +95,7 @@ describe('startRoom', () => {
 		);
 		const events = collect(session);
 		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.agent === 'gamma') gammaIdle.resolve();
+			if (event.type === 'activation_end' && event.seat === 'gamma') gammaIdle.resolve();
 			if (event.type === 'message' && event.message.from === 'alpha') alphaSaid.resolve();
 		});
 
@@ -111,7 +111,7 @@ describe('startRoom', () => {
 		// a say wakes the idle room: gamma, idle when alpha spoke, looked again,
 		// and the exchange still settled, because a woken seat with nothing to add declines
 		const gammaStarts = events.filter(
-			(e) => e.type === 'activation_start' && e.agent === 'gamma',
+			(e) => e.type === 'activation_start' && e.seat === 'gamma',
 		).length;
 		expect(gammaStarts).toBeGreaterThanOrEqual(2);
 	});
@@ -155,7 +155,7 @@ describe('startRoom', () => {
 		);
 		const events = collect(session);
 		const starts = (name: string) =>
-			events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
+			events.filter((e) => e.type === 'activation_start' && e.seat === name).length;
 
 		const visit = await enter(session);
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
@@ -273,7 +273,7 @@ describe('startRoom', () => {
 		});
 		await faultVisit.send({ text: 'trigger' });
 		await failed;
-		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
+		expect(faultEvents.some((e) => e.type === 'error' && e.seat === 'solo')).toBe(true);
 		expect(spoken(await messagesOf(faulty))).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
 		// backoff, so the room is still working, and only an abort settles it now
@@ -335,7 +335,7 @@ describe('startRoom', () => {
 		const conflicts = events.filter((e) => e.type === 'conflict');
 		expect(conflicts).toHaveLength(1);
 		expect(conflicts[0]).toMatchObject({
-			author: 'second',
+			seat: 'second',
 			activation: expect.stringMatching(/:second:\d+$/),
 		});
 		const missed = conflicts[0]?.type === 'conflict' ? conflicts[0].missed[0] : undefined;
@@ -368,8 +368,8 @@ describe('startRoom', () => {
 		await waitForRoom(session);
 
 		expect(spoken(await messagesOf(session))).toHaveLength(2);
-		const end = events.find((e) => e.type === 'activation_end' && e.agent === 'second');
-		expect(end).toMatchObject({ spoke: false });
+		const end = events.find((e) => e.type === 'activation_end' && e.seat === 'second');
+		expect(end).toMatchObject({ said: false });
 	});
 
 	it('refuses a delivery to the assistant, lands a repeated key once, and leaves no mark of a decline', async () => {
@@ -392,8 +392,8 @@ describe('startRoom', () => {
 		expect(events.filter((e) => e.type === 'message' && e.message.kind === 'said')).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 		expect(events.find((e) => e.type === 'activation_end')).toMatchObject({
-			agent: 'shy',
-			spoke: false,
+			seat: 'shy',
+			said: false,
 		});
 	});
 

@@ -135,7 +135,7 @@ Nested routing lists and summary ranges follow the same rule.
 inside that notification are detached from the room and from other listeners.
 Error notifications retain the original `Error` object, with its cause and
 provider fields. Errors describe execution and are not room facts. An
-execution event names its activation.
+activation event names its activation.
 
 **An in-process port has the same ownership boundary as a remote call.**
 The room captures commit and lease requests before it awaits work. Results and

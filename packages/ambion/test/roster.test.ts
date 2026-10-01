@@ -77,7 +77,7 @@ async function open(options: {
 const kinds = (record: readonly Message[]) => record.map((message) => message.kind);
 const presence = (record: readonly Message[]) => record.filter(isPresence);
 const activated = (events: RoomNotification[]) =>
-	events.filter((event) => event.type === 'activation_start').map((event) => event.agent);
+	events.filter((event) => event.type === 'activation_start').map((event) => event.seat);
 const seatNames = async (session: Room) =>
 	(await participantsOf(session)).filter((seat) => seat.kind === 'agent').map((seat) => seat.name);
 describe('ordinary participation', () => {
@@ -189,7 +189,7 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'How should we plan the pour?' });
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end' || event.agent !== surveyor.name) return;
+				if (event.type !== 'activation_end' || event.seat !== surveyor.name) return;
 				off();
 				resolve();
 			});
