@@ -26,7 +26,7 @@ async function consumer(directory, dependencies, source, skipLibCheck) {
 		JSON.stringify({
 			private: true,
 			type: 'module',
-			packageManager: 'pnpm@10.20.0',
+			packageManager: 'pnpm@10.34.6',
 			dependencies,
 			devDependencies: { typescript: '7.0.2', '@types/node': '26.2.0' },
 			pnpm: { overrides: dependencies },

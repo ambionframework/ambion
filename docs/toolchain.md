@@ -103,7 +103,7 @@ rule.
 | Language               | TypeScript 7, strict settings                              |
 | Contracts              | LemmaScript 0.6 with Dafny backend                         |
 | Bundling               | tsdown, ESM output and `.d.mts` declarations               |
-| Tests                  | Vitest 4                                                   |
+| Tests                  | Vitest 5; `packages/cloudflare` runs Vitest 4              |
 | Coverage               | `@vitest/coverage-v8`, on demand; the gate does not run it |
 | Lint                   | Biome 2; its formatter is disabled                         |
 | Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown   |
@@ -155,6 +155,10 @@ the failure of every package. `agentGuidance: false` stops turbo from writing
 its block into `AGENTS.md`. `globalPassThroughEnv` passes the variables that
 Vitest reads to detect an agent; with them, Vitest picks its agent reporter,
 which prints only failures.
+
+**`packages/cloudflare` pins Vitest 4.** `@cloudflare/vitest-pool-workers`
+0.22 supports Vitest `^4.1.0` only, and its workerd pool fails to start on
+Vitest 5. Move the package to Vitest 5 when a pool release supports it.
 
 ## 6. Script contract
 
@@ -228,7 +232,7 @@ the script sends every line to stderr.
 
 `pnpm test:live-local-workstation` needs a running Docker daemon. It copies
 the checkout into a disposable `node:26.10-bookworm` container, installs
-pnpm 10.20.0 from the workspace's `packageManager` pin, installs the Linux
+pnpm 10.34.6 from the workspace's `packageManager` pin, installs the Linux
 OpenSSH test prerequisites, and runs the same `test/sshd/setup.sh` and
 `test:sshd` commands as CI. The setup provisions Unix accounts only inside
 the container. The checkout is mounted read-only while copied; Git metadata,

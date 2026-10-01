@@ -3,7 +3,7 @@
 	"type": "module",
 	"private": true,
 	"license": "Apache-2.0",
-	"packageManager": "pnpm@10.20.0",
+	"packageManager": "pnpm@10.34.6",
 	"engines": {
 		"node": ">=22.19.0",
 		"pnpm": ">=10 <11"
@@ -33,14 +33,14 @@
 		"publish:packages": "node scripts/publish.mjs"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.14",
+		"@biomejs/biome": "^2.5.15",
 		"@types/node": "^26.6.3",
-		"@vitest/coverage-v8": "^4.1.11",
-		"knip": "^6.38.0",
+		"@vitest/coverage-v8": "^5.0.3",
+		"knip": "^6.39.0",
 		"lemmascript": "0.6.4",
 		"prettier": "^3.9.9",
 		"turbo": "^2.11.5",
 		"typescript": "^7.0.2",
-		"vitest": "^4.1.11"
+		"vitest": "^5.0.3"
 	}
 }

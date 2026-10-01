@@ -55,11 +55,11 @@
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-agent-core": "^0.87.1",
-		"@earendil-works/pi-ai": "^0.87.1",
+		"@earendil-works/pi-agent-core": "^0.99.2",
+		"@earendil-works/pi-ai": "^0.99.2",
 		"tsdown": "^0.23.0",
 		"typescript": "^7.0.2",
-		"vitest": "^4.1.11"
+		"vitest": "^5.0.3"
 	},
 	"dependencies": {
 		"@ambionframework/journal": "workspace:*",
