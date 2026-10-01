@@ -43,7 +43,7 @@ function workspace(location = ':memory:', timeout?: number): Workspace {
 	return site;
 }
 
-/** Run `sql` on the SQL owner as `agent`, as host code does. */
+/** Run `sql` on the SQL resource as `agent`, as host code does. */
 async function run(
 	site: Workspace,
 	sql: string,
@@ -55,8 +55,8 @@ async function run(
 		agent?: string;
 	} = {},
 ): Promise<SqlOutcome> {
-	const owner = site.sql;
-	if (owner === undefined) throw new Error('The workspace has no SQL backend.');
+	const resource = site.sql;
+	if (resource === undefined) throw new Error('The workspace has no SQL backend.');
 	const context =
 		options.signal === undefined
 			? BACKGROUND_CONTEXT
@@ -66,7 +66,9 @@ async function run(
 		...(options.export === undefined ? {} : { export: options.export }),
 		...(options.import === undefined ? {} : { import: options.import }),
 	};
-	return owner.use({ name: options.agent ?? 'alpha' }, (env) => env.run(sql, runOptions, context));
+	return resource.use({ name: options.agent ?? 'alpha' }, (env) =>
+		env.run(sql, runOptions, context),
+	);
 }
 
 const messageOf = (outcome: SqlOutcome): string => (outcome.ok ? '' : outcome.message);

@@ -17,7 +17,7 @@ interface InstrumentSpec {
 }
 
 export interface InstrumentOptions {
-	/** The owner of the lab database. The instrument appends to its `operations` table. */
+	/** The resource of the lab database. The instrument appends to its `operations` table. */
 	readonly lab: WorkspaceResource<SqlEnv>;
 	readonly instruments: readonly InstrumentSpec[];
 }

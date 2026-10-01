@@ -17,7 +17,7 @@
  * clear answer about a missing object.
  *
  * The host holds the credentials. No agent reaches the store: `restore` reads
- * an object on the object owner and writes it into the agent's files.
+ * an object on the object resource and writes it into the agent's files.
  */
 
 import { AwsClient } from 'aws4fetch';

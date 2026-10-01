@@ -36,7 +36,7 @@ the optional closing summary. It has no kernel authority beyond its ordinary
 room tools.
 
 Application instructions follow the maintained defaults and take precedence
-when they conflict. The room still enforces membership, activation authority,
+when they conflict. The room still enforces seating, activation authority,
 freshness, recipients, exchange closure, and summary provenance.
 
 Omitting `seats` starts all defined agents at broadcast attention. Use

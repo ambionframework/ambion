@@ -3,8 +3,8 @@
  *
  * Every workspace has a bash backend. A SQL backend is optional. When a
  * workspace has one, the `sql` tool runs its statements on this backend,
- * under an owner of its own. The database need not live on the shell's
- * filesystem.
+ * under a resource of its own. The database need not live on the filesystem
+ * of the bash backend.
  *
  * `connect(agent, files)` gives one agent an environment over the
  * database. `files` is the agent's view of the bash backend: the backend
@@ -42,7 +42,7 @@ export type WorkspaceRead =
 
 /**
  * What a SQL backend reaches of the bash backend: the calling agent's
- * files. Each call is one operation on the bash owner, as that agent.
+ * files. Each call is one operation on the bash resource, as that agent.
  */
 export interface WorkspaceFiles {
 	/**
@@ -159,7 +159,7 @@ export interface SqlEnv extends ResourceEnv {
 
 /**
  * A shared database that a workspace opens beside its bash backend. The
- * workspace opens a resource owner over it and passes each agent's
+ * workspace opens a resource over it and passes each agent's
  * `WorkspaceFiles` to `connect`.
  */
 export interface SqlBackend {

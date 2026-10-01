@@ -47,7 +47,7 @@ interface ObserveDetails {
 	}[];
 }
 
-/** Build the observe tool over a workspace's connection and snapshot owners. */
+/** Build the observe tool over a workspace's connections and snapshot store. */
 function createObserveTool(options: {
 	readonly connections: SensorConnections;
 	readonly store: SnapshotStore;
