@@ -36,6 +36,14 @@ upper-case provider of the model, with each `-` replaced by `_`, and the
 suffix `_API_KEY`. The id `anthropic/claude-sonnet-5` reads
 `ANTHROPIC_API_KEY`.
 
+**A subscription replaces the key.** Run `loginPi('anthropic', store)` for
+Claude Pro and Max, or `loginPi('openai-codex', store)` for ChatGPT Plus and
+Pro, once on a host with a browser. `store` is `fileCredentials(path)`.
+Pass the same store as `piExecution({ credentials: store })`. A provider with
+a stored sign-in ignores its `<PROVIDER>_API_KEY`. The
+[guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md#subscriptions)
+holds the steps and the limits.
+
 ## Example
 
 ```ts
@@ -98,13 +106,14 @@ room or to `createRuntime`.
 | `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                        |
 | `thinking`             | `off`                         | How much the model reasons, a Pi `ThinkingLevel`.             |
 
-`piExecution({ stream, sessions, sessionDir })` takes three options.
+`piExecution({ stream, sessions, sessionDir, credentials })` takes four options.
 Without a `stream`, the Pi registry answers. A scripted `stream` makes a
 room deterministic, and the model then resolves to a stub. `sessionDir`
 names the directory on the local disk for the sessions. Without it, every
 stream keeps them in `ambion-pi-sessions-<uid>` in the OS temporary
 directory, with access for its owner only. `sessions: 'memory'` keeps them
-in memory, two for each room and seat, as a test does.
+in memory, two for each room and seat, as a test does. `credentials` is a Pi
+`CredentialStore` that holds subscription sign-ins.
 
 ## How an activation runs
 
@@ -207,15 +216,16 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Exports
 
-| Export                                          | Use                                                         |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| `pi(options)`                                   | The executor of an agent definition                         |
-| `fromPiTool(tool)`                              | Adapt a native Pi tool to an Ambion tool                    |
-| `piExecution({ stream, sessions, sessionDir })` | The `execution` value for `startRoom` and `createRuntime`   |
-| `createExecutionServices`                       | The services for a host that runs seats apart from the room |
-| `memorySessions`, `PiSessions`, `SessionScope`  | A store of sessions in memory, and the store contract       |
-| `stubModel`                                     | The model that a custom stream receives                     |
-| `piExecutorHarness` (`/testing`)                | The executor suite on a scripted stream                     |
+| Export                                                       | Use                                                         |
+| ------------------------------------------------------------ | ----------------------------------------------------------- |
+| `pi(options)`                                                | The executor of an agent definition                         |
+| `fromPiTool(tool)`                                           | Adapt a native Pi tool to an Ambion tool                    |
+| `piExecution({ stream, sessions, sessionDir, credentials })` | The `execution` value for `startRoom` and `createRuntime`   |
+| `fileCredentials(path)`, `loginPi`, `terminalInteraction`    | A store of subscription sign-ins, and the sign-in           |
+| `createExecutionServices`                                    | The services for a host that runs seats apart from the room |
+| `memorySessions`, `PiSessions`, `SessionScope`               | A store of sessions in memory, and the store contract       |
+| `stubModel`                                                  | The model that a custom stream receives                     |
+| `piExecutorHarness` (`/testing`)                             | The executor suite on a scripted stream                     |
 
 ## Troubleshooting
 

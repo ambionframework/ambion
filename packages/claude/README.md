@@ -36,6 +36,13 @@ from GitHub Packages; see
 environment of the host process, so `ANTHROPIC_API_KEY` reaches it. A value
 for `env` replaces that environment.
 
+**A Claude subscription works with no key.** Run `claude login` on the host,
+or pass the token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`.
+Leave `ANTHROPIC_API_KEY` out, because a key takes precedence. A custom `env`
+needs `HOME` for the sign-in. The reported cost is notional. The
+[guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#install-and-sign-in)
+holds the limits.
+
 ## Example
 
 ```ts
@@ -221,7 +228,8 @@ settings sources, or a resume. The package has no live tier.
 - **The model cannot see `Bash`.** `allowedTools` does not name it.
 - **Every request is denied.** `canUseTool` is absent or throws.
 - **Abandoned after one attempt with an authentication text.** Check
-  `ANTHROPIC_API_KEY`. A custom `env` may have dropped it.
+  `ANTHROPIC_API_KEY`, or run `claude login`. A custom `env` may have
+  dropped the key, `HOME`, or `CLAUDE_CODE_OAUTH_TOKEN`.
 - **`The Claude session ended before the pass did.`** The process exited.
   Check the executable path and `env`.
 

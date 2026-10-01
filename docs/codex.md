@@ -52,6 +52,16 @@ that runs your process.
 - Set `CODEX_API_KEY` in the environment of the process. The binary reads it
   on each run.
 - Run `codex login` once. The binary reads the sign-in from `~/.codex`.
+  Sign in with ChatGPT to run on a ChatGPT Plus or Pro subscription. A
+  host with no browser runs `codex login --device-auth`.
+
+**A subscription needs no key.** Leave `CODEX_API_KEY` out of the
+environment, so that the binary runs on the ChatGPT sign-in. A
+custom `env` on `codexExecution()` needs `HOME`, or `CODEX_HOME`, so that the
+binary finds `~/.codex`. A subscription has its own usage limit, which is a
+permanent failure. Codex reports no cost, so the executor records none. A
+provider may restrict the use of a consumer subscription outside its own
+clients. Read its terms first.
 
 ## A complete example
 
@@ -512,7 +522,8 @@ missing `~/.codex/sessions` directory, a `codex` of another version, or a
 different account than the one that started the thread.
 
 **A run fails with a sign-in message.** The failure is permanent, so the room
-does not retry. Set `CODEX_API_KEY`, or run `codex login`.
+does not retry. Set `CODEX_API_KEY`, or run `codex login`. A custom `env`
+needs `HOME` or `CODEX_HOME` for the sign-in.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
 Claude seat reached a Codex executor through an execution with no kind.

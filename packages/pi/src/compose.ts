@@ -2,6 +2,7 @@
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { CredentialStore } from '@earendil-works/pi-ai';
 import { createPiExecutor } from './executor.ts';
 import { createExecutionServices, type SessionPlace } from './services.ts';
 
@@ -22,6 +23,13 @@ export interface PiExecutionOptions {
 	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
 	 */
 	readonly sessionDir?: string;
+	/**
+	 * Where the subscription sign-ins live, such as `fileCredentials(path)`.
+	 * A provider with a stored credential answers with it, and its
+	 * `<PROVIDER>_API_KEY` is not read. Absent, the registry reads the
+	 * environment alone.
+	 */
+	readonly credentials?: CredentialStore;
 }
 
 /**
@@ -39,6 +47,7 @@ export const piExecution = defineExecution<PiExecutionOptions>('pi', (host, opti
 		...(options.stream === undefined ? {} : { stream: options.stream }),
 		...(options.sessions === undefined ? {} : { sessions: options.sessions }),
 		...(options.sessionDir === undefined ? {} : { sessionDir: options.sessionDir }),
+		...(options.credentials === undefined ? {} : { credentials: options.credentials }),
 	});
 	return (request) =>
 		createPiExecutor({

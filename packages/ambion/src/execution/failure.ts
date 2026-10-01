@@ -12,13 +12,13 @@ export const PERMANENT_STATUS: ReadonlySet<number> = new Set([400, 401, 402, 403
 
 /**
  * Error text that names a refusal a retry cannot clear: a credit, a quota, a
- * usage limit, a credential, a login, or a permission. Each provider names
+ * usage limit, a credential, a login, a sign-in that expired, or a permission. Each provider names
  * a refusal in its own words, so the list holds the words of each: Anthropic,
  * OpenAI, the Claude Code login, and the Codex login. OpenAI sends a spent
  * quota with a 429, and only its text tells it from a rate limit.
  */
 const PERMANENT_TEXT =
-	/credit balance|billing_error|usage[_\s-]?limit|insufficient_quota|exceeded your current quota|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in|missing bearer/i;
+	/credit balance|billing_error|usage[_\s-]?limit|insufficient_quota|exceeded your current quota|authentication_error|permission_error|invalid_request_error|invalid[_\s-]?api[_\s-]?key|x-api-key|unauthorized|permission denied|not logged in|missing bearer|invalid_grant|provider is not configured/i;
 
 /**
  * Whether a failure is permanent or transient. A text that names a refusal
