@@ -1,7 +1,8 @@
 /**
- * What crosses between a seat and its room. Every shape here is plain JSON:
- * an optional key is written only when it is present, and no value is
- * `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a function. A
+ * What crosses between a seat and its room. Every request and response is
+ * plain JSON: an optional key is written only when it is present, and no
+ * value is `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a
+ * function. A
  * request and its response survive a round trip through `JSON.stringify`
  * unchanged, which is what lets a seat and a room live in two processes.
  *
@@ -11,6 +12,10 @@
  * seat through three calls: `wake` starts an activation, `steer` sends
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
+ *
+ * The file also holds the executor contract: the types between the driver
+ * and one running activation in the same process. They hold functions, and
+ * they do not cross the wire.
  */
 
 import type { Static } from 'typebox';
