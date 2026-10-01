@@ -240,7 +240,7 @@ one rendered message in `record.ts`.
 | --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------ | ---- |
 | S1  | `ClaudeRuntime` and `CodexRuntime` collide with the core `Runtime` | `ClaudeExecutionOptions`, `CodexExecutionOptions`, as `PiExecutionOptions`                                                     | `claude/src/options.ts:14`, `codex/src/options.ts:16`                                                  | High   | 6    |
 | S2  | Codex declares a `RoomTool` that shadows the core type             | `CodexTool`                                                                                                                    | `codex/src/tools.ts:29`                                                                                | High   | 3    |
-| S3  | `Pass.agentTools` holds agent tools under the type `RoomTool`      | A type `AgentTool`, or one list as E6 proposes                                                                                 | `execution/executor.ts:96`; E6                                                                         | Medium | 2    |
+| S3  | `Pass.agentTools` holds agent tools under the type `RoomTool`      | None: E6 removes `Pass.agentTools`, and S3 closes with it                                                                      | `execution/executor.ts:96`; E6                                                                         | Medium | 2    |
 | S4  | The testing entry exports a second `Step`, `Call`, and `Result`    | `ScriptStep`, `ScriptCall`, `ScriptResult`; the parameter `call` → `request`                                                   | `testing/scripted.ts:22-44`, `testing.ts:21`                                                           | High   | 6    |
 | S5  | Pi `scripted()` collides with the core `scripted()`                | `scriptedStream()`                                                                                                             | `pi/src/testing.ts`, `ambion/src/testing/scripted.ts:264`                                              | High   | 3    |
 | S6  | The workspace object has five names                                | "workspace" for the value, "resource" for the contract; "bash owner" and "shell" go                                            | `workspace.ts:76,181,416,489`; 44 uses of "bash owner" in `src`                                        | Medium | 6    |
@@ -352,3 +352,38 @@ again, or runs the simulator and one live case.
 2. O3 and T15: the verified rules, after K12 if K12 lands first.
 3. T8: the stored delay and the `schedule` parameter.
 4. O9: the prompt text.
+
+## The pull requests
+
+**Each pull request holds one row or a few rows that touch the same
+files.** Each one starts from `main`, runs `pnpm check`, and names its
+change in the changelog. A pull request in a later wave waits for the
+pull request it depends on.
+
+| Wave | Rows                    | Branch                              | Waits for       |
+| ---- | ----------------------- | ----------------------------------- | --------------- |
+| 1    | T11                     | `claude/terms-t11-entries`          |                 |
+| 1    | O5, O8                  | `claude/terms-o5-o8-prose`          |                 |
+| 1    | O1, O2, S10             | `claude/terms-o1-o2-s10-hosts`      |                 |
+| 1    | S1, S2, S5              | `claude/terms-s1-s2-s5-executors`   |                 |
+| 2    | S7, S8, S9              | `claude/terms-s7-s8-s9-processes`   |                 |
+| 2    | T5, T6                  | `claude/terms-t5-t6-say`            |                 |
+| 2    | T7, T9                  | `claude/terms-t7-t9-reads`          |                 |
+| 2    | T10                     | `claude/terms-t10-scheduled`        |                 |
+| 2    | T2                      | `claude/terms-t2-activation-events` |                 |
+| 2    | T3, T14                 | `claude/terms-t3-t14-participants`  |                 |
+| 2    | O10, O11, S11           | `claude/terms-o10-o11-s11-traces`   |                 |
+| 2    | O4a, S4                 | `claude/terms-o4a-s4-fixtures`      |                 |
+| 2    | T12                     | `claude/terms-t12-journal-entry`    | T11             |
+| 2    | T1                      | `claude/terms-t1-executor`          | E6              |
+| 2    | T4                      | `claude/terms-t4-stops`             | T1              |
+| 3    | T13, O4b, O6, O7        | `claude/terms-journal-bodies`       | Wave 2          |
+| 3    | O3, T15                 | `claude/terms-o3-t15-rules`         | Wave 2          |
+| 3    | T8                      | `claude/terms-t8-delay`             | T10             |
+| 3    | O9                      | `claude/terms-o9-prompts`           | T8              |
+| 3    | S6                      | `claude/terms-s6-workspace-prose`   | S7, S8, S9      |
+| 3    | The check, the glossary | `claude/terms-vocabulary-check`     | The gate change |
+
+**The gate change waits.** An open pull request rewrites the gate and
+`CLAUDE.md`. The vocabulary check and the glossary rows land after it,
+with the entries for every rename that has landed.
