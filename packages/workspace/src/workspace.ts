@@ -105,7 +105,7 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * `use`, as its owner agent, at `Process.output`.
 	 */
 	readonly processes: WorkspaceProcesses;
-	/** Host sensor reads and lifecycle callbacks. Available when the backend supports ports. */
+	/** Host sensor reads and lifecycle callbacks. Available when the bash backend has `endpoints`. */
 	readonly sensors?: Pick<SensorConnections, 'get' | 'list' | 'subscribe'>;
 	/**
 	 * Start mirroring `room`'s messages under the backend's layout, at
