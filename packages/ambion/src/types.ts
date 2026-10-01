@@ -471,7 +471,7 @@ export type RoomNotification = RoomEvent | ActivationEvent;
  * reads the fields below and no other. An executor kind adds its own
  * fields, such as a model, and reads them itself.
  */
-export interface AgentExecutor {
+export interface Executor {
 	/** The executor kind, such as `pi`. The host that composes execution resolves it. */
 	readonly kind: string;
 	readonly instructions: string;
@@ -499,7 +499,7 @@ export interface AgentExecutor {
 export interface AgentDefinition {
 	readonly name: string;
 	readonly identity: string;
-	readonly executor: AgentExecutor;
+	readonly executor: Executor;
 	/** What the trace keeps. `defineAgent` and `captureAgent` set the default when absent. */
 	readonly trace?: TracePolicy;
 }

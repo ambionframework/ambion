@@ -15,6 +15,18 @@ body holds `summaryWriter` for `summary`. The Cloudflare room metadata holds
 `Composition`, `Close`, and the Cloudflare `StartOptions`. `StartOptions.agents`
 is `definitions`, and `TracePolicy.thinking` takes `'start'` for `'summary'`.
 The golden journals hold the new names.
+**`Executor` now names one thing: the value in an agent definition.** The
+word named three things before. The hosting entry renames the function type
+`Executor` to `ActivationOpener`. It renames `ExecutorSession` to
+`RunningActivation`. The main and hosting entries rename the value type
+`AgentExecutor` to `Executor`. The hosting entry renames
+`AgentExecutorBaseOptions` to `ExecutorBaseOptions`. The `/testing` entry
+renames `scriptedExecutor` to `scriptedOpener`. The fields that hold an
+`ActivationOpener` take the name `opener`: `AgentExecutionContext.executor`
+becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
+`createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
+`createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
+`ExecutorActivation`, and `ExecutorOptions` keep their names.
 **`@ambionframework/journal` exports its entry type as `Entry`.** The
 package exported the type as `JournalEntry`. The core imported it as
 `Envelope`, and the room named its own entry union `Entry`. The stored shape
@@ -153,6 +165,29 @@ workspace `read` of a picture and the frames of `observe` reach it as images.
 The tool list does not change, because `view_image` stays off. A model with
 no image input stays text-only, and Codex shows a placeholder.
 
+**The Codex recipe matches `codex` 0.158.0.** `exclusiveConfig` no longer
+sets `tools.view_image`. Codex 0.158.0 does not know the key, and it
+reported two warnings for every run. The `view_image` feature still turns the
+tool off. The config sets `skills.include_instructions` and
+`skills.bundled.enabled` to `false`, so no `skills_instructions` message
+reaches the model and Codex installs no system skill in the seat home. The
+catalog flag `include_skills_usage_instructions` did not remove that message.
+The config also sets `check_for_update_on_startup`, `analytics.enabled`,
+`feedback.enabled`, `memories.generate_memories`, and
+`memories.use_memories` to `false`, so a seat sends no analytics or
+feedback and keeps no memory. `codex exec` starts no update check, and the
+update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
+`shell_snapshot`, `daemon_auto_start`,
+`workspace_dependencies`, `worktrees`, `realtime_conversation`, and
+`memories`. Each acts on the host or the network, or writes state outside
+the journal. `shell_snapshot` ran the shell of the host
+user and wrote its environment into the seat home. The binary tier now
+asserts that a default seat produces no warning `notice` and no skills
+block. The catalog fixture is `catalog-0.158.0.json`. The recorded event
+streams stay as recorded on 0.155.1. Docs state that the `config.toml` of
+the seat home is the responsibility of the host, because a key that the
+recipe does not name survives from it.
+
 **The trace logs the size of an image in a tool result of every executor.**
 `loggedToolResult` replaced the bytes of an image with their count only in
 the `content` array of a record. The Claude and Codex executors log the
@@ -173,7 +208,7 @@ speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
 kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
 `isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
 `say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
-`AgentExecutor.speaking`. `AgentExecutor.guidance` keeps its name. The
+`Executor.speaking`. `Executor.guidance` keeps its name. The
 callback `RoomToolOptions.spoke` is now `said`. The kind string, the
 journal bodies, and the text that a model reads do not change.
 **Three names in the process and credential options change.** The option

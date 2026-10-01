@@ -7,7 +7,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import {
-	type AgentExecutor,
+	type Executor,
 	executorOfKind,
 	type Pass,
 	present,
@@ -44,7 +44,7 @@ export function seatText(pass: Pick<Pass, 'mechanism' | 'agent'>): string {
 }
 
 /** The Codex executor a definition names, or an error that names its kind. */
-export function codexOf(executor: AgentExecutor): CodexExecutor {
+export function codexOf(executor: Executor): CodexExecutor {
 	return executorOfKind<CodexExecutor>(executor, 'codex');
 }
 

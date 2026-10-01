@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { renderActivation } from '../../ambion/src/execution/render.ts';
 import { deferred } from '../../ambion/test/support/room.ts';
-import { createPiExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../src/executor.ts';
 import { openHarness } from '../src/harness.ts';
 import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
@@ -102,14 +102,14 @@ function recording(script: PiScript) {
 
 function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
 	const definition = workerWith(compaction, thinking);
-	const executor = createPiExecutor({
+	const opener = createPiOpener({
 		definition,
 		model: stubModel,
 		stream,
 		now: () => 0,
 		sessions: memorySessions(),
 	});
-	const open = (id: string): ActivationState => stateOf(executor, definition, { id });
+	const open = (id: string): ActivationState => stateOf(opener, definition, { id });
 	return { definition, open };
 }
 
@@ -310,14 +310,14 @@ describe('the harness of an activation', () => {
 			"The Pi executor cannot run an executor of kind 'other'.",
 		],
 	])('fails a pass over %s as transient', async (_name, definition, spec, message) => {
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
 			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});
-		const session = stateOf(executor, definition);
+		const session = stateOf(opener, definition);
 		const view = { ...respond([said(1, 'Go.')], 1), spec };
 		expect(await session.pass({ kind: 'view', view })).toMatchObject({
 			failed: true,
@@ -335,14 +335,14 @@ describe('the harness of an activation', () => {
 				identity: 'Works.',
 				executor: pi({ instructions: 'Work.', model }),
 			});
-			const executor = createPiExecutor({
+			const opener = createPiOpener({
 				definition,
 				model: stubModel,
 				stream,
 				now: () => 0,
 				sessions,
 			});
-			return stateOf(executor, definition);
+			return stateOf(opener, definition);
 		};
 		const first = on('scripted/first');
 		await first.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
@@ -374,14 +374,14 @@ describe('the harness of an activation', () => {
 			open: (scope, id, context) => store.open(scope, id, context),
 		};
 		const definition = workerWith();
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
 			stream,
 			now: () => 0,
 			sessions,
 		});
-		const session = stateOf(executor, definition);
+		const session = stateOf(opener, definition);
 		const running = session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		await created.promise;
 		session.close?.();
@@ -389,7 +389,7 @@ describe('the harness of an activation', () => {
 		expect(await running).toEqual({ failed: false });
 		expect(requests).toHaveLength(0);
 		// The next activation of the seat waits for the close, then continues the session.
-		const next = stateOf(executor, definition, { id: 'message:2:worker:1' });
+		const next = stateOf(opener, definition, { id: 'message:2:worker:1' });
 		const view = respond([said(1, 'Go.')], 1);
 		await next.pass({
 			kind: 'view',

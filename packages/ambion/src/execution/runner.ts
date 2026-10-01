@@ -149,7 +149,7 @@ export class AgentRunner implements AgentPort {
 			cut = resolve;
 		});
 		const trace = this.context.trace.open(id);
-		const state = new ActivationState(this.context.executor, {
+		const state = new ActivationState(this.context.opener, {
 			id,
 			room: this.boundedRoom(cutOff, trace),
 			definition: this.context.definition,

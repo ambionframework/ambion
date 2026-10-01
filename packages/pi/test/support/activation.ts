@@ -1,10 +1,10 @@
 /** One activation built by hand over the core state, with no runner and no room around it. */
 import type { AgentDefinition, RoomNotification } from '@ambionframework/ambion';
 import type {
+	ActivationOpener,
 	ActivationView,
 	CommitRequest,
 	CommitResult,
-	Executor,
 	RoomProtocol,
 	RoomTool,
 	StepSink,
@@ -35,7 +35,7 @@ export function roomThatCommits(
 
 /** The core state of one activation over `executor`, as the driver opens it. */
 export function stateOf(
-	executor: Executor,
+	opener: ActivationOpener,
 	definition: AgentDefinition,
 	options: {
 		id?: string;
@@ -44,7 +44,7 @@ export function stateOf(
 		trace?: StepSink;
 	} = {},
 ): ActivationState {
-	return new ActivationState(executor, {
+	return new ActivationState(opener, {
 		id: options.id ?? 'message:1:worker:1',
 		room: options.room ?? unusedRoom,
 		definition,
@@ -64,13 +64,13 @@ export async function boundActivation(
 	view: ActivationView,
 ): Promise<{ state: ActivationState; tools: readonly RoomTool[] }> {
 	let tools: readonly RoomTool[] = [];
-	const executor = () => ({
+	const opener = () => ({
 		pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
 			tools = pass.tools;
 			return { failed: false };
 		},
 	});
-	const state = new ActivationState(executor, {
+	const state = new ActivationState(opener, {
 		id,
 		room,
 		definition,

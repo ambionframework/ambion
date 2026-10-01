@@ -4,10 +4,10 @@
  * `codex()` builds the executor an agent definition takes. The room reads
  * none of the fields Codex adds; the Codex executor does.
  */
-import type { AgentExecutor } from '@ambionframework/ambion';
+import type { Executor } from '@ambionframework/ambion';
 import {
-	type AgentExecutorBaseOptions,
 	describeExecutor,
+	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
@@ -15,7 +15,7 @@ import type { ModelReasoningEffort } from '@openai/codex-sdk';
 /** What Codex asks of the model about its reasoning. Codex shows a summary, never the raw reasoning. */
 export type ReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none';
 
-export interface CodexOptions extends AgentExecutorBaseOptions {
+export interface CodexOptions extends ExecutorBaseOptions {
 	/** A Codex model identifier. */
 	model: string;
 	/** How much the model reasons before it answers. Absent, Codex uses the default of the model. */
@@ -29,7 +29,7 @@ export interface CodexOptions extends AgentExecutorBaseOptions {
 }
 
 /** An agent's Codex executor: the Codex SDK loop, model, instructions, and tools. */
-export interface CodexExecutor extends AgentExecutor {
+export interface CodexExecutor extends Executor {
 	readonly kind: 'codex';
 	readonly model: string;
 	readonly modelReasoningEffort?: ModelReasoningEffort;

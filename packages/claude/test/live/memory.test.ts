@@ -13,7 +13,7 @@ import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
 import { isSaid, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { createClaudeExecutor } from '../../src/executor.ts';
+import { createClaudeOpener } from '../../src/executor.ts';
 import { viewOf } from '../support.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -116,9 +116,9 @@ live('memory', () => {
 		const definition = seat('sonnet', 'Answers what is asked.', {
 			instructions: 'Answer the question with one say, in one sentence. Guess if you must.',
 		});
-		const executor = createClaudeExecutor({ definition });
+		const opener = createClaudeOpener({ definition });
 		const view = viewOf();
-		const session = new ActivationState(executor, {
+		const session = new ActivationState(opener, {
 			id: view.spec.id,
 			room,
 			definition,

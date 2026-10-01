@@ -20,7 +20,7 @@ import {
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
 import { pi } from './define.ts';
-import { createPiExecutor } from './executor.ts';
+import { createPiOpener } from './executor.ts';
 import { scriptContext } from './script-context.ts';
 import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';
@@ -237,7 +237,7 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 export function piExecutorHarness(): ExecutorHarness {
 	return {
 		open: (plan, definition) =>
-			createPiExecutor({
+			createPiOpener({
 				// The suite names a neutral executor. The seat runs on a Pi one.
 				definition: {
 					...definition,

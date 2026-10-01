@@ -1,6 +1,6 @@
 /**
- * The Pi executor: one activation's session, from the pass the driver hands
- * it until the activation stops.
+ * The Pi opener: it opens one running activation, which takes each pass the
+ * driver hands it until the activation stops.
  *
  * Pi's `AgentHarness` owns the model loop, the session, its persistence and
  * its compaction. The driver's contract is pass in and result out, so the
@@ -37,13 +37,13 @@
  * boundary), and the lease entries and the trace of each one carry that word.
  */
 import type {
+	ActivationOpener,
 	ActivationView,
 	AgentDefinition,
-	Executor,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassResult,
+	RunningActivation,
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
@@ -62,8 +62,8 @@ import { toolsFor } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
 
-/** What builds a Pi executor for one seat: its definition, and the room's services. */
-export interface PiExecutorOptions extends ExecutionServices {
+/** What builds a Pi opener for one seat: its definition, and the room's services. */
+export interface PiOpenerOptions extends ExecutionServices {
 	readonly definition: AgentDefinition;
 	/** The room's clock. The session stamps every range of the record with it. */
 	readonly now: () => number;
@@ -76,10 +76,10 @@ interface Seat {
 	readonly closing: Map<string, Promise<void>>;
 }
 
-/** The Pi executor. One instance per seat, for as long as the room runs. */
-export function createPiExecutor(options: PiExecutorOptions): Executor {
+/** The Pi opener. One instance per seat, for as long as the room runs. */
+export function createPiOpener(options: PiOpenerOptions): ActivationOpener {
 	const seat: Seat = { sessions: options.sessions, closing: new Map() };
-	return (activation: ExecutorActivation): ExecutorSession =>
+	return (activation: ExecutorActivation): RunningActivation =>
 		new Activation(activation, options, seat);
 }
 
@@ -98,10 +98,10 @@ interface Opened extends OpenHarness {
 const noop = () => {};
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-class Activation implements ExecutorSession {
+class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly options: PiExecutorOptions;
+	private readonly options: PiOpenerOptions;
 	private readonly seat: Seat;
 	private readonly steps = new PiSteps();
 	/** The harness of this activation. The first pass opens it, and `close` closes it. */
@@ -131,7 +131,7 @@ class Activation implements ExecutorSession {
 	private readonly cut: Promise<void>;
 	private cutNow: () => void = noop;
 
-	constructor(activation: ExecutorActivation, options: PiExecutorOptions, seat: Seat) {
+	constructor(activation: ExecutorActivation, options: PiOpenerOptions, seat: Seat) {
 		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;
