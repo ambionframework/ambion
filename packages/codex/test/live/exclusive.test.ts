@@ -1,11 +1,9 @@
 /**
- * Native tools off, on a real `codex` and a real model. Three claims:
+ * No native tools, on a real `codex` and a real model. Two claims:
  *
- * - With the default `nativeTools: 'none'`, the tools the seat can call are
- *   exactly the room tools and the tool the application gave it.
- * - With the default, a request to read `/etc/hosts` reaches no tool that
- *   reads a file.
- * - With `nativeTools: 'codex'`, the native tools return.
+ * - The tools the seat can call are exactly the room tools and the tool the
+ *   application gave it.
+ * - A request to read `/etc/hosts` reaches no tool that reads a file.
  *
  * Codex adds a prefix to the name of a tool. The test removes it. Codex adds
  * three MCP helper tools whenever any MCP server is on: `list_mcp_resources`,
@@ -80,7 +78,7 @@ function calledIn(
 		.map((step) => step.name);
 }
 
-live('nativeTools', () => {
+live('no native tools', () => {
 	it('gives the seat exactly the room tools and its own tools by default', async () => {
 		const { room, events } = await open('exclusive-list', {
 			agents: [seat('clerk', { tools: [lookup], instructions: 'Answer with one say.' })],
@@ -132,28 +130,6 @@ live('nativeTools', () => {
 				.map((message) => message.text)
 				.join('\n');
 			expect(said).not.toMatch(/Host Database|127\.0\.0\.1|localhost/);
-			expect(errorsIn(events)).toEqual([]);
-		} finally {
-			await room.stop();
-		}
-	});
-
-	it('brings the native tools back with nativeTools codex', async () => {
-		const { room, steps, events } = await open('exclusive-codex', {
-			agents: [
-				seat('clerk', {
-					nativeTools: 'codex',
-					instructions: 'Do what is asked with your own tools, then say.',
-				}),
-			],
-		});
-		try {
-			const visit = await room.visit(person);
-			await visit.send({ text: 'Run the shell command `echo ambion` and say what it printed.' });
-			await untilQuiet(room);
-			const [activation] = activationsOf(events, 'clerk');
-			const called = calledIn(steps, activation);
-			expect(called.some((tool) => !ROOM.includes(tool))).toBe(true);
 			expect(errorsIn(events)).toEqual([]);
 		} finally {
 			await room.stop();

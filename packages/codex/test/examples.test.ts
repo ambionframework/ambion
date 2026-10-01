@@ -40,6 +40,8 @@ it('typechecks every ts example of the README and the guide', () => {
 					'@ambionframework/ambion': [here('../../ambion/src/index.ts')],
 					'@ambionframework/ambion/hosting': [here('../../ambion/src/hosting.ts')],
 					'@ambionframework/journal': [here('../../journal/src/index.ts')],
+					'@ambionframework/just-bash': [here('../../just-bash/src/index.ts')],
+					'@ambionframework/workspace': [here('../../workspace/src/index.ts')],
 				},
 			},
 			include: [],

@@ -9,9 +9,12 @@
  *
  * - **Seat text.** The SDK has no system prompt option. The harness note,
  *   the mechanism and the agent part go in the config of the client, fixed
- *   for the activation (`options.ts`). The first prompt holds the view
- *   alone. A `codex` seat that resumes a thread is the exception: Codex
- *   keeps the stored developer message, so that prompt carries the text.
+ *   for the activation (`options.ts`), as an instructions file in the
+ *   scratch of the seat. Every first prompt holds the view alone.
+ * - **No native tools.** A seat has no native tool. The catalog entry, the
+ *   config, and the thread policy turn each one off (`catalog.ts`). Files and
+ *   a shell come only from the tools of the agent, which the room tools
+ *   server serves.
  * - **Home.** Every seat runs in the Codex home of its execution, with the
  *   login of the host linked in (`home.ts`). The config and the
  *   instructions of the host user never reach a seat.
@@ -44,7 +47,6 @@ import type {
 	Pass,
 	PassResult,
 	ReadRange,
-	RoomToolOptions,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
 import {
@@ -56,7 +58,7 @@ import {
 } from '@openai/codex-sdk';
 import { type Bridge, startBridge } from './bridge.ts';
 import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
-import { CodexSteps, changedPaths } from './codex-trace.ts';
+import { CodexSteps } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
 import { openHome, rolloutOf, type SeatHome, seatHome } from './home.ts';
 import {
@@ -66,7 +68,7 @@ import {
 	seatText,
 	threadOptions,
 } from './options.ts';
-import { citing, servedTools } from './tools.ts';
+import { servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
 interface CodexThreadLike {
@@ -140,14 +142,8 @@ class Activation implements ExecutorSession {
 	private turn: AbortController | undefined;
 	/** The range of the record the turn in flight reads. The core counts it read when the turn starts. */
 	private reading: ReadRange | undefined;
-	/** The workspace paths the agent changed since its last say. The next ordinary say cites them. */
-	private readonly changed = new Set<string>();
-	/** Whether the activation responds. A closing say cites no changed path. */
-	private ordinary = true;
-	/** What a say and a schedule add: the changed paths, as refs. */
-	readonly roomTools: RoomToolOptions = citing(this.changed, () => this.ordinary);
 	private bridge: Bridge | undefined;
-	/** The patched catalog and the empty directory. Absent when nativeTools is 'codex'. */
+	/** The patched catalog, the instructions file, and the empty directory. Absent until the first pass. */
 	private scratch: Scratch | undefined;
 	private thread: CodexThreadLike | undefined;
 	/** The Codex home of the seat and the environment of the binary. Absent until the first pass. */
@@ -183,14 +179,12 @@ class Activation implements ExecutorSession {
 	/** One pass: read, act, and report where this session left off. */
 	async pass(pass: Pass): Promise<PassResult> {
 		try {
-			this.ordinary = pass.view.spec.purpose.kind !== 'summarize';
 			const prompt = await pass.record();
 			if (prompt === undefined) return { failed: false };
-			const text = this.promptText(pass, prompt.text);
 			const thread = await this.start(pass);
 			if (this.stopped) return { failed: false };
 			this.reading = prompt.range;
-			return await this.attempt(thread, text);
+			return await this.attempt(thread, prompt.text);
 		} catch (error) {
 			return this.broke(error);
 		}
@@ -219,18 +213,6 @@ class Activation implements ExecutorSession {
 		}
 	}
 
-	/**
-	 * The text to run. Codex keeps the developer message stored with a resumed
-	 * thread, so the config cannot replace it. The first prompt of a `codex`
-	 * seat that resumes carries the seat text. If the resume fails, the fresh
-	 * thread runs the same prompt and holds the text twice.
-	 */
-	private promptText(pass: Pass, view: string): string {
-		const resumes = this.thread === undefined && pass.resume !== undefined;
-		if (!resumes || codexOf(this.definition.executor).nativeTools !== 'codex') return view;
-		return `${seatText(pass)}\n\n${view}`;
-	}
-
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
 	private async start(pass: Pass): Promise<CodexThreadLike> {
 		if (this.thread !== undefined) return this.thread;
@@ -241,7 +223,7 @@ class Activation implements ExecutorSession {
 		// The seat text is fixed for the activation. The client config carries it.
 		const seat = seatText(pass);
 		// The catalog comes next. A model with no entry fails before anything opens.
-		const scratch = await this.seal(seat);
+		const scratch = await this.seal(seat, home);
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
 		const tools = servedTools(pass.tools, this.activation);
@@ -249,31 +231,28 @@ class Activation implements ExecutorSession {
 		this.bridge = bridge;
 		if (this.stopped) {
 			bridge.close();
-			scratch?.remove();
+			scratch.remove();
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		const summary = codexOf(this.definition.executor).reasoningSummary ?? 'auto';
-		this.client = make(
-			clientOptions(this.options, home, bridge.socketPath, seat, summary, scratch),
-		);
+		this.client = make(clientOptions(this.options, home, bridge.socketPath, summary, scratch));
 		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}
 
-	/** The scratch of a seat with no native tools, with the seat text in it. A seat with `nativeTools: 'codex'` has none. */
-	private async seal(seat: string): Promise<Scratch | undefined> {
+	/** The scratch of the seat: the patched catalog, the empty directory, and the seat text. */
+	private async seal(seat: string, home: SeatHome): Promise<Scratch> {
 		const executor = codexOf(this.definition.executor);
-		if (executor.nativeTools === 'codex') return undefined;
-		const home = this.home;
-		if (home === undefined) throw new Error('The Codex home is not open.');
 		const source = this.options.catalog ?? installedCatalog(this.options.codexPath, home.env);
 		return scratchFor(executor.model, source, seat);
 	}
 
 	/** Open a thread: the one to resume when `resume` names it, else a fresh one. */
 	private begin(resume: string | undefined): CodexThreadLike {
-		if (this.client === undefined) throw new Error('The Codex client is not open.');
+		if (this.client === undefined || this.scratch === undefined) {
+			throw new Error('The Codex client is not open.');
+		}
 		const options = threadOptions(codexOf(this.definition.executor), this.scratch);
 		this.heard = false;
 		return resume === undefined
@@ -311,7 +290,7 @@ class Activation implements ExecutorSession {
 		return passResultOf(ending.failure());
 	}
 
-	/** One thread event: its steps, its changed paths, and the range the turn read. */
+	/** One thread event: its steps, and the range the turn read. */
 	private handle(event: ThreadEvent): void {
 		if (event.type === 'thread.started') {
 			this.heard = true;
@@ -320,7 +299,6 @@ class Activation implements ExecutorSession {
 		if (event.type === 'turn.started' && this.reading !== undefined) {
 			this.activation.read(this.reading);
 		}
-		for (const path of changedPaths(event)) this.changed.add(path);
 		for (const step of this.steps.steps(event)) this.activation.trace.record(step);
 	}
 

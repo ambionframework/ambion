@@ -67,16 +67,7 @@ describe('the Workbench tool set', () => {
 			kind: 'codex',
 			model: 'gpt-5.6-luna',
 			modelReasoningEffort: 'medium',
-			nativeTools: 'none',
 		});
-		for (const option of [
-			'sandboxMode',
-			'approvalPolicy',
-			'networkAccessEnabled',
-			'workingDirectory',
-			'additionalDirectories',
-		])
-			expect(executors.experiments, option).not.toHaveProperty(option);
 	});
 });
 

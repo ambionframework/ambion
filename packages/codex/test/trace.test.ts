@@ -2,7 +2,7 @@
 import type { Step } from '@ambionframework/ambion';
 import type { ThreadEvent, ThreadItem } from '@openai/codex-sdk';
 import { describe, expect, it } from 'vitest';
-import { CodexSteps, changedPaths, NOTICE_CHARS, usageOf } from '../src/codex-trace.ts';
+import { CodexSteps, NOTICE_CHARS, usageOf } from '../src/codex-trace.ts';
 import { causeOf, passResultOf } from '../src/failure.ts';
 
 const started = (item: ThreadItem): ThreadEvent => ({ type: 'item.started', item });
@@ -53,63 +53,6 @@ describe('text and thinking', () => {
 });
 
 describe('tools', () => {
-	it('maps a command to a call and a result', () => {
-		const command = {
-			id: 'c1',
-			type: 'command_execution' as const,
-			command: 'ls',
-			aggregated_output: '',
-		};
-		expect(
-			stepsOf(
-				started({ ...command, status: 'in_progress' }),
-				completed({ ...command, aggregated_output: 'a.txt', exit_code: 0, status: 'completed' }),
-			),
-		).toEqual([
-			{ type: 'tool_call', call: idOf('c1'), name: 'command', input: { command: 'ls' } },
-			{ type: 'tool_result', call: idOf('c1'), output: { output: 'a.txt', exitCode: 0 } },
-		]);
-	});
-
-	it('marks a failed command as an error', () => {
-		const steps = stepsOf(
-			completed({
-				id: 'c1',
-				type: 'command_execution',
-				command: 'false',
-				aggregated_output: '',
-				exit_code: 1,
-				status: 'failed',
-			}),
-		);
-		expect(steps).toMatchObject([
-			{ type: 'tool_call', call: idOf('c1') },
-			{ type: 'tool_result', call: idOf('c1'), error: 'The command failed with exit code 1.' },
-		]);
-	});
-
-	it('gives a file change both steps when it arrives only at its end', () => {
-		const changes = [{ path: '/work/a.md', kind: 'update' as const }];
-		expect(
-			stepsOf(completed({ id: 'f1', type: 'file_change', changes, status: 'completed' })),
-		).toEqual([
-			{ type: 'tool_call', call: idOf('f1'), name: 'file_change', input: { changes } },
-			{ type: 'tool_result', call: idOf('f1'), output: changes },
-		]);
-	});
-
-	it('maps a web search', () => {
-		expect(
-			stepsOf(
-				started({ id: 'w1', type: 'web_search', query: 'pour schedule' }),
-				completed({ id: 'w1', type: 'web_search', query: 'pour schedule' }),
-			),
-		).toMatchObject([
-			{ type: 'tool_call', name: 'web_search', input: { query: 'pour schedule' } },
-			{ type: 'tool_result', call: idOf('w1') },
-		]);
-	});
-
 	it('shows a tool of another server with its server, and marks a failed call', () => {
 		const call = {
 			id: 't1',
@@ -144,23 +87,26 @@ describe('tools', () => {
 	});
 });
 
-describe('plans and diagnostics', () => {
-	it('maps the plan of the agent to the tool update_plan', () => {
-		const items = [
-			{ text: 'Read the log', completed: true },
-			{ text: 'Name the owner', completed: false },
-		];
-		expect(
-			stepsOf(
-				started({ id: 'p1', type: 'todo_list', items }),
-				updated({ id: 'p1', type: 'todo_list', items }),
-				completed({ id: 'p1', type: 'todo_list', items }),
-			),
-		).toEqual([
-			{ type: 'tool_call', call: idOf('p1'), name: 'update_plan', input: { items } },
-			{ type: 'tool_result', call: idOf('p1'), output: items },
-		]);
-	});
+describe('diagnostics', () => {
+	it.each([
+		['command_execution', { command: 'ls', aggregated_output: '', status: 'completed' }],
+		['file_change', { changes: [{ path: '/work/a.md', kind: 'add' }], status: 'completed' }],
+		['web_search', { query: 'pour schedule' }],
+		['todo_list', { items: [{ text: 'Read the log', completed: true }] }],
+	] as const)(
+		'maps a completed %s item, which a seat has no tool for, to a warning notice that names it',
+		(type, fields) => {
+			const item = { id: 'n1', type, ...fields } as ThreadItem;
+			expect(stepsOf(started(item), updated(item))).toEqual([]);
+			expect(stepsOf(completed(item))).toEqual([
+				{
+					type: 'notice',
+					level: 'warning',
+					text: `Codex reported a native ${type} item. A seat has no native tools.`,
+				},
+			]);
+		},
+	);
 
 	it('maps an error item and a non-terminal error event to a warning notice', () => {
 		const text = 'Codex is ignoring 1 unrecognized configuration setting.';
@@ -201,7 +147,7 @@ it('gives each turn its own ids, though codex numbers the items of each turn aga
 	]);
 });
 
-describe('usage and paths', () => {
+describe('usage', () => {
 	it('maps the usage of a turn to tokens, and reports no cost', () => {
 		const [step] = stepsOf({
 			type: 'turn.completed',
@@ -215,15 +161,6 @@ describe('usage and paths', () => {
 		});
 		expect(step).toEqual({ type: 'usage', input: 115, output: 30, cacheRead: 10, cacheWrite: 5 });
 		expect(usageOf({ input_tokens: 1, cached_input_tokens: 4, output_tokens: 0 }).input).toBe(0);
-	});
-
-	it('reports the paths of a completed patch only', () => {
-		const changes = [{ path: '/work/a.md', kind: 'add' as const }];
-		const patch = (status: 'completed' | 'failed') =>
-			completed({ id: 'f', type: 'file_change', changes, status });
-		expect(changedPaths(patch('completed'))).toEqual(['/work/a.md']);
-		expect(changedPaths(patch('failed'))).toEqual([]);
-		expect(changedPaths({ type: 'turn.started' })).toEqual([]);
 	});
 });
 
