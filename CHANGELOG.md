@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+**The body schemas are the one source of the body types.** The new file
+`packages/ambion/src/bodies.ts` holds the schema of each stored body. Before,
+each body was written twice, as a type and as a schema, and the two had
+drifted. `SpokenMessage`, `PostedMessage`, `PresenceMessage`,
+`SummaryMessage`, `DismissedMessage`, `PresenceChange`, `Attention`,
+`EndReason`, `FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`,
+`Close`, `Cancellation`, `Fence`, `Seating`, and `Composition` now derive
+from the schemas with `Static`.
+
+**Each derived type keeps its name and its fields.** The fields, the
+optional keys, and the `readonly` marks stay the same. An interface stays an
+interface, and an alias stays an alias. The `.d.ts` of a type refers to its
+schema, and the schema carries the doc comment of each field.
+
+**The release request takes its fields from the ended lease.** The
+`release` variant of `LeaseRequest` takes `reason`, `readThrough`, `cause`,
+`usage`, and `session` from the schema of the ended lease. It lists them
+once.
+
+**The ended lease refuses an invalid `cause`.** The schema of an ended lease
+did not name `cause`, so any value passed. The schema now holds `permanent`
+or `transient`. A journal that holds another value stops at replay with an
+error that names `body.cause`.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and
