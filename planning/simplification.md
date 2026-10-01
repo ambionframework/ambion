@@ -55,7 +55,7 @@ changelog names each change to an export and to a behavior.
 | One view of the room host (K16)              | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
 | Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
 | One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
-| One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `workspace/src/process-table.ts`         |
+| One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `processes.ts`, `sensor-connections.ts`  |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
