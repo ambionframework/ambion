@@ -683,7 +683,9 @@
 											"!@ambionframework/workspace/git",
 											"**/packages/workspace/**",
 											"just-bash",
+											"just-bash/**",
 											"@ambionframework/just-bash",
+											"@ambionframework/just-bash/**",
 											"node:sqlite"
 										],
 										"message": "Reach the workspace through its root entry, `/resource`, or `/git`. The workstation loads no just-bash and no SQLite."
@@ -764,7 +766,9 @@
 											"**/packages/workspace/**",
 											"**/workspace/src/**",
 											"just-bash",
-											"@ambionframework/just-bash"
+											"just-bash/**",
+											"@ambionframework/just-bash",
+											"@ambionframework/just-bash/**"
 										],
 										"message": "Reach the workspace through its root entry, `/resource`, or `/git`. The git backend loads no just-bash."
 									}
@@ -787,7 +791,13 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["@ambionframework/*", "@earendil-works/pi-*", "**/ambion/**"],
+										"group": [
+											"@ambionframework/*",
+											"@ambionframework/*/**",
+											"@earendil-works/pi-*",
+											"@earendil-works/pi-*/**",
+											"**/ambion/**"
+										],
 										"message": "The record knows no room. Nothing in this repository sits below it."
 									}
 								]
