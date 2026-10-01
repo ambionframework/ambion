@@ -9,7 +9,7 @@ import { AmbionError } from '../errors.ts';
 import { closedExchange, discussionMessages, summaryCompletion } from '../room/exchange.ts';
 import type { ClosedExchange, ExchangeRef, Message, Seq, SummaryMessage } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { RoomBase } from './core.ts';
+import type { RoomHostState } from './core.ts';
 
 export interface ExchangeHandle extends ExchangeRef {
 	/**
@@ -27,14 +27,8 @@ export interface ExchangeHandle extends ExchangeRef {
 	waitForSummary(): Promise<SummaryMessage | undefined>;
 }
 
-/** What the waiters need of the room: the registry of callers. */
-export interface WaitsHost extends RoomBase {
-	/** Each caller that waits for a fact the state does not hold yet. A wake empties it. */
-	readonly waiters: Set<() => void>;
-}
-
 /** Reacquire an exchange by the source sequence of its opening question. */
-export function exchange(host: WaitsHost, from: Seq): ExchangeHandle | undefined {
+export function exchange(host: RoomHostState, from: Seq): ExchangeHandle | undefined {
 	const state = host.state();
 	const close = state.closes.find((candidate) => candidate.from === from);
 	const found = close ?? (state.exchange?.from === from ? state.exchange : undefined);
@@ -47,7 +41,7 @@ export function exchange(host: WaitsHost, from: Seq): ExchangeHandle | undefined
 	return opens ? handleFor(host, found, false) : undefined;
 }
 
-function handleFor(host: WaitsHost, found: ExchangeRef, opened: boolean): ExchangeHandle {
+function handleFor(host: RoomHostState, found: ExchangeRef, opened: boolean): ExchangeHandle {
 	const at = host.state().messages.find((message) => message.seq === found.from)?.at ?? found.at;
 	return {
 		...(found.person === undefined ? {} : { person: found.person }),
@@ -60,7 +54,7 @@ function handleFor(host: WaitsHost, found: ExchangeRef, opened: boolean): Exchan
 }
 
 /** The handle for the exchange a committed delivery belongs to. */
-export function handleForMessage(host: WaitsHost, message: Message): ExchangeHandle {
+export function handleForMessage(host: RoomHostState, message: Message): ExchangeHandle {
 	if (message.kind !== 'said' && message.kind !== 'posted')
 		throw new Error('A delivery did not commit a spoken message or a post.');
 	const state = host.state();
@@ -76,7 +70,7 @@ export function handleForMessage(host: WaitsHost, message: Message): ExchangeHan
 	return handleFor(host, found, message.seq === found.from);
 }
 
-function closedFor(host: WaitsHost, from: Seq): ClosedExchange | undefined {
+function closedFor(host: RoomHostState, from: Seq): ClosedExchange | undefined {
 	const state = host.state();
 	const close = state.closes.find((candidate) => candidate.from === from);
 	if (close === undefined) return undefined;
@@ -87,7 +81,11 @@ function closedFor(host: WaitsHost, from: Seq): ClosedExchange | undefined {
  * Look for a fact on the state until it is there. Each wake looks again, and
  * a room that answers nothing more ends the wait with the `stopped` message.
  */
-async function until<T>(host: WaitsHost, find: () => T | undefined, stopped: string): Promise<T> {
+async function until<T>(
+	host: RoomHostState,
+	find: () => T | undefined,
+	stopped: string,
+): Promise<T> {
 	await host.ready;
 	for (;;) {
 		const found = find();
@@ -99,16 +97,16 @@ async function until<T>(host: WaitsHost, find: () => T | undefined, stopped: str
 	}
 }
 
-function waitForClose(host: WaitsHost, from: Seq): Promise<ClosedExchange> {
+function waitForClose(host: RoomHostState, from: Seq): Promise<ClosedExchange> {
 	return until(host, () => closedFor(host, from), `Exchange '${from}' was stopped or interrupted.`);
 }
 
-async function exchangeMessages(host: WaitsHost, from: Seq): Promise<Message[]> {
+async function exchangeMessages(host: RoomHostState, from: Seq): Promise<Message[]> {
 	const close = await waitForClose(host, from);
 	return discussionMessages(host.state().messages, close.from, close.through);
 }
 
-async function responseFor(host: WaitsHost, from: Seq): Promise<SummaryMessage | undefined> {
+async function responseFor(host: RoomHostState, from: Seq): Promise<SummaryMessage | undefined> {
 	const close = await waitForClose(host, from);
 	const { result } = await until(
 		host,
@@ -124,7 +122,7 @@ async function responseFor(host: WaitsHost, from: Seq): Promise<SummaryMessage |
 }
 
 function responseResult(
-	host: WaitsHost,
+	host: RoomHostState,
 	close: ClosedExchange,
 ): SummaryMessage | 'pending' | 'silent' | 'failed' {
 	const state = host.state();
@@ -140,7 +138,7 @@ function responseResult(
 }
 
 /** Wake every caller that waits. Each looks at the state again. */
-export function notifyExchangeWaiters(host: WaitsHost): void {
+export function notifyExchangeWaiters(host: RoomHostState): void {
 	const waiters = [...host.waiters];
 	host.waiters.clear();
 	for (const resolve of waiters) resolve();
