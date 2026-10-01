@@ -3,7 +3,7 @@
  * `codex` binary runs against a scripted model. The script holds one reply
  * for each request, in order. The endpoint records the body of each request.
  */
-import { createServer } from 'node:http';
+import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /** One reply of the scripted model: assistant text, or a call to a named tool. */
@@ -71,6 +71,8 @@ export interface ScriptedResponses {
 	readonly url: string;
 	/** The body of each request that took a reply from the script, in arrival order. */
 	readonly requests: readonly ResponsesRequest[];
+	/** The headers of every request that arrived, probes and other paths included, in arrival order. */
+	readonly headers: readonly IncomingHttpHeaders[];
 	/** The count of probes: requests that came before the MCP tools were ready. */
 	readonly probes: () => number;
 	/** The path of each request that was not `POST /v1/responses`. */
@@ -161,12 +163,14 @@ export async function scriptedResponses(
 ): Promise<ScriptedResponses> {
 	const requests: ResponsesRequest[] = [];
 	const others: string[] = [];
+	const headers: IncomingHttpHeaders[] = [];
 	let probes = 0;
 	let overrun = 0;
 	const server = createServer((request, response) => {
 		const chunks: Buffer[] = [];
 		request.on('data', (chunk: Buffer) => chunks.push(chunk));
 		request.on('end', async () => {
+			headers.push(request.headers);
 			if (request.method !== 'POST' || request.url !== '/v1/responses') {
 				others.push(`${request.method} ${request.url}`);
 				response.writeHead(404).end();
@@ -192,6 +196,7 @@ export async function scriptedResponses(
 	return {
 		url: `http://127.0.0.1:${port}/v1`,
 		requests,
+		headers,
 		probes: () => probes,
 		others,
 		overrun: () => overrun,

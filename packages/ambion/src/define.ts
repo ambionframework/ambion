@@ -342,7 +342,7 @@ export const UNSEAT = {
 	}),
 };
 
-/** The room tool that dismisses one pending say of the seat. */
+/** The room tool that dismisses one scheduled say of the seat. */
 export const DISMISS = {
 	name: 'dismiss' as const,
 	description: 'Drop a message you scheduled, by its seq. The room does not wake you with it.',

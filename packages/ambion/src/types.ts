@@ -8,7 +8,7 @@
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { AmbionTool, Reminder } from './bundle.ts';
-import type { PendingSay } from './scheduling.ts';
+import type { ScheduledSay } from './scheduling.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -123,7 +123,7 @@ interface RoomReadFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
 	/** The scheduled says that wait to return, in the order they landed. */
-	readonly scheduled: readonly PendingSay[];
+	readonly scheduled: readonly ScheduledSay[];
 	readonly participants: readonly ParticipantInfo[];
 	readonly exchanges: readonly Exchange[];
 	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;

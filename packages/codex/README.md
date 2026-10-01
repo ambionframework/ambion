@@ -34,8 +34,12 @@ await visit.send({ text: 'Is the plan ready?' });
 @ambionframework/codex`. The package needs Node 22.19 or newer. The Codex SDK
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
 or run `codex login`. A ChatGPT sign-in runs the seat on a ChatGPT Plus or
-Pro subscription: leave `CODEX_API_KEY` out,
-and keep `HOME` or `CODEX_HOME` in a custom `env`.
+Pro subscription: leave `CODEX_API_KEY` out, and keep `HOME` in a custom
+`env`. Every seat runs in the Codex home `home`, `~/.ambion/codex` by
+default, and links the file `auth.json` of the host. The `config.toml` and
+the `AGENTS.md` of `~/.codex` reach no seat. A login in the OS keyring
+cannot be shared: use the file store, or run `codex login` with
+`CODEX_HOME` set to the seat home.
 
 **Codex owns the loop, and the room owns the record.** One Codex thread
 serves each activation. The first pass sends the mechanism, the agent

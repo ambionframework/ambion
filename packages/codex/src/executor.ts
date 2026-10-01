@@ -7,6 +7,9 @@
  * later pass sends the delta. A turn ends on `turn.completed` or
  * `turn.failed`.
  *
+ * - **Home.** Every seat runs in the Codex home of its execution, with the
+ *   login of the host linked in (`home.ts`). The config and the
+ *   instructions of the host user never reach a seat.
  * - **Room tools.** The core binds the tools. They live in a stdio MCP
  *   server that Codex spawns. The server reaches them through a local
  *   socket that the activation opens (`bridge.ts`).
@@ -48,6 +51,7 @@ import { type Bridge, startBridge } from './bridge.ts';
 import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
 import { CodexSteps, changedPaths } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
+import { openHome, type SeatHome, seatHome } from './home.ts';
 import { type CodexExecutionOptions, clientOptions, codexOf, threadOptions } from './options.ts';
 import { citing, servedTools } from './tools.ts';
 
@@ -140,6 +144,8 @@ class Activation implements RunningActivation {
 	/** The patched catalog and the empty directory. Absent when nativeTools is 'codex'. */
 	private scratch: Scratch | undefined;
 	private thread: CodexThreadLike | undefined;
+	/** The Codex home of the seat and the environment of the binary. Absent until the first pass. */
+	private home: SeatHome | undefined;
 	private stopped = false;
 
 	constructor(activation: ExecutorActivation, options: CodexOpenerOptions) {
@@ -218,7 +224,11 @@ class Activation implements RunningActivation {
 	/** Open the socket and the thread on the first pass. Later passes keep them. */
 	private async start(pass: Pass): Promise<CodexThreadLike> {
 		if (this.thread !== undefined) return this.thread;
-		// The catalog comes first. A model with no entry fails before anything opens.
+		// The home comes first. The catalog run and every thread read the config and the login there.
+		const home = seatHome(this.options);
+		await openHome(home);
+		this.home = home;
+		// The catalog comes next. A model with no entry fails before anything opens.
 		const scratch = await this.seal();
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
@@ -230,7 +240,7 @@ class Activation implements RunningActivation {
 			scratch?.remove();
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
+		this.client = make(clientOptions(this.options, home, bridge.socketPath, scratch));
 		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
@@ -240,8 +250,9 @@ class Activation implements RunningActivation {
 	private async seal(): Promise<Scratch | undefined> {
 		const executor = codexOf(this.definition.executor);
 		if (executor.nativeTools === 'codex') return undefined;
-		const source =
-			this.options.catalog ?? installedCatalog(this.options.codexPath, this.options.env);
+		const home = this.home;
+		if (home === undefined) throw new Error('The Codex home is not open.');
+		const source = this.options.catalog ?? installedCatalog(this.options.codexPath, home.env);
 		return scratchFor(executor.model, source);
 	}
 

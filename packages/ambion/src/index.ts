@@ -37,7 +37,7 @@ export {
 	roomUri,
 	snapshotUri,
 } from './refs.ts';
-export { pendingFor } from './room/read.ts';
+export { awaitingFor } from './room/read.ts';
 export type {
 	ExchangeHandle,
 	ExchangeRead,
@@ -50,7 +50,7 @@ export type {
 	Visit,
 } from './room.ts';
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
-export type { PendingSay } from './scheduling.ts';
+export type { ScheduledSay } from './scheduling.ts';
 export type {
 	ActivationEvent,
 	ActivationOutcome,

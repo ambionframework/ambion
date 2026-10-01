@@ -232,7 +232,7 @@ each room refusal for the model.
 
 **A resumed session reads the delta on its first pass.** `record(after)`
 takes the position that the harness session read through. The first pass
-of a respond activation then reads the reminders, the pending says, and
+of a respond activation then reads the reminders, the scheduled says, and
 the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
 

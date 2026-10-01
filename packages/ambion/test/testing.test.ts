@@ -22,10 +22,10 @@ import {
 	callTool,
 	fakeClock,
 	isClosing,
-	later,
 	quiet,
 	type Script,
 	say,
+	schedule,
 	scripted,
 	scriptedOpener,
 	settled,
@@ -250,7 +250,7 @@ describe('scriptedOpener', () => {
 		const session = open(
 			scriptedOpener(
 				(_step, _seat, call) =>
-					call === 1 ? say('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
+					call === 1 ? say('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);
@@ -305,7 +305,7 @@ describe('scriptedOpener', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedOpener(() => later('Again.', 60), agent('a')));
+		const session = open(scriptedOpener(() => schedule('Again.', 60), agent('a')));
 		await expect(session.pass(input(closing))).resolves.toMatchObject({
 			failed: true,
 			cause: 'transient',
