@@ -14,16 +14,14 @@
  * time it builds a session, and it stores, issues, and rotates no
  * credential.
  *
- * The workstation carries the git transport `ssh` of
- * `workstationGitBackend`. With that git backend, each `connect` asks
- * `identityFor` for the agent's key, and writes the key and the ssh
+ * The `git` option takes a `workstationGitBackend`. With it, each `connect`
+ * asks `identityFor` for the agent's key, and writes the key and the ssh
  * configuration into the agent's `~/.ssh` (`git-agent.ts`). A failure of
  * either step fails the `connect`.
  */
 
 import {
 	type BashBackend,
-	type BashServices,
 	MAX_TIMER_SECONDS,
 	type WorkspaceEndpoint,
 	type WorkspaceEndpoints,
@@ -31,8 +29,8 @@ import {
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
-import { WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
-import type { WorkstationGitAccess } from './git-backend.ts';
+import { writeGitFiles } from './git-agent.ts';
+import type { WorkstationGitBackend } from './git-backend.ts';
 import { forwardWorkspaceEndpoint } from './ports.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
@@ -51,6 +49,12 @@ export interface WorkstationOptions {
 	readonly layout: WorkspaceLayout;
 	/** Seconds a session may stay unused before the backend closes it. The default is 300. */
 	readonly idleTimeout?: number;
+	/**
+	 * The repositories that `git` in each agent's shell reaches. The
+	 * workspace opens it under an owner of its own. Absent, the workspace has
+	 * no `repos`, `clone` or `fork` tool.
+	 */
+	readonly git?: WorkstationGitBackend;
 	/** The account and the key of one agent, and of the workspace's host identity. */
 	credentialFor(agent: WorkspaceAgent): WorkstationCredential | Promise<WorkstationCredential>;
 }
@@ -111,6 +115,7 @@ export function checkedServer(
 /** A `BashBackend` over SSH to one server, with one account for each agent. */
 export function workstationBackend(options: WorkstationOptions): BashBackend {
 	const { port, idleMs } = checkedServer('workstationBackend', options);
+	const { git } = options;
 	const address = { host: options.server, port, hostKey: options.hostKey };
 	const entries = new Map<string, Entry>();
 	const activeEndpoints = new Set<() => Promise<void>>();
@@ -247,18 +252,12 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		layout: options.layout,
 		guidance: guidance(options.server, port),
 		endpoints,
-		gitTransports: WORKSTATION_TRANSPORTS,
-		async connect(
-			agent: WorkspaceAgent,
-			signal?: AbortSignal,
-			services?: BashServices,
-		): Promise<WorkspaceEnv> {
-			// `openWorkspace` checks the transport, so a set access is the access of the git account.
-			const git = services?.git as WorkstationGitAccess | undefined;
+		...(git === undefined ? {} : { git }),
+		async connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<WorkspaceEnv> {
 			const env = await envFor(agent, signal);
 			if (git === undefined) return env;
 			try {
-				await writeGitFiles(env, await git.identityFor(agent), signal);
+				await writeGitFiles(env, await git.access.identityFor(agent), signal);
 			} catch (error) {
 				await env.cleanup();
 				throw error;

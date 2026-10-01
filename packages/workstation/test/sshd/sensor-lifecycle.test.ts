@@ -200,9 +200,9 @@ async function openLifecycleWorkspace(): Promise<LifecycleWorkspace> {
 		account: { username: 'lab-git', privateKey: await keyOf(setup, 'lab-git') },
 		templates: { 'sensor-server': template },
 	});
-	const bash = workstationBackend(ssh);
+	const bash = workstationBackend({ ...ssh, git });
 	return {
-		workspace: openWorkspace({ name: WORKSPACE, backend: { bash, git }, audit: {} }),
+		workspace: openWorkspace({ name: WORKSPACE, backend: { bash }, audit: {} }),
 		bash,
 		git,
 		disposed: false,
