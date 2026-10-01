@@ -8,8 +8,8 @@
  * repositories. A type of the package checks the pair: a git backend of
  * another package is a compile error. When the bash backend has a git
  * backend in `git`, the `repos`, `clone` and `fork` tools use it under an
- * owner of its own. `clone` looks up its source there, then checks it out on
- * the shell owner.
+ * resource of its own. `clone` looks up its source there, then checks it
+ * out on the bash resource.
  *
  * A repository ID is `templates/<name>`, `shared/<name>`, or
  * `<agent>/<name>`. Only registration changes a template. Shared

@@ -232,7 +232,7 @@ version 1, launch source metadata, unique sensor names, and the listed names.
 It checks the same process again before committing. A failure closes the
 temporary transport and adds no connection. The server process keeps running.
 
-**Network waits hold no workspace resource owner.** Process checks and
+**Network waits hold no resource of the workspace.** Process checks and
 export writes use the existing short resource operations. HTTP requests
 and tunnel establishment run outside those queues.
 
@@ -529,7 +529,8 @@ because the complete response bytes already passed verification.
 **The existing snapshot machinery owns hashing and storage.** An
 internal helper can store the received buffers directly. It must retain
 the received bytes, even if a process later edits an exported file.
-The implementation takes no object-owner lock inside a bash-owner call.
+The implementation takes no lock of the object resource inside a call on the
+bash resource.
 The current snapshot rules for digest verification and backend errors
 continue to apply. The internal retention operation stages each export and
 publishes its per-call directory only after all files and the manifest are

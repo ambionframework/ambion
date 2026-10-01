@@ -144,7 +144,7 @@ describe('bash', () => {
 		// Outside a room there is no say, so the result points to none.
 		expect(started.text).not.toContain(LATER_LINE);
 		expect((await call(workspace, 'status', { handle })).details.process.state).toBe('running');
-		// A running process holds no operation of the bash owner.
+		// A running process holds no operation of the bash resource.
 		expect(await workspace.use({ name: 'alpha' }, () => 'free')).toBe('free');
 		const waited = await call(workspace, 'wait', { handles: [handle], timeout: 5 });
 		expect(waited.details.process).toMatchObject({ state: 'exited', exitCode: 0 });
@@ -339,19 +339,19 @@ describe('the process table', () => {
 
 	it('answers ended for a process that this table saw end, and for no other', async () => {
 		const backend = memoryBackend();
-		const owner = openResource({ name: 'ended', backend });
+		const bash = openResource({ name: 'ended', backend });
 		const table = openProcessTable({
 			connect: (agent) => backend.connect(agent),
-			shell: owner.use,
+			bash: bash.use,
 		});
 		onTestFinished(async () => {
 			await table.close();
-			await owner.dispose();
+			await bash.dispose();
 		});
 		const alpha = { name: 'alpha' };
 		// The files of an earlier run: the table did not start this process, and it never saw it end.
 		const earlier = 'bash-000000000001';
-		await owner.use(alpha, async (env) => {
+		await bash.use(alpha, async (env) => {
 			const spec = { handle: earlier, kind: 'bash' as const, agent: 'alpha', command: 'true' };
 			const startedAt = new Date().toISOString();
 			const dir = await writeSpec(env, await processesDir(env), {
@@ -362,7 +362,7 @@ describe('the process table', () => {
 			});
 			await writeExit(env, dir, 0);
 		});
-		const { handle } = await owner.use(alpha, (env) =>
+		const { handle } = await bash.use(alpha, (env) =>
 			table.start(alpha, env, { command: 'sleep 30', timeout: 600, grace: 1 }),
 		);
 		expect(table.ended('alpha', handle)).toBe(false);
@@ -503,7 +503,7 @@ describe('the reminder', () => {
 		const shown = await failedHandle(() =>
 			toolOf(workspace, 'bash').invoke({ command: 'exit 4' }, callAs('alpha')),
 		);
-		// A reminder that passes its bound while it waits on a busy owner marks nothing seen.
+		// A reminder that passes its bound while it waits on a busy bash resource marks nothing seen.
 		const gate = Promise.withResolvers<void>();
 		const busy = workspace.use({ name: 'alpha' }, () => gate.promise);
 		const bound = new AbortController();

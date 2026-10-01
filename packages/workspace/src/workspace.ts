@@ -70,7 +70,7 @@ export interface WorkspaceProcesses {
 	cancel(handle: string): Promise<ProcessRecord>;
 }
 
-/** A workspace resource with an ordinary Ambion tool bundle. */
+/** The resource over the bash backend, with an Ambion tool bundle. */
 export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	/**
 	 * Return the backend tools and optional model guidance. With no options,
@@ -85,20 +85,20 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 */
 	readonly mirrorAgent: WorkspaceAgent;
 	/**
-	 * The owner of the SQL backend, when the workspace has one. Host code
+	 * The resource of the SQL backend, when the workspace has one. Host code
 	 * runs statements through its `use`. A SQL operation may wait on the
-	 * bash owner, so do not await this owner inside a callback of `use`.
+	 * bash resource, so do not await this resource inside a callback of `use`.
 	 */
 	readonly sql?: WorkspaceResource<SqlEnv>;
 	/**
-	 * The owner of the git backend, when the workspace has one. Host code
+	 * The resource of the git backend, when the workspace has one. Host code
 	 * lists and forks repositories through its `use`.
 	 */
 	readonly git?: WorkspaceResource<GitEnv>;
 	/**
-	 * The owner of the object backend, where the bytes of each snapshot live.
-	 * It is `backend.objects`, or a file store at `layout.snapshots` when that
-	 * is absent. An object operation may wait on the bash owner.
+	 * The resource of the object backend, where the bytes of each snapshot
+	 * live. It is `backend.objects`, or a file store at `layout.snapshots`
+	 * when that is absent. An object operation may wait on the bash resource.
 	 */
 	readonly objects: WorkspaceResource<ObjectEnv>;
 	/**
@@ -116,7 +116,7 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * Freeze the files at `paths` and give one snapshot ref for each, in
 	 * order: `ambion://workspace/<name>/snapshot/<digest>/<path>`. The
 	 * `agent` of `options` reads the files, and the default is `host`. The
-	 * host agent puts the bytes of each file on the object owner, under their
+	 * host agent puts the bytes of each file on the object resource, under their
 	 * digest.
 	 * The same bytes give the same ref.
 	 */
@@ -149,16 +149,16 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	): Promise<GitCommit>;
 }
 
-/** The SQL backend of a workspace, and the owner the workspace opened over it. */
+/** The SQL backend of a workspace, and the resource the workspace opened over it. */
 interface SqlBinding {
 	readonly backend: SqlBackend;
-	readonly owner: WorkspaceResource<SqlEnv>;
+	readonly resource: WorkspaceResource<SqlEnv>;
 }
 
-/** The git backend of a workspace, and the owner the workspace opened over it. */
+/** The git backend of a workspace, and the resource the workspace opened over it. */
 interface GitBinding {
 	readonly backend: GitBackend;
-	readonly owner: WorkspaceResource<GitEnv>;
+	readonly resource: WorkspaceResource<GitEnv>;
 }
 
 /** What the capabilities of a workspace need from its backends. */
@@ -176,20 +176,20 @@ interface WorkspaceBackings {
  * capability whose backend is absent.
  */
 function capabilitiesOf(
-	shell: WorkspaceResource<WorkspaceEnv>,
+	resource: WorkspaceResource<WorkspaceEnv>,
 	{ sql, git, connections, store, processes }: WorkspaceBackings,
 ): readonly Capability[] {
 	return [
-		fileCapability(shell.use),
-		processCapability({ shell: shell.use, processes }),
+		fileCapability(resource.use),
+		processCapability({ bash: resource.use, processes }),
 		snapshotCapability(store),
-		sql && sqlCapability(sql.backend, sql.owner),
+		sql && sqlCapability(sql.backend, sql.resource),
 		git &&
 			gitCapability({
-				git: git.owner.use,
-				shell: shell.use,
+				git: git.resource.use,
+				bash: resource.use,
 				server: git.backend.label,
-				workspace: shell.name,
+				workspace: resource.name,
 			}),
 		connections && sensorCapability({ connections, store }),
 	].filter((capability) => capability !== undefined);
@@ -206,11 +206,11 @@ function capabilitiesOf(
  */
 function workspaceTools(
 	bash: BashBackend,
-	shell: WorkspaceResource<WorkspaceEnv>,
+	resource: WorkspaceResource<WorkspaceEnv>,
 	backends: WorkspaceBackings,
 	audit: AuditLog | undefined,
 ): ToolBundle {
-	const capabilities = capabilitiesOf(shell, backends);
+	const capabilities = capabilitiesOf(resource, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
 	const toolLine = defaultToolGuidance(tools.map((tool) => tool.name));
 	const [first = '', ...rest] = capabilities.flatMap((capability) => capability.notes);
@@ -223,7 +223,7 @@ function workspaceTools(
 	];
 	return Object.freeze({
 		tools: Object.freeze(
-			audit === undefined ? tools : tools.map((tool) => audited(tool, shell.use, audit)),
+			audit === undefined ? tools : tools.map((tool) => audited(tool, resource.use, audit)),
 		),
 		guidance: joinNotes(notes),
 		remind: mergeReminders(capabilities.map((capability) => capability.remind)),
@@ -232,8 +232,8 @@ function workspaceTools(
 
 /**
  * The bundle with the skills of `set`. The guidance lists them. The
- * reminder queues the copy on the bash owner, then gives the reminder of
- * the bundle. The owner runs its operations in order, so the copy ends
+ * reminder queues the copy on the bash resource, then gives the reminder
+ * of the bundle. The bash resource runs its operations in order, so the copy ends
  * before any tool call of the activation starts. The reminder does not
  * wait for the copy, so the bound of the reminder does not cut it. A copy
  * that fails leaves no manifest, and the next activation copies again.
@@ -244,14 +244,12 @@ function workspaceTools(
 function withSkills(
 	bundle: ToolBundle,
 	set: SkillSet,
-	shell: WorkspaceResource<WorkspaceEnv>['use'],
+	bash: WorkspaceResource<WorkspaceEnv>['use'],
 ): ToolBundle {
 	const copied = new Set<string>();
 	const copy = (agent: string): void => {
 		copied.add(agent);
-		shell({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(
-			() => undefined,
-		);
+		bash({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(() => undefined);
 	};
 	const tools = bundle.tools.map((tool): AmbionTool =>
 		Object.freeze({
@@ -277,10 +275,11 @@ function withSkills(
 }
 
 /**
- * The bash backend with the process table in its disposal. The bash owner
- * calls `dispose` once its queue drains: the table cancels its processes and
- * waits for the end first, and the backend then releases its handles. A process can reach the git
- * backend, and the git owner disposes after the bash owner.
+ * The bash backend with the process table in its disposal. The bash
+ * resource calls `dispose` once its queue drains: the table cancels its
+ * processes and waits for the end first, and the backend then releases its
+ * handles. A process can reach the git backend, and the git resource
+ * disposes after the bash resource.
  */
 function withProcesses(
 	backend: ResourceBackend<WorkspaceEnv>,
@@ -299,21 +298,21 @@ function withProcesses(
 	};
 }
 
-/** The file store at `root` on the bash owner, written as the host agent. */
+/** The file store at `root` on the bash resource, written as the host agent. */
 function defaultObjects(
-	shell: WorkspaceResource<WorkspaceEnv>,
+	bash: WorkspaceResource<WorkspaceEnv>,
 	mirrorAgent: WorkspaceAgent,
 	root: string,
 ): ObjectBackend {
-	return fileObjectBackend({ shell: shell.use, host: mirrorAgent, root });
+	return fileObjectBackend({ bash: bash.use, host: mirrorAgent, root });
 }
 
-/** Dispose each owner in turn, and report the first failure once every one has run. */
-async function disposeInOrder(owners: readonly { dispose(): Promise<void> }[]): Promise<void> {
+/** Dispose each resource in turn, and report the first failure once every one has run. */
+async function disposeInOrder(resources: readonly { dispose(): Promise<void> }[]): Promise<void> {
 	let failure: { reason: unknown } | undefined;
-	for (const owner of owners) {
+	for (const resource of resources) {
 		try {
-			await owner.dispose();
+			await resource.dispose();
 		} catch (reason) {
 			failure ??= { reason };
 		}
@@ -322,19 +321,19 @@ async function disposeInOrder(owners: readonly { dispose(): Promise<void> }[]): 
 }
 
 /**
- * Open the SQL owner. Each connection gets the calling agent's
- * `WorkspaceFiles` on the bash owner, so a SQL operation may wait on the
- * bash owner. No bash operation waits on the SQL owner.
+ * Open the SQL resource. Each connection gets the calling agent's
+ * `WorkspaceFiles` on the bash resource, so a SQL operation may wait on the
+ * bash resource. No bash operation waits on the SQL resource.
  */
-function openSqlOwner(
+function openSqlResource(
 	name: string,
 	backend: SqlBackend,
-	shell: WorkspaceResource<WorkspaceEnv>,
+	bash: WorkspaceResource<WorkspaceEnv>,
 ): WorkspaceResource<SqlEnv> {
 	return openResource<SqlEnv>({
 		name,
 		backend: {
-			connect: (agent, signal) => backend.connect(agent, workspaceFiles(shell.use, agent), signal),
+			connect: (agent, signal) => backend.connect(agent, workspaceFiles(bash.use, agent), signal),
 			dispose: async () => backend.dispose?.(),
 		},
 	});
@@ -343,12 +342,12 @@ function openSqlOwner(
 /**
  * Open one workspace over its backends. `backend.bash` is required, and
  * `backend.sql` is optional. The git backend is `backend.bash.git`, and it
- * is optional. Each backend gets its own resource owner, so a long shell
+ * is optional. Each backend gets its own resource, so a long shell
  * command does not delay a query or a fork. The SQL backend reaches the
  * bash backend through `WorkspaceFiles` to write an export. The bash
  * backend reaches its own git backend through the access that its package
- * defines. `use` and `mirror()` reach the bash owner, `sql` exposes the SQL
- * owner, and `git` the git owner. The bash backend's `layout` names where
+ * defines. `use` and `mirror()` reach the bash resource, `sql` exposes the
+ * SQL resource, and `git` the git resource. The bash backend's `layout` names where
  * the audit log and the room mirrors live. A workspace with no SQL backend
  * has no `sql` tool, and one with no git backend has no `repos`, `clone` or
  * `fork` tool. Set `audit.path` to record every bound tool call at a path
@@ -356,7 +355,7 @@ function openSqlOwner(
  * every agent the log exists and where to read it, and always names the
  * room mirror convention at `layout.rooms`. `backend.objects` holds the
  * bytes of each snapshot; absent, a file store at `layout.snapshots` holds
- * them, written through the bash owner as the host agent.
+ * them, written through the bash resource as the host agent.
  */
 export function openWorkspace(options: {
 	name: string;
@@ -365,11 +364,11 @@ export function openWorkspace(options: {
 }): Workspace {
 	const { bash, sql: sqlBackend } = options.backend;
 	const gitBackend = bash.git;
-	// Each process connects its own environment, outside the queue of the bash owner.
+	// Each process connects its own environment, outside the queue of the bash resource.
 	const table = openProcessTable({
 		connect: (agent) => bash.connect(agent),
-		// The owner opens below. The table calls it only after the workspace opens.
-		shell: (agent, operation, signal) => resource.use(agent, operation, signal),
+		// The bash resource opens below. The table calls it only after the workspace opens.
+		bash: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
 	const connections =
 		bash.endpoints === undefined ? undefined : createSensorConnections(bash.endpoints, table);
@@ -380,13 +379,13 @@ export function openWorkspace(options: {
 	const sql =
 		sqlBackend === undefined
 			? undefined
-			: { backend: sqlBackend, owner: openSqlOwner(options.name, sqlBackend, resource) };
+			: { backend: sqlBackend, resource: openSqlResource(options.name, sqlBackend, resource) };
 	const git =
 		gitBackend === undefined
 			? undefined
 			: {
 					backend: gitBackend,
-					owner: openResource<GitEnv>({ name: options.name, backend: gitBackend }),
+					resource: openResource<GitEnv>({ name: options.name, backend: gitBackend }),
 				};
 	const layout = bash.layout;
 	const audit =
@@ -403,7 +402,7 @@ export function openWorkspace(options: {
 	const store: SnapshotStore = {
 		workspace: options.name,
 		host: mirrorAgent,
-		shell: resource.use,
+		bash: resource.use,
 		objects: objects.use,
 	};
 	const toolBundle = workspaceTools(
@@ -424,21 +423,21 @@ export function openWorkspace(options: {
 	};
 	const mirror = (room: Room, mirrorOptions?: RoomMirrorOptions): Promise<RoomMirror> =>
 		mirrorRoom(room, resource, mirrorAgent, layout.rooms, mirrorOptions);
-	// The SQL owner goes first: a SQL operation may still write through the
-	// bash owner. The git owner goes last: a push in the active bash
-	// operation reaches the git backend, so the bash owner drains first.
-	// The object owner goes after the bash owner, so a use that starts after
-	// `dispose` is refused at once. An object operation that then asks the
-	// bash owner for a write is refused, the same as any queued operation.
-	const owners = [sql?.owner, resource, objects, git?.owner].flatMap((owner) =>
-		owner === undefined ? [] : [owner],
+	// The SQL resource goes first: a SQL operation may still write through
+	// the bash resource. The git resource goes last: a push in the active bash
+	// operation reaches the git backend, so the bash resource drains first.
+	// The object resource goes after the bash resource, so a use that starts
+	// after `dispose` is refused at once. An object operation that then asks
+	// the bash resource for a write is refused, the same as any queued operation.
+	const resources = [sql?.resource, resource, objects, git?.resource].flatMap((entry) =>
+		entry === undefined ? [] : [entry],
 	);
 	const dispose = (): Promise<void> => {
 		// This call stops a pending sensor connect at once, even while the bash
-		// owner is busy. The call in `withProcesses` then awaits the same close.
+		// resource is busy. The call in `withProcesses` then awaits the same close.
 		const connectionClose = connections?.close() ?? Promise.resolve();
-		const ownersClose = disposeInOrder(owners);
-		return Promise.all([connectionClose, ownersClose]).then(() => undefined);
+		const resourcesClose = disposeInOrder(resources);
+		return Promise.all([connectionClose, resourcesClose]).then(() => undefined);
 	};
 	return Object.freeze({
 		...resource,
@@ -459,7 +458,7 @@ export function openWorkspace(options: {
 		) => {
 			if (git === undefined) throw new Error(`Workspace '${options.name}' has no git backend.`);
 			return commitRefOf(
-				git.owner.use,
+				git.resource.use,
 				options.name,
 				refOptions.agent ?? mirrorAgent,
 				{ repository, at },
@@ -472,14 +471,14 @@ export function openWorkspace(options: {
 		) => {
 			if (git === undefined) throw new Error(`Workspace '${options.name}' has no git backend.`);
 			return readCommitOf(
-				git.owner.use,
+				git.resource.use,
 				options.name,
 				readOptions.agent ?? mirrorAgent,
 				ref,
 				readOptions.signal,
 			);
 		},
-		...(sql === undefined ? {} : { sql: sql.owner }),
-		...(git === undefined ? {} : { git: git.owner }),
+		...(sql === undefined ? {} : { sql: sql.resource }),
+		...(git === undefined ? {} : { git: git.resource }),
 	});
 }

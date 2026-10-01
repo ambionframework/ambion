@@ -1,6 +1,6 @@
 /**
  * A workspace with a SQL backend: the `sql` tool over SQLite, its preview
- * and its export into the shell, the audit entry, the two owners, and
+ * and its export into the shell, the audit entry, the two resources, and
  * disposal, and the import of a CSV file from the shell. A workspace with
  * no SQL backend has no `sql` tool. The SQL conformance cases run in
  * `conformance.test.ts`.
@@ -77,7 +77,7 @@ async function shellText(workspace: Workspace, path: string): Promise<string | u
 	});
 }
 
-/** A promise that stays open, as a shell operation that holds the bash owner, until released. */
+/** A promise that stays open, as a shell operation that holds the bash resource, until released. */
 function holdShell(workspace: Workspace) {
 	let release = (): void => {};
 	const held = workspace.use({ name: 'host' }, () => new Promise<void>((done) => (release = done)));
@@ -343,7 +343,7 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		expect(entry.arguments).toEqual({ sql: 'SELECT 1 AS one' });
 	});
 
-	it('runs a query while a shell operation holds the shell owner, and makes an export wait for it', async () => {
+	it('runs a query while a shell operation holds the bash resource, and makes an export wait for it', async () => {
 		const { workspace } = withSql();
 		const release = holdShell(workspace);
 		expect((await call(workspace, { sql: 'SELECT 42 AS answer' })).text).toContain('| 42 |');
@@ -360,7 +360,7 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		expect(await exporting).toContain('Wrote 1 row to /home/ada/one.csv.');
 	});
 
-	it('exposes the SQL owner for host code, which exports as the host agent', async () => {
+	it('exposes the SQL resource for host code, which exports as the host agent', async () => {
 		const { workspace } = withSql();
 		const run = (options: { maxRows: number; export?: string }) =>
 			workspace.sql?.use({ name: 'host' }, (env) => env.run('SELECT 7 AS n', options, ctx));
@@ -379,7 +379,7 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		expect(await shellText(workspace, '/home/host/n.csv')).toBe('n\n7\n');
 	});
 
-	it('disposes both owners, and the SQL backend once', async () => {
+	it('disposes both resources, and the SQL backend once', async () => {
 		const { sql, workspace } = withSql();
 		await Promise.all([workspace.dispose(), workspace.dispose()]);
 		expect(sql.disposals()).toBe(1);
@@ -409,9 +409,9 @@ describe('the import of a CSV file', () => {
 	async function imported(text: string): Promise<unknown> {
 		const { workspace } = withSql();
 		await workspace.use({ name: 'host' }, (env) => env.writeFile('/home/ada/in.csv', text, ctx));
-		const owner = workspace.sql;
-		if (owner === undefined) throw new Error('The workspace has no SQL backend.');
-		const outcome = await owner.use({ name: 'ada' }, (env) =>
+		const resource = workspace.sql;
+		if (resource === undefined) throw new Error('The workspace has no SQL backend.');
+		const outcome = await resource.use({ name: 'ada' }, (env) =>
 			env.run('SELECT * FROM import.rows', { maxRows: 50, import: 'in.csv' }, ctx),
 		);
 		await workspace.dispose();
@@ -490,7 +490,7 @@ describe('the import of a CSV file', () => {
 });
 
 describe('a workspace with no SQL backend and no audit log', () => {
-	it('has no SQL owner, no sql tool, and no sql or audit guidance', () => {
+	it('has no SQL resource, no sql tool, and no sql or audit guidance', () => {
 		const workspace = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
 		expect(workspace.sql).toBeUndefined();
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([

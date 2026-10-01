@@ -1,11 +1,11 @@
 /**
- * `WorkspaceFiles` over the bash owner: what a SQL backend reaches of the
- * bash backend.
+ * `WorkspaceFiles` over the bash resource: what a SQL backend reaches of
+ * the bash backend.
  *
- * Each call is one operation on the bash owner, as the calling agent, so it
- * takes its place in the same queue as every file tool. A SQL operation may
- * wait on the bash owner through this facade. A bash operation never waits
- * on the SQL owner, so the two owners never wait on each other.
+ * Each call is one operation on the bash resource, as the calling agent, so
+ * it takes its place in the same queue as every file tool. A SQL operation
+ * may wait on the bash resource through this facade. A bash operation never
+ * waits on the SQL resource, so the two resources never wait on each other.
  *
  * `writeFile` appends the chunks to a temporary file beside the target,
  * then renames it onto the target. The target changes only after every
@@ -109,7 +109,7 @@ async function readThrough(
 	return { ok: true, path: target, text: read.value };
 }
 
-/** The files of `agent` on the bash backend, through the bash owner's `use`. */
+/** The files of `agent` on the bash backend, through the `use` of the bash resource. */
 export function workspaceFiles(
 	use: WorkspaceResource<WorkspaceEnv>['use'],
 	agent: WorkspaceAgent,

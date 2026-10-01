@@ -12,7 +12,7 @@ import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts
 import type { SqlBackend } from './sql-backend.ts';
 
 /**
- * A Pi `ExecutionEnv` whose cleanup the resource owner calls with no
+ * A Pi `ExecutionEnv` whose cleanup the resource calls with no
  * context. Its `exec` also takes the grace of a stop.
  */
 export interface WorkspaceEnv extends Omit<ExecutionEnv, 'cleanup' | 'exec'>, ResourceEnv {
@@ -61,8 +61,8 @@ export interface WorkspaceEndpoints {
 }
 
 /**
- * The bash backend: a shell over a persistent filesystem, with a home for
- * each agent. The workspace binds its tools over this shell.
+ * The bash backend: a persistent filesystem that a shell reaches, with a
+ * home for each agent. The workspace binds its tools over this backend.
  */
 export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	/** One agent's environment. */
@@ -70,7 +70,7 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	/**
 	 * The repositories that the shell reaches. The package of the bash
 	 * backend takes a git backend of its own type, so `git` of each agent
-	 * reaches it. `openWorkspace` opens it under an owner of its own. Absent,
+	 * reaches it. `openWorkspace` opens it under a resource of its own. Absent,
 	 * the workspace has no `repos`, `clone` or `fork` tool.
 	 */
 	readonly git?: GitBackend;
@@ -88,7 +88,7 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
  * `objects` are optional.
  */
 export interface WorkspaceBackends {
-	/** The shell and its filesystem. The file tools, the processes, the audit log, the room mirrors, and the snapshots run on it. */
+	/** The persistent filesystem and its shell. The file tools, the processes, the audit log, the room mirrors, and the snapshots run on it. */
 	readonly bash: BashBackend;
 	/** A shared database. Absent, the workspace has no `sql` tool. */
 	readonly sql?: SqlBackend;

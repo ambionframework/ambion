@@ -9,10 +9,10 @@
  * An agent writes a commit ref itself, from `git rev-parse`; the git note
  * states the form.
  *
- * `clone` resolves its source on the git owner, and that operation ends
- * before the clone starts. The clone then runs as one
- * operation on the bash owner, as the calling agent. No git operation holds
- * a bash operation, so neither owner waits on the other.
+ * `clone` resolves its source on the git resource, and that operation ends
+ * before the clone starts. The clone then runs as one operation on the
+ * bash resource, as the calling agent. No git operation holds a bash
+ * operation, so neither resource waits on the other.
  *
  * A refusal comes back as text that tells the agent what to do next. A
  * fault and an abort reject. `docs/git.md` states the texts.
@@ -43,10 +43,10 @@ const CLONE_TIMEOUT_SECONDS = 300;
 /** How much of a failed clone's output the result keeps. */
 const CLONE_OUTPUT = { maxBytes: 4000, maxLines: 20 };
 
-/** What the git tools need from the workspace: the two owners and the server name. */
+/** What the git tools need from the workspace: the two resources and the server name. */
 export interface GitToolOptions {
 	readonly git: WorkspaceResource<GitEnv>['use'];
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
+	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly server: string;
 }
 
@@ -114,7 +114,7 @@ export function gitCapability(
 	};
 }
 
-/** Build the git tools. Repository operations run on the git owner. */
+/** Build the git tools. Repository operations run on the git resource. */
 function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 	const repos = defineTool({
 		name: 'repos',
@@ -274,7 +274,7 @@ async function forked(
 }
 
 /**
- * Clone `repository` into `path`, as one operation on the bash owner. A
+ * Clone `repository` into `path`, as one operation on the bash resource. A
  * repeated fork (`existing`) clones only when the path does not exist yet.
  */
 async function cloneInto(
@@ -287,7 +287,7 @@ async function cloneInto(
 ): Promise<{ path: string; text: string; failed?: true }> {
 	const context =
 		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
-	return options.shell(
+	return options.bash(
 		ctx.agent,
 		async (env) => {
 			const target = unwrap(await env.absolutePath(path, context), `Cannot clone into ${path}`);

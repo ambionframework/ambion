@@ -26,13 +26,13 @@ import { memoryBackend } from '@ambionframework/just-bash';
 const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend() } });
 ```
 
-`openWorkspace` returns one owner for a backend and its data. A host creates
-one owner for each shared filesystem it intends agents to share. The package
-does not coordinate separate owners or processes.
+`openWorkspace` returns one workspace for a backend and its data. A host
+creates one workspace for each shared filesystem it intends agents to share.
+The package does not coordinate separate workspaces or processes.
 
-The owner serializes complete operations. Each `use` call checks revocation,
-opens a fresh backend environment for its agent, runs the operation, and
-cleans up the environment in `finally`.
+The workspace serializes complete operations. Each `use` call checks
+revocation, opens a fresh backend environment for its agent, runs the
+operation, and cleans up the environment in `finally`.
 
 ```ts
 await drive.use(
@@ -45,7 +45,7 @@ await drive.use(
 );
 ```
 
-The resource checks revocation before it connects. A queued operation that
+The workspace checks revocation before it connects. A queued operation that
 starts after disposal is refused.
 
 ## The layout and the host identity
@@ -88,8 +88,9 @@ bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
 A backend with `endpoints` adds `connect` to validate and discover a running
 sensor server owned by the caller, and `observe` to read a qualified sensor
-and retain its returned evidence. Network requests run outside the shell
-owner; only process checks and export or audit writes use that owner.
+and retain its returned evidence. Network requests run outside the bash
+resource. Only process checks and export or audit writes use the bash
+resource.
 `observe` returns each frame as an image part and names its export path in
 the text of the result. `read` of an image returns the image part and a text
 part, `Image path: <path>`. A format that the tool does not attach, such as
@@ -99,7 +100,7 @@ snapshots, and `read` leaves its source file unchanged.
 A workspace with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend adds its own guidance
-about its own shell, if it has any. Tools use resource owners for storage
+about its own shell, if it has any. Tools use the resources for storage
 operations; process waits and sensor network requests run outside those
 operations. The bundle keeps one stable identity. Pass it in an agent's
 `bundles` field.
@@ -228,7 +229,7 @@ over one rotation can both see the file past the threshold. Both try to
 rename it aside, and the second rename fails. That call reports a failure
 for a record that the file already holds, so a caller that retries writes a
 duplicate. A caller inside `resource.use()` gets serialization from the
-owner's queue (see [Open one resource](#open-one-resource)). A caller that
+queue of the resource (see [Open one resource](#open-one-resource)). A caller that
 holds `env` directly serializes its own calls.
 
 ## Record every tool call
@@ -262,10 +263,10 @@ one entry out of many, by `room`, `tool`, `agent`, or `activation`.
 a note naming the path and what each line holds to the bundle's guidance, so
 an agent that reads its own tool guidance already knows to look for it.
 
-**The entry is one more operation on the bash owner after the call ends.**
-Every tool follows this one rule, the file tools and the tools that run on
-another owner alike. Another operation can run between the call and its
-entry. The entry is an operation on the one bash owner (see
+**The entry is one more operation on the bash resource after the call
+ends.** Every tool follows this one rule, the file tools and the tools that
+run on another resource alike. Another operation can run between the call
+and its entry. The entry is an operation on the one bash resource (see
 [Open one resource](#open-one-resource)), so the log's own rotation
 decisions stay serialized. `audited` in `src/tools.ts` applies the rule to a
 tool, and `workspaceTools` applies it once to every tool of the bundle.
@@ -274,8 +275,8 @@ tool, and `workspaceTools` applies it once to every tool of the bundle.
 before it runs. The entry holds the arguments of the call as the tool
 received them, and the validation error.
 
-**A call that ends after `dispose` starts leaves no entry.** The bash owner
-refuses the record of that call, the same as any operation queued after
+**A call that ends after `dispose` starts leaves no entry.** The bash
+resource refuses the record of that call, the same as any operation queued after
 `dispose`. The call keeps its own result, and its other effects stay.
 The log's `onError` receives an error that names the tool and the call id.
 
@@ -428,20 +429,20 @@ the calling agent, and its result lists one ref for each path. The guidance
 tells every agent to cite a file with a snapshot ref in the `refs` of a
 say. The audit log records each call.
 
-| Step | Owner  | What happens                                                                                 |
-| ---- | ------ | -------------------------------------------------------------------------------------------- |
-| 1    | bash   | The agent that reads finds every file. A path that is not one readable file fails the call.  |
-| 2    | bash   | For each file in turn, the agent that reads reads the bytes.                                 |
-| 3    | —      | The workspace hashes the bytes with SHA-256.                                                 |
-| 4    | object | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts. |
-| 5    | —      | The workspace gives the refs.                                                                |
+| Step | Resource | What happens                                                                                 |
+| ---- | -------- | -------------------------------------------------------------------------------------------- |
+| 1    | bash     | The agent that reads finds every file. A path that is not one readable file fails the call.  |
+| 2    | bash     | For each file in turn, the agent that reads reads the bytes.                                 |
+| 3    | —        | The workspace hashes the bytes with SHA-256.                                                 |
+| 4    | object   | The host agent, `<name>-host`, puts the bytes under their digest. Then the next file starts. |
+| 5    | —        | The workspace gives the refs.                                                                |
 
 **The `restore` tool puts the bytes of a cited snapshot in an agent's files.**
 It takes `ref` and an optional `path`. The default path is
 `~/snapshots/<digest>/<name>`, where `<name>` is the last part of the path
-in the ref. The host agent gets the object on the object owner, and the
+in the ref. The host agent gets the object on the object resource, and the
 workspace checks it. The calling agent then writes the file on the bash
-owner and reads it with `read` or `bash`. No agent holds a credential of
+resource and reads it with `read` or `bash`. No agent holds a credential of
 the object store.
 
 | Outcome | The result                                                                                     |
@@ -520,7 +521,7 @@ the object limit. No bash backend sets a limit of the store.
 | The default file store     | none: `openWorkspace` opens it  | One file per digest at `layout.snapshots`, on the bash backend    |
 | `s3ObjectBackend(options)` | `@ambionframework/workspace/s3` | One object per digest at `<bucket>/<prefix><digest>` on an S3 API |
 
-**The default file store writes through the bash owner as the host
+**The default file store writes through the bash resource as the host
 agent.** A put writes a temporary file beside the target, then renames it,
 and it writes nothing when the file exists. On `memoryBackend` the bytes
 live in process, on `directoryBackend` in the directory, and on a
@@ -582,14 +583,14 @@ a prefix share their objects. A ref names its workspace, and `readSnapshot`
 refuses a ref of another workspace. But the host of either workspace can
 read every object under the prefix.
 
-**The object backend has its own resource owner.** `Workspace.objects`
-exposes it for host code. An object operation may wait on the bash owner,
-since the default store writes through it. No bash operation waits on the
-object owner: `snapshot` reads on the bash owner and then puts on the
-object owner, and `restore` gets on the object owner and then writes on the
-bash owner. `dispose` drains the SQL owner, the bash owner, the object
-owner, and the git owner, in that order, so a use that starts after
-`dispose` is refused at once.
+**The object backend has its own resource.** `Workspace.objects` exposes it
+for host code. An object operation may wait on the bash resource, since the
+default store writes through it. No bash operation waits on the object
+resource: `snapshot` reads on the bash resource and then puts on the object
+resource, and `restore` gets on the object resource and then writes on the
+bash resource. `dispose` drains the SQL resource, the bash resource, the
+object resource, and the git resource, in that order, so a use that starts
+after `dispose` is refused at once.
 
 **A new object backend passes `objectConformance`** from
 `@ambionframework/workspace/conformance`. A
@@ -632,7 +633,7 @@ not: a 403 head and a 409 put.
 The `backend` option holds the backends by kind, as `WorkspaceBackends`.
 `backend.bash` is a `BashBackend`, and every workspace has one.
 `backend.sql` is an optional `SqlBackend`: a shared database that need not
-live on the shell's filesystem. `backend.bash.git` is an optional
+live on the filesystem of the bash backend. `backend.bash.git` is an optional
 `GitBackend`: the repositories of the workspace, which [Git](git.md)
 describes. The bash backend takes it as an option of its own package, so a
 wrong pair is a compile error
@@ -679,8 +680,8 @@ tables. `sqlite_master` holds each view's definition, so an agent reads how a
 shared view was built before the agent trusts its data. Prefer a view or a
 table for every hand-off between agents.
 
-**`export` writes the full result into the shell's filesystem, and the
-tool returns a preview.** Set it when a script or another tool needs the
+**`export` writes the full result into the filesystem of the bash backend,
+and the tool returns a preview.** Set it when a script or another tool needs the
 rows. The SQL backend streams every row as CSV to the calling agent's
 files through `WorkspaceFiles`, and gives back the first `maxRows` rows and
 the row count. The tool shows the head of the file. A failed query leaves
@@ -762,9 +763,9 @@ import: sweep/results.csv
   value above 0 and at most 2147483. A timeout is an `ok: false` outcome,
   and an abort rejects. A stopped export removes its temporary file and
   leaves the target unchanged.
-- **A call does not stop while it waits for the bash owner.** An export
+- **A call does not stop while it waits for the bash resource.** An export
   and an import wait for the running shell operation to end. The time
-  limit applies when the wait ends, and the SQL owner stays held for the
+  limit applies when the wait ends, and the SQL resource stays held for the
   wait.
 - **One statement that gives no rows runs to its end.** `node:sqlite` has no
   hook to stop a statement, so the backend cannot stop such a statement
@@ -885,10 +886,10 @@ implements them.
 | `label`                             | The name the tool reports and the guidance states, with no credential  |
 | `guidance`                          | Optional. The dialect and the limits of the database                   |
 | `SqlEnv.run(sql, options, context)` | Run the statements in order, and give a preview of the last one's rows |
-| `SqlEnv.cleanup()`                  | The owner calls it after each operation                                |
+| `SqlEnv.cleanup()`                  | The resource calls it after each operation                             |
 
 **`files` is the agent's view of the bash backend.** `WorkspaceFiles` has
-two methods. Each call is one operation on the bash owner, as the calling
+two methods. Each call is one operation on the bash resource, as the calling
 agent, and each resolves `~` and a relative path under the agent's home.
 
 - **`writeFile(path, chunks, context)`** creates missing directories, and
@@ -927,25 +928,26 @@ after the call.
 A backend with a native import, such as `COPY`, reads through `files`
 itself.
 
-**Each backend gets its own resource owner.** A long `bash` command does not
-delay a query. A process runs off the bash owner, so it does not delay a file
-tool either ([Processes](processes.md#a-process)). `workspace.use` and
-`mirror()` reach the bash owner. `workspace.sql` is the SQL owner, for host
-code.
+**Each backend gets its own resource.** A long `bash` command does not
+delay a query. A process runs off the bash resource, so it does not delay a
+file tool either ([Processes](processes.md#a-process)). `workspace.use` and
+`mirror()` reach the bash resource. `workspace.sql` is the SQL resource, for
+host code.
 
-**A SQL operation may wait on the bash owner, and a bash operation never
-waits on the SQL owner.** An export and an import wait for the running
+**A SQL operation may wait on the bash resource, and a bash operation never
+waits on the SQL resource.** An export and an import wait for the running
 shell operation to end. Do not await `workspace.sql.use` inside a callback of
-`workspace.use`: that callback holds the bash owner. `dispose()` disposes
-the SQL owner first, so an export in progress still reaches the bash
-owner, and then the bash owner.
+`workspace.use`: that callback holds the bash resource. `dispose()` disposes
+the SQL resource first, so an export in progress still reaches the bash
+resource, and then the bash resource.
 
-**Two owners give no total order across the backends.** Each owner orders
-its own operations. A `bash` call and a `sql` call from two agents can
+**Two resources give no total order across the backends.** Each resource
+orders its own operations. A `bash` call and a `sql` call from two agents can
 finish in either order.
 
-**The audit log stays on the shell's filesystem.** A `sql` call runs on the
-SQL owner. Its entry is an operation on the bash owner, by the one rule of
+**The audit log stays on the filesystem of the bash backend.** A `sql` call
+runs on the SQL resource. Its entry is an operation on the bash resource, by
+the one rule of
 [Record every tool call](#record-every-tool-call).
 
 **The SQL cases run on `sqliteBackend` alone.** They live in the SQLite
@@ -964,7 +966,7 @@ entry names `WorkspaceEnv`, the Pi `ExecutionEnv` that has a zero-argument
 optional guidance about the backend's own shell and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)). A
 backend adds no tool: the workspace binds the same tools over every backend.
-`openWorkspace` creates the resource owner, builds the three file tools, and
+`openWorkspace` opens the bash resource, builds the three file tools, and
 binds them to its `use` method. It also opens
 the process table and builds the five process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
@@ -1076,8 +1078,8 @@ files, and an in-memory resource releases its cached filesystem. A host
 deletes the data that it owns.
 
 A `use` callback must not await another `use` or `dispose` call on the same
-owner. The owner serializes those operations, so such nesting would wait
-for the callback that is already running.
+resource. The resource serializes those operations, so such nesting would
+wait for the callback that is already running.
 
 ## Backends and limits
 
@@ -1116,7 +1118,7 @@ each other's homes. The default workspace does not provide operating-system isol
 agents or distributed ownership of a shared directory. Hosts own credentials
 and authorization for external services.
 
-Backends perform raw filesystem I/O below the owner. They do not keep a
+Backends perform raw filesystem I/O below the resource. They do not keep a
 second operation queue.
 
 **A new backend follows one recipe.** It implements `connect()` and an

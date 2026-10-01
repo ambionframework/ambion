@@ -128,7 +128,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 			callAs('reviewer'),
 		);
 		const manifestPath = (restored as { details: { path: string } }).details.path;
-		const manifestBytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
+		const manifestBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
 			const read = await env.readBinaryFile(manifestPath, BACKGROUND_CONTEXT);
 			if (!read.ok) throw read.error;
 			return read.value;
@@ -164,7 +164,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 			callAs('reviewer'),
 		);
 		const imagePath = (restoredFile as { details: { path: string } }).details.path;
-		const restoredBytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
+		const restoredBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
 			const read = await env.readBinaryFile(imagePath, BACKGROUND_CONTEXT);
 			if (!read.ok) throw read.error;
 			return read.value;
@@ -268,16 +268,16 @@ async function createStore(root: string): Promise<{
 		...disk,
 		connect: (agent, signal) => disk.connect(agent, signal),
 	};
-	const shell = openResource<WorkspaceEnv>({ name: 'source-retention-shell', backend });
+	const bash = openResource<WorkspaceEnv>({ name: 'source-retention-bash', backend });
 	const objects = openResource<ObjectEnv>({
 		name: 'source-retention-objects',
-		backend: fileObjectBackend({ shell: shell.use, host, root: '/snapshots' }),
+		backend: fileObjectBackend({ bash: bash.use, host, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'sensor-source-retention', host, shell: shell.use, objects: objects.use },
+		store: { workspace: 'sensor-source-retention', host, bash: bash.use, objects: objects.use },
 		async dispose() {
 			await objects.dispose();
-			await shell.dispose();
+			await bash.dispose();
 		},
 	};
 }
