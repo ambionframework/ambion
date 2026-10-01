@@ -173,7 +173,7 @@ try {
 
 **The room seats every agent at `broadcast` by default.** Pass `seats` to
 choose other members or another attention. See [Roster](docs/roster.md#configuration).
-The room runs each seat on the default execution of its family; see
+The room runs each seat on the default execution of its executor kind; see
 [Executors](docs/executors.md). [`examples/workbench`](examples/workbench)
 builds its team the same way and runs it in a terminal.
 

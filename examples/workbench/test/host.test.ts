@@ -5,13 +5,7 @@ import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workbench } from '../src/workbench.ts';
-import {
-	freshDirectory,
-	idleStream,
-	openHost,
-	scriptedFamilies,
-	scriptedStream,
-} from './hosting.ts';
+import { freshDirectory, idleStream, openHost, scriptedKinds, scriptedStream } from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
@@ -37,7 +31,7 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 }
 
-/** The design seat runs on the Claude family. A script drives it, with no key. */
+/** The design seat runs on the Claude executor. A script drives it, with no key. */
 const designScript = byAgent({
 	design: (_step, _seat, call) => {
 		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
@@ -51,7 +45,7 @@ const open = (directory?: string) =>
 	openHost({
 		directory,
 		stream: scriptedStream(scriptedResponse),
-		executions: scriptedFamilies(designScript),
+		executions: scriptedKinds(designScript),
 	});
 
 async function messagesOf(workbench: Workbench, room: string) {

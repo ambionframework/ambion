@@ -684,7 +684,7 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   summary goes to the `person` of the exchange. Before this change, the
   model decided, and a question followed by a departure sometimes closed
   with no answer. See
-  [Default assistant](docs/assistant.md#membership-and-completion).
+  [Default assistant](docs/assistant.md#seating-and-completion).
 - **A Codex seat lands a say in each activation.** A real `codex` numbers
   the items of each turn from `item_0`, and a room tool took the item id as
   the key of its commit. The say of a later activation then had the key of

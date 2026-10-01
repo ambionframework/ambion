@@ -308,7 +308,7 @@ interface WorkspacePorts {
   ): Promise<WorkspacePort>;
 }
 
-// Optional member of BashBackend:
+// Optional property of BashBackend:
 // readonly ports?: WorkspacePorts;
 ```
 

@@ -1,8 +1,8 @@
 /**
- * One room, two executor families: a seat on Pi and a seat on the Claude
+ * One room, two executor kinds: a seat on Pi and a seat on the Claude
  * Agent SDK. Pi runs on a scripted stream, and Claude on the fake
  * executable. The record holds the say of each, whether the room names its
- * execution or routes each seat to the default of its family.
+ * execution or routes each seat to the default of its kind.
  */
 import { defineAgent, isSpoken, type Room, startRoom } from '@ambionframework/ambion';
 import { defineExecution } from '@ambionframework/ambion/hosting';
@@ -60,7 +60,7 @@ it('runs a Pi seat and a Claude seat in one room, and the record holds both says
 	await expectBothSay(await startRoom({ name: roomName('mixed'), agents, execution }));
 });
 
-it('routes a Pi seat and a Claude seat to the default of each family, which a built execution keeps', async () => {
+it('routes a Pi seat and a Claude seat to the default of each kind, which a built execution keeps', async () => {
 	// A definition of an execution makes it the default of its kind.
 	defineExecution('pi', (host) => {
 		const services = createExecutionServices({ sessions: 'memory', stream: pilotStream() });

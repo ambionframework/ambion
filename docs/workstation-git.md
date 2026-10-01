@@ -607,7 +607,7 @@ repository hook protects its default branch. The kernel does not.
 of [the package guide](../packages/workstation/README.md) do not change.
 
 - **One account `<workspace>-git`,** with a login shell of `bash`, a home
-  of mode `0700`, and no membership in the agents' group.
+  of mode `0700`, and no place in the group of the agents.
 - **The host's key for it** in `~/.ssh/authorized_keys`.
 - **The `Match User` block** that adds `authorized_keys.ambion`.
 - **`AllowUsers`, when it is set,** names the account.
