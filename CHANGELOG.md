@@ -143,8 +143,9 @@ reaches the model and Codex installs no system skill in the seat home. The
 catalog flag `include_skills_usage_instructions` did not remove that message.
 The config also sets `check_for_update_on_startup`, `analytics.enabled`,
 `feedback.enabled`, `memories.generate_memories`, and
-`memories.use_memories` to `false`, so a seat starts no update check, sends
-no analytics or feedback, and keeps no memory. `EXCLUSIVE_FEATURES` gains
+`memories.use_memories` to `false`, so a seat sends no analytics or
+feedback and keeps no memory. `codex exec` starts no update check, and the
+update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
 `shell_snapshot`, `daemon_auto_start`,
 `workspace_dependencies`, `worktrees`, `realtime_conversation`, and
 `memories`. Each acts on the host or the network, or writes state outside

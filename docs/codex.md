@@ -551,6 +551,9 @@ path as `model_catalog_json`. The recipe has five parts:
    network. `shell_snapshot` runs the shell of the host user and writes its
    environment to a file in the seat home. `memories` is off by default, and
    the entry keeps the `config.toml` of the seat home from turning it on.
+   Codex 0.158.0 turns `unified_exec` on again unless a managed requirement
+   pins it. With `shell_tool` off, `unified_exec` adds no tool, and the
+   tool-list test shows it.
 3. **The tool switches and the skills.** `web_search` is `'disabled'`.
    `update_plan` and `experimental_request_user_input` are disabled.
    `skills.include_instructions` and `skills.bundled.enabled` are `false`,
@@ -567,11 +570,13 @@ path as `model_catalog_json`. The recipe has five parts:
 
 **The recipe turns off the traffic and the state that a seat does not
 need.** `check_for_update_on_startup`, `analytics.enabled`, and
-`feedback.enabled` are `false`. `memories.generate_memories` and
+`feedback.enabled` are `false`. Only the terminal interface of Codex reads
+`check_for_update_on_startup`, and `codex exec` starts no update check. The
+config sets the key so that a later version keeps the same behavior. `memories.generate_memories` and
 `memories.use_memories` are `false`, and so is the `memories` feature. Codex
 0.158.0 recognizes each key and reports no warning for it. With a dummy API
 key, a run makes no request except the model requests and opens no outbound
-connection, with these keys and without them. The binary tier asserts both.
+connection, with these keys. The binary tier asserts it.
 A seat on a ChatGPT sign-in is the case that the keys protect, and the
 binary tier does not run it.
 
@@ -598,7 +603,9 @@ trace as a warning `notice`.
 on 0.158.0 shows 15 more features that are on and not in the recipe. They
 are the app features, the approval features, `auth_elicitation`,
 `fast_mode`, and a few wire features. None adds a tool or reaches the host.
-The comment on `EXCLUSIVE_FEATURES` names each one. A new default feature
+The comment on `EXCLUSIVE_FEATURES` names each one. The list also prints
+nine removed flags as on, such as `steer` and `sqlite`. A removed flag has
+no effect. A new default feature
 needs the same check on each upgrade.
 
 **The environment includes the key by default.** With no `env` on
