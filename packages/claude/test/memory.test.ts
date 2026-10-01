@@ -51,6 +51,11 @@ describe('exchange continuity', () => {
 			context: { ...closing.context, preferences: 'Start with VERDICT.' },
 		});
 		const [one, two, three, four] = room.argvs();
+		// The session store is the config home, so every activation of the seat reads the same one.
+		const homes = room.envs().map((env) => env.values.CLAUDE_CONFIG_DIR);
+		expect(homes).toHaveLength(4);
+		expect(new Set(homes).size).toBe(1);
+		expect(homes[0]).toContain('ambion-claude-');
 		for (const argv of room.argvs()) expect(argv).not.toContain('--no-session-persistence');
 		expect(resumeOf(one)).toBeUndefined();
 		expect(resumeOf(two)).toBe('sess-1');

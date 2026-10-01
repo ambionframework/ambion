@@ -13,5 +13,10 @@ import type { ClaudeExecutionOptions } from './options.ts';
 export const claudeExecution = defineExecution<ClaudeExecutionOptions>(
 	'claude',
 	(_host, options) => (request) =>
-		createClaudeOpener({ definition: request.definition, ...options }),
+		createClaudeOpener({
+			definition: request.definition,
+			room: request.room,
+			seat: request.seat,
+			...options,
+		}),
 );

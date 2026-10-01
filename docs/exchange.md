@@ -92,10 +92,10 @@ after the close is durable.
 ## 6. A scheduled say
 
 **An agent comes back to its work with a say to itself.** The agent calls
-`schedule` with `after` set to a number of seconds. The tool writes a `said`
-entry with `to` set to the author's own name and `after` beside it. The say
-wakes nobody and steers nobody, and it is not live work, so the exchange
-closes while it waits.
+`schedule` with `delaySeconds` set to a number of seconds. The tool writes a
+`said` entry with `to` set to the author's own name and `delaySeconds` beside
+it. The say wakes nobody and steers nobody, and it is not live work, so the
+exchange closes while it waits.
 
 ```mermaid
 sequenceDiagram
@@ -104,7 +104,7 @@ sequenceDiagram
     participant W as worker
     P->>R: question (seq 4) opens exchange 4
     R->>W: activation
-    W->>R: schedule, after 600 (seq 6, to worker)
+    W->>R: schedule, delaySeconds 600 (seq 6, to worker)
     R-->>R: close [4, 6], person priya
     Note over R: 600 seconds later, the alarm
     R->>R: posted (seq 9, returns 6) opens exchange 9, no person
@@ -121,8 +121,8 @@ the say. The system wrote it, so it has no `from`. It wakes one seat, the
 one that `to` names, and steers no other.
 
 **The due time comes from the record.** A say is due at its `at` plus
-`after` seconds. `nextAlarm` takes the earliest due time beside the lease
-expiries and the retry times, so a resumed room arms it again from the
+`delaySeconds` seconds. `nextAlarm` takes the earliest due time beside the
+lease expiries and the retry times, so a resumed room arms it again from the
 journal. A pass that ends a lease returns no say, so the returned say lands
 after the close of the same pass.
 
@@ -135,8 +135,8 @@ after the close of the same pass.
   them, so the model reads the record through the say.
 - A respond activation schedules, whether an exchange is open or not. A
   summary activation cannot schedule.
-- `limits.schedule` bounds `after` from `minAfter` to `maxAfter` seconds, 60 to
-  604,800 by default, and holds at most `pending` says of one seat, 4 by
+- `limits.schedule` bounds `delaySeconds` from `minDelaySeconds` to
+  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most `pending` says of one seat, 4 by
   default.
 
 **The agent sees its scheduled says.** The schedule result names the say by

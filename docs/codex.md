@@ -407,9 +407,6 @@ level `warning`. A pass that fails ends with an `error` event and then
 `turn.failed`. The `end` step carries that failure, and the `error` event
 also shows as a `notice` with the same text.
 
-**The package writes no `approval` step.** Codex answers its own approvals by
-its policy and reports none through the SDK.
-
 ## Usage
 
 **One `usage` step ends each pass.** `turn.completed` reports input, cached,

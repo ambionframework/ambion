@@ -125,7 +125,7 @@ another attention; see [Roster](docs/roster.md#configuration).
 - **A harness session is a cache for one exchange.** A lost session starts
   fresh from the record. See
   [Exchange continuity](docs/executors.md#exchange-continuity).
-- **An agent comes back to its work later.** `schedule` with `after` returns
+- **An agent comes back to its work later.** `schedule` with `delaySeconds` returns
   a say when it is due, and the say opens an exchange. A host posts an event
   with `room.post`. See [A scheduled say](docs/exchange.md#6-a-scheduled-say).
 - **The steps of each activation go to the host's logger.** See

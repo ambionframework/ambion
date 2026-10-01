@@ -320,6 +320,15 @@ check that fails when it is stale. **Condition:** an adapter or host
 author who cannot work from the typed README examples and the export
 snapshot.
 
+**D25. `Grep` and `Glob` over the workspace for Claude seats.** A Claude
+seat has no built-in tool. The aliases cover `Bash`, `Read`, `Write`, and
+`Edit`, and `Grep` and `Glob` have no target. The workspace has no search
+tool. A model emits `Grep` and `Glob` out of habit, and the call fails as
+unknown. The tools run `rg` and `find` through the workspace `bash`. They
+return the matches as one result, and then they take the two aliases. **Condition:** a
+live trace in which a Claude seat tries `Grep` or `Glob` and loses
+turns to the failure.
+
 ### For sensors
 
 **D21. Sensor capabilities after the functional core.** 0.5.0 uses Git

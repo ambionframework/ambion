@@ -7,8 +7,8 @@
  * The scenario is JSON in `AMBION_FAKE`: `{ passes, log }`. `passes` holds one
  * list of actions for each pass the fake runs. A pass starts when a user
  * message waits, and it ends with a `result`. `log` names a file that takes
- * one JSON line for the arguments, the initialize request, and each
- * permission answer.
+ * one JSON line for the arguments, the initialize request, and the
+ * environment.
  *
  * `rejectResume` makes a resumed start exit before it says anything.
  * `rejectResumeResult` makes a resumed start answer as the real SDK does: a
@@ -16,14 +16,20 @@
  * echoes no user message.
  *
  * Actions:
+ * The first pass of a start sends the `system` init message first, as the real
+ * executable does. `apiKeySource`, `initTools`, and `claudeVersion` in the scenario set three
+ * of its fields.
+ *
  * - `{ say }`: call the room tool `say`.
  * - `{ sayUntilLanded }`: call `say`, and call it again when the room answers an error.
  * - `{ call: { tool, args } }`: call one tool of the room server.
  * - `{ text, stream }` and `{ thinking, stream }`: one block, sent whole or as deltas.
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
- * - `{ fail: { status, text } }`: end the pass with an error result.
- * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
+ * - `{ fail: { status, text, exit?, stderr? } }`: end the pass with an error result. `stderr`
+ *   goes to standard error before the result, and `exit` exits with that code right after it.
+ * - `{ stderr }`: write the text to standard error.
+ * - `{ crash: { stderr, code } }`: write `stderr` to standard error and exit with `code`, with no result.
  * - `{ own: { name, input, output } }`: a tool the executable runs itself.
  */
 import { appendFileSync } from 'node:fs';
@@ -54,6 +60,7 @@ let pass = 0;
 let running = false;
 let cut = false;
 let mcpReady = false;
+let introduced = false;
 const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 const waiters = new Set();
 const answers = new Map();
@@ -68,7 +75,21 @@ const until = async (ready) => {
 };
 
 log({ argv: process.argv.slice(2), cwd: process.cwd() });
-log({ env: { names: Object.keys(process.env), entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT } });
+// The log holds the names of the variables, and the values of these few that hold no secret.
+const LOGGED_VALUES = [
+	'HOME',
+	'USERPROFILE',
+	'CLAUDE_CONFIG_DIR',
+	'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+	'CLAUDE_CODE_DISABLE_AUTO_MEMORY',
+];
+log({
+	env: {
+		names: Object.keys(process.env),
+		entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT,
+		values: Object.fromEntries(LOGGED_VALUES.map((name) => [name, process.env[name]])),
+	},
+});
 if (resumed !== undefined && config.rejectResume === true) {
 	process.stderr.write(`No conversation found with session ID: ${resumed}\n`);
 	process.exit(1);
@@ -167,21 +188,6 @@ async function callRoom(tool, args) {
 	return result;
 }
 
-async function permission({ tool, input }) {
-	const id = toolUse(tool, input);
-	const response = await ask({
-		subtype: 'can_use_tool',
-		tool_name: tool,
-		input,
-		tool_use_id: id,
-		permission_suggestions: [],
-	});
-	const decision = response.response;
-	log({ permission: { tool, id, behavior: decision.behavior } });
-	if (decision.behavior === 'allow') toolResult(id, [{ type: 'text', text: 'ran' }], false);
-	else toolResult(id, [{ type: 'text', text: decision.message ?? 'denied' }], true);
-}
-
 const actions = {
 	say: (text) => callRoom('say', { text }),
 	sayUntilLanded: async (text) => {
@@ -195,7 +201,11 @@ const actions = {
 	usage: (added) => {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
 	},
-	permission,
+	stderr: (text) => process.stderr.write(`${text}\n`),
+	crash: ({ stderr, code }) => {
+		process.stderr.write(`${stderr}\n`);
+		process.exit(code);
+	},
 	own: ({ name, input, output }) =>
 		toolResult(toolUse(name, input), [{ type: 'text', text: output }], false),
 };
@@ -232,11 +242,37 @@ function result(fields) {
 	);
 }
 
+/** The `system` init message of the real executable, with the facts that the trace reads. */
+const init = (cwd = process.cwd()) =>
+	envelope({
+		type: 'system',
+		subtype: 'init',
+		apiKeySource: config.apiKeySource ?? 'ANTHROPIC_API_KEY',
+		claude_code_version: config.claudeVersion ?? '2.1.284',
+		cwd,
+		tools: config.initTools ?? ['Bash', 'mcp__ambion__say'],
+		mcp_servers: [{ name: 'ambion', status: 'connected' }],
+		model: args[args.indexOf('--model') + 1] ?? 'fake',
+		permissionMode: args[args.indexOf('--permission-mode') + 1] ?? 'default',
+		slash_commands: [],
+		skills: [],
+		plugins: [],
+		agents: [],
+		output_style: 'default',
+	});
+
 const unresumable = () => resumed !== undefined && config.rejectResumeResult === true;
+
+function failTurn({ status, text, exit, stderr }) {
+	if (stderr !== undefined) process.stderr.write(`${stderr}\n`);
+	result({ is_error: true, result: text, api_error_status: status });
+	// The empty write ends after the result, so the exit loses no line.
+	if (exit !== undefined) process.stdout.write('', () => process.exit(exit));
+}
 
 async function play(list) {
 	if (unresumable()) {
-		out(envelope({ type: 'system', subtype: 'init' }));
+		out(init());
 		return result({
 			subtype: 'error_during_execution',
 			is_error: true,
@@ -244,13 +280,7 @@ async function play(list) {
 		});
 	}
 	for (const action of list) {
-		if (action.fail !== undefined) {
-			return result({
-				is_error: true,
-				result: action.fail.text,
-				api_error_status: action.fail.status,
-			});
-		}
+		if (action.fail !== undefined) return failTurn(action.fail);
 		const [name, value] = Object.entries(action)[0];
 		await actions[name](value, action);
 	}
@@ -261,6 +291,8 @@ async function run() {
 	running = true;
 	consumed = users.length;
 	try {
+		if (!introduced && !unresumable()) out(init());
+		introduced = true;
 		await play(config.passes[pass] ?? []);
 	} catch (error) {
 		if (!cut) throw error;
@@ -299,7 +331,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 	}
 	if (message.type !== 'user') return;
 	users.push(message);
-	log({ user: message.message.content });
+	log({ user: message.message.content, composed: message.client_composed === true });
 	if (!unresumable()) out({ ...message, isReplay: true, session_id: session });
 	wake();
 	if (!running) void run();

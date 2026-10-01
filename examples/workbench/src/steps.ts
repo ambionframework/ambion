@@ -73,9 +73,9 @@ export function activationLine(activation: ExchangeActivation): string {
 	return parts.join(' · ');
 }
 
-function decisionOf(step: Extract<TraceStep, { type: 'approval' }>): string {
-	if (step.decision === undefined) return 'waiting for the harness permission';
-	return step.decision === 'allow' ? 'harness permission allowed' : 'harness permission denied';
+function sessionText(step: Extract<TraceStep, { type: 'session' }>): string {
+	const model = step.model === undefined ? '' : ` ${step.model}`;
+	return `${step.name}${model}: ${step.tools.length} tools`;
 }
 
 function lineOf(step: TraceStep): StepLine {
@@ -96,8 +96,8 @@ function lineOf(step: TraceStep): StepLine {
 			return { kind: 'room', text: `room ${step.result}${step.seq ? ` at ${step.seq}` : ''}` };
 		case 'steer':
 			return { kind: 'steer', text: `steer ${step.seq} ${step.consumed ? 'read' : 'queued'}` };
-		case 'approval':
-			return { kind: 'approval', text: `${step.name}: ${decisionOf(step)}` };
+		case 'session':
+			return { kind: 'session', text: sessionText(step) };
 		case 'notice':
 			return { kind: 'notice', text: `${step.level}: ${brief(step.text)}` };
 		case 'usage':

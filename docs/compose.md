@@ -538,16 +538,17 @@ model. `compose` ignores the flag, and its own result never sets it.
 
 ## Approval
 
-**A harness hook does not see a nested call.** The Claude executor asks
-`canUseTool` for a tool outside the tools that the room hosts, and it
-records the answer as an `approval` step. `compose` is one of the hosted
-tools, so the hook never sees `compose`, and never sees the `bash` that the
-code calls.
+**A harness hook does not see a nested call.** The room hosts `compose`,
+and the harness sees it as one tool of the room server. The harness sees
+neither the nested calls nor the `bash` that the code calls. A Claude seat
+has no permission callback and no built-in tool, so no harness hook exists
+to see them.
 
 **The `compose` option takes an `approve` hook.** `compose` calls it with
 `uses`, `code`, and the `ToolContext` of the `compose` call, without
 `record`. It calls the hook after it checks `uses` and before it evaluates
-any code, and records the answer as an `approval` step. A denial fails the
+any code. The step that records the answer is part of this proposal. The
+step vocabulary has no such kind today. A denial fails the
 compose call with no ledger and no effect. With no hook, `compose` allows
 every compose call of the catalog.
 
@@ -773,7 +774,7 @@ each page states the current surface.
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                      |
 | [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                                                                          |
-| [Trust](trust.md)                                                      | A harness approval hook sees no tool that the room hosts, so it sees no compose call. `approve` is the one hook that sees one.                                                                                                                                                           |
+| [Trust](trust.md)                                                      | A harness sees one tool for a compose call, and no nested call. `approve` is the one hook that sees one.                                                                                                                                                                                 |
 | [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, and `count` in the `sql` details.                                                                                                                                                                           |
 | [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                              |
 | [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call. `fromPiTool` takes an output declaration.                                                                                                                                                                                |

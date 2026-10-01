@@ -70,9 +70,9 @@ function bodyOf(message: Message): string {
 
 /** When a say to oneself returns, as a clock time after its header, or `dismissed` when a dismissal names it. */
 function returnsAt({ message, dismissed }: MessageBlock): string {
-	if (message.kind !== 'said' || message.after === undefined) return '';
+	if (message.kind !== 'said' || message.delaySeconds === undefined) return '';
 	if (dismissed) return '  dismissed';
-	return `  returns ${clock(new Date(Date.parse(message.at) + message.after * 1000).toISOString())}`;
+	return `  returns ${clock(new Date(Date.parse(message.at) + message.delaySeconds * 1000).toISOString())}`;
 }
 
 /** A post of the host reads `posted`, and a say that the room returned reads `returned`. */
