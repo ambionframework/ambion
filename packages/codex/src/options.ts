@@ -145,6 +145,9 @@ export function clientOptions(
 					args: [serverPath(), socketPath],
 					// The room tools are the seat's own. Under approvalPolicy 'never', Codex denies an MCP call that needs approval.
 					default_tools_approval_mode: 'approve',
+					// Codex waits for a required server before the first model request. It waits
+					// one second for an optional server, and a loaded host needs more.
+					required: true,
 					startup_timeout_sec: 30,
 					tool_timeout_sec: 600,
 				},

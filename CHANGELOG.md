@@ -109,6 +109,18 @@ The word `Runtime` now names the core `Runtime` alone.
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
 
+**A Codex seat has the room tools on its first model request.** Codex
+starts an MCP server in the background and waits one second for an optional
+server. A loaded host starts the room tools server in more time, so the first
+request of a turn listed no `mcp__ambion` tool. A real model could not call
+`say` on that request and could answer in text that the room never hears.
+The executor now sets `required = true` on the room tools server. Codex waits
+for it, up to 30 seconds, before the first model request. A server that
+cannot start now ends `codex exec` with "required MCP servers failed to
+initialize" before any model request, and the activation fails as transient.
+The test endpoint no longer answers a request that lacks a tool with a probe.
+A request without `say` now fails the test.
+
 **A Codex seat stops when its host dies.** The SDK closes the input of
 `codex exec` at once. A host that died by SIGKILL or out of memory left
 `codex exec` running, with the model request in flight. The process ran its

@@ -71,10 +71,8 @@ export interface ScriptedResponses {
 	readonly url: string;
 	/** The body of each request that took a reply from the script, in arrival order. */
 	readonly requests: readonly ResponsesRequest[];
-	/** The headers of every request that arrived, probes and other paths included, in arrival order. */
+	/** The headers of every request that arrived, other paths included, in arrival order. */
 	readonly headers: readonly IncomingHttpHeaders[];
-	/** The count of probes: requests that came before the MCP tools were ready. */
-	readonly probes: () => number;
 	/** The path of each request that was not `POST /v1/responses`. */
 	readonly others: readonly string[];
 	/** The count of requests that arrived after the script ended. */
@@ -84,18 +82,6 @@ export interface ScriptedResponses {
 
 /** What the endpoint answers when the script has ended. */
 export const SCRIPT_ENDED = 'The script has ended.';
-
-/**
- * The most probes the endpoint sends for one script. A probe that never
- * finds the tools ends, so a binary that never lists them fails the test
- * and does not loop.
- */
-const MAX_PROBES = 100;
-
-/** The reply that asks Codex to list MCP resources. It reads nothing and costs no usage. */
-const PROBE: Reply = { call: 'list_mcp_resources', namespace: 'functions', args: {} };
-
-const NO_USAGE: ReportedUsage = { input: 0, cached: 0, output: 0, reasoning: 0 };
 
 function itemOf(reply: Reply, id: string): Record<string, unknown> {
 	if ('text' in reply) {
@@ -140,28 +126,12 @@ function parsed(text: string): ResponsesRequest {
 }
 
 /**
- * Whether the model could call the tool of the reply. Codex starts its MCP
- * servers while it starts the turn, and a loaded host can send the first
- * request before a server is ready. The model then sees no tool of it.
- */
-function listsTool(request: ResponsesRequest, reply: Reply | undefined): boolean {
-	if (reply === undefined || 'text' in reply || reply.namespace === undefined) return true;
-	const tools = toolsOf(request);
-	// A native function of Codex is a top-level tool, outside any namespace.
-	return (tools[reply.namespace]?.includes(reply.call) ?? false) || reply.call in tools;
-}
-
-/**
  * Runs when a request takes a reply, before the endpoint answers. It gets the index of the reply
  * and the response. The `close` event of the response tells that the client went away.
  */
 export type OnRequest = (index: number, response: ServerResponse) => void | Promise<void>;
 
-/**
- * Start an endpoint on a free port of the loopback interface. When a request
- * does not list the tool that the next reply calls, the endpoint answers with
- * a probe and keeps the reply for the next request.
- */
+/** Start an endpoint on a free port of the loopback interface. */
 export async function scriptedResponses(
 	script: readonly Reply[],
 	onRequest?: OnRequest,
@@ -169,7 +139,6 @@ export async function scriptedResponses(
 	const requests: ResponsesRequest[] = [];
 	const others: string[] = [];
 	const headers: IncomingHttpHeaders[] = [];
-	let probes = 0;
 	let overrun = 0;
 	const server = createServer((request, response) => {
 		const chunks: Buffer[] = [];
@@ -185,11 +154,6 @@ export async function scriptedResponses(
 			const index = requests.length;
 			const reply = script[index];
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			if (!listsTool(body, reply) && probes < MAX_PROBES) {
-				probes += 1;
-				response.end(eventsOf(PROBE, `probe_${probes}`, NO_USAGE));
-				return;
-			}
 			requests.push(body);
 			await onRequest?.(index, response);
 			if (reply === undefined) overrun += 1;
@@ -202,7 +166,6 @@ export async function scriptedResponses(
 		url: `http://127.0.0.1:${port}/v1`,
 		requests,
 		headers,
-		probes: () => probes,
 		others,
 		overrun: () => overrun,
 		close: () =>
