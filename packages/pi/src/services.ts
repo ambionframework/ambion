@@ -2,7 +2,7 @@
 
 import { PermanentError } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Api, Model, Models } from '@earendil-works/pi-ai';
+import type { Api, CredentialStore, Model, Models } from '@earendil-works/pi-ai';
 import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from './sessions.ts';
 
 /** Resolves an agent's `provider/model-id` to the model Pi's harness runs. */
@@ -32,6 +32,13 @@ export interface PiExecutionOptions {
 	 * `ambion-pi-sessions-<uid>` in the OS temporary directory.
 	 */
 	readonly sessionDir?: string;
+	/**
+	 * Where the subscription sign-ins live, such as `fileCredentials(path)`.
+	 * A provider with a stored credential answers with it, and Pi does
+	 * not read its `<PROVIDER>_API_KEY`. Absent, the registry reads the
+	 * environment alone.
+	 */
+	readonly credentials?: CredentialStore;
 }
 
 /**
@@ -43,28 +50,39 @@ type SessionPlace = 'disk' | 'memory';
 
 let builtinRegistry: Promise<Models> | undefined;
 
-const registry = () =>
-	(builtinRegistry ??= import('@earendil-works/pi-ai/providers/all').then(({ builtinModels }) =>
-		builtinModels(),
-	));
-
-const registryStream: StreamFn = async (model, context, streamOptions) => {
-	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
-	const resolved =
-		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-	return (await registry()).streamSimple(model, context, resolved);
-};
-
-const registryModel: ModelResolver = async (id, agent) => {
-	const slash = id.indexOf('/');
-	if (slash > 0) {
-		const model = (await registry()).getModel(id.slice(0, slash), id.slice(slash + 1));
-		if (model) return model;
-	}
-	throw new PermanentError(
-		`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`,
+/** The registry. A host with a credential store gets a registry of its own; every other host shares one. */
+const loadRegistry = (credentials?: CredentialStore): Promise<Models> =>
+	import('@earendil-works/pi-ai/providers/all').then(({ builtinModels }) =>
+		credentials === undefined ? builtinModels() : builtinModels({ credentials }),
 	);
-};
+
+const sharedRegistry = () => (builtinRegistry ??= loadRegistry());
+
+/** The registry stream. A stored credential owns its provider, so the store skips the environment key. */
+const registryStream =
+	(registry: () => Promise<Models>, credentials?: CredentialStore): StreamFn =>
+	async (model, context, streamOptions) => {
+		const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
+		const owned = envKey && credentials ? await credentials.read(model.provider) : undefined;
+		const resolved =
+			streamOptions?.apiKey || !envKey || owned
+				? streamOptions
+				: { ...streamOptions, apiKey: envKey };
+		return (await registry()).streamSimple(model, context, resolved);
+	};
+
+const registryModel =
+	(registry: () => Promise<Models>): ModelResolver =>
+	async (id, agent) => {
+		const slash = id.indexOf('/');
+		if (slash > 0) {
+			const model = (await registry()).getModel(id.slice(0, slash), id.slice(slash + 1));
+			if (model) return model;
+		}
+		throw new PermanentError(
+			`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`,
+		);
+	};
 
 /** A custom stream never reads a model, so the harness receives a stub. It names the seat, and a scripted stream routes on that name. */
 export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
@@ -82,9 +100,13 @@ export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
 
 export function createExecutionServices(options: PiExecutionOptions = {}): ExecutionServices {
 	const custom = options.stream !== undefined;
+	const { credentials } = options;
+	let own: Promise<Models> | undefined;
+	const registry =
+		credentials === undefined ? sharedRegistry : () => (own ??= loadRegistry(credentials));
 	return {
-		stream: options.stream ?? registryStream,
-		model: custom ? stubModel : registryModel,
+		stream: options.stream ?? registryStream(registry, credentials),
+		model: custom ? stubModel : registryModel(registry),
 		sessions: sessionsOf(options),
 	};
 }

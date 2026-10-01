@@ -6,7 +6,9 @@
  */
 
 export { piExecution } from './compose.ts';
+export { fileCredentials } from './credentials.ts';
 export { fromPiTool, type PiExecutor, type PiOptions, pi } from './define.ts';
+export { loginPi, type TerminalStreams, terminalInteraction } from './login.ts';
 export {
 	type RunAgentCall,
 	type RunAgentRequest,

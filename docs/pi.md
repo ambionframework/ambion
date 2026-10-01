@@ -46,6 +46,14 @@ and reads `<PROVIDER>_API_KEY`. The id `anthropic/claude-sonnet-5` reads
 `ANTHROPIC_API_KEY`. The id `google-vertex/...` reads `GOOGLE_VERTEX_API_KEY`.
 A key that Pi passes in its own stream options wins over the variable.
 
+**A subscription sign-in replaces the key.** Pi signs in to Claude Pro and
+Max (`anthropic`) and to ChatGPT Plus and Pro (`openai-codex`) with OAuth.
+Run `loginPi('anthropic', fileCredentials(path))` once on a host that has a
+browser. Pass the same store to `piExecution({ credentials })`. A provider
+with a stored sign-in answers with it, and Pi does not read its
+`<PROVIDER>_API_KEY`. A provider with none keeps the key rule above. [Subscriptions](#subscriptions)
+holds the steps.
+
 **The registry loads on the first request.** A room with a scripted `stream`
 never loads it and needs no key.
 
@@ -121,13 +129,14 @@ validates the shared fields. Pi adds `model` and `compaction`.
 executor writes `compaction` only when the definition gives it. `pi()`
 throws when a token count is negative or not a safe integer.
 
-**`piExecution(options)` takes three options.**
+**`piExecution(options)` takes four options.**
 
-| Option       | Default                                                  | Meaning                                                                           |
-| ------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `stream`     | The Pi registry stream                                   | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing). |
-| `sessions`   | `'disk'`                                                 | Where the seats keep their sessions: `'disk'` or `'memory'`.                      |
-| `sessionDir` | `ambion-pi-sessions-<uid>` in the OS temporary directory | The directory on the local disk for the sessions of the seats.                    |
+| Option        | Default                                                  | Meaning                                                                                   |
+| ------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `stream`      | The Pi registry stream                                   | A Pi `StreamFn`. A custom stream makes the model resolve to a stub (see Testing).         |
+| `sessions`    | `'disk'`                                                 | Where the seats keep their sessions: `'disk'` or `'memory'`.                              |
+| `sessionDir`  | `ambion-pi-sessions-<uid>` in the OS temporary directory | The directory on the local disk for the sessions of the seats.                            |
+| `credentials` | None                                                     | A Pi `CredentialStore` that holds subscription sign-ins, such as `fileCredentials(path)`. |
 
 **Every stream keeps the sessions on the disk by default.** A custom
 `stream` makes the model a stub, and the sessions stay on the disk.
@@ -150,6 +159,57 @@ the definition carries the name alone. `length`, the default, counts
 `Math.ceil(text.length / 4)`. `createRuntime({ estimators })` registers
 other names. [History and limits](room.md#history-and-limits) states the
 rule.
+
+## Subscriptions
+
+**A subscription needs a store and one sign-in.** Pi runs the OAuth flow of
+the provider and keeps the credential in a `CredentialStore`. The package
+ships `fileCredentials(path)`, one JSON file keyed by provider id.
+
+```ts
+import { fileCredentials, loginPi, piExecution } from '@ambionframework/pi';
+
+const credentials = fileCredentials('/var/lib/ambion/auth.json');
+
+// Once, on a host with a browser. The sign-in asks on the terminal.
+await loginPi('openai-codex', credentials); // or 'anthropic'
+
+// Every run after that.
+const execution = piExecution({ credentials });
+```
+
+The model id names the provider. `openai-codex/<model>` runs on the ChatGPT
+sign-in, and `anthropic/<model>` runs on the Claude sign-in. `loginPi`
+takes an `AuthInteraction` as its third argument, for a host that asks in
+another way than on a terminal.
+
+**The store rotates the refresh token.** Each refresh gives a new refresh
+token and voids the old one. `fileCredentials` writes the file through a
+lock file and a rename, so two seats and two processes on one disk never
+lose a rotated token. The file has mode `0600`. It holds the same power as
+the account, so keep it out of the repository and out of the room.
+
+**A stored sign-in owns its provider.** An `ANTHROPIC_API_KEY` in the
+environment does not override a stored `anthropic` sign-in. Remove the
+credential with `store.delete('anthropic')` to use the key again.
+
+**A host with no disk supplies its own store.** `fileCredentials` loads the
+Node file system on first use. A Cloudflare seat passes any object that
+implements the Pi `CredentialStore`: `read`, `list`, `modify`, and `delete`.
+`modify` must serialize writes for one provider, because it holds the
+refresh.
+
+**A revoked sign-in is a permanent failure.** An `invalid_grant` on refresh,
+and a provider with no sign-in and no key, fail the seat with no retry.
+Run `loginPi` again.
+
+**The cost is notional.** The `usage` steps price tokens at the list price
+of the model. A subscription bills nothing per token, and it has its own
+usage limit. A limit that the provider reports is a permanent failure.
+
+**Read the terms of the provider first.** A provider may restrict the use of
+a consumer subscription outside its own clients. The terms are the choice
+of the person who owns the account.
 
 ## How an activation runs
 
@@ -277,6 +337,12 @@ activation. The model sees no environment variable and no key.
 host process, and it sends the key to the provider only. A tool that reads
 `process.env` or the disk gives the model what it reads. Give a tool the
 narrowest reach that the job needs, and use a workspace backend for files.
+
+**The credential file holds the sign-in of the account.** A host that sets
+`credentials` gives every tool of the host process the same reach as the
+stream. A tool that reads the disk can read the file. Keep such tools off
+a seat that runs on a subscription, and name a file that the host user
+alone reads.
 
 **The session files hold the whole transcript.** On Node, the harness
 writes each session to a JSONL file under `sessionDir`: every prompt, every
@@ -481,17 +547,18 @@ Pi seats.
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                      |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.       |
-| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                         |
-| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.  |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.  |
-| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
-| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                |
-| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |
-| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
-| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                   |
-| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.               |
-| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                 |
-| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                 |
+| Symptom                                                             | Cause                                                                                                                                                                |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.                                                                 |
+| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                   |
+| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                            |
+| `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries. |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.                                                            |
+| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                               |
+| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                          |
+| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                 |
+| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                           |
+| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                                                                             |
+| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.                                                                         |
+| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                           |
+| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                           |

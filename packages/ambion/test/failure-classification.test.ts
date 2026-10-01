@@ -35,6 +35,9 @@ it.each([
 		undefined,
 		'permanent',
 	],
+	// Pi on a subscription sign-in: a revoked refresh token, and a provider with no sign-in or key.
+	['pi', 'OAuth refresh failed for anthropic: invalid_grant', undefined, 'permanent'],
+	['pi', 'Provider is not configured: openai-codex', undefined, 'permanent'],
 	// The Claude Agent SDK.
 	['claude', 'invalid x-api-key', undefined, 'permanent'],
 	['claude', 'Invalid API key · Please run /login', undefined, 'permanent'],

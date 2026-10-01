@@ -33,7 +33,9 @@ await visit.send({ text: 'Is the plan ready?' });
 **Install it next to the kernel.** Run `npm install @ambionframework/ambion
 @ambionframework/codex`. The package needs Node 22.19 or newer. The Codex SDK
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
-or run `codex login`.
+or run `codex login`. A ChatGPT sign-in runs the seat on a ChatGPT Plus or
+Pro subscription: leave `CODEX_API_KEY` out,
+and keep `HOME` or `CODEX_HOME` in a custom `env`.
 
 **Codex owns the loop, and the room owns the record.** One Codex thread
 serves each activation. The first pass sends the mechanism, the agent

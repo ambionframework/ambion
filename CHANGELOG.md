@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**Pi runs on a Claude or a ChatGPT subscription.**
+`@ambionframework/pi` exports `fileCredentials`, `loginPi`, and
+`terminalInteraction`, and `piExecution` and `createExecutionServices` take
+a `credentials` option: a Pi `CredentialStore`. `loginPi('anthropic', store)`
+signs in with a Claude Pro or Max account, and `loginPi('openai-codex',
+store)` signs in with a ChatGPT Plus or Pro account. `fileCredentials(path)`
+keeps the sign-ins in one file of mode `0600`, and writes each refresh
+through a lock file and a rename, so no seat loses a rotated refresh token. Each lock names its owner, and
+a process removes only its own lock.
+A provider with a stored sign-in no longer reads its `<PROVIDER>_API_KEY`.
+A host with no `credentials` reads the environment, as before. The shared
+classifier now reads `invalid_grant` and `provider is not configured` as
+permanent. The Claude and Codex guides state how to run those seats on a
+subscription: `claude login` or `CLAUDE_CODE_OAUTH_TOKEN`, and `codex
+login`. Neither package changes.
+
 **One scripted test language serves the core and Pi.**
 `@ambionframework/ambion/testing` renames the type `Turn` to `Reply`,
 because `turn` means one request to a provider in Pi. `seat(name)` joins the verbs `callTool`,
@@ -39,7 +55,7 @@ host reads its fields without a name for its type.
 and `sessions`. The `clock`, `call`, and `trace` fields are gone, because
 no code read them. The executor takes its clock from the host.
 `createExecutionServices` takes `PiExecutionOptions`: `stream`, `sessions`,
-and `sessionDir`. The `clock`, `call`, and `trace` options are gone.
+`sessionDir`, and `credentials`. The `clock`, `call`, and `trace` options are gone.
 `PiExecutionOptions` is the one option type of the Pi execution and its
 services. `ExecutionServicesOptions` and `SessionPlace` leave the entry of
 `@ambionframework/pi`.

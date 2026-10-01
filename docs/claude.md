@@ -47,6 +47,18 @@ from its environment. By default that is the environment of the host
 process, so `ANTHROPIC_API_KEY` in `process.env` reaches it. A sign-in
 failure is permanent; see [Failure classification](#failure-classification).
 
+**A Claude subscription works with no key.** Run `claude login` on the
+host once. The executable keeps the sign-in in the home of the host user.
+A host with no browser runs `claude setup-token` elsewhere and passes the
+token as `CLAUDE_CODE_OAUTH_TOKEN`. Remove `ANTHROPIC_API_KEY` from the
+environment, because a key takes precedence over the sign-in. A custom `env`
+needs `PATH` and `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` when the sign-in came
+from `claude setup-token`. The `usage` steps report a notional cost, so
+`maxBudgetUsd` caps notional dollars. The subscription has its own usage
+limit, which is a permanent failure. A provider may restrict the
+use of a consumer subscription outside its own clients. Read its terms
+first.
+
 **`pathToClaudeCodeExecutable` selects the binary.** Without it, the SDK
 finds the executable that it ships with.
 
@@ -433,18 +445,18 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                                      |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                   |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                  |
-| The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                          |
-| Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                 |
-| The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                   |
-| A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                             |
-| The seat is abandoned after one attempt with an authentication text | A permanent failure. Check `ANTHROPIC_API_KEY`. A custom `env` may have dropped it.                                        |
-| `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The executor does not forward the stderr of the process. |
-| The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                            |
-| A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                           |
-| The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                        |
-| A resumed seat opens a new session                                  | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                    |
-| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                 |
+| Symptom                                                             | Cause                                                                                                                                                 |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                              |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                             |
+| The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                     |
+| Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                            |
+| The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                              |
+| A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                                                        |
+| The seat is abandoned after one attempt with an authentication text | A permanent failure. Check `ANTHROPIC_API_KEY`, or run `claude login`. A custom `env` may have dropped the key, `HOME`, or `CLAUDE_CODE_OAUTH_TOKEN`. |
+| `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The executor does not forward the stderr of the process.                            |
+| The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                       |
+| A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                                                      |
+| The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                   |
+| A resumed seat opens a new session                                  | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                               |
+| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                            |
