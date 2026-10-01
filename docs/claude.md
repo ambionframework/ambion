@@ -55,9 +55,17 @@ in the config home of the host user. Pass `ANTHROPIC_API_KEY`. A Claude
 subscription works with a token: run `claude setup-token` once, and pass the
 token as `CLAUDE_CODE_OAUTH_TOKEN`. Remove `ANTHROPIC_API_KEY` from the
 environment, because a key takes precedence over the token. To use the
-sign-in of the host, pass an `env` that names `CLAUDE_CONFIG_DIR`, for
-example the `~/.claude` directory of the host user. All seats then share
-that config home.
+sign-in of the host on Linux, pass an `env` that names `CLAUDE_CONFIG_DIR`,
+for example the `~/.claude` directory of the host user. All seats then share
+that config home, its sessions, and its `.credentials.json` file.
+
+**On macOS the sign-in lives in the keychain, and the name of its entry
+depends on `CLAUDE_CONFIG_DIR`.** When the variable is set, the service name
+gets a suffix that the executable derives from the directory. A
+`claude login` made without the variable is under the name with no suffix, so
+a seat that sets the variable does not read it. On macOS, run `claude login`
+with the same `CLAUDE_CONFIG_DIR` set, or use `claude setup-token` and
+`CLAUDE_CODE_OAUTH_TOKEN`.
 
 **A custom `env` needs `PATH` and `HOME`.** It needs
 `CLAUDE_CODE_OAUTH_TOKEN` when the sign-in came from `claude setup-token`.
@@ -284,9 +292,10 @@ definition, and the built-in tools that `allowedTools` names, minus
 `disallowedTools`. A test asserts that an empty policy passes `--tools ''`.
 
 **What the environment holds.** Without `env`, the seat gets the variables
-of the host process that an allowlist names, and no other. `Bash` can print
-what the seat holds, so the allowlist keeps the other secrets of the host
-out of its reach.
+of the host process that an allowlist names, and no other. The allowlist
+limits the environment variables of the seat. It does not limit the
+filesystem. `HOME` passes, and a seat with `Bash` or `Read` runs as the host
+user and can read the files of that user.
 
 | Kind         | Names                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------- |
@@ -305,6 +314,12 @@ Pass the variables that the executable needs, as the example does. In both
 cases the executor then removes the variables of a Claude Code session, and
 sets `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
 unless the environment holds them.
+
+**A host on Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*`
+does not cover must pass `env`.** The allowlist holds no `AWS_` and no
+`GOOGLE_` prefix, because those names carry broad cloud secrets. Without the
+variables of the provider, the executable cannot sign in. Pass an `env` that
+holds `PATH`, `HOME`, and the variables that the provider needs.
 
 **A seat starts outside the Claude Code session of its host.** A host that
 runs inside Claude Code holds variables such as `CLAUDE_CODE_SESSION_ID`
@@ -330,7 +345,7 @@ or the working directory of the host.
 **The executor routes a built-in name to the tool of the seat with the same
 name.** A model can emit `Bash` out of habit, or because a skill text names
 it. The executor passes `toolAliases` to the SDK, so that call lands on the
-workspace tool and does not fail as unknown. The map holds seven names:
+workspace tool and does not fail as unknown. The map holds the four names that the workspace tools of the seat carry:
 
 | Built-in | Tool of the seat |
 | -------- | ---------------- |
@@ -338,9 +353,6 @@ workspace tool and does not fail as unknown. The map holds seven names:
 | `Read`   | `read`           |
 | `Write`  | `write`          |
 | `Edit`   | `edit`           |
-| `Grep`   | `grep`           |
-| `Glob`   | `find`           |
-| `LS`     | `ls`             |
 
 An alias exists only when the seat holds a tool of that name and does not
 hold the built-in. A seat with built-in tools gets aliases by the same rule.
@@ -378,11 +390,15 @@ directories. The executable keeps its sessions, its settings, and on Linux
 its credentials in this directory.
 
 **`configRoot` places the seat directories.** The seat directory is
-`<configRoot>/<room>/<seat>`. The room name and the seat name become one
+`<configRoot>/<room>/<seat>`. A relative `configRoot` becomes absolute once,
+against the working directory of the host, because the executable reads the
+variable as it is. The room name and the seat name become one
 path segment each. A prefix and a percent encoding remove every separator
 and every dot, so no name leaves the root. Without `configRoot`, each seat
-gets a private directory under the temporary directory of the host. That
-directory does not survive a restart of the process or the machine. A resume
+gets a private directory under the temporary directory of the host. Each
+seat of each room start leaves one `ambion-claude-*` directory there, and the
+executor removes none. A host that wants cleanup passes `configRoot` and owns
+that directory. The directory does not survive a restart of the process or the machine. A resume
 after the restart then falls back to a fresh session, as designed in
 [Exchange continuity](#exchange-continuity). Pass `configRoot` to keep the
 sessions of a room across restarts. The executor deletes no session file,
@@ -390,7 +406,8 @@ and the host owns the cleanup.
 
 **An `env` that names `CLAUDE_CONFIG_DIR` opts out.** The seat then uses
 that directory, as does every seat with the same `env`. This shares the
-credentials and the sessions of the host.
+sessions and, on Linux, the `.credentials.json` file. It does not share the
+keychain sign-in of macOS; see [Install and sign in](#install-and-sign-in).
 
 ## Exchange continuity
 
@@ -544,6 +561,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                     |
 | The seat is abandoned after one attempt with an authentication text | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have dropped the key or `HOME`. |
 | `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class. |
+| The executable cannot sign in on Bedrock, Vertex, or Foundry        | The allowlist holds no variable of that provider. Pass an `env` with `PATH`, `HOME`, and the variables the provider needs.                                                         |
 | The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                                                    |
 | A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                                                                                   |
 | The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                                                |

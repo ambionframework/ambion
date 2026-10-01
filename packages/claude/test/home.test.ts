@@ -1,7 +1,7 @@
 /** The directories of a seat: each name gives one safe path segment, and a home stays under its root. */
 import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { seatHome, segment } from '../src/home.ts';
 
@@ -55,4 +55,20 @@ it('makes a different private directory for each seat when no root is named', ()
 	const [one, two] = [seatHome(undefined, 'lab', 'a')(), seatHome(undefined, 'lab', 'a')()];
 	expect(one.config).not.toBe(two.config);
 	expect(one.config.startsWith(tmpdir())).toBe(true);
+});
+
+it('resolves a relative root once, so the executable reads the same directory from any cwd', () => {
+	const parent = mkdtempSync(join(tmpdir(), 'ambion-rel-'));
+	const before = process.cwd();
+	process.chdir(parent);
+	try {
+		const dirs = seatHome('state', 'lab', 'a')();
+		expect(isAbsolute(dirs.config)).toBe(true);
+		expect(dirs.config).toBe(
+			resolve(process.cwd(), 'state', segment('lab'), segment('a'), 'config'),
+		);
+		expect(existsSync(dirs.config)).toBe(true);
+	} finally {
+		process.chdir(before);
+	}
 });

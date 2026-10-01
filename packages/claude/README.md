@@ -41,8 +41,10 @@ environment.
 pass the token as `CLAUDE_CODE_OAUTH_TOKEN`. Leave `ANTHROPIC_API_KEY` out,
 because a key takes precedence. Each seat has its own Claude config
 directory, so the sign-in of `claude login` does not reach it. To share the
-config home of the host, pass an `env` that names `CLAUDE_CONFIG_DIR`. A
-custom `env` needs `PATH` and `HOME`. The reported cost is notional. The
+config home of the host on Linux, pass an `env` that names
+`CLAUDE_CONFIG_DIR`. On macOS the sign-in lives in the keychain under a name
+that depends on that variable, so run `claude login` with the variable set,
+or use `claude setup-token`. A custom `env` needs `PATH` and `HOME`. The reported cost is notional. The
 [guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#install-and-sign-in)
 holds the limits.
 
@@ -170,13 +172,16 @@ becomes an `approval` step with the answer. The executor denies a request when
 
 **`env` replaces the environment.** The value is not merged with
 `process.env`. Pass `PATH`, `HOME`, and the key that the executable needs.
-Without `env`, the seat gets an allowlist of the variables of the host.
+Without `env`, the seat gets an allowlist of the variables of the host. The
+allowlist limits environment variables and not the filesystem. A host on
+Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*` does not
+cover must pass `env` with the variables it needs.
 
 **Each seat has its own config directory.** The executor sets
 `CLAUDE_CONFIG_DIR` for it, turns the skills off, and sets
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`. Without `configRoot`, the
-directory is private and lives in the temporary directory, and a restart
-loses it. A seat with no built-in tool runs in a scratch directory, and the
+directory is private and lives in the temporary directory, a restart loses
+it, and the executor never removes it. A seat with no built-in tool runs in a scratch directory, and the
 executor aliases a built-in name such as `Bash` to the tool of the seat with
 the same name.
 

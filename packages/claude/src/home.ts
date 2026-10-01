@@ -9,7 +9,7 @@
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /** The two directories of a seat. */
 interface SeatDirs {
@@ -41,7 +41,10 @@ function privateDirectory(path: string): string {
 
 /**
  * The home of one seat. With `configRoot`, it is
- * `<configRoot>/<room>/<seat>`. Without it, the seat gets a private
+ * `<resolve(configRoot)>/<room>/<seat>`. A relative root becomes absolute
+ * once, because the executable reads `CLAUDE_CONFIG_DIR` raw and resolves it
+ * against its own working directory, which can be the scratch directory.
+ * Without it, the seat gets a private
  * directory under the temporary directory of the host.
  */
 export function seatHome(configRoot: string | undefined, room: string, seat: string): SeatHome {
@@ -51,7 +54,7 @@ export function seatHome(configRoot: string | undefined, room: string, seat: str
 		const root =
 			configRoot === undefined
 				? mkdtempSync(join(tmpdir(), 'ambion-claude-'))
-				: join(configRoot, segment(room), segment(seat));
+				: join(resolve(configRoot), segment(room), segment(seat));
 		dirs = {
 			config: privateDirectory(join(root, 'config')),
 			work: privateDirectory(join(root, 'work')),

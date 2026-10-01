@@ -152,9 +152,6 @@ export const TOOL_ALIASES = {
 	Read: 'read',
 	Write: 'write',
 	Edit: 'edit',
-	Grep: 'grep',
-	Glob: 'find',
-	LS: 'ls',
 } as const;
 
 /**

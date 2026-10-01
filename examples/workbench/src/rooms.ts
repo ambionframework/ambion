@@ -109,7 +109,12 @@ function familyExecutions(options: RoomsOptions = {}): readonly Execution[] {
 			// A test gives the stream, and its sessions stay in memory.
 			stream && piExecution({ stream, sessions: 'memory' }),
 		),
-		pick('claude', () => claudeExecution({ env }), executions?.claude),
+		// The Claude seat takes the allowlist of the host environment, unless the caller gave an env.
+		pick(
+			'claude',
+			() => (options.env === undefined ? claudeExecution() : claudeExecution({ env: options.env })),
+			executions?.claude,
+		),
 		pick('codex', () => codexExecution({ env }), executions?.codex),
 	];
 }

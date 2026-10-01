@@ -281,8 +281,8 @@ it.each([
 it('gives the options no alias map when no alias applies, and skills off always', () => {
 	expect(optionsOf({ env: {} }).toolAliases).toBeUndefined();
 	expect(optionsOf({ env: {} }).skills).toEqual([]);
-	const { toolAliases: aliases } = optionsOf({ env: {} }, {}, ['mcp__ambion__find']);
-	expect(aliases).toEqual({ Glob: 'mcp__ambion__find' });
+	const { toolAliases: aliases } = optionsOf({ env: {} }, {}, ['mcp__ambion__edit']);
+	expect(aliases).toEqual({ Edit: 'mcp__ambion__edit' });
 });
 
 const bashTool = defineTool({
@@ -348,7 +348,7 @@ it('makes a private config home under the temporary directory when the host name
 	const { env } = await argvOf();
 	const config = String(env.values.CLAUDE_CONFIG_DIR);
 	expect(basename(config)).toBe('config');
-	expect(dirname(dirname(config)).startsWith(realpathSync(tmpdir()))).toBe(true);
+	expect(realpathSync(dirname(dirname(config))).startsWith(realpathSync(tmpdir()))).toBe(true);
 	expect(basename(dirname(config)).startsWith('ambion-claude-')).toBe(true);
 });
 
