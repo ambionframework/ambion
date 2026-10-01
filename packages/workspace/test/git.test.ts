@@ -108,6 +108,7 @@ describe('the tools and the guidance', () => {
 			status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,
 			wait waits for the first of them to end, and cancel stops one. ps lists your running processes.
 			A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
+			A stop sends SIGTERM, then SIGKILL after grace seconds, 10 by default. Raise grace for a process that must clean up.
 			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 			A wait stops before your activation ends.
 			A process that outlives your activation shows in the reminder at the start of your next activation.

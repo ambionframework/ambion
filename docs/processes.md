@@ -29,7 +29,8 @@ the processes of the agents of this run through `workspace.processes`
 | File               | Holds                                                                |
 | ------------------ | -------------------------------------------------------------------- |
 | `process-files.ts` | The files of a process, the wrapper, the listing, and the state rule |
-| `processes.ts`     | The table: starts, reads, adoptions, stops, and the host's view      |
+| `processes.ts`     | The table: starts, reads, adoptions, and the host's view             |
+| `process-stop.ts`  | The stops: the chain of steps for each agent, and the waits          |
 | `process-run.ts`   | One run of a process, and the waits                                  |
 | `process-tools.ts` | The five tools, and the read of the end of an output                 |
 | `process-text.ts`  | The state line, the `ps` table, and the reminder text                |
@@ -53,21 +54,21 @@ states the owner and the backends that a process runs on.
 
 ## The tools
 
-| Tool     | Parameters                              | What it does                                                      |
-| -------- | --------------------------------------- | ----------------------------------------------------------------- |
-| `bash`   | `command`, `name?`, `timeout?`, `wait?` | Starts a process, waits up to `wait` seconds, and gives its state |
-| `ps`     | None                                    | Lists the caller's running processes                              |
-| `status` | `handle`                                | Gives the state of the process and its new output                 |
-| `wait`   | `handles`, `timeout?`                   | Waits up to `timeout` seconds for the first process to end        |
-| `cancel` | `handle`                                | Stops a running process, waits for it to end, then as status      |
+| Tool     | Parameters                                        | What it does                                                      |
+| -------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| `bash`   | `command`, `name?`, `timeout?`, `wait?`, `grace?` | Starts a process, waits up to `wait` seconds, and gives its state |
+| `ps`     | None                                              | Lists the caller's running processes                              |
+| `status` | `handle`                                          | Gives the state of the process and its new output                 |
+| `wait`   | `handles`, `timeout?`                             | Waits up to `timeout` seconds for the first process to end        |
+| `cancel` | `handle`                                          | Stops a running process, waits for it to end, then as status      |
 
-| Value                | Default | Range                         |
-| -------------------- | ------- | ----------------------------- |
-| `bash` `timeout`     | 600 s   | Above 0, up to 2,147,483 s    |
-| `bash` `wait`        | 30 s    | 0 to 600 s. 0 returns at once |
-| `wait` `timeout`     | 30 s    | 0 to 600 s                    |
-| The grace of a stop  | 10 s    | Fixed                         |
-| The wait of `cancel` | 15 s    | Fixed: the grace and 5 s      |
+| Value                | Default | Range                                        |
+| -------------------- | ------- | -------------------------------------------- |
+| `bash` `timeout`     | 600 s   | Above 0, up to 2,147,483 s                   |
+| `bash` `wait`        | 30 s    | 0 to 600 s. 0 returns at once                |
+| `wait` `timeout`     | 30 s    | 0 to 600 s                                   |
+| `bash` `grace`       | 10 s    | 1 to 300 s                                   |
+| The wait of `cancel` | 15 s    | At most 15 s: the grace, up to 10 s, and 5 s |
 
 **`bash` with `wait` is `bash` with a `wait` of 0 and then the `wait`
 tool.** A command that ends inside the window gives its output and its
@@ -88,16 +89,16 @@ agent is the agent's own home. A handle of another agent fails with
 
 **Each process is a directory: `~/.processes/<handle>/`.**
 
-| File     | Written by  | When                                                                 |
-| -------- | ----------- | -------------------------------------------------------------------- |
-| `spec`   | The table   | At the start: the command, the name, the timeout, the room, the time |
-| `out`    | The command | While it runs. The just-bash backends write it when the command ends |
-| `pid`    | The wrapper | First: the pid of the shell that runs the command                    |
-| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent       |
-| `stop`   | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`   |
-| `stop`   | The table   | When a read first finds the process lost with a `pid`: `failed`      |
-| `seen`   | The table   | When a result or a reminder showed the end                           |
-| `cursor` | The table   | After each result: the byte offset of the output that results showed |
+| File     | Written by  | When                                                                            |
+| -------- | ----------- | ------------------------------------------------------------------------------- |
+| `spec`   | The table   | At the start: the command, the name, the timeout, the grace, the room, the time |
+| `out`    | The command | While it runs. The just-bash backends write it when the command ends            |
+| `pid`    | The wrapper | First: the pid of the shell that runs the command                               |
+| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent                  |
+| `stop`   | The table   | Before it stops the process: `cancelled`, `timed_out`, or `failed`              |
+| `stop`   | The table   | When a read first finds the process lost with a `pid`: `failed`                 |
+| `seen`   | The table   | When a result or a reminder showed the end                                      |
+| `cursor` | The table   | After each result: the byte offset of the output that results showed            |
 
 **The wrapper writes the pid, runs the command, and writes the end.**
 
@@ -269,6 +270,7 @@ same value.
 | `state`     | `running`, `exited`, `timed_out`, `cancelled`, or `failed`                 |
 | `output`    | The absolute path of the output file                                       |
 | `timeout`   | Seconds the process may run                                                |
+| `grace`     | Seconds from `SIGTERM` to `SIGKILL` when the table stops the process       |
 | `room`      | The room of the `bash` call, when it had one. Metadata alone               |
 | `startedAt` | ISO time of the start                                                      |
 | `endedAt`   | ISO time of the end, when the files name it                                |
@@ -318,27 +320,30 @@ table stops the process the way a cancel does. The backend's own deadline
 comes 30 seconds after the timeout and the grace. It stops a process that
 the table's stop did not end, with the same grace.
 
-**The table stops the processes of one agent one at a time.** A stop on
-the workstation opens a short channel of its own for each signal. A stop
-waits for the stops of the same agent before it, so the stops of one
-agent hold at most one signal channel. A cancel, a timeout, and a cancel
-by the host stop a process this way. `dispose()` puts only the abort of
-a process of this run on the chain
-([The stop](#the-stop)).
+**The stop steps of one agent run one at a time.** A step of a stop
+writes `stop`, aborts a process of this run, or sends a signal to an
+adopted one. A step opens at most one short channel on the workstation.
+A step never waits for an end, so a stop with a long grace holds no later
+stop of the same agent. A cancel, a timeout, a cancel by the host, and
+`dispose()` stop a process this way ([The stop](#the-stop)). The
+workstation sends one signal channel at a time for each client
+([Workstation](workstation.md#the-ssh-client)).
 
 ## The stop
 
 **A stop sends `SIGTERM` to the process group, waits for the grace, and
-then sends `SIGKILL`.** The grace of a `bash` process is 10 seconds. A
-server, a database, or a device controller uses that time to clean up. A
-cancel, a timeout, a cancel by the host, and `dispose()` all take this
-path.
+then sends `SIGKILL`.** The `grace` of the `bash` call sets the wait: 1 to
+300 seconds, 10 by default. A server, a database, or a device controller
+uses that time to clean up. A cancel, a timeout, a cancel by the host,
+and `dispose()` all take this path. A `grace` outside the range makes the
+call fail with `Invalid`.
 
 **The grace reaches the backend in the options of `exec`.** `runBash`
 passes `grace` beside `timeout`. An abort of the process's controller
 and the backend's own deadline then stop the command with that grace.
-The table keeps the grace in the record of each live process, so a later
-kind of process can give a grace of its own.
+The table writes the grace to `spec` and keeps it in the record of each
+live process, so an adopted process keeps the grace of its own call. A
+`spec` with no `grace` gets the default of 10 seconds.
 
 ```ts
 export interface WorkspaceExecOptions extends ShellExecOptions {
@@ -367,33 +372,41 @@ The code is the command's own answer: it cleaned up. `stop` still names
 the cause, `cancelled` or `timed_out`, and `cancel` does not say that it
 stopped nothing.
 
-**`cancel` waits for the end, up to the grace and 5 seconds.** The 5
-seconds cover the `SIGKILL`, the close of the channel, and the read of
-the files. While the stop waits, the status reads `running` with
-`stopping: true`. The flag stays while the process runs, also after the
-wait ends and in a later run of the host. The first read after the end
-gives the final state. A process that has not ended by then still reads
+**`cancel` waits for the end, up to the grace and 5 seconds, and at most
+15 seconds.** The wait is the shorter of the grace and 10 seconds, and 5
+seconds more. The 5 seconds cover the `SIGKILL`, the close of the channel,
+and the read of the files. While the stop waits, the status reads
+`running` with `stopping: true`. When the wait ends first, `cancel` gives
+that status, and the stop goes on: the `SIGKILL` still comes after the
+full grace. The flag stays while the process runs, also after the wait
+ends and in a later run of the host. The first read after the end gives
+the final state. A process that has not ended by then still reads
 `running`.
 
 **The timeout takes the same path.** At the timeout, the table writes
 `timed_out` to `stop` and aborts the process's controller. A command that
 traps `TERM` and exits 0 then reads `exited` with code 0.
 
-**An adopted process gets the same signals through its pid.** The table
-writes `stop`, and a script sends `SIGTERM` to the group of the pid. The
-table reads the files every 500 ms until the grace ends. It then sends
-`SIGKILL` to a group that still runs, and reads for 5 seconds more. The
-script checks the handle in the command line of the pid before each
+**An adopted process gets the same signals through its pid.** One step
+of the chain writes `stop` and sends `SIGTERM` to the group of the pid.
+The table then reads the files every 500 ms until the grace ends, outside
+the chain. A second step of the chain sends `SIGKILL` to a group that
+still runs, and the table reads for 5 seconds more, outside the chain.
+The script checks the handle in the command line of the pid before each
 signal ([Recovery](#recovery)).
 
-**`dispose()` gives each process its grace, and the graces run at the
-same time.** For each agent, `dispose()` writes `stop` and aborts the
-processes of this run one after another on the chain of the agent. A step
-of the chain does not wait for an end. `dispose()` then waits for all the
-ends at once, each for the grace and 5 seconds. An agent with 4 processes
-that ignore `TERM` takes about 15 seconds to stop. An adopted process
-keeps its full stop on the chain, so each adopted process adds up to 15
-seconds. The agents stop in parallel.
+**A stop for a process that a stop already stops joins that stop.** A
+timeout that comes during a cancel adds no second `SIGTERM` and no
+second poll.
+
+**`dispose()` waits for the full grace of each process, and the graces
+run at the same time.** For each process, `dispose()` takes the same steps
+as a cancel, and waits for the end for the grace and 5 seconds, with no
+limit of 15 seconds. A step of the chain does not wait for an end, so
+the stops of one agent overlap. A device controller declares its grace and
+gets it at `dispose()`. An agent with 4 processes that ignore `TERM`
+takes about one grace and 5 seconds to stop, and a grace of 300 seconds
+holds `dispose()` for up to 305 seconds. The agents stop in parallel.
 
 **On just-bash, a stop ends the command at once.** The simulated shell has
 no signals and no `trap`. No trap of the command runs, the wrapper writes
@@ -483,9 +496,10 @@ ends.** It covers the processes of this run, and the adopted ones whose
 end a read of this run sees. A listener that throws does not stop the
 other listeners or the process.
 
-**`cancel` stops the process of any agent of this run.** It waits up to
-the grace and 5 seconds for the end, and a process that has not ended by
-then still reads `running`. The host reads the output of a process through
+**`cancel` stops the process of any agent of this run.** It waits for the
+end as the `cancel` tool does: the grace, up to 10 seconds, and 5 seconds.
+A process that has not ended by then still reads `running`, and its stop
+goes on. The host reads the output of a process through
 `workspace.use`, as the owner agent, at `ProcessStatus.output`.
 
 ## Reminders
@@ -706,7 +720,8 @@ seat's host.
 **`cancel` stops the process and waits up to 15 seconds for it to end.**
 The state becomes `cancelled`, or `exited` for a command that ended inside
 the grace ([The stop](#the-stop)). A process that has not ended after 15
-seconds still reads `running`, and a later `status` gives its end. A
+seconds still reads `running` with `stopping: true`, for example when its
+grace is 30 seconds. Its stop goes on, and a later `status` gives its end. A
 `cancel` of a process in a final state gives that state again.
 
 **A shell that outlives its run becomes adopted.** A process can outlive
@@ -717,9 +732,8 @@ it comes when a read sees its end.
 **`dispose()` stops every running process of this run, and every adopted
 one.** The bash owner refuses new work and drains its queue. The table
 then refuses new processes and stops each running process, each one with
-its grace. The processes of this run of one agent stop at the same time.
-The adopted processes of one agent stop one at a time. The agents stop in
-parallel. The bash backend then disposes. The git owner disposes after
+its full grace and the slack. All the processes stop at the same time,
+whatever their agent. The bash backend then disposes. The git owner disposes after
 the bash owner, so a push in a process still reaches the git backend.
 
 ## Backends
@@ -809,14 +823,15 @@ the three handle tools stay as they are.
 | `ps` writes an audit entry                                     | The audit log records every tool call                                                                |
 | A process wakes no seat, and the agent waits for its result    | The kernel adds no wake source for the end of a process, and a host that wants one calls `room.post` |
 | The agent comes back to a long process with a scheduled say    | The room keeps one clock, and the agent chooses when to look again                                   |
-| A stop sends `SIGTERM`, waits 10 seconds, then sends `SIGKILL` | A process gets time to clean up, and 10 seconds was already the wait of a stop                       |
-| The grace goes in the options of `exec`, beside `timeout`      | An abort signal carries no time, and a later kind gives its own grace with no new operation          |
+| A stop sends `SIGTERM`, waits the grace, then sends `SIGKILL`  | A process gets time to clean up. The `bash` call sets the grace, 10 seconds by default               |
+| The grace goes in `spec` and in the options of `exec`          | An abort signal carries no time, and an adopted process keeps the grace of its own call              |
 | The workstation host holds the timer of the grace              | No channel stays open for the grace, and `SIGKILL` goes only to a command that still runs            |
-| `cancel` waits for the end, up to the grace and 5 seconds      | A cancel gives the final state of a `bash` process, and `stopping` lets a longer grace return early  |
+| `cancel` waits for the end, up to 15 seconds                   | A cancel gives the final state of a `bash` process, and `stopping` lets a longer grace return early  |
 | A command that exits inside the grace reads its exit code      | The code is the command's own answer, and exit 0 says that it cleaned up                             |
 | Code 143 after a stop reads the cause in `stop`                | The `SIGTERM` ended that command, and the command chose no end                                       |
 | The timeout and the backend's deadline stop with the grace too | Every stop takes one path                                                                            |
-| `dispose()` gives each process its grace, all at the same time | A shutdown of the host waits for about one grace for the processes of this run                       |
+| `dispose()` gives each process its full grace, all at once     | A device controller gets the grace that it declared, and the shutdown waits for the longest grace    |
+| No stop waits for an end on the chain of its agent             | A cancel with a grace of 300 seconds holds no later cancel or timeout of the agent                   |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
 start removes the oldest finished processes of the agent that starts it,

@@ -2,11 +2,27 @@
 
 ## Unreleased
 
+**`bash` takes a `grace` for each call.** The new optional parameter `grace`
+is a number of seconds from 1 to 300, 10 by default. A value outside the
+range fails the call with `Invalid`. The table writes `grace` to `spec`,
+so an adopted process keeps the grace of its own call, and a `spec` with no
+`grace` gets 10. `ProcessStatus` gains `grace: number`. `cancel` and
+`workspace.processes.cancel` wait for the end up to the grace, at most 10
+seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
+they give the status `running` with `stopping: true`, and the stop goes on.
+No stop holds the chain of its agent while it waits for the grace, so a
+later cancel or timeout of the agent does not wait for it. `dispose()` still
+waits for the full grace and 5 seconds of each process. The message of the
+workbench for a cancel that did not end now reads `did not end within the
+wait of the stop.` The workstation backend sends one signal channel at a
+time for each SSH client, so overlapping stops stay inside the 10 sessions
+of OpenSSH. No journal body changes.
+
 **`dispose()` stops the processes of one agent at the same time.** Before,
 an agent with 4 processes that ignore `SIGTERM` took about 60 seconds to
 stop. Now the processes of this run stop in about one grace and 5 seconds.
-An adopted process keeps its full stop on the chain of its agent. `cancel`
-and the timeout stop one process at a time, as before.
+An adopted process takes one chain step for each signal, and waits for the
+end outside the chain.
 
 **One function holds the decisions of repository registration.**
 `@ambionframework/workspace/git` exports two new names:

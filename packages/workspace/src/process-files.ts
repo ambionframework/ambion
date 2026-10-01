@@ -41,6 +41,8 @@ export interface ProcessStatus {
 	readonly output: string;
 	/** Seconds the process may run before the table stops it. */
 	readonly timeout: number;
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	readonly grace: number;
 	/** The room of the call that started the process, when it had one. Metadata alone. */
 	readonly room?: string;
 	readonly startedAt: string;
@@ -62,9 +64,14 @@ export interface ProcessSpec {
 	readonly agent: string;
 	readonly command: string;
 	readonly timeout: number;
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	readonly grace: number;
 	readonly room?: string;
 	readonly startedAt: string;
 }
+
+/** The grace of a process whose `spec` names none. */
+export const DEFAULT_GRACE_SECONDS = 10;
 
 /** The directory in each agent's home that holds its processes. */
 export const PROCESSES_DIR = '~/.processes';
@@ -249,15 +256,16 @@ function parseSpec(text: string): ProcessSpec | undefined {
 	try {
 		const spec: unknown = JSON.parse(text);
 		if (typeof spec !== 'object' || spec === null) return undefined;
-		const { handle, agent, command, timeout, startedAt } = spec as Record<string, unknown>;
+		const { handle, agent, command, timeout, startedAt, grace } = spec as Record<string, unknown>;
 		const valid =
 			typeof handle === 'string' &&
 			isHandle(handle) &&
 			typeof agent === 'string' &&
 			typeof command === 'string' &&
 			typeof timeout === 'number' &&
-			typeof startedAt === 'string';
-		return valid ? (spec as ProcessSpec) : undefined;
+			typeof startedAt === 'string' &&
+			(grace === undefined || typeof grace === 'number');
+		return valid ? ({ ...spec, grace: grace ?? DEFAULT_GRACE_SECONDS } as ProcessSpec) : undefined;
 	} catch {
 		return undefined;
 	}
@@ -420,6 +428,7 @@ export function statusOf(files: ProcessFiles, owned: boolean): ProcessStatus {
 		command: spec.command,
 		output: `${files.dir}/out`,
 		timeout: spec.timeout,
+		grace: spec.grace,
 		...(spec.room === undefined ? {} : { room: spec.room }),
 		startedAt: spec.startedAt,
 		...ending,
