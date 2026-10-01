@@ -22,7 +22,7 @@ import { memoryJournals } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { HARNESS_NOTE } from '../src/executor.ts';
+import { RESUMED_NOTE } from '../src/executor.ts';
 import { codex } from '../src/index.ts';
 import { codexOn, hasBinary, MODEL } from './binary.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
@@ -159,7 +159,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(textsOf(first, 'developer').join('\n')).toContain('<skills_instructions>');
 					// Today the part of the seat arrives in the last user message, after the harness note.
 					const prompt = textsOf(first, 'user').at(-1);
-					expect(prompt?.startsWith(HARNESS_NOTE)).toBe(true);
+					expect(prompt?.startsWith(RESUMED_NOTE)).toBe(true);
 					expect(prompt).toContain('Answer in one sentence.');
 					expect(prompt).toContain('Is the plan ready?');
 
@@ -206,7 +206,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(messagesOf(three).slice(0, first.length)).toEqual(first);
 					const delta = textsOf(three as ResponsesRequest, 'user').at(-1);
 					expect(delta).toContain('Also name the owner.');
-					expect(delta?.startsWith(HARNESS_NOTE)).toBe(false);
+					expect(delta?.startsWith(RESUMED_NOTE)).toBe(false);
 				} finally {
 					await on.close();
 				}
