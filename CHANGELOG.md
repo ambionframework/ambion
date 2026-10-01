@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Three types, one method, and two fields change name.**
+`@ambionframework/simulator` exports `Simulation` and `SimulationExchange`
+in place of `Run` and `RunExchange`. A run now means one run of a room over
+its journal. `@ambionframework/ambion` exports `TracedStep` in place of
+`TraceRecord`, and the parameter of `TraceLogger` is `traced`.
+`AuditLog.record` of `@ambionframework/workspace` is `append`, the name that
+`WorkspaceLog.append` has for the same act. `RoomProjection.record` and
+`OwedFacts.record` are `summaryFacts`, because a record is the messages
+that participants read. The internal constant `DEFAULT_TRACE` is
+`DEFAULT_TRACE_POLICY`. No journal body changes.
 **A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
 person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
 now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
