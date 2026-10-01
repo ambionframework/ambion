@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
+person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
+now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
+The read field `scheduled` and the tool `schedule` already used the new name.
+This renames the one remaining shape and adds no shape. The journal and the
+golden journals do not change.
+
 **`View` names only what a seat receives, and a read position is `through`
 or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
 that the `exchange_closed` event carries, is now `ExchangeRange`.

@@ -6,13 +6,13 @@ import { captureHuman } from '../src/define.ts';
 import { renderRecord } from '../src/execution/render.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
+	awaitingFor,
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
 	isSpoken,
 	type Message,
-	pendingFor,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -1155,14 +1155,14 @@ describe('a summary for each person who spoke', () => {
 		if (changed?.status === 'closed' && changed.summary.status === 'published')
 			(changed.summary.summary as { text: string }).text = 'changed';
 		expect((await session.read()).exchanges).toEqual(before.exchanges);
-		const pending = pendingFor(await session.read(), 'sam');
+		const pending = awaitingFor(await session.read(), 'sam');
 		expect(pending).toHaveLength(1);
 		expect(pending[0]?.outcome).toEqual({ kind: 'awaiting', person: 'sam' });
-		expect(pendingFor(await session.read(), 'priya')).toEqual([]);
+		expect(awaitingFor(await session.read(), 'priya')).toEqual([]);
 
 		await session.stop();
 		const after = await readRoom(session.name, { runtime });
 		expect(after.exchanges).toEqual(before.exchanges);
-		expect(pendingFor(after, 'sam')).toHaveLength(1);
+		expect(awaitingFor(after, 'sam')).toHaveLength(1);
 	});
 });

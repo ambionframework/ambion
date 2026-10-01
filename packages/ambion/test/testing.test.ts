@@ -22,9 +22,9 @@ import {
 	callTool,
 	fakeClock,
 	isClosing,
-	later,
 	quiet,
 	type Script,
+	schedule,
 	scripted,
 	scriptedExecutor,
 	settled,
@@ -253,7 +253,7 @@ describe('scriptedExecutor', () => {
 		const session = open(
 			scriptedExecutor(
 				(_step, _seat, call) =>
-					call === 1 ? speak('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
+					call === 1 ? speak('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);
@@ -308,7 +308,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => later('Again.', 60), agent('a')));
+		const session = open(scriptedExecutor(() => schedule('Again.', 60), agent('a')));
 		await expect(session.pass(input(closing))).resolves.toMatchObject({
 			failed: true,
 			cause: 'transient',

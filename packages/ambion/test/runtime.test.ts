@@ -84,7 +84,7 @@ describe('createRuntime', () => {
 			{ schedule: { minAfter: 600, maxAfter: 60 } },
 			/limits.schedule.maxAfter/,
 		],
-		['no pending says', { schedule: { pending: 0 } }, /limits.schedule.pending/],
+		['no scheduled says', { schedule: { pending: 0 } }, /limits.schedule.pending/],
 	])('refuses %s', (_, limits, error) => {
 		expect(() => createRuntime({ limits })).toThrow(error);
 	});

@@ -84,7 +84,7 @@ export type Pass = PassInput & {
 	 * the reminders of the tool bundles. A later pass reads the delta after
 	 * the `after` of its input. The argument `after` names the position that
 	 * a resumed harness session read through: the first pass of a respond
-	 * activation then reads the reminders, the pending says, and the delta
+	 * activation then reads the reminders, the scheduled says, and the delta
 	 * after it. It gives nothing when no message is new, and the core then
 	 * counts the view read.
 	 */

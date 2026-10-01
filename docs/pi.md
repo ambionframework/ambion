@@ -466,7 +466,7 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 `@ambionframework/pi/testing` exports `scripted`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
+`@ambionframework/ambion/testing`: `speak`, `callTool`, `schedule`, `seat`,
 `quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
 `Models` collection, which holds the model of the seat under its provider
 and id.

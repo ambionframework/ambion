@@ -9,7 +9,7 @@
  */
 
 import type { Body } from '../journal/journal.ts';
-import type { PendingSay, ScheduleLimits } from '../scheduling.ts';
+import type { ScheduledSay, ScheduleLimits } from '../scheduling.ts';
 import type { Message, PostedMessage, Seq } from '../types.ts';
 
 /** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
@@ -31,7 +31,7 @@ export function changesScheduled(message: Message): boolean {
 }
 
 /** The list after one message. */
-export function scheduleStep(list: readonly PendingSay[], message: Message): PendingSay[] {
+export function scheduleStep(list: readonly ScheduledSay[], message: Message): ScheduledSay[] {
 	if (returnsSay(message)) return list.filter((say) => say.seq !== message.returns);
 	if (message.kind === 'dismissed') return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
@@ -49,7 +49,7 @@ export function scheduleStep(list: readonly PendingSay[], message: Message): Pen
 }
 
 /** When a say is due, in milliseconds on the wall clock. */
-export const returnsAt = (say: PendingSay): number => Date.parse(say.due);
+export const returnsAt = (say: ScheduledSay): number => Date.parse(say.due);
 
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */
 const UNBOUNDED: ScheduleLimits = {
@@ -63,7 +63,7 @@ const UNBOUNDED: ScheduleLimits = {
  * author, within the bounds.
  */
 export function scheduleRefusal(
-	list: readonly PendingSay[],
+	list: readonly ScheduledSay[],
 	seat: string,
 	intent: { to?: string; after?: number },
 	schedule: ScheduleLimits = UNBOUNDED,
@@ -85,7 +85,7 @@ export function scheduleRefusal(
  * roster. A say of a seat off the roster waits for the seat to return.
  */
 export function returnable(
-	say: PendingSay,
+	say: ScheduledSay,
 	roster: readonly { readonly name: string }[],
 	now: number,
 ): boolean {
@@ -98,7 +98,7 @@ export function returnable(
  * say finds it gone.
  */
 export function returning(
-	list: readonly PendingSay[],
+	list: readonly ScheduledSay[],
 	roster: readonly { readonly name: string }[],
 	seq: Seq,
 	now: number,
@@ -116,13 +116,13 @@ export function returning(
 }
 
 /**
- * What a dismissal of one scheduled say does. A seat dismisses its own pending
- * say, and the host, with no seat, any pending say. A say that no longer
+ * What a dismissal of one scheduled say does. A seat dismisses its own scheduled
+ * say, and the host, with no seat, any scheduled say. A say that no longer
  * waits is `unchanged`, so a retry reads the same answer. Any other seq
  * of a seat gets a refusal.
  */
 export function dismissal(
-	list: readonly PendingSay[],
+	list: readonly ScheduledSay[],
 	messages: readonly Message[],
 	seat: string | undefined,
 	seq: Seq,

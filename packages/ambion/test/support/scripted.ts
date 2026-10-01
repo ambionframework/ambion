@@ -10,7 +10,7 @@ export {
 	toolNames,
 	toolResultTexts,
 } from '../../../pi/src/testing.ts';
-export { byAgent, callTool, later, quiet, seat, speak } from '../../src/testing.ts';
+export { byAgent, callTool, quiet, schedule, seat, speak } from '../../src/testing.ts';
 
 // Closing publications use the same model tool as ordinary speech.
 export const summarise = (text: string) => speak(text);

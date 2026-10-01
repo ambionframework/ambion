@@ -28,7 +28,7 @@ export function attentionOf(
 	approvals: readonly Approval[],
 ): string[] {
 	if (!view || !person) return [];
-	// `pendingFor` reads a `RoomRead`, and the host view overrides `goal`, so filter here.
+	// `awaitingFor` reads a `RoomRead`, and the host view overrides `goal`, so filter here.
 	const replies = view.exchanges
 		.filter(
 			(exchange) =>

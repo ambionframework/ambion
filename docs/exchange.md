@@ -139,9 +139,9 @@ after the close of the same pass.
   604,800 by default, and holds at most `pending` says of one seat, 4 by
   default.
 
-**The agent sees its pending says.** The schedule result names the say by
+**The agent sees its scheduled says.** The schedule result names the say by
 its seq, as the record shows it: `scheduled #41: the room wakes you with this
-message at <time>`. The view of each response activation carries the pending
+message at <time>`. The view of each response activation carries the scheduled
 says of the seat in `scheduled`, and the render lists each one with its seq,
 its due time, its text, and its refs. A continued Pi session reads the list
 beside the delta. A closing activation reads none.
@@ -152,16 +152,16 @@ out writes no unseating, so its says wait until the seat is on the roster
 again. A read lists the says that wait in `scheduled`.
 
 **The agent or the host dismisses a say.** A correction to long work can make
-a pending say wrong, and its text is fixed. The `dismiss` tool takes the
-seq of a pending say as `message`, and the room writes a `dismissed` entry
+a scheduled say wrong, and its text is fixed. The `dismiss` tool takes the
+seq of a scheduled say as `message`, and the room writes a `dismissed` entry
 `{ from, message }`. The entry wakes nobody. The fold drops the say, so it
 frees its place under `pending`.
 
-- A seat dismisses its own pending say, from a response activation. The
+- A seat dismisses its own scheduled say, from a response activation. The
   seq of another seat's say, or of no scheduled say, gets a refusal.
 - A dismissal of a say that returned or that the seat dismissed already
   changes nothing. The tool result says that the say no longer waits.
-- The host dismisses any pending say with `room.dismiss(seq)`. The entry
+- The host dismisses any scheduled say with `room.dismiss(seq)`. The entry
   has no `from`. The call returns `true` when it writes the entry and
   `false` when the say no longer waits.
 - A dismissal and the due time race through the journal. The entry that
@@ -295,9 +295,9 @@ the same outcome. The first case that holds wins:
 A message to the author of the opening message is the answer to that
 person's question, so it never makes an exchange `awaiting`. A returned say
 has no author, so in its exchange each message to a person can make it
-`awaiting`. `pendingFor` then lists what the work of a returned say needs of
+`awaiting`. `awaitingFor` then lists what the work of a returned say needs of
 that person. `awaiting` carries the `person`. It clears when
-that person speaks. `pendingFor(read, person)` returns the closed exchanges
+that person speaks. `awaitingFor(read, person)` returns the closed exchanges
 of a room read that await one person. A failed summary reads
 through `summary`, not `outcome`. The verified rule `exchangeOutcome` fixes the
 order.
@@ -348,7 +348,7 @@ of `waitForClose()` before `waitForSummary()`. Replay and storage variants are i
 covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
 presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
 [`exchange-outcome.test.ts`](../packages/ambion/test/exchange-outcome.test.ts)
-checks the outcome order, the `awaiting` clearing, and `pendingFor`.
+checks the outcome order, the `awaiting` clearing, and `awaitingFor`.
 [`scheduled-say.test.ts`](../packages/ambion/test/scheduled-say.test.ts)
 checks a scheduled say: the close while it waits, the returned say on the
 room's alarm, the exchange it opens, and one return after a stop or a crash.

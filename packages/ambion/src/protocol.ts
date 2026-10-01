@@ -13,7 +13,7 @@
  * lease the room ended.
  */
 
-import type { PendingSay } from './scheduling.ts';
+import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipantInfo,
 	EndReason,
@@ -108,7 +108,7 @@ export interface CollaborationContext {
 	 * The says of this seat that wait to return, for a response. The seq of
 	 * each names it. Absent when none waits.
 	 */
-	readonly scheduled?: readonly PendingSay[];
+	readonly scheduled?: readonly ScheduledSay[];
 	/**
 	 * How many messages of the record this activation may read lie below the
 	 * first one in `messages`. The room reports it when the cap or the token
