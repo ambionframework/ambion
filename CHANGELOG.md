@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**The journal reads only the format this release writes.**
+A journal that an earlier release wrote is not supported, and the journal
+adds no reader for it. Two promises of `docs/durability.md` go, and a host
+with an older journal sees no error from either:
+
+- **The body schemas no longer refuse the fields of earlier releases.**
+  `said.owner`, `close.owner`, `close.cancelled`, `run.format`, and
+  `cancel.close` met the refusal `expected no such field; an earlier
+  release wrote it`. A body schema now accepts them as any extra field.
+  The room does not read `close.owner`, `run.format`, or `cancel.close`. A
+  `said` entry keeps `owner` as an extra field of its message. A `close`
+  entry with `cancelled: true` reads as a cancelled close, because the
+  fold takes a `close` body as written.
+- **The journal no longer promises to read a key with no prefix from an
+  older journal.** A delivery key starts with `delivery:`, a commit key
+  with `commit:`, and a post key with `post:`. A presence key and a cancel
+  key carry no prefix, and the room reads them as written.
+
+A stored entry with no `run` stays readable. A journal that opens with no
+run reads and writes such entries.
+
 **The audit log names its threshold `rotateBytes`.**
 `AuditLogOptions.maxBytes` and `AuditLog.maxBytes` of
 `@ambionframework/workspace` are now `rotateBytes`, the name that

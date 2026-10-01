@@ -66,7 +66,9 @@ export type Entry = Entries<Kind, Bodies>;
  */
 export type KeySpace = 'delivery' | 'commit' | 'post';
 export const spaced = (space: KeySpace, key: string): string => `${space}:${key}`;
-const unspaced = (key: string): string => key.replace(/^(?:delivery|commit|post):/, '');
+/** The prefix of a spaced key. A presence key and a cancel key carry none. */
+export const SPACE_PREFIX = /^(?:delivery|commit|post):/;
+const unspaced = (key: string): string => key.replace(SPACE_PREFIX, '');
 
 /** One record entry as the room reads it: the body, joined to its envelope. */
 export const placed = (entry: Envelope<Bodies['message']>): Message =>

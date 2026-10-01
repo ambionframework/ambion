@@ -48,7 +48,7 @@ async function faulty(label: string, wrap = (journals: JournalOpener) => journal
 describe('key spaces', () => {
 	it.each([
 		['a tagged key', spaced('delivery', 'k1')],
-		['an untagged key from before key spaces', 'k1'],
+		['a presence key, which carries no space', 'k1'],
 	])('gives the caller its own token back from %s', (_case, key) => {
 		expect(placed({ kind: 'message', seq: 1, key, body: say('one') })).toEqual({
 			...say('one'),

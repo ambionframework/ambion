@@ -21,13 +21,6 @@ const seating = Type.Object(
 	extra,
 );
 const covers = Type.Object({ from: seq, through: seq }, extra);
-/**
- * A field that an earlier release wrote, and that this runtime would misread
- * or drop without a word. A body schema accepts an extra field, so the schema
- * of the body names each such field and refuses it.
- */
-const removed = Type.Optional(Type.Never());
-const REMOVED = 'expected no such field; an earlier release wrote it';
 
 const messageSchemas: Record<string, TSchema> = {
 	said: Type.Object(
@@ -39,8 +32,6 @@ const messageSchemas: Record<string, TSchema> = {
 			text: Type.String(),
 			refs,
 			after: Type.Optional(Type.Integer({ minimum: 1 })),
-			// An exchange has no owner, so a scheduled say names none.
-			owner: removed,
 		},
 		extra,
 	),
@@ -145,15 +136,12 @@ const schemas: Record<Kind, TSchema> = {
 	lease,
 	close: Type.Object(
 		{
-			// An exchange has no owner. `person` names the first person who spoke.
-			owner: removed,
+			// `person` names the first person who spoke.
 			person: Type.Optional(Type.String()),
 			from: seq,
 			through: seq,
 			at: Type.String(),
 			summary: Type.Optional(Type.String()),
-			// Only the room derives a cancelled close, from a cancel entry.
-			cancelled: removed,
 		},
 		extra,
 	),
@@ -167,10 +155,8 @@ const schemas: Record<Kind, TSchema> = {
 		},
 		extra,
 	),
-	// A journal carries no format number.
-	run: Type.Object({ at: Type.String(), format: removed }, extra),
-	// The room derives the close of a cancellation from the cancel entry.
-	cancel: Type.Object({ at: Type.String(), close: removed }, extra),
+	run: Type.Object({ at: Type.String() }, extra),
+	cancel: Type.Object({ at: Type.String() }, extra),
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
@@ -302,10 +288,8 @@ function objectBody(value: unknown): Record<string, unknown> | undefined {
 		: undefined;
 }
 
-/** Only a removed field fails the `not` keyword, so it gets its own reason. */
-function reasonOf(error: { keyword: string; message: string } | undefined): string {
-	if (error === undefined) return 'does not match the stored shape';
-	return error.keyword === 'not' ? REMOVED : error.message;
+function reasonOf(error: { message: string } | undefined): string {
+	return error?.message ?? 'does not match the stored shape';
 }
 
 function instancePath(error: { instancePath: string; keyword: string; params: object }): string {

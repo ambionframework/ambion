@@ -90,7 +90,7 @@ export interface Entry<TBody = unknown> {
 	readonly seq: Seq;
 	/** The idempotency token the commit carried. A repeated token lands once. */
 	readonly key?: string;
-	/** The run that wrote it, or nothing from before runs were fenced. */
+	/** The run that wrote it, or nothing when a journal with no run wrote it. */
 	readonly run?: string;
 }
 
@@ -345,8 +345,8 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	 * entry moves the fence to its run: this journal's own entry marks it
 	 * fenced, and one of another run past that supersedes it, once. Any
 	 * other entry is cached unless the fence voids it: written by a run other
-	 * than the one whose entry the read passed last. An entry written before
-	 * runs were fenced belongs to whatever run stood.
+	 * than the one whose entry the read passed last. An entry with no run
+	 * belongs to whatever run stood.
 	 */
 	private take(entry: Entries<TKind, TBodies>, written: string | undefined): void {
 		const passed: Passed = fenceStep(this.fence, this.run, entry.kind === this.words.run, written);
