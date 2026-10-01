@@ -112,11 +112,11 @@ export function seatExecution(): Execution<AgentRunner> {
 /** The host of a seat object: the system clock, and the worker's limits and logger. */
 export function seatHost(): ExecutionHost {
 	const { limits, logger } = configured();
-	const runtime = createRuntime({ ...(limits === undefined ? {} : { limits }) });
+	const hosting = hostingOf(createRuntime({ ...(limits === undefined ? {} : { limits }) }));
 	return {
-		clock: runtime.clock,
-		storage: runtime.storage,
-		limits: hostingOf(runtime).limits,
+		clock: hosting.clock,
+		storage: hosting.storage,
+		limits: hosting.limits,
 		...(logger === undefined ? {} : { logger }),
 	};
 }

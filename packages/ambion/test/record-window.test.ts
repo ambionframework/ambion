@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
-import { createRuntime, roomRuntime, tokenWindowOf } from '../src/host/runtime.ts';
+import { createRuntime, runtimeStateOf, tokenWindowOf } from '../src/host/runtime.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import type { RoomState } from '../src/room/fold.ts';
@@ -101,9 +101,8 @@ function wideState(): RoomState {
 const wide = wideState();
 
 /** A runtime whose registry holds `chars`: one token per character, so a limit reads as a length. */
-const runtime = roomRuntime(
+const runtime = runtimeStateOf(
 	createRuntime({ estimators: { chars: (text: string) => text.length } }),
-	'window',
 );
 const chars = 'chars';
 

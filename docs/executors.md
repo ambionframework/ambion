@@ -198,7 +198,7 @@ internal. Participant views omit `sessionId`.
 | `AgentRunner`      | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
 | `defineExecution`  | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
 | `localExecution`   | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
-| `hostingOf`        | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
+| `hostingOf`        | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
 | `visitOf`          | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor` | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
 | `Executor`         | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |

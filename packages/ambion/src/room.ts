@@ -4,19 +4,13 @@ import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
 import { route } from './execution/route.ts';
 import {
-	defaultConnectors,
 	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
-	executionHostOf,
 	executionsOf,
-	hostingOf,
-	type RoomRuntime,
 	type Runtime,
-	registeredRoom,
-	registerRoom,
-	releaseRoom,
-	roomRuntime,
+	type RuntimeState,
+	runtimeStateOf,
 	tokenWindowOf,
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
@@ -83,29 +77,29 @@ export interface ResumeRoomOptions {
  * people and its record.
  */
 function connectorFor(
-	runtime: Runtime,
+	state: RuntimeState,
 	own: Execution | readonly Execution[] | undefined,
 ): ExecutionConnector {
 	return route({
-		executions: [...executionsOf(own), ...hostingOf(runtime).executions],
-		host: executionHostOf(runtime),
-		built: defaultConnectors(runtime),
+		executions: [...executionsOf(own), ...state.executions],
+		host: state,
+		built: state.defaults,
 	});
 }
 
 export function startRoom(options: StartRoomOptions): Promise<Room> {
-	return acquire(options.name, options, (hosted, connector) => {
+	return acquire(options.name, options, (state, connector) => {
 		const cast = composeFrom(options);
-		assertEstimators(cast.definitions, hosted);
-		return RoomHost.start(options.name, hosted, cast, connector);
+		assertEstimators(cast.definitions, state);
+		return RoomHost.start(options.name, state, cast, connector);
 	});
 }
 
 export function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
-	return acquire(name, options, (hosted, connector) => {
+	return acquire(name, options, (state, connector) => {
 		const bindings = definitionsOf(options.agents);
-		assertEstimators(bindings.values(), hosted);
-		return RoomHost.resume(name, hosted, bindings, connector);
+		assertEstimators(bindings.values(), state);
+		return RoomHost.resume(name, state, bindings, connector);
 	});
 }
 
@@ -118,17 +112,17 @@ export function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Ro
 async function acquire(
 	name: string,
 	options: Pick<StartRoomOptions, 'runtime' | 'execution'>,
-	open: (hosted: RoomRuntime, connector: ExecutionConnector) => RoomHost,
+	open: (state: RuntimeState, connector: ExecutionConnector) => RoomHost,
 ): Promise<Room> {
 	assertRoomName(name);
-	const runtime = options.runtime ?? defaultRuntime();
-	assertFree(runtime, name);
-	const room = open(roomRuntime(runtime, name), connectorFor(runtime, options.execution));
-	registerRoom(runtime, room);
+	const state = runtimeStateOf(options.runtime ?? defaultRuntime());
+	assertFree(state, name);
+	const room = open(state, connectorFor(state, options.execution));
+	state.running.set(room.name, room);
 	try {
 		await room.started();
 	} catch (error) {
-		releaseRoom(runtime, room.name, room);
+		state.release(room.name, room);
 		throw error;
 	}
 	return room;
@@ -150,16 +144,16 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	const messages = captureMessageSelection(options.messages);
-	const live = registeredRoom(runtime, name);
+	const state = runtimeStateOf(runtime);
+	const live = state.running.get(name);
 	if (live instanceof RoomHost) return live.read({ messages });
-	const hosting = hostingOf(runtime);
-	const journal = roomJournal(hosting.journals.open(name));
+	const journal = roomJournal(state.journals.open(name));
 	await journal.ready;
 	await journal.settled();
 	return readView(
 		name,
-		projectState(replay(journal.entries, hosting.limits.activation)),
-		runtime.clock.now(),
+		projectState(replay(journal.entries, state.limits.activation)),
+		state.clock.now(),
 		journal.lastSeq,
 		messages,
 	);
@@ -194,8 +188,8 @@ export async function readExchange(
 	};
 }
 
-function assertFree(runtime: Runtime, name: string): void {
-	if (registeredRoom(runtime, name) !== undefined)
+function assertFree(state: RuntimeState, name: string): void {
+	if (state.running.has(name))
 		throw new AmbionError(
 			'room_running',
 			`Room '${name}' is already running: stop it before starting it again.`,
@@ -207,8 +201,8 @@ function assertFree(runtime: Runtime, name: string): void {
  * room checks when a run starts, the first point where the definition and the
  * registry meet, so a wrong name fails the start and never an activation.
  */
-function assertEstimators(definitions: Iterable<AgentDefinition>, runtime: RoomRuntime): void {
-	for (const agent of definitions) tokenWindowOf(agent, runtime);
+function assertEstimators(definitions: Iterable<AgentDefinition>, state: RuntimeState): void {
+	for (const agent of definitions) tokenWindowOf(agent, state);
 }
 
 function composeFrom(options: StartRoomOptions): CompositionDraft {

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { decodeActivationId } from '../src/activation-id.ts';
 import { speakOnce } from '../src/conformance.ts';
-import { executionHostOf, runningRoom } from '../src/host/runtime.ts';
+import { runningRoom } from '../src/host/runtime.ts';
 import {
 	type ExecutionEvent,
 	hostingOf,
@@ -407,7 +407,7 @@ describe('a lease', () => {
 		const events: ExecutionEvent[] = [];
 		const runner = (room: RoomProtocol) =>
 			localExecution('recover', () => () => speakOnce())
-				.connector(executionHostOf(runtime))
+				.connector(hostingOf(runtime))
 				.connect(room, {
 					room: session.name,
 					seat: solo.name,

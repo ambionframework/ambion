@@ -7,7 +7,7 @@
  */
 
 import { AmbionError } from '../errors.ts';
-import type { RoomRuntime } from '../host/runtime.ts';
+import type { RuntimeState } from '../host/runtime.ts';
 import type { Composition } from '../journal/events.ts';
 import type { Kind, RoomJournal } from '../journal/journal.ts';
 import type { RoomState } from '../room/fold.ts';
@@ -25,7 +25,7 @@ import type { CompositionDraft } from './room.ts';
 /** What every mechanism needs of the room. */
 export interface RoomBase {
 	readonly name: string;
-	readonly runtime: RoomRuntime;
+	readonly runtime: RuntimeState;
 	readonly journal: RoomJournal;
 	/** The replay, the composition on the journal, and the first reconcile. Every operation waits here. */
 	readonly ready: Promise<void>;

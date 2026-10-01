@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Seventeen reductions have landed.** `pnpm check` passes on them, and the
+**Eighteen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -51,6 +51,7 @@ changelog names each change to an export and to a behavior.
 | One scripted test language (E7)             | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
 | One copy of each small rule (W9)            | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
 | The journal reads its own format (K1)       | Five refusal guards of earlier releases, the bare-key promise            | `journal/validate.ts`, `durability.md`   |
+| One runtime state, nested views (K2)        | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -73,7 +74,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | ID  | Finding                                                                            | Evidence                                                                                                 | Removes | Conf.  | Rank |
 | --- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
 | K1  | Readers of older formats remain, which CLAUDE.md forbids (done)                    | Bare keys (`durability.md:272`), `removed` fields (`validate.ts:29`), run-less entries (`journal.ts:93`) | 3       | High   | 9    |
-| K2  | One runtime has five facets                                                        | `Runtime`, `ExecutionHost`, `Hosting`, `RuntimeState`, `RoomRuntime` (`runtime.ts:53-249`)               | 3       | High   | 9    |
+| K2  | One runtime has five facets (done)                                                 | `Runtime`, `ExecutionHost`, `Hosting`, `RuntimeState`, `RoomRuntime` (`runtime.ts:53-249`)               | 3       | High   | 9    |
 | K3  | The commit result has two forms                                                    | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
 | K5  | Usage addition exists three times                                                  | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |

@@ -5,12 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { type PortHarness, portConformance, speakOnce } from '../src/conformance.ts';
-import { executionHostOf } from '../src/host/runtime.ts';
-import { type Execution, localExecution } from '../src/hosting.ts';
+import { type Execution, hostingOf, localExecution } from '../src/hosting.ts';
 import { createRuntime, defineAgent } from '../src/index.ts';
 import { serializing } from './support/ports.ts';
 
-const host = executionHostOf(createRuntime({ limits: { call: { attempts: 2, timeout: 1_000 } } }));
+const host = hostingOf(createRuntime({ limits: { call: { attempts: 2, timeout: 1_000 } } }));
 
 const harnessOver = (execution: Execution): PortHarness => ({
 	connect: async (room, names) =>
