@@ -168,7 +168,10 @@ export function codexExecutorHarness(): ExecutorHarness {
 			const options: CodexExecutorOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
-					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
+					? {
+							env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' },
+							login: false as const,
+						}
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
 			};

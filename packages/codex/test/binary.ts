@@ -1,14 +1,20 @@
 /**
- * The real `codex` binary on a scripted model. `codexOn` writes a Codex
- * home that routes the model provider to a scripted Responses endpoint,
- * and builds the execution that runs the binary with a minimal environment.
+ * The real `codex` binary on a scripted model. `codexOn` gives the
+ * execution a Codex home that routes the model provider to a scripted
+ * Responses endpoint. The environment of the binary holds a host home with
+ * traps: a config that spawns a server and reroutes the provider, and an
+ * instructions file. A seat that reads the host home shows it.
  */
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Execution } from '@ambionframework/ambion';
 import { codexExecution } from '../src/index.ts';
+import type { CodexExecutionOptions } from '../src/options.ts';
 import {
 	type OnRequest,
 	type Reply,
@@ -45,7 +51,7 @@ function bundledBinary(): string | undefined {
 export const hasBinary = bundledBinary() !== undefined;
 
 /** The config of a Codex home that sends every model request to `url`. */
-export function homeConfig(url: string): string {
+export function homeConfig(url: string, signIn = false): string {
 	return [
 		'model_provider = "scripted"',
 		'check_for_update_on_startup = false',
@@ -54,44 +60,138 @@ export function homeConfig(url: string): string {
 		'name = "scripted"',
 		`base_url = "${url}"`,
 		'wire_api = "responses"',
-		`env_key = "${DUMMY_KEY_VAR}"`,
+		signIn ? 'requires_openai_auth = true' : `env_key = "${DUMMY_KEY_VAR}"`,
 		'',
 	].join('\n');
+}
+
+/** A text no seat may read. The instructions file of the host holds it. */
+export const HOST_MARKER = 'HOST-INSTRUCTIONS-MARKER-7f3a91';
+
+/** The config of the host user. Each line would change a seat that read it. */
+function hostConfig(spawned: string): string {
+	const spawn = `require('node:fs').writeFileSync(${JSON.stringify(spawned)}, 'spawned')`;
+	return [
+		'model_provider = "dead"',
+		'',
+		'[model_providers.dead]',
+		'name = "dead"',
+		'base_url = "http://127.0.0.1:1/v1"',
+		'wire_api = "responses"',
+		`env_key = "${DUMMY_KEY_VAR}"`,
+		'',
+		'[mcp_servers.leak]',
+		`command = ${JSON.stringify(process.execPath)}`,
+		`args = ${JSON.stringify(['-e', spawn])}`,
+		'',
+	].join('\n');
+}
+
+/** A proxy that records and refuses every connection. The binary reaches the network only through it. */
+async function refusingProxy(): Promise<{ seen: string[]; url: string; close(): Promise<void> }> {
+	const seen: string[] = [];
+	const server = createServer((request, response) => {
+		seen.push(`${request.method} ${request.url}`);
+		response.writeHead(403).end();
+	});
+	server.on('connect', (request, socket) => {
+		seen.push(`CONNECT ${request.url}`);
+		socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+	});
+	await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+	const { port } = server.address() as AddressInfo;
+	return {
+		seen,
+		url: `http://127.0.0.1:${port}`,
+		close: () =>
+			new Promise<void>((resolve) => {
+				server.closeAllConnections();
+				server.close(() => resolve());
+			}),
+	};
+}
+
+/** The text of an `auth.json` for a sign-in with the API key `key`. */
+export function apiKeyLogin(key: string): string {
+	return JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: key });
+}
+
+/** What a run of the binary needs besides the script. */
+export interface CodexOnOptions {
+	/** The runtime of the execution. It overrides the defaults: `home`, `login`, and `env`. */
+	readonly runtime?: CodexExecutionOptions;
+	/** The text of the login file of the host user, written as `.codex/auth.json` in the host home. */
+	readonly hostLogin?: string;
+	/** Whether the provider takes the sign-in of the home and not the dummy key. */
+	readonly signIn?: boolean;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
 export interface CodexOnScript {
 	readonly execution: Execution;
 	readonly responses: ScriptedResponses;
-	/** The Codex home of the run. */
+	/** The Codex home of the seats. */
 	readonly home: string;
+	/** The home of the host user. Its `.codex` holds the traps. */
+	readonly hostHome: string;
+	/** Whether the server in the config of the host started. */
+	readonly leaked: () => boolean;
+	/** The connections that the binary tried outside the loopback interface. */
+	readonly outbound: readonly string[];
 	close(): Promise<void>;
 }
 
 /**
- * Run the real binary against the script. The environment holds `PATH`, a
- * home in a temporary directory, and the dummy key. It holds nothing of the
- * host, so no real sign-in or key reaches the binary.
+ * Run the real binary against the script. The environment holds `PATH`, the
+ * host home as `HOME` and `CODEX_HOME`, a proxy that refuses every outbound connection, and
+ * the dummy key. The Codex home of the seats holds the scripted config.
  */
 export async function codexOn(
 	script: readonly Reply[],
 	onRequest?: OnRequest,
+	options: CodexOnOptions = {},
 ): Promise<CodexOnScript> {
 	const responses = await scriptedResponses(script, onRequest);
+	const proxy = await refusingProxy();
 	const dir = mkdtempSync(join(tmpdir(), 'ambion-codex-binary-'));
-	writeFileSync(join(dir, 'config.toml'), homeConfig(responses.url));
+	const hostHome = join(dir, 'host');
+	const spawned = join(dir, 'leak-spawned');
+	mkdirSync(join(hostHome, '.codex'), { recursive: true });
+	writeFileSync(join(hostHome, '.codex', 'config.toml'), hostConfig(spawned));
+	writeFileSync(join(hostHome, '.codex', 'AGENTS.md'), `${HOST_MARKER}\n`);
+	if (options.hostLogin !== undefined) {
+		writeFileSync(join(hostHome, '.codex', 'auth.json'), options.hostLogin);
+	}
+	const home = options.runtime?.home ?? join(dir, 'seats');
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, 'config.toml'), homeConfig(responses.url, options.signIn));
 	const env = {
 		PATH: process.env.PATH,
-		HOME: dir,
-		CODEX_HOME: dir,
+		HOME: hostHome,
+		// The host names its Codex home. The binary never gets this value.
+		CODEX_HOME: join(hostHome, '.codex'),
 		[DUMMY_KEY_VAR]: 'dummy-key-for-the-scripted-endpoint',
+		HTTP_PROXY: proxy.url,
+		HTTPS_PROXY: proxy.url,
+		ALL_PROXY: proxy.url,
+		NO_PROXY: '127.0.0.1,localhost',
 	};
 	return {
-		execution: codexExecution({ env }),
+		// With a host login, the default `login` links it. Otherwise no seat links a login.
+		execution: codexExecution({
+			env,
+			...(options.hostLogin === undefined ? { login: false } : {}),
+			...options.runtime,
+			home,
+		}),
 		responses,
-		home: dir,
+		home,
+		hostHome,
+		leaked: () => existsSync(spawned),
+		outbound: proxy.seen,
 		close: async () => {
 			await responses.close();
+			await proxy.close();
 			rmSync(dir, { recursive: true, force: true });
 		},
 	};

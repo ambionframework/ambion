@@ -7,6 +7,9 @@
  * Some assertions state what Codex does today, and a later change flips
  * them. Each one carries a comment that starts with "Today".
  */
+
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import {
 	createRuntime,
 	defineAgent,
@@ -24,7 +27,7 @@ import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { HARNESS_NOTE } from '../src/executor.ts';
 import { codex } from '../src/index.ts';
-import { codexOn, hasBinary, MODEL } from './binary.ts';
+import { apiKeyLogin, codexOn, HOST_MARKER, hasBinary, MODEL } from './binary.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
 
 /** How long a test may take. The binary starts in about a second, and a loaded host takes longer. */
@@ -170,6 +173,46 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					]);
 					expect(JSON.stringify(second.input.at(-1))).toContain('said #');
 					expect(on.responses.others).toEqual([]);
+
+					// The seat runs in its own home. The config and the instructions of the host user
+					// reach it nowhere: the provider is not rerouted, the server of the host never starts,
+					// and the instructions of the host appear in no request.
+					expect(on.leaked()).toBe(false);
+					expect(JSON.stringify(on.responses.requests)).not.toContain(HOST_MARKER);
+					expect(on.outbound).toEqual([]);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'runs on the login of the host through a link, and leaves the file as it was',
+			async () => {
+				const key = 'sk-key-of-the-host';
+				const login = apiKeyLogin(key);
+				const on = await codexOn([say('hello room'), { text: 'done' }], undefined, {
+					hostLogin: login,
+					signIn: true,
+				});
+				try {
+					const { visit } = await roomOn(on.execution);
+					const exchange = await visit.send({ text: 'Is the plan ready?' });
+					await exchange.waitForClose();
+
+					// Every request carries the key of the host login.
+					expect(on.responses.requests).toHaveLength(2);
+					const sent = on.responses.headers.map((headers) => headers.authorization);
+					expect(sent).toEqual(sent.map(() => `Bearer ${key}`));
+					// The seat home links the file. The binary did not refresh or rewrite it.
+					const host = join(on.hostHome, '.codex', 'auth.json');
+					const link = join(on.home, 'auth.json');
+					expect(lstatSync(link).isSymbolicLink()).toBe(true);
+					expect(realpathSync(link)).toBe(realpathSync(host));
+					expect(readFileSync(host, 'utf8')).toBe(login);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
 				} finally {
 					await on.close();
 				}
