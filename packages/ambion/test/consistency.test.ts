@@ -37,7 +37,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 
 const OPERATIONS: Operation[] = ['wake', 'steer', 'cut', 'view', 'commit', 'lease'];
@@ -125,7 +125,7 @@ class Cluster {
 	private execution(): Execution {
 		return serializing(
 			faulty(
-				piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+				piExecution({ sessions: 'memory', stream: scriptedStream(this.cast.script) }),
 				this.faults,
 				this.clock,
 			),

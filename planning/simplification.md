@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-two reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                         | Files                                    |
@@ -54,6 +54,8 @@ changelog names each change to an export and to a behavior.
 | One runtime state, nested views (K2)         | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
 | One view of the room host (K16)              | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
 | Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
+| One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
+| One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `processes.ts`, `sensor-connections.ts`  |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -128,7 +130,7 @@ concepts, high confidence.
 | E3  | `Executor.harness` always equals the executor kind (done)                     | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
 | E4  | Pi has three option types for its services (done)                             | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
 | E5  | The kind narrowing and the policy copy are written three times (done in part) | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
-| E6  | A pass carries `tools` and `agentTools` apart                                 | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
+| E6  | A pass carries `tools` and `agentTools` apart (done)                          | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
 | E7  | Two scripted test languages export the same six verbs (done)                  | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
 | E8  | Small helpers repeat (done)                                                   | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
 
@@ -155,7 +157,7 @@ definition runs on different executions in
 | W3  | Two wrappers audit a tool, under two placement rules (done)            | `bindTool`, `recordedOnShell`; 13 tools write their name twice          | 2       | High   | 6    |
 | W4  | Seven conformance suites each have a `check` and a harness type (done) | Five `check` copies; the suites already share `ConformanceCase`         | 3       | High   | 9    |
 | W5  | The sensor path validates at every layer                               | The client and the retention both check the schema and the digest       | 2       | Medium | 4    |
-| W6  | The sensor connections keep a second liveness table                    | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
+| W6  | The sensor connections keep a second liveness table (done)             | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
 | W7  | Two owners close the sensor connections (kept)                         | `workspace.ts:364` and `workspace.ts:517`                               | 0       | High   | —    |
 | W8  | The backends label themselves under four names                         | `database`, `server`, `store`, `hostname`                               | 2       | Medium | 4    |
 | W9  | Refs, logs, and constants repeat (done)                                | See the list below                                                      | 5       | High   | 15   |
@@ -167,9 +169,9 @@ rank counts one concept, but the row fixes a package boundary. CLAUDE.md
 states that `packages/workspace` owns the workspace port. The neutral-file
 import rule of `biome.jsonc` holds it for all five neutral files.
 
-**The owner decided W1: the workspace owns its port.** The work stays in
-phase 3 for its size. Each change before it adds no import of
-`@earendil-works/pi-agent-core`.
+**The owner decided W1: the workspace owns its port.** On 2026-10-01 the
+owner moved it out of phase 3 and into 0.5.0 as [LB8](next.md). Each change before it adds no
+import of `@earendil-works/pi-agent-core`.
 
 **W3 leaves `withSkills` to W2.** `withSkills` copies the skills at the
 first call of an agent. It audits nothing.
@@ -289,8 +291,6 @@ CLAUDE.md requires for a change that merges tests.
 **Phase 3 needs a decision of the owner.** Each item changes a package
 boundary, a stored format, or a promise.
 
-- W1: the workspace owns its port, and the Pi executor adapts it. The
-  owner decided it; the size keeps it in this phase.
 - K1: the journal reads only the current format. It drops the promise of
   `docs/durability.md:272`.
 - K9: the assistant moves beside Pi, and the room option goes.

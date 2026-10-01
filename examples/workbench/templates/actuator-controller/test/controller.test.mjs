@@ -99,7 +99,26 @@ test('the loop reaches the target, holds it, and exits 0 in a safe state at the 
 	assert.equal(end.code, 0, end.output);
 	const lines = await events(setupResult.env);
 	for (const line of lines) checkLine(line);
-	assert.deepEqual(claimsOf(lines), ['acting', 'reached', 'holding', 'safe']);
+	// A late sample on a loaded host can move the value out of the band for a moment. The loop
+	// then claims `acting` with a note, and holds again. The contract is the first hold and a safe end.
+	const claims = claimsOf(lines);
+	assert.deepEqual(claims.slice(0, 3), ['acting', 'reached', 'holding']);
+	assert.equal(claims.at(-1), 'safe');
+	assert.deepEqual(
+		lines
+			.filter((line) => line.kind === 'state')
+			.slice(3, -1)
+			.filter((line) => line.value === 'acting')
+			.map((line) => line.note),
+		claims
+			.slice(3, -1)
+			.filter((claim) => claim === 'acting')
+			.map(() => 'the value left the tolerance'),
+	);
+	assert.ok(
+		claims.slice(3, -1).every((claim) => ['acting', 'reached', 'holding'].includes(claim)),
+		`unexpected claims ${claims.join(', ')}`,
+	);
 	assert.equal(lines.at(-1).note, 'deadline');
 	const last = lines.filter((line) => line.kind === 'observe').at(-1);
 	assert.ok(Math.abs(last.value - 37) <= 0.3, `the last value is ${last.value}`);

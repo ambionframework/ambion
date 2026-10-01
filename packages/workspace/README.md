@@ -27,7 +27,7 @@ environment the backend built for that agent, rooted at
 `/home/<agent name>`. `bash` starts each command as a background process and
 returns its handle, and `drive.processes` lists them for the host; see [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md).
 
-A bash backend with workstation `ports` also adds `connect` and `observe`.
+A bash backend with workstation `endpoints` also adds `connect` and `observe`.
 Connect a running server process, then call `observe({ sensor: 'bench/temperature' })`;
 the result includes a manifest snapshot ref and export paths. Set
 `drive.tools({ images: false })` to receive image paths instead of attachments.

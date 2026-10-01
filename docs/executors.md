@@ -29,7 +29,7 @@ seat that no execution serves fails at once with a `no_execution` error,
 and the failure is permanent. A room with no execution still runs its
 people and its record.
 
-**`defineExecution(kind, build)` defines an executor family.** It returns
+**`defineExecution(kind, build)` defines an executor kind.** It returns
 the function that gives an execution of the kind for a set of options, such
 as `piExecution(options)`. An execution with options serves only the rooms
 and the runtimes that it is passed to, and it changes no default. The call
@@ -44,7 +44,7 @@ of that kind, over its own storage, clock, limits, and logger.
 
 **`localExecution(kind, build)` makes one execution of a kind.** It changes
 no default. `defineExecution` builds each execution with it. A host uses it
-for an execution that is not a family, such as a stub for a kind that is
+for an execution that no package defines, such as a stub for a kind that is
 not available.
 
 ```ts
@@ -107,9 +107,9 @@ that the model consumed input.
 
 **An executor is a function of the activation.** It takes an
 `ExecutorActivation` and returns an `ExecutorSession`. The activation
-holds what serves the whole activation, in these members:
+holds what serves the whole activation, in these properties:
 
-| Member            | What it is                                                                              |
+| Property          | What it is                                                                              |
 | ----------------- | --------------------------------------------------------------------------------------- |
 | `id`              | The activation id.                                                                      |
 | `trace`           | A `StepSink`: its `record(step)` takes the steps that the executor owns.                |
@@ -121,34 +121,33 @@ holds what serves the whole activation, in these members:
 
 **`pass` receives what the core decides for one pass.** `Pass` holds
 `kind`, `view`, and `since` for a delta, as `PassInput` does, and these
-members:
+properties:
 
-| Member          | What it is                                                                                     |
+| Property        | What it is                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
 | `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
 | `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
 | `resume`        | The id of the harness session to resume, when `spec.resume` names the executor kind.           |
-| `tools`         | The room tools that the purpose grants, bound to the activation.                               |
-| `agentTools`    | The tools of the definition in the same form. A closing activation gets none.                  |
+| `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
 
-**The session reports back.** `ExecutorSession` has these members:
+**The session reports back.** `ExecutorSession` has these properties:
 
-| Member                     | What it does                                                                        |
+| Property                   | What it does                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------- |
 | `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
 | `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
 | `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
-| `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the family cannot.                      |
+| `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the executor cannot.                    |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
 **The core records the session under the executor kind.** The release
 records `{ harness, id }`, where `harness` is `definition.executor.kind`,
 such as `pi`. An executor session with no `session` id records none.
 
-**`pass` returns a `PassResult`.** It has these members:
+**`pass` returns a `PassResult`.** It has these fields:
 
-| Member    | What it is                                                                                        |
+| Field     | What it is                                                                                        |
 | --------- | ------------------------------------------------------------------------------------------------- |
 | `failed`  | Whether the pass failed.                                                                          |
 | `cause`   | On failure: `permanent` or `transient`. It tells the room whether a retry can pass.               |
@@ -196,12 +195,12 @@ internal. Participant views omit `sessionId`.
 | `AgentPort`              | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
 | `RoomProtocol`           | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
 | `AgentRunner`            | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
-| `defineExecution`        | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
+| `defineExecution`        | Defines an executor kind: the executions of one kind by options, and the default of the kind                                                                   |
 | `localExecution`         | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
 | `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
 | `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
-| `describeExecutor`       | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
-| `present`, `pickPresent` | The option fields that hold a value, which a family spreads into its executor                                                                                  |
+| `describeExecutor`       | The neutral half of an executor definition, which an executor kind extends with its fields                                                                     |
+| `present`, `pickPresent` | The option fields that hold a value, which an executor kind spreads into its executor                                                                          |
 | `Executor`               | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
@@ -237,7 +236,7 @@ the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
 
 **A definition can replace the speaking policy.** The main entry exports
-`DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
+`DEFAULT_SPEAKING`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
 The core resolves the `reminders` of the bundles once for each respond
 activation, when `record()` has something to send. Each reminder has 5
@@ -249,10 +248,10 @@ bundle bounds the length of its own text.
 ## How an activation runs
 
 [The prompt the core renders](#the-prompt-the-core-renders) states the
-parts. The adapter page names the placement for its family.
+parts. The adapter page names the placement for its executor kind.
 
 **`readThrough` advances only when the model has consumed a message.** The
-core keeps it. The table below holds for every family. An adapter page
+core keeps it. The table below holds for every executor kind. An adapter page
 names the signal it reads for the first and the last events.
 
 | Event                                                | Who tells the core        | What moves                                                          |
@@ -294,8 +293,8 @@ first `await`. The executor holds a line that its harness cannot take yet,
 delivers it when the harness can, and drops what it holds when `pass`
 settles. It calls `read({ after, through: seq })` when the model consumes
 the line, with the `after` and the `seq` that `steer` received. It records
-no `steer` step. Each family page states the moment its executor calls
-`read`, because the moment differs by family.
+no `steer` step. The guide of each executor kind states the moment its executor calls
+`read`, because the moment differs by kind.
 
 **The room applies the activation token limit.** It keeps the newest
 messages that fit `activationTokenLimit`, and keeps the open exchange
@@ -303,7 +302,7 @@ whole, inside the view it serves. The limit counts record text through the
 estimator that `estimateTokens` names in the registry of the runtime. It
 does not count the system prompt, the tool schemas, or the model output. It
 does not compare with the context window of the model. The rule holds for
-every family, and one view is one call over the wire.
+every executor kind, and one view is one call over the wire.
 [History and limits](room.md#history-and-limits) states the rule.
 
 ## The room tools
@@ -311,19 +310,18 @@ every family, and one view is one call over the wire.
 [Definitions and tools](agent.md#tools) states which tools an ordinary
 activation receives and which tools a closing activation receives.
 
-**The core binds the room tools once, in a form that names no harness.**
-Each family adapts them to its own tool shape.
+**The core binds the tools of the activation once, in a form that names no
+harness.** Each executor kind adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
-  grants. Each `RoomTool` has a `name`, a `description`, TypeBox
+  grants, then the tools of the definition. A closing activation gets the
+  room tools alone. Each `RoomTool` has a `name`, a `description`, TypeBox
   `parameters`, and `run(args, call)`. `call` is the id of the tool call,
-  and the commit takes it as its key. The core binds each tool to the
-  read position and the cut of the activation.
-- **`pass.agentTools`** holds the tools of the definition in the same form.
-  A closing activation gets none. Each call reads the view of the pass
-  that runs it.
+  and the commit takes it as its key. The core binds each room tool to the
+  read position and the cut of the activation. A call of a tool of the
+  definition reads the view of the pass that runs it.
 - **`session.roomTools`** is a `RoomToolOptions` value that adds to a say
-  and to a schedule: `refs` changes the refs it cites, and `spoke` runs
+  and to a schedule: `refs` changes the refs it cites, and `said` runs
   when the room takes an ordinary say or a scheduled say.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
   `ToolContext` of one call of a definition tool, for an executor that
@@ -347,7 +345,7 @@ it.
 tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
 result names the message, as `said #41` or `said #41 to priya`, so the
 agent can cite it. `seat` and `unseat` give `seated surveyor (#42)`, and a
-membership the record already holds gives `surveyor is already seated`.
+seating the record already holds gives `surveyor is already seated`.
 
 **`schedule` commits a `said` intent with `after`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any
@@ -355,14 +353,14 @@ position. It accepts `after`, `text`, and `refs`. The result names the say
 as `#<seq>` and gives the due time, and it lists the `unread` messages of
 the answer.
 
-**`seat` and `unseat` commit a membership intent**, keyed on the tool call
+**`seat` and `unseat` commit a seating intent**, keyed on the tool call
 id.
 
 **`recall` reads and commits nothing.** For each distinct ref of its
 room, it calls `view(id, seq)`. The view of one message applies no window
 and folds no summarised range, so it reaches a message below the window. The
 tool calls neither `acknowledgeThrough` nor `resultExpected`, and every
-family reports it as a tool event.
+executor kind reports it as a tool event.
 
 **The room answer tells the adapter what to do:**
 
@@ -400,9 +398,10 @@ no call took yet, or a fresh id when none waits. A `tool_result` step ends
 its call, so the core drops the id of that call. Each adapter page names
 the transport.
 
-**Pi hosts `pass.tools`, and builds the tools of the definition itself.**
-Claude and Codex host `pass.agentTools`. A `RoomTool` does not carry what
-the Pi harness does with a tool of the definition:
+**Pi hosts the room tools of `pass.tools`, and builds the tools of the
+definition itself.** Claude and Codex host all of `pass.tools`. A
+`RoomTool` does not carry what the Pi harness does with a tool of the
+definition:
 
 - The harness applies `prepareArguments` before it checks the arguments
   against the schema. A `RoomTool` applies it after the check.
@@ -418,7 +417,7 @@ the context that the core gives it.
 ## The step vocabulary
 
 **A step is one thing an activation did.** The vocabulary has ten kinds,
-and every executor family shares it. A step is plain JSON. The trace stamps
+and every executor kind shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
@@ -436,7 +435,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `usage`       | executor    | Tokens and cost.                                                                                   |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
 
-**A family page holds its own mapping table.** [Pi](pi.md#the-step-mapping),
+**Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map
 the events of their harness to these steps.
 
@@ -537,9 +536,9 @@ room does with the cause.
 | Every other error of the executor, such as a lost room call or a lost process                             | `transient` |
 | Every other failure                                                                                       | `transient` |
 
-**One classifier serves every family.** `classifyCause({ text, status })`
+**One classifier serves every executor kind.** `classifyCause({ text, status })`
 from `@ambionframework/ambion/hosting` holds the text set of every provider
-that a shipped family reaches. The patterns are `credit balance`,
+that a shipped executor kind reaches. The patterns are `credit balance`,
 `billing_error`, `usage limit`, `insufficient_quota`, `exceeded your
 current quota`, `authentication_error`, `permission_error`,
 `invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
@@ -572,17 +571,17 @@ that the driver cannot recover from, raises one `error` event with its
 cause. The event carries the `error` of the pass result, or an error built
 from its `message`. No executor raises one.
 
-**Each family brings its own source of a status.**
+**Each executor kind brings its own source of a status.**
 [Pi](pi.md#failure-classification), [Claude](claude.md#failure-classification),
-and [Codex](codex.md#failures) name the status source of each family.
+and [Codex](codex.md#failures) name the status source of each executor kind.
 
 ## The harness matrix
 
-**Three executor families ship today.** Pi, the Claude Agent SDK, and the
+**Three executor kinds ship today.** Pi, the Claude Agent SDK, and the
 Codex SDK implement the contract. The Anthropic SDK tool runner is an
-anticipated family. No package for it exists yet.
+anticipated executor kind. No package for it exists yet.
 
-| Family                    | Package                   | Loop owner | Steer during a pass                 | Status      |
+| Kind                      | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
 | Pi `AgentHarness`         | `@ambionframework/pi`     | Harness    | Yes, through `lane.steer`           | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
@@ -591,7 +590,7 @@ anticipated family. No package for it exists yet.
 
 The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 
-**A family that cannot steer still passes.** Its `readThrough` advances at
+**An executor that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
 core records that line as `consumed: false`. What a
 harness remembers between activations is in [Trust](trust.md).
@@ -599,8 +598,8 @@ harness remembers between activations is in [Trust](trust.md).
 ## How to write an adapter
 
 An adapter is a package that builds an `Execution` and an executor for one
-family. `@ambionframework/claude` is the worked example, and
-`@ambionframework/pi` is the second family.
+executor kind. `@ambionframework/claude` is the worked example, and
+`@ambionframework/pi` is the second.
 
 1. **Implement `Executor` and `ExecutorSession`.** The executor is a
    function that takes the activation and returns a session. Keep the model
@@ -610,8 +609,8 @@ family. `@ambionframework/claude` is the worked example, and
    harness caches them, and send the text of `pass.record()`.
    [The prompt the core renders](#the-prompt-the-core-renders) states the
    parts.
-3. **Host the tools.** Adapt `pass.tools` and `pass.agentTools` to the
-   form the harness needs, and run them where the harness reaches them.
+3. **Host the tools.** Adapt `pass.tools` to the form the harness needs,
+   and run them where the harness reaches them.
    A harness that does more with a tool of the definition can build it
    from its `AmbionTool`, as Pi does.
    [The room tools](#the-room-tools) states the commit key and the room
@@ -636,7 +635,7 @@ family. `@ambionframework/claude` is the worked example, and
    cannot clear, such as a model that the registry does not hold, and
    call `failedPass` for a thrown fault of the executor.
    [Failure classification](#failure-classification) states the shared
-   rule; bring the family's own source of a status.
+   rule; bring the source of a status that the executor kind has.
 7. **Record a session, and resume only the one the pass names.**
    [Exchange continuity](#exchange-continuity) states the recorded session
    and the fresh start. A harness with no session records none.
@@ -645,7 +644,7 @@ family. `@ambionframework/claude` is the worked example, and
    execution. Claude offers `claude()` and `claudeExecution()`. Export the
    result of `defineExecution` as the second function. The call defines the
    default when the package loads, so a room with no `execution` serves the
-   seats of the family.
+   seats of the executor kind.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';

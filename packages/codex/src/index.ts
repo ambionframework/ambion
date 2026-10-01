@@ -7,4 +7,4 @@
 
 export { codexExecution } from './compose.ts';
 export { type CodexExecutor, type CodexOptions, type CodexPolicy, codex } from './define.ts';
-export type { CodexRuntime } from './options.ts';
+export type { CodexExecutionOptions } from './options.ts';

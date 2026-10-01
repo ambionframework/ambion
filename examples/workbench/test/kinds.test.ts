@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { describeUnavailable, keyVariable, seatFamilies } from '../src/families.ts';
+import { describeUnavailable, keyVariable, seatKinds } from '../src/kinds.ts';
 import { buildTimeline } from '../src/timeline.ts';
 import { openHost } from './hosting.ts';
 
-describe('Workbench executor families', () => {
-	it('assigns each seat to a family', () => {
-		expect(seatFamilies).toEqual({
+describe('Workbench executor kinds', () => {
+	it('assigns each seat to an executor kind', () => {
+		expect(seatKinds).toEqual({
 			assistant: 'pi',
 			datasheets: 'pi',
 			design: 'claude',
@@ -13,7 +13,7 @@ describe('Workbench executor families', () => {
 		});
 	});
 
-	it('names the key of each family', () => {
+	it('names the key of each executor kind', () => {
 		expect(keyVariable('pi', {})).toBe('ANTHROPIC_API_KEY');
 		expect(keyVariable('pi', { AMBION_MODEL: 'openai-codex/gpt-5' })).toBe('OPENAI_CODEX_API_KEY');
 		expect(keyVariable('claude', {})).toBe('ANTHROPIC_API_KEY');
@@ -22,7 +22,7 @@ describe('Workbench executor families', () => {
 
 	it('says which seat cannot run and why, and lists only the seats without a key', () => {
 		expect(describeUnavailable({ ANTHROPIC_API_KEY: 'k' })).toEqual([
-			"Seat 'experiments' cannot run: CODEX_API_KEY is not set, and the codex family needs it.",
+			"Seat 'experiments' cannot run: CODEX_API_KEY is not set, and the codex executor needs it.",
 		]);
 		expect(describeUnavailable({ ANTHROPIC_API_KEY: 'k', CODEX_API_KEY: 'k' })).toEqual([]);
 		expect(describeUnavailable({})).toHaveLength(4);

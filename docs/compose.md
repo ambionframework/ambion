@@ -106,7 +106,7 @@ interface LedgerEntry {
 ```
 
 **A failed or cancelled compose call throws.** Its message renders the
-error and the ledger. Every family marks a thrown error as a tool error:
+error and the ledger. Every executor kind marks a thrown error as a tool error:
 Claude and Codex give its message as an error result, and Pi does the
 same. The model then knows which calls completed and which effects can
 stand. The error is a `ToolFailure` whose `details` hold the `ComposeResult`. The ledger never holds the
@@ -171,7 +171,7 @@ policy, as it renders the guidance of every bundle
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_GUIDANCE`. The text follows:
+option replaces `DEFAULT_SPEAKING`. The text follows:
 
 ```text
 compose joins your tools in one call. Put the tools that you use in
@@ -457,7 +457,7 @@ outcome of each call, so code that wants every result uses it.
 **`compose` is a definition tool.** The executor options take a `compose`
 option, beside `tools` and `bundles`. `describeExecutor` flattens the
 tools, then appends `compose` when the option is present. `pi()`,
-`claude()`, and `codex()` each call `describeExecutor`, so every family
+`claude()`, and `codex()` each call `describeExecutor`, so every executor kind
 gets the tool the same way. The frozen executor keeps no `compose` field:
 the tool closes over the option.
 
@@ -471,10 +471,11 @@ uses the TypeBox checks and the step vocabulary, as `define.ts` does, so
 it joins the vocabulary layer. The file list of that layer in
 `biome.jsonc` gains it ([Toolchain](toolchain.md)).
 
-**Every family hosts `compose` as one more tool.** Pi builds its tools
-from the definition. Claude and Codex host `pass.agentTools`, which maps
-the same tools one to one. The `invoke` of `compose` closes over the other
-tools of the definition, and calls each `AmbionTool` directly.
+**Every executor kind hosts `compose` as one more tool.** Pi builds its
+tools from the definition. Claude and Codex host `pass.tools`, which holds
+each tool of the definition as a `RoomTool`. The `invoke` of `compose`
+closes over the other tools of the definition, and calls each
+`AmbionTool` directly.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
 actions in this order:
@@ -509,7 +510,7 @@ step for each nested call, with a `parent` field that holds the call id of
 `compose`. The core raises the tool events from them, as it does for every
 tool.
 
-**Each family supplies `record`.** The hosting export `toolContext` takes
+**Each executor kind supplies `record`.** The hosting export `toolContext` takes
 the step sink of the activation. The core passes it for Claude and Codex.
 `@ambionframework/pi` builds the context of each call itself, so it passes
 `activation.trace` through `toolsFor`. `runAgent` runs outside a room and
@@ -790,8 +791,8 @@ three, so `settled(room)` waits for a deterministic compose call, and a
 test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the
-`ComposeResult`. Items 1 and 6 also run on the live tier of each family
-once.
+`ComposeResult`. Items 1 and 6 also run on the live tier of each executor
+kind once.
 
 1. **The tools compose unchanged.** A seat on each of Pi, Claude, and Codex
    binds `sql` and `snapshot` with the same code. Each nested call keeps
@@ -816,6 +817,6 @@ once.
    processes with `bash` and waits for each. The wall time stays near the
    time of the slowest process.
 7. **The guidance steers the choice.** The live comparison of CP6 holds
-   two cases on each family. In the first, the result of one tool feeds
+   two cases on each executor kind. In the first, the result of one tool feeds
    another, and the seat calls `compose`. In the second, the seat must
    read a result before it decides, and it calls the tool directly.

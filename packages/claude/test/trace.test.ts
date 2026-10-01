@@ -1,4 +1,4 @@
-/** Claude Agent SDK messages become the steps every executor family shares. */
+/** Claude Agent SDK messages become the steps every executor kind shares. */
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
 import { ClaudeSteps, usageOf } from '../src/claude-trace.ts';

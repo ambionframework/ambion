@@ -48,7 +48,7 @@ import { type Bridge, startBridge } from './bridge.ts';
 import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
 import { CodexSteps, changedPaths } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
-import { type CodexRuntime, clientOptions, codexOf, threadOptions } from './options.ts';
+import { type CodexExecutionOptions, clientOptions, codexOf, threadOptions } from './options.ts';
 import { citing, servedTools } from './tools.ts';
 
 /** The part of a Codex thread that a pass uses. */
@@ -65,8 +65,8 @@ interface CodexClientLike {
 	resumeThread(id: string, options?: ThreadOptions): CodexThreadLike;
 }
 
-/** What builds a Codex executor for one seat: its definition, and the runtime that runs it. */
-export interface CodexExecutorOptions extends CodexRuntime {
+/** What builds a Codex executor for one seat: its definition, and the options that run it. */
+export interface CodexExecutorOptions extends CodexExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** Builds the client. Absent, the SDK's own `Codex`. */
 	readonly client?: (options: CodexOptions) => CodexClientLike;
@@ -222,7 +222,7 @@ class Activation implements ExecutorSession {
 		const scratch = await this.seal();
 		// Keep the scratch before the bridge opens, so a failed bridge still removes it on close.
 		this.scratch = scratch;
-		const tools = servedTools([...pass.tools, ...pass.agentTools], this.activation);
+		const tools = servedTools(pass.tools, this.activation);
 		const bridge = await startBridge(tools, this.activation.signal);
 		this.bridge = bridge;
 		if (this.stopped) {

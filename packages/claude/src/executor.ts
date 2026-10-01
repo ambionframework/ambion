@@ -41,7 +41,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/c
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
 import { passResultOf, sessionOf, unresumableResult } from './failure.ts';
-import { approver, type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
+import { approver, type ClaudeExecutionOptions, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -52,8 +52,8 @@ export const RESUMED_NOTE =
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
 
-/** What builds a Claude executor for one seat: its definition, and the runtime that runs it. */
-export interface ClaudeExecutorOptions extends ClaudeRuntime {
+/** What builds a Claude executor for one seat: its definition, and the options that run it. */
+export interface ClaudeExecutorOptions extends ClaudeExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** The SDK entry. Absent, the SDK's own `query`. */
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
@@ -75,7 +75,7 @@ interface Held {
 class Activation implements ExecutorSession {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly runtime: ClaudeRuntime;
+	private readonly options: ClaudeExecutionOptions;
 	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
@@ -101,7 +101,7 @@ class Activation implements ExecutorSession {
 	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
 		this.activation = activation;
 		this.definition = options.definition;
-		this.runtime = options;
+		this.options = options;
 		this.open = options.query ?? query;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
 	}
@@ -200,11 +200,10 @@ class Activation implements ExecutorSession {
 	private start(pass: Pass): void {
 		if (this.stream !== undefined) return;
 		const executor = claudeOf(this.definition.executor);
-		const tools = [...pass.tools, ...pass.agentTools];
 		this.resuming = pass.resume;
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
-			const { server, names } = roomServer(tools, (tool) => this.activation.callId(tool));
+			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));
 			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({
@@ -213,7 +212,7 @@ class Activation implements ExecutorSession {
 					server,
 					names,
 					canUseTool: approver(executor, this.trace, names),
-					runtime: this.runtime,
+					options: this.options,
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),
 				}),
 			});

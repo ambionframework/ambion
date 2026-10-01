@@ -30,7 +30,14 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, callTool, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
+import {
+	byAgent,
+	callTool,
+	type PiScript,
+	quiet,
+	say,
+	scriptedStream,
+} from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -75,8 +82,11 @@ describe('the definition of agent tools', () => {
 
 	it.each([
 		['say', { tools: [tool('say')] }, /room supplies it for an activation/],
+		['schedule', { tools: [tool('schedule')] }, /room supplies it for an activation/],
+		['recall', { tools: [tool('recall')] }, /room supplies it for an activation/],
 		['seat', { tools: [tool('seat')] }, /room supplies it for an activation/],
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
+		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
 		[
 			'a duplicate after a bundle',
 			{ tools: [tool('read')], bundles: [{ tools: [tool('read')] }] },
@@ -286,7 +296,10 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, 
 			summary: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },
 			agents: [worker({ tools: [probe], bundles: [bundle] }), assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({ worker: script })) }),
+			execution: piExecution({
+				sessions: 'memory',
+				stream: scriptedStream(byAgent({ worker: script })),
+			}),
 		}),
 	);
 	const events = collect(room);
@@ -307,7 +320,7 @@ describe('a running tool', () => {
 				prompts.push(context.systemPrompt ?? '');
 				reads.push(JSON.stringify(context.messages));
 				if (call <= 2) return callTool('probe', {});
-				return call === 3 ? speak('done') : quiet();
+				return call === 3 ? say('done') : quiet();
 			},
 			true,
 		);

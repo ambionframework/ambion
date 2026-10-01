@@ -13,7 +13,7 @@ import type { RoomEntry } from '../src/journal/journal.ts';
 import { viewOf } from '../src/room/view.ts';
 import { replayState } from './support/fold.ts';
 import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -33,11 +33,11 @@ describe('participant views', () => {
 					runtime,
 					execution: piExecution({
 						sessions: 'memory',
-						stream: scripted((context) => {
+						stream: scriptedStream((context) => {
 							contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
 							const text = contextText(context);
 							return text.includes('Question?') && !text.includes('Answer.')
-								? speak('Answer.')
+								? say('Answer.')
 								: quiet();
 						}),
 					}),

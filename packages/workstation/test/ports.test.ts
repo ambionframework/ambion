@@ -39,19 +39,19 @@ const tcpServerCount = () =>
 	process.getActiveResourcesInfo().filter((resource) => resource === 'TCPServerWrap').length;
 
 async function open(backend: ReturnType<typeof workstationBackend>, port: number) {
-	const ports = backend.ports;
-	if (ports === undefined) throw new Error('The workstation has no port capability.');
-	return ports.open({ name: 'ada' }, port);
+	const endpoints = backend.endpoints;
+	if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+	return endpoints.forward({ name: 'ada' }, port);
 }
 
-describe('workstation ports over the in-process SSH tier', () => {
+describe('workstation endpoints over the in-process SSH tier', () => {
 	it('forwards actual loopback HTTP, exposes the configured hostname, and releases on close', async () => {
 		const { backend, http, ssh } = await fixture();
-		const ports = backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
-		expect(ports.hostname).toBe(ssh.options.host);
+		const endpoints = backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+		expect(endpoints.machine).toBe(ssh.options.server);
 		const controller = new AbortController();
-		const port = await ports.open({ name: 'ada' }, http.port, controller.signal);
+		const port = await endpoints.forward({ name: 'ada' }, http.port, controller.signal);
 		controller.abort(new Error('signal ended after open'));
 		const local = new URL(port.url);
 		expect(local.protocol).toBe('http:');
@@ -68,10 +68,10 @@ describe('workstation ports over the in-process SSH tier', () => {
 
 	it('rejects invalid service ports before opening an SSH session', async () => {
 		const { backend, ssh } = await fixture();
-		const ports = backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
+		const endpoints = backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
 		for (const port of [0, -1, 1.5, 65_536, Number.NaN, Number.POSITIVE_INFINITY]) {
-			await expect(ports.open({ name: 'ada' }, port)).rejects.toThrow(/port/i);
+			await expect(endpoints.forward({ name: 'ada' }, port)).rejects.toThrow(/port/i);
 		}
 		expect(ssh.logins.get('ada') ?? 0).toBe(0);
 	});
@@ -91,11 +91,11 @@ describe('workstation ports over the in-process SSH tier', () => {
 
 	it('releases the failed open lease and unpublished loopback listener after forwarding refusal', async () => {
 		const { backend, http, ssh } = await fixture({ idleTimeout: 0.05 });
-		const ports = backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
+		const endpoints = backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
 		ssh.refuseForwarding(true);
 		const listenersBefore = tcpServerCount();
-		await expect(ports.open({ name: 'ada' }, http.port)).rejects.toThrow(/forward/i);
+		await expect(endpoints.forward({ name: 'ada' }, http.port)).rejects.toThrow(/forward/i);
 		await until(
 			() => tcpServerCount() === listenersBefore,
 			'The refused port open kept a loopback listener alive.',
@@ -205,12 +205,12 @@ describe('workstation ports over the in-process SSH tier', () => {
 			await http.close();
 			await ssh.stop();
 		});
-		const ports = backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
+		const endpoints = backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
 		const controller = new AbortController();
-		const canceled = ports.open({ name: 'ada' }, http.port, controller.signal);
+		const canceled = endpoints.forward({ name: 'ada' }, http.port, controller.signal);
 		await until(() => requested, 'The shared credential resolver was not called.');
-		const surviving = ports.open({ name: 'ada' }, http.port);
+		const surviving = endpoints.forward({ name: 'ada' }, http.port);
 		controller.abort(new Error('first opener canceled'));
 		await expect(canceled).rejects.toThrow('first opener canceled');
 		resolveCredential?.(await ssh.options.credentialFor({ name: 'ada' }));
@@ -313,9 +313,9 @@ async function openWithSignal(
 	port: number,
 	signal: AbortSignal,
 ) {
-	const ports = backend.ports;
-	if (ports === undefined) throw new Error('The workstation has no port capability.');
-	return ports.open({ name: 'ada' }, port, signal);
+	const endpoints = backend.endpoints;
+	if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+	return endpoints.forward({ name: 'ada' }, port, signal);
 }
 
 async function promptly(work: Promise<unknown>): Promise<void> {

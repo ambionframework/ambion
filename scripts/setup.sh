@@ -24,6 +24,11 @@ Z3_VERSION="${Z3_VERSION:-4.12.1.0}"
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 log() { printf '[setup] %s\n' "$*" >&2; }
 
+# A SessionStart hook adds its stdout to the context of the agent. Every line
+# of this script and of the installers goes to stderr, so a session starts
+# with no install log in its context.
+exec 1>&2
+
 # --- Node, through nvm ---
 # The web image ships nvm. `nvm.sh` sits under one of a few paths.
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"

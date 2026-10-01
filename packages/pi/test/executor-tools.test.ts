@@ -15,6 +15,7 @@ import type {
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { ROOM_TOOL_NAMES } from '../../ambion/src/define.ts';
 import type { RoomEntry } from '../../ambion/src/journal/journal.ts';
 import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { projectState, replay } from '../../ambion/src/room/projection.ts';
@@ -35,6 +36,8 @@ const worker = defineAgent({
 		tools: [
 			defineTool({
 				name: 'record_decision',
+				label: 'Record decision',
+				executionMode: 'sequential',
 				description: 'Record a private decision.',
 				parameters: Type.Object({}),
 				execute: (_params, context) => {
@@ -116,7 +119,8 @@ const call = (tool: PiTool | undefined, id: string, params: Record<string, unkno
 
 describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', async () => {
-		expect(names((await bound('activation', respond)).tools)).toEqual([
+		const { tools } = await bound('activation', respond);
+		expect(names(tools)).toEqual([
 			'say',
 			'schedule',
 			'seat',
@@ -125,6 +129,10 @@ describe('executor tool authority', () => {
 			'recall',
 			'record_decision',
 		]);
+		// The room tools are exactly the names that `defineAgent` refuses for a definition tool.
+		expect(new Set(names(tools).slice(0, -1))).toEqual(new Set(ROOM_TOOL_NAMES));
+		// Pi builds the tool of the definition from its `AmbionTool`. A `RoomTool` has neither field.
+		expect(tools.at(-1)).toMatchObject({ label: 'Record decision', executionMode: 'sequential' });
 		expect(names((await bound('activation', summarize)).tools)).toEqual(['say']);
 	});
 
