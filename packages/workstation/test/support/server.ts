@@ -43,6 +43,8 @@ export interface TestServer {
 	dropClients(): void;
 	/** Refuse each new session channel while `refuse` is true, as a full `MaxSessions` would. */
 	refuseChannels(refuse: boolean): void;
+	/** The kill channels of the backend's stops: how many are open now, the most at once, and the delay of each. */
+	readonly kills: { open: number; peak: number; delayMs: number };
 	/** Write `text` to stderr before each command, as a login shell's `.bashrc` can. */
 	setLoginNoise(text: string): void;
 	/** Refuse forwarding requests while `refuse` is true. */
@@ -96,6 +98,17 @@ function runExec(stream: ServerChannel, command: string, home: string, noise: st
 	child.on('close', () => stream.end());
 }
 
+/** Run a kill channel after the delay, and count the kill channels that are open at once. */
+function countKill(kills: TestServer['kills'], channel: ServerChannel, run: () => void): void {
+	kills.open += 1;
+	kills.peak = Math.max(kills.peak, kills.open);
+	// The server ends its side when the command ends, before the client sees the close.
+	channel.once('finish', () => {
+		kills.open -= 1;
+	});
+	setTimeout(run, kills.delayMs);
+}
+
 interface ServerState {
 	readonly homes: Map<string, string>;
 	readonly logins: Map<string, number>;
@@ -104,6 +117,7 @@ interface ServerState {
 	refuseForwarding: boolean;
 	holdForwarding: boolean;
 	loginNoise: string;
+	readonly kills: TestServer['kills'];
 	readonly forwards: Set<ServerChannel>;
 	readonly pendingForwards: Set<() => void>;
 	readonly cancelPendingForwards: Map<Connection, Map<() => void, () => void>>;
@@ -132,9 +146,12 @@ function onClient(client: Connection, state: ServerState) {
 			if (state.refuse) return reject();
 			const session = accept();
 			const home = homes.get(account ?? '') ?? '/';
-			session.on('exec', (acceptExec, _reject, info) =>
-				runExec(acceptExec(), info.command, home, state.loginNoise),
-			);
+			session.on('exec', (acceptExec, _reject, info) => {
+				const channel = acceptExec();
+				const run = () => runExec(channel, info.command, home, state.loginNoise);
+				if (info.command.startsWith("exec bash -c 'kill")) countKill(state.kills, channel, run);
+				else run();
+			});
 			session.on('sftp', (acceptSftp) => serveSftp(acceptSftp(), home));
 		});
 		client.on('tcpip', (accept, reject, info) => {
@@ -223,6 +240,7 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 		refuseForwarding: false,
 		holdForwarding: false,
 		loginNoise: '',
+		kills: { open: 0, peak: 0, delayMs: 0 },
 		forwards,
 		pendingForwards: new Set(),
 		cancelPendingForwards: new Map(),
@@ -251,6 +269,7 @@ export async function startSshServer(accounts: readonly string[]): Promise<TestS
 		},
 		homes,
 		logins,
+		kills: state.kills,
 		forwards,
 		pendingForwards: state.pendingForwards,
 		clients,

@@ -299,6 +299,27 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		expect(spawnSync('test', ['-f', join(home, 'marker')]).status === 0).toBe(marker);
 	});
 
+	it('opens one kill channel at a time for each client, and ends every aborted command', async () => {
+		const started = await server();
+		// Each kill channel stays open for 200 ms, so a second kill channel would overlap the first.
+		started.kills.delayMs = 200;
+		const backend = backendFor(started.options);
+		const controller = new AbortController();
+		const results = await withEnv(backend, 'ada', async (env) => {
+			const aborted = withAbortSignal(controller.signal, ctx);
+			const runs = [1, 2, 3, 4].map(() =>
+				env.exec('trap : TERM\nsleep 30 & wait', { timeout: 60, grace: 1 }, aborted),
+			);
+			// Let each command report its group before the abort.
+			await new Promise((resolve) => setTimeout(resolve, 1_000));
+			controller.abort();
+			return Promise.all(runs);
+		});
+		for (const result of results) expect(result).toMatchObject({ ok: false });
+		// The abort of 4 commands sends 4 TERM signals.
+		expect(started.kills.peak).toBe(1);
+	}, 20_000);
+
 	it.each([
 		{ noise: '', shell: 'a quiet login shell' },
 		{ noise: 'Welcome to the lab.\n', shell: 'a login shell that writes to stderr first' },
@@ -406,6 +427,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 				agent: 'ada',
 				command: 'exec sleep 30',
 				timeout,
+				grace: 10,
 				startedAt,
 			};
 			await writeFile(join(dir, 'spec'), JSON.stringify(spec));
@@ -437,7 +459,12 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
 		await writeFile(
 			join(lost, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+			JSON.stringify({
+				...spec,
+				timeout: 600,
+				grace: 10,
+				startedAt: new Date().toISOString(),
+			}),
 		);
 		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
 		await env.cleanup();

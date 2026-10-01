@@ -273,7 +273,7 @@ async function specOf(
 ): Promise<string> {
 	const dir = await env.absolutePath(`~/.processes/${handle}`, ctx);
 	if (!dir.ok) throw dir.error;
-	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, startedAt };
+	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, grace: 10, startedAt };
 	expect(await env.createDir(dir.value, { recursive: true }, ctx)).toMatchObject({ ok: true });
 	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec), ctx)).toMatchObject({
 		ok: true,
@@ -484,4 +484,58 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			await workspace.dispose();
 		}
 	});
+
+	it('stops an owned process that ignores TERM after the grace of its call', async () => {
+		const { workspace, backend } = await nextRun();
+		try {
+			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
+			const started = await call(workspace, 'bash', { command: stubborn, grace: 2, wait: 1 });
+			expect(started.process).toMatchObject({ state: 'running', grace: 2 });
+			const began = Date.now();
+			const killed = await call(workspace, 'cancel', { handle: started.process?.handle });
+			const elapsed = Date.now() - began;
+			// The default grace of 10 s would hold the stop for longer.
+			expect(elapsed).toBeGreaterThanOrEqual(2_000);
+			expect(elapsed).toBeLessThan(9_000);
+			expect(killed.process?.state).toBe('cancelled');
+			await withEnv(backend, OWNER, async (env) => {
+				const child = await env.readTextFile('child', ctx);
+				if (!child.ok) throw child.error;
+				expect(await allEnded(env, [Number(child.value.trim())])).toBe(true);
+			});
+		} finally {
+			await workspace.dispose();
+		}
+	});
+
+	it('disposes 4 processes of one agent that ignore TERM in about one grace, inside the channel limit', async () => {
+		const { workspace } = await nextRun();
+		const checker = workstationBackend(await options());
+		try {
+			await withEnv(checker, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			const names = ['one', 'two', 'three', 'four'];
+			for (const name of names) {
+				const command = `trap '' TERM\nsleep 300 &\necho "$!" > child-${name}\nwait`;
+				await call(workspace, 'bash', { command, wait: 1 });
+			}
+			const began = Date.now();
+			await workspace.dispose();
+			const elapsed = Date.now() - began;
+			expect(elapsed).toBeGreaterThanOrEqual(10_000);
+			expect(elapsed).toBeLessThan(25_000);
+			await withEnv(checker, OWNER, async (env) => {
+				const pids: number[] = [];
+				for (const name of names) {
+					const child = await env.readTextFile(`child-${name}`, ctx);
+					if (!child.ok) throw child.error;
+					pids.push(Number(child.value.trim()));
+				}
+				expect(await allEnded(env, pids)).toBe(true);
+			});
+		} finally {
+			await workspace.dispose();
+			await checker.dispose?.();
+		}
+	}, 60_000);
 });

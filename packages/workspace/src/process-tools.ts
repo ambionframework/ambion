@@ -27,7 +27,7 @@ import {
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
-import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
+import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
@@ -61,6 +61,10 @@ const NOT_CUT = { cut: false } as const;
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
+/** The least and the most seconds of the grace of a process. */
+const MIN_GRACE_SECONDS = 1;
+const MAX_GRACE_SECONDS = 300;
+
 /** What the process tools need from the workspace: the bash owner and the process table. */
 export interface ProcessToolOptions {
 	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
@@ -77,6 +81,7 @@ export function processToolGuidance(): string {
 		`status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,`,
 		`wait waits for the first of them to end, and cancel stops one. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
+		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
@@ -105,6 +110,11 @@ const bashSchema = Type.Object({
 	wait: Type.Optional(
 		Type.Number({
 			description: `Seconds this call waits for the process to end before it returns. The default is ${DEFAULT_BASH_WAIT_SECONDS}. Set 0 to return at once.`,
+		}),
+	),
+	grace: Type.Optional(
+		Type.Number({
+			description: `Seconds from SIGTERM to SIGKILL when the workspace stops the process, from ${MIN_GRACE_SECONDS} to ${MAX_GRACE_SECONDS}. The default is ${DEFAULT_GRACE_SECONDS}. A command that traps TERM uses this time to clean up.`,
 		}),
 	),
 });
@@ -200,7 +210,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after 10 seconds. A command can trap TERM, clean up, and exit in that time. A process that has not ended 15 seconds after the SIGTERM still shows running.',
+				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. A command can trap TERM, clean up, and exit in that time. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
 			execute: async (params: HandleParams, ctx) => {
 				const { status, stopped } = await table.cancel(ctx.agent, params.handle);
@@ -215,6 +225,17 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 	if (value === undefined) return fallback;
 	if (!Number.isFinite(value) || value < 0 || value > max) {
 		throw new Error(`Invalid number of seconds: give a number from 0 to ${max}.`);
+	}
+	return value;
+}
+
+/** The grace of a process: `DEFAULT_GRACE_SECONDS` when the caller names none. */
+function checkedGrace(value: number | undefined): number {
+	if (value === undefined) return DEFAULT_GRACE_SECONDS;
+	if (!Number.isFinite(value) || value < MIN_GRACE_SECONDS || value > MAX_GRACE_SECONDS) {
+		throw new Error(
+			`Invalid grace: give a number of seconds from ${MIN_GRACE_SECONDS} to ${MAX_GRACE_SECONDS}.`,
+		);
 	}
 	return value;
 }
@@ -278,6 +299,7 @@ async function started(
 	const spec = {
 		command: params.command,
 		timeout,
+		grace: checkedGrace(params.grace),
 		...(params.name === undefined ? {} : { name: params.name }),
 		...(ctx.room === undefined ? {} : { room: ctx.room }),
 	};

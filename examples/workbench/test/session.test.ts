@@ -504,6 +504,7 @@ describe('Session /ps', () => {
 		state: 'running',
 		output: `/home/design/.processes/${handle}/out`,
 		timeout: 600,
+		grace: 10,
 		startedAt: at(0),
 		...extra,
 	});
@@ -606,7 +607,7 @@ describe('Session /ps', () => {
 		void panel.cancel();
 		expect(panel.message).toBe('Cancelling bash-000000000001.');
 		await cancelling;
-		expect(panel.message).toBe('bash-000000000001 did not end within 15 seconds.');
+		expect(panel.message).toBe('bash-000000000001 did not end within the wait of the stop.');
 		expect(host.calls.filter((call) => call.startsWith('cancel:'))).toHaveLength(1);
 	});
 

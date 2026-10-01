@@ -82,6 +82,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		super(session.home);
 		this.host = {
 			open: (command) => this.open(command),
+			queueSignal: (send) => this.session.queueSignal(send),
 			isDirectory: (path) => this.isDirectory(path),
 		};
 	}

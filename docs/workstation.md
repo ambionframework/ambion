@@ -322,7 +322,7 @@ first thing the script prints.
 **An abort stops the group with `SIGTERM`, a grace, and `SIGKILL`.** The
 `grace` field of `WorkspaceExecOptions` gives the seconds between the two
 signals. Each signal opens a short channel that runs
-`kill -<signal> -- -<group>`.
+`kill -<signal> -- -<group>`, in the queue of the client's signals.
 
 | `grace`            | What an abort sends                                                       |
 | ------------------ | ------------------------------------------------------------------------- |
@@ -440,17 +440,43 @@ call adds network round trips to every tool call.
   no data on the server. The host removes a workspace's folders with its own
   tools.
 
+**A client opens one signal channel at a time.** `Session` holds one FIFO
+queue of signals for each client. A `SIGTERM` or a `SIGKILL` of any
+command waits for the earlier signal channel of the same client to close,
+and then opens. The `SIGKILL` timer starts when the `SIGTERM` joins the queue, so a
+delay in the queue shortens the time between the two signals by that
+delay. An entry ends when its channel closes, when the session ends,
+or after 5 seconds, so a channel that never closes does not hold the
+queue. When the session ends, every waiting entry ends with it, and no signal
+opens on a closed client.
+
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
-on one connection by default (`MaxSessions`). The bash owner runs one
-operation at a time, so the owner's work holds at most three channels of
-a client: SFTP, one command, and one signal. Each running process of the
-agent holds one command channel, and the process table allows 4. The table
-stops the processes of one agent one at a time, and a timeout stops a
-process the same way, so the stops hold at most one signal channel. A
-signal channel stays open only while `kill` runs. A client then holds at
-most 8 channels. A process that outlives the wait of its stop meets the
-backend's own deadline later, and that stop opens one more signal
-channel ([Processes](processes.md#a-process)).
+on one connection by default (`MaxSessions`). The count below holds at the
+same time on one client of one agent. It does not assume a drained bash
+owner, so it covers `dispose()` and a live cancel or timeout alike.
+
+| Holder                                                                                                                             | Channels |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| The SFTP channel                                                                                                                   | 1        |
+| The bash owner: one operation, one `exec`                                                                                          | 1        |
+| The processes: a command channel for each process of this run, and one poll read for each adopted process, with 4 processes in all | up to 4  |
+| One signal channel, for every abort and every stop of the client                                                                   | 1        |
+| One `exec` of the table on a stop step: `writeStop`, or the signal script of an adopted stop                                       | 1        |
+| The total                                                                                                                          | 8        |
+
+**The process table allows 4 running processes.** A process of this run
+holds one command channel. An adopted process holds none, because its
+shell ran on an earlier client, and a poll read of the files holds one
+channel at a time for it. A process of this run or an adopted one counts
+as one of the 4, so the commands and the polls together stay at 4. The
+final read of a process of this run (`settleOwned`, `finalStatus`,
+`readFiles`: one listing `exec`) runs after its command channel closed,
+and takes the place of that channel. The stops of one agent take their
+steps one at a time, so the table holds one `exec` on a stop step. The
+owner's own abort signal uses the one signal channel. The worst case is
+8 channels, 2 below the limit of 10. The count of one signal channel
+assumes that a kill channel closes within 5 seconds, the time after which
+the queue releases an entry.
 
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits

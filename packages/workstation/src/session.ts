@@ -23,6 +23,9 @@ const READY_TIMEOUT_MS = 20_000;
 /** How often the client probes the server, so a dead connection surfaces as an error. */
 const KEEPALIVE_MS = 15_000;
 
+/** The longest one signal channel holds the queue of signals of its client. */
+const SIGNAL_WAIT_MS = 5_000;
+
 /** What one agent logs in with. */
 export interface WorkstationCredential {
 	readonly username: string;
@@ -53,6 +56,8 @@ function hostKeyText(key: Buffer): string {
 export class Session {
 	private open = true;
 	private readonly onEnd = new Set<() => void>();
+	/** The last signal channel of this client: each new one waits for it to close. */
+	private signals: Promise<void> = Promise.resolve();
 	private stop: (error: Error) => void = () => undefined;
 	/**
 	 * Rejects when the session ends. `ssh2` fails the SFTP requests in flight
@@ -138,6 +143,30 @@ export class Session {
 			this.close();
 			throw error;
 		}
+	}
+
+	/**
+	 * Run `send`, which opens a signal channel and waits for it to close,
+	 * after every earlier signal of this client. Each client has at most one
+	 * signal channel open, so the signals of several stops stay inside the
+	 * server's limit of sessions. An entry ends when `send` ends, when the
+	 * session ends, or after `SIGNAL_WAIT_MS`, so a channel that never
+	 * closes does not hold the queue. `send` never rejects.
+	 */
+	queueSignal(send: () => Promise<void>): Promise<void> {
+		const entry = this.signals.then(async () => {
+			let timer: NodeJS.Timeout | undefined;
+			const late = new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, SIGNAL_WAIT_MS);
+			});
+			try {
+				await Promise.race([this.guard(send), late]);
+			} finally {
+				clearTimeout(timer);
+			}
+		});
+		this.signals = entry.catch(() => undefined);
+		return this.signals;
 	}
 
 	/** Open one SSH direct-tcpip channel to the workstation's loopback. */

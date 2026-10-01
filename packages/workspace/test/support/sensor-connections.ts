@@ -165,6 +165,7 @@ export function status(
 		state,
 		output: `/home/${agent}/.processes/${handle}/out`,
 		timeout: 600,
+		grace: 10,
 		startedAt: '2026-09-29T10:00:00.000Z',
 		...(state === 'running' ? {} : { exitCode: 0, endedAt: '2026-09-29T10:00:01.000Z' }),
 	};

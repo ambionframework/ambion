@@ -83,6 +83,8 @@ const SETSID_NOTICE = /^setsid: child \d+ did not exit normally$/;
 export interface CommandHost {
 	/** Open one `exec` channel for `command`. */
 	open(command: string): Promise<ClientChannel>;
+	/** Run `send` after every earlier signal channel of the client has closed. */
+	queueSignal(send: () => Promise<void>): Promise<void>;
 	/** Whether `path` is a directory. */
 	isDirectory(path: string): Promise<boolean>;
 }
@@ -227,23 +229,22 @@ function finished(
 /**
  * Send `signal` to the command's process group through a second channel.
  * The kill runs in bash: the login shell can be `dash`, whose `kill`
- * refuses `-KILL --`.
+ * refuses `-KILL --`. The client opens one signal channel at a time, so
+ * the signals of several commands wait for each other in a queue.
  */
-async function signalGroup(
-	host: CommandHost,
-	pgid: number,
-	signal: 'TERM' | 'KILL',
-): Promise<void> {
-	try {
-		const killer = await host.open(`exec bash -c 'kill -${signal} -- -${pgid}' 2>/dev/null`);
-		await new Promise<void>((resolve) => {
-			killer.on('close', () => resolve());
-			killer.resume();
-			killer.stderr.resume();
-		});
-	} catch {
-		// The group can end, or the connection drop, before the kill lands.
-	}
+function signalGroup(host: CommandHost, pgid: number, signal: 'TERM' | 'KILL'): Promise<void> {
+	return host.queueSignal(async () => {
+		try {
+			const killer = await host.open(`exec bash -c 'kill -${signal} -- -${pgid}' 2>/dev/null`);
+			await new Promise<void>((resolve) => {
+				killer.on('close', () => resolve());
+				killer.resume();
+				killer.stderr.resume();
+			});
+		} catch {
+			// The group can end, or the connection drop, before the kill lands.
+		}
+	});
 }
 
 /**

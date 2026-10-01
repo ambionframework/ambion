@@ -89,8 +89,8 @@ export interface Workbench {
 	 */
 	processOutput(handle: string, agent: string): Promise<ProcessOutput>;
 	/**
-	 * Stop one process. It waits up to 15 seconds for the end, then gives the
-	 * state. It runs outside the queue of the host's file reads.
+	 * Stop one process. It waits for the end up to the wait of the stop, 15 seconds
+	 * at most, then gives the state. It runs outside the queue of the host's file reads.
 	 */
 	cancelProcess(handle: string): Promise<ProcessView>;
 	/** Call `changed` when a process starts and when one ends. The return value ends the watch. */
