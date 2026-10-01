@@ -19,9 +19,12 @@ What is built:
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
 - **`RoomObject`** runs the room. The name of the object is the name of the
   room: reach it with `idFromName(room)`, and an object with no name throws.
+  A stub from `idFromString` and a proxy from a `wrangler dev` in another
+  process carry no name, so a host reaches a room with `idFromName` from the
+  same worker.
   Its constructor resumes an initialized room with the definitions of its
-  recorded agents from `configure`, unless explicitly stopped; an uninitialized record waits for
-  an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
+  recorded agents from `configure`, unless explicitly stopped; an
+  uninitialized record waits for an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
   `unseat`, `cancel`, `read`, `exchange`, `dismiss`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its runtime reaches each seat through `rpcExecution`, an
@@ -60,9 +63,10 @@ What is built:
   with `activationTokenLimit` names one of them, or `length`, in
   `estimateTokens`.
 
-`RoomObject.start` takes no room name, because the stub names the room. It receives the names of the definitions in `definitions`, an optional
-`summaryWriter` name, and an optional `seats` map. The map sets the initial seats and
-their attention. An omitted map seats every supplied agent at `broadcast`; an empty
+`RoomObject.start` takes no room name, because the stub names the room. It
+receives the names of the definitions in `definitions`, an optional
+`summaryWriter` name, and an optional `seats` map. The map sets the initial
+seats and their attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
 install a new definition. Automatic resume resolves each agent on the record,
 seated or in reserve, through `configure`. Every seat uses the same room

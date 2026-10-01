@@ -384,6 +384,14 @@ it('changes membership by name without installing a definition', async () => {
 	).toMatchObject({ attention: 'named' });
 	await stub.unseat('product');
 	expect(await names()).toEqual(['assistant']);
+	// the unseated agent stays on the record, and a rebuilt room resumes with it
+	await evict(stub, 'the test takes a room with a reserve agent');
+	const again = roomOf('room-roster');
+	expect((await again.read({ messages: false })).reserve).toMatchObject([{ name: 'product' }]);
+	await again.seat('product');
+	expect((await again.read({ messages: false })).participants.map((one) => one.name)).toContain(
+		'product',
+	);
 });
 
 it('serves a token-windowed view over RPC to a seat that names a registered estimator', async () => {

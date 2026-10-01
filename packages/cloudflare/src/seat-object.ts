@@ -58,7 +58,12 @@ export function seatName(room: string, seat: string): string {
 }
 
 function seatOfName(name: string | undefined): { room: string; seat: string } {
-	const parsed: unknown = name === undefined ? undefined : JSON.parse(name);
+	let parsed: unknown;
+	try {
+		parsed = name === undefined ? undefined : JSON.parse(name);
+	} catch {
+		parsed = undefined;
+	}
 	if (Array.isArray(parsed) && parsed.length === 3 && parsed[0] === 'ambion/seat-object') {
 		const [, room, seat] = parsed;
 		if (typeof room === 'string' && typeof seat === 'string') return { room, seat };

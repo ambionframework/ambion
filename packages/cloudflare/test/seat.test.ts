@@ -26,7 +26,7 @@ const stateOf = (seat: DurableObjectStub) =>
 async function woken(room: ReturnType<typeof roomOf>, seat: DurableObjectStub): Promise<boolean> {
 	if ((await stateOf(seat)).activation !== undefined) return true;
 	const read = await room.read({ messages: false });
-	return [...read.exchanges, read.exchange].some((one) => (one?.activations.length ?? 0) > 0);
+	return read.exchanges.some((one) => one.activations.length > 0);
 }
 
 /** A room whose product seat answers, with priya's first question sent. */
@@ -42,7 +42,7 @@ async function asked(name: string) {
 	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// A wake reached the seat: it holds the activation, or the room already
 	// records the activation it ran. How many wakes arrive before the alarm
-	// runs is the runner's speed and not the room's behaviour.
+	// runs depends on the speed of the runner.
 	expect(await until(() => woken(room, seat))).toBe(true);
 	return { room, seat, exchange };
 }
@@ -86,6 +86,8 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
+	// the first run clears its record, so wait for that before counting wakes
+	await until(async () => ((await stateOf(seat)).activation === undefined ? true : undefined));
 	// every wake the seat takes changes its record once, so the calls count the wakes
 	const wakes: number[] = [];
 	await inside<SeatInternals, void>(seat, async (object) => {
@@ -358,14 +360,15 @@ it.each(['idle', 'pending'] as const)(
 	},
 );
 
-it('runs an activation on an alarm that finds the object rebuilt, from the identity in its name', async () => {
+it('rebuilds a seat from its name on the resent wake, and runs the activation it holds on the alarm', async () => {
 	const name = 'seat-identity';
 	const seat = seatOf(name);
 	await seat.hold(true);
 	const { room } = await asked(name);
 	// The seat holds the wake and runs nothing. The hold lifts in storage and
-	// the alarm falls after the platform took the object away, so no call
-	// builds the object again before the alarm runs it.
+	// the platform takes the object away. The room resends the wake every
+	// 50 ms, so an RPC rebuilds the object from its name before the alarm
+	// falls. The alarm then runs the activation that the object holds.
 	await inside<unknown, void>(seat, async (_object, state) => {
 		seatMetadata(state).change(() => ({ patch: { hold: false } }));
 		await state.storage.setAlarm(Date.now() + 300);
