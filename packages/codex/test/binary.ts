@@ -6,13 +6,22 @@
  * instructions file. A seat that reads the host home shows it.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Execution } from '@ambionframework/ambion';
+import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
 import {
@@ -129,6 +138,8 @@ export interface CodexOnOptions {
 	readonly signIn?: boolean;
 	/** More lines for the `config.toml` of the home. */
 	readonly config?: string;
+	/** Whether the room tools server names a command that does not exist, so it cannot start. */
+	readonly brokenRoomServer?: boolean;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
@@ -146,6 +157,18 @@ export interface CodexOnScript {
 	/** The connections that the binary tried outside the loopback interface. */
 	readonly outbound: readonly string[];
 	close(): Promise<void>;
+}
+
+/**
+ * A `codex` executable that runs the bundled binary with a room tools server
+ * that cannot start. The last `-c` flag wins, so it replaces the server table.
+ */
+function brokenServerBinary(dir: string): string {
+	const path = join(dir, 'codex');
+	const table = `mcp_servers.${ROOM_SERVER}={command="/nonexistent/node",args=[],required=true}`;
+	writeFileSync(path, `#!/bin/sh\nexec '${bundledBinary()}' "$@" -c '${table}'\n`);
+	chmodSync(path, 0o755);
+	return path;
 }
 
 /**
@@ -191,6 +214,7 @@ export async function codexOn(
 		execution: codexExecution({
 			env,
 			...(options.hostLogin === undefined ? { login: false } : {}),
+			...(options.brokenRoomServer ? { codexPath: brokenServerBinary(dir) } : {}),
 			...options.runtime,
 			home,
 		}),

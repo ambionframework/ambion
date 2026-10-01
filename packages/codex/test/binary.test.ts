@@ -263,6 +263,43 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 		);
 
 		it(
+			'fails the pass as transient, before any model request, when the room tools server cannot start',
+			async () => {
+				const on = await codexOn([say('hello room'), { text: 'done' }], undefined, {
+					brokenRoomServer: true,
+				});
+				try {
+					const { visit, room, events, steps } = await roomOn(on.execution);
+					const ended = new Promise<void>((resolve) =>
+						room.subscribe((event) => event.type === 'activation_end' && resolve()),
+					);
+					await visit.send({ text: 'Is the plan ready?' });
+					await ended;
+
+					// The required server fails the startup of `codex exec`. No model sees a request.
+					expect(on.responses.requests).toEqual([]);
+					expect(events).toContainEqual(
+						expect.objectContaining({ type: 'error', seat: 'gpt', cause: 'transient' }),
+					);
+					expect(steps).toContainEqual(
+						expect.objectContaining({
+							type: 'end',
+							failure: expect.objectContaining({
+								cause: 'transient',
+								message: expect.stringContaining(
+									'required MCP servers failed to initialize: ambion',
+								),
+							}),
+						}),
+					);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
 			'runs on the login of the host through a link, and leaves the file as it was',
 			async () => {
 				const key = 'sk-key-of-the-host';
@@ -316,6 +353,10 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(passes).toEqual(['view', 'delta']);
 					expect(on.responses.requests).toHaveLength(4);
 					const [one, , three] = on.responses.requests;
+					// Codex waits for the required room server, so every request lists `say`.
+					for (const request of on.responses.requests) {
+						expect(toolsOf(request)[NAMESPACE]).toContain('say');
+					}
 
 					// The second pass runs on the same thread: its request holds the items of the first.
 					expect(threadOf(three)).toBeDefined();
