@@ -175,5 +175,5 @@ export function s3ObjectBackend(options: S3ObjectBackendOptions): ObjectBackend 
 		},
 		cleanup: async () => undefined,
 	};
-	return Object.freeze({ store, connect: async () => env });
+	return Object.freeze({ label: store, connect: async () => env });
 }

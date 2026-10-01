@@ -93,7 +93,9 @@ describe.skipIf(configPath === undefined)('the object backend on MinIO', () => {
 		const [ref = ''] = await workspace.snapshot(['plan.md'], { agent: { name: 'analyst' } });
 		const digest = sha256('pour on Thursday\n');
 		expect(ref).toBe(snapshotUri('lab', digest, '/home/analyst/plan.md'));
-		expect(await workspace.use(workspace.host, (env) => env.exists('/snapshots', ctx))).toEqual({
+		expect(
+			await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots', ctx)),
+		).toEqual({
 			ok: true,
 			value: false,
 		});

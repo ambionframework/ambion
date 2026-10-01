@@ -85,7 +85,7 @@ function session(inner: ExecutorSession, seen: Seen): ExecutorSession {
 			const { spec, through } = pass.view;
 			const entry: Record<string, unknown> = {
 				kind: pass.kind,
-				...(pass.kind === 'delta' ? { since: pass.since } : {}),
+				...(pass.kind === 'delta' ? { after: pass.after } : {}),
 				spec,
 				through,
 				resume: pass.resume,

@@ -64,7 +64,7 @@ export interface RoomToolOptions {
 	/** The refs a say cites, from the refs the model gave, each trimmed and none empty. */
 	readonly refs?: (cited: readonly string[]) => readonly string[];
 	/** The room took an ordinary say or a scheduled say. */
-	readonly spoke?: () => void;
+	readonly said?: () => void;
 }
 
 /** A closing activation: its person, everyone it addresses, and how many it has answered. */
@@ -330,7 +330,7 @@ function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolO
 				intent: scheduledBy(seat, args as ScheduleArgs, options),
 			});
 			if (!('committed' in response)) return answered(landed(binding, response), response);
-			options.spoke?.();
+			options.said?.();
 			const result = scheduleResult(binding, call, response.committed, response.unread ?? []);
 			return answered(result, response);
 		},
@@ -368,7 +368,7 @@ function accepted(
 	if (closing !== undefined) {
 		closing.answered += 1;
 	} else if (message.kind === 'said') {
-		options.spoke?.();
+		options.said?.();
 		binding.acknowledgeThrough(message.seq);
 	}
 }
@@ -411,7 +411,7 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 	};
 }
 
-/** The room tool that dismisses one pending say of the seat, by its seq. */
+/** The room tool that dismisses one scheduled say of the seat, by its seq. */
 function dismissTool(binding: RoomToolBinding): RoomTool {
 	return {
 		name: DISMISS.name,

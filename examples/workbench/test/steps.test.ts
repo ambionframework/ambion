@@ -127,11 +127,11 @@ describe('activationLine', () => {
 			seat: 'design',
 			attempt: 1,
 			purpose: 'respond',
-			outcome: { status: 'released' },
+			outcome: { kind: 'released' },
 			usage: usage({ cost: 0.0031 }),
 		};
 		expect(activationLine(base)).toBe('design · respond · attempt 1 · $0.0031');
-		expect(activationLine({ ...base, usage: undefined, outcome: { status: 'running' } })).toBe(
+		expect(activationLine({ ...base, usage: undefined, outcome: { kind: 'running' } })).toBe(
 			'design · respond · attempt 1 · running',
 		);
 	});

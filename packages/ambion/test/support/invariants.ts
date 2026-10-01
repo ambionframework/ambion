@@ -14,7 +14,7 @@ import {
 	type Room,
 	type RoomNotification,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 
@@ -30,7 +30,7 @@ export interface InvariantOptions {
 }
 
 export const errorsIn = (events: RoomNotification[]) =>
-	events.flatMap((e) => (e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : []));
+	events.flatMap((e) => (e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : []));
 
 const count = (events: RoomNotification[], type: RoomNotification['type']) =>
 	events.filter((e) => e.type === type).length;
@@ -75,13 +75,12 @@ export async function invariants(
 	if (options.journals) await leased(session, options.journals);
 }
 
-/** Every execution event names the activation whose seat raised it. */
+/** Every activation event names the activation whose seat raised it. */
 function activationsMatchEvents(events: RoomNotification[]): void {
 	for (const event of events) {
 		if (!('activation' in event)) continue;
 		expect(event.activation.length).toBeGreaterThan(0);
-		const seat = 'agent' in event ? event.agent : event.author;
-		expect(decodeActivationId(event.activation)?.seat).toBe(seat);
+		expect(decodeActivationId(event.activation)?.seat).toBe(event.seat);
 	}
 }
 

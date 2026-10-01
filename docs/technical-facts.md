@@ -37,7 +37,8 @@ positioning and the current capabilities.
   freshness. A framework supplies one session with passes. Pi, the Claude
   Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
   room tools through an MCP server. A conformance suite proves the Pi
-  and Claude adapters on fakes. The Codex adapter runs live.
+  and Claude adapters on fakes. The Codex adapter runs the real binary on
+  a scripted model, and runs the suite live.
 - **Speech through `say` only; everything else into a trace.** Every
   activation gives its steps to the host's logger as they happen: thinking,
   text, tool calls, room calls, steers, approvals, and usage. The release
@@ -95,7 +96,7 @@ positioning and the current capabilities.
   process table, so a new run of the host adopts the live processes. See
   [Processes](processes.md).
 - **Sensor servers use the Git and process tools.** A workspace backend with
-  ports adds `connect` and `observe`. The workspace package owns
+  endpoints adds `connect` and `observe`. The workspace package owns
   the versioned client and schema exports. `observe` stores the response
   manifest and verified file bytes as ordinary snapshot objects. The server
   owns acquisition and reducer state.
@@ -118,7 +119,7 @@ positioning and the current capabilities.
 | `@ambionframework/workspace`   | The workspace interface, sensor subpaths, SQLite backend, and conformance suites        |
 | `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`          |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, port forwarding, and Git |
-| `@ambionframework/assistant`   | A default assistant that guides membership and writes summaries                         |
+| `@ambionframework/assistant`   | A default assistant that guides seating and writes summaries                            |
 | `@ambionframework/simulator`   | Evals: an actor plays a person in a room, and the simulation holds what the room did    |
 | `@ambionframework/journal`     | The append-only journal and its storage contract                                        |
 | `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                      |

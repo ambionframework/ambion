@@ -12,6 +12,78 @@ its journal. `@ambionframework/ambion` exports `TracedStep` in place of
 `OwedFacts.record` are `summaryFacts`, because a record is the messages
 that participants read. The internal constant `DEFAULT_TRACE` is
 `DEFAULT_TRACE_POLICY`. No journal body changes.
+**A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
+person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
+now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
+The read field `scheduled` and the tool `schedule` already used the new name.
+This renames the one remaining shape and adds no shape. The journal and the
+golden journals do not change.
+
+**`View` names only what a seat receives, and a read position is `through`
+or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
+that the `exchange_closed` event carries, is now `ExchangeRange`.
+`ClosedExchangeView` is gone from the main entry. Write
+`Extract<Exchange, { readonly status: 'closed' }>` in its place.
+`RoomRead.watermark` and `ExchangeRead.watermark` are now `through`. The
+`ok` of a `LeaseResponse` holds `through` where it held `lastSeq`. The
+selection `read({ messages: { since } })` is now `{ after }`, and the delta
+of a `PassInput` holds `after` where it held `since`. The wire carries the
+new names. The journal and the golden journals do not change.
+**Outcomes use one discriminator, `kind`, and `wake` names only the port
+request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
+`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
+exchange read model. The room calls the activation that it owes a seat a due
+activation, after `RoomState.due`. In the core, `PendingActivation` becomes
+`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
+`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
+`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
+`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
+body changes.
+**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
+describes one activation. The main entry and the hosting entry export the
+new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
+member names its seat in `seat`, where the members said `agent` and the
+`conflict` member said `author`. The tool members use `name` in place of
+`toolName`. The member types `tool_execution_start` and `tool_execution_end`
+are now `tool_call` and `tool_result`, the names that `Step` uses. The
+`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
+log line carries the new member types in its `event` field.
+**The verb `say` names the message type, its guard, the test verb, and the
+speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
+kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
+`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
+`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
+`AgentExecutor.speaking`. `AgentExecutor.guidance` keeps its name. The
+callback `RoomToolOptions.spoke` is now `said`. The kind string, the
+journal bodies, and the text that a model reads do not change.
+**Three names in the process and credential options change.** The option
+`tokenTtl` of `justGitBackend` and the option `keyTtl` of
+`workstationGitBackend` are now `credentialTtl`, the name that
+`GitConformanceOptions` already used. The exported type `ProcessStatus` is
+now `ProcessRecord`. A tool call or the host that ends a process cancels
+it, and the code now says so: `process-stop.ts` is `process-cancel.ts`, and
+`ProcessTable.cancel` gives `cancelled` where it gave `stopped`. The `stop`
+file in the directory of a process keeps its name. The tool names and the
+text for the model do not change.
+**The workspace packages name an endpoint, a label, and a server.** The word
+`host` now names the application that embeds a room, and the word `port`
+names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
+`WorkspacePorts` becomes `WorkspaceEndpoints`. Its method `open` becomes
+`forward`, and its field `hostname` becomes `machine`. The field `ports` of
+`BashBackend` becomes `endpoints`. `GitBackend.server`,
+`ObjectBackend.store`, and `SqlBackend.database` become `label`.
+`Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
+`<name>-host` stays. `WorkstationOptions.host` and
+`WorkstationGitOptions.host` become `server`.
+**The executor options and the Pi test stream get their own names.**
+`@ambionframework/claude` exports `ClaudeExecutionOptions`, and
+`@ambionframework/codex` exports `CodexExecutionOptions`. They replace
+`ClaudeRuntime` and `CodexRuntime`, and they match `PiExecutionOptions`.
+The word `Runtime` now names the core `Runtime` alone.
+`@ambionframework/pi/testing` exports `scriptedStream` in place of
+`scripted`. The core testing entry keeps `scripted`, the scripted
+execution. The Codex tool that the stdio server lists is `CodexTool`. It
+replaces a `RoomTool` that shadowed the core type of the same name.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
@@ -19,6 +91,54 @@ the room tools alone. Claude and Codex joined the two lists at once, and
 they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
 tools that the definition does not name, and builds the tools of the
 definition from their `AmbionTool`s as before.
+
+**Breaking: a Codex seat no longer reads `~/.codex`.** The executor never
+set `CODEX_HOME`, so every seat ran in the Codex home of the host user. The
+`[mcp_servers.*]` of its `config.toml` started on every pass beside the room
+tools server, its `model_provider` rerouted the model traffic of the seat,
+and its `AGENTS.md` joined every request. `codexExecution()` now gives its
+seats a Codex home of their own and sets `CODEX_HOME` to it, for each run of
+the binary and for the `codex debug models` run of the catalog. The default
+is `.ambion/codex` under the `HOME` of `env`, with the mode `0700`, and the
+new option `home` names another. The new option `login` names the `auth.json` to link into the
+home. The default is the login file of the host, and `false` links nothing.
+
+**The seat home links the login of the host and never copies it.** A seat
+on a ChatGPT sign-in keeps working with no extra step. The first activation
+makes a symbolic link `auth.json` in the home, or a hard link where symbolic
+links fail. Codex writes the file in place and reads it again before it
+refreshes a token, so the host and the seats share one login. A home that
+holds its own `auth.json` keeps it. If no link can be made, the activation
+fails as permanent.
+
+**Three changes need action.**
+
+- A thread that an earlier version started lives in `~/.codex/sessions`.
+  Threads now live in `sessions` in the seat home, so such a thread starts
+  fresh.
+- A login in the OS keyring cannot be shared, because Codex keys it by a hash
+  of the `CODEX_HOME` path. Set `cli_auth_credentials_store = "file"` and run
+  `codex login` again, or run `CODEX_HOME=~/.ambion/codex codex login`.
+- The `CODEX_HOME` of `env` now names the Codex home of the host, and only
+  sets the default `login`. The binary never gets it. Pass `home` to place the
+  seat home.
+
+**The binary tier proves the isolation and the link.** The host home of
+`test/binary.ts` holds a `config.toml` that reroutes the provider and starts
+an MCP server, and an `AGENTS.md` with a marker. A test asserts that none of
+them reaches a seat. Another test runs a provider on the linked login, with a
+proxy that refuses every outbound connection.
+
+**The Codex package tests the real `codex` binary on a scripted model.**
+`codex` accepts a custom model provider through its config. A local endpoint
+in `packages/codex/test/responses.ts` speaks the Responses API and plays a
+script of replies. `test/binary.test.ts` runs the bundled binary against it,
+in a temporary Codex home, with a minimal environment. It proves that a seat
+speaks through `say`, that the activation reports the usage of the endpoint,
+that the model sees the room tools, the tools of the seat, and the three
+MCP resource tools and no native tool, and that a second pass resumes the
+same thread. This tier runs in the unit tier and needs no key. The executor
+does not change.
 
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
@@ -702,7 +822,7 @@ to a JSON file for each case when `AMBION_LIVE_DUMP` names a directory. See
   summary goes to the `person` of the exchange. Before this change, the
   model decided, and a question followed by a departure sometimes closed
   with no answer. See
-  [Default assistant](docs/assistant.md#membership-and-completion).
+  [Default assistant](docs/assistant.md#seating-and-completion).
 - **A Codex seat lands a say in each activation.** A real `codex` numbers
   the items of each turn from `item_0`, and a room tool took the item id as
   the key of its commit. The say of a later activation then had the key of

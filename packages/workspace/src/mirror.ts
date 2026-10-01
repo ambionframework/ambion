@@ -191,7 +191,7 @@ export async function mirrorRoom(
 
 	let snapshot: RoomRead;
 	try {
-		snapshot = await room.read({ messages: { since: appendedSeq } });
+		snapshot = await room.read({ messages: { after: appendedSeq } });
 	} catch (error) {
 		unsubscribe();
 		throw error;

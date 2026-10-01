@@ -18,7 +18,7 @@
 import {
 	AmbionError,
 	addUsage,
-	type ClosedExchangeView,
+	type Exchange,
 	type Room,
 	type RoomNotification,
 	type Seq,
@@ -170,7 +170,7 @@ class Loop {
 		}
 	}
 
-	private async closedView(from: Seq): Promise<ClosedExchangeView> {
+	private async closedView(from: Seq): Promise<Extract<Exchange, { readonly status: 'closed' }>> {
 		const read = await this.room.read({ messages: false });
 		const view = read.exchanges.find((exchange) => exchange.from === from);
 		if (view?.status !== 'closed') throw new Error(`The exchange at ${from} did not close.`);

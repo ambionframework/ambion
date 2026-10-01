@@ -3,7 +3,7 @@
  * and the simulation that the checks and the judge read.
  */
 import type {
-	ClosedExchangeView,
+	Exchange,
 	HumanDefinition,
 	Message,
 	RoomNotification,
@@ -46,7 +46,7 @@ export type Actor = (seen: Seen) => Move | Promise<Move>;
 
 /** One exchange of a simulation: what the person saw, and the closed view of the room. */
 export interface SimulationExchange extends SeenExchange {
-	readonly view: ClosedExchangeView;
+	readonly view: Extract<Exchange, { readonly status: 'closed' }>;
 }
 
 /** Why the loop ended. */

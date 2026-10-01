@@ -9,7 +9,7 @@ import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	resumeRoom,
@@ -24,7 +24,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { type PiScript, quiet, scripted } from './support/scripted.ts';
+import { type PiScript, quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, type Storage, storages } from './support/storage.ts';
 
@@ -36,7 +36,7 @@ const priya = defineHuman({
 });
 const alternatePriya = defineHuman({ name: priya.name, identity: 'A different person.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
-const execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
+const execution = piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 /** A storage and a clock that stay open until the test ends. */
 async function host(storage: Storage) {
@@ -49,7 +49,7 @@ async function host(storage: Storage) {
 function started(room: Room, agent: string): Promise<void> {
 	return new Promise((resolve) => {
 		const off = room.subscribe((event) => {
-			if (event.type !== 'activation_start' || event.agent !== agent) return;
+			if (event.type !== 'activation_start' || event.seat !== agent) return;
 			off();
 			resolve();
 		});
@@ -142,7 +142,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		const resumed = stopAtEnd(await resumeRoom(name, { agents: [], runtime: fresh(), execution }));
 		const reconnected = await resumed.visit(priya);
 		expect(reconnected.lastDeparture).toBe(left?.seq);
-		const missed = await messagesOf(resumed, { since: reconnected.lastDeparture });
+		const missed = await messagesOf(resumed, { after: reconnected.lastDeparture });
 		expect(missed.map((message) => message.kind)).toEqual(['arrived']);
 
 		const retry = await reconnected.send({ text: 'Can I promise Thursday?', key: 'promise-1' });
@@ -177,7 +177,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		});
 		const arriving = room.visit(priya);
 		await entered.promise;
-		const replay = messagesOf(room, { since: 0 });
+		const replay = messagesOf(room, { after: 0 });
 		gate.resolve();
 		const [visit, history] = await Promise.all([arriving, replay]);
 		off();
@@ -211,7 +211,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				agents: [watcher],
 				seats: { [watcher.name]: 'broadcast' },
 				runtime: firstRuntime,
-				execution: piExecution({ sessions: 'memory', stream: scripted(holds) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(holds) }),
 			});
 			const visit = await first.visit(priya);
 			const wakeStarted = started(first, watcher.name);
@@ -241,7 +241,7 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 			await clock.advance(30_000);
 			await waitForRoom(resumed);
 			expect(await recovered?.waitForClose()).toEqual(expect.any(Array));
-			expect((await messagesOf(resumed)).filter(isSpoken)).toHaveLength(1);
+			expect((await messagesOf(resumed)).filter(isSaid)).toHaveLength(1);
 		},
 	);
 });
