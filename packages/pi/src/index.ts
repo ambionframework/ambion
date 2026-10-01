@@ -5,7 +5,7 @@
  * model library. This package holds Pi and the model registry.
  */
 
-export { type PiExecutionOptions, piExecution } from './compose.ts';
+export { piExecution } from './compose.ts';
 export { fromPiTool, type PiExecutor, type PiOptions, pi } from './define.ts';
 export {
 	type RunAgentCall,
@@ -16,9 +16,8 @@ export {
 export {
 	createExecutionServices,
 	type ExecutionServices,
-	type ExecutionServicesOptions,
 	type ModelResolver,
-	type SessionPlace,
+	type PiExecutionOptions,
 	stubModel,
 } from './services.ts';
 export { memorySessions, type PiSessions, type SessionScope } from './sessions.ts';

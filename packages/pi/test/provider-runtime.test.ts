@@ -8,7 +8,7 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isSpoken, startRoom, systemClock } from '@ambionframework/ambion';
+import { isSpoken, startRoom } from '@ambionframework/ambion';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type AssistantMessageEventStream,
@@ -49,7 +49,7 @@ async function freshServices(count: number) {
 	vi.resetModules();
 	catalog.builds = 0;
 	const { createExecutionServices } = await import('../src/services.ts');
-	return Array.from({ length: count }, () => createExecutionServices({ clock: systemClock() }));
+	return Array.from({ length: count }, () => createExecutionServices());
 }
 
 /** The OS temporary directory of this file: no session reaches the real one. */

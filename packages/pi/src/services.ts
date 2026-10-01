@@ -1,8 +1,6 @@
-/** Model, stream, session and trace-limit services that a Pi execution host composes. */
+/** Model, stream and session services that a Pi execution host composes. */
 
-import { systemClock } from '@ambionframework/ambion';
-import type { Clock, Limits } from '@ambionframework/ambion/hosting';
-import { callLimits, DEFAULT_TRACE_LIMITS, PermanentError } from '@ambionframework/ambion/hosting';
+import { PermanentError } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
 import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from './sessions.ts';
@@ -10,29 +8,24 @@ import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from
 /** Resolves an agent's `provider/model-id` to the model Pi's harness runs. */
 export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<Model<Api>>;
 
-/** What the trace keeps of a step, and how many steps one pass keeps. */
-interface TraceLimits {
-	readonly toolOutputBytes: number;
-	readonly stepsPerPass: number;
-}
-
 export interface ExecutionServices {
-	readonly clock: Clock;
-	readonly call: Limits['call'];
-	readonly trace: TraceLimits;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 	/** Where each seat keeps its Pi harness sessions. */
 	readonly sessions: PiSessions;
 }
 
-export interface ExecutionServicesOptions {
-	/** Absent, the system clock. */
-	readonly clock?: Clock;
-	readonly call?: Partial<Limits['call']>;
-	readonly trace?: Partial<TraceLimits>;
+export interface PiExecutionOptions {
+	/**
+	 * The model call. Absent, Pi's registry answers, keyed from the environment.
+	 * A scripted stream makes every room deterministic; the model then
+	 * resolves to a stub, because a custom stream never reads it.
+	 */
 	readonly stream?: StreamFn;
-	/** Where each seat keeps its sessions. Absent, `'disk'`. */
+	/**
+	 * Where each seat keeps its Pi harness sessions. Absent, `'disk'`.
+	 * `'memory'` keeps them for as long as the connector lives, as a test does.
+	 */
 	readonly sessions?: SessionPlace;
 	/**
 	 * The directory on the local disk for the sessions. Absent,
@@ -46,7 +39,7 @@ export interface ExecutionServicesOptions {
  * disk, or memory for as long as the services live. A test keeps them in
  * memory, so that no room reads a session of another run.
  */
-export type SessionPlace = 'disk' | 'memory';
+type SessionPlace = 'disk' | 'memory';
 
 let builtinRegistry: Promise<Models> | undefined;
 
@@ -87,12 +80,9 @@ export const stubModel: ModelResolver = (id, agent): Model<Api> => ({
 	maxTokens: 64_000,
 });
 
-export function createExecutionServices(options: ExecutionServicesOptions = {}): ExecutionServices {
+export function createExecutionServices(options: PiExecutionOptions = {}): ExecutionServices {
 	const custom = options.stream !== undefined;
 	return {
-		clock: options.clock ?? systemClock(),
-		call: callLimits(options.call),
-		trace: { ...DEFAULT_TRACE_LIMITS, ...options.trace },
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,
 		sessions: sessionsOf(options),
@@ -100,7 +90,7 @@ export function createExecutionServices(options: ExecutionServicesOptions = {}):
 }
 
 /** The session store: memory, the named directory, or the default directory. */
-function sessionsOf(options: ExecutionServicesOptions): PiSessions {
+function sessionsOf(options: PiExecutionOptions): PiSessions {
 	if (options.sessions === 'memory') return memorySessions();
 	return diskSessions(options.sessionDir ?? defaultSessionDir);
 }
