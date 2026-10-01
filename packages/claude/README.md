@@ -96,12 +96,11 @@ try {
 }
 ```
 
-**A room with no `execution` runs each Claude seat on the default Claude
-execution.** A host that sets `env`, a config root, or a path to the executable passes
-`claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one family passes a list, such as
-`[piExecution(), claudeExecution()]`, or passes none when each family
-package is loaded.
+**A room with no `execution` uses the default Claude execution.** A host that sets `env`, a config root, or an executable path
+passes `claudeExecution(options)`. It passes it to a room or to
+`createRuntime`. A room whose seats run on more than one family passes a
+list, such as `[piExecution(), claudeExecution()]`. It passes none when each
+family package is loaded.
 
 ## Options
 
@@ -138,11 +137,12 @@ tools. A closing activation receives `say` only.
 ## Policy and the trust boundary
 
 **A Claude seat has no built-in tool.** It reaches files and a shell only
-through the workspace tools of its bundles. They run behind the workspace
-port, which can be a remote workstation, so the filesystem of the host is not
-the filesystem of the seat. The executable runs on the host as a child process
-with the privileges of the host user. Its working directory is a private
-scratch directory.
+through the workspace tools of its bundles. Those tools run behind the
+workspace port. The seat reaches the filesystem that the backend serves:
+memory, one directory of the host, or a remote server. The executable runs on
+the host as the host user, in a private scratch directory. A compromise of
+that process reaches every file the host user can read, the credential in
+its environment, and the network. The seat has no tool for these.
 
 **The room defines the seat.** The executor sets these options on every
 query. The definition cannot change them.
@@ -153,6 +153,8 @@ query. The definition cannot change them.
 - `strictMcpConfig` limits the query to the room server.
 - `settingSources` is empty, so no `CLAUDE.md` and no settings file reaches
   the model.
+- `verbatimPrompts` is on, so a user message cannot make the executable read
+  a file with an `@path` mention or run a `/` command.
 - `skills` is empty, and the flag tier turns auto-memory off and empties the
   attribution text of commits and pull requests.
 
@@ -167,8 +169,8 @@ not cover must pass `env` with the variables it needs.
 Without `configRoot`, they live in the temporary directory, a restart loses
 them, and the executor never removes them. The executor also sets
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
-`CLAUDE_CODE_DISABLE_AUTO_MEMORY`, and it aliases a built-in name such as
-`Bash` to the tool of the seat with the same name.
+`CLAUDE_CODE_DISABLE_AUTO_MEMORY`. It aliases a built-in name such as `Bash`
+to the tool of the seat with the same name.
 
 ## Exchange continuity
 

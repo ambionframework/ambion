@@ -10,9 +10,9 @@
  * binary, so the log shows the environment that the binary gets.
  *
  * The log holds one JSON line for each start: the sorted names of the
- * variables, the working directory, and the values of `HOME` and
- * `CLAUDE_CONFIG_DIR`. Both values are paths. The log never holds another
- * value.
+ * variables, the working directory, and the values of `HOME`,
+ * `CLAUDE_CONFIG_DIR`, and two switches. The first two values are paths, and
+ * the switches hold `1`. The log never holds another value.
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync } from 'node:fs';
@@ -32,8 +32,8 @@ function candidates() {
 
 /** The path of the real binary that the SDK ships for this platform. */
 function realBinary() {
-	const sdk = createRequire(import.meta.url).resolve('@anthropic-ai/claude-agent-sdk/package.json');
-	const require = createRequire(sdk);
+	// The package of the SDK exports no `package.json`, so resolve from its entry.
+	const require = createRequire(import.meta.resolve('@anthropic-ai/claude-agent-sdk'));
 	for (const name of candidates()) {
 		try {
 			const path = join(
@@ -56,6 +56,9 @@ if (log !== undefined) {
 			cwd: process.cwd(),
 			HOME: process.env.HOME,
 			CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
+			CLAUDE_CODE_DISABLE_AUTO_MEMORY: process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY,
+			CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:
+				process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
 		})}\n`,
 	);
 }

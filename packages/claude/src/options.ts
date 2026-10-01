@@ -240,6 +240,8 @@ export function queryOptions(input: QueryInput): Options {
 		tools: [],
 		allowedTools: [...input.names],
 		permissionMode: 'dontAsk',
+		// The executable delivers each user message as written: no `@path` file read, no slash command.
+		verbatimPrompts: true,
 		// An empty list turns the skills off. Without it, the executable lists the skills it finds on disk.
 		skills: [],
 		settings: SEAT_SETTINGS,

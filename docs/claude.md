@@ -29,10 +29,16 @@ Use the Claude executor when the agent needs:
 
 **A Claude seat has no built-in tool.** The model sees no `Bash`, `Read`,
 `Edit`, or `Grep` of Claude Code. It reaches files and a shell only through
-the workspace tools, which run behind the workspace port. That port can be a
-remote workstation, so the filesystem of the host is not the filesystem of
-the seat. The Claude Code process runs on the host, in a private scratch
-directory, with the environment of the seat.
+the workspace tools. Those tools run behind the workspace port. The seat
+reaches the filesystem that the workspace backend serves. `memoryBackend`
+serves memory. `directoryBackend` serves one directory of the host. A
+workstation serves a remote server.
+
+**The Claude Code process runs on the host.** It runs as the host user, in a
+private scratch directory, with the environment of the seat. A compromise of
+that process reaches every file the host user can read. It also reaches the
+credential in its environment and the network. The seat itself has no tool
+for these.
 
 The executor needs a host that can spawn a process. The Cloudflare adapter
 builds its seats on Pi and does not run this executor. Use
@@ -50,20 +56,19 @@ from GitHub Packages; see
 `@anthropic-ai/claude-agent-sdk` at an exact version.
 
 **The executor sets no credential.** The executable reads its credentials
-from its environment. The environment of the seat holds the allowlisted
-variables of the host process, so `ANTHROPIC_API_KEY` and
-`CLAUDE_CODE_OAUTH_TOKEN` in `process.env` reach it; see [What the
-environment holds](#what-the-environment-holds). A sign-in failure is
-permanent; see [Failure classification](#failure-classification).
+from its environment. The seat gets the allowlisted variables of the host
+process. `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN` reach it; see
+[What the environment holds](#what-the-environment-holds). A sign-in failure
+is permanent; see [Failure classification](#failure-classification).
 
 **The sign-in of `claude login` cannot reach a seat.** Each seat runs with
-its own [config home](#config-home), and the executor sets `CLAUDE_CONFIG_DIR`
+its own [config home](#config-home). The executor sets `CLAUDE_CONFIG_DIR`
 and `HOME` after it reads `env`, so no option changes them. On macOS the
-keychain entry of the sign-in depends on `CLAUDE_CONFIG_DIR`, so a seat does
-not read the entry of a `claude login` either. Pass `ANTHROPIC_API_KEY`. A
-Claude subscription works with a token: run `claude setup-token` once, and
-pass the token as `CLAUDE_CODE_OAUTH_TOKEN`. Remove `ANTHROPIC_API_KEY` from
-the environment, because a key takes precedence over the token.
+keychain entry depends on `CLAUDE_CONFIG_DIR`, so a seat cannot read it.
+Pass `ANTHROPIC_API_KEY`. A Claude subscription works with a token. Run
+`claude setup-token` once, and pass the token as `CLAUDE_CODE_OAUTH_TOKEN`.
+Remove `ANTHROPIC_API_KEY` from the environment, because a key takes
+precedence over the token.
 
 **The `env` option adds variables.** Use it for a provider such as Bedrock or
 Vertex; see [What the environment holds](#what-the-environment-holds). The
@@ -126,8 +131,8 @@ try {
 }
 ```
 
-**A host that sets `env`, a config root, or a path to the executable, passes
-`claudeExecution(options)` to a room or to `createRuntime`.**
+**A host that sets `env`, a config root, or a path to the executable passes
+`claudeExecution(options)`.** It passes it to a room or to `createRuntime`.
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution.
 
@@ -247,20 +252,25 @@ becomes text content. The executor does not pass `onUpdate`. The `signal`
 aborts when the activation is cut.
 
 **The tools of the seat come from the room and the definition.** They are the
-room tools and `pass.tools`: the tools of the definition and of its bundles.
-The workspace bundle gives `read`, `write`, `edit`, and `bash`. See the next
-section.
+room tools and `pass.tools`. `pass.tools` holds the tools of the definition
+and of its bundles. The workspace bundle gives `read`, `write`, `edit`, and
+`bash`.
 
 ## Policy and the trust boundary
 
 **A Claude seat has no built-in tool.** It reaches files and a shell only
-through the workspace tools of its bundles. They run behind the workspace
-port, and that port can be a remote workstation over SSH, so the filesystem
-of the host is never the filesystem of the seat. The Claude Code executable
-runs on the host as a child process with the privileges of the host user. Its
-working directory is a private scratch directory, and its environment is the
-environment of the seat. The room tools and the tools of the definition run
-in the host process.
+through the workspace tools of its bundles. Those tools run behind the
+workspace port. The seat reaches the filesystem that the workspace backend
+serves: memory, one directory of the host, or a remote server.
+
+**The Claude Code process runs on the host as the host user.** It is a child
+process. Its working directory is a private scratch directory, and its
+environment is the environment of the seat. A compromise of that process
+reaches every file that the host user can read. It also reaches the
+credential in its environment and the network. The seat has no tool for
+these. The query is verbatim, so the text of a user cannot make the process
+read a file. The room tools and the tools of the definition run in the host
+process.
 
 **The room defines the seat, and fixed options enforce it.** The executor
 sets them on every query. The definition cannot change them.
@@ -274,12 +284,22 @@ sets them on every query. The definition cannot change them.
 | `strictMcpConfig`                          | `true`                            | The query reads no MCP server but the room server.                                                      |
 | `settingSources`                           | `[]`                              | The query reads no user, project, or local settings, and no `CLAUDE.md`.                                |
 | `skills`                                   | `[]`                              | No skill joins the query. The executor adds no `Skill` entry to the allow list.                         |
+| `verbatimPrompts`                          | `true`                            | The executable delivers each user message as written. It reads no `@path` file and runs no `/` command. |
 | `settings`                                 | `SEAT_SETTINGS`                   | The flag tier turns auto-memory off and empties the commit, pull request, and session-link attribution. |
 | `toolAliases`                              | See [Tool aliases](#tool-aliases) | A built-in name that the model emits goes to the tool of the seat with the same name.                   |
 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY`          | `1`                               | Auto-memory is off before any settings tier, so a managed setting cannot turn it on.                    |
 | `CLAUDE_CONFIG_DIR`                        | The config home of the seat       | The sessions and settings of the seat stay in its own directory.                                        |
 | `HOME` and `USERPROFILE`                   | The home directory of the seat    | The shell and the tools that read `~` find the seat directory.                                          |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1`                               | The executable skips the update check, telemetry, and other traffic that work omits.                    |
+
+**A user message is not a command.** Without `verbatimPrompts`, the
+executable reads the file that an `@path` mention names. It does this with
+no tool call and no permission check, and the file comes from the host
+filesystem. It also runs a message that starts with `/` as a slash command.
+A participant of the room could then pull any file of the host user into the
+seat. With `verbatimPrompts`, the SDK marks each user message as composed by
+the client, and the executable delivers the text as written. The option needs
+Claude Code 2.1.248 or later.
 
 The query has no permission callback, so the executor raises no permission
 request and records no `approval` step. The flag tier sits below the managed
@@ -299,10 +319,10 @@ asserts that it holds no built-in name.
    and no other.
 2. **The overlay.** The `env` option of `claudeExecution`. A value adds or
    replaces a variable, and `undefined` removes one.
-3. **The variables of the seat.** `HOME` and `USERPROFILE` name the home
-   directory of the seat, `CLAUDE_CONFIG_DIR` names its config directory,
-   and the two variables of the table above turn off auto-memory and
-   optional traffic. They win over `env`.
+3. **The variables of the seat.** They win over `env`. `HOME` and
+   `USERPROFILE` name the home directory of the seat. `CLAUDE_CONFIG_DIR`
+   names its config directory. Two switches turn off auto-memory and
+   optional traffic.
 4. **The strip.** The executor removes the variables of a Claude Code
    session of the host.
 
@@ -317,14 +337,14 @@ asserts that it holds no built-in name.
 
 `ENV_ALLOWLIST` and `ENV_PREFIXES` in `src/options.ts` hold the list, and a
 test holds them. The allowlist limits the environment variables of the seat.
-It does not limit the filesystem. The `HOME` of the seat is the `home`
-directory of its [seat directory](#config-home), so the host `HOME` does not
-pass, and the executable reads no rc file or settings file of the host user.
+It does not limit the filesystem. The host `HOME` does not pass. The `HOME`
+of the seat is the `home` directory of its [seat directory](#config-home).
+The executable reads no rc file or settings file of the host user.
 
-**A host on Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*`
-does not cover must pass `env`.** The allowlist holds no `AWS_` and no
-`GOOGLE_` prefix, because those names carry broad cloud secrets. Pass the
-variables that the provider needs, for example
+**A host on Bedrock, Vertex, Foundry, or another provider must pass `env`.**
+This holds when `ANTHROPIC_*` does not cover the provider. The allowlist
+holds no `AWS_` and no `GOOGLE_` prefix, because those names carry broad cloud
+secrets. Pass the variables that the provider needs, for example
 `claudeExecution({ env: { AWS_REGION: 'eu-west-1' } })`. Without them, the
 executable cannot sign in.
 
@@ -344,10 +364,10 @@ then fail on a long query. Pass `ANTHROPIC_API_KEY` to such a seat.
 ### Tool aliases
 
 **The executor routes a built-in name to the tool of the seat with the same
-name.** A model can emit `Bash` out of habit, or because a skill text names
-it. The executor passes `toolAliases` to the SDK, so that call lands on the
-workspace tool and does not fail as unknown. The map holds the four names
-that the workspace tools of the seat carry:
+name.** A model can emit `Bash` out of habit. A skill text can name it too.
+The executor passes `toolAliases` to the SDK. The call then lands on the
+workspace tool, and it does not fail as unknown. The map holds the four names
+that the workspace tools carry:
 
 | Built-in | Tool of the seat |
 | -------- | ---------------- |
@@ -358,9 +378,9 @@ that the workspace tools of the seat carry:
 
 An alias exists only when the seat holds a tool of that name. **An alias
 redirects the name and converts no argument.** The model sends the arguments
-of the built-in tool, such as `file_path`, and the tool of the seat validates
-them against its own schema. A mismatch is a tool error that the model reads.
-`Grep` and `Glob` have no alias, because the workspace has no such tool; the
+of the built-in tool, such as `file_path`. The tool of the seat validates them
+against its own schema. A mismatch is a tool error that the model reads.
+`Grep` and `Glob` have no alias, because the workspace has no such tool. The
 backlog holds the work.
 
 **`maxBudgetUsd` caps one activation.** The SDK enforces it for the query.
@@ -369,10 +389,10 @@ A spent budget is a permanent failure.
 ## Config home
 
 **Each seat has its own Claude config directory.** The executor sets
-`CLAUDE_CONFIG_DIR` to `<seat directory>/config` and uses
+`CLAUDE_CONFIG_DIR` to `<seat directory>/config`. It uses
 `<seat directory>/work` as the working directory of the process. It also makes
-`<seat directory>/home` for `HOME`. It makes the three with mode
-`0700`, on the first need. Every activation of the seat gets the same
+`<seat directory>/home` for `HOME`. It makes the three with mode `0700`, on
+the first need. Every activation of the seat gets the same
 directory, because a resume reads the session store there. Two seats get two
 directories. The executable keeps its sessions, its settings, and on Linux
 its credentials in this directory.
@@ -393,17 +413,17 @@ sessions of a room across restarts. The executor deletes no session file,
 and the host owns the cleanup.
 
 **No option changes the config home.** The executor sets `CLAUDE_CONFIG_DIR`
-after it reads `env`, so a seat never shares the config home, the sessions,
-or the sign-in of the host user.
+after it reads `env`. A seat never shares the config home, the sessions, or
+the sign-in of the host user.
 
 ## Exchange continuity
 
 [Executors](executors.md#exchange-continuity) states the rule, the recorded
 session, and the fresh start.
 
-**Every query persists its session in the config home of the seat.** The release records
-the id that the SDK reports in a `system` message or a `result`. An
-activation whose `spec.resume` names a Claude session passes it as
+**Every query persists its session in the config home of the seat.** The
+release records the id that the SDK reports. The id comes in a `system`
+message or a `result`. An activation whose `spec.resume` names a Claude session passes it as
 `resume`, with `forkSession` off. The SDK writes one session file for each
 activation to its store, and the executor removes none.
 
@@ -535,14 +555,17 @@ behavior of a real session store on resume, or a real sign-in. It never runs
 a model.
 
 **The package has a live tier.** `packages/claude/test/live/` holds the
-cases that the fake cannot prove: tool exclusivity, hermetic start, memory
-across activations, a mixed room, steering, the trace, and a seat that works
-through the workspace tools. `vitest.live.config.ts` runs them on the real
-Claude binary with `ANTHROPIC_API_KEY`, and the block skips without it. The
-hermetic case runs the real binary through a wrapper, `test/live/support/wire.mjs`,
-which records the names of the variables of the process, its working
-directory, and its `HOME` and `CLAUDE_CONFIG_DIR`. A run costs money. The live
-tests of the Workbench also run the `design` seat. See [Example](example.md).
+cases that the fake cannot prove. They cover tool exclusivity, a hermetic
+start, memory across activations, a mixed room, steering, the trace, and a
+seat that works through the workspace tools. `vitest.live.config.ts` runs
+them on the real Claude binary with `ANTHROPIC_API_KEY`. The block skips
+without it. A run costs money.
+
+**The hermetic case runs the real binary through a wrapper.** The wrapper is
+`test/live/support/wire.mjs`. It records the names of the variables of the
+process, its working directory, and its `HOME` and `CLAUDE_CONFIG_DIR`. The
+live tests of the Workbench also run the `design` seat. See
+[Example](example.md).
 
 ## Troubleshooting
 
@@ -556,7 +579,7 @@ tests of the Workbench also run the `design` seat. See [Example](example.md).
 | `The Claude session ended before the pass did.`                       | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class.  |
 | A failed pass names a model or a setting the executable does not know | The message ends with the stderr of the process, which often names the cause. For an unknown model, it says that the model catalog does not describe it.                            |
 | A `bash` tool of the workspace finds no git identity                  | The seat has no `~` of the host user. The workspace backend owns the identity.                                                                                                      |
-| The executable cannot sign in on Bedrock, Vertex, or Foundry          | The allowlist holds no variable of that provider. Pass an `env` with `PATH`, `HOME`, and the variables the provider needs.                                                          |
+| The executable cannot sign in on Bedrock, Vertex, or Foundry          | The allowlist holds no variable of that provider. Pass an `env` with the variables that the provider needs.                                                                         |
 | A pass ends 5 seconds after its result                                | A sent message had no echo yet. The grace period ended the pass.                                                                                                                    |
 | The seat is abandoned with a budget text                              | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                                                 |
 | A resumed seat opens a new session                                    | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                                                             |

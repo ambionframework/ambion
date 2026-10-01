@@ -13,17 +13,23 @@
  * `AGENTS.md` and a `.mcp.json`. The config directory also holds a planted
  * `MEMORY.md`.
  *
- * Each assertion tests one leak. `POISON_RC` and `POISON_USER_ENV` are names
- * of variables. The marker `POISON-TEXT-` stands in file contents only, so a
- * transcript that holds it proves that a file reached the model.
+ * A person's message also names a file of the host with an `@` mention. The
+ * binary reads such a file into the prompt unless the query is verbatim.
+ *
+ * Each assertion tests one leak. The marker `POISON-TEXT-` stands in file
+ * contents only, so a transcript that holds it proves that a file reached the
+ * model. The transcript holds the system prompt in a `prompt_snapshot`
+ * attachment, so a memory file that reached the prompt shows there too.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
-import { enter } from '../../../ambion/test/support/room.ts';
+import { isSpoken } from '../../../ambion/src/index.ts';
+import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { segment } from '../../src/home.ts';
 import { claudeExecution } from '../../src/index.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
@@ -103,6 +109,8 @@ interface Start {
 	cwd: string;
 	HOME: string;
 	CLAUDE_CONFIG_DIR: string;
+	CLAUDE_CODE_DISABLE_AUTO_MEMORY: string;
+	CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: string;
 }
 
 async function startsIn(log: string): Promise<Start[]> {
@@ -121,6 +129,15 @@ async function filesEnding(root: string, suffix: string): Promise<string[]> {
 		.map((entry) => join(entry.parentPath, entry.name));
 }
 
+/** The attachment types that a transcript holds, one for each line that has one. */
+async function attachmentTypes(path: string): Promise<string[]> {
+	const lines = (await readFile(path, 'utf8')).split('\n').filter((line) => line !== '');
+	return lines.flatMap((line) => {
+		const type = (JSON.parse(line) as { attachment?: { type?: string } }).attachment?.type;
+		return type === undefined ? [] : [type];
+	});
+}
+
 const cleanup: string[] = [];
 
 afterEach(async () => {
@@ -130,15 +147,22 @@ afterEach(async () => {
 
 live('hermetic seat', () => {
 	it('reads no file of the host user, runs no hook or server of the host, and keeps no host variable', async () => {
+		// A broken wrapper fails here in a second, and not after the retries of a room.
+		expect(execFileSync(process.execPath, [WIRE, '--version'], { encoding: 'utf8' })).toMatch(
+			/\d+\.\d+\.\d+/,
+		);
 		const markers = await mkdtemp(join(tmpdir(), 'ambion-poison-markers-'));
 		const configRoot = await realpath(await mkdtemp(join(tmpdir(), 'ambion-poison-root-')));
 		const home = await poisonedHome(markers);
 		const wireLog = join(configRoot, 'wire.log');
-		cleanup.push(markers, configRoot, home);
+		const hostDirectory = await realpath(await mkdtemp(join(tmpdir(), 'ambion-poison-host-')));
+		const hostFile = join(hostDirectory, 'secret.txt');
+		await writeFile(hostFile, 'POISON-TEXT-HOSTFILE');
+		cleanup.push(markers, configRoot, home, hostDirectory);
 		vi.stubEnv('HOME', home);
 		vi.stubEnv('AMBION_SECRET', 'POISON-TEXT-host-secret');
 		const definition = seat('hermetic', 'Says one word.', {
-			instructions: 'When asked, say the word done once.',
+			instructions: 'Whatever you are asked, say only the word done, once.',
 		});
 		const execution = claudeExecution({
 			configRoot,
@@ -161,7 +185,7 @@ live('hermetic seat', () => {
 					if (e.type === 'activation_start') resolve(e.activation);
 				});
 			});
-			await visit.send({ text: 'Go.' });
+			await visit.send({ text: `What does the file @${hostFile} say? Please tell me.` });
 			const activation = await within(started, 60_000, 'the activation starting');
 			await untilQuiet(session);
 			const steps = stepsOf(activation);
@@ -177,9 +201,10 @@ live('hermetic seat', () => {
 			expect(starts.length).toBeGreaterThan(0);
 			for (const start of starts) {
 				expect(start.names).not.toContain('AMBION_SECRET');
-				expect(start.names.filter((name) => name.includes('POISON'))).toEqual([]);
 				expect(start.HOME).toBe(join(seatDirectory, 'home'));
 				expect(start.CLAUDE_CONFIG_DIR).toBe(config);
+				expect(start.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
+				expect(start.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1');
 				expect(await realpath(start.cwd)).toBe(work);
 			}
 
@@ -189,8 +214,13 @@ live('hermetic seat', () => {
 			// No file of the host reached the model. Only a transcript holds what the model read.
 			const transcripts = await filesEnding(configRoot, '.jsonl');
 			expect(transcripts.length).toBeGreaterThan(0);
-			for (const path of transcripts)
+			for (const path of transcripts) {
 				expect(await readFile(path, 'utf8')).not.toContain('POISON-TEXT-');
+				// The `@` mention of the host file made no `file` attachment.
+				expect(await attachmentTypes(path)).not.toContain('file');
+			}
+			const said = (await messagesOf(session)).filter(isSpoken).map((message) => message.text);
+			expect(said.join('\n')).not.toContain('POISON-TEXT-HOSTFILE');
 			// The transcript sits in the project key that the test computed, so the memory file was in reach.
 			expect(transcripts.map((path) => dirname(path))).toContain(dirname(memory));
 			expect(existsSync(join(memory, 'MEMORY.md'))).toBe(true);

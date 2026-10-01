@@ -215,6 +215,7 @@ it.each([
 it('gives the options no alias map when no alias applies, and skills off always', () => {
 	expect(optionsOf().toolAliases).toBeUndefined();
 	expect(optionsOf().skills).toEqual([]);
+	expect(optionsOf().verbatimPrompts).toBe(true);
 	expect(optionsOf({}, {}, ['mcp__ambion__edit']).toolAliases).toEqual({
 		Edit: 'mcp__ambion__edit',
 	});
