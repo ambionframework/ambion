@@ -17,7 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PermanentError } from '@ambionframework/ambion/hosting';
+import { PermanentError, ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
 	EXCLUSIVE_FEATURES,
@@ -53,37 +53,52 @@ describe('seatText', () => {
 
 describe('clientOptions', () => {
 	it('carries the seat text as developer_instructions, and serves only the approved room server, without a scratch', () => {
-		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text').config as {
+		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto')
+			.config as {
 			developer_instructions: string;
-			mcp_servers: Record<string, { default_tools_approval_mode?: string; args: string[] }>;
+			model_reasoning_summary: string;
+			mcp_servers: Record<
+				string,
+				{ default_tools_approval_mode?: string; required?: boolean; args: string[] }
+			>;
 		};
-		expect(Object.keys(config)).toEqual(['developer_instructions', 'mcp_servers']);
+		expect(Object.keys(config)).toEqual([
+			'developer_instructions',
+			'model_reasoning_summary',
+			'mcp_servers',
+		]);
 		expect(config.developer_instructions).toBe('seat text');
+		expect(config.model_reasoning_summary).toBe('auto');
 		const servers = Object.values(config.mcp_servers);
 		expect(servers).toHaveLength(1);
 		expect(servers[0]?.default_tools_approval_mode).toBe('approve');
+		// Codex then waits for the server before the first model request.
+		expect(servers[0]?.required).toBe(true);
 		expect(servers[0]?.args.at(-1)).toBe('/tmp/room.sock');
 	});
 
 	it('refuses as permanent a seat text that one command argument cannot hold', () => {
 		const long = 'x'.repeat(DEVELOPER_TEXT_LIMIT);
-		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long)).toThrow(PermanentError);
+		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long, 'auto')).toThrow(
+			PermanentError,
+		);
 	});
 
 	it('names the instructions file, adds the config, and disables node_repl beside the room server with a scratch', () => {
 		const scratch = new Scratch(luna, 'seat text');
 		try {
-			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', scratch)
+			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto', scratch)
 				.config as {
 				model_catalog_json: string;
 				model_instructions_file: string;
-				mcp_servers: Record<string, { enabled?: boolean; command: string }>;
+				mcp_servers: Record<string, { enabled?: boolean; required?: boolean; command: string }>;
 			};
 			expect(config).not.toHaveProperty('developer_instructions');
 			expect(config.model_instructions_file).toBe(scratch.instructions);
 			expect(config.model_catalog_json).toBe(scratch.catalog);
 			expect(config.mcp_servers[NODE_REPL]).toEqual({ command: 'true', enabled: false });
 			expect(Object.keys(config.mcp_servers)).toHaveLength(2);
+			expect(config.mcp_servers[ROOM_SERVER]?.required).toBe(true);
 		} finally {
 			scratch.remove();
 		}
@@ -97,12 +112,14 @@ describe('clientOptions environment', () => {
 			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
 		});
 		expect(
-			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat'),
+			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat', 'auto'),
 		).toMatchObject({
 			codexPathOverride: '/bin/codex',
 			env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
 		});
-		expect(clientOptions({}, home, '/tmp/room.sock', 'seat').env).not.toHaveProperty('GONE');
+		expect(clientOptions({}, home, '/tmp/room.sock', 'seat', 'auto').env).not.toHaveProperty(
+			'GONE',
+		);
 	});
 });
 
@@ -186,6 +203,13 @@ describe('threadOptions', () => {
 			'codex',
 		);
 	});
+
+	it('defaults reasoningSummary to auto', () => {
+		expect(codex({ instructions: 'x', model: 'm' }).reasoningSummary).toBe('auto');
+		expect(
+			codex({ instructions: 'x', model: 'm', reasoningSummary: 'none' }).reasoningSummary,
+		).toBe('none');
+	});
 });
 
 describe('exclusiveEntry', () => {
@@ -196,21 +220,31 @@ describe('exclusiveEntry', () => {
 			slug: 'gpt-5.6-luna',
 			tool_mode: null,
 			apply_patch_tool_type: null,
-			input_modalities: ['text'],
 			supports_search_tool: false,
 			experimental_supported_tools: [],
 			node_repl_disabled: true,
 			multi_agent_version: null,
-			supports_image_detail_original: false,
 			include_apps_usage_instructions: false,
 			include_plugin_usage_instructions: false,
 			include_skills_usage_instructions: false,
 		});
+		// The model keeps its own image input, so an image from a tool of the seat reaches it.
+		expect(luna.input_modalities).toEqual(['text', 'image']);
+		expect(patched.input_modalities).toEqual(luna.input_modalities);
+		expect(patched.supports_image_detail_original).toBe(luna.supports_image_detail_original);
 		expect(patched.base_instructions).toBe(luna.base_instructions);
 		expect(patched.context_window).toBe(luna.context_window);
 		expect(luna).toEqual(before);
 		expect(luna.tool_mode).toBe('code_mode_only');
 		expect(patched).not.toBe(luna);
+	});
+
+	it('keeps the modalities of a model with no image input', () => {
+		const textOnly = { ...luna, input_modalities: ['text'], supports_image_detail_original: false };
+		expect(exclusiveEntry(textOnly)).toMatchObject({
+			input_modalities: ['text'],
+			supports_image_detail_original: false,
+		});
 	});
 
 	it('patches the entry of a model that has no tool mode', () => {

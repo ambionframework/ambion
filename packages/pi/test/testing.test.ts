@@ -88,7 +88,7 @@ it.each([
 	expect(result.errorMessage).toMatch(error);
 });
 
-it('reads the closing activation from the system prompt', () => {
+it('reads the summary activation from the system prompt', () => {
 	expect(isClosingContext({ messages: [], systemPrompt: 'The exchange is over.' })).toBe(true);
 	expect(isClosingContext(normalizeContext({ messages: [] }))).toBe(false);
 });

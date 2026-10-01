@@ -30,6 +30,9 @@
  *   before `thread.started`, and the activation starts a fresh thread.
  * - **Steer.** The session has no `steer`. Codex takes no message into a
  *   turn that runs. The driver holds the line, and the next pass reads it.
+ * - **Notice.** Codex writes every thread to a rollout file in the home. The
+ *   activation records one `notice` for each thread with the thread id, the
+ *   home, and the path of that file, so the trace joins to the full record.
  * - **Cut.** The signal of the activation signals the turn. `close` stops
  *   the socket and the room tools server.
  */
@@ -55,7 +58,7 @@ import { type Bridge, startBridge } from './bridge.ts';
 import { type CatalogSource, installedCatalog, type Scratch, scratchFor } from './catalog.ts';
 import { CodexSteps, changedPaths } from './codex-trace.ts';
 import { passResultOf } from './failure.ts';
-import { openHome, type SeatHome, seatHome } from './home.ts';
+import { openHome, rolloutOf, type SeatHome, seatHome } from './home.ts';
 import {
 	type CodexExecutionOptions,
 	clientOptions,
@@ -129,6 +132,8 @@ class Activation implements ExecutorSession {
 	private resuming: string | undefined;
 	/** Whether Codex reported `thread.started` for the thread in use. */
 	private heard = false;
+	/** The threads whose notice the trace holds. A thread has one notice for the activation. */
+	private readonly introduced = new Set<string>();
 	private client: CodexClientLike | undefined;
 	private readonly steps: CodexSteps;
 	/** Aborts the turn in flight. A turn that ended holds none, so a late cut never signals a dead process. */
@@ -247,7 +252,10 @@ class Activation implements ExecutorSession {
 			scratch?.remove();
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
-		this.client = make(clientOptions(this.options, home, bridge.socketPath, seat, scratch));
+		const summary = codexOf(this.definition.executor).reasoningSummary ?? 'auto';
+		this.client = make(
+			clientOptions(this.options, home, bridge.socketPath, seat, summary, scratch),
+		);
 		this.resuming = pass.resume;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
@@ -294,8 +302,11 @@ class Activation implements ExecutorSession {
 		const ending = new Ending();
 		for await (const event of events) {
 			this.handle(event);
+			// The rollout file exists once the turn starts. A turn that fails first gets its notice at the end.
+			if (event.type === 'turn.started') await this.introduce();
 			if (ending.over(event)) break;
 		}
+		await this.introduce();
 		if (this.stopped) return { failed: false };
 		return passResultOf(ending.failure());
 	}
@@ -311,6 +322,25 @@ class Activation implements ExecutorSession {
 		}
 		for (const path of changedPaths(event)) this.changed.add(path);
 		for (const step of this.steps.steps(event)) this.activation.trace.record(step);
+	}
+
+	/**
+	 * Record the notice of the thread in use: its id, the Codex home, and the
+	 * rollout file, which holds everything Codex saw and did. It joins the
+	 * trace to the record of Codex. The notice comes once for each thread.
+	 */
+	private async introduce(): Promise<void> {
+		const thread = this.reported;
+		const home = this.home?.path;
+		if (thread === undefined || home === undefined || this.introduced.has(thread)) return;
+		this.introduced.add(thread);
+		const rollout = await rolloutOf(home, thread);
+		this.activation.trace.record({
+			type: 'notice',
+			level: 'info',
+			text: 'Codex thread',
+			data: { thread, home, ...(rollout === undefined ? {} : { rollout }) },
+		});
 	}
 
 	/**

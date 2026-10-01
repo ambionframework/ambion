@@ -328,7 +328,7 @@ the session that `pass.resume` names.
 resumed session keeps the system prompt it began with, and the SDK ignores
 a new `systemPrompt`. The seat's duties and instructions for the
 activation, its agent part, therefore go at the head of the first message.
-A closing activation resumes the session of the exchange it summarizes.
+A summary activation resumes the session of the exchange it summarizes.
 This message gives it the summary duties and the reader's preferences.
 When the resume fails, the fresh session gets the same message, and the
 seat's part then appears twice.
@@ -344,7 +344,7 @@ failure does.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 

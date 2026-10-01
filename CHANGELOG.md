@@ -27,6 +27,16 @@ backend for one git backend, in place of the field `bash`. The registration
 cases open a new bash backend for each workspace, so the suite no longer
 borrows one bash backend with a disposal that does nothing.
 
+**The purpose of an activation has one pair of values, and `ParticipantInfo`
+becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
+activation that writes a summary. It now holds `summarize`, the value that
+`ActivationPurpose.kind` already used. The prose names the two purposes a
+respond activation and a summary activation. `isClosing` in
+`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
+`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
+`AgentParticipant`, and `HumanParticipant`. The activation source and the
+activation ids do not change.
+
 **The body schemas are the one source of the body types.** The new file
 `packages/ambion/src/bodies.ts` holds the schema of each stored body.
 Before, a type and a schema each stated the body, and the two drifted.
@@ -88,6 +98,20 @@ activation, after `RoomState.due`. In the core, `PendingActivation` becomes
 `draftsClose` becomes `summarizesClose`. In the Cloudflare package,
 `SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
 body changes.
+
+**An image from a tool reaches a default Codex seat.** The catalog patch of
+`nativeTools: 'none'` no longer sets `input_modalities` and
+`supports_image_detail_original`. The model keeps its own modalities, so a
+workspace `read` of a picture and the frames of `observe` reach it as images.
+The tool list does not change, because `view_image` stays off. A model with
+no image input stays text-only, and Codex shows a placeholder.
+
+**The trace logs the size of an image in a tool result of every executor.**
+`loggedToolResult` replaced the bytes of an image with their count only in
+the `content` array of a record. The Claude and Codex executors log the
+content parts with no record, so their images went into the log whole. The
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
 **`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
 describes one activation. The main entry and the hosting entry export the
 new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
@@ -133,6 +157,44 @@ The word `Runtime` now names the core `Runtime` alone.
 `scripted`. The core testing entry keeps `scripted`, the scripted
 execution. The Codex tool that the stdio server lists is `CodexTool`. It
 replaces a `RoomTool` that shadowed the core type of the same name.
+
+**A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
+Codex 0.158 shows no reasoning unless the request asks for a summary, and
+the catalog of some models turns the summary off. The new option
+`reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
+`none`. The default is `auto`. The executor passes it as
+`model_reasoning_summary` in both modes of `nativeTools`, and the summary
+arrives as `thinking` steps. The default trace policy keeps 280 characters of
+each thinking block. `defineAgent({ trace: { thinking: 'full', toolOutput:
+'full' } })` keeps all of it. A `todo_list` item now gives a `tool_call`
+named `update_plan` and its `tool_result`.
+
+**Breaking: the step vocabulary has an eleventh kind, `notice`.** A `notice`
+is a non-fatal diagnostic of the harness:
+`{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
+gates an activation. A consumer that switches on the step type must handle
+the new kind. The Codex executor records a `notice` at level `warning` for
+each `error` item and each `error` event, such as an unknown setting in the
+config or a reconnect. `turn.failed` stays in the `end` step.
+
+**A Codex trace names the thread and the rollout file.** The executor
+records one `notice` at level `info`, with the text "Codex thread", for each
+thread of an activation. Its `data` holds the `thread` id, the `home` of the
+seat, and the `rollout` path, `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`.
+Codex writes the instructions, every item, the reasoning, and the tool calls
+there. The binary tier proves the path and the notice.
+
+**A Codex seat has the room tools on its first model request.** Codex
+starts an MCP server in the background and waits one second for an optional
+server. A loaded host starts the room tools server in more time, so the first
+request of a turn listed no `mcp__ambion` tool. A real model could not call
+`say` on that request and could answer in text that the room never hears.
+The executor now sets `required = true` on the room tools server. Codex waits
+for it, up to 30 seconds, before the first model request. A server that
+cannot start now ends `codex exec` with "required MCP servers failed to
+initialize" before any model request, and the activation fails as transient.
+The test endpoint no longer answers a request that lacks a tool with a probe.
+A request without `say` now fails the test.
 
 **A Codex seat stops when its host dies.** The SDK closes the input of
 `codex exec` at once. A host that died by SIGKILL or out of memory left

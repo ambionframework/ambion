@@ -67,7 +67,7 @@ export interface ExchangeRange extends ExchangeRef {
 	readonly through: Seq;
 }
 
-/** The durable outcome of the optional summary assignment for a closed exchange. */
+/** The durable outcome of the optional summary work for a closed exchange. */
 export type SummaryOutcome =
 	| { readonly kind: 'pending'; readonly writer?: string }
 	| { readonly kind: 'published'; readonly summary: SummaryMessage }
@@ -92,8 +92,8 @@ export interface ExchangeActivation {
 	readonly seat: string;
 	/** The attempt number. A retry is a new attempt of one due activation. */
 	readonly attempt: number;
-	/** `respond` answers a message. `summary` writes the closing summary. */
-	readonly purpose: 'respond' | 'summary';
+	/** `respond` answers a message. `summarize` writes the closing summary. */
+	readonly purpose: 'respond' | 'summarize';
 	readonly outcome: ActivationOutcome;
 	/** What the activation spent, once it ended and recorded usage. */
 	readonly usage?: Usage;
@@ -109,7 +109,7 @@ export type ExchangeOutcome =
 	| { readonly kind: 'complete' }
 	/** A cancellation wrote the close. */
 	| { readonly kind: 'cancelled' }
-	/** The room gave up on a response activation in the range. */
+	/** The room gave up on a respond activation in the range. */
 	| { readonly kind: 'exhausted' }
 	/** The last spoken message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
@@ -138,7 +138,7 @@ interface RoomReadFields {
 	readonly messages: readonly Message[];
 	/** The scheduled says that wait to return, in the order they landed. */
 	readonly scheduled: readonly ScheduledSay[];
-	readonly participants: readonly ParticipantInfo[];
+	readonly participants: readonly Participant[];
 	readonly exchanges: readonly Exchange[];
 	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
@@ -280,7 +280,7 @@ export interface SeatOptions {
 /** A person is in the room or they are not. */
 export type PresenceStatus = 'present' | 'absent';
 
-export interface AgentParticipantInfo {
+export interface AgentParticipant {
 	kind: 'agent';
 	name: string;
 	identity: string;
@@ -288,14 +288,14 @@ export interface AgentParticipantInfo {
 	attention: Attention;
 }
 
-export interface HumanParticipantInfo {
+export interface HumanParticipant {
 	kind: 'human';
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
 }
 
-export type ParticipantInfo = AgentParticipantInfo | HumanParticipantInfo;
+export type Participant = AgentParticipant | HumanParticipant;
 
 /** A room-level fact: what landed on the record, or what happened to this run. */
 export type RoomEvent =
@@ -420,6 +420,8 @@ export type Step =
 	| { type: 'steer'; seq: Seq; consumed: boolean }
 	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
 	| ({ type: 'usage' } & Usage)
+	/** A non-fatal diagnostic from the harness. A notice never gates the activation. */
+	| { type: 'notice'; level: 'info' | 'warning'; text: string; data?: Record<string, unknown> }
 	/** The activation stops. `failure` is present when it failed. */
 	| {
 			type: 'end';

@@ -307,14 +307,14 @@ every executor kind, and one view is one call over the wire.
 
 ## The room tools
 
-[Definitions and tools](agent.md#tools) states which tools an ordinary
-activation receives and which tools a closing activation receives.
+[Definitions and tools](agent.md#tools) states which tools a respond
+activation receives and which tools a summary activation receives.
 
 **The core binds the tools of the activation once, in a form that names no
 harness.** Each executor kind adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
-  grants, then the tools of the definition. A closing activation gets the
+  grants, then the tools of the definition. A summary activation gets the
   room tools alone. Each `RoomTool` has a `name`, a `description`, TypeBox
   `parameters`, and `run(args, call)`. `call` is the id of the tool call,
   and the commit takes it as its key. The core binds each room tool to the
@@ -331,7 +331,7 @@ harness.** Each executor kind adapts them to its own tool shape.
 **The result of a room tool holds the content that the model reads.**
 `isError` marks an error result. `terminate` marks an activation that has
 nothing more to do: an `unknown` or `stale` answer, or the last answer of a
-closing activation.
+summary activation.
 
 **The scripted executor also reads the room answer of a commit.** A script
 of `@ambionframework/ambion/testing` branches on a short answer, such as
@@ -416,7 +416,7 @@ the context that the core gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has ten kinds,
+**A step is one thing an activation did.** The vocabulary has eleven kinds,
 and every executor kind shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
@@ -433,6 +433,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
 | `usage`       | executor    | Tokens and cost.                                                                                   |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.    |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
@@ -496,7 +497,7 @@ hold. The first activation of a seat in each exchange starts fresh.
 **The release records the session, and the room hands it back.** The
 release records `{ harness, id }` on the `ended` entry. The room gives
 the next activation of the same seat in the same exchange the latest such
-session as `spec.resume`. A closing activation gets the session of the
+session as `spec.resume`. A summary activation gets the session of the
 exchange it summarizes. The room never reads the id. There is no option:
 every executor works this way.
 

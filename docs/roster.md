@@ -52,7 +52,7 @@ Attention controls which events wake an idle seat.
 | `presence`  | Speech plus presence and seating changes          |
 
 Omitted attention uses `broadcast`. The scale applies to every agent, including
-a configured summary writer. Closing assignments have their own authority.
+a configured summary writer. Summary activations have their own authority.
 
 Attention controls waking. It does not grant authority to commit. The room
 checks the activation, lease, recipient, and consumed context for every write.

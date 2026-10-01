@@ -8,7 +8,7 @@ import type {
 	ContextParticipant,
 } from '../protocol.ts';
 import { type Block, blocks, renderLine } from '../record.ts';
-import type { AgentParticipantInfo, ExchangeRef, ParticipantInfo, Seq } from '../types.ts';
+import type { AgentParticipant, ExchangeRef, Participant, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
@@ -41,7 +41,7 @@ export interface RoomFacts {
 }
 
 /** The roster and people returned by the public participants query. */
-export function participantsOf(facts: Pick<RoomFacts, 'state' | 'live'>): ParticipantInfo[] {
+export function participantsOf(facts: Pick<RoomFacts, 'state' | 'live'>): Participant[] {
 	return [
 		...agentsOf(facts),
 		...[...facts.state.people.values()].map((person) => ({
@@ -53,7 +53,7 @@ export function participantsOf(facts: Pick<RoomFacts, 'state' | 'live'>): Partic
 	];
 }
 
-function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipantInfo[] {
+function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipant[] {
 	return facts.state.roster.map((seat) => ({
 		kind: 'agent',
 		name: seat.name,
@@ -69,8 +69,8 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
 	// A summary reads every message through its closed exchange, background and
-	// current alike; what it covers stays fixed to its own exchange. An ordinary
-	// response reads the whole record instead. The room windows that record to
+	// current alike; what it covers stays fixed to its own exchange. A respond
+	// activation reads the whole record instead. The room windows that record to
 	// its cap and to the token limit of the seat. A view of one message reads
 	// it by its seq under the purpose alone, so `recall` reaches below the
 	// window.
@@ -105,7 +105,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 	});
 }
 
-/** The says of the seat that wait to return. A closing activation reads none. */
+/** The says of the seat that wait to return. A summary activation reads none. */
 function scheduledOf(
 	spec: ActivationSpec,
 	state: RoomState,

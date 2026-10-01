@@ -6,15 +6,20 @@
 import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-/** One reply of the scripted model: assistant text, or a call to a named tool. */
-export type Reply =
+/**
+ * One reply of the scripted model: assistant text, or a call to a named tool.
+ * A reply can carry the summary of reasoning, which the endpoint sends as a
+ * reasoning item before the reply item.
+ */
+export type Reply = (
 	| { readonly text: string }
 	| {
 			readonly call: string;
 			readonly args: unknown;
 			/** The namespace of an MCP tool, as Codex lists it on the wire. */
 			readonly namespace?: string;
-	  };
+	  }
+) & { readonly reasoning?: string };
 
 /** The token counts that `response.completed` reports for every reply. */
 export interface ReportedUsage {
@@ -71,10 +76,8 @@ export interface ScriptedResponses {
 	readonly url: string;
 	/** The body of each request that took a reply from the script, in arrival order. */
 	readonly requests: readonly ResponsesRequest[];
-	/** The headers of every request that arrived, probes and other paths included, in arrival order. */
+	/** The headers of every request that arrived, other paths included, in arrival order. */
 	readonly headers: readonly IncomingHttpHeaders[];
-	/** The count of probes: requests that came before the MCP tools were ready. */
-	readonly probes: () => number;
 	/** The path of each request that was not `POST /v1/responses`. */
 	readonly others: readonly string[];
 	/** The count of requests that arrived after the script ended. */
@@ -84,18 +87,6 @@ export interface ScriptedResponses {
 
 /** What the endpoint answers when the script has ended. */
 export const SCRIPT_ENDED = 'The script has ended.';
-
-/**
- * The most probes the endpoint sends for one script. A probe that never
- * finds the tools ends, so a binary that never lists them fails the test
- * and does not loop.
- */
-const MAX_PROBES = 100;
-
-/** The reply that asks Codex to list MCP resources. It reads nothing and costs no usage. */
-const PROBE: Reply = { call: 'list_mcp_resources', namespace: 'functions', args: {} };
-
-const NO_USAGE: ReportedUsage = { input: 0, cached: 0, output: 0, reasoning: 0 };
 
 function itemOf(reply: Reply, id: string): Record<string, unknown> {
 	if ('text' in reply) {
@@ -116,6 +107,16 @@ function itemOf(reply: Reply, id: string): Record<string, unknown> {
 	};
 }
 
+/** A reasoning item with one summary part. The encrypted content is a stand-in. */
+function reasoningOf(summary: string, id: string): Record<string, unknown> {
+	return {
+		type: 'reasoning',
+		id: `rs_${id}`,
+		summary: [{ type: 'summary_text', text: summary }],
+		encrypted_content: 'opaque-reasoning-content',
+	};
+}
+
 /** The server-sent events of one reply. */
 function eventsOf(reply: Reply, id: string, used: ReportedUsage): string {
 	const usage = {
@@ -125,9 +126,14 @@ function eventsOf(reply: Reply, id: string, used: ReportedUsage): string {
 		output_tokens_details: { reasoning_tokens: used.reasoning },
 		total_tokens: used.input + used.output,
 	};
+	const reasoning = reply.reasoning === undefined ? [] : [reasoningOf(reply.reasoning, id)];
 	return [
 		{ type: 'response.created', response: { id } },
-		{ type: 'response.output_item.done', output_index: 0, item: itemOf(reply, id) },
+		...[...reasoning, itemOf(reply, id)].map((item, output_index) => ({
+			type: 'response.output_item.done',
+			output_index,
+			item,
+		})),
 		{ type: 'response.completed', response: { id, usage } },
 	]
 		.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
@@ -140,28 +146,12 @@ function parsed(text: string): ResponsesRequest {
 }
 
 /**
- * Whether the model could call the tool of the reply. Codex starts its MCP
- * servers while it starts the turn, and a loaded host can send the first
- * request before a server is ready. The model then sees no tool of it.
- */
-function listsTool(request: ResponsesRequest, reply: Reply | undefined): boolean {
-	if (reply === undefined || 'text' in reply || reply.namespace === undefined) return true;
-	const tools = toolsOf(request);
-	// A native function of Codex is a top-level tool, outside any namespace.
-	return (tools[reply.namespace]?.includes(reply.call) ?? false) || reply.call in tools;
-}
-
-/**
  * Runs when a request takes a reply, before the endpoint answers. It gets the index of the reply
  * and the response. The `close` event of the response tells that the client went away.
  */
 export type OnRequest = (index: number, response: ServerResponse) => void | Promise<void>;
 
-/**
- * Start an endpoint on a free port of the loopback interface. When a request
- * does not list the tool that the next reply calls, the endpoint answers with
- * a probe and keeps the reply for the next request.
- */
+/** Start an endpoint on a free port of the loopback interface. */
 export async function scriptedResponses(
 	script: readonly Reply[],
 	onRequest?: OnRequest,
@@ -169,7 +159,6 @@ export async function scriptedResponses(
 	const requests: ResponsesRequest[] = [];
 	const others: string[] = [];
 	const headers: IncomingHttpHeaders[] = [];
-	let probes = 0;
 	let overrun = 0;
 	const server = createServer((request, response) => {
 		const chunks: Buffer[] = [];
@@ -185,11 +174,6 @@ export async function scriptedResponses(
 			const index = requests.length;
 			const reply = script[index];
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			if (!listsTool(body, reply) && probes < MAX_PROBES) {
-				probes += 1;
-				response.end(eventsOf(PROBE, `probe_${probes}`, NO_USAGE));
-				return;
-			}
 			requests.push(body);
 			await onRequest?.(index, response);
 			if (reply === undefined) overrun += 1;
@@ -202,7 +186,6 @@ export async function scriptedResponses(
 		url: `http://127.0.0.1:${port}/v1`,
 		requests,
 		headers,
-		probes: () => probes,
 		others,
 		overrun: () => overrun,
 		close: () =>

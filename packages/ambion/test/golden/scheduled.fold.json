@@ -57,7 +57,7 @@
 					"id": "closed:6:assistant:1",
 					"seat": "assistant",
 					"attempt": 1,
-					"purpose": "summary",
+					"purpose": "summarize",
 					"outcome": {
 						"kind": "released"
 					},

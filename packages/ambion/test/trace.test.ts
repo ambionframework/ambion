@@ -152,6 +152,19 @@ describe('loggedToolResult', () => {
 			],
 			details: undefined,
 		});
+		// The Claude and Codex executors log the content parts with no record around them.
+		expect(loggedToolResult(result.content)).toEqual([
+			{ type: 'text', text: 'Read image file [image/png]' },
+			{ type: 'image', mimeType: 'image/png', bytes: 3 },
+		]);
+		// The Claude executor logs an image in the shape of the Anthropic API.
+		const anthropic = {
+			type: 'image',
+			source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
+		};
+		expect(loggedToolResult([anthropic])).toEqual([
+			{ type: 'image', source: { type: 'base64', media_type: 'image/png', bytes: 3 } },
+		]);
 	});
 
 	it('leaves a value with no content array unchanged', () => {
@@ -270,6 +283,34 @@ describe('the trace limits and policy', () => {
 		costless.record({ type: 'usage', input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });
 		expect(costless.usage()).toEqual({ input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });
 		await costless.close();
+	});
+
+	it('logs a notice in order under the strictest policy, with its data as plain JSON', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'notice',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.startPass('view', 1);
+		sink.record({ type: 'notice', level: 'info', text: 'Plain.' });
+		sink.record({
+			type: 'notice',
+			level: 'warning',
+			text: 'Data.',
+			data: { thread: 't1', gone: undefined },
+		});
+		await sink.close();
+		expect(log.records.map((record) => record.step)).toMatchObject([
+			{ type: 'pass' },
+			{ type: 'notice', level: 'info', text: 'Plain.', index: 1 },
+			{ type: 'notice', level: 'warning', data: { thread: 't1' }, index: 2 },
+		]);
+		expect(JSON.stringify(log.records[2]?.step)).not.toContain('gone');
 	});
 
 	it('refuses a policy it does not know', () => {

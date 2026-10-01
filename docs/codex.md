@@ -137,22 +137,23 @@ package. The block in `packages/codex/README.md` gets the same check.
 **`codex(options)` takes the fields of an agent and the policy of Codex.**
 The executor passes each policy field to the Codex SDK unchanged.
 
-| Option                  | Default            | What it does                                                 |
-| ----------------------- | ------------------ | ------------------------------------------------------------ |
-| `instructions`          | Required           | The private voice of the agent                               |
-| `model`                 | Required           | A Codex model identifier                                     |
-| `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server |
-| `bundles`               | None               | Tool bundles with guidance                                   |
-| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                |
-| `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
-| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens  |
-| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
-| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`      |
-| `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`          |
-| `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them               |
-| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only       |
-| `workingDirectory`      | Process directory  | The directory where Codex works                              |
-| `additionalDirectories` | None               | More writable directories, under `workspace-write` only      |
+| Option                  | Default            | What it does                                                        |
+| ----------------------- | ------------------ | ------------------------------------------------------------------- |
+| `instructions`          | Required           | The private voice of the agent                                      |
+| `model`                 | Required           | A Codex model identifier                                            |
+| `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server        |
+| `bundles`               | None               | Tool bundles with guidance                                          |
+| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
+| `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads                 |
+| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens         |
+| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them          |
+| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`             |
+| `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`                 |
+| `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them                      |
+| `reasoningSummary`      | `'auto'`           | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
+| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only              |
+| `workingDirectory`      | Process directory  | The directory where Codex works                                     |
+| `additionalDirectories` | None               | More writable directories, under `workspace-write` only             |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,
@@ -240,9 +241,20 @@ the same path resolves to `src/room-tools-server.ts`, which Node runs by
 stripping types. `serverPath` picks the file from the extension of the module
 that calls it, and a test covers both cases.
 
-**The config key sets three limits and one mode.**
-`startup_timeout_sec` is 30. `tool_timeout_sec` is 600.
-`default_tools_approval_mode` is `approve`.
+**The config key sets two limits, one flag, and one mode.**
+`startup_timeout_sec` is 30. `tool_timeout_sec` is 600. `required` is
+`true`. `default_tools_approval_mode` is `approve`.
+
+**A required server is ready before the first model request.** Codex starts
+its MCP servers in the background. For an optional server, it waits one
+second (`mcp_optional_startup_grace_ms`) and then sends the first request
+with the tools that exist at that time. A Node process on a loaded host
+needs more than one second, so that request listed no room tool. With
+`required = true`, Codex waits for the server up to `startup_timeout_sec`
+while it creates the session. The room tools are then ready before the
+first model request, and a default seat lists them on every request. The
+binary tier asserts it. Under `nativeTools: 'codex'`, the model reaches them
+through Code Mode or tool search, as its catalog entry says.
 
 **Approval is set because a headless run cannot answer.** Under
 `approvalPolicy: 'never'`, Codex denies an MCP call that needs approval. The
@@ -315,7 +327,7 @@ Linux and macOS only. A test kills a real host in the middle of a model request 
 
 ## Step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the Codex source of each step.
 
 **Each item that Codex reports becomes steps in the trace.** Codex reports an
@@ -323,16 +335,20 @@ item as it starts, as it changes, and as it completes. A text item carries the
 whole text so far, so the steps hold the growth: one delta for each update,
 then a closing step.
 
-| Codex item or event  | Steps                                                                      |
-| -------------------- | -------------------------------------------------------------------------- |
-| `agent_message`      | `text` deltas, then a closing `text`                                       |
-| `reasoning`          | `thinking` deltas, then a closing `thinking`                               |
-| `mcp_tool_call`      | `tool_call` and `tool_result`; a room tool has its own name                |
-| `command_execution`  | `tool_call` named `command`; the result holds the output and the exit code |
-| `file_change`        | `tool_call` named `file_change`; the result holds the changes              |
-| `web_search`         | `tool_call` named `web_search`, with the query                             |
-| `turn.completed`     | `usage`                                                                    |
-| `todo_list`, `error` | No step                                                                    |
+| Codex item or event | Steps                                                                                           |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `agent_message`     | `text` deltas, then a closing `text`                                                            |
+| `reasoning`         | `thinking` deltas, then a closing `thinking`                                                    |
+| `mcp_tool_call`     | `tool_call` and `tool_result`; a room tool has its own name                                     |
+| `command_execution` | `tool_call` named `command`; the result holds the output and the exit code                      |
+| `file_change`       | `tool_call` named `file_change`; the result holds the changes                                   |
+| `web_search`        | `tool_call` named `web_search`, with the query                                                  |
+| `todo_list`         | `tool_call` named `update_plan` with the `items`; the result holds them                         |
+| `error` item        | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
+| `error` event       | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
+| `turn.started`      | Once for each thread: `notice` at level `info`, with the thread, the home, and the rollout file |
+| `turn.completed`    | `usage`                                                                                         |
+| `turn.failed`       | No step; the failure goes to the `end` step                                                     |
 
 **The id of a step is unique in the room.** A real `codex` numbers the items
 of each turn from `item_0`. The id of a step holds the activation id, the
@@ -354,6 +370,13 @@ completed `file_change`. The next ordinary `say` cites them in `refs`,
 through the `roomTools` options of the session, and the executor holds each
 path once. A ref is an absolute URI with a scheme, so
 the executor writes each path as a `file:` URI. The room refuses a bare path.
+
+**A notice never gates the activation.** Codex reports its own diagnostics
+as `error` items and `error` events, such as an unknown setting in the
+config or "Reconnecting... 1/5". The trace keeps each one as a `notice` at
+level `warning`. A turn that fails ends with an `error` event and then
+`turn.failed`. The `end` step carries that failure, and the `error` event
+also shows as a `notice` with the same text.
 
 **The package writes no `approval` step.** Codex answers its own approvals by
 its policy and reports none through the SDK.
@@ -385,6 +408,39 @@ cached tokens counts the cache writes twice.
 runs do not show whether `output_tokens` includes them. A field that an older
 `codex` omits counts as zero.
 
+## Debug an activation
+
+**The trace shows each step of the model.** Give the `logger` option of
+`createRuntime` a function that keeps the steps. Each activation logs its
+`thinking`, `text`, `tool_call`, and `tool_result` steps, the plan of the
+agent as `update_plan`, the `room` answers, and the `usage`. The `end` step
+holds the failure of a turn that failed.
+
+**The reasoning summary feeds `thinking`.** Codex shows no raw reasoning.
+It shows a summary that the model writes when the request asks for one. The
+catalog of some models turns the summary off, so the executor asks for it:
+`reasoningSummary` is `auto` by default and goes to Codex as
+`model_reasoning_summary`. `concise` and `detailed` set the size. `none`
+asks for no summary, and the request then has no `reasoning.summary` field.
+
+**The default trace policy cuts each thinking block to 280 characters.**
+[Executors](executors.md#the-trace-log) states the policy. Set
+`defineAgent({ trace: { thinking: 'full', toolOutput: 'full' } })` to keep
+all of each block while you debug.
+
+**One `notice` joins the trace to the full record of Codex.** The notice
+has the text "Codex thread" and the level `info`. Its `data` holds the
+`thread` id, the `home` of the seat, and the `rollout` path. The rollout is
+the file `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`. It
+holds the instructions, every input and output item, the reasoning, and the
+tool calls. The executor looks for the file after the turn starts. It leaves
+out `rollout` when it finds none. Each thread has one notice for the
+activation.
+
+**Codex keeps its own logs in the seat home.** `logs_2.sqlite` in the home
+holds the log of the `codex` process. The stderr of `codex exec` is not
+visible when the run succeeds.
+
 ## Failures
 
 [Executors](executors.md#failure-classification) states the shared rule.
@@ -408,6 +464,12 @@ failure reaches the host as an `error` event before the driver sees it.
 A seat with `nativeTools: 'none'` reads the model catalog from the binary.
 The executor throws `PermanentError` when the platform has no binary, or
 when `@openai/codex` is not installed and no `codexPath` is set.
+
+**A room tools server that fails to start is transient.** The server is
+`required`, so `codex exec` exits with an error that starts "required MCP
+servers failed to initialize: ambion". The SDK throws it, and the executor
+reports a transient failure. The room retries the activation. Codex has sent
+no model request at that time.
 
 **A bad `codexPath` or a socket error is transient.** The executor uses a
 `codexPath` (see [Options](#options)) as given. A path that names no file
@@ -476,6 +538,14 @@ permission profiles do not confine it. A feature flag cannot turn it off,
 because the model catalog turns it on: `gpt-5.6-luna` has
 `tool_mode: 'code_mode_only'`. `gpt-5.5` has no tool mode.
 
+**An image from a tool of the seat reaches the model.** A tool that returns
+an image part, such as the workspace `read` of a picture, sends the image to
+a model that reads images. Codex puts it in the tool output as an
+`input_image`, and the trace keeps the part. No native tool reads an image,
+because the `view_image` feature is off. A model with no image input in its
+catalog entry stays text-only. Codex then replaces the image with a text
+placeholder.
+
 **The default replaces the catalog entry.** A custom catalog overrides the
 entry of a model. The executor runs `codex debug models` on the installed
 binary once for each binary in the process and patches the entry of the seat
@@ -483,11 +553,11 @@ model. It writes the patched catalog to a temporary directory and passes the
 path as `model_catalog_json`. The recipe has five parts:
 
 1. **The catalog entry.** `tool_mode`, `apply_patch_tool_type`, and
-   `multi_agent_version` are `null`. `input_modalities` is `['text']`.
-   `supports_search_tool`, `supports_image_detail_original`, and the three
+   `multi_agent_version` are `null`. `supports_search_tool` and the three
    `include_*_usage_instructions` flags are `false`. `node_repl_disabled` is
    `true`. `experimental_supported_tools` is empty. This removes Code Mode,
-   the patch tool, image input, and the search tool.
+   the patch tool, and the search tool. The patch leaves `input_modalities`
+   and `supports_image_detail_original` as the entry has them.
 2. **The features.** The config sets 31 features to `false`, among them
    `shell_tool`, `unified_exec`, `code_mode`, `code_mode_only`, `apps`,
    `plugins`, `computer_use`, `multi_agent`, and `hooks`. This removes the
@@ -600,14 +670,18 @@ room tool with `name: 'say'` and `namespace: 'mcp__ambion'`. A call with the
 name alone gets the tool result `unsupported call: say`, and nothing reaches
 the room.
 
-**A loaded host can send the first request before the room tools are ready.**
-Codex starts the room tools server while it starts the turn. The first
-request then lists no room tool, and a call to `say` gets the result
-`unsupported call`. The endpoint finds this case: when a request does not
-list the tool that the next reply calls, it answers with a call to
-`list_mcp_resources`, which reports no usage, and keeps the reply. The
-next request lists the tools. A real model that meets this case has no
-`say` for that request.
+**Every request lists the room tools.** The config marks the room tools
+server as `required`, and Codex waits for it before the first model request.
+The endpoint does not retry or skip a request that lacks a tool. A request
+without `say` gets the result `unsupported call`, and the assertions on the
+request count and on the tool list fail. A test ran the tier on 4 cores with
+24 busy loops. Without `required`, every run had requests that listed no
+room tool. With `required`, every run passed.
+
+**A room tools server that cannot start fails the pass.** One test points
+the server at a command that does not exist. Codex exits with "required MCP
+servers failed to initialize: ambion", before it sends a model request. The
+pass reports a transient failure, and the test asserts the message.
 
 **The binary tier proves what the model receives.** The recorded request
 bodies show the tool list, the prompts, and the items of an earlier pass.
@@ -661,9 +735,11 @@ holds the smallest room that proves one claim.
 | `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                                    |
 | `test/live/tools.test.ts`       | A command and a file change become steps; the next say cites the path                                               |
 | `test/live/exclusive.test.ts`   | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
+| `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color                            |
 | `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                                        |
 | `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
 | `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                                               |
+| `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file                         |
 | `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan                        |
 
 **Run the live tier with a key.** Every definition sets the model
@@ -693,8 +769,10 @@ nothing. The trace shows a `tool_result` with "MCP tool call requires
 approval". The config key `default_tools_approval_mode` must be `approve`. A
 custom `config` that replaces `mcp_servers` removes it.
 
-**The server does not start.** Codex reports the startup as failed after 30
-seconds. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
+**The server does not start.** Codex waits up to 30 seconds. It then exits
+with "required MCP servers failed to initialize: ambion", and the activation
+fails as transient. A server that exits at once fails the activation at
+once. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
 and that `node` on the `PATH` of the process is Node 22.19 or newer. Run
 `node dist/room-tools-server.mjs /tmp/none.sock` to see its error.
 

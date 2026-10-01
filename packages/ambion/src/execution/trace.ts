@@ -105,8 +105,9 @@ function base64Bytes(base64: string): number {
 
 /**
  * A tool result's image content, with each image's data replaced by its byte
- * count. A record that does not hold a `content` array passes through
- * unchanged, and so does every other content part.
+ * count. The content is a `content` array of a record, or the array itself:
+ * the Claude and Codex executors log the content parts with no record. Any
+ * other value passes through unchanged, and so does every other content part.
  *
  * A tool result can carry an image inline as base64
  * (`ToolResult.content`, `types.ts`). Writing that image whole into the log
@@ -115,14 +116,25 @@ function base64Bytes(base64: string): number {
  * the bytes.
  */
 export function loggedToolResult(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(loggedContentPart);
 	if (!isRecord(value) || !Array.isArray(value.content)) return value;
 	return { ...value, content: value.content.map(loggedContentPart) };
 }
 
+/**
+ * An image part with its bytes replaced by their count. A part carries the
+ * bytes in `data`, or in `source.data` in the shape of the Anthropic API that
+ * the Claude executor logs.
+ */
 function loggedContentPart(part: unknown): unknown {
-	if (!isRecord(part) || part.type !== 'image' || typeof part.data !== 'string') return part;
-	const { data, ...rest } = part;
-	return { ...rest, bytes: base64Bytes(data) };
+	if (!isRecord(part) || part.type !== 'image') return part;
+	if (typeof part.data === 'string') {
+		const { data, ...rest } = part;
+		return { ...rest, bytes: base64Bytes(data) };
+	}
+	if (!isRecord(part.source) || typeof part.source.data !== 'string') return part;
+	const { data, ...source } = part.source;
+	return { ...part, source: { ...source, bytes: base64Bytes(data) } };
 }
 
 class Trace implements TraceSink {
@@ -195,6 +207,10 @@ class Trace implements TraceSink {
 						: bounded(loggedToolResult(plain(step.output)), this.options.limits.toolOutputBytes);
 				return { ...step, output };
 			}
+			case 'notice':
+				return step.data === undefined
+					? step
+					: { ...step, data: plain(step.data) as typeof step.data };
 			default:
 				return step;
 		}

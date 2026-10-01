@@ -8,10 +8,11 @@
  * them. Each one carries a comment that starts with "Today".
  */
 
-import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	type AmbionTool,
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -20,6 +21,7 @@ import {
 	isSaid,
 	type RoomNotification,
 	startRoom,
+	type TracePolicy,
 	type TraceStep,
 } from '@ambionframework/ambion';
 import { memoryJournals } from '@ambionframework/journal';
@@ -42,6 +44,12 @@ const NAMESPACE = 'mcp__ambion';
  */
 const NO_SYNC = '[features]\nplugins = false\nremote_plugin = false\n';
 
+/** A reasoning summary longer than the 280 characters that the default trace policy keeps. */
+const THOUGHT = 'Check the pour schedule against the weather before the answer. '.repeat(8).trim();
+
+/** A key that Codex does not know. It warns, and the warning names the key. */
+const UNKNOWN_KEY = 'ambion_unknown_setting';
+
 /** A sentence of the mechanism text of the room. It marks the seat text. */
 const MECHANISM = 'You are an agent seated in a room';
 
@@ -54,12 +62,38 @@ const lookup = defineTool({
 	execute: () => 'found r1',
 });
 
+/** A 1x1 PNG, base64. */
+const PIXEL =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+
+/** The text that Codex puts in place of an image when the model does not read images. */
+const OMITTED = 'image content omitted';
+
+const look = defineTool({
+	name: 'look',
+	description: 'Look at one frame.',
+	parameters: Type.Object({}),
+	execute: () => ({
+		content: [
+			{ type: 'text', text: 'frame at t=1' },
+			{ type: 'image', data: PIXEL, mimeType: 'image/png' },
+		],
+		details: {},
+	}),
+});
+
 const say = (text: string): Reply => ({ call: 'say', namespace: NAMESPACE, args: { text } });
 
 /** Open a room with one default seat on the binary. The room stops when the test ends. */
 async function roomOn(
 	execution: Execution,
-	options: { tools?: boolean; native?: Partial<CodexOptions>; instructions?: string } = {},
+	options: {
+		tools?: boolean;
+		extraTools?: readonly AmbionTool[];
+		native?: Partial<CodexOptions>;
+		instructions?: string;
+		trace?: TracePolicy;
+	} = {},
 ) {
 	const steps: TraceStep[] = [];
 	const runtime = createRuntime({
@@ -73,9 +107,12 @@ async function roomOn(
 		executor: codex({
 			instructions: options.instructions ?? 'Answer in one sentence.',
 			model: MODEL,
-			...(options.tools ? { tools: [lookup] } : {}),
+			...(options.tools || options.extraTools
+				? { tools: [...(options.tools ? [lookup] : []), ...(options.extraTools ?? [])] }
+				: {}),
 			...options.native,
 		}),
+		...(options.trace === undefined ? {} : { trace: options.trace }),
 	});
 	const room = stopAtEnd(
 		await startRoom({ name: `binary-${process.pid}-${Date.now()}`, agents: [agent], runtime }),
@@ -156,9 +193,11 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 		it(
 			'speaks through say, reports the usage of the endpoint, and shows the model only the room tools',
 			async () => {
-				const on = await codexOn([say('hello room'), { text: 'done' }]);
+				const on = await codexOn([say('hello room'), { text: 'done' }], undefined, {
+					config: `${UNKNOWN_KEY} = true`,
+				});
 				try {
-					const { visit, room, events } = await roomOn(on.execution, { tools: true });
+					const { visit, room, events, steps } = await roomOn(on.execution, { tools: true });
 					const exchange = await visit.send({ text: 'Is the plan ready?' });
 					await exchange.waitForClose();
 
@@ -229,6 +268,110 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(on.leaked()).toBe(false);
 					expect(JSON.stringify(on.responses.requests)).not.toContain(HOST_MARKER);
 					expect(on.outbound).toEqual([]);
+
+					// Codex warns about the setting it does not know, and the trace keeps the warning.
+					const notices = steps.flatMap((step) => (step.type === 'notice' ? [step] : []));
+					expect(notices).toContainEqual(
+						expect.objectContaining({
+							level: 'warning',
+							text: expect.stringContaining(UNKNOWN_KEY),
+						}),
+					);
+					// One notice joins the trace to the rollout file of Codex: its path holds the thread id
+					// and the file holds every item of the thread.
+					const [thread, ...more] = notices.filter((notice) => notice.text === 'Codex thread');
+					expect(more).toEqual([]);
+					const rollout = thread?.data?.rollout;
+					expect(thread).toMatchObject({ level: 'info', data: { home: on.home } });
+					expect(rollout).toMatch(
+						/\/sessions\/\d{4}\/\d{2}\/\d{2}\/rollout-[\dT-]+-[\w-]+\.jsonl$/,
+					);
+					expect(String(rollout).startsWith(on.home)).toBe(true);
+					expect(existsSync(String(rollout))).toBe(true);
+					expect(String(rollout)).toContain(`-${String(thread?.data?.thread)}.jsonl`);
+					expect(readFileSync(String(rollout), 'utf8')).toContain(String(thread?.data?.thread));
+					expect(threadOf(on.responses.requests[0])).toBe(thread?.data?.thread);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'sends an image from a tool of the seat to the model, and keeps the tool list as it was',
+			async () => {
+				const on = await codexOn([
+					{ call: 'look', namespace: NAMESPACE, args: {} },
+					say('a pixel'),
+					{ text: 'done' },
+				]);
+				try {
+					const { visit, steps } = await roomOn(on.execution, { extraTools: [look] });
+					await (await visit.send({ text: 'What is in the frame?' })).waitForClose();
+
+					expect(on.responses.requests).toHaveLength(3);
+					const [first, second] = on.responses.requests as [ResponsesRequest, ResponsesRequest];
+					// The image reaches the model as an `input_image` with the same bytes, and no placeholder.
+					const output = second.input.find((item) => item.type === 'function_call_output');
+					expect(output?.output).toEqual(
+						expect.arrayContaining([
+							{ type: 'input_text', text: 'frame at t=1' },
+							{ type: 'input_image', image_url: `data:image/png;base64,${PIXEL}` },
+						]),
+					);
+					expect(JSON.stringify(second.input)).not.toContain(OMITTED);
+					// The trace keeps the text part and the image part, with the size of the image in place of its bytes.
+					const result = steps.find(
+						(step) => step.type === 'tool_result' && JSON.stringify(step.output).includes('frame'),
+					);
+					expect(result).toMatchObject({
+						output: [
+							{ type: 'text', text: 'frame at t=1' },
+							{ type: 'image', mimeType: 'image/png', bytes: expect.any(Number) },
+						],
+					});
+					expect(JSON.stringify(result)).not.toContain(PIXEL);
+					// No native tool reads images, so the tool list holds the room tools and the seat tool.
+					expect(toolsOf(first)).toEqual({
+						functions: ['list_mcp_resource_templates', 'list_mcp_resources', 'read_mcp_resource'],
+						[NAMESPACE]: ['dismiss', 'look', 'recall', 'say', 'schedule', 'seat', 'unseat'],
+					});
+					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
+					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it.each([
+			{ configured: undefined, sent: 'auto' },
+			{ configured: 'concise', sent: 'concise' },
+			{ configured: 'detailed', sent: 'detailed' },
+			// Today Codex leaves the field out when the summary is none.
+			{ configured: 'none', sent: undefined },
+		] as const)(
+			'sends reasoning.summary $sent for reasoningSummary $configured, and traces the summary the model returns',
+			async ({ configured, sent }) => {
+				const on = await codexOn([{ ...say('hello room'), reasoning: THOUGHT }, { text: 'done' }]);
+				try {
+					const { visit, steps } = await roomOn(on.execution, {
+						native: configured === undefined ? {} : { reasoningSummary: configured },
+						trace: { thinking: 'full', toolOutput: 'full' },
+					});
+					await (await visit.send({ text: 'Is the plan ready?' })).waitForClose();
+
+					const [first] = on.responses.requests;
+					expect((first?.reasoning as { summary?: string } | undefined)?.summary).toBe(sent);
+					// The summary is longer than the 280 characters of the default policy, and arrives whole.
+					expect(steps).toContainEqual(
+						expect.objectContaining({ type: 'thinking', text: THOUGHT, final: true }),
+					);
+					expect(on.responses.others).toEqual([]);
 				} finally {
 					await on.close();
 				}
@@ -257,6 +400,43 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(codex).toContain(seat);
 				} finally {
 					rmSync(work, { recursive: true, force: true });
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'fails the pass as transient, before any model request, when the room tools server cannot start',
+			async () => {
+				const on = await codexOn([say('hello room'), { text: 'done' }], undefined, {
+					brokenRoomServer: true,
+				});
+				try {
+					const { visit, room, events, steps } = await roomOn(on.execution);
+					const ended = new Promise<void>((resolve) =>
+						room.subscribe((event) => event.type === 'activation_end' && resolve()),
+					);
+					await visit.send({ text: 'Is the plan ready?' });
+					await ended;
+
+					// The required server fails the startup of `codex exec`. No model sees a request.
+					expect(on.responses.requests).toEqual([]);
+					expect(events).toContainEqual(
+						expect.objectContaining({ type: 'error', seat: 'gpt', cause: 'transient' }),
+					);
+					expect(steps).toContainEqual(
+						expect.objectContaining({
+							type: 'end',
+							failure: expect.objectContaining({
+								cause: 'transient',
+								message: expect.stringContaining(
+									'required MCP servers failed to initialize: ambion',
+								),
+							}),
+						}),
+					);
+				} finally {
+					await on.close();
 				}
 			},
 			TEST_MS,
@@ -316,6 +496,10 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(passes).toEqual(['view', 'delta']);
 					expect(on.responses.requests).toHaveLength(4);
 					const [one, , three] = on.responses.requests;
+					// Codex waits for the required room server, so every request lists `say`.
+					for (const request of on.responses.requests) {
+						expect(toolsOf(request)[NAMESPACE]).toContain('say');
+					}
 
 					// The second pass runs on the same thread: its request holds the items of the first.
 					expect(threadOf(three)).toBeDefined();
