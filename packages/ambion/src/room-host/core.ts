@@ -48,16 +48,20 @@ export interface RoomHostState {
 	readonly defs: ReadonlyMap<string, AgentDefinition>;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	readonly visits: Map<string, VisitRuntime>;
-	/** Arrivals awaiting durable acknowledgement, keyed by human name. */
+	/** Each arrival that waits for a durable acknowledgement, by the name of the person. */
 	readonly arrivals: Map<string, { identity: string; promise: Promise<VisitRuntime> }>;
 	readonly ports: Map<string, AgentPort>;
 	/** The three room calls exposed to an in-process seat. */
 	readonly calls: RoomProtocol;
-	/** Each caller that waits for a fact the state does not hold yet. A wake empties it. */
+	/**
+	 * Each caller that waits for a fact the state does not hold yet. A
+	 * publication, the end of the run, and an eviction wake every one, and the
+	 * wake empties the set.
+	 */
 	readonly waiters: Set<() => void>;
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	readonly sentAt: Map<string, number>;
-	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
+	/** The delivery in flight for each due or live activation. A token fences a late reply. */
 	readonly deliveryStates: Map<string, DeliveryState>;
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases: Set<string>;
@@ -79,7 +83,7 @@ export interface RoomHostState {
 	/** Dropped from memory: nothing lands, and nothing reaches a listener. */
 	evicted(): boolean;
 	assertRunning(): void;
-	/** Free the name in the runtime. */
+	/** Free the name in the runtime, for this run alone. */
 	release(): void;
 	emit(event: RoomNotification): void;
 	reconcile(): Promise<void>;

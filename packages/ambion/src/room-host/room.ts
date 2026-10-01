@@ -174,7 +174,6 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		lease: (lease) => this.lease(lease),
 	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
-	/** Each caller that waits on an exchange. A publication and the end of the run wake them. */
 	readonly waiters = new Set<() => void>();
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	readonly sentAt = new Map<string, number>();

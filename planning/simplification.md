@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Eighteen reductions have landed.** `pnpm check` passes on them, and the
+**Nineteen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -52,6 +52,7 @@ changelog names each change to an export and to a behavior.
 | One copy of each small rule (W9)            | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
 | The journal reads its own format (K1)       | Five refusal guards of earlier releases, the bare-key promise            | `journal/validate.ts`, `durability.md`   |
 | One runtime state, nested views (K2)        | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
+| One view of the room host (K16)             | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -88,7 +89,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | K13 | The journal keeps a `seq` beside a dense storage position                          | `nextSeq`, `advanceSeq`, `scanned` (`rules.verified.ts:49-71`)                                           | 2       | Medium | 4    |
 | K14 | The journal package generics have one consumer                                     | Outside the core, only the storage names are imported                                                    | 4       | Low    | 4    |
 | K15 | The roster has two stored sources                                                  | Backlog D7                                                                                               | 1       | Medium | 2    |
-| K16 | The room host has five views over one class                                        | `RoomBase`, `ControlHost`, `DispatchHost`, `PeopleHost`, `WaitsHost`; members repeat                     | 4       | Medium | 8    |
+| K16 | The room host has five views over one class (done)                                 | `RoomBase`, `ControlHost`, `DispatchHost`, `PeopleHost`, `WaitsHost`; members repeat                     | 4       | Medium | 8    |
 | K17 | Six names describe one exchange                                                    | `ExchangeRef`, `ClosedExchange`, `ExchangeView`, `ClosedExchangeView`, `ExchangeRead`, `ExchangeHandle`  | 2       | Medium | 4    |
 | K18 | Three shapes describe one trace sink                                               | `TraceSink`, `StepSink`, `TraceOpener` (`trace.ts:33-59`)                                                | 1       | Medium | 2    |
 
