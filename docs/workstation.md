@@ -460,8 +460,8 @@ owner, so it covers `dispose()` and a live cancel or timeout alike.
 | The SFTP channel                                                                                                                   | 1        |
 | The bash owner: one operation, one `exec`                                                                                          | 1        |
 | The processes: a command channel for each process of this run, and one poll read for each adopted process, with 4 processes in all | up to 4  |
-| One signal channel, for every abort and every stop of the client                                                                   | 1        |
-| One `exec` of the table on a stop step: `writeStop`, or the signal script of an adopted stop                                       | 1        |
+| One signal channel, for every abort and every cancel of the client                                                                 | 1        |
+| One `exec` of the table on a cancel step: `writeStop`, or the signal script of an adopted cancel                                   | 1        |
 | The total                                                                                                                          | 8        |
 
 **The process table allows 4 running processes.** A process of this run
@@ -471,8 +471,8 @@ channel at a time for it. A process of this run or an adopted one counts
 as one of the 4, so the commands and the polls together stay at 4. The
 final read of a process of this run (`settleOwned`, `finalStatus`,
 `readFiles`: one listing `exec`) runs after its command channel closed,
-and takes the place of that channel. The stops of one agent take their
-steps one at a time, so the table holds one `exec` on a stop step. The
+and takes the place of that channel. The cancels of one agent take their
+steps one at a time, so the table holds one `exec` on a cancel step. The
 owner's own abort signal uses the one signal channel. The worst case is
 8 channels, 2 below the limit of 10. The count of one signal channel
 assumes that a kill channel closes within 5 seconds, the time after which

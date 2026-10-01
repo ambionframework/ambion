@@ -3,7 +3,7 @@
  * for the process table.
  *
  * Each process is a directory, `~/.processes/<handle>/`. The table writes
- * `spec` at the start, `stop` before it stops the process, and `seen` when
+ * `spec` at the start, `stop` before it cancels the process, and `seen` when
  * a result shows the end. The command's wrapper writes `pid`, `out`, and
  * `exit`. The state of a process follows from the files that exist, so a
  * new run of the host reads the same table from the same files.
@@ -26,7 +26,7 @@ export type ProcessKind = 'bash';
 export type ProcessState = 'running' | 'exited' | 'timed_out' | 'cancelled' | 'failed';
 
 /** What the files of one process say about it. A caller gets a frozen value. */
-export interface ProcessStatus {
+export interface ProcessRecord {
 	/** The key of the process. */
 	readonly handle: string;
 	/** The label the agent gave the process, when it gave one. */
@@ -39,9 +39,9 @@ export interface ProcessStatus {
 	readonly state: ProcessState;
 	/** The absolute path of the file that holds the whole output. */
 	readonly output: string;
-	/** Seconds the process may run before the table stops it. */
+	/** Seconds the process may run before the table cancels it. */
 	readonly timeout: number;
-	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table cancels the process. */
 	readonly grace: number;
 	/** The room of the call that started the process, when it had one. Metadata alone. */
 	readonly room?: string;
@@ -52,8 +52,8 @@ export interface ProcessStatus {
 	readonly exitCode?: number;
 	/** Set when the state is `failed`. */
 	readonly error?: string;
-	/** True while the state is `running` and a stop of the table waits for the end. */
-	readonly stopping?: boolean;
+	/** True while the state is `running` and a cancel of the table waits for the end. */
+	readonly cancelling?: boolean;
 }
 
 /** What `spec` holds: the facts of a process at its start. */
@@ -64,7 +64,7 @@ export interface ProcessSpec {
 	readonly agent: string;
 	readonly command: string;
 	readonly timeout: number;
-	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table cancels the process. */
 	readonly grace: number;
 	readonly room?: string;
 	readonly startedAt: string;
@@ -82,8 +82,8 @@ const HANDLE = /^[a-z]+-[0-9a-f]{12}$/;
 /** The error of a process that no run of the host runs now, and that left no end. */
 export const LOST = 'The host run ended before the process did.';
 
-/** Why the table stops a process. The first stop names it in `stop`. */
-export type StopCause = 'cancelled' | 'timed_out' | 'failed';
+/** Why the table cancels a process. The first cancel names it in `stop`. */
+export type CancelCause = 'cancelled' | 'timed_out' | 'failed';
 
 /** The files of one process, as the listing reads them. */
 export interface ProcessFiles {
@@ -91,7 +91,7 @@ export interface ProcessFiles {
 	readonly spec: ProcessSpec;
 	/** `<code> <time>`, written by the wrapper when the command ends. */
 	readonly exit?: string;
-	/** `<cause> <time> [message]`, written by the table before it stops the process. */
+	/** `<cause> <time> [message]`, written by the table before it cancels the process. */
 	readonly stop?: string;
 	/** A result or a reminder showed the end. */
 	readonly seen: boolean;
@@ -142,7 +142,7 @@ export async function writeSpec(
  * its own, so a comment or a here-document at its end does not reach the
  * closing parenthesis.
  *
- * `trap : TERM` keeps the wrapper alive through the `SIGTERM` of a stop, so
+ * `trap : TERM` keeps the wrapper alive through the `SIGTERM` of a cancel, so
  * it writes `exit` when the command ends inside the grace. The handler
  * resets to the default in the subshell, so the command gets the signal as
  * usual. An ignored signal stays ignored in each program that the command
@@ -162,7 +162,7 @@ export function wrapped(command: string, dir: string): string {
 }
 
 /** One line for `stop`: the cause, the time, and an optional message on the same line. */
-export function stopLine(cause: StopCause, message?: string): string {
+export function stopLine(cause: CancelCause, message?: string): string {
 	const at = new Date().toISOString();
 	const text = message === undefined ? '' : ` ${message.replace(/\s+/g, ' ').trim()}`;
 	return `${cause} ${at}${text}\n`;
@@ -179,7 +179,7 @@ export function lostLine(): string {
 
 /**
  * Write `stop` for a process that has no `exit`. One shell command checks
- * and writes, so a stop that meets the natural end of the command leaves
+ * and writes, so a cancel that meets the natural end of the command leaves
  * the end as the command gave it.
  */
 export async function writeStop(env: WorkspaceEnv, dir: string, line: string): Promise<void> {
@@ -344,7 +344,7 @@ export async function readFiles(
 	);
 }
 
-type Ending = Pick<ProcessStatus, 'state' | 'endedAt' | 'exitCode' | 'error' | 'stopping'>;
+type Ending = Pick<ProcessRecord, 'state' | 'endedAt' | 'exitCode' | 'error' | 'cancelling'>;
 
 /**
  * The end that `stop` names: its cause, its time, and for a failure its
@@ -362,13 +362,13 @@ function stopEnding(stop: string): Ending {
 
 /**
  * A process that still runs. A `stop` that names a cancel or a timeout
- * means that the table stopped the process. A `failed` line, from a run
- * that broke or from a read that found the process lost, names no stop.
+ * means that the table cancelled the process. A `failed` line, from a run
+ * that broke or from a read that found the process lost, names no cancel.
  */
 function runningEnding(stop: string | undefined): Ending {
 	const state = stop === undefined ? undefined : stopEnding(stop).state;
-	const stopping = state === 'cancelled' || state === 'timed_out';
-	return stopping ? { state: 'running', stopping } : { state: 'running' };
+	const cancelling = state === 'cancelled' || state === 'timed_out';
+	return cancelling ? { state: 'running', cancelling } : { state: 'running' };
 }
 
 /** The exit code of a shell that `SIGTERM` ended: 128 + 15. */
@@ -384,8 +384,8 @@ function exitEnding(exit: string): Ending {
 }
 
 /**
- * The end that `exit` names, after a stop of the table when `stop` names
- * one. The wrapper outlives the `SIGTERM` of a stop and writes the code of
+ * The end that `exit` names, after a cancel of the table when `stop` names
+ * one. The wrapper outlives the `SIGTERM` of a cancel and writes the code of
  * the command. Code 143 is the code of a command that the `SIGTERM` ended,
  * so the cause in `stop` names that end. Every other code is the end that
  * the command chose inside the grace.
@@ -393,19 +393,19 @@ function exitEnding(exit: string): Ending {
 function exitedEnding(exit: string, stop: string | undefined): Ending {
 	const ending = exitEnding(exit);
 	if (ending.exitCode !== TERM_EXIT || stop === undefined) return ending;
-	const stopped = stopEnding(stop);
-	if (stopped.state === 'failed') return ending;
+	const named = stopEnding(stop);
+	if (named.state === 'failed') return ending;
 	return ending.endedAt === undefined
-		? { state: stopped.state }
-		: { state: stopped.state, endedAt: ending.endedAt };
+		? { state: named.state }
+		: { state: named.state, endedAt: ending.endedAt };
 }
 
 /**
  * The end that the files give. `exit` is the end the command chose, and
- * a stop writes no `stop` after it. `stop` names the cause of a stop: the
+ * a cancel writes no `stop` after it. `stop` names the cause of a cancel: the
  * table writes it before it aborts. A command that the `SIGTERM` of the
- * stop ended reads that cause. A process whose shell still runs stays
- * `running` until the stop ends it. With no file of an end, the process
+ * cancel ended reads that cause. A process whose shell still runs stays
+ * `running` until the cancel ends it. With no file of an end, the process
  * runs while this run of the host owns it or its shell still runs, and it
  * is lost otherwise.
  */
@@ -417,7 +417,7 @@ function endingOf(files: ProcessFiles, live: boolean): Ending {
 }
 
 /** The status that the files give. `owned` says that this run of the host runs the process now. */
-export function statusOf(files: ProcessFiles, owned: boolean): ProcessStatus {
+export function statusOf(files: ProcessFiles, owned: boolean): ProcessRecord {
 	const { spec } = files;
 	const ending = endingOf(files, owned || files.alive);
 	return Object.freeze({
@@ -435,17 +435,17 @@ export function statusOf(files: ProcessFiles, owned: boolean): ProcessStatus {
 	});
 }
 
-/** The signals of a stop: `TERM` first, and `KILL` after the grace. */
-export type StopSignal = 'TERM' | 'KILL';
+/** The signals of a cancel: `TERM` first, and `KILL` after the grace. */
+export type CancelSignal = 'TERM' | 'KILL';
 
 /**
  * The script that signals the process group of a process that an earlier
  * run of the host started. It checks the pid first, as the listing does, so
- * a stop sends no signal after the wrapper has ended. It signals the group
+ * a cancel sends no signal after the wrapper has ended. It signals the group
  * only when the group is not the script's own, so a backend that runs
  * commands in the host's group loses one shell and no more.
  */
-function signalScript(dir: string, handle: string, signal: StopSignal): string {
+function signalScript(dir: string, handle: string, signal: CancelSignal): string {
 	return [
 		`pid=$(cat ${shellQuote(`${dir}/pid`)} 2>/dev/null) || exit 0`,
 		`ps -ww -o args= -p "$pid" 2>/dev/null | grep -q -- ${shellQuote(handle)} || exit 0`,
@@ -461,7 +461,7 @@ export async function signalGroup(
 	env: WorkspaceEnv,
 	dir: string,
 	handle: string,
-	signal: StopSignal,
+	signal: CancelSignal,
 ): Promise<void> {
 	await env.exec(signalScript(dir, handle, signal), undefined, BACKGROUND_CONTEXT);
 }

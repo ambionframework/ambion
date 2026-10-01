@@ -7,13 +7,13 @@
  * one record for each live process, with its timer. The record of a
  * process that this run started also holds its environment and its abort
  * controller. The table adopts a live process of an earlier run when a
- * read finds it, and stops it through its pid.
+ * read finds it, and cancels it through its pid.
  *
  * A process runs on an environment of its own, which the table connects
  * outside the queue of the bash owner, so a long command holds no other
- * tool call. A timeout, a cancel, and `close` stop a process through one
+ * tool call. A timeout, a cancel, and `close` cancel a process through one
  * chain for each agent. The workstation backend holds one signal channel
- * for each client, in a queue of its own. A stop sends `SIGTERM`, waits
+ * for each client, in a queue of its own. A cancel sends `SIGTERM`, waits
  * for the grace, and sends `SIGKILL`.
  *
  * An agent reads its own processes alone: each table is the agent's own
@@ -26,13 +26,14 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
+import { cancelWaitMs, type Live, type Own, openCancels, POLL_MS } from './process-cancel.ts';
 import {
 	isHandle,
 	LOST,
 	lostLine,
 	type ProcessFiles,
+	type ProcessRecord,
 	type ProcessSpec,
-	type ProcessStatus,
 	processesDir,
 	readFiles,
 	statusOf,
@@ -49,7 +50,6 @@ import {
 	unreadable,
 	within,
 } from './process-run.ts';
-import { cancelWaitMs, type Live, type Own, openStops, POLL_MS } from './process-stop.ts';
 import type { ProcessEvent, ProcessTable, ProcessTableOptions } from './process-table.ts';
 import { FINISHED_IN_REMINDER, reminderText } from './process-text.ts';
 import type { WorkspaceAgent } from './resource.ts';
@@ -70,7 +70,7 @@ const CLOSED = 'Workspace is no longer available.';
 /** A process as a read finds it: its files, and the status they give. */
 interface Found {
 	readonly files: ProcessFiles;
-	readonly status: ProcessStatus;
+	readonly status: ProcessRecord;
 }
 
 const byStart = (a: { startedAt: string }, b: { startedAt: string }): number =>
@@ -113,21 +113,21 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/** Whether this run runs `handle` now: the process is live, and it is not adopted. */
 	const runs = (handle: string): boolean => live.get(handle)?.own !== undefined;
 
-	/** Arm the timeout of a live process, by default from its spec: at the timeout, the table stops it. */
+	/** Arm the timeout of a live process, by default from its spec: at the timeout, the table cancels it. */
 	const arm = (
 		process: Live,
 		ms = Date.parse(process.spec.startedAt) + process.spec.timeout * 1000 - Date.now(),
 	): void => {
 		clearTimeout(process.timer);
 		process.timer = setTimeout(
-			() => void stop(process.agent, process.spec.handle, 'timed_out'),
+			() => void cancels.cancel(process.agent, process.spec.handle, 'timed_out'),
 			Math.min(Math.max(0, ms), MAX_TIMER_SECONDS * 1000),
 		);
 		process.timer.unref();
 	};
 
 	/** A live process has ended: forget it, and tell the host. */
-	const settle = (process: Live, status: ProcessStatus): void => {
+	const settle = (process: Live, status: ProcessRecord): void => {
 		clearTimeout(process.timer);
 		live.delete(process.spec.handle);
 		emit({ type: 'ended', process: status });
@@ -136,7 +136,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/**
 	 * Adopt a live process of an earlier run that a read found: arm its
 	 * timeout from its spec. A lost line in its `stop` stays. The live shell
-	 * gives `running` over the line, and a stop of the table writes over it.
+	 * gives `running` over the line, and a cancel of the table writes over it.
 	 * When the shell ends with no `exit`, the line names the end again.
 	 */
 	const adopt = (agent: string, files: ProcessFiles): void => {
@@ -197,7 +197,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		return found.sort((a, b) => byStart(a.status, b.status));
 	};
 
-	const { stop } = openStops({
+	const cancels = openCancels({
 		live,
 		released: () => released,
 		detached,
@@ -227,7 +227,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		fn(own.env).catch(() => detached(process.agent, fn));
 
 	/** The final status of a process of this run, from its files, once the run ended. */
-	const finalStatus = async (process: Live, own: Own): Promise<ProcessStatus> => {
+	const finalStatus = async (process: Live, own: Own): Promise<ProcessRecord> => {
 		const { dir, spec } = process;
 		const root = dir.slice(0, dir.lastIndexOf('/'));
 		try {
@@ -238,7 +238,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		}
 	};
 
-	/** Write the end that a run gives: its exit code, or a stop for its error. */
+	/** Write the end that a run gives: its exit code, or a `stop` for its error. */
 	const writeEnd = (env: WorkspaceEnv, dir: string, run: Run): Promise<void> =>
 		'ok' in run && run.ok
 			? writeExit(env, dir, run.value.exitCode)
@@ -250,7 +250,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 * syntax error, gives that code. An error of the run gives `stop`.
 	 */
 	const recordEnd = async (process: Live, own: Own, run: Run): Promise<void> => {
-		if (process.stopping !== undefined) return;
+		if (process.cancelling !== undefined) return;
 		await onFiles(process, own, async (env) => {
 			const exit = await env.exists(`${process.dir}/exit`, BACKGROUND_CONTEXT);
 			if (!exit.ok) throw exit.error;
@@ -263,7 +263,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 * tell the host. The process leaves this run's memory after the read, so a
 	 * start in between counts it as running and does not remove its files. A
 	 * shell that outlived the run, as after a kill it did not obey, becomes
-	 * adopted: its record loses `own` and keeps the cause of its stop. Its one
+	 * adopted: its record loses `own` and keeps the cause of its cancel. Its one
 	 * `ended` event comes when a read sees the end. The environment of the
 	 * process closes last.
 	 */
@@ -361,7 +361,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		agent: WorkspaceAgent,
 		handles: readonly string[],
 		signal?: AbortSignal,
-	): Promise<readonly ProcessStatus[]> => {
+	): Promise<readonly ProcessRecord[]> => {
 		const [only] = handles;
 		if (handles.length === 1 && only !== undefined) return [await find(agent, only, signal)];
 		const all = await list(agent, signal);
@@ -394,9 +394,9 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	const cancel: ProcessTable['cancel'] = async (agent, handle) => {
 		const before = await find(agent, handle);
-		if (before.state !== 'running') return { status: before, stopped: false };
-		await within(stop(agent.name, handle, 'cancelled'), cancelWaitMs(before.grace));
-		return { status: await find(agent, handle), stopped: true };
+		if (before.state !== 'running') return { status: before, cancelled: false };
+		await within(cancels.cancel(agent.name, handle, 'cancelled'), cancelWaitMs(before.grace));
+		return { status: await find(agent, handle), cancelled: true };
 	};
 
 	/** The agent whose table holds `handle`: from memory, or from the host's list. */
@@ -453,7 +453,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	const close = async (): Promise<void> => {
 		closed = true;
 		await Promise.allSettled(
-			[...live.values()].map((one) => stop(one.agent, one.spec.handle, 'cancelled')),
+			[...live.values()].map((one) => cancels.cancel(one.agent, one.spec.handle, 'cancelled')),
 		);
 		for (const process of live.values()) clearTimeout(process.timer);
 		released = true;

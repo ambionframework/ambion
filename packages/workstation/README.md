@@ -118,16 +118,16 @@ const lab = openWorkspace({
 });
 ```
 
-| Option         | What it is                                                                             |
-| -------------- | -------------------------------------------------------------------------------------- |
-| `host`, `port` | The address of the server, the same as for the bash backend. The port is 22 by default |
-| `hostKey`      | The SHA-256 fingerprint of the server's host key. The backend refuses any other        |
-| `account`      | The username and private key of the git account                                        |
-| `root`         | The folder of the repositories, in the account's home. `repos` by default              |
-| `alias`        | The host name in every clone URL. `ambion-git` by default                              |
-| `templates`    | The templates, by name                                                                 |
-| `keyTtl`       | Whole seconds an agent key lives. 3600 by default                                      |
-| `idleTimeout`  | Seconds the git account's client may stay unused. 300 by default                       |
+| Option          | What it is                                                                             |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `host`, `port`  | The address of the server, the same as for the bash backend. The port is 22 by default |
+| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other        |
+| `account`       | The username and private key of the git account                                        |
+| `root`          | The folder of the repositories, in the account's home. `repos` by default              |
+| `alias`         | The host name in every clone URL. `ambion-git` by default                              |
+| `templates`     | The templates, by name                                                                 |
+| `credentialTtl` | Whole seconds an agent key lives. 3600 by default                                      |
+| `idleTimeout`   | Seconds the git account's client may stay unused. 300 by default                       |
 
 **The git backend issues and rotates the git key of each agent.** At each
 `connect`, the bash backend writes the key, a `known_hosts` file, and an

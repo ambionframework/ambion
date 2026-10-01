@@ -50,7 +50,7 @@ repository. An agent key names the agent, and `serve` grants every
 repository in that agent's namespace. Every account on the server shares
 the loopback address, and the room mirror puts the record on the same
 server. A key that an agent copies into a message lets any peer on the
-server push as that agent until the key expires, at most `keyTtl` later.
+server push as that agent until the key expires, at most `credentialTtl` later.
 [Trust](#trust) states the rows.
 
 ## The shape
@@ -132,16 +132,16 @@ const lab = openWorkspace({
 });
 ```
 
-| Option         | Meaning                                                                         |
-| -------------- | ------------------------------------------------------------------------------- |
-| `host`, `port` | The address of the server that holds the git account. The port is 22 by default |
-| `hostKey`      | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
-| `account`      | The username and the private key of the git account, as `WorkstationCredential` |
-| `root`         | The folder of the repositories, in the account's home. The default is `repos`   |
-| `alias`        | The host name in every clone URL. The default is `ambion-git`                   |
-| `templates`    | The registrations, by template name. The same shape as `justGitBackend`         |
-| `keyTtl`       | Whole seconds an agent key lives, 1 or more. The default is 3600                |
-| `idleTimeout`  | Seconds the git account's client may stay unused. The default is 300            |
+| Option          | Meaning                                                                         |
+| --------------- | ------------------------------------------------------------------------------- |
+| `host`, `port`  | The address of the server that holds the git account. The port is 22 by default |
+| `hostKey`       | The SHA-256 fingerprint of the server's host key. The backend refuses any other |
+| `account`       | The username and the private key of the git account, as `WorkstationCredential` |
+| `root`          | The folder of the repositories, in the account's home. The default is `repos`   |
+| `alias`         | The host name in every clone URL. The default is `ambion-git`                   |
+| `templates`     | The registrations, by template name. The same shape as `justGitBackend`         |
+| `credentialTtl` | Whole seconds an agent key lives, 1 or more. The default is 3600                |
+| `idleTimeout`   | Seconds the git account's client may stay unused. The default is 300            |
 
 **The git account is on the workstation, and an agent reaches it on the
 loopback address.** `host`, `port`, and `hostKey` name the one server of
@@ -345,7 +345,7 @@ that the client reads once with `realpath('.')`.
 
 **A key inside its margin counts as missing.** The margin is the smaller
 of 10 minutes and half of the key's life, the rule of the 0.2.0
-credential file. The key rotates about once each `keyTtl`, and a command
+credential file. The key rotates about once each `credentialTtl`, and a command
 that starts with a key keeps it for the length of the margin.
 
 **An old line stays until its expiry.** The backend adds the new line and
@@ -363,7 +363,7 @@ host process, so no line is lost.
 
 **A restart of the host issues new keys.** The keys live in memory. The
 first `connect` of each agent after a restart writes a new key and a new
-line. The old lines expire within `keyTtl`.
+line. The old lines expire within `credentialTtl`.
 
 ## Repositories
 
@@ -540,8 +540,9 @@ suite stays blind to transports. Four cases touch a credential, and each
 calls a hook of `GitConformanceBackend`, a `ConformanceHarness` of
 `GitConformanceStore`, that the package of the pair implements. Each hook
 takes the opened backend and workspace. [Tests](#tests) lists them. The
-store of each harness maps `credentialTtl` to the option of its backend:
-`tokenTtl` of `justGitBackend` or `keyTtl` of `workstationGitBackend`.
+store of each harness passes `credentialTtl` to its backend. Both
+`justGitBackend` and `workstationGitBackend` name the option
+`credentialTtl`.
 
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
 G2.**

@@ -1063,7 +1063,7 @@ await drive.dispose();
 ```
 
 Disposal immediately revokes new and queued work. It waits for an active
-operation and its cleanup, stops every background process of this run and
+operation and its cleanup, cancels every background process of this run and
 waits for it to end ([Processes](processes.md#life-and-disposal)), then asks
 the backend to release its local handles once. Concurrent calls join that
 release. A successful disposal is terminal. A failed disposal leaves the

@@ -7,7 +7,7 @@
  */
 
 import { markdownTable } from './markdown-table.ts';
-import type { ProcessStatus } from './process-files.ts';
+import type { ProcessRecord } from './process-files.ts';
 
 /** The most finished processes one reminder names. It names the newest. */
 export const FINISHED_IN_REMINDER = 10;
@@ -35,17 +35,17 @@ function shortCommand(command: string): string {
 }
 
 /** The handle, and the name in brackets when the process has one. */
-function labelled(process: ProcessStatus): string {
+function labelled(process: ProcessRecord): string {
 	return process.name === undefined ? process.handle : `${process.handle} (${process.name})`;
 }
 
 /** One sentence for the state of a process, with its handle, its name, and its output file. */
-export function stateLine(process: ProcessStatus): string {
+export function stateLine(process: ProcessRecord): string {
 	const who = `Process ${labelled(process)}`;
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
 		case 'running':
-			if (process.stopping === true) {
+			if (process.cancelling === true) {
 				return `${who} is running, and the table stopped it. It has not ended yet. ${where} Call status with its handle, or wait with it in handles, to read the end.`;
 			}
 			return `${who} is running. ${where} Call status or cancel with its handle, wait with it in handles, or ps to list your processes.`;
@@ -84,7 +84,7 @@ export function deadlineNote(left: number, cut: boolean, later: readonly string[
 }
 
 /** The end of a finished process, for the reminder. */
-function endedAs(process: ProcessStatus): string {
+function endedAs(process: ProcessRecord): string {
 	const at = process.endedAt === undefined ? '' : ` at ${process.endedAt.slice(11, 19)} UTC`;
 	switch (process.state) {
 		case 'exited':
@@ -99,7 +99,7 @@ function endedAs(process: ProcessStatus): string {
 }
 
 /** One line of the reminder: the name first when the process has one, then the handle. */
-function reminderLine(process: ProcessStatus, room: string, now: number): string {
+function reminderLine(process: ProcessRecord, room: string, now: number): string {
 	const who = process.name === undefined ? process.handle : `${process.name}, ${process.handle},`;
 	const elsewhere =
 		process.room !== undefined && process.room !== room ? ` in the room ${process.room}` : '';
@@ -116,8 +116,8 @@ function reminderLine(process: ProcessStatus, room: string, now: number): string
  * nothing to name. `room` is the room of the activation.
  */
 export function reminderText(
-	running: readonly ProcessStatus[],
-	unseen: readonly ProcessStatus[],
+	running: readonly ProcessRecord[],
+	unseen: readonly ProcessRecord[],
 	room: string,
 	now: number,
 ): string | undefined {
@@ -133,7 +133,7 @@ export function reminderText(
 }
 
 /** The `ps` table of the caller's running processes. */
-export function psTable(processes: readonly ProcessStatus[], now: number): string {
+export function psTable(processes: readonly ProcessRecord[], now: number): string {
 	const rows = processes.map((process) => ({
 		Handle: process.handle,
 		Name: process.name ?? '',

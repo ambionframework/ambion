@@ -25,8 +25,8 @@ import { type Prepared, prepareAccount } from './git-prepare.ts';
 import { Repositories } from './git-repositories.ts';
 import type { WorkstationCredential } from './session.ts';
 
-/** Seconds an agent key lives when the options name no `keyTtl`. */
-const DEFAULT_KEY_TTL_SECONDS = 3600;
+/** Seconds an agent key lives when the options name no `credentialTtl`. */
+const DEFAULT_CREDENTIAL_TTL_SECONDS = 3600;
 
 /** A folder in the account's home: one or more names, and no name that starts with a dot. */
 const ROOT = /^[A-Za-z0-9_][A-Za-z0-9._-]*(\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
@@ -52,7 +52,7 @@ export interface WorkstationGitOptions {
 	/** The shared repositories, by name. */
 	readonly shared?: Readonly<Record<string, RepositoryRegistration>>;
 	/** Whole seconds an agent key lives. The default is 3600. */
-	readonly keyTtl?: number;
+	readonly credentialTtl?: number;
 	/** Seconds the client of the git account may stay unused. The default is 300. */
 	readonly idleTimeout?: number;
 }
@@ -83,7 +83,7 @@ interface Settings {
 	readonly idleMs: number;
 	readonly root: string;
 	readonly alias: string;
-	readonly keyTtl: number;
+	readonly credentialTtl: number;
 }
 
 function checked(options: WorkstationGitOptions): Settings {
@@ -97,25 +97,25 @@ function checked(options: WorkstationGitOptions): Settings {
 	}
 	const alias = options.alias ?? 'ambion-git';
 	if (!ALIAS.test(alias)) throw new Error(`${who}: alias must be a host name.`);
-	const keyTtl = options.keyTtl ?? DEFAULT_KEY_TTL_SECONDS;
-	if (!Number.isInteger(keyTtl) || keyTtl < 1) {
-		throw new RangeError(`${who}: keyTtl must be a whole number of seconds, 1 or more.`);
+	const credentialTtl = options.credentialTtl ?? DEFAULT_CREDENTIAL_TTL_SECONDS;
+	if (!Number.isInteger(credentialTtl) || credentialTtl < 1) {
+		throw new RangeError(`${who}: credentialTtl must be a whole number of seconds, 1 or more.`);
 	}
-	return { port, idleMs, root, alias, keyTtl };
+	return { port, idleMs, root, alias, credentialTtl };
 }
 
 /** A git backend in the home of one account on the workstation. */
 export function workstationGitBackend(
 	options: WorkstationGitOptions,
 ): GitBackend & { readonly access: WorkstationGitAccess } {
-	const { port, idleMs, root, alias, keyTtl } = checked(options);
+	const { port, idleMs, root, alias, credentialTtl } = checked(options);
 	const account = new GitAccount(
 		{ host: options.host, port, hostKey: options.hostKey },
 		options.account,
 		idleMs,
 	);
 	const repositories = new Repositories(account, root, alias);
-	const keys = new AgentKeys(account, keyTtl);
+	const keys = new AgentKeys(account, credentialTtl);
 	let preparing: Promise<Prepared> | undefined;
 	let disposed = false;
 

@@ -1,7 +1,7 @@
 /** The one-host-run registry for sensor processes connected to a workspace. */
 
 import type { WorkspacePort, WorkspacePorts } from './backend.ts';
-import type { ProcessStatus } from './process-files.ts';
+import type { ProcessRecord } from './process-files.ts';
 import type { ProcessEvent, ProcessTable } from './process-table.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { createSensorClient, type SensorClient } from './sensor-client.ts';
@@ -11,7 +11,7 @@ import type { SensorIndex, SensorSource } from './sensors.ts';
 export interface RegisteredSensorConnection {
 	readonly name: string;
 	readonly owner: string;
-	readonly process: ProcessStatus;
+	readonly process: ProcessRecord;
 	readonly port: number;
 	readonly hostname: string;
 	readonly source: SensorSource;
@@ -47,7 +47,7 @@ export interface SensorConnections {
 
 interface MutableConnection extends RegisteredSensorConnection {
 	index: SensorIndex;
-	process: ProcessStatus;
+	process: ProcessRecord;
 	client: SensorClient;
 	available: boolean;
 	transport: WorkspacePort;
@@ -91,7 +91,7 @@ export function createSensorConnections(
 	};
 	const refresh = async (
 		connection: MutableConnection,
-		process: ProcessStatus,
+		process: ProcessRecord,
 		index: SensorIndex,
 		transport: WorkspacePort,
 	): Promise<RegisteredSensorConnection> => {
@@ -121,7 +121,7 @@ export function createSensorConnections(
 	};
 	const unsubscribe = processes.subscribe(ended);
 
-	const markEnded = (connection: MutableConnection, status?: ProcessStatus): void => {
+	const markEnded = (connection: MutableConnection, status?: ProcessRecord): void => {
 		if (status !== undefined) connection.process = status;
 		endedProcesses.add(processKey(connection.owner, connection.process.handle));
 		connection.available = false;
@@ -132,7 +132,7 @@ export function createSensorConnections(
 		agent: WorkspaceAgent,
 		handle: string,
 		signal?: AbortSignal,
-	): Promise<ProcessStatus> => {
+	): Promise<ProcessRecord> => {
 		if (endedProcesses.has(processKey(agent.name, handle)))
 			throw new Error(`Process '${handle}' has ended and cannot be connected again.`);
 		const status = await processes.find(agent, handle, signal);
@@ -247,7 +247,7 @@ export function createSensorConnections(
 	const newRegistration = (
 		agent: WorkspaceAgent,
 		input: { readonly name: string; readonly process: string; readonly port: number },
-		process: ProcessStatus,
+		process: ProcessRecord,
 		index: SensorIndex,
 		transport: WorkspacePort,
 	): MutableConnection => {
@@ -271,7 +271,7 @@ export function createSensorConnections(
 		initial: MutableConnection | undefined,
 		agent: WorkspaceAgent,
 		input: { readonly name: string; readonly process: string; readonly port: number },
-		process: ProcessStatus,
+		process: ProcessRecord,
 		index: SensorIndex,
 		transport: WorkspacePort,
 		active: AbortSignal,
@@ -291,7 +291,7 @@ export function createSensorConnections(
 		input: { readonly name: string; readonly process: string; readonly port: number },
 		signal: AbortSignal,
 	): Promise<{
-		readonly process: ProcessStatus;
+		readonly process: ProcessRecord;
 		readonly index: SensorIndex;
 		readonly transport: WorkspacePort;
 	}> => {

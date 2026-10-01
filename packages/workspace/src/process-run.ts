@@ -18,8 +18,8 @@ import {
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript } from './execution-env.ts';
 import {
+	type ProcessRecord,
 	type ProcessSpec,
-	type ProcessStatus,
 	statusOf,
 	stopLine,
 	wrapped,
@@ -27,8 +27,8 @@ import {
 
 /**
  * Seconds past its own timeout and its grace that the table gives the
- * backend's deadline. The table stops the process first. The backend's
- * deadline stops a process that the table's stop did not end.
+ * backend's deadline. The table cancels the process first. The backend's
+ * deadline ends a process that the table's cancel did not end.
  */
 const BACKEND_SLACK_SECONDS = 30;
 
@@ -74,7 +74,7 @@ export function pause(ms: number, signal?: AbortSignal): Promise<void> {
 export type Run = Result<ShellExecResult, ExecutionError> | { thrown: unknown };
 
 /**
- * Run one bash process on its own environment. An abort of `signal` stops
+ * Run one bash process on its own environment. An abort of `signal` cancels
  * it with `grace` seconds from `SIGTERM` to `SIGKILL`, on a backend with
  * signals. The shell itself can write before the redirect applies, for
  * example a syntax error. That output goes to the end of `out`.
@@ -118,7 +118,7 @@ export function endOfRun(run: Exclude<Run, { ok: true }>): string {
 }
 
 /** The status of a process whose files could not be read: a failure, from its spec. */
-export function unreadable(spec: ProcessSpec, dir: string, error: unknown): ProcessStatus {
+export function unreadable(spec: ProcessSpec, dir: string, error: unknown): ProcessRecord {
 	const message = error instanceof Error ? error.message : String(error);
 	const lost = statusOf({ dir, spec, seen: false, pid: false, alive: false }, false);
 	return Object.freeze({

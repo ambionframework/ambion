@@ -265,7 +265,7 @@ describe('the grace of a process', () => {
 describe('status, wait and cancel', () => {
 	it('cancels a running process at once on just-bash, and a second cancel gives the same final state', async () => {
 		const workspace = site();
-		// just-bash has no signals and no trap: the stop ends the command at once, and no trap runs.
+		// just-bash has no signals and no trap: the cancel ends the command at once, and no trap runs.
 		const command = "trap 'echo cleanup; exit 0' TERM\nsleep 30";
 		const { details } = await call(workspace, 'bash', { command, wait: 0 });
 		const { handle } = details.process;
@@ -332,7 +332,7 @@ describe('the process table', () => {
 		await expect(fileOf(workspace, 'alpha', first.output)).rejects.toThrow();
 	});
 
-	it(`refuses a process past ${MAX_RUNNING_PROCESSES} running processes of one agent, and dispose stops each running process`, async () => {
+	it(`refuses a process past ${MAX_RUNNING_PROCESSES} running processes of one agent, and dispose cancels each running process`, async () => {
 		const workspace = openWorkspace({ name: 'processes-cap', backend: { bash: memoryBackend() } });
 		const handles: string[] = [];
 		for (let i = 0; i < MAX_RUNNING_PROCESSES; i++) {
@@ -764,20 +764,20 @@ describe('the files as the source of truth', () => {
 		{ files: { exit: EXIT }, live: false, state: 'exited' },
 		{ files: { exit: EXIT, stop: STOP }, live: false, state: 'exited' },
 		{ files: { exit: EXIT, stop: STOP }, live: true, state: 'exited' },
-		// The SIGTERM of a stop ended the command: the cause in stop names the end.
+		// The SIGTERM of a cancel ended the command: the cause in stop names the end.
 		{ files: { exit: TERMED, stop: STOP }, live: false, state: 'cancelled' },
 		{ files: { exit: TERMED, stop: TIMED_OUT }, live: false, state: 'timed_out' },
 		{ files: { exit: '143', stop: STOP }, live: false, state: 'cancelled' },
 		{ files: { exit: TERMED }, live: false, state: 'exited' },
 		{ files: { exit: TERMED, stop: LOST_LINE }, live: false, state: 'exited' },
-		{ files: { stop: STOP }, live: true, state: 'running', stopping: true },
+		{ files: { stop: STOP }, live: true, state: 'running', cancelling: true },
 		{ files: { stop: LOST_LINE }, live: true, state: 'running' },
 		{
 			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
 			live: false,
 			state: 'failed',
 		},
-		// A run that broke names no stop, so a shell that still runs reads running alone.
+		// A run that broke names no cancel, so a shell that still runs reads running alone.
 		{
 			files: { stop: 'failed 2026-01-01T00:00:30.000Z The run broke.' },
 			live: true,
@@ -787,7 +787,7 @@ describe('the files as the source of truth', () => {
 		{ files: {}, live: false, state: 'failed' },
 	])(
 		'reads $state from the files $files, with a live shell: $live',
-		({ files, live, state, stopping }) => {
+		({ files, live, state, cancelling }) => {
 			const spec = {
 				handle: 'bash-00000000000b',
 				kind: 'bash' as const,
@@ -800,10 +800,10 @@ describe('the files as the source of truth', () => {
 			const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
 			const status = statusOf(read, false);
 			expect(status.state).toBe(state);
-			expect(status.stopping).toBe(stopping);
+			expect(status.cancelling).toBe(cancelling);
 			if (files.exit?.includes(' ')) expect(status.endedAt).toBe('2026-01-01T00:01:00Z');
-			// The state line names a stop that waits for the end.
-			expect(stateLine(status).includes('the table stopped it')).toBe(stopping === true);
+			// The state line names a cancel that waits for the end.
+			expect(stateLine(status).includes('the table stopped it')).toBe(cancelling === true);
 		},
 	);
 
@@ -849,7 +849,7 @@ describe('the files as the source of truth', () => {
 		});
 		// The cursor lives in the files, so the new run gives no output that bash showed.
 		expect(status.text.startsWith('(no new output)\n\n[Process')).toBe(true);
-		// A stop that meets the end of the command writes no stop, and the end stays exited.
+		// A cancel that meets the end of the command writes no stop, and the end stays exited.
 		const doneDir = done.output.slice(0, done.output.lastIndexOf('/'));
 		await second.use({ name: 'alpha' }, (env) => writeStop(env, doneDir, stopLine('cancelled')));
 		expect((await call(second, 'status', { handle: done.handle })).details.process.state).toBe(

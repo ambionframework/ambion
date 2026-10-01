@@ -50,7 +50,7 @@ const GIT_ACCOUNT = 'lab-git';
  * A key life between 3 and 5 seconds. `expiry-time` has a resolution of
  * one second, and the server renders it.
  */
-const KEY_TTL = 4;
+const CREDENTIAL_TTL = 4;
 
 /** Start each case with an empty git account, and agents with empty homes. */
 async function wipe(bash: Backend): Promise<void> {
@@ -137,7 +137,7 @@ const pushTo = (url: string) =>
 
 const harness: GitConformanceBackend<GitBackend> = {
 	name: 'workstation git on OpenSSH',
-	shortestCredentialTtl: KEY_TTL,
+	shortestCredentialTtl: CREDENTIAL_TTL,
 	issueCredentials: async ({ backend, workspace }, agent) => {
 		await backend.access.identityFor(agent);
 		await workspace.use(agent, async () => undefined);
@@ -156,7 +156,7 @@ const harness: GitConformanceBackend<GitBackend> = {
 					...base,
 					templates: templatesOf(templates),
 					shared: sharedOf(shared),
-					...(credentialTtl === undefined ? {} : { keyTtl: credentialTtl }),
+					...(credentialTtl === undefined ? {} : { credentialTtl }),
 				}),
 			dispose: async () => bash.dispose?.(),
 		};

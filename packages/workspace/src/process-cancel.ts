@@ -1,22 +1,22 @@
 /**
- * The stops of the process table: one chain of stop steps for each agent,
- * and the waits for the end that run outside the chain.
+ * The cancels of the process table: one chain of cancel steps for each
+ * agent, and the waits for the end that run outside the chain.
  *
- * A stop of a process of this run takes one chain step, the abort. Its
- * backend sends `SIGTERM`, and `SIGKILL` after the grace. A stop of an
+ * A cancel of a process of this run takes one chain step, the abort. Its
+ * backend sends `SIGTERM`, and `SIGKILL` after the grace. A cancel of an
  * adopted process takes one chain step for `SIGTERM` and one for `SIGKILL`,
  * and polls the files between them and after them, outside the chain. No
- * wait for an end holds the chain, so a stop with a long grace holds no
- * later stop of the same agent.
+ * wait for an end holds the chain, so a cancel with a long grace holds no
+ * later cancel of the same agent.
  *
  * `docs/processes.md` is the design contract.
  */
 
 import type { WorkspaceEnv } from './backend.ts';
 import {
+	type CancelCause,
+	type CancelSignal,
 	type ProcessSpec,
-	type StopCause,
-	type StopSignal,
 	signalGroup,
 	stopLine,
 	writeStop,
@@ -24,11 +24,11 @@ import {
 import { pause, within } from './process-run.ts';
 
 /**
- * How long a stop waits for the end after the grace: the kill, the close of
+ * How long a cancel waits for the end after the grace: the kill, the close of
  * the channel, and the read of the files. A process that has not ended by
  * then stays `running`.
  */
-const STOP_SLACK_MS = 5_000;
+const CANCEL_SLACK_MS = 5_000;
 
 /** The most seconds of the grace that the wait of `cancel` covers. */
 const CANCEL_GRACE_SECONDS = 10;
@@ -41,7 +41,7 @@ export const POLL_MS = 500;
  * and the slack. A longer grace goes on after the wait.
  */
 export function cancelWaitMs(grace: number): number {
-	return Math.min(grace, CANCEL_GRACE_SECONDS) * 1000 + STOP_SLACK_MS;
+	return Math.min(grace, CANCEL_GRACE_SECONDS) * 1000 + CANCEL_SLACK_MS;
 }
 
 /** What only a process that this run started has: its environment, its abort, and the end of its run. */
@@ -53,24 +53,24 @@ export interface Own {
 
 /**
  * A live process in the memory of this run. A process that this run started
- * has `own`, and the table stops it through the abort, since just-bash has
+ * has `own`, and the table cancels it through the abort, since just-bash has
  * no pid. An adopted process has no `own`: a read of this run found it
- * live, and the table stops it through its pid.
+ * live, and the table cancels it through its pid.
  */
 export interface Live {
 	readonly agent: string;
 	readonly spec: ProcessSpec;
 	readonly dir: string;
-	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table cancels the process. */
 	readonly grace: number;
 	own?: Own;
 	timer?: ReturnType<typeof setTimeout>;
-	/** Why the first stop stopped it. */
-	stopping?: StopCause;
+	/** Why the first cancel ended it. */
+	cancelling?: CancelCause;
 }
 
-/** What the stops need from the table. */
-export interface StopOptions {
+/** What the cancels need from the table. */
+export interface CancelOptions {
 	readonly live: Map<string, Live>;
 	/** Whether the table has released its backend: a poll then stops. */
 	readonly released: () => boolean;
@@ -80,22 +80,22 @@ export interface StopOptions {
 	readonly readOne: (agent: string, env: WorkspaceEnv, handle: string) => Promise<unknown>;
 }
 
-/** The stops of one process table. */
-export interface Stops {
+/** The cancels of one process table. */
+export interface Cancels {
 	/**
-	 * Stop the process `handle` of `agent` after every earlier stop step of
+	 * Cancel the process `handle` of `agent` after every earlier cancel step of
 	 * the agent. The promise settles when the process ends, or after its grace
-	 * and the slack. It never rejects. A stop of a process that a stop already
-	 * stops joins that stop. The first stop names the cause.
+	 * and the slack. It never rejects. A cancel of a process that a cancel already
+	 * ends joins that cancel. The first cancel names the cause.
 	 */
-	stop(agent: string, handle: string, cause: StopCause): Promise<void>;
+	cancel(agent: string, handle: string, cause: CancelCause): Promise<void>;
 }
 
-/** Open the stops of one process table. */
-export function openStops({ live, released, detached, readOne }: StopOptions): Stops {
-	/** The steps of the stops of each agent, one after another: a step can open a channel of its own. */
+/** Open the cancels of one process table. */
+export function openCancels({ live, released, detached, readOne }: CancelOptions): Cancels {
+	/** The steps of the cancels of each agent, one after another: a step can open a channel of its own. */
 	const chains = new Map<string, Promise<void>>();
-	/** The stop that runs for each handle. A later stop joins it. */
+	/** The cancel that runs for each handle. A later cancel joins it. */
 	const running = new Map<string, Promise<void>>();
 
 	/** Run `step` after every earlier step of the agent. It reads the process again. A step never rejects, so the chain never breaks. */
@@ -118,28 +118,28 @@ export function openStops({ live, released, detached, readOne }: StopOptions): S
 		}
 	};
 
-	/** Name the cause of the first stop in `stop`. A later stop keeps it. */
-	const nameStop = async (process: Live, env: WorkspaceEnv, cause: StopCause): Promise<void> => {
-		if (process.stopping !== undefined) return;
-		process.stopping = cause;
+	/** Name the cause of the first cancel in `stop`. A later cancel keeps it. */
+	const nameCause = async (process: Live, env: WorkspaceEnv, cause: CancelCause): Promise<void> => {
+		if (process.cancelling !== undefined) return;
+		process.cancelling = cause;
 		await writeStop(env, process.dir, stopLine(cause));
 	};
 
 	/** Send a signal to the group of an adopted process through its pid. */
-	const send = (process: Live, signal: StopSignal): Promise<void> =>
+	const send = (process: Live, signal: CancelSignal): Promise<void> =>
 		detached(process.agent, (env) =>
 			signalGroup(env, process.dir, process.spec.handle, signal),
 		).catch(() => undefined);
 
 	/** Name the cause in `stop`, then abort a process of this run. It does not wait. */
-	const abortOwn = async (process: Live, own: Own, cause: StopCause): Promise<void> => {
-		await nameStop(process, own.env, cause).catch(() => undefined);
+	const abortOwn = async (process: Live, own: Own, cause: CancelCause): Promise<void> => {
+		await nameCause(process, own.env, cause).catch(() => undefined);
 		own.controller.abort();
 	};
 
 	/** Name the cause in `stop`, then send `SIGTERM` to the group of an adopted process. */
-	const termAdopted = async (process: Live, cause: StopCause): Promise<void> => {
-		await detached(process.agent, (env) => nameStop(process, env, cause)).catch(() => undefined);
+	const termAdopted = async (process: Live, cause: CancelCause): Promise<void> => {
+		await detached(process.agent, (env) => nameCause(process, env, cause)).catch(() => undefined);
 		await send(process, 'TERM');
 	};
 
@@ -149,10 +149,10 @@ export function openStops({ live, released, detached, readOne }: StopOptions): S
 		await poll(agent, spec.handle, grace * 1000);
 		if (!live.has(spec.handle)) return;
 		await enqueue(agent, spec.handle, (one) => send(one, 'KILL'));
-		await poll(agent, spec.handle, STOP_SLACK_MS);
+		await poll(agent, spec.handle, CANCEL_SLACK_MS);
 	};
 
-	const sequence = async (agent: string, handle: string, cause: StopCause): Promise<void> => {
+	const sequence = async (agent: string, handle: string, cause: CancelCause): Promise<void> => {
 		let wait: (() => Promise<void>) | undefined;
 		await enqueue(agent, handle, (one) => {
 			const { own } = one;
@@ -160,13 +160,13 @@ export function openStops({ live, released, detached, readOne }: StopOptions): S
 				wait = () => finishAdopted(one);
 				return termAdopted(one, cause);
 			}
-			wait = () => within(own.ended, one.grace * 1000 + STOP_SLACK_MS);
+			wait = () => within(own.ended, one.grace * 1000 + CANCEL_SLACK_MS);
 			return abortOwn(one, own, cause);
 		});
 		await wait?.();
 	};
 
-	const stop: Stops['stop'] = (agent, handle, cause) => {
+	const cancel: Cancels['cancel'] = (agent, handle, cause) => {
 		const joined = running.get(handle);
 		if (joined !== undefined) return joined;
 		const run = sequence(agent, handle, cause).finally(() => running.delete(handle));
@@ -174,5 +174,5 @@ export function openStops({ live, released, detached, readOne }: StopOptions): S
 		return run;
 	};
 
-	return { stop };
+	return { cancel };
 }
