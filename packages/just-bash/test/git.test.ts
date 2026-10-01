@@ -43,7 +43,10 @@ function workspaceOver(file: string, options: Partial<Parameters<typeof justGitB
 		templates: TEMPLATES,
 		...options,
 	});
-	const workspace = openWorkspace({ name: 'git-test', backend: { bash: memoryBackend(), git } });
+	const workspace = openWorkspace({
+		name: 'git-test',
+		backend: { bash: memoryBackend({ git }) },
+	});
 	cleanup.push(() => workspace.dispose());
 	return { git, workspace };
 }

@@ -13,6 +13,7 @@
  */
 
 export type {
+	DirectoryBackendOptions,
 	MemoryBackendFile,
 	MemoryBackendOptions,
 	MemoryBashBackend,

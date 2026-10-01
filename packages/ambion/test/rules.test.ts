@@ -1,4 +1,4 @@
-import type { JournalEntry as Entry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/entries.ts';

@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { type Entry, SPACE_PREFIX } from '../src/journal/journal.ts';
+import { type RoomEntry, SPACE_PREFIX } from '../src/journal/journal.ts';
 import { projectState, replay } from '../src/room/projection.ts';
 import { toRoomRead } from '../src/room/read.ts';
 import type { Exchange, RoomRead } from '../src/types.ts';
@@ -24,7 +24,7 @@ const backoff = () => 0;
 const load = async <T>(file: string): Promise<T> =>
 	JSON.parse(await readFile(`${dir}${file}`, 'utf8')) as T;
 
-function foldOf(entries: readonly Entry[]): RoomRead {
+function foldOf(entries: readonly RoomEntry[]): RoomRead {
 	const state = projectState(replay(entries, { backoff }));
 	return toRoomRead('golden', state, now, entries.length, false);
 }
@@ -38,7 +38,7 @@ const spaceOf = (key: string): string => SPACE_PREFIX.exec(key)?.[0] ?? '';
  * fixture names them in order of first use, so a regeneration writes the
  * same bytes. A key keeps its space prefix.
  */
-function named(entries: readonly Entry[]): Entry[] {
+function named(entries: readonly RoomEntry[]): RoomEntry[] {
 	const runs = new Map<string, string>();
 	const keys = new Map<string, string>();
 	const rename = (table: Map<string, string>, prefix: string, value: string) => {
@@ -52,13 +52,13 @@ function named(entries: readonly Entry[]): Entry[] {
 			...entry,
 			...(key === undefined ? {} : { key: `${spaceOf(key)}${rename(keys, 'key', key)}` }),
 			run: rename(runs, 'run', run),
-		} as Entry;
+		} as RoomEntry;
 	});
 }
 
 /** The journal that a scenario writes now, with its runs and keys named. */
-const written = async (run: () => Promise<readonly unknown[]>): Promise<Entry[]> =>
-	named((await run()) as readonly Entry[]);
+const written = async (run: () => Promise<readonly unknown[]>): Promise<RoomEntry[]> =>
+	named((await run()) as readonly RoomEntry[]);
 
 if (process.env.GOLDEN === 'write') {
 	it('writes the golden journals', async () => {
@@ -83,12 +83,12 @@ if (process.env.GOLDEN === 'write') {
 		});
 
 		it.each(Object.entries(goldenScenarios))('writes %s again as committed', async (name, run) => {
-			const committed = await load<Entry[]>(`${name}.journal.json`);
+			const committed = await load<RoomEntry[]>(`${name}.journal.json`);
 			expect(JSON.parse(JSON.stringify(await written(run))), REGENERATE).toEqual(committed);
 		});
 
 		it.each(names)('replays %s to the committed fold', async (name) => {
-			const entries = await load<Entry[]>(`${name}.journal.json`);
+			const entries = await load<RoomEntry[]>(`${name}.journal.json`);
 			const expected = await load<RoomRead>(`${name}.fold.json`);
 			expect(JSON.parse(JSON.stringify(foldOf(entries))), REGENERATE).toEqual(expected);
 		});
@@ -97,7 +97,7 @@ if (process.env.GOLDEN === 'write') {
 			const kinds = new Set<string>();
 			const seen = new Set<string>();
 			for (const name of names) {
-				const entries = await load<Entry[]>(`${name}.journal.json`);
+				const entries = await load<RoomEntry[]>(`${name}.journal.json`);
 				for (const entry of entries) kinds.add(entry.kind);
 				for (const outcome of outcomes(foldOf(entries))) seen.add(outcome);
 			}
@@ -113,14 +113,14 @@ if (process.env.GOLDEN === 'write') {
 		});
 
 		it('writes the time alone on every fence, and two fences after a resume', async () => {
-			const entries = await load<Entry[]>('resumed.journal.json');
+			const entries = await load<RoomEntry[]>('resumed.journal.json');
 			const fences = entries.filter((entry) => entry.kind === 'run');
 			expect(fences).toHaveLength(2);
 			for (const fence of fences) expect(Object.keys(fence.body)).toEqual(['at']);
 		});
 
 		it('records a session on each ended activation, and keeps it inside one exchange', async () => {
-			const entries = await load<Entry[]>('session.journal.json');
+			const entries = await load<RoomEntry[]>('session.journal.json');
 			const ended = entries.flatMap((entry) =>
 				entry.kind === 'lease' && entry.body.phase === 'ended' ? [entry.body] : [],
 			);

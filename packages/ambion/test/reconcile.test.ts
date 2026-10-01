@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/entries.ts';
-import type { Body, Entry } from '../src/journal/journal.ts';
+import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
 import { decide } from '../src/room/transition.ts';
@@ -12,7 +12,7 @@ const at = '2026-01-01T09:00:00.000Z';
 const T0 = Date.parse(at);
 const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-const composition = (): Entry => ({
+const composition = (): RoomEntry => ({
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -26,25 +26,25 @@ const composition = (): Entry => ({
 	},
 });
 
-const arrived = (seq = 2, from = 'priya'): Entry => ({
+const arrived = (seq = 2, from = 'priya'): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'arrived', at, from, subject: from, identity: 'Person.' },
 });
 
-const said = (seq = 3, from = 'priya', extra: Partial<Message> = {}): Entry => ({
+const said = (seq = 3, from = 'priya', extra: Partial<Message> = {}): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'said', at, from, text: `Message ${seq}`, ...extra } as Body<Message>,
 });
 
 const sourcePosition = (id: string): number => decodeActivationId(id)?.position ?? 0;
-const lease = (body: LeaseChange, seq = sourcePosition(body.id)): Entry => ({
+const lease = (body: LeaseChange, seq = sourcePosition(body.id)): RoomEntry => ({
 	kind: 'lease',
 	body,
 	seq,
 });
-const close = (body: Omit<Close, 'at'>, seq = body.through): Entry => ({
+const close = (body: Omit<Close, 'at'>, seq = body.through): RoomEntry => ({
 	kind: 'close',
 	body: { ...body, at } as Close,
 	seq,
@@ -53,7 +53,7 @@ const released = (id: string, readThrough = 3) =>
 	lease({ id, phase: 'ended', reason: 'released', at, readThrough });
 const running = (id: string, expiresAt = T0 + 60_000) =>
 	lease({ id, phase: 'running', expiresAt, at, readThrough: 0 });
-const unseated = (seq: number): Entry => ({
+const unseated = (seq: number): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'unseated', at, subject: 'writer' },
@@ -66,7 +66,7 @@ const answered = () => [
 	released('message:3:product:1'),
 	close({ person: 'priya', from: 3, through: 3, summaryWriter: 'writer' }),
 ];
-const fold = (entries: Entry[]): RoomState => replayState(entries, retry);
+const fold = (entries: RoomEntry[]): RoomState => replayState(entries, retry);
 const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 	now: T0,
 	resend: 5_000,
@@ -110,13 +110,13 @@ describe('room reconciliation', () => {
 		]);
 		expect(planReconciliation(absentOwner, options()).close).toEqual(undefined);
 
-		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as Entry]);
+		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as RoomEntry]);
 		expect(closed(writerLeft)).toEqual({
 			entry: { kind: 'close', body: { person: 'priya', from: 3, through: 4, at } },
 		});
 
 		// A returned say that no person answers closes with no person and owes no summary.
-		const returned: Entry = {
+		const returned: RoomEntry = {
 			kind: 'message',
 			seq: 3,
 			body: { kind: 'posted', at, to: 'product', returns: 2, text: 'Check the build.' },
@@ -192,7 +192,7 @@ describe('room reconciliation', () => {
 	);
 
 	it('retries a failed summary after backoff and abandons it at the configured cap', () => {
-		const failed = (attempt: number, when: number): Entry =>
+		const failed = (attempt: number, when: number): RoomEntry =>
 			lease({
 				id: `closed:3:writer:${attempt}`,
 				phase: 'ended',

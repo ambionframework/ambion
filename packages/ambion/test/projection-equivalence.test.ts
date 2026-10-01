@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { toRoomRead } from '../src/room/read.ts';
 import { freeze, mulberry32 } from './support/core-failure.ts';
@@ -30,7 +30,7 @@ const SEATS = ['scout', 'writer', 'critic', 'extra'];
 
 /** The walk: what it has written so far, and the random source. */
 class Walk {
-	readonly entries: Entry[] = [];
+	readonly entries: RoomEntry[] = [];
 	private seq = 0;
 	private lastThrough = 0;
 	private readonly messages: number[] = [];
@@ -52,13 +52,13 @@ class Walk {
 		return new Date(start + this.seq * 1000).toISOString();
 	}
 
-	next(): Entry {
+	next(): RoomEntry {
 		const entry = this.build();
 		this.entries.push(entry);
 		return entry;
 	}
 
-	private build(): Entry {
+	private build(): RoomEntry {
 		this.seq += 1;
 		const r = this.random();
 		if (r < 0.04) return { kind: 'run', seq: this.seq, body: { at: this.at() } };
@@ -74,17 +74,17 @@ class Walk {
 		return this.said();
 	}
 
-	private message(body: Record<string, unknown>): Entry {
+	private message(body: Record<string, unknown>): RoomEntry {
 		this.messages.push(this.seq);
 		return {
 			kind: 'message',
 			seq: this.seq,
 			key: `k${this.seq}`,
 			body: { at: this.at(), ...body },
-		} as Entry;
+		} as RoomEntry;
 	}
 
-	private composition(): Entry {
+	private composition(): RoomEntry {
 		const seated = SEATS.filter(() => this.chance(0.5));
 		const seat = (name: string) => ({
 			name,
@@ -101,13 +101,13 @@ class Walk {
 		return { kind: 'composition', seq: this.seq, body };
 	}
 
-	private presence(): Entry {
+	private presence(): RoomEntry {
 		const person = this.pick(PEOPLE);
 		const kind = this.chance(0.6) ? 'arrived' : 'left';
 		return this.message({ kind, from: person, subject: person, identity: `${person}.` });
 	}
 
-	private seating(): Entry {
+	private seating(): RoomEntry {
 		const subject = this.pick(SEATS);
 		if (this.chance(0.5)) return this.message({ kind: 'unseated', subject });
 		return this.message({
@@ -120,7 +120,7 @@ class Walk {
 	}
 
 	/** A seat schedules a say to itself, stamped with the owner the room would give it. */
-	private scheduled(): Entry {
+	private scheduled(): RoomEntry {
 		const seat = this.pick(SEATS);
 		this.scheduledSays.push({ seq: this.seq, seat });
 		return this.message({
@@ -137,7 +137,7 @@ class Walk {
 	 * The room returns a say, or its seat or the host dismisses it: often a
 	 * scheduled one, sometimes one that no longer waits.
 	 */
-	private returned(): Entry {
+	private returned(): RoomEntry {
 		const say = this.scheduledSays.length ? this.pick(this.scheduledSays) : undefined;
 		if (say === undefined) return this.scheduled();
 		if (this.chance(0.3))
@@ -154,7 +154,7 @@ class Walk {
 		});
 	}
 
-	private said(): Entry {
+	private said(): RoomEntry {
 		if (this.chance(0.15)) return this.scheduled();
 		const from = this.chance(0.55) ? this.pick(PEOPLE) : this.pick(SEATS);
 		const wakes = SEATS.filter(() => this.chance(0.3));
@@ -190,7 +190,7 @@ class Walk {
 		return id;
 	}
 
-	private lease(): Entry {
+	private lease(): RoomEntry {
 		return { kind: 'lease', seq: this.seq, body: this.change() };
 	}
 
@@ -202,7 +202,7 @@ class Walk {
 		return { person: this.pick(PEOPLE), from, through, at: this.at() };
 	}
 
-	private close(): Entry | undefined {
+	private close(): RoomEntry | undefined {
 		const range = this.range();
 		if (range === undefined) return undefined;
 		const body: Close = this.chance(0.8) ? { ...range, summaryWriter: this.pick(SEATS) } : range;
@@ -212,12 +212,12 @@ class Walk {
 	}
 
 	/** A cancellation closes the exchange it finds open, at the last message before it. */
-	private cancel(): Entry {
+	private cancel(): RoomEntry {
 		return { kind: 'cancel', seq: this.seq, body: { at: this.at() } };
 	}
 
 	/** A summary for an earlier close, possibly long after it. */
-	private summary(): Entry | undefined {
+	private summary(): RoomEntry | undefined {
 		if (this.closes.length === 0) return undefined;
 		const close = this.pick(this.closes);
 		const covers = { from: close.from, through: close.through };

@@ -163,7 +163,6 @@ export function justGitBackend(options: JustGitBackendOptions): JustGitBackend {
 	};
 
 	const access: JustGitAccess = {
-		transport: 'in-process',
 		prefix: `${BASE}/`,
 		fetch: (input, init) => open().fetch(input, init),
 		credentialFor: async (agent, url) => {

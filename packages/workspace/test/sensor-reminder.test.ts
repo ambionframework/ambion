@@ -26,7 +26,7 @@ describe('sensor discovery in the activation reminder', () => {
 							return { url, async close() {} };
 						},
 					},
-					connect(agent, signal, services) {
+					connect(agent, signal) {
 						if (hangOwnerStatus && agent.name === 'owner')
 							return new Promise((_, reject) => {
 								if (signal?.aborted) reject(signal.reason);
@@ -34,7 +34,7 @@ describe('sensor discovery in the activation reminder', () => {
 							});
 						if (failOwnerStatus && agent.name === 'owner')
 							return Promise.reject(new Error('owner process status failed'));
-						return inner.connect(agent, signal, services);
+						return inner.connect(agent, signal);
 					},
 				})),
 			},

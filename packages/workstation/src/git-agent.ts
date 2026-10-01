@@ -18,9 +18,6 @@ import { runIn, type ScriptVariables } from './git-account.ts';
 import type { WorkstationGitIdentity } from './git-backend.ts';
 import type { SshEnv } from './ssh-env.ts';
 
-/** The git transport that the shell of the workstation carries. */
-export const WORKSTATION_TRANSPORTS: readonly string[] = Object.freeze(['ssh']);
-
 /** The ssh configuration of the alias. `ssh` expands `~` in each path. */
 function configOf(identity: WorkstationGitIdentity): string {
 	return [

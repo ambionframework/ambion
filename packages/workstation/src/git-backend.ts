@@ -10,12 +10,12 @@
  * `~/.ssh/authorized_keys.ambion` has the forced command
  * `~/.ambion/serve <agent>`, and `serve` decides each request.
  *
- * The access carries the `ssh` transport. A bash backend that carries it
- * calls `identityFor` at each `connect` and writes the key and the ssh
- * configuration into the agent's home.
+ * A workstation bash backend that takes this backend in its `git` option
+ * calls `identityFor` of the access at each `connect`, and writes the key
+ * and the ssh configuration into the agent's home.
  */
 
-import type { GitAccess, GitBackend, GitEnv } from '@ambionframework/workspace';
+import type { GitBackend, GitEnv } from '@ambionframework/workspace';
 import { assertAgent, type RepositoryRegistration } from '@ambionframework/workspace/git';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { checkedServer } from './backend.ts';
@@ -72,10 +72,14 @@ export interface WorkstationGitIdentity {
 }
 
 /** What a workstation bash backend needs to reach `workstationGitBackend` as one agent. */
-export interface WorkstationGitAccess extends GitAccess {
-	readonly transport: 'ssh';
+export interface WorkstationGitAccess {
 	/** The key of `agent`. Rejects for a reserved name. */
 	identityFor(agent: WorkspaceAgent): Promise<WorkstationGitIdentity>;
+}
+
+/** The git backend of the workstation. Its access gives each agent a key for the git account. */
+export interface WorkstationGitBackend extends GitBackend {
+	readonly access: WorkstationGitAccess;
 }
 
 interface Settings {
@@ -105,9 +109,7 @@ function checked(options: WorkstationGitOptions): Settings {
 }
 
 /** A git backend in the home of one account on the workstation. */
-export function workstationGitBackend(
-	options: WorkstationGitOptions,
-): GitBackend & { readonly access: WorkstationGitAccess } {
+export function workstationGitBackend(options: WorkstationGitOptions): WorkstationGitBackend {
 	const { port, idleMs, root, alias, credentialTtl } = checked(options);
 	const account = new GitAccount(
 		{ host: options.server, port, hostKey: options.hostKey },
@@ -136,7 +138,6 @@ export function workstationGitBackend(
 	};
 
 	const access: WorkstationGitAccess = {
-		transport: 'ssh',
 		identityFor: async (agent) => {
 			const prepared = await ready(agent);
 			const key = await keys.keyOf(agent.name, prepared.serve);

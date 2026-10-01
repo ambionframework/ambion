@@ -20,13 +20,13 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { Entry as RoomEntry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases, within } from './support/chaos.ts';
 import { mulberry32 } from './support/core-failure.ts';
 import { replayState } from './support/fold.ts';
-import { type Entry, History, standing, violations } from './support/history.ts';
+import { History, type HistoryEntry, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import { type Fault, faulty, type Operation, serializing } from './support/ports.ts';
 import {
@@ -91,7 +91,7 @@ class Cluster {
 		op: string,
 		key: string | undefined,
 		action: () => Promise<T>,
-		seen?: (value: T) => Entry['seen'],
+		seen?: (value: T) => HistoryEntry['seen'],
 	): Promise<T | undefined> {
 		const epoch = this.epoch;
 		return this.history.run(client, op, key, action, seen, () => this.epoch !== epoch);

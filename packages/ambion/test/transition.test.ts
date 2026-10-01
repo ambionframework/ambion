@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommitRequest } from '../src/hosting.ts';
 import type { Seating } from '../src/journal/entries.ts';
-import type { Entry, Kind } from '../src/journal/journal.ts';
+import type { Kind, RoomEntry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
@@ -15,7 +15,7 @@ const options = { backoff: () => 0 };
 
 const product = { name: 'product', identity: 'Product.', attention: 'broadcast' } as const;
 const writer = { name: 'writer', identity: 'Writer.', attention: 'broadcast' } as const;
-const composition = (summaryWriter?: string, agents: Seating[] = [product, writer]): Entry => ({
+const composition = (summaryWriter?: string, agents: Seating[] = [product, writer]): RoomEntry => ({
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -27,7 +27,7 @@ const composition = (summaryWriter?: string, agents: Seating[] = [product, write
 });
 
 const message = (seq: number, body: object) =>
-	({ kind: 'message', seq, body: { at, ...body } }) as Entry;
+	({ kind: 'message', seq, body: { at, ...body } }) as RoomEntry;
 const person = (seq = 2) =>
 	message(seq, { kind: 'arrived', from: 'priya', subject: 'priya', identity: 'Person.' });
 const question = (seq = 3) => message(seq, { kind: 'said', from: 'priya', text: 'Question.' });
@@ -35,18 +35,18 @@ const left = (seq: number) => message(seq, { kind: 'left', from: 'priya', subjec
 const unseated = (seq: number) => message(seq, { kind: 'unseated', subject: 'writer' });
 const seated = (seq: number) =>
 	message(seq, { kind: 'seated', subject: 'writer', identity: 'Writer.', attention: 'broadcast' });
-const closed = (seq = 4, through = 3): Entry => ({
+const closed = (seq = 4, through = 3): RoomEntry => ({
 	kind: 'close',
 	seq,
 	body: { person: 'priya', from: 3, through, at, summaryWriter: 'writer' },
 });
-const lease = (id: string, seq: number): Entry => ({
+const lease = (id: string, seq: number): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: { id, phase: 'running', expiresAt: now + 60_000, at, readThrough: 0 },
 });
 
-const fold = (...entries: Entry[]) => replayState(entries, options);
+const fold = (...entries: RoomEntry[]) => replayState(entries, options);
 /** A question, and the running activation of `seat` that answers it. */
 const answering = (seat = 'product', first = composition()) =>
 	fold(first, person(), question(), lease(`message:3:${seat}:1`, 4));
@@ -63,7 +63,7 @@ const commit = (state: RoomState, request: CommitRequest, bytes?: number) =>
 const summary = (state: RoomState, intent: CommitRequest['intent'], bytes?: number) =>
 	commit(state, { activation: 'closed:3:writer:1', key: 'summary', intent }, bytes);
 
-const entryAt = (decision: RoomDecision<Kind>, seq: number): Entry => {
+const entryAt = (decision: RoomDecision<Kind>, seq: number): RoomEntry => {
 	if (!('entry' in decision) || decision.entry === undefined) throw new Error('Expected an entry.');
 	return { ...decision.entry, seq };
 };
@@ -264,7 +264,7 @@ describe('room transition', () => {
 				now,
 			),
 	};
-	const ended: Entry = {
+	const ended: RoomEntry = {
 		kind: 'lease',
 		seq: 5,
 		body: { id: 'message:3:writer:1', phase: 'ended', reason: 'revoked', at, readThrough: 0 },
@@ -368,7 +368,7 @@ describe('a scheduled say', () => {
 	/** A question, the say that the answering seat scheduled, and the close of the exchange. */
 	/** A seat at `presence` hears every arrival, and still no returned say of another seat. */
 	const watcher = { ...writer, attention: 'presence' } as const;
-	const waiting = (...more: Entry[]) =>
+	const waiting = (...more: RoomEntry[]) =>
 		fold(
 			composition(undefined, [product, watcher]),
 			person(),
@@ -378,7 +378,7 @@ describe('a scheduled say', () => {
 			...more,
 		);
 	/** The close of the exchange, with no summary owed, so nothing else waits on the clock. */
-	const quietClose = (seq: number, through: number): Entry => ({
+	const quietClose = (seq: number, through: number): RoomEntry => ({
 		kind: 'close',
 		seq,
 		body: { person: 'priya', from: 3, through, at },
@@ -392,7 +392,7 @@ describe('a scheduled say', () => {
 			},
 			at,
 		);
-	const released = (seq: number): Entry => ({
+	const released = (seq: number): RoomEntry => ({
 		kind: 'lease',
 		seq,
 		body: { id: 'message:3:product:1', phase: 'ended', reason: 'released', at, readThrough: 5 },
@@ -658,7 +658,7 @@ describe('a scheduled say', () => {
 
 	it.each([
 		['an unseating of its seat', message(6, { kind: 'unseated', subject: 'product' })],
-		['a cancellation after it', { kind: 'cancel', seq: 6, body: { at } } as Entry],
+		['a cancellation after it', { kind: 'cancel', seq: 6, body: { at } } as RoomEntry],
 	])('drops a say at %s', (_case, entry) => {
 		const state = waiting(entry);
 		expect(state.scheduled).toEqual([]);
