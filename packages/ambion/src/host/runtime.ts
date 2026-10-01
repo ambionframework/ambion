@@ -92,7 +92,7 @@ export interface Limits {
 	 * counts as an attempt.
 	 */
 	readonly lease: { readonly ttl: number; readonly deadline: number };
-	/** How many attempts the room makes at one wake or one draft, and how long it waits before each retry. */
+	/** How many attempts the room makes at one due activation, and how long it waits before each retry. */
 	readonly activation: { readonly attempts: number; readonly backoff: (attempt: number) => number };
 	/**
 	 * `timeout` bounds each executor call to the room, in milliseconds.

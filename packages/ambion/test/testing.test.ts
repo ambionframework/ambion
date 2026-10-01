@@ -131,7 +131,7 @@ describe('isClosing', () => {
 		expect(flags.filter((flag) => flag).length).toBeGreaterThan(0);
 		expect(flags.at(-1)).toBe(true);
 		const read = await room.read();
-		expect(read.exchanges[0]).toMatchObject({ summary: { status: 'published' } });
+		expect(read.exchanges[0]).toMatchObject({ summary: { kind: 'published' } });
 	});
 });
 

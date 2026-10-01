@@ -55,16 +55,16 @@ export interface ClosedExchange extends ExchangeRef {
 
 /** The durable outcome of the optional summary assignment for a closed exchange. */
 export type SummaryOutcome =
-	| { readonly status: 'pending'; readonly writer?: string }
-	| { readonly status: 'published'; readonly summary: SummaryMessage }
-	| { readonly status: 'silent' }
-	| { readonly status: 'failed' };
+	| { readonly kind: 'pending'; readonly writer?: string }
+	| { readonly kind: 'published'; readonly summary: SummaryMessage }
+	| { readonly kind: 'silent' }
+	| { readonly kind: 'failed' };
 
 /** How an activation stands: at work, or ended for a reason. */
 export type ActivationOutcome =
-	| { readonly status: 'running' }
+	| { readonly kind: 'running' }
 	| {
-			readonly status: EndReason;
+			readonly kind: EndReason;
 			/** Set when a cancellation ended the activation. */
 			readonly cancelled?: true;
 			/** Why the activation failed, on a failed or abandoned activation. */
@@ -76,7 +76,7 @@ export interface ExchangeActivation {
 	/** The activation id. */
 	readonly id: string;
 	readonly seat: string;
-	/** The attempt number. A retry of a wake is a new attempt. */
+	/** The attempt number. A retry is a new attempt of one due activation. */
 	readonly attempt: number;
 	/** `respond` answers a message. `summary` writes the closing summary. */
 	readonly purpose: 'respond' | 'summary';
@@ -435,8 +435,8 @@ export type ActivationEvent =
 			error: Error;
 	  }
 	/**
-	 * The room gave up: a permanent failure, or every attempt at a wake or a
-	 * draft came to nothing and the cap is reached. `activation` names the
+	 * The room gave up: a permanent failure, or every attempt of a due
+	 * activation came to nothing and the cap is reached. `activation` names the
 	 * attempt the room did not make, `cause` says why, and the journal holds
 	 * the entry that says so.
 	 */

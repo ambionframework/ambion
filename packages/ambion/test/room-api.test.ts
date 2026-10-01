@@ -128,7 +128,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		await messagesOf(room);
 		const complete = await readRoom(name, { runtime });
 		const closed = complete.exchanges.find((exchange) => exchange.from === sent.from);
-		expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+		expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
 		expect(complete.exchange).toBeUndefined();
 		expect(complete.watermark).toBeGreaterThan(complete.messages.at(-1)?.seq ?? 0);
 

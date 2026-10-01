@@ -23,11 +23,11 @@ import {
 	reserveOf,
 } from '../../src/room/fold.ts';
 import {
+	type DueActivation,
+	type DueWake,
+	dueOf,
 	type LeaseHold,
-	type PendingActivation,
-	type PendingWake,
 	removedAfter,
-	statusOf,
 } from '../../src/room/lease.ts';
 import { type Owed, withAttempts } from '../../src/room/owed.ts';
 import { advancePeople, type PersonState } from '../../src/room/presence.ts';
@@ -88,11 +88,11 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 }
 
 /** The wakes the room owes, from a state's `due`. */
-export const pendingOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+export const pendingOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'message');
 
-/** The summary drafts the room owes, from a state's `due`. */
-export const owedOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+/** The summary activations the room owes, from a state's `due`. */
+export const owedOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'closed');
 
 /** Every person the record knows, in the order the record met them. */
@@ -146,16 +146,16 @@ export function pendingWakes(
 	roster: ReadonlySet<string>,
 	options: FoldOptions,
 	cancelledAt?: Seq,
-): PendingWake[] {
+): DueWake[] {
 	const bySeat = leasesBySeat(leases, roster);
-	const pending: PendingWake[] = [];
+	const pending: DueWake[] = [];
 	for (const message of after(messages, cancelledAt)) {
 		const delivery = deliveries.get(message.seq);
 		if (delivery === undefined) continue;
 		for (const seat of reached(delivery, roster)) {
 			if (removedAfter(messages, seat, message.seq)) continue;
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options);
+			const wake = dueOf(message, seat, taken, options);
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
@@ -197,7 +197,7 @@ function foldOwed(
 	return closes.flatMap((close) => {
 		if (close.summary === undefined) return [];
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
-		if (completion.status !== 'pending' || completion.writer === undefined) return [];
+		if (completion.kind !== 'pending' || completion.writer === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];
 	});
 }

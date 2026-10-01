@@ -268,7 +268,7 @@ describe('Workbench host', () => {
 		expect(aborted.exchange).toBeUndefined();
 		expect(aborted.status).toBe('running');
 		expect(aborted.exchanges).toContainEqual(
-			expect.objectContaining({ status: 'closed', summary: { status: 'silent' } }),
+			expect.objectContaining({ status: 'closed', summary: { kind: 'silent' } }),
 		);
 	});
 
