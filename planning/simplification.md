@@ -164,8 +164,8 @@ definition runs on different executions in
 **W1 is larger than the re-export.** The workspace also takes its
 environment port, its file errors, and its shell results from Pi. The
 rank counts one concept, but the row fixes a package boundary. CLAUDE.md
-states that `packages/workspace` owns the workspace port. Backlog K6, the
-neutral-file import rule, is the check that holds it.
+states that `packages/workspace` owns the workspace port. The neutral-file
+import rule of `biome.jsonc` holds it for all five neutral files.
 
 **The owner decided W1: the workspace owns its port.** The work stays in
 phase 3 for its size. Each change before it adds no import of
@@ -262,7 +262,6 @@ also exist.
 | Backlog | Relation to this page                                                             |
 | ------- | --------------------------------------------------------------------------------- |
 | P1      | Moves `returnable` into the verified rules; the first done change edits that file |
-| K6      | The import rule that keeps W1 fixed                                               |
 | D5      | Owns the `ProcessKind` question of W10                                            |
 | D7      | Is K15                                                                            |
 | D20     | A generated API reference gives K4 its evidence                                   |

@@ -17,7 +17,14 @@ import test from 'node:test';
 const root = new URL('..', import.meta.url).pathname;
 const biome = join(root, 'node_modules', '.bin', 'biome');
 
-/** [the folder the probe sits in, the import, whether a rule refuses it] */
+/**
+ * [the folder the probe sits in, the import, whether a rule refuses it, the
+ * file name]. The import is one specifier or a list. An item of a list is a
+ * specifier, which takes the refusal of the case, or a pair of a specifier
+ * and its own refusal. A pair lets one probe file hold both a refused and a
+ * passed import, which an override that names one file needs. The case then
+ * has `null` for its refusal. The file name is optional.
+ */
 const CASES = [
 	// A package outside the core reaches it through its published entries.
 	['packages/claude/src', '@ambionframework/ambion', false],
@@ -36,6 +43,12 @@ const CASES = [
 	['packages/simulator/src', '../../ambion/src/room.ts', true],
 	['examples/workbench/src', '@ambionframework/ambion/testing', true],
 	['examples/workbench/src', '../../../packages/ambion/src/room.ts', true],
+	// The assistant reaches the core the same way.
+	['packages/assistant/src', '@ambionframework/ambion', false],
+	['packages/assistant/src', '@ambionframework/pi', false],
+	['packages/assistant/src', '@ambionframework/ambion/testing', true],
+	['packages/assistant/src', '@ambionframework/ambion/src/room.ts', true],
+	['packages/assistant/src', '../../ambion/src/room.ts', true],
 	// The workspace reaches the core the same way, and loads no just-bash.
 	['packages/workspace/src', '@ambionframework/ambion', false],
 	['packages/workspace/src', '@ambionframework/ambion/testing', true],
@@ -47,6 +60,19 @@ const CASES = [
 		true,
 		'backend.ts',
 	],
+	// The five neutral files hold the same rule. `git-backend.ts` and
+	// `object-backend.ts` once fell to the override of the whole package.
+	...['git-backend.ts', 'object-backend.ts'].map((file) => [
+		'packages/workspace/src',
+		[
+			['@ambionframework/ambion', true],
+			['./tools.ts', true],
+			['just-bash', true],
+			['./resource.ts', false],
+		],
+		null,
+		file,
+	]),
 	// The workstation knows the workspace interface, the git helpers, and no room.
 	['packages/workstation/src', '@ambionframework/workspace', false],
 	['packages/workstation/src', '@ambionframework/workspace/resource', false],
@@ -81,6 +107,118 @@ const CASES = [
 	// The core names no model library and no platform module.
 	['packages/ambion/src', '@earendil-works/pi-agent-core', true],
 	['packages/ambion/src', 'node:sqlite', true],
+	// Each layer of the core refuses the layers above it, and reaches those below.
+	[
+		'packages/ambion/src',
+		[
+			['./host/runtime.ts', true],
+			['./journal/journal.ts', true],
+			['./room/fold.ts', true],
+			['./execution/runner.ts', true],
+			['./room-host/core.ts', true],
+			['./room.ts', true],
+			['./errors.ts', false],
+		],
+		null,
+		'types.ts',
+	],
+	[
+		'packages/ambion/src/host',
+		[
+			['../journal/journal.ts', true],
+			['../room/fold.ts', true],
+			['../execution/runner.ts', true],
+			['../room.ts', true],
+			['../execution/executor.ts', false],
+			['../types.ts', false],
+		],
+		null,
+	],
+	[
+		'packages/ambion/src/journal',
+		[
+			['../host/runtime.ts', true],
+			['../protocol.ts', true],
+			['../room/fold.ts', true],
+			['../execution/runner.ts', true],
+			['../room.ts', true],
+			['../types.ts', false],
+		],
+		null,
+	],
+	[
+		'packages/ambion/src/room',
+		[
+			['../host/runtime.ts', true],
+			['../execution/runner.ts', true],
+			['../room-host/core.ts', true],
+			['../room.ts', true],
+			['../journal/journal.ts', false],
+			['../protocol.ts', false],
+		],
+		null,
+	],
+	[
+		'packages/ambion/src',
+		[
+			['./host/runtime.ts', true],
+			['./execution/runner.ts', true],
+			['./room-host/core.ts', true],
+			['./room.ts', true],
+			['./room/fold.ts', false],
+			['./journal/journal.ts', false],
+		],
+		null,
+		'answers.ts',
+	],
+	[
+		'packages/ambion/src/execution',
+		[
+			['../journal/journal.ts', true],
+			['../room/fold.ts', true],
+			['../room-host/core.ts', true],
+			['../room.ts', true],
+			['../host/runtime.ts', false],
+			['../protocol.ts', false],
+		],
+		null,
+	],
+	[
+		'packages/ambion/src',
+		[
+			['./journal/journal.ts', true],
+			['./room/fold.ts', true],
+			['./room-host/core.ts', true],
+			['./room.ts', true],
+			['./execution/runner.ts', false],
+			['./protocol.ts', false],
+		],
+		null,
+		'conformance-support.ts',
+	],
+	[
+		'packages/ambion/src/testing',
+		[
+			['../journal/journal.ts', true],
+			['../room/fold.ts', true],
+			['../room.ts', true],
+			['../room-host/core.ts', true],
+			['../execution/executor.ts', false],
+			['../host/runtime.ts', false],
+		],
+		null,
+	],
+	[
+		'packages/ambion/src/room-host',
+		[
+			['../execution/runner.ts', true],
+			['../room.ts', true],
+			['../room/fold.ts', false],
+			['../journal/journal.ts', false],
+			['./core.ts', false],
+		],
+		null,
+	],
 ];
 
 /** The number of restricted-import diagnostics for each probe path. */
@@ -111,25 +249,32 @@ test('the import rules refuse each import they name, and pass each published ent
 	const tree = mkdtempSync(join(tmpdir(), 'ambion-import-rules-'));
 	try {
 		copyFileSync(join(root, 'biome.jsonc'), join(tree, 'biome.jsonc'));
+		const paths = new Set();
 		const probes = CASES.map(([folder, value, refuse, file], index) => {
 			const path = `${folder}/${file ?? `import-probe-${index}.ts`}`;
-			const specifiers = Array.isArray(value) ? value : [value];
+			assert.ok(!paths.has(path), `two cases write the probe file ${path}`);
+			paths.add(path);
+			const imports = (Array.isArray(value) ? value : [value]).map((item) =>
+				Array.isArray(item) ? item : [item, refuse],
+			);
+			assert.ok(imports.length > 0, `the case ${index} for ${path} has no import`);
 			mkdirSync(dirname(join(tree, path)), { recursive: true });
-			const imports = specifiers
-				.map((specifier, importIndex) => `import * as m${importIndex} from '${specifier}';`)
+			const source = imports
+				.map(([specifier], importIndex) => `import * as m${importIndex} from '${specifier}';`)
 				.join('\n');
-			writeFileSync(join(tree, path), `${imports}\n`);
-			return { path, specifiers, refuse, expected: specifiers.length };
+			writeFileSync(join(tree, path), `${source}\n`);
+			return { path, imports };
 		});
 		const refused = refusedProbes(tree);
-		for (const { path, specifiers, refuse, expected } of probes) {
-			const verb = refuse ? 'refuse' : 'pass';
-			assert.equal(
-				refused.get(path)?.size ?? 0,
-				refuse ? expected : 0,
-				`${dirname(path)}: the rules do not ${verb} ${specifiers.join(', ')}`,
-			);
+		const misses = [];
+		for (const { path, imports } of probes) {
+			imports.forEach(([specifier, refuse], importIndex) => {
+				if ((refused.get(path)?.has(String(importIndex + 1)) ?? false) !== refuse) {
+					misses.push(`${path}: the rules do not ${refuse ? 'refuse' : 'pass'} ${specifier}`);
+				}
+			});
 		}
+		assert.deepEqual(misses, []);
 	} finally {
 		rmSync(tree, { recursive: true, force: true });
 	}

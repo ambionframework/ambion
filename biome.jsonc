@@ -84,17 +84,16 @@
 		},
 		// The core is laid out in layers, and an import points down only:
 		//
-		//   types, bundle, protocol, define, errors  the vocabulary: public and protocol shapes
+		//   types, refs, scheduling, bundle, protocol, define, errors  the vocabulary: public and protocol shapes
 		//   record.ts                      the vocabulary's record lines and summary folds
 		//   activation-id.ts               the vocabulary's durable activation identity codec
 		//   host/                         what a host owns: the runtime value
 		//   journal/                      the room's kinds, over @ambionframework/journal
 		//   room/                         every fact and every decision, pure over the journal
 		//   answers.ts                    what the room answers a seat's three calls with
-		//   tools/                        the workspace port, and the four tools over it
 		//   execution/                   the execution side of the wire: driver, contract, rendering
 		//   testing/                      the deterministic test tools, over the vocabulary and the execution contract
-		//   room-host/                    the room's state and mechanisms over the journal, split by concern
+		//   room-host/                    core.ts, the shared view and helpers, and one file per mechanism
 		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
@@ -123,7 +122,6 @@
 											"./host/*",
 											"./journal/*",
 											"./room/*",
-											"./tools/*",
 											"./execution/*",
 											"./room.ts",
 											"./room-host/*",
@@ -152,7 +150,6 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../tools/*",
 											"../execution/runner*",
 											"../room.ts",
 											"../room-host/*",
@@ -182,7 +179,6 @@
 											"../host/*",
 											"../protocol.ts",
 											"../room/*",
-											"../tools/*",
 											"../execution/*",
 											"../room.ts",
 											"../room-host/*",
@@ -210,7 +206,6 @@
 									{
 										"group": [
 											"../host/*",
-											"../tools/*",
 											"../execution/*",
 											"../room.ts",
 											"../room-host/*",
@@ -238,7 +233,6 @@
 								"patterns": [
 									{
 										"group": [
-											"./tools/*",
 											"./execution/*",
 											"./host/*",
 											"./room.ts",
@@ -248,34 +242,6 @@
 											"@earendil-works/pi-*"
 										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
-									}
-								]
-							}
-						}
-					}
-				}
-			}
-		},
-		{
-			"includes": ["packages/ambion/src/tools/**"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noRestrictedImports": {
-							"level": "error",
-							"options": {
-								"patterns": [
-									{
-										"group": [
-											"../journal/*",
-											"../room/*",
-											"../execution/*",
-											"../room.ts",
-											"../room-host/*",
-											"../index.ts",
-											"../hosting.ts"
-										],
-										"message": "A workspace is what a tool reaches into; it knows no room and no seat."
 									}
 								]
 							}
@@ -327,7 +293,6 @@
 										"group": [
 											"./journal/*",
 											"./room/*",
-											"./tools/*",
 											"./room.ts",
 											"./room-host/*",
 											"./index.ts",
@@ -358,7 +323,6 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../tools/*",
 											"../room.ts",
 											"../room-host/*",
 											"../index.ts",
@@ -407,6 +371,7 @@
 			// A package outside the core reaches it through its published surface:
 			// a host, a workspace backend, and an example alike.
 			"includes": [
+				"packages/assistant/src/**",
 				"packages/cloudflare/src/**",
 				"packages/pi/src/**",
 				"packages/claude/src/**",
@@ -525,7 +490,9 @@
 				"packages/workspace/src/**",
 				"!packages/workspace/src/resource.ts",
 				"!packages/workspace/src/resource-entry.ts",
-				"!packages/workspace/src/backend.ts"
+				"!packages/workspace/src/backend.ts",
+				"!packages/workspace/src/git-backend.ts",
+				"!packages/workspace/src/object-backend.ts"
 			],
 			"linter": {
 				"rules": {
