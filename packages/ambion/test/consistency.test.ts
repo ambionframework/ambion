@@ -37,7 +37,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 
 const OPERATIONS: Operation[] = ['wake', 'steer', 'cut', 'view', 'commit', 'lease'];
@@ -125,7 +125,7 @@ class Cluster {
 	private execution(): Execution {
 		return serializing(
 			faulty(
-				piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }),
+				piExecution({ sessions: 'memory', stream: scriptedStream(this.cast.script) }),
 				this.faults,
 				this.clock,
 			),
@@ -195,7 +195,7 @@ class Cluster {
 	/** Every run is held to its own bound: a run that dies is checked before the next one starts. */
 	private bounded(): void {
 		const errors = this.events.flatMap((e) =>
-			e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+			e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 		);
 		expect(errors.length, `errors on a run: ${errors.join('; ')}`).toBeLessThanOrEqual(
 			this.allowance(),
@@ -471,7 +471,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const stored = await storedOf(opened.journals, cluster.name);
 				const errors = cluster.events.flatMap((e) =>
-					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+					e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 				);
 				const brief = cluster.events
 					.map((e) => {

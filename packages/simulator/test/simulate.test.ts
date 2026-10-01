@@ -3,13 +3,13 @@
  * and the run it returns. Every room is a real room on the scripted
  * execution, and every person is a `scriptedActor` or a plain function.
  */
-import { defineHuman, isSpoken, type Message } from '@ambionframework/ambion';
+import { defineHuman, isSaid, type Message } from '@ambionframework/ambion';
 import {
 	byAgent,
 	isClosing,
 	quiet,
 	ScriptedFailure,
-	speak,
+	say,
 	spend,
 } from '@ambionframework/ambion/testing';
 import { describe, expect, it } from 'vitest';
@@ -29,11 +29,11 @@ const answering = byAgent({
 	desk: (step) => {
 		const done = step.results.length;
 		if (done === 0) return spend({ input: 10, output: 0, cacheRead: 0, cacheWrite: 0 });
-		return done === 1 ? speak('Thursday is dry.') : quiet();
+		return done === 1 ? say('Thursday is dry.') : quiet();
 	},
 });
 
-const spoken = (messages: readonly Message[]) => messages.filter(isSpoken);
+const spoken = (messages: readonly Message[]) => messages.filter(isSaid);
 
 describe('simulate', () => {
 	it('ends with `stopped` when the list ends, and keeps the stop as the last move', async () => {
@@ -82,11 +82,11 @@ describe('simulate', () => {
 		const script = byAgent({
 			desk: (step) => {
 				if (step.results.length > 0) return quiet();
-				const asked = step.view.context.messages.some((m) => isSpoken(m) && m.text === 'Thursday.');
-				return asked ? speak('Thursday is dry.', 'priya') : speak('Which day?', 'priya');
+				const asked = step.view.context.messages.some((m) => isSaid(m) && m.text === 'Thursday.');
+				return asked ? say('Thursday is dry.', 'priya') : say('Which day?', 'priya');
 			},
 			editor: (step) =>
-				isClosing(step.view) && step.results.length === 0 ? speak('Summary.') : quiet(),
+				isClosing(step.view) && step.results.length === 0 ? say('Summary.') : quiet(),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
 		const seen: Seen[] = [];
@@ -112,7 +112,7 @@ describe('simulate', () => {
 			'Summary.',
 		]);
 		expect(
-			seen[2]?.exchanges[1]?.discussion.some((m) => isSpoken(m) && m.text === 'Thursday is dry.'),
+			seen[2]?.exchanges[1]?.discussion.some((m) => isSaid(m) && m.text === 'Thursday is dry.'),
 		).toBe(true);
 		// What the actor saw carries no view of the room.
 		expect(seen[2]?.exchanges[0]).not.toHaveProperty('view');
@@ -126,7 +126,7 @@ describe('simulate', () => {
 		const script = byAgent({
 			desk: (step) => {
 				if (hanging === 'a seat keeps the exchange open') return forever();
-				return step.results.length > 0 ? quiet() : speak('Thursday is dry.');
+				return step.results.length > 0 ? quiet() : say('Thursday is dry.');
 			},
 			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
 		});
@@ -191,7 +191,7 @@ describe('simulate', () => {
 
 	it('ends with `failed` when the room stops while the abort at the deadline runs', async () => {
 		const script = byAgent({
-			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
+			desk: (step) => (step.results.length > 0 ? quiet() : say('Thursday is dry.')),
 			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
@@ -253,7 +253,7 @@ describe('simulate', () => {
 
 	it('ends with `failed` when a required summary fails', async () => {
 		const script = byAgent({
-			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
+			desk: (step) => (step.results.length > 0 ? quiet() : say('Thursday is dry.')),
 			editor: (step) => {
 				if (!isClosing(step.view)) return quiet();
 				throw new ScriptedFailure('permanent', 'The editor cannot write.');

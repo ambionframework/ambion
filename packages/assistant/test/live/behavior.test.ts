@@ -8,8 +8,8 @@
  * sample passes.
  */
 
-import { isSpoken, type SpokenMessage } from '@ambionframework/ambion';
-import { quiet, speak } from '@ambionframework/ambion/testing';
+import { isSaid, type SaidMessage } from '@ambionframework/ambion';
+import { quiet, say } from '@ambionframework/ambion/testing';
 import {
 	agentActor,
 	agentJudge,
@@ -487,13 +487,13 @@ live('the default assistant, driven by the simulator', () => {
 				if (results.length > 0 || view.context.exchange === undefined) return quiet();
 				const { from } = view.context.exchange;
 				const said = view.context.messages.filter(
-					(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
+					(message): message is SaidMessage => isSaid(message) && message.seq >= from,
 				);
 				const asked = said.some(
 					(message) => message.from === 'inventory' && message.to === 'assistant',
 				);
 				if (!asked) {
-					return speak('Which warehouse did priya ask me to check, north or south?', 'assistant');
+					return say('Which warehouse did priya ask me to check, north or south?', 'assistant');
 				}
 				const answered = said.some(
 					(message) => message.from === 'assistant' && message.to === 'inventory',
@@ -502,7 +502,7 @@ live('the default assistant, driven by the simulator', () => {
 					(message) => message.from === 'inventory' && message.to === undefined,
 				);
 				return answered && !reported
-					? speak('The north warehouse has 8 units of SKU A available to dispatch today.')
+					? say('The north warehouse has 8 units of SKU A available to dispatch today.')
 					: quiet();
 			},
 		});
@@ -550,8 +550,8 @@ live('the default assistant, driven by the simulator', () => {
 			});
 			// A post gives no direction, so silence is a valid answer. A say speaks to the event.
 			const spoken = discussion.filter(
-				(message): message is SpokenMessage =>
-					isSpoken(message) && message.from === 'assistant' && message.activationId === id,
+				(message): message is SaidMessage =>
+					isSaid(message) && message.from === 'assistant' && message.activationId === id,
 			);
 			for (const message of spoken)
 				expect(message.text, JSON.stringify(discussion)).toMatch(/stale|sync|stock|SKU/i);

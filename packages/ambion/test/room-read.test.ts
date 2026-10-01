@@ -1,7 +1,7 @@
 import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, readRoom } from '../src/index.ts';
-import type { Close } from '../src/journal/events.ts';
+import type { Close } from '../src/journal/entries.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { readView } from '../src/room/read.ts';

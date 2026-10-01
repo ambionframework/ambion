@@ -4,13 +4,13 @@
  */
 
 import type { WorkspaceEnv } from './backend.ts';
-import type { ProcessStatus } from './process-files.ts';
+import type { ProcessRecord } from './process-files.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
 /** A process that started, or one that ended. */
 export type ProcessEvent =
-	| { readonly type: 'started'; readonly process: ProcessStatus }
-	| { readonly type: 'ended'; readonly process: ProcessStatus };
+	| { readonly type: 'started'; readonly process: ProcessRecord }
+	| { readonly type: 'ended'; readonly process: ProcessRecord };
 
 /** What `bash` asks the table to run. */
 interface BashProcessSpec {
@@ -45,11 +45,11 @@ export interface ProcessTable {
 	 * the bash owner: the table reads the agent's files and writes the new
 	 * process's `spec` through it. The process runs on an environment of its own.
 	 */
-	start(agent: WorkspaceAgent, env: WorkspaceEnv, spec: BashProcessSpec): Promise<ProcessStatus>;
+	start(agent: WorkspaceAgent, env: WorkspaceEnv, spec: BashProcessSpec): Promise<ProcessRecord>;
 	/** The processes of `agent`, in the order they started. */
-	list(agent: WorkspaceAgent, signal?: AbortSignal): Promise<readonly ProcessStatus[]>;
+	list(agent: WorkspaceAgent, signal?: AbortSignal): Promise<readonly ProcessRecord[]>;
 	/** One process of `agent`. Throws when `agent` has no process `handle`. */
-	find(agent: WorkspaceAgent, handle: string, signal?: AbortSignal): Promise<ProcessStatus>;
+	find(agent: WorkspaceAgent, handle: string, signal?: AbortSignal): Promise<ProcessRecord>;
 	/**
 	 * Wait up to `seconds` for the first of the processes `handles` of
 	 * `agent` to end, and return their statuses in the same order. Each
@@ -61,18 +61,18 @@ export interface ProcessTable {
 		handles: readonly string[],
 		seconds: number,
 		signal?: AbortSignal,
-	): Promise<readonly ProcessStatus[]>;
+	): Promise<readonly ProcessRecord[]>;
 	/**
-	 * Stop a process of `agent`, and return its status once it ends or the
-	 * wait of the stop ends. `stopped` is false for a process that had ended
+	 * Cancel a process of `agent`, and return its record once it ends or the
+	 * wait of the cancel ends. `cancelled` is false for a process that had ended
 	 * before the cancel.
 	 */
 	cancel(
 		agent: WorkspaceAgent,
 		handle: string,
-	): Promise<{ readonly status: ProcessStatus; readonly stopped: boolean }>;
+	): Promise<{ readonly status: ProcessRecord; readonly cancelled: boolean }>;
 	/** Write `seen` for a process in a final state, through `env` on the bash owner. */
-	markSeen(env: WorkspaceEnv, process: ProcessStatus): Promise<void>;
+	markSeen(env: WorkspaceEnv, process: ProcessRecord): Promise<void>;
 	/**
 	 * The reminder of one activation: the seat's running processes, and the
 	 * finished ones that no result showed. After `signal` aborts, it marks no
@@ -83,7 +83,7 @@ export interface ProcessTable {
 		signal: AbortSignal,
 	): Promise<string | undefined>;
 	/** The host's list: the processes of the agents that used the workspace in this run. */
-	hostList(query?: ProcessQuery): Promise<readonly ProcessStatus[]>;
+	hostList(query?: ProcessQuery): Promise<readonly ProcessRecord[]>;
 	/**
 	 * Whether this table saw the process `handle` of `agent` end. It answers
 	 * at once and stays true for the run. A process that ended before this
@@ -93,8 +93,8 @@ export interface ProcessTable {
 	ended(agent: string, handle: string): boolean;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
-	/** Stop the process `handle` of any agent of this run: the host's cancel. */
-	hostCancel(handle: string): Promise<ProcessStatus>;
-	/** Refuse new processes, stop every running process, and wait up to the grace and the slack for each one to end. */
+	/** Cancel the process `handle` of any agent of this run: the host's cancel. */
+	hostCancel(handle: string): Promise<ProcessRecord>;
+	/** Refuse new processes, cancel every running process, and wait up to the grace and the slack for each one to end. */
 	close(): Promise<void>;
 }

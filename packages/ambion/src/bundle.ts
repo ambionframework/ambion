@@ -20,7 +20,7 @@ export interface ToolContext {
 	/** Name of the room this call ran in. Absent for a call made outside a room. */
 	readonly room?: string;
 	/**
-	 * The activation this call ran in: the id every execution event and every
+	 * The activation this call ran in: the id every activation event and every
 	 * recorded message carries. Absent for a call made outside a room.
 	 */
 	readonly activation?: string;

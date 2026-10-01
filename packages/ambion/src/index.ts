@@ -22,7 +22,7 @@ export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from '
 export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
-export { DEFAULT_GUIDANCE } from './execution/render.ts';
+export { DEFAULT_SPEAKING } from './execution/render.ts';
 export { loggedToolResult } from './execution/trace.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
@@ -52,6 +52,7 @@ export type {
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type { PendingSay } from './scheduling.ts';
 export type {
+	ActivationEvent,
 	ActivationOutcome,
 	AgentDefinition,
 	AgentExecutor,
@@ -65,7 +66,6 @@ export type {
 	ExchangeOutcome,
 	ExchangeRef,
 	ExchangeView,
-	ExecutionEvent,
 	HarnessSession,
 	HumanDefinition,
 	HumanParticipantInfo,
@@ -77,10 +77,10 @@ export type {
 	PresenceStatus,
 	RoomEvent,
 	RoomNotification,
+	SaidMessage,
 	SeatOptions,
 	SeatStatus,
 	Seq,
-	SpokenMessage,
 	Step,
 	SummaryMessage,
 	SummaryOutcome,
@@ -90,7 +90,7 @@ export type {
 	TraceStep,
 	Usage,
 } from './types.ts';
-export { addUsage, isPosted, isPresence, isSpoken, isSummary } from './types.ts';
+export { addUsage, isPosted, isPresence, isSaid, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

@@ -8,7 +8,7 @@ evidence needed to evaluate it.
 
 ## Responsibility
 
-**The assistant keeps the membership of the room fit for the request, and
+**The assistant keeps the roster of the room fit for the request, and
 summarizes closed exchanges.** It seats a reserve specialist when the request
 needs one. It unseats a specialist when the person asks or the scope no longer
 needs it. It is passive when the specialists are seated at `broadcast`
@@ -16,14 +16,14 @@ or `presence` attention. It speaks during an exchange only when a
 participant addresses it, or when an idle specialist at `named` attention
 needs a directed request.
 
-The assistant is an ordinary agent. The kernel continues to own membership,
+The assistant is an ordinary agent. The kernel continues to own the roster,
 activation authority, freshness checks, exchange closure, and summary
-provenance. Other agents retain their existing membership and speech tools.
+provenance. Other agents retain their existing seats and speech tools.
 The package introduces no privileged role or separate execution lifecycle.
 
 | Responsibility | Default behavior                                                                                                       |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Membership     | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
+| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
 | Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force.    |
 | Answers        | Answer a person or a specialist that addresses the assistant. The summary answers a question to the room.              |
 | Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.      |
@@ -45,7 +45,7 @@ field, which reaches ordinary activations only. Shared instructions describe
 closing behavior and application precedence. Both activation purposes retain
 the application's additional instructions.
 
-The kernel owns the shared speaking policy as `DEFAULT_GUIDANCE`. The package
+The kernel owns the shared speaking policy as `DEFAULT_SPEAKING`. The package
 keeps only the orchestration guidance that the kernel does not enforce.
 
 **Additional instructions can override any assistant behavioral default.**
@@ -56,7 +56,7 @@ Defaults continue to apply where application instructions give no alternative.
 The behavior described below assumes no application override.
 
 Behavioral overrides do not change kernel authority. The room still enforces
-valid membership operations, activation authority, freshness, summary source
+valid seating operations, activation authority, freshness, summary source
 ranges, and recipients. Instructions cannot grant tools that an activation
 does not receive or change the room's configuration validation.
 
@@ -136,7 +136,7 @@ that choice for the application.
 **The journal records the expanded ordinary composition.** The shorthand adds
 no durable assistant role or new history format. Resume still requires all
 recorded agent definitions, including the assistant. A host retains the
-complete definitions for resume and preserves recorded membership.
+complete definitions for resume and preserves the recorded roster.
 
 ## Speak only when the message adds value
 
@@ -236,12 +236,12 @@ specialist at `broadcast` in each of three samples. Both also asked the
 person for a missing fact during the exchange.
 
 **The results of 0.3.0.** Each cell counts the passing cases, with one
-sample for each case. Each model is graded by the other family.
+sample for each case. Each model is graded by the model of the other provider.
 
 | Guidance                                          | Sonnet 5, `medium` | Luna 5.6, `medium` |
 | ------------------------------------------------- | ------------------ | ------------------ |
 | Before the change, 18 cases                       | 13                 | 12                 |
-| Membership first                                  | 16                 | 16                 |
+| Seating first                                     | 16                 | 16                 |
 | Each reaction at `broadcast` named                | 17                 | 18                 |
 | A constraint stays until withdrawn                | 17                 | 18                 |
 | The rule for each specialist, and its questions   | 17                 | 17                 |
@@ -252,9 +252,9 @@ sample for each case. Each model is graded by the other family.
 (a) Two scripted specialists read the words of the assistant. The last row
 fixes the scripts, and it runs the same guidance.
 
-## Membership and completion
+## Seating and completion
 
-**Membership changes serve the work.** Select specialists from the identities in
+**Changes to the roster serve the work.** Select specialists from the identities in
 their definitions and the current request. Avoid recruiting every remotely related
 specialist by default. Retain specialists across exchanges by default.
 Unseat when the user requests removal or a clear scope change makes continued
@@ -264,7 +264,7 @@ participation unnecessary. Being idle alone is not a reason to remove an agent.
 person can ask and leave before the first activation of the assistant. The
 assistant seats and routes as it does for a person who stays. The room
 assigns the closing summary to the `person` of the exchange, the assistant
-writes it, and the person reads it on return. The membership guidance of the package states this
+writes it, and the person reads it on return. The seating guidance of the package states this
 rule.
 
 Unseating can interrupt active work and settle pending assignments. Do not
@@ -276,7 +276,7 @@ agent, including the assistant itself, can unseat it through the room's
 **The room determines closure from remaining work.** The assistant has no
 special completion command. It stops contributing when further intervention
 has no value. Prompt guidance encourages restraint; hard exchange budgets
-and membership restrictions require enforcement outside the prompt.
+and roster restrictions require enforcement outside the prompt.
 
 ## Goals and preferences
 
@@ -349,7 +349,7 @@ room when evaluating changes to the shared behavior.
 **Deterministic checks and behavioral evaluations establish different facts.**
 
 Use deterministic tests for shorthand equivalence, configuration conflicts,
-membership, summary assignment, and resume. Use behavioral evaluations for
+seating, summary assignment, and resume. Use behavioral evaluations for
 specialist selection, silence, summary fidelity, and restraint.
 Evaluate redundant routing explicitly: a specialist that already receives
 the user's request must not require an assistant restatement.
@@ -394,7 +394,7 @@ Run `pnpm check` for formatting, builds, types, lint, and deterministic tests.
 The provider evaluations require credentials for `AMBION_MODEL` and for
 `JUDGE_MODEL`. The model defaults to `anthropic/claude-sonnet-5` with
 `ANTHROPIC_API_KEY`, and the judge's model defaults to `AMBION_MODEL`. Name
-another model family for the judge. `AMBION_THINKING` and `JUDGE_THINKING`
+a model of another provider for the judge. `AMBION_THINKING` and `JUDGE_THINKING`
 set the thinking levels, `off` by default. The suite skips without both
 credentials. Run it after building:
 

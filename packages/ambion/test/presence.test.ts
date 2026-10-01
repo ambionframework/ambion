@@ -4,7 +4,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Room,
 	readRoom,
 	startRoom,
@@ -22,7 +22,7 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { contextText, quiet, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { type FaultyJournals, faultyJournals, memory } from './support/storage.ts';
 
@@ -32,7 +32,7 @@ const contexts: string[] = [];
 const prompts: string[] = [];
 
 /** Every seat reads and stays quiet, and the test reads what each seat was shown. */
-const recording = scripted((context) => {
+const recording = scriptedStream((context) => {
 	prompts.push(context.systemPrompt ?? '');
 	contexts.push(contextText(context));
 	return quiet();
@@ -85,7 +85,7 @@ describe('presence', () => {
 		// the visit stamps the arrival
 		const arrival = (await messagesOf(session))[0];
 		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
-		expect(arrival && isSpoken(arrival)).toBe(false);
+		expect(arrival && isSaid(arrival)).toBe(false);
 		expect(arrival && 'text' in arrival).toBe(false);
 	});
 
@@ -100,7 +100,7 @@ describe('presence', () => {
 		await session.visit(andrei);
 		await waitForRoom(session);
 
-		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.agent);
+		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.seat);
 		expect(woke).toEqual(['greeter']);
 		// the roster tells every seat which of them watches for this
 		expect(contexts.at(-1)).toContain('- greeter (active, watches arrivals)');
@@ -111,7 +111,7 @@ describe('presence', () => {
 		const held = deferred();
 		const providerStarted = deferred();
 		const seen: string[] = [];
-		const holding = scripted(async (context) => {
+		const holding = scriptedStream(async (context) => {
 			seen.push(contextText(context));
 			providerStarted.resolve();
 			await held.promise;
@@ -138,7 +138,7 @@ describe('presence', () => {
 		await two.send({ text: 'from mara' });
 		await waitForRoom(session);
 
-		const said = (await messagesOf(session)).filter(isSpoken);
+		const said = (await messagesOf(session)).filter(isSaid);
 		expect(said.map((m) => [m.from, m.text])).toEqual([
 			['andrei', 'from andrei'],
 			['mara', 'from mara'],
@@ -184,7 +184,7 @@ describe('presence', () => {
 
 		// the roster folds from the record, nothing stands up, and everybody the record knows is absent
 		const view = await readRoom(first.name, { runtime });
-		expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['noting that I was here']);
+		expect(view.messages.filter(isSaid).map((m) => m.text)).toEqual(['noting that I was here']);
 		expect(
 			view.participants.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]),
 		).toEqual([

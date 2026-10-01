@@ -2,12 +2,12 @@
 
 > **Actuators are a pattern over processes.** The workbench ships the
 > [actuator controller template](../examples/workbench/templates/actuator-controller),
-> and its tests pass. A stop sends `SIGTERM`, waits the `grace` of the
+> and its tests pass. A cancel sends `SIGTERM`, waits the `grace` of the
 > `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-stop)).
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
-exits. An agent starts it with `bash`, reads it with `status`, and stops
+exits. An agent starts it with `bash`, reads it with `status`, and cancels
 it with `cancel`. Ambion adds no actuator tool, API, or server.
 
 **The primary job of the agent is to establish a control loop.** The agent

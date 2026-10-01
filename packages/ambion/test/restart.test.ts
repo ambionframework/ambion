@@ -12,7 +12,7 @@ import {
 	type AmbionErrorCode,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
@@ -43,7 +43,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
@@ -82,7 +82,7 @@ const wraps = new WeakMap<Runtime, (execution: Execution) => Execution>();
 
 /** The execution of a room on `runtime`: the scripted Pi execution, through the faults of the runtime. */
 function executionOn(runtime: Runtime, script: PiScript): Execution {
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	return wraps.get(runtime)?.(execution) ?? execution;
 }
 
@@ -133,13 +133,13 @@ const summaries = async (session: Room) => (await messagesOf(session)).filter(is
 const seat = async (session: Room, name: string) =>
 	(await participantsOf(session)).find((s) => s.name === name);
 const starts = (events: ReturnType<typeof collect>, agent: string) =>
-	events.filter((e) => e.type === 'activation_start' && e.agent === agent);
+	events.filter((e) => e.type === 'activation_start' && e.seat === agent);
 
 /** Resolves when this seat's next activation ends. */
 const ended = (session: Room, name: string) =>
 	new Promise<void>((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== name) return;
+			if (event.type !== 'activation_end' || event.seat !== name) return;
 			off();
 			resolve();
 		});
@@ -176,7 +176,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		expect(await currentExchange(resumed)).toEqual(exchange);
 		// the pending wake is sent again, and beta answers into the same exchange
 		await ended(resumed, 'beta');
-		expect((await messagesOf(resumed)).filter(isSpoken).map((m) => m.from)).toEqual([
+		expect((await messagesOf(resumed)).filter(isSaid).map((m) => m.from)).toEqual([
 			'priya',
 			'beta',
 			'beta',
@@ -187,7 +187,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		// again after the backoff, and the exchange closes once alpha stands down
 		held.resolve();
 		await clock.advance(60_000);
-		expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
+		expect(events.some((e) => e.type === 'error' && e.seat === 'alpha')).toBe(true);
 		expect(await currentExchange(resumed)).toMatchObject({ person: 'priya' });
 		await clock.advance(30_000);
 		await waitForRoom(resumed);
@@ -319,7 +319,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		await visit.send({ text: 'Second?' });
 		await waitForRoom(session, 'settled');
 		expect(await summaries(session)).toHaveLength(0);
-		const questions = (await messagesOf(session)).filter((m) => isSpoken(m) && m.from === 'priya');
+		const questions = (await messagesOf(session)).filter((m) => isSaid(m) && m.from === 'priya');
 		crash(first, session);
 
 		// the resumed room's assistant writes at the first summary activation it is given

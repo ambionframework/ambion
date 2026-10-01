@@ -1,5 +1,5 @@
 import { createServer, type Server, type Socket } from 'node:net';
-import type { WorkspacePort } from '@ambionframework/workspace';
+import type { WorkspaceEndpoint } from '@ambionframework/workspace';
 import type { ClientChannel } from 'ssh2';
 import { ConnectionClosed, type Session } from './session.ts';
 
@@ -18,13 +18,13 @@ interface PortResources {
 }
 
 /** Open one remote loopback service through an existing agent session. */
-export async function openWorkspacePort(
+export async function forwardWorkspaceEndpoint(
 	session: Session,
 	remotePort: number,
 	signal: AbortSignal | undefined,
 	release: () => void,
 	track: (close: () => Promise<void>) => () => void,
-): Promise<WorkspacePort> {
+): Promise<WorkspaceEndpoint> {
 	const resources: PortResources = {
 		server: undefined,
 		sockets: new Set(),

@@ -42,7 +42,7 @@ import {
 	byAgent,
 	isClosingContext,
 	quiet,
-	scripted,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -145,7 +145,7 @@ class Walk {
 	private execution(): Execution {
 		return serializing(
 			faulty(
-				piExecution({ sessions: 'memory', stream: scripted(script) }),
+				piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 				this.faults,
 				this.clock,
 			),
@@ -278,9 +278,9 @@ const seeds = Number(process.env.AMBION_SEEDS ?? 25);
 /** One event in a few characters, for the failure message. */
 function brief(event: RoomNotification): string {
 	if (event.type === 'message') return `m${event.message.seq}:${event.message.kind}`;
-	if (event.type === 'activation_start') return `+${event.agent}`;
-	if (event.type === 'activation_end') return `-${event.agent}`;
-	if (event.type === 'error') return `!${event.agent}`;
+	if (event.type === 'activation_start') return `+${event.seat}`;
+	if (event.type === 'activation_end') return `-${event.seat}`;
+	if (event.type === 'error') return `!${event.seat}`;
 	return event.type;
 }
 

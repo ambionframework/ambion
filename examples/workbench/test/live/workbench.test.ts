@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
-import { type Family, hasKey, keyVariable, seatFamilies } from '../../src/families.ts';
+import { type ExecutorKind, hasKey, keyVariable, seatKinds } from '../../src/kinds.ts';
 import { openWorkbench, type Workbench } from '../../src/workbench.ts';
 
 /**
- * A scenario runs when every family it uses has a key: the assistant runs on
- * Pi, and each named specialist runs on the family that `seatFamilies` gives it.
+ * A scenario runs when every executor kind it uses has a key: the assistant runs on
+ * Pi, and each named specialist runs on the executor kind that `seatKinds` gives it.
  */
 function missingKeys(scenario: Scenario): string[] {
-	const families = new Set<Family>(['pi']);
-	for (const name of scenario.specialists) families.add(seatFamilies[name] ?? 'pi');
-	return [...families].filter((family) => !hasKey(family)).map((family) => keyVariable(family));
+	const kinds = new Set<ExecutorKind>(['pi']);
+	for (const name of scenario.specialists) kinds.add(seatKinds[name] ?? 'pi');
+	return [...kinds].filter((kind) => !hasKey(kind)).map((kind) => keyVariable(kind));
 }
 
 interface Scenario {
@@ -59,10 +59,10 @@ async function untilSummary(workbench: Workbench, room: string): Promise<readonl
 	throw new Error(`The Workbench did not publish a summary for '${room}'.`);
 }
 
-/** One test per scenario. Each skips on its own when a family it uses has no key. */
+/** One test per scenario. Each skips on its own when an executor kind it uses has no key. */
 for (const scenario of scenarios) {
 	describe.skipIf(missingKeys(scenario).length > 0)(`Workbench ${scenario.name}`, () => {
-		it('returns a cited summary from a specialist on its family', async () => {
+		it('returns a cited summary from a specialist on its executor kind', async () => {
 			const directory = await mkdtemp(join(tmpdir(), `ambion-workbench-${scenario.name}-live-`));
 			const workbench = await openWorkbench({ directory: join(directory, 'run') });
 			try {

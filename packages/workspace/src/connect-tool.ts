@@ -35,7 +35,7 @@ interface ConnectDetails {
 	readonly sensors: readonly string[];
 }
 
-/** Create the `connect` tool for a workspace that has workstation ports. */
+/** Create the `connect` tool for a workspace that has workstation endpoints. */
 export function createConnectTool(options: {
 	readonly connections: SensorConnections;
 }): AmbionTool {
@@ -51,7 +51,7 @@ export function createConnectTool(options: {
 	});
 }
 
-/** Guidance for connecting a running process to the workstation port transport. */
+/** Guidance for connecting a running process to a workstation endpoint. */
 export function connectToolGuidance(): string {
 	return [
 		`connect attaches a running process you own to a sensor server on this workstation.`,

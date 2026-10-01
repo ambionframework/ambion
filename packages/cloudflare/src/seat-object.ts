@@ -15,7 +15,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { ExecutionEvent } from '@ambionframework/ambion';
+import type { ActivationEvent } from '@ambionframework/ambion';
 import type {
 	AgentRunner,
 	ExecutionHost,
@@ -38,7 +38,7 @@ import { seatMetadata } from './storage.ts';
  *
  * The core writes nothing to stdout, and the decision is a host's to make.
  */
-function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent {
+function seatLine(room: string, seat: string, event: ActivationEvent): SeatEvent {
 	return {
 		ambion: 'seat',
 		room,
@@ -46,7 +46,7 @@ function seatLine(room: string, seat: string, event: ExecutionEvent): SeatEvent 
 		activation: event.activation,
 		event: event.type,
 		...(event.type === 'delivery_error' ? { operation: event.operation } : {}),
-		...('toolName' in event ? { tool: event.toolName } : {}),
+		...('name' in event ? { tool: event.name } : {}),
 		...('error' in event ? { error: event.error.message } : {}),
 		at: new Date().toISOString(),
 	};
@@ -196,7 +196,7 @@ export class SeatObject extends DurableObject<Env> {
 				room,
 				seat,
 				definition: definitionOf(seat),
-				emit: (event: ExecutionEvent) => seatEvent(seatLine(room, seat, event)),
+				emit: (event: ActivationEvent) => seatEvent(seatLine(room, seat, event)),
 			});
 		this.port = { key, runner };
 		return runner;

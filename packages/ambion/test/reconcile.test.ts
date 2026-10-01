@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { Close, LeaseChange } from '../src/journal/entries.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
@@ -97,7 +97,7 @@ describe('room reconciliation', () => {
 		const quiet = [composition(), arrived(), said(), released('message:3:product:1')];
 		expect(planReconciliation(fold(quiet), options()).close).toEqual({ from: 3, through: 3 });
 		expect(closed(fold(quiet))).toEqual({
-			event: {
+			entry: {
 				kind: 'close',
 				body: { person: 'priya', from: 3, through: 3, at, summary: 'writer' },
 			},
@@ -112,7 +112,7 @@ describe('room reconciliation', () => {
 
 		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as Entry]);
 		expect(closed(writerLeft)).toEqual({
-			event: { kind: 'close', body: { person: 'priya', from: 3, through: 4, at } },
+			entry: { kind: 'close', body: { person: 'priya', from: 3, through: 4, at } },
 		});
 
 		// A returned say that no person answers closes with no person and owes no summary.
@@ -123,7 +123,7 @@ describe('room reconciliation', () => {
 		};
 		const tick = fold([composition(), arrived(), returned, released('message:3:product:1')]);
 		expect(tick.exchange).toEqual({ from: 3, at });
-		expect(closed(tick)).toEqual({ event: { kind: 'close', body: { from: 3, through: 3, at } } });
+		expect(closed(tick)).toEqual({ entry: { kind: 'close', body: { from: 3, through: 3, at } } });
 	});
 
 	it('holds an exchange while an ordinary wake or lease is live, but not for summary work', () => {

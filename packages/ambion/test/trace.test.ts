@@ -27,9 +27,9 @@ import {
 	type ViewResponse,
 } from '../src/hosting.ts';
 import type {
+	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
-	ExecutionEvent,
 	TraceLogger,
 	TraceStep,
 } from '../src/index.ts';
@@ -44,7 +44,7 @@ import {
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, scripted, speak } from './support/scripted.ts';
+import { quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 
@@ -80,7 +80,7 @@ async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agen
 
 /** A stream that thinks, then calls `tool`, then stops. */
 const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {}) =>
-	scripted((_context, _agent, call) =>
+	scriptedStream((_context, _agent, call) =>
 		call === 1
 			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {
 					stopReason: 'toolUse',
@@ -346,7 +346,7 @@ function play(
 	const services = createExecutionServices({ stream, sessions: 'memory' });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const executor =
 		stub ?? createPiExecutor({ ...services, definition: product, now: () => clock.now() });
 	const actor = new AgentRunner(room, {
@@ -382,7 +382,7 @@ describe('the steps the driver owns', () => {
 	] as const)('records a %s commit as a room step', async (result, answer) => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scripted((_c, _a, call) => (call === 1 ? speak('Hi.') : quiet())),
+			scriptedStream((_c, _a, call) => (call === 1 ? say('Hi.') : quiet())),
 			log.logger,
 		);
 		room.answer = answer;
@@ -398,7 +398,7 @@ describe('the steps the driver owns', () => {
 	it('records a delta pass and the steers of a running activation', async () => {
 		const release = deferred();
 		const started = deferred();
-		const stream: StreamFn = scripted(async (_context, _agent, call) => {
+		const stream: StreamFn = scriptedStream(async (_context, _agent, call) => {
 			if (call === 1) {
 				started.resolve();
 				await release.promise;
@@ -444,7 +444,7 @@ describe('the steps the driver owns', () => {
 	it('records the steer of a line that waited for a claim the room refused', async () => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			log.logger,
 		);
 		room.lease = async () => ({ stale: 'gone' });
@@ -477,7 +477,7 @@ describe('the steps the driver owns', () => {
 	] as const)('ends %s', async (_name, message, end) => {
 		const log = collectSteps();
 		const { actor } = play(
-			scripted(() => message),
+			scriptedStream(() => message),
 			log.logger,
 		);
 		await actor.run(id);
@@ -490,7 +490,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const failing: Executor = () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) });
 		const { actor, events } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			log.logger,
 			undefined,
 			failing,
@@ -515,7 +515,7 @@ describe('the steps the driver owns', () => {
 		['rejects', rejecting],
 	])('never fails the activation when the logger %s', async (_name, logger) => {
 		const { room, actor, events } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			logger,
 		);
 		await actor.run(id);
@@ -535,7 +535,7 @@ describe('a sink that closes late', () => {
 		const closing = deferred();
 		const closed = deferred();
 		const { room, actor } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			undefined,
 			(opener) => ({
 				open: (activation) => {

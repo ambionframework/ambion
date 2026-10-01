@@ -11,7 +11,7 @@ import {
 import { exchangeActivation } from '../src/room/exchange.ts';
 import { settledFlag } from './support/core-exchange.ts';
 import { deferred, roomName, scriptedAgent, tick, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted } from './support/scripted.ts';
+import { contextText, quiet, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type Storage, storages } from './support/storage.ts';
 
@@ -112,7 +112,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 				agents: [scriptedAgent('worker')],
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(async (context) => {
+					stream: scriptedStream(async (context) => {
 						if (!contextText(context).includes('What is open?')) return quiet();
 						started.resolve();
 						await release.promise;

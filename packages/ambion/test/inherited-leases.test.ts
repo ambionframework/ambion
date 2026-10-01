@@ -15,7 +15,7 @@ import {
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Room,
 	type Runtime,
 	resumeRoom,
@@ -149,7 +149,7 @@ async function spoken(room: Room, from: number) {
 	await room.reconcile();
 	const exchange = room.exchange(from);
 	if (exchange === undefined) throw new Error('The resumed exchange is missing.');
-	return (await exchange.waitForClose()).filter(isSpoken).map((m) => m.text);
+	return (await exchange.waitForClose()).filter(isSaid).map((m) => m.text);
 }
 
 async function assertOldHostStale(state: InterruptedRoom): Promise<void> {

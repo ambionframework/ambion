@@ -1,7 +1,7 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say } from '@ambionframework/ambion/testing';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workbench } from '../src/workbench.ts';
@@ -9,8 +9,8 @@ import {
 	freshDirectory,
 	idleStream,
 	openHost,
-	scriptedFamilies,
-	scriptedStream,
+	respondingStream,
+	scriptedKinds,
 } from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
@@ -37,11 +37,11 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 }
 
-/** The design seat runs on the Claude family. A script drives it, with no key. */
+/** The design seat runs on the Claude executor. A script drives it, with no key. */
 const designScript = byAgent({
 	design: (_step, _seat, call) => {
 		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
-		if (call === 2) return speak('Resistor chosen.', 'assistant');
+		if (call === 2) return say('Resistor chosen.', 'assistant');
 		return quiet();
 	},
 });
@@ -50,8 +50,8 @@ const designScript = byAgent({
 const open = (directory?: string) =>
 	openHost({
 		directory,
-		stream: scriptedStream(scriptedResponse),
-		executions: scriptedFamilies(designScript),
+		stream: respondingStream(scriptedResponse),
+		executions: scriptedKinds(designScript),
 	});
 
 async function messagesOf(workbench: Workbench, room: string) {
@@ -274,7 +274,7 @@ describe('Workbench host', () => {
 
 	it('lists a say that waits to return, and dismisses it once', async () => {
 		const workbench = await openHost({
-			stream: scriptedStream((agent, call, closing) => {
+			stream: respondingStream((agent, call, closing) => {
 				if (closing || agent !== 'assistant' || call !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 				const later = { text: 'Check the bench supply.', after: 600 };
@@ -330,7 +330,7 @@ describe('Workbench host', () => {
 
 	it('lists the processes that an agent starts with bash, reads an output, and cancels a running one', async () => {
 		// The assistant starts a short process that ends in its window, then a long one that it leaves running.
-		const stream = scriptedStream((agent, call, closing) => {
+		const stream = respondingStream((agent, call, closing) => {
 			const start = (command: string, name: string, wait: number) =>
 				fauxAssistantMessage([fauxToolCall('bash', { command, name, wait })], {
 					stopReason: 'toolUse',

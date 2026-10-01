@@ -15,7 +15,7 @@ import type {
 	ExecutionHost,
 	Limits,
 } from '../host/runtime.ts';
-import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import type { Executor } from './executor.ts';
 import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
@@ -28,7 +28,7 @@ export interface SeatContextInput {
 	readonly room: string;
 	readonly seat: string;
 	readonly executor: Executor;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 	/** Where the steps of each activation go. Absent, the trace drops them. */
 	readonly logger?: TraceLogger;
 	readonly limits: Limits['trace'];

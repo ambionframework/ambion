@@ -29,7 +29,7 @@
 
 import type { JournalEntry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
-import type { LeaseChange } from '../journal/events.ts';
+import type { LeaseChange } from '../journal/entries.ts';
 import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
 import {
 	applyChange,

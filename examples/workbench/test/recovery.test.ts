@@ -4,7 +4,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms, type RoomView } from '../src/rooms.ts';
 import type { Workbench } from '../src/workbench.ts';
-import { freshDirectory, openHost, quietStream, scriptedFamilies } from './hosting.ts';
+import { freshDirectory, openHost, quietStream, scriptedKinds } from './hosting.ts';
 
 const mira = people.at(0);
 if (!mira) throw new Error('The test team has no human.');
@@ -80,7 +80,7 @@ function catalog(directory: string): DatabaseSync {
 async function hostRooms(database: DatabaseSync, directory: string, counter = { calls: 0 }) {
 	const rooms = await openRooms(database, directory, {
 		stream: quietStream(counter),
-		executions: scriptedFamilies(),
+		executions: scriptedKinds(),
 	});
 	onTestFinished(() => rooms.close().catch(() => undefined));
 	return rooms;

@@ -10,7 +10,7 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	isSpoken,
+	isSaid,
 	type Message,
 	pendingFor,
 	type Room,
@@ -41,9 +41,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	say,
+	scriptedStream,
 	seat,
-	speak,
 	summarise,
 	toolNames,
 } from './support/scripted.ts';
@@ -132,7 +132,7 @@ async function open(options: {
 			[(options.assistant ?? assistant).name]:
 				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
 		},
-		execution: piExecution({ sessions: 'memory', stream: scripted(options.script) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(options.script) }),
 		runtime: options.runtime ?? runtime,
 	});
 	return stopAtEnd(session);
@@ -150,26 +150,26 @@ function nextSummary(session: Room): Promise<SummaryMessage> {
 }
 
 const summaries = (record: Message[]) => record.filter((m) => m.kind === 'summary');
-const said = (record: Message[]) => record.filter(isSpoken).map((m) => m.text);
+const said = (record: Message[]) => record.filter(isSaid).map((m) => m.text);
 
 // -- what the products say ---------------------------------------------------
 
 /** Two answers to one question, then silence. */
 const twoAnswers: PiScript = (_context, _name, call) => {
-	if (call === 1) return speak('Thursday is out: the inspector needs 48h notice.');
-	if (call === 2) return speak('Saturday works if the rebar lands Wednesday.');
+	if (call === 1) return say('Thursday is out: the inspector needs 48h notice.');
+	if (call === 2) return say('Saturday works if the rebar lands Wednesday.');
 	return quiet();
 };
 
 /** Two answers to the first question, then one to each that follows. */
 const answersEach: PiScript = (_context, _name, call) => {
 	if (call === 3 || call === 5) return quiet();
-	return speak(`answer ${call}`);
+	return say(`answer ${call}`);
 };
 
 /** Two answers to every question it is asked. */
 const twoAnswersEach: PiScript = (_context, _name, call) =>
-	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
+	call % 3 === 0 ? quiet() : say(`answer ${call}`);
 
 /** An assistant that writes once per activation, however many activations it takes. */
 const writesEach =
@@ -184,8 +184,8 @@ function heldUntil(held: Promise<void>): PiScript {
 			await held;
 			return quiet();
 		}
-		if (call === 2) return speak('answer 1');
-		if (call === 3) return speak('answer 2');
+		if (call === 2) return say('answer 1');
+		if (call === 3) return say('answer 2');
 		return quiet();
 	};
 }
@@ -227,7 +227,7 @@ describe('closing summaries', () => {
 		const record = await messagesOf(session);
 		// it stands through the last message before it, and leaves none behind
 		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
-		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
+		expect(summary.covers.from).toBe(record.find((m) => isSaid(m))?.seq);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
 		// what an assistant is given: the range it covers, and one tool that reaches the record
 		expect(tools).toEqual(['say']);
@@ -298,7 +298,7 @@ describe('closing summaries', () => {
 
 		expect(summary.to).toBe('priya');
 		const record = await messagesOf(session);
-		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
+		expect(summary.covers.from).toBe(record.find((m) => isSaid(m))?.seq);
 	});
 
 	it('keeps a summary on its closed exchange while a later question arrives', async () => {
@@ -333,8 +333,8 @@ describe('closing summaries', () => {
 		expect(summaries(record)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'conflict')).toEqual([]);
 		expect(summary.text).toBe('the first answer');
-		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
-		const later = record.find((message) => isSpoken(message) && message.text === 'And the pump?');
+		expect(summary.covers.from).toBe(record.find((m) => isSaid(m))?.seq);
+		const later = record.find((message) => isSaid(message) && message.text === 'And the pump?');
 		expect(summary.covers.through).toBeLessThan(later?.seq ?? 0);
 		const closed = events.find(
 			(event) => event.type === 'exchange_closed' && event.exchange.from === summary.covers.from,
@@ -406,8 +406,8 @@ describe('closing summaries', () => {
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 		expect(
-			events.filter((e) => e.type === 'activation_end' && e.agent === 'assistant'),
-		).toMatchObject([{ spoke: false }]);
+			events.filter((e) => e.type === 'activation_end' && e.seat === 'assistant'),
+		).toMatchObject([{ said: false }]);
 	});
 
 	it('drafts again after the backoff when its activation fails outright', async () => {
@@ -441,7 +441,7 @@ describe('closing summaries', () => {
 		const summary = await written;
 
 		expect(summary.text).toBe('written the second time');
-		expect(summary.covers.from).toBe((await messagesOf(session)).find((m) => isSpoken(m))?.seq);
+		expect(summary.covers.from).toBe((await messagesOf(session)).find((m) => isSaid(m))?.seq);
 	});
 
 	it('writes for the person whose question opened the exchange, and for nobody else', async () => {
@@ -544,7 +544,7 @@ describe('closing summaries', () => {
 		// and no product reads how anybody reads
 		expect(prompts[2]).not.toContain('tomorrow');
 		// her second summary stands for her second question alone
-		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
+		const questions = record.filter((m) => isSaid(m) && m.from === 'priya');
 		expect(written[0]?.covers.from).toBe(questions[0]?.seq);
 		expect(written[3]?.covers.from).toBe(questions[1]?.seq);
 		expect(written[3]?.covers.from).toBeGreaterThan(written[0]?.seq ?? 0);
@@ -584,14 +584,14 @@ describe('closing summaries', () => {
 		const written = summaries(await messagesOf(session));
 		expect(written.map((m) => m.to)).toEqual(['priya', 'sam']);
 		// one seat, so the two activations ran one after the other
-		const starts = seen.filter((e) => e.type === 'activation_start' && e.agent === 'assistant');
-		const ends = seen.filter((e) => e.type === 'activation_end' && e.agent === 'assistant');
+		const starts = seen.filter((e) => e.type === 'activation_start' && e.seat === 'assistant');
+		const ends = seen.filter((e) => e.type === 'activation_end' && e.seat === 'assistant');
 		expect(starts).toHaveLength(2);
 		expect(seen.indexOf(starts[1] as RoomNotification)).toBeGreaterThan(
 			seen.indexOf(ends[0] as RoomNotification),
 		);
 		// and sam's range starts at his own question
-		const questions = (await messagesOf(session)).filter((m) => isSpoken(m) && m.from === 'sam');
+		const questions = (await messagesOf(session)).filter((m) => isSaid(m) && m.from === 'sam');
 		expect(written[1]?.covers.from).toBe(questions[0]?.seq);
 	});
 
@@ -601,7 +601,7 @@ describe('closing summaries', () => {
 			/one name names one participant/,
 		);
 
-		const session = await open({ script: byAgent({ product: () => speak('working alone') }) });
+		const session = await open({ script: byAgent({ product: () => say('working alone') }) });
 		const events = collect(session);
 		await waitForRoom(session);
 		expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
@@ -611,7 +611,7 @@ describe('closing summaries', () => {
 		});
 		// an agent-only room never activates it
 		expect(
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant'),
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant'),
 		).toHaveLength(0);
 
 		const twin = defineHuman({ name: 'assistant', identity: 'Not the assistant.' });
@@ -637,8 +637,8 @@ describe('closing summaries', () => {
 			script: byAgent({
 				product: (context, _name, call) => {
 					contexts.push(contextText(context));
-					if (call === 1) return speak('   ');
-					if (call === 2) return speak('Thursday is out.');
+					if (call === 1) return say('   ');
+					if (call === 2) return say('Thursday is out.');
 					return quiet();
 				},
 			}),
@@ -688,7 +688,7 @@ describe('closing summaries', () => {
 		const session = await open({ script: byAgent({ product: twoAnswers, assistant: hangs }) });
 		const events = collect(session);
 		const starts = () =>
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant').length;
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant').length;
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
@@ -732,7 +732,7 @@ describe('an exchange', () => {
 				product: answersEach,
 				// It meets the arrival once; a seat that speaks on every activation
 				// would keep waking the other one, and the room would never settle.
-				greeter: (_context, _name, call) => (call === 1 ? speak('who just arrived?') : quiet()),
+				greeter: (_context, _name, call) => (call === 1 ? say('who just arrived?') : quiet()),
 			}),
 		});
 		const events = collect(session);
@@ -755,7 +755,7 @@ describe('an exchange', () => {
 
 		expect(await currentExchange(session)).toBeUndefined();
 		const record = await messagesOf(session);
-		const question = record.find((m) => isSpoken(m) && m.from === 'priya');
+		const question = record.find((m) => isSaid(m) && m.from === 'priya');
 		expect(of('exchange_opened')).toMatchObject([
 			{ exchange: { person: 'priya', from: question?.seq } },
 		]);
@@ -786,7 +786,7 @@ describe('an exchange', () => {
 	const askedAsStops = (session: Room, seat: string, ask: () => Promise<unknown>) =>
 		new Promise<{ landed: Promise<unknown> }>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end' || event.agent !== seat) return;
+				if (event.type !== 'activation_end' || event.seat !== seat) return;
 				off();
 				resolve({ landed: ask() });
 			});
@@ -835,7 +835,7 @@ describe('an exchange', () => {
 			await waitForRoom(session);
 
 			const record = await messagesOf(session);
-			const [first, next] = record.filter(isSpoken);
+			const [first, next] = record.filter(isSaid);
 			// The stale close decision is reconsidered: the later committed question
 			// remains inside the exchange that was already open, and composes nobody.
 			expect(
@@ -847,7 +847,7 @@ describe('an exchange', () => {
 				),
 			).toEqual([[first?.seq, next?.seq]]);
 			expect(
-				events.filter((e) => e.type === 'activation_start' && e.agent === 'product'),
+				events.filter((e) => e.type === 'activation_start' && e.seat === 'product'),
 			).toHaveLength(starts);
 			expect(record.some((m) => m.kind === 'seated')).toBe(false);
 			expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
@@ -946,7 +946,7 @@ describe('a room without a summary writer', () => {
 				runtime,
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(byAgent({ product: insists('Thursday is out.') })),
+					stream: scriptedStream(byAgent({ product: insists('Thursday is out.') })),
 				}),
 			}),
 		);
@@ -1077,7 +1077,7 @@ describe('ordinary and closing work on one agent', () => {
 						: 'First question?';
 					if (answered.has(question)) return quiet();
 					answered.add(question);
-					return speak(`Answer to ${question}`);
+					return say(`Answer to ${question}`);
 				},
 			}),
 		});
@@ -1097,7 +1097,7 @@ describe('ordinary and closing work on one agent', () => {
 		finishClosing.resolve();
 		expect(
 			(await discussion).some(
-				(message) => isSpoken(message) && message.text === 'Answer to Second question?',
+				(message) => isSaid(message) && message.text === 'Answer to Second question?',
 			),
 		).toBe(true);
 		expect(await first.waitForSummary()).toMatchObject({ kind: 'summary', text: 'Summary 1.' });
@@ -1117,12 +1117,12 @@ describe('a summary for each person who spoke', () => {
 				product: async (_context, _name, call) => {
 					if (call !== 1) return quiet();
 					await held.promise;
-					return speak('Saturday works.', 'sam');
+					return say('Saturday works.', 'sam');
 				},
 				// the second message to priya is refused, and the third goes to sam
 				assistant: (_context, _name, call) => {
-					if (call <= 2) return speak(`For priya ${call}.`, 'priya');
-					return call === 3 ? speak('For sam.', 'sam') : quiet();
+					if (call <= 2) return say(`For priya ${call}.`, 'priya');
+					return call === 3 ? say('For sam.', 'sam') : quiet();
 				},
 			}),
 		});

@@ -13,7 +13,7 @@ import {
 	type ExchangeActivation,
 	type HumanDefinition,
 	isPosted,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type PostedMessage,
@@ -32,7 +32,7 @@ function messageLine(message: Message): string {
 		const { from, through } = message.covers;
 		return `[${message.seq}] summary from ${message.from} to ${message.to} (covers ${from}-${through}): ${text}`;
 	}
-	if (isSpoken(message)) {
+	if (isSaid(message)) {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
 	if (isPosted(message)) return postedLine(message, text);
@@ -54,7 +54,7 @@ function postedLine(message: PostedMessage, text: string): string {
 function seenLines(exchange: SeenExchange, index: number): string[] {
 	const lines = [`Exchange ${index + 1}. You sent: ${exchange.sent}`];
 	for (const message of exchange.discussion) {
-		if (isSpoken(message)) lines.push(messageLine(message));
+		if (isSaid(message)) lines.push(messageLine(message));
 	}
 	if (exchange.summary !== undefined) lines.push(`Summary to you: ${exchange.summary.text}`);
 	return lines;
@@ -85,8 +85,8 @@ export function actorSystem(person: HumanDefinition, brief: string): string {
 function toolsByActivation(events: readonly RoomNotification[]): Map<string, string[]> {
 	const tools = new Map<string, string[]>();
 	for (const event of events) {
-		if (event.type !== 'tool_execution_start') continue;
-		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.toolName]);
+		if (event.type !== 'tool_call') continue;
+		tools.set(event.activation, [...(tools.get(event.activation) ?? []), event.name]);
 	}
 	return tools;
 }

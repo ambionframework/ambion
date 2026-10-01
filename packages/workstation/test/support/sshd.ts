@@ -37,7 +37,7 @@ export function keyOf(setup: SetupFile, name: string): Promise<string> {
 export async function options(): Promise<WorkstationOptions> {
 	const setup = await readSetup();
 	return {
-		host: setup.host,
+		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		layout: setup.layout,

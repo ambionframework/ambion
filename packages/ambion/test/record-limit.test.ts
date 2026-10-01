@@ -24,7 +24,7 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
@@ -59,7 +59,7 @@ async function watched(
 	const { limits, ...room } = options;
 	const pages: Page[] = [];
 	const contexts: { seat: string; text: string }[] = [];
-	const stream = scripted((context, name, call) => {
+	const stream = scriptedStream((context, name, call) => {
 		contexts.push({ seat: name, text: contextText(context) });
 		return script(context, name, call);
 	});

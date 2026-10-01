@@ -8,7 +8,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import type { RoomNotification, Usage } from '../src/index.ts';
 import { createRuntime, readExchange, startRoom } from '../src/index.ts';
 import { andrei, collect, roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 import { collectSteps } from './support/trace.ts';
@@ -55,7 +55,7 @@ describe.each(storages)('usage on $name storage', (storage) => {
 				runtime,
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(() => ({
+					stream: scriptedStream(() => ({
 						...fauxAssistantMessage('done', { stopReason: 'stop' }),
 						usage: spent,
 					})),
@@ -68,7 +68,7 @@ describe.each(storages)('usage on $name storage', (storage) => {
 		await waitForRoom(room, 'quiet', 2_000);
 
 		const ends = events.filter(isEnd);
-		const worked = ends.find((event) => event.agent === 'product');
+		const worked = ends.find((event) => event.seat === 'product');
 		if (worked?.usage === undefined) throw new Error('Expected usage on activation_end.');
 		const steps = log
 			.of(worked.activation)
