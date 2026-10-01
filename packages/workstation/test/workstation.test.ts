@@ -427,6 +427,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 				agent: 'ada',
 				command: 'exec sleep 30',
 				timeout,
+				grace: 10,
 				startedAt,
 			};
 			await writeFile(join(dir, 'spec'), JSON.stringify(spec));
@@ -458,7 +459,12 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
 		await writeFile(
 			join(lost, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+			JSON.stringify({
+				...spec,
+				timeout: 600,
+				grace: 10,
+				startedAt: new Date().toISOString(),
+			}),
 		);
 		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
 		await env.cleanup();

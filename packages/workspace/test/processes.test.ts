@@ -822,14 +822,21 @@ describe('the files as the source of truth', () => {
 		const spec = { handle: lost, kind: 'bash', agent: 'alpha', command: 'sleep 99' };
 		await writeFile(
 			join(home, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
+			JSON.stringify({ ...spec, timeout: 600, grace: 10, startedAt: '2026-01-01T00:00:00.000Z' }),
 		);
 		await writeFile(join(home, 'pid'), '1\n');
-		// A spec with a grace that is not a number is no spec: the table skips the process.
-		const odd = join(dir, 'home', 'alpha', '.processes', 'bash-00000000000c');
-		await mkdir(odd, { recursive: true });
-		const oddSpec = { ...spec, handle: 'bash-00000000000c', timeout: 600, grace: 'long' };
-		await writeFile(join(odd, 'spec'), JSON.stringify(oddSpec));
+		// A spec with a grace that is not a number, and one with none, are no specs: the table skips them.
+		for (const [handle, extra] of [
+			['bash-00000000000c', { grace: 'long' }],
+			['bash-00000000000d', {}],
+		] as const) {
+			const odd = join(dir, 'home', 'alpha', '.processes', handle);
+			await mkdir(odd, { recursive: true });
+			await writeFile(
+				join(odd, 'spec'),
+				JSON.stringify({ ...spec, handle, timeout: 600, ...extra }),
+			);
+		}
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
 		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
@@ -857,6 +864,7 @@ describe('the files as the source of truth', () => {
 		expect([cause, message.join(' ')]).toEqual(['failed', `${LOST}\n`]);
 		expect(reminded).not.toContain(done.handle);
 		expect(reminded).not.toContain('bash-00000000000c');
+		expect(reminded).not.toContain('bash-00000000000d');
 		expect(
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();

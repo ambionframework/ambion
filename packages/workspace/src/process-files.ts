@@ -70,7 +70,7 @@ export interface ProcessSpec {
 	readonly startedAt: string;
 }
 
-/** The grace of a process whose `spec` names none. */
+/** The grace of a `bash` call that names none. */
 export const DEFAULT_GRACE_SECONDS = 10;
 
 /** The directory in each agent's home that holds its processes. */
@@ -264,8 +264,8 @@ function parseSpec(text: string): ProcessSpec | undefined {
 			typeof command === 'string' &&
 			typeof timeout === 'number' &&
 			typeof startedAt === 'string' &&
-			(grace === undefined || typeof grace === 'number');
-		return valid ? ({ ...spec, grace: grace ?? DEFAULT_GRACE_SECONDS } as ProcessSpec) : undefined;
+			typeof grace === 'number';
+		return valid ? (spec as ProcessSpec) : undefined;
 	} catch {
 		return undefined;
 	}

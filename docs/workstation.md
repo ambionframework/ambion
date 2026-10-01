@@ -440,11 +440,12 @@ call adds network round trips to every tool call.
 **A client opens one signal channel at a time.** `Session` holds one FIFO
 queue of signals for each client. A `SIGTERM` or a `SIGKILL` of any
 command waits for the earlier signal channel of the same client to close,
-and then opens. The host timers do not change: `SIGTERM` goes at the abort,
-and `SIGKILL` goes after the grace. Only the opening of the channels waits
-in the queue. An entry ends when its channel closes, when the session ends,
+and then opens. The `SIGKILL` timer starts when the `SIGTERM` joins the queue, so a
+delay in the queue shortens the time between the two signals by that
+delay. An entry ends when its channel closes, when the session ends,
 or after 5 seconds, so a channel that never closes does not hold the
-queue. A dropped client takes its queue with it.
+queue. When the session ends, every waiting entry ends with it, and no signal
+opens on a closed client.
 
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The count below holds at the
@@ -470,7 +471,9 @@ final read of a process of this run (`settleOwned`, `finalStatus`,
 and takes the place of that channel. The stops of one agent take their
 steps one at a time, so the table holds one `exec` on a stop step. The
 owner's own abort signal uses the one signal channel. The worst case is
-8 channels, 2 below the limit of 10.
+8 channels, 2 below the limit of 10. The count of one signal channel
+assumes that a kill channel closes within 5 seconds, the time after which
+the queue releases an entry.
 
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits

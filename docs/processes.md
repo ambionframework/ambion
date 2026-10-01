@@ -343,7 +343,7 @@ passes `grace` beside `timeout`. An abort of the process's controller
 and the backend's own deadline then stop the command with that grace.
 The table writes the grace to `spec` and keeps it in the record of each
 live process, so an adopted process keeps the grace of its own call. A
-`spec` with no `grace` gets the default of 10 seconds.
+`spec` with no `grace` is no spec: a read skips it.
 
 ```ts
 export interface WorkspaceExecOptions extends ShellExecOptions {

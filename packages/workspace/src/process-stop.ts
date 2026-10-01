@@ -72,6 +72,8 @@ export interface Live {
 /** What the stops need from the table. */
 export interface StopOptions {
 	readonly live: Map<string, Live>;
+	/** Whether the table has released its backend: a poll then stops. */
+	readonly released: () => boolean;
 	/** Run `fn` on an environment of its own for `agent`, outside the bash owner's queue. */
 	readonly detached: <T>(agent: string, fn: (env: WorkspaceEnv) => Promise<T>) => Promise<T>;
 	/** Read the files of one process. A read that finds the end of an adopted process settles it. */
@@ -90,7 +92,7 @@ export interface Stops {
 }
 
 /** Open the stops of one process table. */
-export function openStops({ live, detached, readOne }: StopOptions): Stops {
+export function openStops({ live, released, detached, readOne }: StopOptions): Stops {
 	/** The steps of the stops of each agent, one after another: a step can open a channel of its own. */
 	const chains = new Map<string, Promise<void>>();
 	/** The stop that runs for each handle. A later stop joins it. */
@@ -102,15 +104,15 @@ export function openStops({ live, detached, readOne }: StopOptions): Stops {
 			const process = live.get(handle);
 			if (process !== undefined) await step(process);
 		};
-		const next = (chains.get(agent) ?? Promise.resolve()).then(run);
+		const next = (chains.get(agent) ?? Promise.resolve()).then(run).catch(() => undefined);
 		chains.set(agent, next);
 		return next;
 	};
 
-	/** Read one adopted process on an environment of its own until its files show an end, up to `ms`. */
+	/** Read one adopted process on an environment of its own until its files show an end, up to `ms`, or until the table releases. */
 	const poll = async (agent: string, handle: string, ms: number): Promise<void> => {
 		const deadline = Date.now() + ms;
-		while (Date.now() < deadline && live.has(handle)) {
+		while (Date.now() < deadline && live.has(handle) && !released()) {
 			await detached(agent, (env) => readOne(agent, env, handle)).catch(() => undefined);
 			if (live.has(handle)) await pause(POLL_MS);
 		}

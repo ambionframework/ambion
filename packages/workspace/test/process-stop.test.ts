@@ -73,7 +73,7 @@ async function earlierProcess(
 	started: TestServer,
 	agent: string,
 	handle: string,
-	grace?: number,
+	grace = 10,
 	onTerm = 'echo term',
 ) {
 	const dir = join(started.homes.get(agent) ?? '', '.processes', handle);
@@ -84,7 +84,7 @@ async function earlierProcess(
 		JSON.stringify({
 			...spec,
 			timeout: 600,
-			...(grace === undefined ? {} : { grace }),
+			grace,
 			startedAt: new Date().toISOString(),
 		}),
 	);

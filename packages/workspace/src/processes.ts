@@ -12,9 +12,9 @@
  * A process runs on an environment of its own, which the table connects
  * outside the queue of the bash owner, so a long command holds no other
  * tool call. A timeout, a cancel, and `close` stop a process through one
- * chain for each agent. A timeout and a cancel hold at most one signal
- * channel on the workstation, and `close` holds up to 4. A stop sends
- * `SIGTERM`, waits for the grace, and sends `SIGKILL`.
+ * chain for each agent. The workstation backend holds one signal channel
+ * for each client, in a queue of its own. A stop sends `SIGTERM`, waits
+ * for the grace, and sends `SIGKILL`.
  *
  * An agent reads its own processes alone: each table is the agent's own
  * home. The host reads the tables of the agents that used the workspace in
@@ -199,6 +199,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	const { stop } = openStops({
 		live,
+		released: () => released,
 		detached,
 		readOne: (agent, env, handle) => read(agent, env, handle),
 	});
