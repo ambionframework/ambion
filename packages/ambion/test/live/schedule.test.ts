@@ -34,7 +34,7 @@ live('schedule', () => {
 				When somebody asks you to check back after some seconds, call schedule
 				once. Set delaySeconds to the number of seconds they name. Set text to
 				one sentence that tells you to check back. After schedule returns, end
-				your turn and call no other tool.
+				your activation and call no other tool.
 
 				When the room wakes you with a scheduled message, call say once, to
 				the person who asked, with one short sentence that says you checked
