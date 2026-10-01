@@ -17,9 +17,9 @@
  * Every shape a call carries is plain data, because a remote port
  * serialises it.
  *
- * `hostingOf(runtime)` is the other half: the journal namespace, wake and
- * retry policy, and the room lifecycle registry, none of which the main
- * entry exposes. An executor package, such as `@ambionframework/pi`, builds
+ * `hostingOf(runtime)` is the other half: the clock, the storage, the
+ * limits, the journal namespace, the executions, and `evict`, none of which
+ * the main entry exposes. An executor package, such as `@ambionframework/pi`, builds
  * on the executor contract this entry exports: the core hands each pass its
  * prompt, its room tools, and the session to resume.
  *

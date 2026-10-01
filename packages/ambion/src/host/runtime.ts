@@ -3,18 +3,17 @@
  *
  * An application holds a `Runtime` as an opaque token: a clock, and a place
  * to store the record. `startRoom` and `readRoom` take one and pass it on;
- * neither reads anything else off it. Everything else a host or the
- * kernel's own internals need — the journal namespace, the limits, and the
- * room lifecycle registry — lives behind `hostingOf`.
+ * neither reads anything else off it. Behind the token sits one state
+ * object, and each reader sees a part of it. `hostingOf` gives a host the
+ * `Hosting` part: the journal namespace, the limits, the executions, and
+ * `evict`. `stateOf` gives the core the whole `RuntimeState`.
  *
  * `Runtime`'s brand blocks a hand-written literal at compile time: nothing
  * outside this file can name the key it carries, so a value assembled from
  * scratch never type-checks as one. It does not follow a value through a
  * spread, because the key names no runtime property to copy; what actually
- * refuses a value that did not come from `createRuntime` is the same check
- * `hostingOf` always made, the `stateFor` lookup below, so a spread copy
- * still fails, at the first call that reaches it, exactly as it did before
- * the brand existed.
+ * refuses a value that did not come from `createRuntime` is the `stateFor`
+ * lookup below, so a spread copy fails at the first call that reaches it.
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
@@ -129,81 +128,49 @@ export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
 });
 
 /**
- * What a host, or the kernel's own internals, need beyond the application
- * view: the journal namespace, the limits, the executions of the runtime,
- * and the room lifecycle registry. `hostingOf` is the one way to reach it
- * from a `Runtime` value.
+ * What a host needs beyond the application view: the execution host, the
+ * journal namespace, and the executions of the runtime. `hostingOf` is the
+ * one way to reach it from a `Runtime` value.
  */
-export interface Hosting {
+export interface Hosting extends ExecutionHost {
 	readonly journals: JournalOpener;
 	/** The executions that every room in this runtime uses before a default, after its own. */
 	readonly executions: readonly Execution[];
-	readonly limits: Limits;
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
 }
 
-interface RuntimeState extends Hosting {
-	running: Map<string, RunningRoom>;
+/**
+ * The one state of a runtime. The core reads all of it. A host reads the
+ * `Hosting` part, and an execution reads the `ExecutionHost` part.
+ */
+export interface RuntimeState extends Hosting {
+	/** The rooms that run in this runtime, by name. */
+	readonly running: Map<string, RunningRoom>;
 	/** One connector per executor kind, built on first use from the default of the kind. */
 	readonly defaults: Map<string, ExecutionConnector>;
-	readonly clock: Clock;
-	readonly storage: JournalOpener;
-	readonly logger?: TraceLogger;
 	/** The token estimators of the runtime, by name, with the built-in ones. */
 	readonly estimators: ReadonlyMap<string, TokenEstimator>;
+	/** Free the name of a room, when this run is the room that holds it. */
+	release(name: string, room: RunningRoom): void;
 }
 
 const stateFor = new WeakMap<Runtime, RuntimeState>();
 
-function state(runtime: Runtime): RuntimeState {
+/** The whole state of a runtime, for the core. */
+export function stateOf(runtime: Runtime): RuntimeState {
 	const found = stateFor.get(runtime);
 	if (found === undefined) throw new Error('Runtime must come from createRuntime.');
 	return found;
 }
 
-/** Everything beyond the application view: a host's, or the kernel's own, escape hatch. */
+/** The part of the state that a host reads, and that an execution reads as an `ExecutionHost`. */
 export function hostingOf(runtime: Runtime): Hosting {
-	const found = state(runtime);
-	return {
-		journals: found.journals,
-		executions: found.executions,
-		limits: found.limits,
-		evict: found.evict,
-	};
+	return stateOf(runtime);
 }
 
 export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | undefined =>
-	state(runtime).running.get(name)?.calls;
-
-/** The host's lifecycle record, for the room facade's own live fast paths. */
-export const registeredRoom = (runtime: Runtime, name: string): RunningRoom | undefined =>
-	state(runtime).running.get(name);
-
-export function registerRoom(runtime: Runtime, room: RunningRoom): void {
-	state(runtime).running.set(room.name, room);
-}
-
-export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): void {
-	const running = state(runtime).running;
-	if (running.get(name) === room) running.delete(name);
-}
-
-/** What an execution reads from a runtime. */
-export function executionHostOf(runtime: Runtime): ExecutionHost {
-	const found = state(runtime);
-	return {
-		clock: found.clock,
-		storage: found.storage,
-		limits: found.limits,
-		...(found.logger === undefined ? {} : { logger: found.logger }),
-	};
-}
-
-/** The connectors of the defaults that the runtime built, by kind. Each kind builds once per runtime. */
-export function defaultConnectors(runtime: Runtime): Map<string, ExecutionConnector> {
-	return state(runtime).defaults;
-}
+	stateOf(runtime).running.get(name)?.calls;
 
 /** The dependencies that one in-process seat needs for one captured definition. */
 export interface AgentExecutionContext {
@@ -243,26 +210,6 @@ export interface ConnectorRequest {
  */
 export interface ExecutionConnector<Port extends AgentPort = AgentPort> {
 	connect(room: RoomProtocol, request: ConnectorRequest): Port;
-}
-
-/** Collaboration services that a room host may use. */
-export interface RoomRuntime {
-	readonly clock: Clock;
-	readonly journals: JournalOpener;
-	readonly limits: Limits;
-	readonly estimators: ReadonlyMap<string, TokenEstimator>;
-	release(room: RunningRoom): void;
-}
-
-export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
-	const hosting = state(runtime);
-	return {
-		clock: runtime.clock,
-		journals: hosting.journals,
-		limits: hosting.limits,
-		estimators: hosting.estimators,
-		release: (room) => releaseRoom(runtime, name, room),
-	};
 }
 
 export interface CreateRuntimeOptions {
@@ -375,6 +322,9 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			const room = running.get(name);
 			running.delete(name);
 			room?.evict();
+		},
+		release(name, room) {
+			if (running.get(name) === room) running.delete(name);
 		},
 	});
 	return runtime;

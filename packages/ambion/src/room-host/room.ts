@@ -27,8 +27,8 @@ import { answerCommit, answerLease, answerView } from '../answers.ts';
 import { AmbionError } from '../errors.ts';
 import {
 	type ExecutionConnector,
-	type RoomRuntime,
 	type RunningRoom,
+	type RuntimeState,
 	tokenWindowOf,
 } from '../host/runtime.ts';
 import type { Composition } from '../journal/events.ts';
@@ -153,7 +153,7 @@ export interface Room {
  */
 export class RoomHost implements Room, RunningRoom {
 	readonly name: string;
-	readonly runtime: RoomRuntime;
+	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */
 	readonly connector: ExecutionConnector;
 	readonly journal: RoomJournal;
@@ -200,7 +200,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	static start(
 		name: string,
-		runtime: RoomRuntime,
+		runtime: RuntimeState,
 		cast: CompositionDraft,
 		connector: ExecutionConnector,
 	): RoomHost {
@@ -209,7 +209,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	static resume(
 		name: string,
-		runtime: RoomRuntime,
+		runtime: RuntimeState,
 		bindings: Map<string, AgentDefinition>,
 		connector: ExecutionConnector,
 	): RoomHost {
@@ -218,7 +218,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	private constructor(
 		name: string,
-		runtime: RoomRuntime,
+		runtime: RuntimeState,
 		cast: CompositionDraft | undefined,
 		connector: ExecutionConnector,
 		bindings: Map<string, AgentDefinition> = new Map(),
@@ -342,7 +342,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	/** Free the name in the runtime, for this run alone. */
 	release(): void {
-		this.runtime.release(this);
+		this.runtime.release(this.name, this);
 	}
 
 	// -- what the room holds --------------------------------------------------

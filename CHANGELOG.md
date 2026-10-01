@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**`Hosting` extends `ExecutionHost`, and `hostingOf` returns the state of
+the runtime.** `hostingOf(runtime)` returns the runtime's own hosting
+view. Before, it built a copy with four members. `Hosting` gains `clock`,
+`storage`, and `logger` from `ExecutionHost`, and keeps `journals`,
+`executions`, `limits`, and `evict`. A `Hosting` is an `ExecutionHost`, so
+a host passes `hostingOf(runtime)` to `Execution.connector`. Nothing else
+in the public surface changes.
+
 **The journal reads only the format this release writes.**
 A journal that an earlier release wrote is not supported, and the journal
 adds no reader for it. Two promises of `docs/durability.md` go, and a host
