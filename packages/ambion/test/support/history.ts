@@ -14,7 +14,7 @@
  * nothing is pending once the room drains.
  */
 
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { decodeActivationId } from '../../src/activation-id.ts';
 import type { Clock, Message, Seq } from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/entries.ts';
@@ -23,7 +23,7 @@ import { owedOf, pendingOf } from './fold.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
 
-export interface Entry {
+export interface HistoryEntry {
 	index: number;
 	client: string;
 	op: string;
@@ -43,7 +43,7 @@ const DEFINITIVE =
 	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session|superseded|moved under the write/;
 
 export class History {
-	readonly entries: Entry[] = [];
+	readonly entries: HistoryEntry[] = [];
 
 	constructor(private readonly clock: Clock) {}
 
@@ -53,7 +53,7 @@ export class History {
 		op: string,
 		key: string | undefined,
 		action: () => Promise<T>,
-		seen?: (value: T) => Entry['seen'],
+		seen?: (value: T) => HistoryEntry['seen'],
 		stale?: () => boolean,
 	): Promise<T | undefined> {
 		const invoke = this.push({
@@ -104,8 +104,8 @@ export class History {
 		}
 	}
 
-	private push(entry: Omit<Entry, 'index' | 'at'>): Entry {
-		const full: Entry = { ...entry, index: this.entries.length, at: this.clock.now() };
+	private push(entry: Omit<HistoryEntry, 'index' | 'at'>): HistoryEntry {
+		const full: HistoryEntry = { ...entry, index: this.entries.length, at: this.clock.now() };
 		this.entries.push(full);
 		return full;
 	}
@@ -128,7 +128,7 @@ export interface Checked {
 	/** The record the room holds at the end. */
 	record: readonly Message[];
 	/** Every entry on the storage, in append order. */
-	stored: readonly JournalEntry[];
+	stored: readonly Entry[];
 	/** The fold at the end, after the drain. */
 	state: RoomState;
 }
@@ -186,8 +186,8 @@ function reads(history: History, record: readonly Message[]): string[] {
 
 /** What one read breaks: the prefix, the client's forward motion, or a delivery acknowledged before it. */
 function oneRead(
-	entry: Entry,
-	seen: NonNullable<Entry['seen']>,
+	entry: HistoryEntry,
+	seen: NonNullable<HistoryEntry['seen']>,
 	record: readonly Message[],
 	lastSeen: number,
 	acknowledged: readonly { key: string; index: number }[],
@@ -208,7 +208,7 @@ function oneRead(
 
 /** The first position where what a read saw differs from the record, or nothing for a prefix. */
 function prefixBreak(
-	seen: NonNullable<Entry['seen']>,
+	seen: NonNullable<HistoryEntry['seen']>,
 	record: readonly Message[],
 ): number | undefined {
 	for (const [i, item] of seen.entries()) {
@@ -224,7 +224,7 @@ function prefixBreak(
  * use for them.
  */
 export function standing(stored: Checked['stored']): Checked['stored'] {
-	const kept: JournalEntry[] = [];
+	const kept: Entry[] = [];
 	let fence: string | undefined;
 	for (const entry of stored) {
 		const run = entry.run;

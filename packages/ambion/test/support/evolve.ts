@@ -5,7 +5,7 @@
  * projection with `advance`, and `projection-equivalence.test.ts` holds
  * that path equal to the oracle.
  */
-import type { Entry } from '../../src/journal/journal.ts';
+import type { RoomEntry } from '../../src/journal/journal.ts';
 import {
 	applyEntry,
 	type BaseFacts,
@@ -25,7 +25,7 @@ const baseOf = (state: RoomState): BaseFacts => ({
 });
 
 /** The state after one more entry, by the rules that fold a whole journal. */
-export function evolve(state: RoomState, entry: Entry, options: FoldOptions): RoomState {
+export function evolve(state: RoomState, entry: RoomEntry, options: FoldOptions): RoomState {
 	const base = baseOf(state);
 	applyEntry(base, entry, state.exchange);
 	return project(base, options);
