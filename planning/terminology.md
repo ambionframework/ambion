@@ -2,8 +2,9 @@
 
 **This page lists the names that break the controlled vocabulary.** The
 glossary in [`docs/room.md`](../docs/room.md#glossary) and rule 4 of
-`CLAUDE.md` hold the prose. No check holds the identifiers, the `kind`
-strings, or the prompt text. Each of those changed on its own.
+`CLAUDE.md` hold the prose. The vocabulary check holds the identifiers
+that have landed. No check holds the prompt text. Each name changed on
+its own before the check existed.
 [Simplification](simplification.md) removes concepts. This page renames
 the concepts that stay, so that each word has one meaning.
 
@@ -18,6 +19,36 @@ edit the verified rules or a stored body. The second review found three
 new collisions and a check that fails the gate. The third review found a
 method name that collides with a field, and a row to split by phase.
 This revision holds the findings of all three.
+
+## Done
+
+**Seventeen pull requests have landed, and this one is the eighteenth.**
+`pnpm check` passes on each one, and the changelog names each change to an
+export and to a stored body.
+
+| Pull request      | Rows                    | Change                                                                           |
+| ----------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| #423              | T11                     | `journal/entries.ts`, `applyEntry`, `ProposedEntry`, `acceptedEntry`             |
+| #424              | O5, O8                  | "executor kind" for "family"; "seat" and "roster" for "member" in the docs       |
+| #426              | S1, S2, S5              | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `CodexTool`, `scriptedStream` |
+| #428              | O1, O2, S10             | `WorkspaceEndpoint`, `forward`, `machine`, `mirrorAgent`, backend `label`        |
+| #430              | T5, T6                  | `SaidMessage`, `isSaid`, test verb `say()`, `DEFAULT_SPEAKING`                   |
+| #431              | T1                      | `Executor`, `ActivationOpener`, `RunningActivation`                              |
+| #432              | S7, S8, S9              | `credentialTtl`, `process-cancel.ts`, `CancelCause`, `ProcessRecord`             |
+| #436              | O10, O11, S11           | `Simulation`, `summaryFacts`, `TracedStep`, `append`, `DEFAULT_TRACE_POLICY`     |
+| #437              | O4a, S4                 | The `*Fixture` names, `AMBION_EXECUTOR`, `RESUMED_NOTE`, `ScriptStep`            |
+| #438              | T2                      | `ActivationEvent`, the field `seat`, `tool_call`, `tool_result`                  |
+| #439              | T7, T9                  | `Exchange`, `ExchangeRange`, `toRoomRead`, `through`, `after`                    |
+| #440              | T12                     | `Entry` and `RoomEntry`                                                          |
+| #441              | T3, T14                 | The purpose `'summarize'`, `isSummarizing`, `Participant`                        |
+| #442              | T10                     | `ScheduledSay`, `awaitingFor`, test verb `schedule()`                            |
+| #446              | T4                      | `room.cancel()`, `cutAll()`, `cut()`, the stop reason `'cut'`                    |
+| #448              | T13, O4b, O6, O7        | `Landed.activation`, `VendorSession`, `seated`, `reserve`, `summaryWriter`       |
+| #449              | O3, T15                 | `DueActivation`, `dueOf`, `summarizesClose`, the discriminator `kind`            |
+| This pull request | The check, the glossary | `scripts/vocabulary.test.mjs` and the new rows of the glossary                   |
+
+**Three rows stay open.** T8 is a draft (#447) and waits on a live case.
+O9 is a draft and waits on a live case. S6 is in progress.
 
 ## How a row is ranked
 
@@ -60,23 +91,23 @@ counts 2, and low counts 1.
 executor package. Paths are relative to `packages/ambion/src` unless a
 row names a package.
 
-| ID  | Finding                                                  | Proposal                                                                                                                                                                                                                                                   | Evidence                                                                                                                                                                  | Removes | Conf.  | Rank | Risk            |
-| --- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- | --------------- |
-| T1  | `executor` names a value, a factory, and a session       | `AgentExecutor` → `Executor`; the factory type → `ActivationOpener`; `ExecutorSession` → `RunningActivation`                                                                                                                                               | `types.ts:551`, `execution/executor.ts:117,160`, `pi/src/executor.ts:1`                                                                                                   | 3       | High   | 9    | Exports         |
-| T2  | `ExecutionEvent` describes one activation                | `ActivationEvent`; fields `agent`, `author`, `toolName` → `seat`, `seat`, `name`; `tool_execution_*` → `tool_call`, `tool_result`                                                                                                                          | `types.ts:405-438`; `TraceRecord.seat` at `types.ts:524`                                                                                                                  | 3       | High   | 9    | Exports         |
-| T3  | The purpose of an activation has two sets of values      | `respond` and `summarize` in `ExchangeActivation.purpose`; `isClosing` → `isSummarizing`; one prose name for each purpose                                                                                                                                  | `protocol.ts:31`, `types.ts:82`, `room/exchange.ts:275`, `testing/scripted.ts:94`                                                                                         | 2       | High   | 6    | Exports         |
-| T4  | Six words name the three stop mechanisms of the room     | `room.abort()` → `room.cancel()`; `AgentRunner.abort()` → `cutAll()`; `ActivationState.cancel()` and `RoomToolBinding.abort()` → `cut()`, after the field `ActivationState.cut` → `controller`; the stop reason `'aborted'` → `'cut'`; `room.stop()` stays | `room-host/room.ts:127-129`, `room-host/control.ts:336`, `execution/runner.ts:52,118,133`, `execution/activation.ts:65,129`, `execution/room-tools.ts:68`, `types.ts:505` | 4       | High   | 12   | Exports         |
-| T5  | The verb `say` appears in five forms                     | `SaidMessage`, `isSaid`, test verb `say()`, event field `said`                                                                                                                                                                                             | `types.ts:182,305,423`, `testing/scripted.ts:52`                                                                                                                          | 3       | High   | 9    | Exports         |
-| T6  | `DEFAULT_GUIDANCE` is the default of `speaking`          | `DEFAULT_SPEAKING`                                                                                                                                                                                                                                         | `define.ts:61`; `AgentExecutor.guidance` is the bundle guidance                                                                                                           | 1       | High   | 3    | Exports         |
-| T7  | `View` names a seat input and a host read                | `ExchangeView` → `Exchange`; `ClosedExchange` (the range) → `ExchangeRange`; `ClosedExchangeView` goes; `readView` → `toRoomRead`                                                                                                                          | `types.ts:38-123`, `protocol.ts:120`, `room/read.ts:29`                                                                                                                   | 3       | Medium | 6    | Exports         |
-| T8  | `after` is a delay in seconds and a seq cursor           | The delay → `delaySeconds`; a position is `through` (inclusive) or `after` (exclusive)                                                                                                                                                                     | `types.ts:32,196`, `define.ts:343`, `protocol.ts:72`, `execution/executor.ts:19`                                                                                          | 2       | High   | 6    | Journal, Prompt |
-| T9  | Six names for one read position                          | `watermark`, `lastSeq`, `since` → `through` or `after`; `readThrough` stays                                                                                                                                                                                | `types.ts:134`, `room.ts:163`, `protocol.ts:225`, `room/read.ts:16`                                                                                                       | 3       | Medium | 6    | Exports         |
-| T10 | `pending` names a scheduled say and an awaiting exchange | `PendingSay` → `ScheduledSay`; `pendingFor` → `awaitingFor`; test verb `later` → `schedule`                                                                                                                                                                | `scheduling.ts:21`, `room/read.ts:96`, `testing/scripted.ts:56`                                                                                                           | 3       | High   | 9    | Exports         |
-| T11 | `event` names a journal entry and a notification         | `journal/events.ts` → `entries.ts`; `applyEvent`, `ProposedEvent`, `acceptedEvent` → `*Entry`                                                                                                                                                              | `room/fold.ts:74`, `room/transition.ts:45`, `room-host/core.ts:155`                                                                                                       | 2       | High   | 6    | Internal        |
-| T12 | One stored shape has three names                         | `Entry` for the stored envelope, and `RoomEntry` for the room's union                                                                                                                                                                                      | `journal/src/journal.ts:84`, `journal/src/index.ts:31`, `ambion/src/journal/journal.ts:15,55`                                                                             | 2       | High   | 6    | Exports         |
-| T13 | `activationId` is the one field that is not `activation` | `Landed.activationId` → `activation`                                                                                                                                                                                                                       | `types.ts:174`                                                                                                                                                            | 1       | High   | 3    | Journal         |
-| T14 | `ParticipantInfo` is the one `Info` type of the kernel   | `Participant`, `AgentParticipant`, `HumanParticipant`                                                                                                                                                                                                      | `types.ts:356-371`                                                                                                                                                        | 1       | Medium | 2    | Exports         |
-| T15 | Outcomes use two discriminators                          | `kind` on `ActivationOutcome`, `SummaryOutcome`, and `ExchangeOutcome`                                                                                                                                                                                     | `types.ts:57,64,94`; the summary verdict at `room/rules.verified.ts:582-584`                                                                                              | 1       | Medium | 2    | Exports, Rules  |
+| ID  | Finding                                                         | Proposal                                                                                                                                                                                                                                                   | Evidence                                                                                                                                                                  | Removes | Conf.  | Rank | Risk            |
+| --- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- | --------------- |
+| T1  | `executor` names a value, a factory, and a session (done)       | `AgentExecutor` → `Executor`; the factory type → `ActivationOpener`; `ExecutorSession` → `RunningActivation`                                                                                                                                               | `types.ts:551`, `execution/executor.ts:117,160`, `pi/src/executor.ts:1`                                                                                                   | 3       | High   | 9    | Exports         |
+| T2  | `ExecutionEvent` describes one activation (done)                | `ActivationEvent`; fields `agent`, `author`, `toolName` → `seat`, `seat`, `name`; `tool_execution_*` → `tool_call`, `tool_result`                                                                                                                          | `types.ts:405-438`; `TraceRecord.seat` at `types.ts:524`                                                                                                                  | 3       | High   | 9    | Exports         |
+| T3  | The purpose of an activation has two sets of values (done)      | `respond` and `summarize` in `ExchangeActivation.purpose`; `isClosing` → `isSummarizing`; one prose name for each purpose                                                                                                                                  | `protocol.ts:31`, `types.ts:82`, `room/exchange.ts:275`, `testing/scripted.ts:94`                                                                                         | 2       | High   | 6    | Exports         |
+| T4  | Six words name the three stop mechanisms of the room (done)     | `room.abort()` → `room.cancel()`; `AgentRunner.abort()` → `cutAll()`; `ActivationState.cancel()` and `RoomToolBinding.abort()` → `cut()`, after the field `ActivationState.cut` → `controller`; the stop reason `'aborted'` → `'cut'`; `room.stop()` stays | `room-host/room.ts:127-129`, `room-host/control.ts:336`, `execution/runner.ts:52,118,133`, `execution/activation.ts:65,129`, `execution/room-tools.ts:68`, `types.ts:505` | 4       | High   | 12   | Exports         |
+| T5  | The verb `say` appears in five forms (done)                     | `SaidMessage`, `isSaid`, test verb `say()`, event field `said`                                                                                                                                                                                             | `types.ts:182,305,423`, `testing/scripted.ts:52`                                                                                                                          | 3       | High   | 9    | Exports         |
+| T6  | `DEFAULT_GUIDANCE` is the default of `speaking` (done)          | `DEFAULT_SPEAKING`                                                                                                                                                                                                                                         | `define.ts:61`; `AgentExecutor.guidance` is the bundle guidance                                                                                                           | 1       | High   | 3    | Exports         |
+| T7  | `View` names a seat input and a host read (done)                | `ExchangeView` → `Exchange`; `ClosedExchange` (the range) → `ExchangeRange`; `ClosedExchangeView` goes; `readView` → `toRoomRead`                                                                                                                          | `types.ts:38-123`, `protocol.ts:120`, `room/read.ts:29`                                                                                                                   | 3       | Medium | 6    | Exports         |
+| T8  | `after` is a delay in seconds and a seq cursor                  | The delay → `delaySeconds`; a position is `through` (inclusive) or `after` (exclusive)                                                                                                                                                                     | `types.ts:32,196`, `define.ts:343`, `protocol.ts:72`, `execution/executor.ts:19`                                                                                          | 2       | High   | 6    | Journal, Prompt |
+| T9  | Six names for one read position (done)                          | `watermark`, `lastSeq`, `since` → `through` or `after`; `readThrough` stays                                                                                                                                                                                | `types.ts:134`, `room.ts:163`, `protocol.ts:225`, `room/read.ts:16`                                                                                                       | 3       | Medium | 6    | Exports         |
+| T10 | `pending` names a scheduled say and an awaiting exchange (done) | `PendingSay` → `ScheduledSay`; `pendingFor` → `awaitingFor`; test verb `later` → `schedule`                                                                                                                                                                | `scheduling.ts:21`, `room/read.ts:96`, `testing/scripted.ts:56`                                                                                                           | 3       | High   | 9    | Exports         |
+| T11 | `event` names a journal entry and a notification (done)         | `journal/events.ts` → `entries.ts`; `applyEvent`, `ProposedEvent`, `acceptedEvent` → `*Entry`                                                                                                                                                              | `room/fold.ts:74`, `room/transition.ts:45`, `room-host/core.ts:155`                                                                                                       | 2       | High   | 6    | Internal        |
+| T12 | One stored shape has three names (done)                         | `Entry` for the stored envelope, and `RoomEntry` for the room's union                                                                                                                                                                                      | `journal/src/journal.ts:84`, `journal/src/index.ts:31`, `ambion/src/journal/journal.ts:15,55`                                                                             | 2       | High   | 6    | Exports         |
+| T13 | `activationId` is the one field that is not `activation` (done) | `Landed.activationId` → `activation`                                                                                                                                                                                                                       | `types.ts:174`                                                                                                                                                            | 1       | High   | 3    | Journal         |
+| T14 | `ParticipantInfo` is the one `Info` type of the kernel (done)   | `Participant`, `AgentParticipant`, `HumanParticipant`                                                                                                                                                                                                      | `types.ts:356-371`                                                                                                                                                        | 1       | Medium | 2    | Exports         |
+| T15 | Outcomes use two discriminators (done)                          | `kind` on `ActivationOutcome`, `SummaryOutcome`, and `ExchangeOutcome`                                                                                                                                                                                     | `types.ts:57,64,94`; the summary verdict at `room/rules.verified.ts:582-584`                                                                                              | 1       | Medium | 2    | Exports, Rules  |
 
 **T1 follows the glossary.** The glossary says that a definition is a
 name, an identity, and an executor, and `defineAgent({ executor: pi() })`
@@ -145,20 +176,20 @@ field `scheduled` and the tool `schedule` use. It adds no shape.
 **These rows assign each common word to one concept.** The glossary
 gains a row for each word that stays.
 
-| ID  | Word      | Meanings today                                                                                                  | The one meaning that stays                             | Renames                                                                                                                                                   | Conf.  | Rank | Risk     |
-| --- | --------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- | -------- |
-| O1  | `host`    | The embedding application; `RoomHost`; `Workspace.host`; the SSH server; the host loopback                      | The application that embeds a room                     | `Workspace.host` → `mirrorAgent`; `WorkstationOptions.host` → `server`, after S10; `WorkspacePorts.hostname` → `machine`; `RoomHost` stays                | High   | 9    | Exports  |
-| O2  | `port`    | An interface boundary (`AgentPort`, W1); a private HTTP endpoint (`WorkspacePort`); the SSH port option         | An interface boundary                                  | `WorkspacePort` → `WorkspaceEndpoint`; `WorkspacePorts` → `WorkspaceEndpoints`; `open` → `forward`                                                        | High   | 6    | Exports  |
-| O3  | `wake`    | The `Wake` request; `Message.wakes`; the `wakes.ts` index; a retried unit; a Cloudflare counter                 | The request that the room sends to a seat's port       | `PendingActivation`, `PendingWake`, and the summary "draft" → `DueActivation`; `statusOf` → `dueOf`; `SeatMetadata.wakes` → `wakeCount`                   | Medium | 8    | Rules    |
-| O4a | `harness` | Pi's `AgentHarness`; `HarnessSession.harness`; the conformance fixtures; `AMBION_HARNESS`; Codex `HARNESS_NOTE` | Pi's `AgentHarness`, and a vendor loop in prose        | The `*Harness` fixtures and their factories → `*Fixture`; `AMBION_HARNESS` → `AMBION_EXECUTOR`; Codex `HARNESS_NOTE` → `RESUMED_NOTE`, as Claude names it | High   | 9    | Exports  |
-| O4b | `harness` | The recorded vendor session: `HarnessSession { harness, id }`, `Pass.resume`                                    | Pi's `AgentHarness`, and a vendor loop in prose        | `HarnessSession` → `VendorSession { kind, id }`; `Pass.resume` → `resumeId`                                                                               | High   | 3    | Journal  |
-| O5  | `family`  | The executor kind in prose (73 uses in the docs and the README); the workbench `Family`; "model family"         | No meaning stays. The word goes.                       | "executor kind" in prose; the workbench `Family` → `ExecutorKind`                                                                                         | High   | 3    | Internal |
-| O6  | `agents`  | Every definition (`StartRoomOptions`); the seated agents (`Composition`); definition names (Cloudflare)         | The definitions that an application supplies           | `Composition.agents` → `seated`; `Composition.available` → `reserve`; Cloudflare `agents` → `definitions`                                                 | High   | 9    | Journal  |
-| O7  | `summary` | The writer's name; the outcome; the message; a `TracePolicy` value                                              | The message and its outcome                            | `StartRoomOptions.summary`, `Composition.summary`, `Close.summary` → `summaryWriter`; `TracePolicy.thinking: 'summary'` → `'start'`                       | High   | 9    | Journal  |
-| O8  | `member`  | 62 uses of "member" and "membership" in `docs/`, the glossary row for Seat included                             | No meaning stays. The word goes.                       | "seat", "seated", and "roster"                                                                                                                            | High   | 3    | Internal |
-| O9  | `turn`    | Pi's request to a provider; an activation in eleven prompt strings; a Codex run; `FakeScenario.turns`           | Pi's request to a provider                             | Prompts: "end your activation"; the Codex docs map a Codex turn to a pass once; Claude test `turns` → `passes`                                            | High   | 9    | Prompt   |
-| O10 | `run`     | One run of a room over its journal; the `run` entry; the simulator `Run`; a Pi run; `RoomTool.run()`            | One run of a room over its journal, as a fence         | The simulator `Run` → `Simulation`; a Pi run is a pass in prose; the body `Fence` and the verb `run()` stay                                               | Medium | 4    | Exports  |
-| O11 | `record`  | The messages on the journal; `RoomProjection.record`; `OwedFacts.record`; `TraceRecord`; `AuditLog.record`      | The messages on the journal, as participants read them | `RoomProjection.record`, `OwedFacts.record` → `summaryFacts`; `TraceRecord` → `TracedStep`; `AuditLog.record` → `append`                                  | Medium | 8    | Exports  |
+| ID  | Word             | Meanings today                                                                                                  | The one meaning that stays                             | Renames                                                                                                                                                   | Conf.  | Rank | Risk     |
+| --- | ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- | -------- |
+| O1  | `host` (done)    | The embedding application; `RoomHost`; `Workspace.host`; the SSH server; the host loopback                      | The application that embeds a room                     | `Workspace.host` → `mirrorAgent`; `WorkstationOptions.host` → `server`, after S10; `WorkspacePorts.hostname` → `machine`; `RoomHost` stays                | High   | 9    | Exports  |
+| O2  | `port` (done)    | An interface boundary (`AgentPort`, W1); a private HTTP endpoint (`WorkspacePort`); the SSH port option         | An interface boundary                                  | `WorkspacePort` → `WorkspaceEndpoint`; `WorkspacePorts` → `WorkspaceEndpoints`; `open` → `forward`                                                        | High   | 6    | Exports  |
+| O3  | `wake` (done)    | The `Wake` request; `Message.wakes`; the `wakes.ts` index; a retried unit; a Cloudflare counter                 | The request that the room sends to a seat's port       | `PendingActivation`, `PendingWake`, and the summary "draft" → `DueActivation`; `statusOf` → `dueOf`; `SeatMetadata.wakes` → `wakeCount`                   | Medium | 8    | Rules    |
+| O4a | `harness` (done) | Pi's `AgentHarness`; `HarnessSession.harness`; the conformance fixtures; `AMBION_HARNESS`; Codex `HARNESS_NOTE` | Pi's `AgentHarness`, and a vendor loop in prose        | The `*Harness` fixtures and their factories → `*Fixture`; `AMBION_HARNESS` → `AMBION_EXECUTOR`; Codex `HARNESS_NOTE` → `RESUMED_NOTE`, as Claude names it | High   | 9    | Exports  |
+| O4b | `harness` (done) | The recorded vendor session: `HarnessSession { harness, id }`, `Pass.resume`                                    | Pi's `AgentHarness`, and a vendor loop in prose        | `HarnessSession` → `VendorSession { kind, id }`; `Pass.resume` → `resumeId`                                                                               | High   | 3    | Journal  |
+| O5  | `family` (done)  | The executor kind in prose (73 uses in the docs and the README); the workbench `Family`; "model family"         | No meaning stays. The word goes.                       | "executor kind" in prose; the workbench `Family` → `ExecutorKind`                                                                                         | High   | 3    | Internal |
+| O6  | `agents` (done)  | Every definition (`StartRoomOptions`); the seated agents (`Composition`); definition names (Cloudflare)         | The definitions that an application supplies           | `Composition.agents` → `seated`; `Composition.available` → `reserve`; Cloudflare `agents` → `definitions`                                                 | High   | 9    | Journal  |
+| O7  | `summary` (done) | The writer's name; the outcome; the message; a `TracePolicy` value                                              | The message and its outcome                            | `StartRoomOptions.summary`, `Composition.summary`, `Close.summary` → `summaryWriter`; `TracePolicy.thinking: 'summary'` → `'start'`                       | High   | 9    | Journal  |
+| O8  | `member` (done)  | 62 uses of "member" and "membership" in `docs/`, the glossary row for Seat included                             | No meaning stays. The word goes.                       | "seat", "seated", and "roster"                                                                                                                            | High   | 3    | Internal |
+| O9  | `turn`           | Pi's request to a provider; an activation in eleven prompt strings; a Codex run; `FakeScenario.turns`           | Pi's request to a provider                             | Prompts: "end your activation"; the Codex docs map a Codex turn to a pass once; Claude test `turns` → `passes`                                            | High   | 9    | Prompt   |
+| O10 | `run` (done)     | One run of a room over its journal; the `run` entry; the simulator `Run`; a Pi run; `RoomTool.run()`            | One run of a room over its journal, as a fence         | The simulator `Run` → `Simulation`; a Pi run is a pass in prose; the body `Fence` and the verb `run()` stay                                               | Medium | 4    | Exports  |
+| O11 | `record` (done)  | The messages on the journal; `RoomProjection.record`; `OwedFacts.record`; `TraceRecord`; `AuditLog.record`      | The messages on the journal, as participants read them | `RoomProjection.record`, `OwedFacts.record` → `summaryFacts`; `TraceRecord` → `TracedStep`; `AuditLog.record` → `append`                                  | Medium | 8    | Exports  |
 
 **O1 depends on S10.** `server` is the label of `GitBackend` today
 (`git-backend.ts:119`). S10 renames that label, so S10 lands first or
@@ -236,19 +267,19 @@ one rendered message in `record.ts`.
 
 **These rows align the names of packages that implement one contract.**
 
-| ID  | Finding                                                            | Proposal                                                                                                                       | Evidence                                                                                               | Conf.  | Rank |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------ | ---- |
-| S1  | `ClaudeRuntime` and `CodexRuntime` collide with the core `Runtime` | `ClaudeExecutionOptions`, `CodexExecutionOptions`, as `PiExecutionOptions`                                                     | `claude/src/options.ts:14`, `codex/src/options.ts:16`                                                  | High   | 6    |
-| S2  | Codex declares a `RoomTool` that shadows the core type             | `CodexTool`                                                                                                                    | `codex/src/tools.ts:29`                                                                                | High   | 3    |
-| S3  | `Pass.agentTools` holds agent tools under the type `RoomTool`      | None: E6 removes `Pass.agentTools`, and S3 closes with it                                                                      | `execution/executor.ts:96`; E6                                                                         | Medium | 2    |
-| S4  | The testing entry exports a second `Step`, `Call`, and `Result`    | `ScriptStep`, `ScriptCall`, `ScriptResult`; the parameter `call` → `request`                                                   | `testing/scripted.ts:22-44`, `testing.ts:21`                                                           | High   | 6    |
-| S5  | Pi `scripted()` collides with the core `scripted()`                | `scriptedStream()`                                                                                                             | `pi/src/testing.ts`, `ambion/src/testing/scripted.ts:264`                                              | High   | 3    |
-| S6  | The workspace object has five names                                | "workspace" for the value, "resource" for the contract; "bash owner" and "shell" go                                            | `workspace.ts:76,181,416,489`; 44 uses of "bash owner" in `src`                                        | Medium | 6    |
-| S7  | The credential lifetime has three option names                     | `credentialTtl`                                                                                                                | `git-conformance.ts:58`, `just-bash/src/git/backend.ts:78`, `workstation/src/git-backend.ts:55`        | High   | 6    |
-| S8  | A process stops under `cancel` in the tool and `stop` in the code  | `cancel` in the code: `process-stop.ts` → `process-cancel.ts`, `StopCause` → `CancelCause`                                     | `process-files.ts:26`, `process-tools.ts:208`, `process-stop.ts`                                       | Medium | 2    |
-| S9  | `ProcessStatus` is the whole record, and `.state` is the status    | `ProcessRecord`, with `state`                                                                                                  | `process-files.ts:29,39`                                                                               | Medium | 2    |
-| S10 | The backend label has three names (extends W8)                     | `label`; `WorkspacePorts.hostname` belongs to O1; `GitStorage.location` stays, because `sqliteGitStorage` opens the file at it | `git-backend.ts:119`, `object-backend.ts:198`, `sql-backend.ts:170`; `just-bash/src/git/storage.ts:52` | Medium | 4    |
-| S11 | Three trace defaults look alike                                    | `DEFAULT_TRACE` → `DEFAULT_TRACE_POLICY`                                                                                       | `define.ts:35`, `host/runtime.ts:125`                                                                  | Medium | 2    |
+| ID  | Finding                                                                   | Proposal                                                                                                                       | Evidence                                                                                               | Conf.  | Rank |
+| --- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------ | ---- |
+| S1  | `ClaudeRuntime` and `CodexRuntime` collide with the core `Runtime` (done) | `ClaudeExecutionOptions`, `CodexExecutionOptions`, as `PiExecutionOptions`                                                     | `claude/src/options.ts:14`, `codex/src/options.ts:16`                                                  | High   | 6    |
+| S2  | Codex declares a `RoomTool` that shadows the core type (done)             | `CodexTool`                                                                                                                    | `codex/src/tools.ts:29`                                                                                | High   | 3    |
+| S3  | `Pass.agentTools` holds agent tools under the type `RoomTool`             | None: E6 removes `Pass.agentTools`, and S3 closes with it                                                                      | `execution/executor.ts:96`; E6                                                                         | Medium | 2    |
+| S4  | The testing entry exports a second `Step`, `Call`, and `Result` (done)    | `ScriptStep`, `ScriptCall`, `ScriptResult`; the parameter `call` → `request`                                                   | `testing/scripted.ts:22-44`, `testing.ts:21`                                                           | High   | 6    |
+| S5  | Pi `scripted()` collides with the core `scripted()` (done)                | `scriptedStream()`                                                                                                             | `pi/src/testing.ts`, `ambion/src/testing/scripted.ts:264`                                              | High   | 3    |
+| S6  | The workspace object has five names                                       | "workspace" for the value, "resource" for the contract; "bash owner" and "shell" go                                            | `workspace.ts:76,181,416,489`; 44 uses of "bash owner" in `src`                                        | Medium | 6    |
+| S7  | The credential lifetime has three option names (done)                     | `credentialTtl`                                                                                                                | `git-conformance.ts:58`, `just-bash/src/git/backend.ts:78`, `workstation/src/git-backend.ts:55`        | High   | 6    |
+| S8  | A process stops under `cancel` in the tool and `stop` in the code (done)  | `cancel` in the code: `process-stop.ts` → `process-cancel.ts`, `StopCause` → `CancelCause`                                     | `process-files.ts:26`, `process-tools.ts:208`, `process-stop.ts`                                       | Medium | 2    |
+| S9  | `ProcessStatus` is the whole record, and `.state` is the status (done)    | `ProcessRecord`, with `state`                                                                                                  | `process-files.ts:29,39`                                                                               | Medium | 2    |
+| S10 | The backend label has three names (extends W8) (done)                     | `label`; `WorkspacePorts.hostname` belongs to O1; `GitStorage.location` stays, because `sqliteGitStorage` opens the file at it | `git-backend.ts:119`, `object-backend.ts:198`, `sql-backend.ts:170`; `just-bash/src/git/storage.ts:52` | Medium | 4    |
+| S11 | Three trace defaults look alike (done)                                    | `DEFAULT_TRACE` → `DEFAULT_TRACE_POLICY`                                                                                       | `define.ts:35`, `host/runtime.ts:125`                                                                  | Medium | 2    |
 
 **S8 follows the glossary row for Cancel.** A cancel ends work and keeps
 the fact: the room writes a `cancel` entry, and a process takes the
@@ -281,9 +312,10 @@ own.**
 
 ## The glossary rows to add
 
-**The glossary gains one row for each word that Tier 2 assigns.** The
-row for Seat changes too: "An agent's place on the roster, with its
-attention."
+**The glossary gained one row for each word that Tier 2 assigns.** The
+row for Seat changed too: "An agent's place on the roster, with its
+attention." The glossary in [`docs/room.md`](../docs/room.md#glossary)
+holds all of them. The rows below are the plan that it followed.
 
 | Term           | Meaning                                                                |
 | -------------- | ---------------------------------------------------------------------- |
@@ -304,9 +336,11 @@ attention."
 
 ## A check that holds the vocabulary
 
-**`pnpm check` gains a vocabulary check.** The check is a list of
-refused patterns with the paths they apply to. The first entries refuse
-the words that phase 1 removes:
+**`pnpm check` runs a vocabulary check.** The check is
+`scripts/vocabulary.test.mjs`. It is a table of refused patterns with the
+paths they apply to and the plan rows that own them. It reads the output
+of `git ls-files`, and it skips `CHANGELOG.md` and `planning/`. The first
+entries refuse the words that phase 1 removed:
 
 - `member` and `membership` in `docs/` (O8).
 - `family` in `docs/` and `README.md` (O5).
@@ -314,13 +348,14 @@ the words that phase 1 removes:
 **A new entry lands with the rename that removes the word.** Each later
 entry waits for its row, so the gate passes after each commit.
 
-| Entry                                                                                                      | Lands with |
-| ---------------------------------------------------------------------------------------------------------- | ---------- |
-| `Spoken` in an identifier                                                                                  | T5         |
-| `Info` at the end of an exported type name in `packages/ambion/src`                                        | T14        |
-| `Harness` in an identifier outside `packages/pi`, except `HarnessSession` and the Pi types that W1 removes | O4a        |
-| The exception for `HarnessSession` goes                                                                    | O4b        |
-| `turn` as a whole word in a string literal of `ambion`                                                     | O9         |
+| Entry                                                                                                 | Lands with | Status                                   |
+| ----------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------- |
+| `Spoken` in an identifier under `packages/*/src` and `examples/*/src`                                 | T5         | Done                                     |
+| `Info` at the end of an exported type name in `packages/ambion/src`                                   | T14        | Done                                     |
+| `Harness` in an identifier outside `packages/pi`, except the Pi types and the workspace `HarnessTool` | O4a, O4b   | Done, with no `HarnessSession` exception |
+| `matrix.harness` and the `harness` matrix key of the live workflow                                    | O4a        | Done                                     |
+| One entry for the old names of each other landed row, such as `WorkspacePorts` and `TraceRecord`      | The row    | Done                                     |
+| `turn` as a whole word in a string literal of `ambion`                                                | O9         | Pending with O9                          |
 
 **The `turn` pattern matches the whole word inside a string literal.**
 It skips `return`, and it skips the comment "in turn" at `bundle.ts:50`.
@@ -360,30 +395,31 @@ files.** Each one starts from `main`, runs `pnpm check`, and names its
 change in the changelog. A pull request in a later wave waits for the
 pull request it depends on.
 
-| Wave | Rows                    | Branch                              | Waits for       |
-| ---- | ----------------------- | ----------------------------------- | --------------- |
-| 1    | T11                     | `claude/terms-t11-entries`          |                 |
-| 1    | O5, O8                  | `claude/terms-o5-o8-prose`          |                 |
-| 1    | O1, O2, S10             | `claude/terms-o1-o2-s10-hosts`      |                 |
-| 1    | S1, S2, S5              | `claude/terms-s1-s2-s5-executors`   |                 |
-| 2    | S7, S8, S9              | `claude/terms-s7-s8-s9-processes`   |                 |
-| 2    | T5, T6                  | `claude/terms-t5-t6-say`            |                 |
-| 2    | T7, T9                  | `claude/terms-t7-t9-reads`          |                 |
-| 2    | T10                     | `claude/terms-t10-scheduled`        |                 |
-| 2    | T2                      | `claude/terms-t2-activation-events` |                 |
-| 2    | T3, T14                 | `claude/terms-t3-t14-participants`  |                 |
-| 2    | O10, O11, S11           | `claude/terms-o10-o11-s11-traces`   |                 |
-| 2    | O4a, S4                 | `claude/terms-o4a-s4-fixtures`      |                 |
-| 2    | T12                     | `claude/terms-t12-journal-entry`    | T11             |
-| 2    | T1                      | `claude/terms-t1-executor`          | E6              |
-| 2    | T4                      | `claude/terms-t4-stops`             | T1              |
-| 3    | T13, O4b, O6, O7        | `claude/terms-journal-bodies`       | Wave 2          |
-| 3    | O3, T15                 | `claude/terms-o3-t15-rules`         | Wave 2          |
-| 3    | T8                      | `claude/terms-t8-delay`             | T10             |
-| 3    | O9                      | `claude/terms-o9-prompts`           | T8              |
-| 3    | S6                      | `claude/terms-s6-workspace-prose`   | S7, S8, S9      |
-| 3    | The check, the glossary | `claude/terms-vocabulary-check`     | The gate change |
+| Wave | Rows                    | Branch                              | Pull request      | Waits for   |
+| ---- | ----------------------- | ----------------------------------- | ----------------- | ----------- |
+| 1    | T11                     | `claude/terms-t11-entries`          | #423              |             |
+| 1    | O5, O8                  | `claude/terms-o5-o8-prose`          | #424              |             |
+| 1    | O1, O2, S10             | `claude/terms-o1-o2-s10-hosts`      | #428              |             |
+| 1    | S1, S2, S5              | `claude/terms-s1-s2-s5-executors`   | #426              |             |
+| 2    | S7, S8, S9              | `claude/terms-s7-s8-s9-processes`   | #432              |             |
+| 2    | T5, T6                  | `claude/terms-t5-t6-say`            | #430              |             |
+| 2    | T7, T9                  | `claude/terms-t7-t9-reads`          | #439              |             |
+| 2    | T10                     | `claude/terms-t10-scheduled`        | #442              |             |
+| 2    | T2                      | `claude/terms-t2-activation-events` | #438              |             |
+| 2    | T3, T14                 | `claude/terms-t3-t14-participants`  | #441              |             |
+| 2    | O10, O11, S11           | `claude/terms-o10-o11-s11-traces`   | #436              |             |
+| 2    | O4a, S4                 | `claude/terms-o4a-s4-fixtures`      | #437              |             |
+| 2    | T12                     | `claude/terms-t12-journal-entry`    | #440              |             |
+| 2    | T1                      | `claude/terms-t1-executor`          | #431              |             |
+| 2    | T4                      | `claude/terms-t4-stops`             | #446              |             |
+| 3    | T13, O4b, O6, O7        | `claude/terms-journal-bodies`       | #448              |             |
+| 3    | O3, T15                 | `claude/terms-o3-t15-rules`         | #449              |             |
+| 3    | T8                      | `claude/terms-t8-delay`             | #447, draft       | A live case |
+| 3    | O9                      | `claude/terms-o9-prompts`           | Draft             | A live case |
+| 3    | S6                      | `claude/terms-s6-workspace-prose`   | In progress       |             |
+| 3    | The check, the glossary | `claude/terms-vocabulary-check`     | This pull request |             |
 
-**The gate change waits.** An open pull request rewrites the gate and
-`CLAUDE.md`. The vocabulary check and the glossary rows land after it,
-with the entries for every rename that has landed.
+**The gate change landed first.** The rewrite of the gate and of
+`CLAUDE.md` merged before this pull request. The vocabulary check and the
+glossary rows landed after it, with the entries for every rename that had
+landed.
