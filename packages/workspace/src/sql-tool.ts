@@ -3,7 +3,7 @@
  *
  * A workspace with a SQL backend gives its agents this tool. A workspace
  * with no SQL backend has no `sql` tool. The statements run on the SQL
- * owner. The backend gives back a preview of the last statement's rows and
+ * resource. The backend gives back a preview of the last statement's rows and
  * their count. With `export`, the backend writes every row as CSV to the
  * agent's files on the bash backend (`WorkspaceFiles`), and the tool shows
  * the head of the file. With `import`, the backend reads a CSV file from the
@@ -85,7 +85,7 @@ const sqlSchema = Type.Object({
 
 type SqlParams = Static<typeof sqlSchema>;
 
-/** What the tool needs from the workspace: the SQL owner and the database name. */
+/** What the tool needs from the workspace: the SQL resource and the database name. */
 interface SqlToolOptions {
 	readonly sql: WorkspaceResource<SqlEnv>['use'];
 	readonly database: string;
@@ -107,16 +107,19 @@ function sqlToolGuidance(database: string): string {
 	].join('\n');
 }
 
-/** The SQL capability: the `sql` tool over the SQL owner, its note, and the note of the backend. */
-export function sqlCapability(backend: SqlBackend, owner: WorkspaceResource<SqlEnv>): Capability {
+/** The SQL capability: the `sql` tool over the SQL resource, its note, and the note of the backend. */
+export function sqlCapability(
+	backend: SqlBackend,
+	resource: WorkspaceResource<SqlEnv>,
+): Capability {
 	const { label, guidance } = backend;
 	return {
-		tools: [createSqlTool({ sql: owner.use, database: label })],
+		tools: [createSqlTool({ sql: resource.use, database: label })],
 		notes: [sqlToolGuidance(label), guidance],
 	};
 }
 
-/** Build the `sql` tool that runs on the SQL owner. */
+/** Build the `sql` tool that runs on the SQL resource. */
 function createSqlTool(options: SqlToolOptions): AmbionTool {
 	return defineTool({
 		name: 'sql',

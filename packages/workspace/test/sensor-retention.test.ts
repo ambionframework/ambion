@@ -28,8 +28,8 @@ async function defaultStore(
 		...disk,
 		connect: (agent, signal) => disk.connect(agent, signal),
 	};
-	const shell = openResource<WorkspaceEnv>({
-		name: 'retention-shell',
+	const bash = openResource<WorkspaceEnv>({
+		name: 'retention-bash',
 		backend: {
 			...backend,
 			async connect(agent, signal) {
@@ -40,13 +40,13 @@ async function defaultStore(
 	});
 	const objects = openResource<ObjectEnv>({
 		name: 'retention-objects',
-		backend: fileObjectBackend({ shell: shell.use, host: owner, root: '/snapshots' }),
+		backend: fileObjectBackend({ bash: bash.use, host: owner, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'retention-test', host: owner, shell: shell.use, objects: objects.use },
+		store: { workspace: 'retention-test', host: owner, bash: bash.use, objects: objects.use },
 		async dispose() {
 			await objects.dispose();
-			await shell.dispose();
+			await bash.dispose();
 		},
 	};
 }
@@ -168,7 +168,7 @@ describe('sensor evidence retention', () => {
 				callAs('reviewer'),
 			);
 			const manifestPath = (restored as { details: { path: string } }).details.path;
-			const manifestContents = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
+			const manifestContents = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
 				const result = await env.readTextFile(manifestPath, BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 				return result.value;
@@ -191,7 +191,7 @@ describe('sensor evidence retention', () => {
 					callAs('reviewer'),
 				);
 				const path = (result as { details: { path: string } }).details.path;
-				const bytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
+				const bytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
 					const found = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
 					if (!found.ok) throw found.error;
 					return found.value;
@@ -201,7 +201,7 @@ describe('sensor evidence retention', () => {
 
 			const firstExport = retained.files[0];
 			if (!firstExport) throw new Error('Expected a retained file export.');
-			await storeFixture.store.shell({ name: 'observer' }, async (env) => {
+			await storeFixture.store.bash({ name: 'observer' }, async (env) => {
 				const changed = await env.writeFile(firstExport.path, 'edited export', BACKGROUND_CONTEXT);
 				if (!changed.ok) throw changed.error;
 			});
@@ -217,7 +217,7 @@ describe('sensor evidence retention', () => {
 
 	it('clones source, request, observations, and bytes before awaiting storage', async () => {
 		const inner = memoryBackend();
-		const shell = openResource<WorkspaceEnv>({ name: 'retention-mutable-shell', backend: inner });
+		const bash = openResource<WorkspaceEnv>({ name: 'retention-mutable-bash', backend: inner });
 		let releasePuts = () => {};
 		let startedPut = () => {};
 		const started = new Promise<void>((resolve) => (startedPut = resolve));
@@ -242,7 +242,7 @@ describe('sensor evidence retention', () => {
 			await import('../src/object-files.ts')
 		)
 			.fileObjectBackend({
-				shell: shell.use,
+				bash: bash.use,
 				host: owner,
 				root: '/snapshots',
 			})
@@ -250,7 +250,7 @@ describe('sensor evidence retention', () => {
 		const store: SnapshotStore = {
 			workspace: 'retention-clone',
 			host: owner,
-			shell: shell.use,
+			bash: bash.use,
 			objects: objects.use,
 		};
 		const payload = new Uint8Array([1, 2, 3]);
@@ -302,7 +302,7 @@ describe('sensor evidence retention', () => {
 		const bytes = await store.objects(owner, (env) => env.get(retained.files[0]?.digest ?? ''));
 		expect(bytes).toEqual(new Uint8Array([1, 2, 3]));
 		await objects.dispose();
-		await shell.dispose();
+		await bash.dispose();
 	});
 
 	it('retains text-only observations with no received files', async () => {
@@ -402,7 +402,7 @@ describe('sensor evidence retention', () => {
 					]),
 				),
 			).rejects.toMatchObject({ name: 'SensorDigestError', expected: frameDigest });
-			const noObjects = await storeFixture.store.shell(owner, (env) =>
+			const noObjects = await storeFixture.store.bash(owner, (env) =>
 				env.exists('/snapshots', BACKGROUND_CONTEXT),
 			);
 			expect(noObjects).toMatchObject({ ok: true, value: false });
@@ -412,9 +412,9 @@ describe('sensor evidence retention', () => {
 		}
 	});
 
-	it('does not export successfully when the object owner rejects a write', async () => {
-		const shell = openResource<WorkspaceEnv>({
-			name: 'retention-write-failure-shell',
+	it('does not export successfully when the object resource rejects a write', async () => {
+		const bash = openResource<WorkspaceEnv>({
+			name: 'retention-write-failure-bash',
 			backend: memoryBackend(),
 		});
 		const stored = new Map<string, Uint8Array>();
@@ -438,7 +438,7 @@ describe('sensor evidence retention', () => {
 		const store: SnapshotStore = {
 			workspace: 'retention-write-failure',
 			host: owner,
-			shell: shell.use,
+			bash: bash.use,
 			objects: objects.use,
 		};
 		try {
@@ -474,13 +474,13 @@ describe('sensor evidence retention', () => {
 			).rejects.toThrow('manifest object write refused');
 			expect(writes).toBe(2);
 			expect(stored.get(frameDigest)).toEqual(new Uint8Array(frameBytes));
-			const exports = await shell.use({ name: 'observer' }, (env) =>
+			const exports = await bash.use({ name: 'observer' }, (env) =>
 				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
 			await objects.dispose();
-			await shell.dispose();
+			await bash.dispose();
 		}
 	});
 
@@ -493,8 +493,8 @@ describe('sensor evidence retention', () => {
 				...disk,
 				connect: (agent, signal) => disk.connect(agent, signal),
 			};
-			const shell = openResource<WorkspaceEnv>({
-				name: 'retention-partial-shell',
+			const bash = openResource<WorkspaceEnv>({
+				name: 'retention-partial-bash',
 				backend: {
 					...backend,
 					async connect(agent, signal) {
@@ -505,12 +505,12 @@ describe('sensor evidence retention', () => {
 			});
 			const objects = openResource<ObjectEnv>({
 				name: 'retention-partial-objects',
-				backend: fileObjectBackend({ shell: shell.use, host: owner, root: '/snapshots' }),
+				backend: fileObjectBackend({ bash: bash.use, host: owner, root: '/snapshots' }),
 			});
 			const store: SnapshotStore = {
 				workspace: 'retention-partial',
 				host: owner,
-				shell: shell.use,
+				bash: bash.use,
 				objects: objects.use,
 			};
 			const bytes = new Uint8Array([1, 2, 3]);
@@ -548,13 +548,13 @@ describe('sensor evidence retention', () => {
 							? 'Operation aborted'
 							: 'cancel after rename',
 				);
-				const entries = await shell.use({ name: 'observer' }, (env) =>
+				const entries = await bash.use({ name: 'observer' }, (env) =>
 					env.listDir('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
 				);
 				expect(entries).toMatchObject({ ok: true, value: [] });
 			} finally {
 				await objects.dispose();
-				await shell.dispose();
+				await bash.dispose();
 			}
 		},
 	);

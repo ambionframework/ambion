@@ -406,8 +406,8 @@ new one.
 
 ## Connections
 
-**The backend keeps one SSH client for each agent.** The resource owner
-calls `connect()` and `cleanup()` once for each operation
+**The backend keeps one SSH client for each agent.** The resource calls
+`connect()` and `cleanup()` once for each operation
 ([Resources](resources.md#the-resource-contract)). A handshake on each
 call adds network round trips to every tool call.
 
@@ -453,12 +453,12 @@ opens on a closed client.
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
 on one connection by default (`MaxSessions`). The count below holds at the
 same time on one client of one agent. It does not assume a drained bash
-owner, so it covers `dispose()` and a live cancel or timeout alike.
+resource, so it covers `dispose()` and a live cancel or timeout alike.
 
 | Holder                                                                                                                             | Channels |
 | ---------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | The SFTP channel                                                                                                                   | 1        |
-| The bash owner: one operation, one `exec`                                                                                          | 1        |
+| The bash resource: one operation, one `exec`                                                                                       | 1        |
 | The processes: a command channel for each process of this run, and one poll read for each adopted process, with 4 processes in all | up to 4  |
 | One signal channel, for every abort and every cancel of the client                                                                 | 1        |
 | One `exec` of the table on a cancel step: `writeStop`, or the signal script of an adopted cancel                                   | 1        |
@@ -473,21 +473,21 @@ final read of a process of this run (`settleOwned`, `finalStatus`,
 `readFiles`: one listing `exec`) runs after its command channel closed,
 and takes the place of that channel. The cancels of one agent take their
 steps one at a time, so the table holds one `exec` on a cancel step. The
-owner's own abort signal uses the one signal channel. The worst case is
+resource's own abort signal uses the one signal channel. The worst case is
 8 channels, 2 below the limit of 10. The count of one signal channel
 assumes that a kill channel closes within 5 seconds, the time after which
 the queue releases an entry.
 
-**The bash owner serializes every agent's file work and the start of each
+**The bash resource serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits
-on the network. A `bash` process runs off the owner, so a long command delays
-no file tool of another agent ([Processes](processes.md#a-process)). A query runs on
-the SQL owner, so a command delays no query.
+on the network. A `bash` process runs off the bash resource, so a long command
+delays no file tool of another agent ([Processes](processes.md#a-process)). A
+query runs on the SQL resource, so a command delays no query.
 
 ## The shared database
 
 **The workstation adds no SQL backend.** The `sql` tool runs on
-`backend.sql`, a backend kind apart from the shell
+`backend.sql`, a backend kind apart from the bash backend
 ([Query the shared database](workspace.md#query-the-shared-database)). A
 workspace on a workstation sets it as any workspace does.
 
@@ -497,7 +497,7 @@ host, beside the workstation, so no agent reaches the file through
 
 **An export lands on the workstation as the calling agent.** The SQL
 backend streams the CSV through `WorkspaceFiles`, one operation on the
-bash owner as that agent. The file lands in the agent's home, or at the
+bash resource as that agent. The file lands in the agent's home, or at the
 path the agent names, with that account's permissions.
 
 **An import reads the workstation as the calling agent.** `WorkspaceFiles`
@@ -651,7 +651,7 @@ the script writes. It proves what only OpenSSH can:
 - OpenSSH certificates.
 - A workspace across two or more servers.
 - A workstation under workerd.
-- Concurrent operations on the bash owner. The
+- Concurrent operations on the bash resource. The
   [backlog](../planning/backlog.md#designs-with-a-shape) holds the backend
   profile that allows them.
 

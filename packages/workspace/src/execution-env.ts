@@ -39,7 +39,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 
 /**
- * The options of one command on a workspace shell: Pi's options, and the
+ * The options of one command on a workspace environment: Pi's options, and the
  * grace of a stop.
  */
 export interface WorkspaceExecOptions extends ShellExecOptions {

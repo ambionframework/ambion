@@ -168,7 +168,7 @@ It resolves when that fork can be cloned, the same as a new fork.
 
 **The backend registers its templates before its first operation.**
 `openWorkspace` is synchronous, and a backend has no open step. The first
-`connect` of the git owner, and the first call of `credentialFor`, await
+`connect` of the git resource, and the first call of `credentialFor`, await
 one registration. A failed registration rejects
 that operation with an error that names the template. The next operation
 tries again. Host code that wants the error at start calls
@@ -389,7 +389,7 @@ can fill them in for the other action. The file is
 
 **The audit log records each call.** `openWorkspace` records all three
 tools, the same as every tool of the bundle. The clone of a `fork` call runs
-as one more operation on the bash owner, and the log records one entry
+as one more operation on the bash resource, and the log records one entry
 for the `fork` call.
 
 ### clone
@@ -404,8 +404,8 @@ const cloneSchema = Type.Object({
 ```
 
 **`clone` checks out a repository without making a fork.** It resolves
-`source` on the git owner, ends that operation, then runs `git clone <url>
-<path>` on the bash owner as the calling agent. `~` and relative paths
+`source` on the git resource, ends that operation, then runs `git clone <url>
+<path>` on the bash resource as the calling agent. `~` and relative paths
 resolve under the agent's home. The clone's `origin` is the source and
 keeps that repository's push permissions. Repeated calls follow ordinary
 `git clone` behavior; a non-empty destination fails.
@@ -462,8 +462,8 @@ const forkSchema = Type.Object({
 
 **`clone` resolves the same as a file tool's path.** `~` and a relative
 path resolve under the agent's home. The tool runs `env.fork` on the git
-owner, and that operation ends. The tool then runs `git clone <url>
-<path>` on the bash owner as the calling agent, so the clone sets
+resource, and that operation ends. The tool then runs `git clone <url>
+<path>` on the bash resource as the calling agent, so the clone sets
 `origin` to the fork.
 
 **Each outcome has one text.** `<url>` is the fork's clone URL. A missing
@@ -815,33 +815,34 @@ one place that every backend keeps. A peer reads only what was pushed.
 record of the room. Neither writes to the other, and a restart of the host
 recovers each one on its own.
 
-## Owners and order
+## Resources and order
 
-**The git backend has its own resource owner.** The `repos`, `clone` and
+**The git backend has its own resource.** The `repos`, `clone` and
 `fork` tools and host code reach it. A `fork` does not wait for a long
 `bash` command, and a long clone does not delay another agent's `fork`.
 
-**Neither owner waits on the other.** A git operation holds no bash
+**Neither resource waits on the other.** A git operation holds no bash
 operation: the `clone` tool ends its source lookup before it runs the
-clone on the bash owner, and the `fork` tool ends its fork operation first.
+clone on the bash resource, and the `fork` tool ends its fork operation first.
 A `git push` in `bash` calls the server
 directly, and `credentialFor` reads the registry and signs a token.
-Neither takes the git owner, and neither changes a row.
+Neither takes the git resource, and neither changes a row.
 
 **The server orders the pushes to one repository.** Each ref update
 compares the old commit and the new one, and a push that lost the race
 fails. A push of the commit that a ref already names updates no ref, so a
 tool call that repeats after a timeout is safe.
 
-**A clone or a push holds the bash owner.** On the just-bash backends, the
+**A clone or a push holds the bash resource.** On the just-bash backends, the
 pack work runs in the host's process. While one agent clones a large
 template, every other agent's file tools wait. The backlog item
 [A backend profile and concurrent operations](../planning/backlog.md#designs-with-a-shape)
 removes this wait.
 
-**Disposal runs in order.** The SQL owner goes first, then the bash owner,
-then the git owner. The bash owner waits for its active operation, so a
-push in flight ends before the git owner disposes the backend. The
+**Disposal runs in order.** The SQL resource goes first, then the bash
+resource, then the git resource. The bash resource waits for its active
+operation, so a push in flight ends before the git resource disposes the
+backend. The
 `dispose` of `justGitBackend` closes its server.
 
 ## Trust
@@ -876,7 +877,7 @@ identity of a push.
 | ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
 | `packages/workspace`   | `src/git-backend.ts`                   | The types of [The contract](#the-contract)                                          |
 | `packages/workspace`   | `src/git-tools.ts`, `src/git-refs.ts`  | `repos`, `clone`, `fork`, the git note, and the host's `commitRef` and `readCommit` |
-| `packages/workspace`   | `src/workspace.ts`                     | The git owner of `bash.git`, and the order of disposal                              |
+| `packages/workspace`   | `src/workspace.ts`                     | The git resource of `bash.git`, and the order of disposal                           |
 | `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files             |
 | `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                    |
 | `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                   |

@@ -123,7 +123,7 @@ export interface SeedWriter {
 export interface MemoryBackendOptions {
 	/**
 	 * The repositories that `git` in the shell reaches. The workspace opens
-	 * it under an owner of its own. Absent, `git` stays inside the
+	 * it under a resource of its own. Absent, `git` stays inside the
 	 * filesystem.
 	 */
 	git?: JustGitBackend;
@@ -189,8 +189,8 @@ async function listFiles(fs: IFileSystem): Promise<MemoryBackendFile[]> {
 
 /**
  * Memoises what `build` returns and retries after a rejection instead of
- * staying poisoned by it. The workspace owner, rather than this cache, owns
- * lifecycle and prevents use after destruction.
+ * staying poisoned by it. The workspace owns the lifecycle and prevents
+ * use after destruction.
  */
 function lazyResource<T>(build: () => Promise<T>): {
 	get(): Promise<T>;
@@ -218,7 +218,7 @@ function lazyResource<T>(build: () => Promise<T>): {
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
  * the handle building it up front. Disposing the owning workspace clears
- * the cache, releasing the filesystem; the owner prevents any later
+ * the cache, releasing the filesystem. The workspace then refuses any later
  * connection through the handle. A host deletes the data it owns.
  */
 export function memoryBackend(options: MemoryBackendOptions = {}): MemoryBashBackend {
@@ -320,7 +320,7 @@ function checkTrustedChanges(): void {
 export interface DirectoryBackendOptions {
 	/**
 	 * The repositories that `git` in the shell reaches. The workspace opens
-	 * it under an owner of its own. Absent, `git` stays inside the
+	 * it under a resource of its own. Absent, `git` stays inside the
 	 * filesystem.
 	 */
 	git?: JustGitBackend;

@@ -188,7 +188,7 @@ It makes `~/.ambion` and `~/.ssh`, writes `serve` when its content
 differs, removes the old staging folders, and registers the templates.
 `serve` goes to a temporary name and then a rename, since `bash` reads a
 script as it runs and a write in place can change a running copy. The
-first `connect` of the git owner and the first `identityFor` await the
+first `connect` of the git resource and the first `identityFor` await the
 same preparation, so no key reaches `sshd` before its forced command
 exists. A failed preparation lets the next caller try again.
 
@@ -539,13 +539,13 @@ a bash backend for each git backend. Both
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
 G2.**
 
-## Owners and order
+## Resources and order
 
-**The git owner runs `list`, `get`, and `fork` on the git account's
+**The git resource runs `list`, `get`, and `fork` on the git account's
 client.** The client holds one SFTP channel. An operation opens one
 `exec` channel, and an abort opens one more.
 
-**`identityFor` does not take the git owner.** It runs from the bash
+**`identityFor` does not take the git resource.** It runs from the bash
 backend's `connect`. It awaits the preparation of the account, then reads
 the key from memory. A new key adds one write of `authorized_keys.ambion`
 on the git account's client, with one `exec` channel.
@@ -554,8 +554,8 @@ on the git account's client, with one `exec` channel.
 takes a lock on each ref and compares the old commit. A push that lost
 the race fails, the same as on `justGitBackend`.
 
-**A clone or a push holds no owner in the host.** The pack work runs
-between two processes on the server. The bash owner still waits for the
+**A clone or a push holds no resource in the host.** The pack work runs
+between two processes on the server. The bash resource still waits for the
 `bash` call that runs `git`, as it waits for any command.
 
 ## Persistence

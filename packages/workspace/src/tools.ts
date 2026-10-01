@@ -97,16 +97,16 @@ async function outcomeOf(tool: AmbionTool, params: unknown, ctx: ToolContext): P
 /**
  * A copy of `tool` that records one audit entry for each call, successful
  * or not. A call with invalid arguments has an entry. The entry runs as one
- * more operation on the bash owner after the call ends, over
+ * more operation on the bash resource after the call ends, over
  * `BACKGROUND_CONTEXT`, so a cut call still leaves its entry. Another
  * operation can run between the call and its entry. A call that ends after
- * `dispose` starts has no entry: the bash owner refuses the record, and the
+ * `dispose` starts has no entry: the bash resource refuses the record, and the
  * log's `onError` receives the loss. A failure to record does not replace
  * the result or the error of the call.
  */
 export function audited(
 	tool: AmbionTool,
-	shell: WorkspaceResource<WorkspaceEnv>['use'],
+	bash: WorkspaceResource<WorkspaceEnv>['use'],
 	audit: AuditLog,
 ): AmbionTool {
 	const record = async (params: unknown, ctx: ToolContext, outcome: Outcome): Promise<void> => {
@@ -120,7 +120,7 @@ export function audited(
 			);
 		await bestEffort(async () => {
 			const entry = auditEntry(tool.name, params, ctx, outcome);
-			await shell(ctx.agent, (env) => audit.append(env, entry, BACKGROUND_CONTEXT));
+			await bash(ctx.agent, (env) => audit.append(env, entry, BACKGROUND_CONTEXT));
 		}, lost);
 	};
 	return Object.freeze({
@@ -134,7 +134,7 @@ export function audited(
 	});
 }
 
-/** Bind a Pi harness tool through the owner's whole-operation queue. */
+/** Bind a Pi harness tool through the whole-operation queue of the resource. */
 function bindTool(tool: HarnessTool, use: WorkspaceResource<WorkspaceEnv>['use']): AmbionTool {
 	return defineTool({
 		name: tool.name,
@@ -165,7 +165,7 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource<WorkspaceEnv>['use']
 	});
 }
 
-/** Bind Pi harness tools through the owner's whole-operation queue. */
+/** Bind Pi harness tools through the whole-operation queue of the resource. */
 export function bindTools(
 	tools: readonly HarnessTool[],
 	use: WorkspaceResource<WorkspaceEnv>['use'],

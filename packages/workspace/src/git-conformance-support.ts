@@ -1,6 +1,6 @@
 /**
  * What the git conformance cases share: the agents and the helpers that run
- * the git owner and the shell as one agent.
+ * the git resource and the bash resource as one agent.
  */
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
@@ -14,15 +14,15 @@ export const ctx = BACKGROUND_CONTEXT;
 export const ANALYST: WorkspaceAgent = { name: 'analyst' };
 export const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
 
-/** Run `operation` on the git owner as `agent`. */
+/** Run `operation` on the git resource as `agent`. */
 export function git<T>(
 	workspace: Workspace,
 	agent: WorkspaceAgent,
 	operation: (env: GitEnv) => Promise<T>,
 ): Promise<T> {
-	const owner = workspace.git;
-	if (owner === undefined) throw new Error('The workspace has no git owner.');
-	return owner.use(agent, operation);
+	const resource = workspace.git;
+	if (resource === undefined) throw new Error('The workspace has no git resource.');
+	return resource.use(agent, operation);
 }
 
 /**

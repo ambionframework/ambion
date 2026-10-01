@@ -268,7 +268,7 @@ describe('audited', () => {
 		]);
 		expect(errors).toEqual([]);
 
-		// A closed bash owner refuses the record. The call keeps its own outcome, and onError hears the loss.
+		// A closed bash resource refuses the record. The call keeps its own outcome, and onError hears the loss.
 		await site.dispose();
 		expect(await ok.invoke({}, callAs('scribe', { callId: 'late-ok' }))).toBe('fine');
 		expect(errors).toHaveLength(1);
