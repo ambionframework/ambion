@@ -80,6 +80,7 @@ describe('room journal body validation', () => {
 			},
 		],
 		['run', { at }],
+		['run', { at, unread: 'extra field' }],
 		['cancel', { at }],
 	])('accepts a stored %s body with its optional fields: %j', (kind, body) => {
 		expect(validateRoomBody(kind, body)).toBe(true);
@@ -116,11 +117,6 @@ describe('room journal body validation', () => {
 			'body.from',
 		],
 		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body.text'],
-		[
-			'message',
-			{ kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 60, owner: 'andrei' },
-			'body.owner',
-		],
 		['message', { kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60 }, 'body.to'],
 		['message', { kind: 'seated', at, subject: 'andrei', fixed: 'yes' }, 'body.fixed'],
 		[
@@ -145,7 +141,6 @@ describe('room journal body validation', () => {
 			'body.at',
 		],
 		['close', { person: 'a', from: 1, through: 2.5, at: 'now' }, 'body.through'],
-		['close', { owner: 'a', from: 1, through: 2, at }, 'body.owner'],
 		['close', { from: 1, through: 2, at, summary: 'assistant' }, 'body.person'],
 		[
 			'composition',
@@ -157,17 +152,6 @@ describe('room journal body validation', () => {
 	] as const)('reports the kind and the path of a malformed %s body at %s', (kind, body, path) => {
 		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		expect(() => validateRoomBody(kind, body)).toThrow(new RegExp(`kind '${kind}'.*${escaped}`));
-	});
-
-	it.each([
-		['cancel', { at, close: { person: 'andrei', from: 1, through: 2, at } }, 'body.close'],
-		['close', { person: 'andrei', from: 1, through: 2, at, cancelled: true }, 'body.cancelled'],
-		['run', { at, format: 1 }, 'body.format'],
-	] as const)('refuses a %s body with the old field at %s', (kind, body, path) => {
-		const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		expect(() => validateRoomBody(kind, body)).toThrow(
-			new RegExp(`kind '${kind}' at ${escaped}: expected no such field`),
-		);
 	});
 
 	it('writes a run entry with the time alone', async () => {
@@ -193,7 +177,7 @@ describe('room journal body validation', () => {
 		await expect(journal.ready).rejects.toThrow(/kind 'message'.*body\.text/);
 	});
 
-	it('replays a legacy message with optional roster fields omitted', async () => {
+	it('replays a presence message with optional roster fields omitted', async () => {
 		const journal = await replay([
 			{ kind: 'message', body: { kind: 'arrived', at, subject: 'andrei' } },
 		]);

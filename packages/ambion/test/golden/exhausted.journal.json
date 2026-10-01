@@ -40,14 +40,14 @@
 		"kind": "message",
 		"body": {
 			"kind": "said",
-			"at": "2026-01-01T09:00:00.000Z",
 			"from": "priya",
+			"at": "2026-01-01T09:00:00.000Z",
 			"to": "worker",
 			"text": "Answer me.",
 			"wakes": ["worker"]
 		},
 		"seq": 4,
-		"key": "key-2",
+		"key": "delivery:key-2",
 		"run": "run-1"
 	},
 	{

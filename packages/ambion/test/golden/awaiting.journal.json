@@ -53,13 +53,13 @@
 		"kind": "message",
 		"body": {
 			"kind": "said",
-			"at": "2026-01-01T09:00:00.000Z",
 			"from": "priya",
+			"at": "2026-01-01T09:00:00.000Z",
 			"text": "Is the slab poured?",
 			"wakes": ["worker"]
 		},
 		"seq": 5,
-		"key": "key-3",
+		"key": "delivery:key-3",
 		"run": "run-1"
 	},
 	{
@@ -85,7 +85,7 @@
 			"from": "worker"
 		},
 		"seq": 7,
-		"key": "key-4",
+		"key": "commit:key-4",
 		"run": "run-1"
 	},
 	{

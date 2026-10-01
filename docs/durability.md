@@ -236,31 +236,14 @@ and after each append. A body that does not match its schema stops the
 read with an error that names the kind and the path. A `run` entry
 carries `at` alone. The journal carries no format number.
 
-**Before 1.0.0 a body carries no promise, and Ambion supports no
-downgrade.** A release may change any body. It adds no reader for an older
-body. An older runtime must not open a journal that a newer runtime wrote.
+**The journal reads the format this release writes.** A journal that an
+earlier release wrote is not supported. Before 1.0.0 a body carries no
+promise, and Ambion supports no downgrade. A release may change any body.
+It adds no reader for an older body. An older runtime must not open a
+journal that a newer runtime wrote.
 
-**A schema refuses an old field that the runtime would misread.** A body
-schema accepts an extra field, so a field that the runtime does not read
-disappears without an error. A change that removes or redefines a field
-makes the schema of its body refuse that field:
-
-| Kind     | Refused field | Why                                                                     |
-| -------- | ------------- | ----------------------------------------------------------------------- |
-| `cancel` | `close`       | The room derives the close of a cancellation from the `cancel` entry    |
-| `close`  | `cancelled`   | Only the close that the room derives from a `cancel` entry is cancelled |
-| `run`    | `format`      | The journal carries no format number                                    |
-
-**The refusal of `format` stops a journal of 0.3.0 at its first entry.**
-Each run of 0.3.0 wrote `format: 1` on its `run` entry, and that entry is
-the first entry of the journal. A field that the runtime does not misread
-needs no refusal of its own:
-
-- **`version` on a `composition` entry.** The room reads the composition by
-  its other fields.
-- **`readThrough` on a `lease` entry.** A lease entry of 0.3.0 stores the
-  highest read position of its lease. The fold keeps the highest position,
-  so the fold of that entry does not change.
+**A body schema accepts an extra field.** Only a `dismissed` body refuses
+one.
 
 **Two more mechanisms hold the stored shapes.**
 
@@ -269,7 +252,7 @@ needs no refusal of its own:
   fold in CI, and each scenario writes its committed journal again.
 - **A key carries a space prefix.** A delivery key starts with `delivery:`
   and a commit key starts with `commit:`, so equal text in the two never
-  collides. A key with no prefix, from an older journal, reads as written.
+  collides.
 
 **A `session` on an ended lease entry names a harness session.** An
 executor hands the driver a harness session at release. The room writes it
@@ -332,7 +315,7 @@ for the claims that need more than a unit test:
 | A lost commit retries under its key and speaks once; an unknown outcome ends the activation without a second say                                        | [`commit-retry.test.ts`](../packages/ambion/test/commit-retry.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Atomic cancellation, retry, and restart                                                                                                                 | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Ordered publication and recovery after submission faults                                                                                                | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Golden journals replay to the committed fold, and a body schema refuses an old field                                                                    | [`golden.test.ts`](../packages/ambion/test/golden.test.ts), [`journal-validation.test.ts`](../packages/ambion/test/journal-validation.test.ts)                                                                                                                                                                                                                                                                                                                                            |
+| Golden journals replay to the committed fold                                                                                                            | [`golden.test.ts`](../packages/ambion/test/golden.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Crash before/after every append, then same-key retry                                                                                                    | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Host handover and lease retry under load                                                                                                                | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Child-process kill and SQLite recovery                                                                                                                  | [`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts)                                                                                                                                                                                                                                                                                                                                                                                                          |

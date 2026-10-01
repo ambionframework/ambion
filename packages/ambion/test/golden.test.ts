@@ -31,10 +31,12 @@ function foldOf(entries: readonly Entry[]): RoomRead {
 
 const json = (value: unknown) => `${JSON.stringify(value, null, '\t')}\n`;
 
+const spaceOf = (key: string): string => /^(?:delivery|commit|post):/.exec(key)?.[0] ?? '';
+
 /**
  * The runtime makes run ids and idempotency keys from random numbers. The
  * fixture names them in order of first use, so a regeneration writes the
- * same bytes.
+ * same bytes. A key keeps its space prefix.
  */
 function named(entries: readonly Entry[]): Entry[] {
 	const runs = new Map<string, string>();
@@ -48,7 +50,7 @@ function named(entries: readonly Entry[]): Entry[] {
 		const { key, run } = entry as { key?: string; run: string };
 		return {
 			...entry,
-			...(key === undefined ? {} : { key: rename(keys, 'key', key) }),
+			...(key === undefined ? {} : { key: `${spaceOf(key)}${rename(keys, 'key', key)}` }),
 			run: rename(runs, 'run', run),
 		} as Entry;
 	});

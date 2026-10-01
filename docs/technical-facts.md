@@ -13,8 +13,8 @@ positioning and the current capabilities.
 - **Conditional, fenced, idempotent writes.** Storage appends only at the
   expected position. Each run writes a fence, and a later fence voids the
   earlier run's writes. A retry under the same key lands once. Golden
-  journals replay in CI, the body schemas refuse an old field that the
-  runtime would misread, and before 1.0.0 any release may change a body.
+  journals replay in CI, the journal reads only the format of its own
+  release, and before 1.0.0 any release may change a body.
   Memory and SQLite storages ship, with a Cloudflare Durable Objects
   adapter.
 - **Derived activation identity.** An activation id encodes its cause, its
