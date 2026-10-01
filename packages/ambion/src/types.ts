@@ -23,6 +23,7 @@ import type {
 } from './bodies.ts';
 import type { AmbionTool, Reminder } from './bundle.ts';
 import type { ScheduledSay } from './scheduling.ts';
+import type { SessionFacts } from './session-facts.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -418,8 +419,9 @@ export type Step =
 	  }
 	/** A message landed mid-activation. `consumed` says whether the model received it in that pass. */
 	| { type: 'steer'; seq: Seq; consumed: boolean }
-	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
 	| ({ type: 'usage' } & Usage)
+	/** What the harness ran with, as it reported at the start of a session. */
+	| ({ type: 'session' } & SessionFacts)
 	/** A non-fatal diagnostic from the harness. A notice never gates the activation. */
 	| { type: 'notice'; level: 'info' | 'warning'; text: string; data?: Record<string, unknown> }
 	/** The activation stops. `failure` is present when it failed. */

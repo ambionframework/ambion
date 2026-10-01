@@ -5,13 +5,11 @@
  * seat still speaks. The fake executable proves the resume inside one
  * exchange (`../memory.test.ts`).
  */
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
-import { isSaid, type Step } from '../../../ambion/src/index.ts';
+import { defineTool, isSaid, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { createClaudeOpener } from '../../src/executor.ts';
 import { viewOf } from '../support.ts';
@@ -19,36 +17,36 @@ import { live, open, person, seat, stepsOfType, untilQuiet, within } from './sup
 
 const CODE = 'TANGO-7731';
 
-async function directory(): Promise<string> {
-	const cwd = await realpath(await mkdtemp(join(tmpdir(), 'ambion-live-memory-')));
-	await writeFile(join(cwd, 'code.txt'), `${CODE}\n`);
-	return cwd;
-}
+/** The tool that holds the code. The model has no other way to know it. */
+const readCode = defineTool({
+	name: 'read_code',
+	description: 'Read the gate code from the site register.',
+	parameters: Type.Object({}),
+	execute: () => `The gate code is ${CODE}.`,
+});
 
-const definition = (cwd: string) =>
-	seat('keeper', 'Reads the code file when asked.', {
+const definition = () =>
+	seat('keeper', 'Reads the code when asked.', {
 		instructions: `
-			When somebody asks you to read code.txt, read it with the Read tool and
-			answer with one say that says only "Read." and does not quote the file.
-			When somebody asks for the code and you already know it, answer with
-			one say that quotes it, and read nothing. When you do not know it, read
-			code.txt first.
+			When somebody asks you to read the code, call read_code and answer with
+			one say that says only "Read." and does not quote the code. When
+			somebody asks for the code and you already know it, answer with one
+			say that quotes it, and call nothing. When you do not know it, call
+			read_code first.
 		`,
-		allowedTools: ['Read'],
-		cwd,
+		tools: [readCode],
 	});
 
 /** Two exchanges with one seat. Returns the steps of each activation and the said texts. */
 async function twoQuestions() {
-	const cwd = await directory();
-	const { session, steps: stepsOf } = await open('memory', [definition(cwd)]);
+	const { session, steps: stepsOf } = await open('memory', [definition()]);
 	try {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
 		session.subscribe((e) => {
 			if (e.type === 'activation_start' && e.seat === 'keeper') ids.push(e.activation);
 		});
-		await visit.send({ text: 'Please read code.txt.' });
+		await visit.send({ text: 'Please read the code.' });
 		await untilQuiet(session);
 		const first = ids[0];
 		await visit.send({ text: 'What is the code? Answer from memory if you can.' });
@@ -69,12 +67,11 @@ async function twoQuestions() {
 		};
 	} finally {
 		await session.stop();
-		await rm(cwd, { recursive: true, force: true });
 	}
 }
 
 const reads = (steps: Parameters<typeof stepsOfType>[0]) =>
-	stepsOfType(steps, 'tool_call').filter((s) => s.name === 'Read');
+	stepsOfType(steps, 'tool_call').filter((s) => s.name === 'read_code');
 
 live('memory', () => {
 	it('records a session for each activation, and starts fresh in a new exchange', async () => {

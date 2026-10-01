@@ -10,10 +10,10 @@ kernel for agents and humans.
 
 ## When to use it
 
-- **The built-in tools of Claude Code**, such as `Read`, `Grep`, and `Bash`,
-  under a policy that the definition states.
 - **The Claude Code loop.** The executable owns the loop, and the executor
   feeds it.
+- **A seat with no built-in tool.** The seat reaches files and a shell only
+  through the workspace tools of its bundles.
 - **A session that survives between the activations of one exchange.** The
   seat resumes its SDK session when the room wakes it again.
 
@@ -32,14 +32,16 @@ Every package needs Node 22.19 or newer. The packages install from npmjs with no
 from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
-**The executor sets no credential.** By default the executable inherits the
-environment of the host process, so `ANTHROPIC_API_KEY` reaches it. A value
-for `env` replaces that environment.
+**The executor sets no credential.** The executable gets the variables of the
+host process that an allowlist names, so `ANTHROPIC_API_KEY` and
+`CLAUDE_CODE_OAUTH_TOKEN` reach it. The `env` option adds variables, and
+`undefined` removes one.
 
-**A Claude subscription works with no key.** Run `claude login` on the host,
-or pass the token from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`.
-Leave `ANTHROPIC_API_KEY` out, because a key takes precedence. A custom `env`
-needs `HOME` for the sign-in. The reported cost is notional. The
+**A Claude subscription works with a token.** Run `claude setup-token` and
+pass the token as `CLAUDE_CODE_OAUTH_TOKEN`. Leave `ANTHROPIC_API_KEY` out,
+because a key takes precedence. Each seat has its own Claude config
+directory, so the sign-in of `claude login` cannot reach it. The reported
+cost is notional. The
 [guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#install-and-sign-in)
 holds the limits.
 
@@ -48,6 +50,8 @@ holds the limits.
 ```ts
 import { defineAgent, defineHuman, defineTool, startRoom } from '@ambionframework/ambion';
 import { claude, claudeExecution } from '@ambionframework/claude';
+import { memoryBackend } from '@ambionframework/just-bash';
+import { openWorkspace } from '@ambionframework/workspace';
 import { Type } from 'typebox';
 
 const owner = defineTool({
@@ -57,6 +61,8 @@ const owner = defineTool({
   execute: async ({ plan }) => `${plan}: owned by Dana`,
 });
 
+const drive = openWorkspace({ name: 'delivery', backend: { bash: memoryBackend() } });
+
 const reviewer = defineAgent({
   name: 'reviewer',
   identity: 'Reads the plan and names what is missing.',
@@ -64,14 +70,8 @@ const reviewer = defineAgent({
     instructions: 'Speak when the plan lacks evidence.',
     model: 'claude-sonnet-5',
     tools: [owner],
-    allowedTools: ['Read', 'Grep', 'Bash(git status:*)'],
-    canUseTool: async (name, input) =>
-      name === 'Bash'
-        ? { behavior: 'deny', message: 'Only git status may run.' }
-        : { behavior: 'allow', updatedInput: input },
-    permissionMode: 'default',
+    bundles: [drive.tools()],
     maxBudgetUsd: 1,
-    cwd: '/work/plans',
   }),
 });
 
@@ -80,13 +80,7 @@ const priya = defineHuman({ name: 'priya', identity: 'Owns the delivery.' });
 const room = await startRoom({
   name: 'delivery',
   agents: [reviewer],
-  execution: claudeExecution({
-    env: {
-      PATH: process.env.PATH,
-      HOME: process.env.HOME,
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    },
-  }),
+  execution: claudeExecution({ configRoot: './claude-state' }),
 });
 
 try {
@@ -98,37 +92,32 @@ try {
   await visit.leave();
 } finally {
   await room.stop();
+  await drive.dispose();
 }
 ```
 
-**A room with no `execution` runs each Claude seat on the default Claude
-execution.** A host that sets `env` or a path to the executable passes
-`claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one executor kind passes a list, such as
-`[piExecution(), claudeExecution()]`, or passes none when the package of each executor
-kind is loaded.
+**A room with no `execution` uses the default Claude execution.** A host that sets `env`, a config root, or an executable path
+passes `claudeExecution(options)`. It passes it to a room or to
+`createRuntime`. A room whose seats run on more than one executor kind passes a
+list, such as `[piExecution(), claudeExecution()]`. It passes none when the package of each
+executor kind is loaded.
 
 ## Options
 
-| Option                  | Default                           | Meaning                                                       |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------- |
-| `instructions`          | Required                          | The private guidance of the agent.                            |
-| `model`                 | Required                          | A Claude model id.                                            |
-| `tools`, `bundles`      | None                              | The tools of the agent and the bundles that add tools.        |
-| `speaking`              | `DEFAULT_SPEAKING`                | The speaking policy. It replaces the default.                 |
-| `activationTokenLimit`  | The whole record                  | The token limit of the record one activation reads.           |
-| `estimateTokens`        | `'length'`                        | The name of the estimator in the runtime. It needs the limit. |
-| `permissionMode`        | The SDK default, `default`        | The SDK permission mode.                                      |
-| `allowedTools`          | None                              | Tools that run with no request. It names the built-in tools.  |
-| `disallowedTools`       | None                              | Tools the model never sees.                                   |
-| `canUseTool`            | Deny every request                | Answers a permission request.                                 |
-| `maxBudgetUsd`          | None                              | The most one activation may spend, in US dollars.             |
-| `effort`                | The SDK default                   | `low`, `medium`, `high`, `xhigh`, or `max`.                   |
-| `cwd`                   | The working directory of the host | The working directory of the executable.                      |
-| `additionalDirectories` | None                              | Directories that the tools may reach beyond `cwd`.            |
+| Option                 | Default            | Meaning                                                       |
+| ---------------------- | ------------------ | ------------------------------------------------------------- |
+| `instructions`         | Required           | The private guidance of the agent.                            |
+| `model`                | Required           | A Claude model id.                                            |
+| `tools`, `bundles`     | None               | The tools of the agent and the bundles that add tools.        |
+| `speaking`             | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                 |
+| `activationTokenLimit` | The whole record   | The token limit of the record one activation reads.           |
+| `estimateTokens`       | `'length'`         | The name of the estimator in the runtime. It needs the limit. |
+| `maxBudgetUsd`         | None               | The most one activation may spend, in US dollars.             |
+| `effort`               | The SDK default    | `low`, `medium`, `high`, `xhigh`, or `max`.                   |
 
-`claudeExecution({ pathToClaudeCodeExecutable, env })` takes two options. The
-first selects the executable. The second sets its environment.
+`claudeExecution({ pathToClaudeCodeExecutable, env, configRoot })` takes three
+options. The first selects the executable. The second sets its environment.
+The third names the directory that holds the config directory of each seat.
 
 ## How an activation runs
 
@@ -147,25 +136,41 @@ tools. A summary activation receives `say` only.
 
 ## Policy and the trust boundary
 
-**The executable runs on the host** with the privileges of the host user.
-Its built-in tools run in that process.
+**A Claude seat has no built-in tool.** It reaches files and a shell only
+through the workspace tools of its bundles. Those tools run behind the
+workspace port. The seat reaches the filesystem that the backend serves:
+memory, one directory of the host, or a remote server. The executable runs on
+the host as the host user, in a private scratch directory. A compromise of
+that process reaches every file the host user can read, the credential in
+its environment, and the network. The seat has no tool for these.
 
-**The room defines the seat.** The executor sets three options on every
+**The room defines the seat.** The executor sets these options on every
 query. The definition cannot change them.
 
-- `tools` lists the built-in tools that `allowedTools` names. An empty list
-  gives the model none.
+- `tools` is empty, so the executable exposes no built-in tool.
+- `allowedTools` names the tools of the seat, and the mode is `dontAsk`. The
+  executable denies any other call, and it asks no one.
 - `strictMcpConfig` limits the query to the room server.
 - `settingSources` is empty, so no `CLAUDE.md` and no settings file reaches
   the model.
+- `verbatimPrompts` is on, so a user message cannot make the executable read
+  a file with an `@path` mention or run a `/` command.
+- `skills` is empty, and the flag tier turns auto-memory off and empties the
+  attribution text of commits and pull requests.
 
-**A permission request goes to `canUseTool`.** A room tool and a tool of the
-agent get `allow` with no step. Any other request goes to `canUseTool` and
-becomes an `approval` step with the answer. The executor denies a request when
-`canUseTool` is absent or throws.
+**The `env` option adds variables.** The base is an allowlist of the host
+variables. A value adds or replaces one, and `undefined` removes one. The
+allowlist limits environment variables. It does not limit the filesystem. A
+host on Bedrock, Vertex, Foundry, or another provider that `ANTHROPIC_*` does
+not cover must pass `env` with the variables it needs.
 
-**`env` replaces the environment.** The value is not merged with
-`process.env`. Pass `PATH`, `HOME`, and the key that the executable needs.
+**Each seat has its own directories.** The executor sets `CLAUDE_CONFIG_DIR`,
+`HOME`, and `USERPROFILE` to directories of the seat, after it reads `env`.
+Without `configRoot`, they live in the temporary directory, a restart loses
+them, and the executor never removes them. The executor also sets
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+`CLAUDE_CODE_DISABLE_AUTO_MEMORY`. It aliases a built-in name such as `Bash`
+to the tool of the seat with the same name.
 
 ## Exchange continuity
 
@@ -179,7 +184,7 @@ activation sends the whole view in its first pass.
 ## Steps, usage, and failures
 
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
-`tool_result`, `approval`, `steer`, and `usage`.
+`tool_result`, `session`, `steer`, and `usage`.
 
 **Usage.** One `usage` step follows each SDK `result`, with the cost that the
 SDK reports. `maxBudgetUsd` caps one activation. A spent budget is a permanent
@@ -212,26 +217,28 @@ describe('claude executor', () => {
 The published package holds no fake. The repository keeps one at
 `packages/claude/test/fake/claude-executable.mjs`. The fake enforces nothing.
 It cannot show what the real binary does with `--tools`, the allow list, the
-settings sources, or a resume. The package has no live tier.
+settings sources, or a resume. The live tier in `test/live` runs on the real
+binary with `ANTHROPIC_API_KEY`.
 
 ## Exports
 
-| Export                                                 | Use                                                       |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| `claude(options)`                                      | The executor of an agent definition                       |
-| `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime` |
-| `claudeExecutorFixture`, `scenarioOf`                  | From `/testing`: the suite fixture and its scenarios      |
+| Export                                                             | Use                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------- |
+| `claude(options)`                                                  | The executor of an agent definition                       |
+| `claudeExecution({ pathToClaudeCodeExecutable, env, configRoot })` | The `execution` value for `startRoom` and `createRuntime` |
+| `claudeExecutorFixture`, `scenarioOf`                              | From `/testing`: the suite fixture and its scenarios      |
 
 ## Troubleshooting
 
 - **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
-- **The model cannot see `Bash`.** `allowedTools` does not name it.
-- **Every request is denied.** `canUseTool` is absent or throws.
+- **The model cannot see `Bash`.** A Claude seat has no built-in tool. Give it a workspace bundle.
 - **Abandoned after one attempt with an authentication text.** Check
-  `ANTHROPIC_API_KEY`, or run `claude login`. A custom `env` may have
-  dropped the key, `HOME`, or `CLAUDE_CODE_OAUTH_TOKEN`.
+  `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. The sign-in of
+  `claude login` does not reach a seat. A custom `env` may have set the key
+  to `undefined`.
 - **`The Claude session ended before the pass did.`** The process exited.
-  Check the executable path and `env`.
+  Check the executable path and `env`. The message ends with the last 2,000
+  characters of the process stderr.
 
 The [guide](https://github.com/ambionframework/ambion/blob/main/docs/claude.md#troubleshooting)
 lists more causes.

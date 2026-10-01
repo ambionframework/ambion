@@ -19,7 +19,7 @@ import type {
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { createClaudeOpener } from '../src/executor.ts';
+import { type ClaudeOpenerOptions, createClaudeOpener } from '../src/executor.ts';
 import { type ClaudeOptions, claude } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
@@ -76,15 +76,22 @@ export function viewOf(through = 1): ActivationView {
 	};
 }
 
+/** A scenario of the fake, with the fields that only the tests set. */
+export type Scenario = FakeScenario & {
+	session?: string;
+	apiKeySource?: string;
+	claudeVersion?: string;
+	initTools?: string[];
+	rejectResume?: boolean;
+	rejectResumeResult?: boolean;
+};
+
 /** An executor of `definition` over the fake, and a room that records what the seat commits. */
 export function fakeRoom(
-	scenario: FakeScenario & {
-		session?: string;
-		rejectResume?: boolean;
-		rejectResumeResult?: boolean;
-	},
+	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
@@ -122,7 +129,8 @@ export function fakeRoom(
 	const opener = createClaudeOpener({
 		definition,
 		pathToClaudeCodeExecutable: executable,
-		env: { ...process.env, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		env: { ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
+		...extra,
 	});
 	const sessions: RunningActivation[] = [];
 	const recording: ActivationOpener = (activation) => {
@@ -147,6 +155,11 @@ export function fakeRoom(
 		answers,
 		events,
 		log,
+		/** The environment facts of each start of the fake, in order: names, and the values it logs. */
+		envs: () =>
+			log().flatMap((line) =>
+				'env' in line ? [line.env as { names: string[]; values: Record<string, string> }] : [],
+			),
 		/** The argument list of each start of the fake, in order. */
 		argvs: () => log().flatMap((line) => ('argv' in line ? [line.argv as string[]] : [])),
 		moveRecordTo: (seq: number) => {
@@ -168,11 +181,12 @@ export function fakeRoom(
 
 /** Open one activation of `definition` over the fake, with a scenario. */
 export function open(
-	scenario: FakeScenario,
+	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
-	const room = fakeRoom(scenario, definition, env);
+	const room = fakeRoom(scenario, definition, env, extra);
 	return { ...room, session: room.activate('message:1:sonnet:1') };
 }
 
