@@ -267,10 +267,19 @@ and calls `connect` again. This avoids a second durable service registry.
 
 **A process end makes its connection unavailable.** The process table's end
 event or a process check marks it unavailable and closes its endpoint.
-The registry remembers the ended process identity for this host run, so a
-stale read cannot revive it. Reconnecting a replacement is an explicit owner
-call and does not reuse the old registration's transport. A listener that
-later reuses the port is never attached silently.
+The process table remembers each process it saw end for this host run, so a
+stale read cannot revive it. The table has no record of a process that ended
+in an earlier host run. For such a process, `connect` reads the state on each
+call and refuses any state other than `running`.
+
+**A connect can commit before the table records an end.** The process writes
+its exit, and the table records the end later. The `ended` event then marks
+that connection unavailable at once, as for a process that ends just after
+`connect` returns.
+
+**A replacement is an explicit owner call.** It does not reuse the old
+registration's transport. A listener that later reuses the port is never
+attached silently.
 
 **Sensor readers use one internal registry boundary.** The source
 module `sensor-connections.ts` exposes

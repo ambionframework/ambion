@@ -27,6 +27,29 @@ describe('the sensor connection registry', () => {
 		port = 43127,
 	) => registry.connect({ name: agent }, { name, process, port });
 
+	/**
+	 * Make the process `handle` end during the next `skip + 1`th `find`, and let
+	 * that `find` report `running`: a stale read that began before the end.
+	 */
+	const endDuringFind = (handle: string, skip = 0): void => {
+		const original = rig.processes.find.bind(rig.processes);
+		let seen = 0;
+		(rig.processes as unknown as { find: typeof original }).find = async (...args) => {
+			const found = await original(...args);
+			if (seen++ === skip) {
+				rig.end(handle);
+				rig.setStatus(found);
+			}
+			return found;
+		};
+	};
+
+	const running = (handle: string) => {
+		const one = status(handle, 'owner', 'running');
+		rig.setStatus(one);
+		return one;
+	};
+
 	it('registers the validated index with immutable launch source and qualified names readable by any agent', async () => {
 		const connection = await connect();
 		expect(connection).toMatchObject({
@@ -200,6 +223,12 @@ describe('the sensor connection registry', () => {
 		await expect(connect()).rejects.toThrow(/running process/i);
 		expect(rig.opens[0]?.closed).toBe(1);
 		expect(await registry.get('bench/bench')).toBeUndefined();
+		// The end event comes during the second read, which still reports `running`.
+		const stale = running('bash-000000000012');
+		endDuringFind(stale.handle, 1);
+		await expect(connect('late', stale.handle)).rejects.toThrow(/has ended/);
+		expect(rig.opens.map(({ closed }) => closed)).toEqual([1, 1]);
+		expect(await registry.get('late/bench')).toBeUndefined();
 	});
 
 	it('keeps an ended handle unavailable after a later stale running read and never reuses its port', async () => {
@@ -210,6 +239,28 @@ describe('the sensor connection registry', () => {
 		rig.setStatus(rig.status);
 		await expect(connect()).rejects.toThrow(/ended/i);
 		expect(rig.opens.map(({ closed }) => closed)).toEqual([1]);
+		// The process ends while the index request waits, and every read still reports `running`.
+		const fetched = running('bash-000000000011');
+		const gate = rig.blockIndex();
+		const pending = connect('late', fetched.handle);
+		await gate.entered;
+		rig.end(fetched.handle);
+		rig.setStatus(fetched);
+		gate.release();
+		await expect(pending).rejects.toThrow(/has ended/);
+		expect(rig.opens.map(({ closed }) => closed)).toEqual([1, 1]);
+		expect(await registry.get('late/bench')).toBeUndefined();
+		// A read that began before the end marks the connection ended at once, in `get` and in `list`.
+		const got = running('bash-000000000013');
+		const gotConnection = await connect('got', got.handle);
+		endDuringFind(got.handle);
+		expect(await registry.get('got/bench')).toBeUndefined();
+		expect(gotConnection.available).toBe(false);
+		const listed = running('bash-000000000014');
+		await connect('listed', listed.handle);
+		endDuringFind(listed.handle);
+		const states = await registry.list();
+		expect(states.find((one) => one.name === 'listed')?.state).toBe('unavailable');
 	});
 
 	it('lets only the owner replace an ended registration', async () => {
