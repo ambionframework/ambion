@@ -67,7 +67,6 @@ export function seat(
 			instructions: 'Answer through one say, in one sentence.',
 			model: MODEL,
 			modelReasoningEffort: 'medium',
-			approvalPolicy: 'never',
 			...rest,
 		}),
 	});
@@ -161,9 +160,6 @@ export function codexExecutorFixture(): ExecutorFixture {
 				instructions: instructionsOf(plan),
 				model: MODEL,
 				modelReasoningEffort: 'medium',
-				approvalPolicy: 'never',
-				// A binary that does not exist fails before Codex reads the catalog.
-				...(failing === 'transient' ? { nativeTools: 'codex' as const } : {}),
 			});
 			const options: CodexExecutorOptions = {
 				definition: { ...definition, executor },

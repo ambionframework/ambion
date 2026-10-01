@@ -27,7 +27,7 @@ describe('the live harness switch', () => {
 		expect(harness.executorFor({ instructions: 'x' }).kind).toBe('claude');
 	});
 
-	it('selects codex with its model, effort, no native tools, and its key', async () => {
+	it('selects codex with its model, effort, and its key', async () => {
 		const harness = await harnessWith('codex');
 		expect(harness.HARNESS).toBe('codex');
 		expect(harness.KEY_VAR).toBe('CODEX_API_KEY');
@@ -37,7 +37,6 @@ describe('the live harness switch', () => {
 			kind: 'codex',
 			model: 'gpt-5.6-luna',
 			modelReasoningEffort: 'medium',
-			nativeTools: 'none',
 		});
 	});
 

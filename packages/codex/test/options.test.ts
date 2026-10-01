@@ -17,7 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PermanentError, ROOM_SERVER } from '@ambionframework/ambion/hosting';
+import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
 	EXCLUSIVE_FEATURES,
@@ -32,7 +32,6 @@ import { codex } from '../src/define.ts';
 import { seatHome } from '../src/home.ts';
 import {
 	clientOptions,
-	DEVELOPER_TEXT_LIMIT,
 	RESUMED_NOTE,
 	seatText,
 	serverPath,
@@ -52,53 +51,35 @@ describe('seatText', () => {
 });
 
 describe('clientOptions', () => {
-	it('carries the seat text as developer_instructions, and serves only the approved room server, without a scratch', () => {
-		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto')
-			.config as {
-			developer_instructions: string;
-			model_reasoning_summary: string;
-			mcp_servers: Record<
-				string,
-				{ default_tools_approval_mode?: string; required?: boolean; args: string[] }
-			>;
-		};
-		expect(Object.keys(config)).toEqual([
-			'developer_instructions',
-			'model_reasoning_summary',
-			'mcp_servers',
-		]);
-		expect(config.developer_instructions).toBe('seat text');
-		expect(config.model_reasoning_summary).toBe('auto');
-		const servers = Object.values(config.mcp_servers);
-		expect(servers).toHaveLength(1);
-		expect(servers[0]?.default_tools_approval_mode).toBe('approve');
-		// Codex then waits for the server before the first model request.
-		expect(servers[0]?.required).toBe(true);
-		expect(servers[0]?.args.at(-1)).toBe('/tmp/room.sock');
-	});
-
-	it('refuses as permanent a seat text that one command argument cannot hold', () => {
-		const long = 'x'.repeat(DEVELOPER_TEXT_LIMIT);
-		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long, 'auto')).toThrow(
-			PermanentError,
-		);
-	});
-
-	it('names the instructions file, adds the config, and disables node_repl beside the room server with a scratch', () => {
+	it('names the instructions file, adds the config, and disables node_repl beside the approved room server', () => {
 		const scratch = new Scratch(luna, 'seat text');
 		try {
-			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', 'auto', scratch)
-				.config as {
+			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'auto', scratch).config as {
 				model_catalog_json: string;
 				model_instructions_file: string;
-				mcp_servers: Record<string, { enabled?: boolean; required?: boolean; command: string }>;
+				model_reasoning_summary: string;
+				mcp_servers: Record<
+					string,
+					{
+						enabled?: boolean;
+						required?: boolean;
+						command: string;
+						default_tools_approval_mode?: string;
+						args: string[];
+					}
+				>;
 			};
 			expect(config).not.toHaveProperty('developer_instructions');
 			expect(config.model_instructions_file).toBe(scratch.instructions);
 			expect(config.model_catalog_json).toBe(scratch.catalog);
+			expect(config.model_reasoning_summary).toBe('auto');
 			expect(config.mcp_servers[NODE_REPL]).toEqual({ command: 'true', enabled: false });
 			expect(Object.keys(config.mcp_servers)).toHaveLength(2);
-			expect(config.mcp_servers[ROOM_SERVER]?.required).toBe(true);
+			const room = config.mcp_servers[ROOM_SERVER];
+			expect(room?.default_tools_approval_mode).toBe('approve');
+			// Codex then waits for the server before the first model request.
+			expect(room?.required).toBe(true);
+			expect(room?.args.at(-1)).toBe('/tmp/room.sock');
 		} finally {
 			scratch.remove();
 		}
@@ -111,15 +92,20 @@ describe('clientOptions environment', () => {
 			home: '/srv/seat',
 			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
 		});
-		expect(
-			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat', 'auto'),
-		).toMatchObject({
-			codexPathOverride: '/bin/codex',
-			env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
-		});
-		expect(clientOptions({}, home, '/tmp/room.sock', 'seat', 'auto').env).not.toHaveProperty(
-			'GONE',
-		);
+		const scratch = new Scratch(luna, 'seat text');
+		try {
+			expect(
+				clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'auto', scratch),
+			).toMatchObject({
+				codexPathOverride: '/bin/codex',
+				env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
+			});
+			expect(clientOptions({}, home, '/tmp/room.sock', 'auto', scratch).env).not.toHaveProperty(
+				'GONE',
+			);
+		} finally {
+			scratch.remove();
+		}
 	});
 });
 
@@ -143,65 +129,24 @@ describe('serverPath', () => {
 });
 
 describe('threadOptions', () => {
-	const policy = {
-		sandboxMode: 'danger-full-access',
-		approvalPolicy: 'on-request',
-		networkAccessEnabled: true,
-		workingDirectory: '/home/me',
-		modelReasoningEffort: 'medium',
-	} as const;
-	const executor = codex({ instructions: 'x', model: 'm', ...policy });
-
-	it('applies the options as they are without a scratch, and fixes the policy under a scratch', () => {
-		expect(threadOptions(executor)).toMatchObject(policy);
+	it('fixes the policy for every seat, and passes only the reasoning effort of the executor', () => {
 		const scratch = new Scratch(luna, 'seat text');
 		try {
-			expect(threadOptions(executor, scratch)).toMatchObject({
+			const fixed = {
+				model: 'm',
 				sandboxMode: 'read-only',
 				approvalPolicy: 'never',
 				networkAccessEnabled: false,
 				workingDirectory: scratch.directory,
-				modelReasoningEffort: 'medium',
-			});
+				skipGitRepoCheck: true,
+			};
+			const plain = codex({ instructions: 'x', model: 'm' });
+			expect(threadOptions(plain, scratch)).toEqual(fixed);
+			const effort = codex({ instructions: 'x', model: 'm', modelReasoningEffort: 'medium' });
+			expect(threadOptions(effort, scratch)).toEqual({ ...fixed, modelReasoningEffort: 'medium' });
 		} finally {
 			scratch.remove();
 		}
-	});
-
-	it('gives a seat with native tools no Codex sandbox unless it names one', () => {
-		const native = { instructions: 'x', model: 'm', nativeTools: 'codex' } as const;
-		expect(threadOptions(codex(native)).sandboxMode).toBe('danger-full-access');
-		expect(threadOptions(codex({ ...native, sandboxMode: 'read-only' })).sandboxMode).toBe(
-			'read-only',
-		);
-	});
-
-	it.each([
-		{ sandboxMode: undefined, refused: true },
-		{ sandboxMode: 'danger-full-access', refused: true },
-		{ sandboxMode: 'read-only', refused: true },
-		{ sandboxMode: 'workspace-write', refused: false },
-	] as const)(
-		'refuses networkAccessEnabled that Codex would not read under $sandboxMode',
-		({ sandboxMode, refused }) => {
-			const define = () =>
-				codex({
-					instructions: 'x',
-					model: 'm',
-					nativeTools: 'codex',
-					networkAccessEnabled: false,
-					...(sandboxMode && { sandboxMode }),
-				});
-			if (refused) expect(define).toThrow(/networkAccessEnabled applies only/);
-			else expect(define).not.toThrow();
-		},
-	);
-
-	it('defaults nativeTools to none', () => {
-		expect(codex({ instructions: 'x', model: 'm' }).nativeTools).toBe('none');
-		expect(codex({ instructions: 'x', model: 'm', nativeTools: 'codex' }).nativeTools).toBe(
-			'codex',
-		);
 	});
 
 	it('defaults reasoningSummary to auto', () => {
@@ -291,7 +236,7 @@ describe('Scratch', () => {
 
 	it('fails for a model that the catalog lacks, and names the model', async () => {
 		await expect(scratchFor('gpt-unknown', recordedCatalog, 'seat text')).rejects.toThrow(
-			/'gpt-unknown'.*nativeTools 'none' needs/,
+			/'gpt-unknown'.*a Codex seat needs/,
 		);
 	});
 });

@@ -628,7 +628,7 @@ not defend.
 
 **The evaluator is separate from Codex Code Mode.** Codex Code Mode reads
 host files outside the sandbox ([Codex](codex.md#the-trust-boundary)).
-`nativeTools: 'none'` keeps it off. A Codex seat uses the `compose` tool,
+The Codex executor keeps it off in every seat. A Codex seat uses the `compose` tool,
 as every seat does.
 
 **A seat opts in with an evaluator.** The executor options take a

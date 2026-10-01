@@ -96,8 +96,7 @@ export function team(workspace: Workspace, instrument: Instrument) {
  * The executor of a specialist, on the executor kind that `seatKinds` names. Every
  * kind gets the same options, so every seat reaches the world only through
  * the same bundles. Pi has no native tool. The Claude seat sets no
- * `allowedTools`, so it has no built-in tool. The Codex seat sets `nativeTools`
- * to `none` and no policy option that opens the host.
+ * `allowedTools`, so it has no built-in tool. A Codex seat has no native tool.
  */
 function executorFor(
 	name: string,
@@ -112,7 +111,6 @@ function executorFor(
 				...options,
 				model: CODEX_MODEL,
 				modelReasoningEffort: 'medium',
-				nativeTools: 'none',
 			});
 		default:
 			return pi({ ...options, model });

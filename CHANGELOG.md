@@ -64,6 +64,25 @@ The read field `scheduled` and the tool `schedule` already used the new name.
 This renames the one remaining shape and adds no shape. The journal and the
 golden journals do not change.
 
+**A Codex seat has no native tools, ever.** Files and a shell come only from
+the workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The option `nativeTools` of `codex()` is gone, and so is the mode
+`'codex'`. The policy options `sandboxMode`, `approvalPolicy`,
+`networkAccessEnabled`, `workingDirectory`, and `additionalDirectories` are
+gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
+`reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
+runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
+no network, no approval, an empty working directory, and the seat text in
+`model_instructions_file`. The seat no longer uses `developer_instructions`,
+and a seat text has no size limit from a command argument. A seat that needed
+a shell or file edits now takes the workspace tools in `bundles`. The trace
+maps only the items that a seat can produce: `agent_message`, `reasoning`,
+`mcp_tool_call`, `error`, and the usage of a turn. An item of any other type
+becomes a warning `notice` that names the type. A say no longer cites the
+paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
+type `RoomToolOptions`, because only the Codex executor used them.
+
 **`View` names only what a seat receives, and a read position is `through`
 or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
 that the `exchange_closed` event carries, is now `ExchangeRange`.
