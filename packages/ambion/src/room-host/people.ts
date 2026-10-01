@@ -9,18 +9,11 @@ import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { VisitRuntime } from '../room/presence.ts';
 import type { RoomCommand } from '../room/transition.ts';
-import type {
-	AgentDefinition,
-	HumanDefinition,
-	Message,
-	PresenceMessage,
-	SeatOptions,
-	Seq,
-} from '../types.ts';
+import type { HumanDefinition, Message, PresenceMessage, SeatOptions, Seq } from '../types.ts';
 import {
 	decideAndAppend,
 	messageKeyConflict,
-	type RoomBase,
+	type RoomHostState,
 	requireSubmission,
 	saidContentMatches,
 } from './core.ts';
@@ -46,18 +39,6 @@ export interface Visit {
 	leave(): Promise<void>;
 }
 
-/** What people and the roster need of the room. */
-export interface PeopleHost extends RoomBase {
-	/** Every definition this room can seat, by name. */
-	readonly defs: ReadonlyMap<string, AgentDefinition>;
-	/** The handles the host delivers through. Presence itself is a fold over the journal. */
-	readonly visits: Map<string, VisitRuntime>;
-	/** Arrivals awaiting durable acknowledgement, keyed by human name. */
-	readonly arrivals: Map<string, { identity: string; promise: Promise<VisitRuntime> }>;
-	assertRunning(): void;
-	handleForMessage(message: Message): ExchangeHandle;
-}
-
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 
@@ -81,7 +62,7 @@ function deliveryMatches(
 }
 
 /** Puts a person in the room. A second visit while they are here is the same visit. */
-export async function visit(host: PeopleHost, human: HumanDefinition): Promise<Visit> {
+export async function visit(host: RoomHostState, human: HumanDefinition): Promise<Visit> {
 	host.assertRunning();
 	const captured = captureHuman(human);
 	const pending = host.arrivals.get(captured.name);
@@ -111,7 +92,7 @@ export async function visit(host: PeopleHost, human: HumanDefinition): Promise<V
  * writes nothing. A room that resumed holds no handle for the people who
  * stayed, so the first call takes one from the record.
  */
-export function presentVisit(host: PeopleHost, name: string): Visit | undefined {
+export function presentVisit(host: RoomHostState, name: string): Visit | undefined {
 	if (host.gone()) return undefined;
 	const known = host.visits.get(name);
 	if (known !== undefined) return handle(host, known);
@@ -128,7 +109,7 @@ export function presentVisit(host: PeopleHost, name: string): Visit | undefined 
 }
 
 /** Complete one arrival and cache the handle only after its presence is durable. */
-async function arrive(host: PeopleHost, captured: HumanDefinition): Promise<VisitRuntime> {
+async function arrive(host: RoomHostState, captured: HumanDefinition): Promise<VisitRuntime> {
 	await host.ready;
 	host.assertRunning();
 	await host.journal.settled();
@@ -154,7 +135,7 @@ async function arrive(host: PeopleHost, captured: HumanDefinition): Promise<Visi
 }
 
 async function retryKnown(
-	host: PeopleHost,
+	host: RoomHostState,
 	captured: HumanDefinition,
 	known: VisitRuntime,
 ): Promise<VisitRuntime> {
@@ -163,7 +144,7 @@ async function retryKnown(
 	return arrive(host, captured);
 }
 
-function assertVisitable(host: PeopleHost, human: HumanDefinition): void {
+function assertVisitable(host: RoomHostState, human: HumanDefinition): void {
 	if (host.defs.has(human.name))
 		throw new AmbionError(
 			'duplicate_name',
@@ -171,7 +152,7 @@ function assertVisitable(host: PeopleHost, human: HumanDefinition): void {
 		);
 }
 
-function handle(host: PeopleHost, runtime: VisitRuntime): Visit {
+function handle(host: RoomHostState, runtime: VisitRuntime): Visit {
 	return {
 		human: runtime.human,
 		get lastDeparture() {
@@ -189,7 +170,7 @@ function handle(host: PeopleHost, runtime: VisitRuntime): Visit {
 	};
 }
 
-async function endVisit(host: PeopleHost, runtime: VisitRuntime): Promise<void> {
+async function endVisit(host: RoomHostState, runtime: VisitRuntime): Promise<void> {
 	if (runtime.departure !== undefined) return runtime.departure;
 	// A terminal room invalidates handles it ended itself. A handle that
 	// started a departure has a stable key and must still retry its write,
@@ -209,7 +190,7 @@ async function endVisit(host: PeopleHost, runtime: VisitRuntime): Promise<void> 
 	return operation;
 }
 
-async function leaveVisit(host: PeopleHost, runtime: VisitRuntime, key: string): Promise<void> {
+async function leaveVisit(host: RoomHostState, runtime: VisitRuntime, key: string): Promise<void> {
 	await host.ready;
 	await host.journal.settled();
 	if (host.state().people.get(runtime.human.name)?.presence === 'present') {
@@ -229,7 +210,7 @@ async function leaveVisit(host: PeopleHost, runtime: VisitRuntime, key: string):
 }
 
 async function deliverFrom(
-	host: PeopleHost,
+	host: RoomHostState,
 	from: string,
 	input: { to?: string; text: string; refs?: string[]; key?: string },
 ): Promise<ExchangeHandle> {
@@ -254,7 +235,7 @@ async function deliverFrom(
  * journal hears nothing, and the room reacts to nothing.
  */
 async function commitMessage(
-	host: PeopleHost,
+	host: RoomHostState,
 	key: string,
 	command: Extract<RoomCommand, { type: 'deliver' | 'post' }>,
 ): Promise<Message> {
@@ -282,7 +263,7 @@ export interface PostInput {
  * exchange when none is open. A repeated key lands once, and the post it
  * landed carries it back.
  */
-export async function post(host: PeopleHost, input: PostInput): Promise<ExchangeHandle> {
+export async function post(host: RoomHostState, input: PostInput): Promise<ExchangeHandle> {
 	host.assertRunning();
 	const key = input.key ?? crypto.randomUUID();
 	const committed = await commitMessage(host, key, {
@@ -300,7 +281,7 @@ export async function post(host: PeopleHost, input: PostInput): Promise<Exchange
  * The decision where the message commits refuses what the room refuses.
  */
 async function commitPresence(
-	host: PeopleHost,
+	host: RoomHostState,
 	change: PresenceDraft,
 	route = true,
 	key: string = crypto.randomUUID(),
@@ -317,7 +298,7 @@ async function commitPresence(
 
 /** The host seats a registered agent. Executable definitions stay fixed for the run. */
 export async function seatAgent(
-	host: PeopleHost,
+	host: RoomHostState,
 	name: string,
 	options: SeatOptions = {},
 ): Promise<void> {
@@ -338,7 +319,7 @@ export async function seatAgent(
 }
 
 /** The host takes an agent off the roster. */
-export async function unseatAgent(host: PeopleHost, name: string): Promise<void> {
+export async function unseatAgent(host: RoomHostState, name: string): Promise<void> {
 	host.assertRunning();
 	await host.ready;
 	if (!host.defs.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
@@ -351,7 +332,7 @@ export async function unseatAgent(host: PeopleHost, name: string): Promise<void>
  * so, and the host hears it. It wakes nobody: an activation started to
  * hear that the room is closing is an activation nobody reads.
  */
-export async function leaveEverybody(host: PeopleHost): Promise<void> {
+export async function leaveEverybody(host: RoomHostState): Promise<void> {
 	for (const person of host.state().people.values()) {
 		if (person.presence !== 'present') continue;
 		const runtime = host.visits.get(person.name);

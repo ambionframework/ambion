@@ -11,7 +11,7 @@
  * last run stopped.
  *
  * `RoomHost` holds the state and the phases of the room. Its mechanisms live
- * in the files beside it, as functions over a view of the room:
+ * in the files beside it, as functions over `RoomHostState`:
  *
  * - `people.ts` — visits, deliveries from a visit, and the roster.
  * - `dispatch.ts` — the reaction to each entry, and the ports that send.
@@ -71,6 +71,7 @@ import {
 	compositionOf,
 	decideAndAppend,
 	notificationFor,
+	type RoomHostState,
 	requireSubmission,
 	submit,
 } from './core.ts';
@@ -149,9 +150,9 @@ export interface Room {
 
 /**
  * The state is public inside the package so the mechanism files can reach it
- * through their views. The public surface of a room is the `Room` interface.
+ * through `RoomHostState`. The public surface of a room is the `Room` interface.
  */
-export class RoomHost implements Room, RunningRoom {
+export class RoomHost implements Room, RunningRoom, RoomHostState {
 	readonly name: string;
 	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */

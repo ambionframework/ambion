@@ -5,16 +5,15 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { ExecutionConnector } from '../host/runtime.ts';
 import type { Close, LeaseChange } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { AgentPort, RoomProtocol, Steer } from '../protocol.ts';
+import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
 import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
-import type { AgentDefinition, ClosedExchange, Seq } from '../types.ts';
+import type { ClosedExchange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { RoomBase } from './core.ts';
+import type { RoomHostState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
@@ -25,30 +24,8 @@ export interface DeliveryState {
 	failed: boolean;
 }
 
-/** What delivery needs of the room. */
-export interface DispatchHost extends RoomBase {
-	/** The configured execution owner for this room's seats. */
-	readonly connector: ExecutionConnector;
-	readonly defs: ReadonlyMap<string, AgentDefinition>;
-	readonly ports: Map<string, AgentPort>;
-	/** The three room calls exposed to an in-process seat. */
-	readonly calls: RoomProtocol;
-	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
-	readonly sentAt: Map<string, number>;
-	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
-	readonly deliveryStates: Map<string, DeliveryState>;
-	/** Every lease id this room has heard a change for. It says `activation_start` once. */
-	readonly heardLeases: Set<string>;
-	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
-	heardCloses: number;
-	/** Publications run in journal order after the confirmed entry has been folded. */
-	publications: Promise<void>;
-	evicted(): boolean;
-	notifyExchangeWaiters(): void;
-}
-
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
-export function hearEntry(host: DispatchHost, entry: Entry): void {
+export function hearEntry(host: RoomHostState, entry: Entry): void {
 	if (entry.kind === 'message') queueMessage(host, entry);
 	else if (entry.kind === 'close') queueCloses(host);
 	else if (entry.kind === 'lease') queueLease(host, entry.body, opens(host, entry.body.id));
@@ -63,7 +40,7 @@ export function hearEntry(host: DispatchHost, entry: Entry): void {
  * listeners or transport. Each caller that waits on an exchange hears it after
  * the effect, since each entry the room hears can change what a waiter looks for.
  */
-function publish(host: DispatchHost, effect: () => void): void {
+function publish(host: RoomHostState, effect: () => void): void {
 	host.publications = host.publications.then(() => {
 		if (host.evicted()) return;
 		try {
@@ -81,14 +58,14 @@ function publish(host: DispatchHost, effect: () => void): void {
  * it says `activation_start` once. The replay seeds it from the fold, so a
  * resumed room starts no activation the last run already started.
  */
-function opens(host: DispatchHost, id: string): boolean {
+function opens(host: RoomHostState, id: string): boolean {
 	const first = !host.heardLeases.has(id);
 	host.heardLeases.add(id);
 	return first;
 }
 
 /** Every lease id and every close the room has heard, seeded by the replay. */
-export function seedHeard(host: DispatchHost): void {
+export function seedHeard(host: RoomHostState): void {
 	const state = host.state();
 	for (const id of state.leases.keys()) host.heardLeases.add(id);
 	host.heardCloses = state.closes.length;
@@ -100,7 +77,7 @@ export function seedHeard(host: DispatchHost): void {
  * the pending activations the projection derives. One message, one event,
  * one order.
  */
-function queueMessage(host: DispatchHost, entry: Extract<Entry, { kind: 'message' }>): void {
+function queueMessage(host: RoomHostState, entry: Extract<Entry, { kind: 'message' }>): void {
 	const message = copyMessage(placed(entry));
 	const state = host.state();
 	const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;
@@ -130,7 +107,7 @@ function queueMessage(host: DispatchHost, entry: Extract<Entry, { kind: 'message
  * Every close the room has not heard yet. A close entry adds one to the
  * state, and a cancellation adds one when it finds an exchange open.
  */
-function queueCloses(host: DispatchHost): void {
+function queueCloses(host: RoomHostState): void {
 	const { closes } = host.state();
 	for (const close of closes.slice(host.heardCloses)) queueClose(host, close);
 	host.heardCloses = closes.length;
@@ -141,7 +118,7 @@ function queueCloses(host: DispatchHost): void {
  * before any closing summary. A question that landed
  * ahead of the close opens the next exchange, and the room says so.
  */
-function queueClose(host: DispatchHost, close: Close): void {
+function queueClose(host: RoomHostState, close: Close): void {
 	const question = host.state().messages.find((m) => m.seq === close.from);
 	const exchange: ClosedExchange = {
 		...(close.person === undefined ? {} : { person: close.person }),
@@ -158,7 +135,7 @@ function queueClose(host: DispatchHost, close: Close): void {
 }
 
 /** A cancellation closes its current exchange and cuts every lease it superseded. */
-function queueCancellation(host: DispatchHost, seq: Seq): void {
+function queueCancellation(host: RoomHostState, seq: Seq): void {
 	const state = host.state();
 	const revoked = [...state.leases.values()].filter(
 		(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.until === seq,
@@ -186,7 +163,7 @@ function queueCancellation(host: DispatchHost, seq: Seq): void {
  * end ends one. A change that ends a lease the journal never held is a
  * wake written off, and starts nothing.
  */
-function queueLease(host: DispatchHost, lease: LeaseChange, first: boolean): void {
+function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): void {
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(host, () => {
@@ -237,25 +214,25 @@ function queueLease(host: DispatchHost, lease: LeaseChange, first: boolean): voi
  * Send projected ordinary targets when their recorded lease is live now.
  * The delivery projection excludes authors and context-bound activations.
  */
-function steerTarget(host: DispatchHost, steer: Steer): void {
+function steerTarget(host: RoomHostState, steer: Steer): void {
 	if (activationSpec(steer.activation, host.state()) === undefined) return;
 	dispatch(host, steer.seat, 'steer', steer.activation, (port) => port.steer(steer));
 }
 
 /** One activation wake over the wire. */
-export function sendWake(host: DispatchHost, id: string, seat: string): void {
+export function sendWake(host: RoomHostState, id: string, seat: string): void {
 	if (activationSpec(id, host.state()) === undefined) return;
 	host.sentAt.set(id, host.now());
 	dispatch(host, seat, 'wake', id, (port) => port.wake({ room: host.name, seat, activation: id }));
 }
 
-function cutPort(host: DispatchHost, seat: string, activation: string): void {
+function cutPort(host: RoomHostState, seat: string, activation: string): void {
 	dispatch(host, seat, 'cut', activation, (port) => port.cut(activation));
 }
 
 /** Contain synchronous connector faults and asynchronous port rejection independently. */
 function dispatch(
-	host: DispatchHost,
+	host: RoomHostState,
 	seat: string,
 	operation: DeliveryOperation,
 	activation: string,
@@ -311,7 +288,7 @@ function dispatch(
 	}
 }
 
-function deliveryActive(host: DispatchHost, activation: string): boolean {
+function deliveryActive(host: RoomHostState, activation: string): boolean {
 	return (
 		host.state().due.some((work) => work.id === activation) ||
 		host.state().leases.get(activation)?.phase === 'running'
@@ -319,7 +296,7 @@ function deliveryActive(host: DispatchHost, activation: string): boolean {
 }
 
 /** Remove failures for activations that are no longer pending or live. */
-function pruneDeliveryErrors(host: DispatchHost): void {
+function pruneDeliveryErrors(host: RoomHostState): void {
 	const active = new Set([
 		...host.state().due.map((work) => work.id),
 		...[...host.state().leases.values()]
@@ -332,7 +309,7 @@ function pruneDeliveryErrors(host: DispatchHost): void {
 
 /** Report a failed or unknown delivery without changing the journal result. */
 function emitDeliveryError(
-	host: DispatchHost,
+	host: RoomHostState,
 	seat: string,
 	operation: DeliveryOperation,
 	activation: string,
@@ -347,7 +324,7 @@ function emitDeliveryError(
 	});
 }
 
-function portFor(host: DispatchHost, seat: string): AgentPort {
+function portFor(host: RoomHostState, seat: string): AgentPort {
 	let port = host.ports.get(seat);
 	if (port === undefined) {
 		const definition = host.defs.get(seat);
