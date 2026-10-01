@@ -215,7 +215,7 @@ export class AgentRunner implements AgentPort {
 
 	/**
 	 * Pass over the record until the activation stops: an executor failure, a
-	 * closing purpose (which never rebuilds), a cut activation, or nothing
+	 * summarize purpose (which never rebuilds), a cut activation, or nothing
 	 * left the executor or the room needs it to see again. A cut activation
 	 * earns no further room call on its behalf: an abort mid-pass is not a
 	 * provider failure, but it still ends the loop here, before the freshness

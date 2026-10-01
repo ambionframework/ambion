@@ -28,7 +28,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 opened it stays its `person`. The room does not open a second exchange.
 
 **Each person who spoke gets a summary.** The closed exchange view carries
-`summaries`. [The closing activation](summary.md#closing-activation) states
+`summaries`. [The summary activation](summary.md#summary-activation) states
 the assignment rules.
 
 ## Waiting on a person

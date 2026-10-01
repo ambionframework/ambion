@@ -19,7 +19,7 @@ import { answers, openRoom, priya, saidBy } from './live/support.ts';
 
 /**
  * An assistant that routes the first question once, and writes a summary
- * with the count. It keeps the context of each ordinary activation in `seen`.
+ * with the count. It keeps the context of each respond activation in `seen`.
  */
 function assistant(route: Route, seen: string[]): PiScript {
 	let routed = route === 'quiet';

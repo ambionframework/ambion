@@ -11,7 +11,7 @@ export {
 	byAgent,
 	type Call,
 	callTool,
-	isClosing,
+	isSummarizing,
 	later,
 	quiet,
 	type Reply,

@@ -6,7 +6,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
-	type ParticipantInfo,
+	type Participant,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -109,7 +109,7 @@ export async function messagesOf(
 	return [...(await room.read({ messages: options })).messages];
 }
 
-export async function participantsOf(room: Pick<Room, 'read'>): Promise<ParticipantInfo[]> {
+export async function participantsOf(room: Pick<Room, 'read'>): Promise<Participant[]> {
 	return [...(await room.read({ messages: false })).participants];
 }
 

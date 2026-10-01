@@ -6,7 +6,7 @@
 import { defineHuman, isSpoken, type Message } from '@ambionframework/ambion';
 import {
 	byAgent,
-	isClosing,
+	isSummarizing,
 	quiet,
 	ScriptedFailure,
 	speak,
@@ -86,7 +86,7 @@ describe('simulate', () => {
 				return asked ? speak('Thursday is dry.', 'priya') : speak('Which day?', 'priya');
 			},
 			editor: (step) =>
-				isClosing(step.view) && step.results.length === 0 ? speak('Summary.') : quiet(),
+				isSummarizing(step.view) && step.results.length === 0 ? speak('Summary.') : quiet(),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
 		const seen: Seen[] = [];
@@ -128,7 +128,7 @@ describe('simulate', () => {
 				if (hanging === 'a seat keeps the exchange open') return forever();
 				return step.results.length > 0 ? quiet() : speak('Thursday is dry.');
 			},
-			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
+			editor: (step) => (isSummarizing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
 		const run = await simulate(room, {
@@ -192,7 +192,7 @@ describe('simulate', () => {
 	it('ends with `failed` when the room stops while the abort at the deadline runs', async () => {
 		const script = byAgent({
 			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
-			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
+			editor: (step) => (isSummarizing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
 		// The room itself, stopped before its abort runs: the abort then rejects.
@@ -255,7 +255,7 @@ describe('simulate', () => {
 		const script = byAgent({
 			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
 			editor: (step) => {
-				if (!isClosing(step.view)) return quiet();
+				if (!isSummarizing(step.view)) return quiet();
 				throw new ScriptedFailure('permanent', 'The editor cannot write.');
 			},
 		});

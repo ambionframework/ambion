@@ -53,9 +53,9 @@ registry does not hold fails `startRoom` and `resumeRoom`. The start is the
 first point where the definition and the registry meet, and a failure there
 reaches the host before any activation reads a view.
 
-`summary` is an optional name from `agents`. It assigns closing work to that
-ordinary agent. `assistant` accepts an ordinary agent definition and supplies
-its registration, broadcast seat, and summary assignment. The optional
+`summary` is an optional name from `agents`. It names the ordinary agent that
+runs summary activations. `assistant` accepts an ordinary agent definition and supplies
+its registration, broadcast seat, and summary writer. The optional
 `@ambionframework/assistant` package supplies a default definition factory.
 The shorthand introduces no separate role or tool set. See
 [Default assistant](assistant.md) for configuration and behavior.
@@ -84,8 +84,8 @@ const lookup = defineTool({
 property path and the rule it breaks, such as `handles must not have fewer
 than 1 items`. The model reads this text as a tool error.
 
-Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`,
-`dismiss`, and `recall`, plus the tools from its definition. A closing
+Every respond activation receives `say`, `schedule`, `seat`, `unseat`,
+`dismiss`, and `recall`, plus the tools from its definition. A summary
 activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ after, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,

@@ -1,4 +1,4 @@
-import type { ParticipantInfo, PendingSay } from '@ambionframework/ambion';
+import type { Participant, PendingSay } from '@ambionframework/ambion';
 import type { Block } from './timeline.ts';
 import type { RoomAction, RoomView } from './workbench.ts';
 
@@ -53,7 +53,7 @@ export function refusal(action: RoomAction, view: RoomView | undefined): string 
 
 /** The agents that are at work in a room now. */
 export const workingAgents = (view: RoomView | undefined): string[] =>
-	(view?.participants ?? []).flatMap((participant: ParticipantInfo) =>
+	(view?.participants ?? []).flatMap((participant: Participant) =>
 		participant.kind === 'agent' && participant.status === 'active' ? [participant.name] : [],
 	);
 

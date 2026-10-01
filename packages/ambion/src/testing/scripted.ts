@@ -91,7 +91,8 @@ export const byAgent = <Input = Step, Out = Reply>(
 };
 
 /** True when the view asks for the summary of a closed exchange. */
-export const isClosing = (view: ActivationView): boolean => view.spec.purpose.kind === 'summarize';
+export const isSummarizing = (view: ActivationView): boolean =>
+	view.spec.purpose.kind === 'summarize';
 
 /** The room tools a script calls by name. Every other call names a tool of the agent. */
 const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
@@ -207,7 +208,7 @@ class ScriptedSession implements ExecutorSession {
 		// answer itself, so the answer comes from beside the result.
 		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
 		const outcome = answer(response);
-		if (isClosing(pass.view) && outcome.text === 'delivered') this.done = true;
+		if (isSummarizing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
 	}
 

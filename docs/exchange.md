@@ -133,18 +133,18 @@ after the close of the same pass.
   takes it at any position. The commit result lists in `unread` the
   messages after that position and before the say. The tool result shows
   them, so the model reads the record through the say.
-- A response activation schedules, whether an exchange is open or not. A
-  closing activation cannot schedule.
+- A respond activation schedules, whether an exchange is open or not. A
+  summary activation cannot schedule.
 - `limits.schedule` bounds `after` from `minAfter` to `maxAfter` seconds, 60 to
   604,800 by default, and holds at most `pending` says of one seat, 4 by
   default.
 
 **The agent sees its pending says.** The schedule result names the say by
 its seq, as the record shows it: `scheduled #41: the room wakes you with this
-message at <time>`. The view of each response activation carries the pending
+message at <time>`. The view of each respond activation carries the pending
 says of the seat in `scheduled`, and the render lists each one with its seq,
 its due time, its text, and its refs. A continued Pi session reads the list
-beside the delta. A closing activation reads none.
+beside the delta. A summary activation reads none.
 
 **A say can stop waiting.** An unseating of its author drops it, and a
 cancellation drops every say before it. A recomposition that leaves the author
@@ -157,7 +157,7 @@ seq of a pending say as `message`, and the room writes a `dismissed` entry
 `{ from, message }`. The entry wakes nobody. The fold drops the say, so it
 frees its place under `pending`.
 
-- A seat dismisses its own pending say, from a response activation. The
+- A seat dismisses its own pending say, from a respond activation. The
   seq of another seat's say, or of no scheduled say, gets a refusal.
 - A dismissal of a say that returned or that the seat dismissed already
   changes nothing. The tool result says that the say no longer waits.
@@ -190,8 +190,8 @@ const same = resumed.exchange(exchange.from);
 `waitForClose()` waits for the durable close and returns non-summary messages in
 the inclusive `[from, through]` range. `waitForSummary()` waits for its optional
 summary, returning `undefined` when no writer is configured or the writer
-deliberately stays silent. A revoked or abandoned required assignment rejects
-the response. The exchange handle is the completion API; there is no room-wide
+deliberately stays silent. A revoked or abandoned summary activation rejects
+the response when the summary is required. The exchange handle is the completion API; there is no room-wide
 quiet wait.
 
 **The host posts with `room.post`.** A post is a message of the system:
@@ -232,7 +232,7 @@ reports an event and gives no direction.` Put a label, such as `ci:`, in
 
 Summary completion is folded from the recorded close, messages, and lease
 history (`summaryCompletion`). A covering summary wins over lease state; a
-pending assignment remains pending until it publishes or records a terminal
+pending summary activation remains pending until it publishes or records a terminal
 failure. Retrying the same delivery key and payload returns the same handle;
 conflicting reuse rejects. Concurrent sends into one open exchange share its
 identity. See [delivery guarantees](durability.md#2-what-a-delivery-promises).
@@ -288,7 +288,7 @@ the same outcome. The first case that holds wins:
 | Outcome     | When it holds                                                                  |
 | ----------- | ------------------------------------------------------------------------------ |
 | `cancelled` | A cancellation wrote the close.                                                |
-| `exhausted` | The room gave up on a response activation in the range.                        |
+| `exhausted` | The room gave up on a respond activation in the range.                         |
 | `awaiting`  | The last spoken message asks a person, and that person has said nothing since. |
 | `complete`  | None of the above.                                                             |
 
@@ -308,7 +308,7 @@ settles existing pending summary work as failed. See the
 
 **Every exchange view lists its `activations`.** One entry holds the
 activation `id`, the `seat`, the `attempt`, the `purpose` (`respond` or
-`summary`), and the `outcome`. The outcome is `running`, or an end reason
+`summarize`), and the `outcome`. The outcome is `running`, or an end reason
 with `cancelled` and `cause` when they apply. An entry carries `usage` when
 the activation recorded it. Every attempt has an entry, in journal order. An
 open exchange lists the activations since its question. The `session` field
@@ -320,7 +320,7 @@ is absent when the harness recorded none.
 
 ## 8. What reads one
 
-- The summary writer receives one dedicated closing activation and may write a
+- The summary writer receives one dedicated summary activation and may write a
   summary through `say`.
 - A client groups the fixed range under the question it answered.
 - A host can measure cost and completion per exchange. A closed exchange

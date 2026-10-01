@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**The purpose of an activation has one pair of values, and `ParticipantInfo`
+becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
+activation that writes a summary. It now holds `summarize`, the value that
+`ActivationPurpose.kind` already used. The prose names the two purposes a
+respond activation and a summary activation. `isClosing` in
+`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
+`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
+`AgentParticipant`, and `HumanParticipant`. The activation source and the
+activation ids do not change.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

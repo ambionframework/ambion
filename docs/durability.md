@@ -116,7 +116,7 @@ backoff. Repeated claims renew the same activation; repeated release is stale
 and harmless.
 
 Lease ids derive from cause, journal position, seat, and attempt. No caller
-mints them. The room derives pending wakes and summary assignments from the
+mints them. The room derives pending wakes and summary activations from the
 record. It retries under `hostingOf(runtime).limits.activation` and records
 `abandoned` at `attempts`. `hostingOf` comes from
 `@ambionframework/ambion/hosting`, a host's own entry. Each claim or renewal

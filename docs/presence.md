@@ -191,7 +191,7 @@ The full rendering rules are in [`execution/render.ts`](../packages/ambion/src/e
 ## 10. Observing presence
 
 The `participants` field of `await room.read({ messages: false })` contains
-`ParticipantInfo` values, distinguished by `kind`.
+`Participant` values, distinguished by `kind`.
 Both variants have `name` and `identity`. An agent has activity `status` and
 `attention`; a human has `presence`. These views contain no transcript IDs.
 `room.read()` and `room.subscribe()` expose presence through the existing

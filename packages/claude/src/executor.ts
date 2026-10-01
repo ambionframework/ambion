@@ -168,7 +168,7 @@ class Activation implements ExecutorSession {
 	 * The message that starts a pass: the whole view first, then the delta,
 	 * or none when nothing is new. A resumed session keeps the system prompt
 	 * it began with, so the first message of a resumed query restates the
-	 * seat's part for this activation. A closing activation gets its duties
+	 * seat's part for this activation. A summary activation gets its duties
 	 * and the reader's preferences this way.
 	 */
 	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {

@@ -139,7 +139,7 @@ function noteFor(exchange: ClosedView, failures?: ReadonlyMap<string, string>): 
 	if (failed) return `Closed, ${failureText(failed, failures)}${suffix}`;
 	const status = exchange.summary.status;
 	if (status === 'pending') return `Closed, summary pending${suffix}`;
-	const summary = lastFailed(exchange, 'summary');
+	const summary = lastFailed(exchange, 'summarize');
 	if (status === 'failed' && summary)
 		return `Closed, summary failed: ${failureText(summary, failures)}${suffix}`;
 	if (status === 'failed') return `Closed, summary failed${suffix}`;

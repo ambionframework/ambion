@@ -1,4 +1,4 @@
-/** Pure summary assignment from the recorded composition and roster. */
+/** Pure choice of the summary writer from the recorded composition and roster. */
 
 import type { Composition, Seating } from '../journal/events.ts';
 

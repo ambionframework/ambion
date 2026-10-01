@@ -200,7 +200,7 @@ describe('buildTimeline', () => {
 				exhausted([
 					attempt('m1', 'respond', 'failed', 'permanent'),
 					attempt('m2', 'respond', 'abandoned', 'permanent', 2),
-					attempt('s1', 'summary', 'failed', 'permanent'),
+					attempt('s1', 'summarize', 'failed', 'permanent'),
 				]),
 				failures,
 				`Closed, assistant failed, the room does not retry this: ${limit}`,
@@ -215,7 +215,7 @@ describe('buildTimeline', () => {
 				'names why a summary failed after a reply',
 				{
 					...closedExchange(75, 75, 'theo', { status: 'failed' }),
-					activations: [attempt('s1', 'summary', 'failed', 'permanent')],
+					activations: [attempt('s1', 'summarize', 'failed', 'permanent')],
 				} as ExchangeView,
 				failures,
 				`Closed, summary failed: assistant failed, the room does not retry this: ${limit}`,

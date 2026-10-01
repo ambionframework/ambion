@@ -67,7 +67,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	expect(await world.peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
 	const through = async () => {
 		const view = await world.peer.view(activation);
-		if (!('view' in view)) throw new Error('The ordinary activation is absent.');
+		if (!('view' in view)) throw new Error('The respond activation is absent.');
 		return view.view.through;
 	};
 	const first = await through();
@@ -91,7 +91,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	return { ...world, exchange, activation, say, first };
 }
 
-/** A room with a summary writer where the test claims the closing activation. */
+/** A room with a summary writer where the test claims the summary activation. */
 async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOptions = {}) {
 	const world = await openWorld(
 		storage,
@@ -101,7 +101,7 @@ async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOpt
 	const exchange = await (await world.room.visit(person)).send({ text: 'Question?' });
 	await world.room.reconcile();
 	const owed = stateOf(world.room).due.find((work) => work.source === 'closed');
-	if (owed === undefined) throw new Error('The room has no closing assignment.');
+	if (owed === undefined) throw new Error('The room has no summary activation.');
 	expect(await world.peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
 	const say = (key: string, text: string, extra: { refs?: string[]; to?: string } = {}) =>
 		world.peer.commit({ activation: owed.id, key, intent: { kind: 'said', text, ...extra } });
@@ -406,7 +406,7 @@ describe('the room protocol on a lease', () => {
 		});
 		// The room cap holds the summary view to its last message and counts the rest.
 		const view = await peer.view(activation);
-		if (!('view' in view)) throw new Error('The closing activation is absent.');
+		if (!('view' in view)) throw new Error('The summary activation is absent.');
 		expect(view.view.context.messages.map((message) => message.seq)).toEqual([exchange.from]);
 		expect(view.view.context.omitted).toBe(
 			(await messagesOf(room)).filter((message) => message.seq < exchange.from).length,

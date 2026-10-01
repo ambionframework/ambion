@@ -388,7 +388,7 @@ through its bindings.
 **`compose` does not bind itself.** A compose call cannot start a compose
 call.
 
-**A closing activation has no `compose`.** It receives only `say`, as
+**A summary activation has no `compose`.** It receives only `say`, as
 [Definitions and tools](agent.md#tools) states.
 
 ## Parallel calls

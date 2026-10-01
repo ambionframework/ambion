@@ -139,7 +139,7 @@ describe('assistant room shorthand', () => {
 	});
 
 	it.each(storages)(
-		'preserves changed membership and summary assignment after $name resume',
+		'preserves changed membership and summary writer after $name resume',
 		async (storage) => {
 			const opened = await openFor(storage);
 			const room = stopAtEnd(

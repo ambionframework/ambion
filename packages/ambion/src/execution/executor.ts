@@ -92,7 +92,7 @@ export type Pass = PassInput & {
 	readonly resume?: string;
 	/**
 	 * The room tools that the purpose grants, then the tools of the
-	 * definition, bound to the activation. A closing activation gets the room
+	 * definition, bound to the activation. A summary activation gets the room
 	 * tools alone. Every pass holds the same values.
 	 */
 	readonly tools: readonly RoomTool[];

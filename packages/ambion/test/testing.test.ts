@@ -21,7 +21,7 @@ import {
 	byAgent,
 	callTool,
 	fakeClock,
-	isClosing,
+	isSummarizing,
 	later,
 	quiet,
 	type Script,
@@ -115,8 +115,8 @@ describe('scripted', () => {
 	});
 });
 
-describe('isClosing', () => {
-	it('is false for an ordinary activation and true for the summary activation', async () => {
+describe('isSummarizing', () => {
+	it('is false for a respond activation and true for the summary activation', async () => {
 		const flags: boolean[] = [];
 		const room = await open({
 			name: roomName('testing-closing'),
@@ -125,7 +125,7 @@ describe('isClosing', () => {
 			seats: { product: 'broadcast', writer: 'none' },
 			runtime: createRuntime(),
 			execution: scripted((step, seat, call) => {
-				flags.push(isClosing(step.view));
+				flags.push(isSummarizing(step.view));
 				return call === 1 ? speak(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
 		});

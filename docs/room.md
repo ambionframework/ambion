@@ -149,7 +149,7 @@ either to answer a message or to write a closing summary. The room derives the
 purpose from the activation id and the journal state. A caller cannot
 construct authority by changing fields in a request.
 
-An ordinary activation reads the goal, the participants, the reserve
+A respond activation reads the goal, the participants, the reserve
 identities, and the messages that its context boundary allows. A summary
 activation reads every message through its fixed exchange, plus its recipient
 and the preferences of that person. It cannot change the recipient or the
