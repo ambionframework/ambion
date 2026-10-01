@@ -86,7 +86,7 @@ function accessError(path: string, error: FileError): Error {
 
 /** The absolute path of a tool path. A leading `@` and the Unicode spaces of a pasted path go. */
 async function resolvePath(env: WorkspaceEnv, path: string, context: Context): Promise<string> {
-	const plain = path.replace(/[  -   　]/g, ' ');
+	const plain = path.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
 	return value(await env.absolutePath(plain.startsWith('@') ? plain.slice(1) : plain, context));
 }
 
@@ -99,10 +99,10 @@ async function resolveReadPath(env: WorkspaceEnv, path: string, context: Context
 	const resolved = await resolvePath(env, path, context);
 	const forms = [
 		resolved,
-		resolved.replace(/ (AM|PM)\./gi, ' $1.'),
+		resolved.replace(/ (AM|PM)\./gi, '\u202F$1.'),
 		resolved.normalize('NFD'),
-		resolved.replace(/'/g, '’'),
-		resolved.normalize('NFD').replace(/'/g, '’'),
+		resolved.replace(/'/g, '\u2019'),
+		resolved.normalize('NFD').replace(/'/g, '\u2019'),
 	];
 	for (const form of new Set(forms)) {
 		if (value(await env.exists(form, context))) return form;
@@ -128,7 +128,7 @@ async function readImage(
 			content: [
 				{
 					type: 'text',
-					text: `Read image file [image/bmp]\n[Image omitted: configure an imageProcessor to convert BMP images.]`,
+					text: `Read image file [image/bmp]\n[Image omitted: BMP has no image part. Convert the file to PNG with bash to see it.]`,
 				},
 				note,
 			],

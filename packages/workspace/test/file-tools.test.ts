@@ -181,7 +181,7 @@ const cases: readonly Case[] = [
 		content: [
 			{
 				type: 'text',
-				text: 'Read image file [image/bmp]\n[Image omitted: configure an imageProcessor to convert BMP images.]',
+				text: 'Read image file [image/bmp]\n[Image omitted: BMP has no image part. Convert the file to PNG with bash to see it.]',
 			},
 			{ type: 'text', text: `Image path: ${home}/pic.bmp` },
 		],
