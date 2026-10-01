@@ -196,11 +196,11 @@ export type LeaseRequest =
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat
- * reads `lastSeq` against what its view held: the record moved when it grew.
+ * reads `through` against what its view held: the record moved when it grew.
  * An entry beside the record moves neither, so a renewal never reports its
  * own landing as movement.
  */
-export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
+export type LeaseResponse = { ok: { expiresAt: number; through: Seq } } | Stale;
 
 export interface RoomProtocol {
 	/**

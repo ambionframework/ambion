@@ -60,12 +60,12 @@ export interface ExecutorActivation {
 /**
  * Which record one pass reads. The first pass of an activation gets the
  * `view`: the record it reads whole. Every later pass gets a `delta`: the
- * record as it stands now, and `since`, the position the activation had read
+ * record as it stands now, and `after`, the position the activation had read
  * through before the driver asked again.
  */
 export type PassInput =
 	| { readonly kind: 'view'; readonly view: ActivationView }
-	| { readonly kind: 'delta'; readonly since: Seq; readonly view: ActivationView };
+	| { readonly kind: 'delta'; readonly after: Seq; readonly view: ActivationView };
 
 /** The record one pass reads, rendered, and the range of the record it holds. */
 export interface PassRecord {
@@ -82,10 +82,11 @@ export type Pass = PassInput & {
 	/**
 	 * The record this pass reads. The first pass reads the whole view, with
 	 * the reminders of the tool bundles. A later pass reads the delta after
-	 * `since`. `after` names the position that a resumed harness session read
-	 * through: the first pass of a respond activation then reads the
-	 * reminders, the pending says, and the delta after it. It gives nothing
-	 * when no message is new, and the core then counts the view read.
+	 * the `after` of its input. The argument `after` names the position that
+	 * a resumed harness session read through: the first pass of a respond
+	 * activation then reads the reminders, the pending says, and the delta
+	 * after it. It gives nothing when no message is new, and the core then
+	 * counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
 	/** The id of the harness session to resume: `spec.resume`, when it names the kind of the executor. */

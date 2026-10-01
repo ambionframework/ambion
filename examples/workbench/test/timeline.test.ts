@@ -1,4 +1,4 @@
-import type { ExchangeView, Message } from '@ambionframework/ambion';
+import type { Exchange, Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
 import { type Block, buildTimeline, discussionKeys } from '../src/timeline.ts';
 
@@ -15,7 +15,7 @@ const closedExchange = (
 	through: number,
 	person: string,
 	summary: object = { status: 'silent' },
-): ExchangeView =>
+): Exchange =>
 	({
 		from,
 		through,
@@ -25,8 +25,8 @@ const closedExchange = (
 		person,
 		at: AT,
 		summary,
-	}) as ExchangeView;
-const openExchange = (from: number): ExchangeView => ({
+	}) as Exchange;
+const openExchange = (from: number): Exchange => ({
 	from,
 	status: 'open',
 	person: 'mira',
@@ -37,7 +37,7 @@ const openExchange = (from: number): ExchangeView => ({
 const humans = new Set(['theo', 'mira']);
 const build = (
 	messages: Message[],
-	exchanges: ExchangeView[],
+	exchanges: Exchange[],
 	extra: Partial<Parameters<typeof buildTimeline>[0]> = {},
 ) =>
 	buildTimeline({
@@ -192,7 +192,7 @@ describe('buildTimeline', () => {
 				...closedExchange(75, 75, 'theo', summary),
 				outcome: { kind: 'exhausted' },
 				activations,
-			}) as ExchangeView;
+			}) as Exchange;
 
 		it.each([
 			[
@@ -216,7 +216,7 @@ describe('buildTimeline', () => {
 				{
 					...closedExchange(75, 75, 'theo', { status: 'failed' }),
 					activations: [attempt('s1', 'summary', 'failed', 'permanent')],
-				} as ExchangeView,
+				} as Exchange,
 				failures,
 				`Closed, summary failed: assistant failed, the room does not retry this: ${limit}`,
 			],
@@ -236,7 +236,7 @@ describe('buildTimeline', () => {
 				...closed,
 				outcome: { kind: 'exhausted' },
 				activations: [attempt('m1', 'respond', 'failed', 'permanent')],
-			} as ExchangeView;
+			} as Exchange;
 			expect(build(thread, [exchange])[1]).toMatchObject({ flag: 'assistant failed' });
 		});
 	});
@@ -266,8 +266,8 @@ describe('buildTimeline', () => {
 
 describe('cost and awaiting', () => {
 	const usage = { input: 9000, output: 3300, cacheRead: 0, cacheWrite: 0 };
-	const exchangeWith = (extra: Record<string, unknown>): ExchangeView =>
-		({ ...closed, ...extra }) as ExchangeView;
+	const exchangeWith = (extra: Record<string, unknown>): Exchange =>
+		({ ...closed, ...extra }) as Exchange;
 
 	it('shows the cost of an exchange on its discussion, or its tokens, or nothing without usage', () => {
 		const blocks = build(thread, [exchangeWith({ usage: { ...usage, cost: 0.0123 } })]);

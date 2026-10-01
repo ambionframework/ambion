@@ -155,7 +155,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		},
 	},
 	refused: { refused: "'nobody' is not in the reserve." },
-	ok: { ok: { expiresAt: 1767258060000, lastSeq: 3 } },
+	ok: { ok: { expiresAt: 1767258060000, through: 3 } },
 };
 
 describe('the wire', () => {

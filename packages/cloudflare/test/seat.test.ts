@@ -296,7 +296,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 		return late.promise;
 	});
 	expect((await read()).activation).toBe(newer);
-	late.resolve({ ok: { expiresAt: Date.now() + 10_000, lastSeq: 1 } });
+	late.resolve({ ok: { expiresAt: Date.now() + 10_000, through: 1 } });
 	await new Promise((resolve) => setTimeout(resolve, 20));
 	expect((await read()).activation).toBe(newer);
 	timedOut();

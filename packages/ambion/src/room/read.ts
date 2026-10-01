@@ -1,36 +1,29 @@
 /** Coherent, detached room reads built from one folded projection. */
 
-import {
-	type ClosedExchangeView,
-	copyMessage,
-	type ExchangeView,
-	type Message,
-	type RoomRead,
-	type Seq,
-} from '../types.ts';
+import { copyMessage, type Exchange, type Message, type RoomRead, type Seq } from '../types.ts';
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
 import { participantsOf } from './view.ts';
 
-export type MessageSelection = false | { since?: Seq };
+export type MessageSelection = false | { after?: Seq };
 
 /** Capture a caller's selection before an asynchronous read begins. */
 export function captureMessageSelection(
 	selection: MessageSelection | undefined,
 ): MessageSelection | undefined {
 	const captured =
-		selection === false || selection === undefined ? selection : { since: selection.since };
+		selection === false || selection === undefined ? selection : { after: selection.after };
 	validateSelection(captured);
 	return captured;
 }
 
 /** Build a room read without executing, reconciling, or changing the journal. */
-export function readView(
+export function toRoomRead(
 	name: string,
 	state: RoomState,
 	now: number,
-	watermark: Seq,
+	through: Seq,
 	messages: MessageSelection | undefined,
 ): RoomRead {
 	validateSelection(messages);
@@ -43,7 +36,7 @@ export function readView(
 			participants: [],
 			exchanges: [],
 			exchange: undefined,
-			watermark,
+			through,
 		};
 
 	const exchanges = exchangeViews(
@@ -55,7 +48,7 @@ export function readView(
 		new Set(state.people.keys()),
 	);
 	const current = exchanges.find(
-		(exchange): exchange is Extract<ExchangeView, { readonly status: 'open' }> =>
+		(exchange): exchange is Extract<Exchange, { readonly status: 'open' }> =>
 			exchange.status === 'open',
 	);
 	return {
@@ -67,7 +60,7 @@ export function readView(
 		participants: participantsOf({ state, live: liveWork(state, now).seats }),
 		exchanges,
 		exchange: current,
-		watermark,
+		through,
 	};
 }
 
@@ -77,14 +70,14 @@ function selectMessages(
 	selection: MessageSelection | undefined,
 ): readonly Message[] {
 	if (selection === false) return [];
-	const since = selection?.since;
-	const selected = since === undefined ? all : all.filter((message) => message.seq > since);
+	const after = selection?.after;
+	const selected = after === undefined ? all : all.filter((message) => message.seq > after);
 	return selected.map(copyMessage);
 }
 
 function validateSelection(selection: MessageSelection | undefined): void {
-	const since = selection === false ? undefined : selection?.since;
-	if (since !== undefined && (!Number.isSafeInteger(since) || since < 0))
+	const after = selection === false ? undefined : selection?.after;
+	if (after !== undefined && (!Number.isSafeInteger(after) || after < 0))
 		throw new RangeError('Message cursor must be a non-negative safe integer.');
 }
 
@@ -93,9 +86,12 @@ function validateSelection(selection: MessageSelection | undefined): void {
  * them and they have said nothing since. The read holds the answer, so this
  * waits for nothing and starts nothing.
  */
-export function pendingFor(read: RoomRead, person: string): ClosedExchangeView[] {
+export function pendingFor(
+	read: RoomRead,
+	person: string,
+): Extract<Exchange, { readonly status: 'closed' }>[] {
 	return read.exchanges.filter(
-		(exchange): exchange is ClosedExchangeView =>
+		(exchange): exchange is Extract<Exchange, { readonly status: 'closed' }> =>
 			exchange.status === 'closed' &&
 			exchange.outcome.kind === 'awaiting' &&
 			exchange.outcome.person === person,

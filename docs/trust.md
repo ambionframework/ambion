@@ -101,7 +101,7 @@ same exchange. [Exchange continuity](executors.md#exchange-continuity)
 states the rule.
 
 **Freshness governs speech in a kept session.** The driver records the
-session on the `ended` lease entry, and the exchange view lists it as
+session on the `ended` lease entry, and the `Exchange` lists it as
 `ExchangeActivation.session`. [Durability](durability.md) owns the entry
 format.
 

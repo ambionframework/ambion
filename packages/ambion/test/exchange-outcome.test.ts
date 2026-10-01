@@ -8,8 +8,8 @@ import type { Close } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
-import { pendingFor, readView } from '../src/room/read.ts';
-import type { ExchangeView, Message, RoomRead, SummaryMessage } from '../src/types.ts';
+import { pendingFor, toRoomRead } from '../src/room/read.ts';
+import type { Exchange, Message, RoomRead, SummaryMessage } from '../src/types.ts';
 import { evolve } from './support/evolve.ts';
 import { activationOf, foldRoom, owedOf, pendingOf, replayState } from './support/fold.ts';
 
@@ -75,10 +75,10 @@ const cancel = (seq: number): Entry => ({ kind: 'cancel', seq, body: { at: cance
 describe('exchange outcomes', () => {
 	const room = [composition, arrival(2, 'priya'), arrival(3, 'sam')];
 	const readOf = (entries: readonly Entry[]): RoomRead =>
-		readView('room', replayState(entries, retry), 0, entries.length, false);
+		toRoomRead('room', replayState(entries, retry), 0, entries.length, false);
 	const closed = (read: RoomRead) =>
 		read.exchanges.filter(
-			(exchange): exchange is Extract<ExchangeView, { status: 'closed' }> =>
+			(exchange): exchange is Extract<Exchange, { status: 'closed' }> =>
 				exchange.status === 'closed',
 		);
 	const outcomes = (entries: readonly Entry[]) =>
@@ -189,7 +189,7 @@ describe('exchange outcomes', () => {
 		];
 		let state = foldRoom(entries.slice(0, 3), retry);
 		for (const entry of entries.slice(3)) state = evolve(state, entry, retry);
-		expect(readView('room', state, 0, 8, false)).toEqual(readOf(entries));
+		expect(toRoomRead('room', state, 0, 8, false)).toEqual(readOf(entries));
 	});
 });
 

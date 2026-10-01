@@ -142,7 +142,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		const resumed = stopAtEnd(await resumeRoom(name, { agents: [], runtime: fresh(), execution }));
 		const reconnected = await resumed.visit(priya);
 		expect(reconnected.lastDeparture).toBe(left?.seq);
-		const missed = await messagesOf(resumed, { since: reconnected.lastDeparture });
+		const missed = await messagesOf(resumed, { after: reconnected.lastDeparture });
 		expect(missed.map((message) => message.kind)).toEqual(['arrived']);
 
 		const retry = await reconnected.send({ text: 'Can I promise Thursday?', key: 'promise-1' });
@@ -177,7 +177,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		});
 		const arriving = room.visit(priya);
 		await entered.promise;
-		const replay = messagesOf(room, { since: 0 });
+		const replay = messagesOf(room, { after: 0 });
 		gate.resolve();
 		const [visit, history] = await Promise.all([arriving, replay]);
 		off();

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**`View` names only what a seat receives, and a read position is `through`
+or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
+that the `exchange_closed` event carries, is now `ExchangeRange`.
+`ClosedExchangeView` is gone from the main entry. Write
+`Extract<Exchange, { readonly status: 'closed' }>` in its place.
+`RoomRead.watermark` and `ExchangeRead.watermark` are now `through`. The
+`ok` of a `LeaseResponse` holds `through` where it held `lastSeq`. The
+selection `read({ messages: { since } })` is now `{ after }`, and the delta
+of a `PassInput` holds `after` where it held `since`. The wire carries the
+new names. The journal and the golden journals do not change.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

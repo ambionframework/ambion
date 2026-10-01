@@ -314,7 +314,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			const after = await readRoom(room.name, { runtime });
 			expect(after.messages).toEqual(before.messages);
 			expect(after.exchange).toEqual(before.exchange);
-			expect(after.watermark).toBe(before.watermark);
+			expect(after.through).toBe(before.through);
 
 			const preserved = '  accepted \u00a0 ';
 			const exchange = await visit.send({ key, text: preserved });
@@ -336,7 +336,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				refused: expect.stringMatching(/message is empty/i),
 			});
 			expect(await messagesOf(room)).toEqual(before.messages);
-			expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
+			expect((await readRoom(room.name, { runtime })).through).toBe(before.through);
 
 			const preserved = '  ordinary \u00a0 ';
 			expect(await say('ordinary-blank', preserved)).toMatchObject({
@@ -355,7 +355,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				refused: expect.stringMatching(/message is empty/i),
 			});
 			expect(await messagesOf(room)).toEqual(before.messages);
-			expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
+			expect((await readRoom(room.name, { runtime })).through).toBe(before.through);
 
 			const preserved = '  summary \u00a0 ';
 			const accepted = await say(key, preserved);

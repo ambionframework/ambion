@@ -1,7 +1,7 @@
-import type { ExchangeActivation, ExchangeView, Message } from '@ambionframework/ambion';
+import type { Exchange, ExchangeActivation, Message } from '@ambionframework/ambion';
 import { formatUsage, type PassView } from './steps.ts';
 
-type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
+type ClosedView = Extract<Exchange, { status: 'closed' }>;
 
 /**
  * How a message reads in the conversation. A steer is a person's message
@@ -61,7 +61,7 @@ export type Block = MessageBlock | DiscussionBlock | NoteBlock | StepsBlock | Li
 
 export interface TimelineInput {
 	messages: readonly Message[];
-	exchanges: readonly ExchangeView[];
+	exchanges: readonly Exchange[];
 	open?: { person?: string };
 	/** The latest work an agent reported in the open exchange. */
 	activity?: string;

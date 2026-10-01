@@ -159,7 +159,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		expect(first?.messages.every((message) => message.kind !== 'summary')).toBe(true);
 		expect(closed.summary).toMatchObject(published);
 		expect(closed).not.toHaveProperty('usage');
-		expect(first?.watermark).toBe(8);
+		expect(first?.through).toBe(8);
 		expect(await position()).toBe(before);
 
 		for (const interior of [3, 5, 7]) expect(await read(interior)).toBeUndefined();

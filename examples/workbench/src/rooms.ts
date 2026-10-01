@@ -341,13 +341,13 @@ export async function openRooms(
 		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
-		read: (name: string, since?: number) =>
+		read: (name: string, after?: number) =>
 			withRoom(name, async (entry) =>
 				roomView(
 					entry,
 					await readRoom(entry.name, {
 						runtime,
-						messages: since === undefined ? undefined : { since },
+						messages: after === undefined ? undefined : { after },
 					}),
 					missing,
 				),

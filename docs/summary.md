@@ -97,7 +97,7 @@ exchange is refused, and so is a second summary for the same person.
 
 The activation ends after the writer has said one message to each person.
 The summary for the `person` completes the close. A summary for another
-person appears in `summaries` on the closed exchange view. Only the reading
+person appears in `summaries` on the closed `Exchange`. Only the reading
 preferences of the `person` reach the writer.
 
 The room stamps the writer, recipient, covered range, activation id, and

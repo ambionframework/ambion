@@ -217,7 +217,7 @@ describe('presence', () => {
 		await waitForRoom(session);
 		expect(again.lastDeparture).toBe(left?.seq); // it does not move while they read
 		// a cursor reads both kinds of message, in order
-		const missed = await messagesOf(session, { since: again.lastDeparture });
+		const missed = await messagesOf(session, { after: again.lastDeparture });
 		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		expect(missed.every((m) => m.seq > (left?.seq ?? 0))).toBe(true);
 		expect(await messagesOf(session)).toHaveLength(5);

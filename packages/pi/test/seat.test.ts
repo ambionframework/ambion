@@ -376,7 +376,7 @@ describe('runner liveness', () => {
 		},
 		{
 			renewal: 'moves the expiry nowhere',
-			answer: () => ({ ok: { expiresAt: 100, lastSeq: 1 } }),
+			answer: () => ({ ok: { expiresAt: 100, through: 1 } }),
 			cutAt: 100,
 			reason: 'failed',
 		},

@@ -31,12 +31,12 @@ import type { Close } from '../journal/events.ts';
 import {
 	type ActivationOutcome,
 	addUsage,
-	type ClosedExchange,
 	copyMessage,
+	type Exchange,
 	type ExchangeActivation,
 	type ExchangeOutcome,
+	type ExchangeRange,
 	type ExchangeRef,
-	type ExchangeView,
 	type HarnessSession,
 	isSpoken,
 	isSummary,
@@ -220,8 +220,8 @@ function summariesOf(close: Close, range: readonly Message[], pass: Pass): Summa
 	});
 }
 
-/** Build one detached closed exchange view from the recorded close. */
-function closedExchangeView(close: Close, pass: Pass): Extract<ExchangeView, { status: 'closed' }> {
+/** Build one detached closed `Exchange` from the recorded close. */
+function closedExchangeView(close: Close, pass: Pass): Extract<Exchange, { status: 'closed' }> {
 	const { usage, exhausted } = workOf(close.from, close.through, pass.leases);
 	const range = rangeOf(pass.messages, close.from, close.through);
 	const summaries = summariesOf(close, range, pass);
@@ -268,7 +268,7 @@ function outcomeOf(lease: LeaseHold): ActivationOutcome {
 	};
 }
 
-/** Map one lease to the activation the exchange read lists. */
+/** Map one lease to the activation that `Exchange` lists. */
 export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 	const { seat, attempt, source } = lease.activation;
 	return {
@@ -305,7 +305,7 @@ function workOf(
 export function closedExchange(
 	close: Pick<Close, 'person' | 'from' | 'through' | 'at'>,
 	messages: readonly Message[],
-): ClosedExchange {
+): ExchangeRange {
 	return {
 		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
@@ -335,7 +335,7 @@ function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): 
 	return last;
 }
 
-/** Build detached exchange views in journal order, including the current open exchange. */
+/** Build detached `Exchange` values in journal order, including the current open exchange. */
 export function exchangeViews(
 	closes: readonly Close[],
 	messages: readonly Message[],
@@ -343,7 +343,7 @@ export function exchangeViews(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt: number | undefined,
 	people: ReadonlySet<string>,
-): ExchangeView[] {
+): Exchange[] {
 	const pass: Pass = {
 		people,
 		messages,

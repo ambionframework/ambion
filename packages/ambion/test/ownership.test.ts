@@ -87,16 +87,16 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		});
 		const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
 		await exchange.waitForClose();
-		const liveOptions = { messages: { since: 0 } };
+		const liveOptions = { messages: { after: 0 } };
 		const recordedOptions = {
 			runtime: createRuntime({ storage: opened.storage }),
-			messages: { since: 0 },
+			messages: { after: 0 },
 		};
 		const readings = [room.read(liveOptions), readRoom(room.name, recordedOptions)];
-		liveOptions.messages.since = Number.MAX_SAFE_INTEGER;
-		recordedOptions.messages.since = Number.MAX_SAFE_INTEGER;
-		liveOptions.messages = { since: Number.MAX_SAFE_INTEGER };
-		recordedOptions.messages = { since: Number.MAX_SAFE_INTEGER };
+		liveOptions.messages.after = Number.MAX_SAFE_INTEGER;
+		recordedOptions.messages.after = Number.MAX_SAFE_INTEGER;
+		liveOptions.messages = { after: Number.MAX_SAFE_INTEGER };
+		recordedOptions.messages = { after: Number.MAX_SAFE_INTEGER };
 		for (const snapshot of await Promise.all(readings)) {
 			expect(snapshot.messages.filter(isSpoken).map((message) => message.text)).toEqual([
 				'Original question.',

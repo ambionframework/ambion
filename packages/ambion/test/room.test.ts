@@ -474,11 +474,11 @@ describe('startRoom', () => {
 		expect(claimed).toMatchObject({ ok: {} });
 		expect(await room.lease({ activation, operation: 'claim' })).toMatchObject({ ok: {} });
 		// A renewal writes an entry beside the record, and the record stands
-		// where it stood. The seat reads `lastSeq` against what its view held to
+		// where it stood. The seat reads `through` against what its view held to
 		// decide whether to read again: a renewal that reported its own landing
 		// as movement would read again, renew again, and never stop.
 		expect(await room.lease({ activation, operation: 'renew' })).toMatchObject({
-			ok: { lastSeq: 'ok' in claimed ? claimed.ok.lastSeq : -1 },
+			ok: { through: 'ok' in claimed ? claimed.ok.through : -1 },
 		});
 
 		const before = await messagesOf(session);

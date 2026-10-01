@@ -97,7 +97,7 @@ async function resume(): Promise<void> {
 			messages.filter((message) => message.kind === 'said' && message.key === request.key).length,
 			1,
 		);
-		const missed = await messagesOf(room, { since: checkpoint.cursor });
+		const missed = await messagesOf(room, { after: checkpoint.cursor });
 		assert.ok(missed.length > 0);
 		assert.ok(missed.every((message) => message.seq > checkpoint.cursor));
 		assert.ok(

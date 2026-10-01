@@ -140,7 +140,8 @@ moves back. The room's proofs file proves these lemmas:
   change fixes `activation`, `openedSeq`, and `claimedAt`. The read
   position never moves back. An ended lease stays as it ended.
   `openedSeq` is the seq of the entry that opened the lease. The name
-  `since` belongs to the exclusive read cursor of a read and of a pass.
+  `after` belongs to the exclusive read position of a read and of a pass.
+  The name `through` belongs to the inclusive one.
 - `OneOpenExchange`: the open exchange is the earliest question after the
   last close. Every other question that could open one comes at or after
   it.
