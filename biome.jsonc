@@ -705,10 +705,10 @@
 		},
 		{
 			// The Pi test entry reads the verbs and the `Reply` type of the core
-			// test entry. A Biome override replaces the options of an earlier one
+			// test entry, and so does the scripted demo of Camera Chat. A Biome override replaces the options of an earlier one
 			// for the same rule, so this entry repeats the group above and adds
 			// the one path it may reach.
-			"includes": ["packages/pi/src/testing.ts"],
+			"includes": ["packages/pi/src/testing.ts", "examples/camera-chat/src/demo.ts"],
 			"linter": {
 				"rules": {
 					"style": {

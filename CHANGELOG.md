@@ -904,7 +904,7 @@ migration. Journal bodies and stored schemas do not change.
 separate sensors package.
 
 **Sensor connections expose host lifecycle callbacks and a disconnect tool.**
-A ports-enabled workspace exposes `workspace.sensors.get`, `list`, and
+A workspace with endpoints exposes `workspace.sensors.get`, `list`, and
 `subscribe`. Events report committed connection, refresh, disconnect, and
 process-unavailability changes. Listener failures do not undo registry changes.
 `disconnect({ name })` detaches an owned link and closes its transport without

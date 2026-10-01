@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import {
 	BACKGROUND_CONTEXT,
 	type BashBackend,
+	type GitBackend,
 	resolvePath,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
@@ -10,7 +11,7 @@ import { assertAgent } from '@ambionframework/workspace/git';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 
 /** A trusted local shell. Agent directories provide organization, without an OS sandbox. */
-export function localBashBackend(directory: string): BashBackend {
+export function localBashBackend(directory: string, git: GitBackend): BashBackend {
 	const root = resolve(directory);
 	let disposed = false;
 	return {
@@ -19,12 +20,12 @@ export function localBashBackend(directory: string): BashBackend {
 			rooms: `${root}/rooms`,
 			snapshots: `${root}/snapshots`,
 		},
-		gitTransports: ['local-file'],
+		git,
 		guidance:
 			'Commands run directly on this Mac as the signed-in user. Your home is an application directory. The shell has full host access and network access. Local Git remotes use filesystem paths. Only use this backend with trusted agents.',
-		ports: {
-			hostname: 'localhost',
-			async open(_agent, port, signal) {
+		endpoints: {
+			machine: 'localhost',
+			async forward(_agent, port, signal) {
 				signal?.throwIfAborted();
 				if (disposed) throw new Error('The local backend is disposed.');
 				if (!Number.isInteger(port) || port < 1 || port > 65535)

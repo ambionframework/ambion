@@ -128,8 +128,7 @@ export async function localGitBackend(directory: string): Promise<GitBackend> {
 	await protect(pathOf(template));
 	await protect(pathOf('templates/camera'));
 	return {
-		access: { transport: 'local-file' },
-		server: 'localhost (local bare repositories)',
+		label: 'localhost (local bare repositories)',
 		async connect(agent, signal): Promise<GitEnv> {
 			assertAgent(agent);
 			signal?.throwIfAborted();
