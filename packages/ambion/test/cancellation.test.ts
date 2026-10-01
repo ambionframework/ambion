@@ -31,7 +31,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
+import { byAgent, isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 
@@ -237,7 +237,7 @@ describe('durable cancellation', () => {
 					byAgent({
 						worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
 						assistant: (context) => {
-							if (!isClosing(context)) return quiet();
+							if (!isClosingContext(context)) return quiet();
 							summaryStarted.resolve();
 							return new Promise<never>(() => {});
 						},

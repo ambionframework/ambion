@@ -24,8 +24,8 @@ import {
 	callTool,
 	contextText,
 	later,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	speak,
 	toolResultTexts,
@@ -42,7 +42,7 @@ const AFTER = 600;
  * back. A delivered say or a scheduled one ends the activation.
  */
 const results: string[] = [];
-const checksLater: Script = (context) => {
+const checksLater: PiScript = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
 	if (last?.startsWith('said #') || last?.startsWith('scheduled')) return quiet();
@@ -60,7 +60,7 @@ const checksLater: Script = (context) => {
  * the say result names. It tells the person in the same activation, so the
  * dismissal must not leave its say behind the record.
  */
-const changesItsMind: Script = (context) => {
+const changesItsMind: PiScript = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
 	const seq = /^scheduled #(\d+):/.exec(last ?? '')?.[1];
@@ -81,7 +81,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const runtime = () => createRuntime({ clock, storage: opened.storage });
 		return { clock, runtime };
 	};
-	const start = async (runtime: Runtime, script: Script = checksLater) =>
+	const start = async (runtime: Runtime, script: PiScript = checksLater) =>
 		stopAtEnd(
 			await startRoom({
 				name: roomName('scheduled'),

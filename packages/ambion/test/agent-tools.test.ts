@@ -30,7 +30,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, callTool, quiet, type Script, scripted, speak } from './support/scripted.ts';
+import { byAgent, callTool, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -263,7 +263,7 @@ describe('the definition of agent tools', () => {
 });
 
 /** One room where `worker` has a probe tool; resolves when the room settles. */
-async function probeRoom(attention: 'broadcast' | 'presence', script: Script, ask: boolean) {
+async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, ask: boolean) {
 	const seen: ToolContext[] = [];
 	const frozen: boolean[] = [];
 	const probe = tool('probe', (ctx) => {

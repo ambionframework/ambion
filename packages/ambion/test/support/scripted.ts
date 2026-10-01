@@ -1,20 +1,16 @@
 import type { Context } from '@earendil-works/pi-ai';
-import { contextText, quiet, type Script, speak } from '../../../pi/src/testing.ts';
+import { contextText, type PiScript } from '../../../pi/src/testing.ts';
+import { quiet, speak } from '../../src/testing.ts';
 
 export {
-	byAgent,
-	callTool,
 	contextText,
-	isClosing,
-	later,
-	quiet,
-	type Script,
+	isClosingContext,
+	type PiScript,
 	scripted,
-	seat,
-	speak,
 	toolNames,
 	toolResultTexts,
 } from '../../../pi/src/testing.ts';
+export { byAgent, callTool, later, quiet, seat, speak } from '../../src/testing.ts';
 
 // Closing publications use the same model tool as ordinary speech.
 export const summarise = (text: string) => speak(text);
@@ -52,7 +48,7 @@ function delivered(context: Context): string[] {
  * the seat quiet.
  */
 export const answersLastQuestion =
-	(people: string[]): Script =>
+	(people: string[]): PiScript =>
 	(context, name) => {
 		const text = contextText(context);
 		const asked = new RegExp(
@@ -95,7 +91,7 @@ export function unanswered(context: Context, name: string, people: string[]): st
  * answer stays quiet.
  */
 export const answersEveryQuestion =
-	(people: string[]): Script =>
+	(people: string[]): PiScript =>
 	(context, name) => {
 		const next = unanswered(context, name, people)[0];
 		return next === undefined ? quiet() : speak(`${name} on ${next}`);
@@ -105,7 +101,7 @@ export const answersEveryQuestion =
  * A seat that says one thing and means it: a refused say is said again, and
  * a delivered one ends the pass. What lands beside it never changes its mind.
  */
-export const insists = (text: string, to?: string): Script => says([text], to);
+export const insists = (text: string, to?: string): PiScript => says([text], to);
 
 /**
  * A seat that says these things, in this order, once each, however the room
@@ -113,7 +109,7 @@ export const insists = (text: string, to?: string): Script => says([text], to);
  * a say the record already holds is not said twice.
  */
 export const says =
-	(texts: string[], to?: string): Script =>
+	(texts: string[], to?: string): PiScript =>
 	(context, name) => {
 		const record = contextText(context);
 		const said = delivered(context);

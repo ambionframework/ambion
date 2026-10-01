@@ -4,16 +4,14 @@
  * exchange, and the simulator drives the room. A scripted Pi stream plays
  * the assistant, so the live suite's plumbing runs with no key.
  */
+
+import { byAgent, quiet, seat, speak } from '@ambionframework/ambion/testing';
 import { piExecution } from '@ambionframework/pi';
 import {
-	byAgent,
 	contextText,
-	isClosing,
-	quiet,
-	type Script,
+	isClosingContext,
+	type PiScript,
 	scripted,
-	seat,
-	speak,
 } from '@ambionframework/pi/testing';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 import { describe, expect, it } from 'vitest';
@@ -23,11 +21,11 @@ import { answers, openRoom, priya, saidBy } from './live/support.ts';
  * An assistant that routes the first question once, and writes a summary
  * with the count. It keeps the context of each ordinary activation in `seen`.
  */
-function assistant(route: Route, seen: string[]): Script {
+function assistant(route: Route, seen: string[]): PiScript {
 	let routed = route === 'quiet';
 	return byAgent({
 		assistant: (context) => {
-			if (isClosing(context)) {
+			if (isClosingContext(context)) {
 				return contextText(context).includes('Summary:') ? quiet() : speak('Summary: 8 units.');
 			}
 			seen.push(contextText(context));

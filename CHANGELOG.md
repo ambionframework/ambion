@@ -18,6 +18,22 @@ permanent. The Claude and Codex guides state how to run those seats on a
 subscription: `claude login` or `CLAUDE_CODE_OAUTH_TOKEN`, and `codex
 login`. Neither package changes.
 
+**One scripted test language serves the core and Pi.**
+`@ambionframework/ambion/testing` renames the type `Turn` to `Reply`,
+because `turn` means one request to a provider in Pi. `seat(name)` joins the verbs `callTool`,
+`speak`, `later`, `spend`, and `quiet` in that entry. `byAgent` is generic:
+`byAgent<Input, Out>` routes a script that reads a `Step` and a script that
+reads a Pi `Context` with one function. `@ambionframework/pi/testing` drops
+`callTool`, `speak`, `later`, `quiet`, `seat`, and `byAgent`. A Pi script
+reads these verbs from the core entry. The Pi type `Script` is now
+`PiScript`, and a `PiScript` answers with a `Reply` or an
+`AssistantMessage`. `isClosing` in the Pi entry is now `isClosingContext`,
+so the name `isClosing` means only the view check of the core. The Pi
+`scripted` stream turns a reply into a message: one tool call for each call,
+or a text that ends the run for an empty reply. It turns a `spend` reply
+into an error message. `quiet` takes no text. A test that reads the text
+builds the message with `fauxAssistantMessage`.
+
 **The hosting entry exports what a host or an executor family uses.**
 `@ambionframework/ambion/hosting` no longer exports 28 names. No package,
 test, or example outside the core imported them, and no page told a reader

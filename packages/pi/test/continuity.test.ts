@@ -24,6 +24,7 @@ import type {
 	RoomProtocol,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
+import { quiet, speak } from '@ambionframework/ambion/testing';
 import {
 	BACKGROUND_CONTEXT,
 	type CompactionSettings,
@@ -42,7 +43,7 @@ import {
 	type PiSessions,
 	privateDirectory,
 } from '../src/sessions.ts';
-import { contextText, quiet, type Script, scripted, speak } from '../src/testing.ts';
+import { contextText, type PiScript, scripted } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 import { tempDir } from './support/temp.ts';
 
@@ -125,7 +126,7 @@ const texts = (context: Context) =>
 function seatOn(
 	room: TwoQuestions,
 	sessions: PiSessions,
-	script: Script = () => quiet(),
+	script: PiScript = () => quiet(),
 	definition: AgentDefinition = scriptedAgent('product'),
 ) {
 	const seen: Context[] = [];

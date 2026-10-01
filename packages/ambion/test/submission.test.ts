@@ -37,9 +37,9 @@ import {
 import {
 	answersLastQuestion,
 	byAgent,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	says,
 	scripted,
 	summarise,
@@ -62,7 +62,7 @@ const watcher = scriptedAgent('watcher');
 /** Alpha speaks by `script`, and the assistant summarises each closed exchange once. */
 async function summarisedRoom(
 	storage: JournalOpener,
-	script: Script,
+	script: PiScript,
 	wrap: (execution: Execution) => Execution = (execution) => execution,
 ) {
 	const clock = fakeClock();
@@ -80,7 +80,7 @@ async function summarisedRoom(
 						byAgent({
 							alpha: script,
 							assistant: (context) =>
-								isClosing(context) &&
+								isClosingContext(context) &&
 								!toolResultTexts(context).some((text) => text.startsWith('said #'))
 									? summarise('The one message.')
 									: quiet(),

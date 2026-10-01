@@ -26,9 +26,9 @@ import {
 } from './support/room.ts';
 import {
 	contextText,
-	isClosing,
+	isClosingContext,
+	type PiScript,
 	quiet,
-	type Script,
 	scripted,
 	speak,
 	summarise,
@@ -41,20 +41,20 @@ const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-const answer: Script = (_context, _agent, call) => (call === 2 ? speak('The answer.') : quiet());
+const answer: PiScript = (_context, _agent, call) => (call === 2 ? speak('The answer.') : quiet());
 /** A seat script that holds its second model call until the test opens the gate. */
 const heldBy =
-	(gate: Promise<void>): Script =>
+	(gate: Promise<void>): PiScript =>
 	async (_context, _agent, call) => {
 		if (call === 2) await gate;
 		return quiet();
 	};
-const withSummary = (): Script => {
+const withSummary = (): PiScript => {
 	const answers = new Map<string, number>();
 	let summarised = false;
 	return (context, agent) => {
 		if (agent === 'assistant') {
-			if (!isClosing(context) || summarised) return quiet();
+			if (!isClosingContext(context) || summarised) return quiet();
 			summarised = true;
 			return summarise('The result.');
 		}
@@ -78,7 +78,7 @@ async function runtimeOn(storage: Storage): Promise<Runtime> {
 
 /** A room of `alpha` that stops at the end of the test. */
 async function world(
-	script: Script = answer,
+	script: PiScript = answer,
 	options: Options = {},
 	storage: Storage = memory,
 ): Promise<{ runtime: Runtime; room: Room }> {
