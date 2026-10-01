@@ -200,11 +200,10 @@ class Activation implements ExecutorSession {
 	private start(pass: Pass): void {
 		if (this.stream !== undefined) return;
 		const executor = claudeOf(this.definition.executor);
-		const tools = [...pass.tools, ...pass.agentTools];
 		this.resuming = pass.resume;
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
-			const { server, names } = roomServer(tools, (tool) => this.activation.callId(tool));
+			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));
 			return this.open({
 				prompt: this.inbox,
 				options: queryOptions({

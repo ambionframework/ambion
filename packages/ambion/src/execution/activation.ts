@@ -45,12 +45,6 @@ export interface ActivationInput {
 	readonly trace: StepSink;
 }
 
-/** The tools of one activation: the room tools and the tools of the definition. */
-interface Tools {
-	readonly room: readonly RoomTool[];
-	readonly agent: readonly RoomTool[];
-}
-
 /** A line that landed while the activation worked. */
 interface Steered {
 	readonly after: Seq;
@@ -64,7 +58,7 @@ export class ActivationState {
 	private readonly freshness = new Freshness();
 	private readonly cut = new AbortController();
 	private readonly executor: ExecutorSession;
-	private tools: Tools | undefined;
+	private tools: readonly RoomTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
 	/** The pass in flight. Absent between passes. */
@@ -247,15 +241,13 @@ export class ActivationState {
 
 	private passOf(input: PassInput): Pass {
 		const { view } = input;
-		const tools = this.toolsOf(view);
 		const resume = sessionToResume(view, this.input.definition.executor.kind);
 		return {
 			...input,
 			...renderSystem(view, this.input.definition),
 			record: (after) => this.record(input, after),
 			...(resume === undefined ? {} : { resume }),
-			tools: tools.room,
-			agentTools: tools.agent,
+			tools: this.toolsOf(view),
 		};
 	}
 
@@ -299,8 +291,8 @@ export class ActivationState {
 		return { text: context, range: { after: 0, through: view.through } };
 	}
 
-	/** The tools of the activation, bound on its first pass. */
-	private toolsOf(view: ActivationView): Tools {
+	/** The tools of the activation, bound on its first pass: the room tools, then the tools of the definition. */
+	private toolsOf(view: ActivationView): readonly RoomTool[] {
 		if (this.tools !== undefined) return this.tools;
 		const freshness = this.freshness;
 		const binding: RoomToolBinding = {
@@ -313,10 +305,10 @@ export class ActivationState {
 			resultExpected: (call, seq) => freshness.resultExpected(call, seq),
 			abort: () => this.cancel(),
 		};
-		this.tools = {
-			room: roomTools(view, binding, this.executor.roomTools),
-			agent: agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
-		};
+		this.tools = [
+			...roomTools(view, binding, this.executor.roomTools),
+			...agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
+		];
 		return this.tools;
 	}
 }

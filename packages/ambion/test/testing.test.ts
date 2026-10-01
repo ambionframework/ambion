@@ -628,7 +628,7 @@ describe('scriptedExecutor', () => {
 		const { state, activation, events } = around(
 			async (pass) => {
 				activation.trace.record({ type: 'tool_call', call: 'c1', name: 'echo', input: {} });
-				const tool = pass.agentTools.find((one) => one.name === 'echo');
+				const tool = pass.tools.find((one) => one.name === 'echo');
 				const call = activation.callId('echo');
 				const result = await tool?.run({}, call);
 				activation.trace.record({ type: 'tool_result', call, output: 'echoed' });

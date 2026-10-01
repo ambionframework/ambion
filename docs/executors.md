@@ -129,8 +129,7 @@ members:
 | `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
 | `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
 | `resume`        | The id of the harness session to resume, when `spec.resume` names the executor kind.           |
-| `tools`         | The room tools that the purpose grants, bound to the activation.                               |
-| `agentTools`    | The tools of the definition in the same form. A closing activation gets none.                  |
+| `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
 
 **The session reports back.** `ExecutorSession` has these members:
 
@@ -311,17 +310,16 @@ every family, and one view is one call over the wire.
 [Definitions and tools](agent.md#tools) states which tools an ordinary
 activation receives and which tools a closing activation receives.
 
-**The core binds the room tools once, in a form that names no harness.**
-Each family adapts them to its own tool shape.
+**The core binds the tools of the activation once, in a form that names no
+harness.** Each family adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
-  grants. Each `RoomTool` has a `name`, a `description`, TypeBox
+  grants, then the tools of the definition. A closing activation gets the
+  room tools alone. Each `RoomTool` has a `name`, a `description`, TypeBox
   `parameters`, and `run(args, call)`. `call` is the id of the tool call,
-  and the commit takes it as its key. The core binds each tool to the
-  read position and the cut of the activation.
-- **`pass.agentTools`** holds the tools of the definition in the same form.
-  A closing activation gets none. Each call reads the view of the pass
-  that runs it.
+  and the commit takes it as its key. The core binds each room tool to the
+  read position and the cut of the activation. A call of a tool of the
+  definition reads the view of the pass that runs it.
 - **`session.roomTools`** is a `RoomToolOptions` value that adds to a say
   and to a schedule: `refs` changes the refs it cites, and `spoke` runs
   when the room takes an ordinary say or a scheduled say.
@@ -400,9 +398,10 @@ no call took yet, or a fresh id when none waits. A `tool_result` step ends
 its call, so the core drops the id of that call. Each adapter page names
 the transport.
 
-**Pi hosts `pass.tools`, and builds the tools of the definition itself.**
-Claude and Codex host `pass.agentTools`. A `RoomTool` does not carry what
-the Pi harness does with a tool of the definition:
+**Pi hosts the room tools of `pass.tools`, and builds the tools of the
+definition itself.** Claude and Codex host all of `pass.tools`. A
+`RoomTool` does not carry what the Pi harness does with a tool of the
+definition:
 
 - The harness applies `prepareArguments` before it checks the arguments
   against the schema. A `RoomTool` applies it after the check.
@@ -610,8 +609,8 @@ family. `@ambionframework/claude` is the worked example, and
    harness caches them, and send the text of `pass.record()`.
    [The prompt the core renders](#the-prompt-the-core-renders) states the
    parts.
-3. **Host the tools.** Adapt `pass.tools` and `pass.agentTools` to the
-   form the harness needs, and run them where the harness reaches them.
+3. **Host the tools.** Adapt `pass.tools` to the form the harness needs,
+   and run them where the harness reaches them.
    A harness that does more with a tool of the definition can build it
    from its `AmbionTool`, as Pi does.
    [The room tools](#the-room-tools) states the commit key and the room

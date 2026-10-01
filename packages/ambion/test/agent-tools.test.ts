@@ -75,8 +75,11 @@ describe('the definition of agent tools', () => {
 
 	it.each([
 		['say', { tools: [tool('say')] }, /room supplies it for an activation/],
+		['schedule', { tools: [tool('schedule')] }, /room supplies it for an activation/],
+		['recall', { tools: [tool('recall')] }, /room supplies it for an activation/],
 		['seat', { tools: [tool('seat')] }, /room supplies it for an activation/],
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
+		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
 		[
 			'a duplicate after a bundle',
 			{ tools: [tool('read')], bundles: [{ tools: [tool('read')] }] },
