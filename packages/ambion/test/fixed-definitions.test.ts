@@ -233,6 +233,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		await waitForRoom(resumed);
 		const read = await readRoom(room.name, { runtime: host() });
 		expect(read.participants.map((participant) => participant.name)).toEqual(['beta', 'gamma']);
+		expect(read.reserve).toEqual([{ name: 'alpha', identity: alpha.identity }]);
 		await expect(
 			resumeRoom(room.name, { agents: [beta, gamma], runtime: host(), execution: silent() }),
 		).rejects.toThrow();

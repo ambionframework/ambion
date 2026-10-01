@@ -52,6 +52,25 @@ function seatLine(room: string, seat: string, event: ActivationEvent): SeatEvent
 	};
 }
 
+/** The name of the seat object of one seat: its identity, from which the object reads its room and seat. */
+export function seatName(room: string, seat: string): string {
+	return JSON.stringify(['ambion/seat-object', room, seat]);
+}
+
+function seatOfName(name: string | undefined): { room: string; seat: string } {
+	let parsed: unknown;
+	try {
+		parsed = name === undefined ? undefined : JSON.parse(name);
+	} catch {
+		parsed = undefined;
+	}
+	if (Array.isArray(parsed) && parsed.length === 3 && parsed[0] === 'ambion/seat-object') {
+		const [, room, seat] = parsed;
+		if (typeof room === 'string' && typeof seat === 'string') return { room, seat };
+	}
+	throw new Error('A seat object is reached by the name that seatName gives.');
+}
+
 export class SeatObject extends DurableObject<Env> {
 	/** The runner of the activation that runs in this object now. */
 	private runner: AgentRunner | undefined;
@@ -62,9 +81,12 @@ export class SeatObject extends DurableObject<Env> {
 	/** Whether an alarm runs in this object now. */
 	private alarming = false;
 	private readonly metadata;
+	/** The room and the seat this object serves, from its name. */
+	private readonly identity: { room: string; seat: string };
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		this.identity = seatOfName(ctx.id.name);
 		this.metadata = seatMetadata(ctx);
 	}
 
@@ -79,11 +101,8 @@ export class SeatObject extends DurableObject<Env> {
 				? undefined
 				: {
 						patch: {
-							room: wake.room,
-							seat: wake.seat,
 							activation: wake.activation,
 							phase: current.phase ?? 'pending',
-							wakeCount: (current.wakeCount ?? 0) + 1,
 						},
 					},
 		);
@@ -105,7 +124,6 @@ export class SeatObject extends DurableObject<Env> {
 	 * reaches no runner, and the alarm that starts it is refused its claim.
 	 */
 	async cut(activation: string): Promise<void> {
-		this.metadata.change((current) => ({ patch: { cuts: (current.cuts ?? 0) + 1 } }));
 		await this.runner?.cut(activation);
 	}
 
@@ -119,16 +137,6 @@ export class SeatObject extends DurableObject<Env> {
 		if (!on && next.activation !== undefined) {
 			await this.ctx.storage.setAlarm(Date.now());
 		}
-	}
-
-	/** How many wakes this seat has taken. The tests read it. */
-	async wakeCount(): Promise<number> {
-		return this.metadata.read().wakeCount ?? 0;
-	}
-
-	/** How many cuts the room has sent this seat. The tests read it. */
-	async cuts(): Promise<number> {
-		return this.metadata.read().cuts ?? 0;
 	}
 
 	/**
@@ -149,8 +157,9 @@ export class SeatObject extends DurableObject<Env> {
 
 	private async runHeld(): Promise<void> {
 		const state = this.metadata.read();
-		const { activation, room, seat } = state;
-		if (activation === undefined || room === undefined || seat === undefined) return;
+		const { activation } = state;
+		if (activation === undefined) return;
+		const { room, seat } = this.identity;
 		if (state.phase === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
 			// The runner of the seat releases it as failed.

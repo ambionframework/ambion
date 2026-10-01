@@ -49,6 +49,7 @@ function fakeRoom(
 				messages,
 				scheduled: [],
 				participants: [],
+				reserve: [],
 				exchanges: [],
 				exchange: undefined,
 				through: backlog.at(-1)?.seq ?? 0,

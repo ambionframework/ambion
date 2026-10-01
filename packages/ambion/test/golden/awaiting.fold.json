@@ -24,6 +24,7 @@
 			"presence": "absent"
 		}
 	],
+	"reserve": [],
 	"exchanges": [
 		{
 			"person": "priya",

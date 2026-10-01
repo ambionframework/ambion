@@ -36,7 +36,7 @@ const priya = { name: 'priya', identity: 'Project manager.' };
 /** A started room with no agents that priya has visited. */
 async function visited(name: string) {
 	const stub = roomOf(name);
-	await stub.start({ name, definitions: [] });
+	await stub.start({ definitions: [] });
 	await stub.visit(priya);
 	return stub;
 }
@@ -60,7 +60,7 @@ async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
 
 async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): Promise<void> {
 	await inside<Room, void>(stub, async (object, state) => {
-		object.metadata.change(() => ({ patch: { name, definitions: [], stopped: true } }));
+		object.metadata.change(() => ({ patch: { stopped: true } }));
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
 		let position = (await journal.read(0)).position;
 		const entries = [
@@ -103,7 +103,6 @@ async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): P
 it('starts, admits a person, and returns one plain exchange for repeated sends, also for an empty key', async () => {
 	const stub = roomOf('room-test');
 	await stub.start({
-		name: 'room-test',
 		summaryWriter: 'assistant',
 		seats: { assistant: 'none' },
 		definitions: ['assistant'],
@@ -188,14 +187,13 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 
 it('does not persist malformed visits and makes repeated leave harmless', async () => {
 	const stub = roomOf('room-malformed-visit');
-	await stub.start({ name: 'room-malformed-visit', definitions: [] });
-	const metadata = await inside<Room, Record<string, unknown>>(stub, async (object) => {
+	await stub.start({ definitions: [] });
+	await inside<Room, void>(stub, async (object) => {
 		await expect(object.visit({ name: 'Not valid', identity: 'Unknown.' })).rejects.toThrow(
 			/Invalid participant name/,
 		);
-		return object.metadata.read();
 	});
-	expect(metadata.people).toBeUndefined();
+	expect((await stub.read({ messages: false })).participants).toEqual([]);
 	await stub.visit(priya);
 	await stub.leave('priya');
 	await expect(stub.leave('priya')).resolves.toBeUndefined();
@@ -211,7 +209,7 @@ it('does not persist malformed visits and makes repeated leave harmless', async 
 it('rejects a conflicting delivery key payload and recipient over RPC', async () => {
 	const name = 'room-delivery-conflict';
 	const stub = roomOf(name);
-	await stub.start({ name, definitions: ['assistant'] });
+	await stub.start({ definitions: ['assistant'] });
 	await stub.visit(priya);
 	await stub.visit({ name: 'sam', identity: 'Engineering lead.' });
 	await inside<Room, void>(stub, async (object) => {
@@ -285,7 +283,7 @@ it('keeps a visit that reenters while an older leave is in flight', async () => 
 
 it('can ensure a resumed room and report its current state', async () => {
 	const stub = roomOf('room-status');
-	const composition = { name: 'room-status', assistant: 'assistant', definitions: [] } as const;
+	const composition = { assistant: 'assistant', definitions: [] } as const;
 	await stub.ensureStart(composition);
 	await stub.ensureStart(composition);
 	await expect(stub.read()).resolves.toMatchObject({
@@ -331,7 +329,7 @@ it('reads a stopped open exchange and reconstructs it after eviction', async () 
 
 it('retains the stopped handle when saving stop metadata fails', async () => {
 	const stub = roomOf('room-stop-retry');
-	await stub.start({ name: 'room-stop-retry', definitions: [] });
+	await stub.start({ definitions: [] });
 	type Stoppable = {
 		metadata: { change: (...args: never[]) => unknown };
 		stop(): Promise<void>;
@@ -351,21 +349,17 @@ it('retains the stopped handle when saving stop metadata fails', async () => {
 	await expect(again.read({ messages: false })).resolves.toMatchObject({ initialized: true });
 });
 
-it('leaves an uninitialized named record for an explicit start retry', async () => {
+it('leaves an uninitialized record for an explicit start retry', async () => {
 	const name = 'room-uninitialized-retry';
 	const stub = roomOf(name);
-	await inside<Room, void>(stub, async (object) => {
-		object.metadata.change(() => ({
-			patch: { name, definitions: ['assistant'], stopped: false },
-		}));
-	});
+	await stub.read({ messages: false });
 	await evict(stub, 'reconstruct uninitialized object');
 	const again = roomOf(name);
 	await expect(again.read({ messages: false })).resolves.toMatchObject({
 		name,
 		initialized: false,
 	});
-	await again.start({ name, definitions: [] });
+	await again.start({ definitions: [] });
 	await expect(again.read({ messages: false })).resolves.toMatchObject({
 		name,
 		initialized: true,
@@ -375,7 +369,6 @@ it('leaves an uninitialized named record for an explicit start retry', async () 
 it('changes membership by name without installing a definition', async () => {
 	const stub = roomOf('room-roster');
 	await stub.start({
-		name: 'room-roster',
 		summaryWriter: 'assistant',
 		definitions: ['product', 'assistant'],
 		seats: { assistant: 'none' },
@@ -391,6 +384,14 @@ it('changes membership by name without installing a definition', async () => {
 	).toMatchObject({ attention: 'named' });
 	await stub.unseat('product');
 	expect(await names()).toEqual(['assistant']);
+	// the unseated agent stays on the record, and a rebuilt room resumes with it
+	await evict(stub, 'the test takes a room with a reserve agent');
+	const again = roomOf('room-roster');
+	expect((await again.read({ messages: false })).reserve).toMatchObject([{ name: 'product' }]);
+	await again.seat('product');
+	expect((await again.read({ messages: false })).participants.map((one) => one.name)).toContain(
+		'product',
+	);
 });
 
 it('serves a token-windowed view over RPC to a seat that names a registered estimator', async () => {
@@ -403,7 +404,7 @@ it('serves a token-windowed view over RPC to a seat that names a registered esti
 	configure({ ...configuration, stream });
 	onTestFinished(() => configure(configuration));
 	const stub = roomOf('room-window');
-	await stub.start({ name: 'room-window', definitions: ['reader'] });
+	await stub.start({ definitions: ['reader'] });
 	await stub.visit(priya);
 	// Four questions of 40 characters each: the window of 40 tokens holds one.
 	const question = (index: number) => `Question ${index} about the pour.`.padEnd(40, '.');

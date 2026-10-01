@@ -140,6 +140,8 @@ interface RoomReadFields {
 	/** The scheduled says that wait to return, in the order they landed. */
 	readonly scheduled: readonly ScheduledSay[];
 	readonly participants: readonly Participant[];
+	/** The agents on the record that no seat holds now. A seat takes one by name. */
+	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
 	readonly exchanges: readonly Exchange[];
 	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
@@ -154,6 +156,7 @@ export type RoomRead =
 			readonly messages: readonly [];
 			readonly scheduled: readonly [];
 			readonly participants: readonly [];
+			readonly reserve: readonly [];
 			readonly exchanges: readonly [];
 			readonly exchange: undefined;
 	  })

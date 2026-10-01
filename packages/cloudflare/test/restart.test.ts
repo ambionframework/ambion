@@ -40,7 +40,6 @@ const writers = async (stub: DurableObjectStub, type: string) =>
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
 	const stub = roomOf(NAME);
 	await stub.start({
-		name: NAME,
 		summaryWriter: 'assistant',
 		seats: { slow: 'broadcast', assistant: 'none' },
 		definitions: ['slow', 'assistant'],
