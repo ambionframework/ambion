@@ -1,41 +1,47 @@
 /**
- * How a harness run ends a pass. A failed provider message is permanent or
- * transient by its text and by the status its diagnostics report. A run
- * that fails with no such message is transient, and a cut run is no failure.
+ * How a settled submission ends a pass. A failed provider message is
+ * permanent or transient by its text and by the status its diagnostics
+ * report. A model error with no such message is classified by its text. A
+ * conversation with no model is permanent, every other refusal is
+ * transient, and a cut pass is no failure.
  */
 
 import { providerMessage } from '@ambionframework/ambion/hosting';
-import type { OperationResultRecord, RunResult } from '@earendil-works/pi-agent-core';
-import { LaneBusy } from '@earendil-works/pi-agent-core';
 import { type AssistantMessage, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import {
+	type EntryId,
+	ROOT_CONVERSATION_ID,
+	type SettledSubmissionRecord,
+	type SubmissionId,
+} from '@earendil-works/pi-durable';
 import { describe, expect, it } from 'vitest';
 import { passOutcome } from '../src/failure.ts';
 
-const run = (
-	status: OperationResultRecord['status'],
-	error?: OperationResultRecord['error'],
-): RunResult => ({
-	ok: true,
-	value: {
-		operationId: 'run',
-		kind: 'run',
-		status,
-		...(error === undefined ? {} : { error }),
-		fromTipId: null,
-		tipId: null,
-		startedAt: 0,
-		endedAt: 0,
-	},
-});
+/** What a submission settles with. */
+type Settling =
+	{ status: 'done'; answer: EntryId } | { status: 'unanswered'; reason: string; detail?: string };
+
+/** The record of a settled input. The ids are the ones of a conversation that ran. */
+const settled = (outcome: Settling): SettledSubmissionRecord =>
+	({
+		id: 1 as SubmissionId,
+		conversationId: ROOT_CONVERSATION_ID,
+		type: 'input',
+		entry: 1 as EntryId,
+		...outcome,
+	}) as SettledSubmissionRecord;
+
+const unanswered = (reason: string, detail?: string) =>
+	settled({ status: 'unanswered', reason, ...(detail === undefined ? {} : { detail }) });
+
+const answered = settled({ status: 'done', answer: 2 as EntryId });
 
 const failed = (text: string, extra: object = {}): AssistantMessage => ({
 	...fauxAssistantMessage('', { stopReason: 'error', errorMessage: text }),
 	...extra,
 });
 
-const assistantError = { code: 'assistant_error', message: 'x' };
-
-describe('the outcome of a run', () => {
+describe('the outcome of a settled input', () => {
 	it.each([
 		['a credit refusal in the text', 'Your credit balance is too low', {}, 'permanent'],
 		[
@@ -89,7 +95,7 @@ describe('the outcome of a run', () => {
 		['a number in free text', 'Rate limited at 401 tokens.', {}, 'transient'],
 		['an overload with no status', 'Overloaded.', {}, 'transient'],
 	] as const)('classifies %s', (_name, text, extra, cause) => {
-		expect(passOutcome(run('failed', assistantError), failed(text, extra))).toMatchObject({
+		expect(passOutcome(unanswered('model_error', text), failed(text, extra))).toMatchObject({
 			failed: true,
 			cause,
 			error: new Error(providerMessage(text)),
@@ -99,74 +105,57 @@ describe('the outcome of a run', () => {
 	it.each([
 		[
 			'a failed provider message with no text',
-			run('failed', assistantError),
+			unanswered('model_error', ''),
 			failed(''),
-			{
-				failed: true,
-				cause: 'transient',
-				error: new Error('The activation failed.'),
-			},
+			{ failed: true, cause: 'transient', error: new Error('The activation failed.') },
 		],
 		[
-			'a failed run with no failed provider message',
-			run('failed', { code: 'harness_fault', message: 'The harness failed.' }),
+			'a model error with no failed provider message, by the text of the error',
+			unanswered('model_error', 'Your credit balance is too low'),
 			fauxAssistantMessage('Earlier.'),
-			{ failed: true, cause: 'transient', error: new Error('The harness failed.') },
+			{ failed: true, cause: 'permanent', error: new Error('Your credit balance is too low') },
 		],
 		[
-			'a failed run for a model the harness cannot find',
-			run('failed', { code: 'model_unavailable', message: 'The model is unavailable.' }),
-			fauxAssistantMessage('Earlier.'),
-			{ failed: true, cause: 'permanent', error: new Error('The model is unavailable.') },
-		],
-		[
-			'a failed run for a tool the harness cannot find',
-			run('failed', { code: 'configured_tools_unavailable', message: 'A tool is unavailable.' }),
-			undefined,
-			{ failed: true, cause: 'permanent', error: new Error('A tool is unavailable.') },
-		],
-		[
-			'a failed run with no error',
-			run('failed'),
+			'a model error with no text at all',
+			unanswered('model_error'),
 			undefined,
 			{ failed: true, cause: 'transient', error: new Error('The activation failed.') },
 		],
 		[
-			'a run the lane refused',
-			{
-				ok: false,
-				error: new LaneBusy({
-					lane: 'main',
-					operationId: 'x',
-					operationKind: 'run',
-					message: 'busy',
-				}),
-			},
+			'a conversation with no model',
+			unanswered('no_model'),
 			undefined,
-			{ failed: true, cause: 'transient', error: new Error('busy') },
+			{ failed: true, cause: 'permanent', error: new Error('The conversation has no model.') },
 		],
 		[
-			'a suspended run',
+			'a fault of the harness',
+			unanswered('faulted', 'The disk failed.'),
+			fauxAssistantMessage('Earlier.'),
 			{
-				ok: true,
-				value: {
-					operationId: 'x',
-					status: 'suspended',
-					deferred: { id: 'd', provider: 'p', modelId: 'm', api: 'a' },
-				},
+				failed: true,
+				cause: 'transient',
+				error: new Error('The activation ended without an answer: faulted.'),
 			},
-			undefined,
-			{ failed: true, cause: 'transient', error: new Error('The run suspended.') },
 		],
-		['a cut run', run('aborted'), failed('aborted'), { failed: false }],
 		[
-			'a run that stopped at a length limit',
-			run('completed'),
+			'an input the harness left stale',
+			unanswered('stale'),
+			undefined,
+			{
+				failed: true,
+				cause: 'transient',
+				error: new Error('The activation ended without an answer: stale.'),
+			},
+		],
+		['a cut pass', unanswered('aborted'), failed('aborted'), { failed: false }],
+		[
+			'a pass that stopped at a length limit',
+			answered,
 			fauxAssistantMessage('Cut.', { stopReason: 'length' }),
 			{ failed: false, stop: 'length' },
 		],
-		['a run that completed', run('completed'), fauxAssistantMessage('Done.'), { failed: false }],
-	] as const)('ends %s', (_name, result, last, outcome) => {
-		expect(passOutcome(result as RunResult, last)).toEqual(outcome);
+		['a pass that answered', answered, fauxAssistantMessage('Done.'), { failed: false }],
+	] as const)('ends %s', (_name, record, last, outcome) => {
+		expect(passOutcome(record, last)).toEqual(outcome);
 	});
 });

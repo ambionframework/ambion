@@ -1,36 +1,20 @@
 /**
- * Exchange continuity. The executor reopens the Pi harness session the room
- * names in `spec.resume`, prompts it with the delta, and records the session
- * on every release. A view that names no session, or names one the store
- * cannot open, begins a fresh one. Every case runs on sessions in memory and
- * on sessions on the local disk.
+ * Exchange continuity. The executor reopens the Pi session the room names in
+ * `spec.resume`, sends the delta as the input of the pass, and records the
+ * session on every release. A view that names no session, or names one the
+ * store cannot open, begins a fresh one. The session cases run on sessions in
+ * memory and on sessions on the local disk.
  */
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentDefinition, Executor, Message, ReminderSeat } from '@ambionframework/ambion';
-import type {
-	ActivationSpec,
-	ActivationView,
-	CommitRequest,
-	CommitResult,
-	LeaseRequest,
-	LeaseResponse,
-	RoomProtocol,
-	VendorSession,
-	ViewResponse,
-} from '@ambionframework/ambion/hosting';
+import type { ReminderSeat } from '@ambionframework/ambion';
 import { quiet, say } from '@ambionframework/ambion/testing';
-import {
-	BACKGROUND_CONTEXT,
-	type CompactionSettings,
-	type Session,
-} from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createPiOpener } from '../src/executor.ts';
-import { createExecutionServices, stubModel } from '../src/index.ts';
+import { createExecutionServices } from '../src/index.ts';
 import {
 	defaultSessionDir,
 	diskSessions,
@@ -38,130 +22,13 @@ import {
 	type PiSessions,
 	privateDirectory,
 } from '../src/sessions.ts';
-import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
+import { scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
+import { failing, seed } from './support/storage.ts';
 import { tempDir } from './support/temp.ts';
+import { began, seatOn, TwoQuestions, texts, viewOf } from './support/two-questions.ts';
 
-const said = (seq: number, text: string): Message => ({
-	kind: 'said',
-	seq,
-	at: '2026-01-01T09:00:00.000Z',
-	from: 'andrei',
-	text,
-});
-
-const RECORD = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
-
-/** A room with two questions. The record stands at `last`, and an activation reads through its own message. */
-class TwoQuestions implements RoomProtocol {
-	readonly releases: Extract<LeaseRequest, { operation: 'release' }>[] = [];
-	readonly commits: CommitRequest[] = [];
-	readonly answers: string[] = [];
-
-	constructor(private readonly last = 2) {}
-
-	async view(activation: string): Promise<ViewResponse> {
-		const message = Number(activation.split(':')[1]);
-		return {
-			view: {
-				spec: {
-					id: activation,
-					seat: 'product',
-					attempt: 1,
-					purpose: { kind: 'respond', message },
-				},
-				through: message,
-				context: {
-					name: 'memory',
-					now: 0,
-					participants: [],
-					messages: RECORD.filter((entry) => entry.seq <= message),
-					exchange: { person: 'andrei', from: 1 },
-					reserve: [],
-				},
-			},
-		};
-	}
-
-	async commit(request: CommitRequest): Promise<CommitResult> {
-		this.commits.push(request);
-		if ((request.readThrough ?? 0) < this.last) {
-			this.answers.push('missed');
-			return { missed: RECORD.filter((entry) => entry.seq > (request.readThrough ?? 0)) };
-		}
-		this.answers.push('committed');
-		return {
-			committed: { kind: 'said', seq: this.last + 1, at: '', from: 'product', text: 'Yes.' },
-		};
-	}
-
-	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
-		if (lease.operation === 'release') this.releases.push(lease);
-		return { ok: { expiresAt: Date.now() + 60_000, through: this.last } };
-	}
-}
-
-/** The seat on compaction settings that `pi()` refuses, as a host could build it by hand. */
-const withCompaction = (compaction: CompactionSettings): AgentDefinition => {
-	const definition = scriptedAgent('product');
-	return { ...definition, executor: { ...definition.executor, compaction } as Executor };
-};
-
-/** The session that the activation `message:<seq>:product:1` began. */
-const began = (seq: number): VendorSession => ({ kind: 'pi', id: `message:${seq}:product:1` });
-
-const texts = (context: Context) =>
-	context.messages.map((message) => contextText({ ...context, messages: [message] }));
-
-/**
- * One executor for the seat over `sessions`. `run` opens one activation,
- * runs its first pass over the view the room gives with the spec changes it
- * names, and closes it as the driver does.
- */
-function seatOn(
-	room: TwoQuestions,
-	sessions: PiSessions,
-	script: PiScript = () => quiet(),
-	definition: AgentDefinition = scriptedAgent('product'),
-) {
-	const seen: Context[] = [];
-	const errors: string[] = [];
-	const opener = createPiOpener({
-		definition,
-		model: stubModel,
-		stream: scriptedStream((context, agent, request) => {
-			seen.push({ ...context, messages: [...context.messages] });
-			return script(context, agent, request);
-		}),
-		now: () => 0,
-		sessions,
-	});
-	const run = async (
-		id: string,
-		spec: Partial<ActivationSpec> = {},
-		context: Partial<ActivationView['context']> = {},
-	) => {
-		const answer = await room.view(id);
-		if (!('view' in answer)) throw new Error('The room answered stale.');
-		const session = stateOf(opener, definition, {
-			id,
-			room,
-			emit: (event) => {
-				if (event.type === 'error') errors.push(event.error.message);
-			},
-		});
-		const view = {
-			...answer.view,
-			spec: { ...answer.view.spec, ...spec },
-			context: { ...answer.view.context, ...context },
-		};
-		const result = await session.pass({ kind: 'view', view });
-		const recorded = { result, session: session.session, readThrough: session.readThrough };
-		session.close?.();
-		return recorded;
-	};
-	return { seen, errors, run, opener, definition };
-}
+const scope = { room: 'memory', seat: 'product' };
 
 const stores: [string, () => Promise<PiSessions>][] = [
 	['memory', async () => memorySessions()],
@@ -177,7 +44,7 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, prompts the reminders, the scheduled says, and the delta, and records it', async () => {
+	it('continues the session the room names, sends the reminders, the scheduled says, and the delta, and records it', async () => {
 		// A bundle reminder and the scheduled says reach the model on a continued session too, before the delta.
 		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
@@ -219,9 +86,13 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
 		const { seen, run } = seatOn(new TwoQuestions(1), await store(), undefined, definition);
 		const first = await run('message:1:product:1');
-		await run('message:1:product:2', { resume: first.session });
+		const again = await run('message:1:product:2', { resume: first.session });
 		expect(seen).toHaveLength(1);
 		expect(reminded).toEqual(['message:1:product:1']);
+		// The core takes the view as read, and the session stays the one the room named.
+		expect(again.result).toEqual({ failed: false });
+		expect(again.readThrough).toBe(1);
+		expect(again.session).toEqual(began(1));
 	});
 
 	it('begins a fresh session when the view names none, as in a new exchange', async () => {
@@ -330,29 +201,18 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(next.session).toEqual(began(2));
 	});
 
-	it('starts no run for a continued session with nothing new, and reads through the view', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(1), await store());
-		await run('message:1:product:1');
-		const again = await run('message:1:product:2', { resume: began(1) });
-		expect(again.result).toEqual({ failed: false });
-		expect(seen).toHaveLength(1);
-		expect(again.readThrough).toBe(1);
-		expect(again.session).toEqual(began(1));
-	});
-
 	it.each([
-		['holds no object', 'two'],
-		['holds no position', { through: 'two' }],
-	])('reads the whole view over a continued session whose read entry %s', async (_name, data) => {
+		['holds no range entry', []],
+		[
+			'holds range entries with no positions',
+			[
+				{ kind: 'ambion.record', data: { after: -1, through: 'two' } },
+				{ kind: 'ambion.record', data: 'two' },
+			],
+		],
+	])('reads the whole view over a continued session that %s', async (_name, entries) => {
 		const sessions = await store();
-		const written = await sessions.create(
-			{ room: 'memory', seat: 'product' },
-			'message:1:product:1',
-			BACKGROUND_CONTEXT,
-		);
-		const branch = await written.createBranch('main', null, BACKGROUND_CONTEXT);
-		await branch.appendCustomEntry('ambion.read', data, BACKGROUND_CONTEXT);
-		await written.close(BACKGROUND_CONTEXT);
+		await seed(sessions, scope, 'message:1:product:1', entries);
 		const { seen, run } = seatOn(new TwoQuestions(), sessions);
 		const second = await run('message:2:product:1', { resume: began(1) });
 		expect(second.session).toEqual(began(1));
@@ -370,12 +230,12 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const retry = await run('message:2:product:2', { resume: failed.session });
 		expect(retry.result).toEqual({ failed: false });
 		expect(retry.session).toEqual(began(2));
-		// The failed run left the provider input. The retry holds the view once.
+		// The failed pass left the context. The retry holds the view once.
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
 	});
 
-	it('prompts the delta once when the room retries a failed activation that continued a session', async () => {
+	it('sends the delta once when the room retries a failed activation that continued a session', async () => {
 		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, request) => {
 			if (request === 2) throw new Error('overloaded 529');
 			return quiet();
@@ -390,64 +250,13 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
-	it('closes the session, records none, and fails as transient when the harness refuses the settings', async () => {
-		const sessions = await store();
-		await seatOn(new TwoQuestions(), sessions).run('message:1:product:1');
-		const definition = withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 });
-		const opener = createPiOpener({
-			definition,
-			model: stubModel,
-			stream: scriptedStream(() => quiet()),
-			now: () => 0,
-			sessions,
-		});
-		const session = stateOf(opener, definition, {
-			id: 'message:2:product:1',
-			room: new TwoQuestions(),
-		});
-		const view = await viewOf('message:2:product:1');
-		const result = await session.pass({
-			kind: 'view',
-			view: { ...view, spec: { ...view.spec, resume: began(1) } },
-		});
-		expect(result).toMatchObject({ failed: true, cause: 'transient' });
-		expect(session.session).toBeUndefined();
-		// The continued session and the fresh one both closed, so each opens again.
-		for (const id of ['message:1:product:1', 'message:2:product:1']) {
-			const reopened = await sessions.open(
-				{ room: 'memory', seat: 'product' },
-				id,
-				BACKGROUND_CONTEXT,
-			);
-			expect(reopened?.metadata.id).toBe(id);
-			await reopened?.close(BACKGROUND_CONTEXT);
-		}
-	});
-
-	it('begins a fresh session when the one the room names opens but does not restore', async () => {
-		const store0 = await store();
-		const sessions: PiSessions = {
-			create: (scope, id, context) => store0.create(scope, id, context),
-			open: async (scope, id, context) => {
-				const opened = await store0.open(scope, id, context);
-				await opened?.close(context);
-				return opened;
-			},
-		};
-		const { run } = seatOn(new TwoQuestions(), sessions);
-		const first = await run('message:1:product:1');
-		const second = await run('message:2:product:1', { resume: first.session });
-		expect(second.result).toEqual({ failed: false });
-		expect(second.session).toEqual(began(2));
-	});
-
-	it('begins a fresh session when the one the room names fails as the lane goes back to its position', async () => {
+	it('begins a fresh session when the one the room names does not open', async () => {
 		const inner = await store();
 		const sessions: PiSessions = {
-			create: (scope, id, context) => inner.create(scope, id, context),
-			open: async (scope, id, context) => {
-				const opened = await inner.open(scope, id, context);
-				return opened && failing(opened, ['scanBranch'], () => true);
+			create: (where, id) => inner.create(where, id),
+			open: async (where, id) => {
+				const opened = await inner.open(where, id);
+				return opened && failing(opened, ['*'], () => true);
 			},
 		};
 		const { seen, run } = seatOn(new TwoQuestions(), sessions);
@@ -458,13 +267,34 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 	});
 
-	it('records a fresh session when the session fails a write during the run, and the retry reads the whole view', async () => {
+	it('begins a fresh session when the one the room names fails as the executor reads its position', async () => {
+		const inner = await store();
+		let reading = false;
+		const sessions: PiSessions = {
+			create: (where, id) => inner.create(where, id),
+			open: async (where, id) => {
+				const opened = await inner.open(where, id);
+				reading = true;
+				return opened && failing(opened, ['scanSubmissions'], () => reading);
+			},
+		};
+		const { seen, run } = seatOn(new TwoQuestions(), sessions);
+		const first = await run('message:1:product:1');
+		const second = await run('message:2:product:1', { resume: first.session });
+		expect(second.result).toEqual({ failed: false });
+		expect(second.session).toEqual(began(2));
+		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
+	});
+
+	it('records no session when the session fails a write during the run, and the retry reads the whole view', async () => {
 		const inner = await store();
 		let broken = false;
 		const sessions: PiSessions = {
-			create: async (scope, id, context) =>
-				failing(await inner.create(scope, id, context), WRITES, () => broken),
-			open: (scope, id, context) => inner.open(scope, id, context),
+			create: async (where, id) => {
+				const created = await inner.create(where, id);
+				return { ...created, storage: failing(created.storage, ['commit'], () => broken) };
+			},
+			open: (where, id) => inner.open(where, id),
 		};
 		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, request) => {
 			broken = request === 1;
@@ -472,71 +302,26 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		});
 		const failed = await run('message:2:product:1');
 		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
-		expect(failed.session?.id).not.toBe('message:2:product:1');
-		const retry = await run('message:2:product:2', { resume: failed.session });
+		expect(failed.session).toBeUndefined();
+		// The disk comes back. The retry starts a session of its own.
+		broken = false;
+		const retry = await run('message:2:product:2');
 		expect(retry.result).toEqual({ failed: false });
-		expect(retry.session).toEqual(failed.session);
+		expect(retry.session).toEqual({ kind: 'pi', id: 'message:2:product:2' });
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
 	});
 
-	it('records no session when the session fails a write and the store creates no fresh one', async () => {
-		const inner = await store();
-		let broken = false;
-		const sessions: PiSessions = {
-			create: async (scope, id, context) => {
-				if (broken) throw new Error('The store is full.');
-				return failing(await inner.create(scope, id, context), WRITES, () => broken);
-			},
-			open: (scope, id, context) => inner.open(scope, id, context),
-		};
-		const { run } = seatOn(new TwoQuestions(), sessions, () => {
-			broken = true;
-			return quiet();
-		});
-		const failed = await run('message:2:product:1');
-		expect(failed.result).toMatchObject({ failed: true, cause: 'transient' });
-		expect(failed.session).toBeUndefined();
-	});
-
 	it('gives a session a fresh id when the store already holds the id', async () => {
 		const sessions = await store();
-		const scope = { room: 'memory', seat: 'product' };
-		const one = await sessions.create(scope, 'same', BACKGROUND_CONTEXT);
-		const two = await sessions.create(scope, 'same', BACKGROUND_CONTEXT);
-		expect(one.metadata.id).toBe('same');
-		expect(two.metadata.id).not.toBe('same');
-		await one.close(BACKGROUND_CONTEXT);
-		await two.close(BACKGROUND_CONTEXT);
+		const one = await sessions.create(scope, 'same');
+		const two = await sessions.create(scope, 'same');
+		expect(one.id).toBe('same');
+		expect(two.id).not.toBe('same');
+		expect(await sessions.open(scope, 'same')).toBeDefined();
+		expect(await sessions.open(scope, two.id)).toBeDefined();
 	});
 });
-
-/** The methods of a session that write to its store. */
-const WRITES = ['mutate', 'beginMutation', 'setValue', 'appendList'];
-
-/** The session, with each method in `methods` failing while `broken` answers true. */
-function failing(session: Session, methods: readonly string[], broken: () => boolean): Session {
-	return new Proxy(session, {
-		get(target, property, receiver) {
-			const value: unknown = Reflect.get(target, property, receiver);
-			if (typeof value !== 'function') return value;
-			if (typeof property === 'string' && methods.includes(property)) {
-				return (...args: unknown[]) =>
-					broken()
-						? Promise.reject(new Error('The disk failed.'))
-						: Reflect.apply(value, target, args);
-			}
-			return value.bind(target);
-		},
-	});
-}
-
-/** The view the room gives an activation. */
-async function viewOf(id: string) {
-	const answer = await new TwoQuestions().view(id);
-	if (!('view' in answer)) throw new Error('The room answered stale.');
-	return answer.view;
-}
 
 describe('exchange continuity on the local disk', () => {
 	it('continues a session after a restart, from the position the session read', async () => {
@@ -553,19 +338,28 @@ describe('exchange continuity on the local disk', () => {
 		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
-	it('keeps a session file for each room and seat, and begins fresh over a corrupt one', async () => {
+	it('keeps a storage folder for each session of a room and seat, and begins fresh over a corrupt one', async () => {
 		const dir = await tempDir('ambion-corrupt-');
 		const { run, seen } = seatOn(new TwoQuestions(), diskSessions(dir));
 		const first = await run('message:1:product:1');
-		const [folder] = await readdir(dir);
-		expect(folder).toMatch(/^--.*memory.*product--$/);
-		const [file] = await readdir(join(dir, folder as string));
-		expect(file).toMatch(/\.jsonl$/);
-		await appendFile(join(dir, folder as string, file as string), '{not json\n');
+		const [room] = await readdir(dir);
+		expect(room).toBe('memory');
+		expect(await readdir(join(dir, 'memory'))).toEqual(['product']);
+		const folder = join(dir, 'memory', 'product', encodeURIComponent('message:1:product:1'));
+		const files = await readdir(folder);
+		expect(files).toContain('main.jsonl');
+		await appendFile(join(folder, 'main.jsonl'), '{not json\n');
 		const second = await run('message:2:product:1', { resume: first.session });
 		expect(second.result).toEqual({ failed: false });
 		expect(second.session).toEqual(began(2));
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
+	});
+
+	it('opens a session that the disk does not hold as nothing, and creates no folder for it', async () => {
+		const dir = await tempDir('ambion-missing-');
+		const sessions = diskSessions(dir);
+		expect(await sessions.open(scope, 'absent')).toBeUndefined();
+		expect(await readdir(dir)).toEqual([]);
 	});
 
 	it('names a directory in the OS temporary directory for this user, and tries again after a refusal', async () => {
@@ -583,10 +377,8 @@ describe('exchange continuity on the local disk', () => {
 		expect((await stat(dir)).mode & 0o777).toBe(0o700);
 		// With no option, every stream keeps its sessions there.
 		const services = createExecutionServices({ stream: scriptedStream(() => quiet()) });
-		const scope = { room: 'room', seat: 'seat' };
-		await (
-			await services.sessions.create(scope, 'kept', BACKGROUND_CONTEXT)
-		).close(BACKGROUND_CONTEXT);
+		const created = await services.sessions.create({ room: 'room', seat: 'seat' }, 'kept');
+		await created.storage.close(BACKGROUND_CONTEXT);
 		expect(await readdir(dir)).toEqual([expect.stringContaining('room')]);
 	});
 
@@ -623,33 +415,24 @@ describe('exchange continuity on the local disk', () => {
 				stream: scriptedStream(() => quiet()),
 				...(named ? { sessionDir: dir } : { sessions: 'memory' }),
 			});
-		const scope = { room: 'room', seat: 'seat' };
-		const created = await services().sessions.create(scope, 'kept', BACKGROUND_CONTEXT);
-		await created.close(BACKGROUND_CONTEXT);
-		const opened = await services().sessions.open(scope, 'kept', BACKGROUND_CONTEXT);
+		const where = { room: 'room', seat: 'seat' };
+		const created = await services().sessions.create(where, 'kept');
+		await created.storage.close(BACKGROUND_CONTEXT);
+		const opened = await services().sessions.open(where, 'kept');
 		expect(opened !== undefined).toBe(kept);
 		await opened?.close(BACKGROUND_CONTEXT);
 	});
 });
 
 describe('exchange continuity on sessions in memory', () => {
-	it('keeps the two newest sessions of a seat, and deletes an older one once it closes', async () => {
+	it('keeps the two newest sessions of a seat, and drops an older one', async () => {
 		const sessions = memorySessions();
-		const scope = { room: 'memory', seat: 'product' };
 		const ids = ['one', 'two', 'three', 'four'];
-		const held = await sessions.create(scope, 'one', BACKGROUND_CONTEXT);
-		for (const id of ids.slice(1, 3)) {
-			await (await sessions.create(scope, id, BACKGROUND_CONTEXT)).close(BACKGROUND_CONTEXT);
-		}
-		// An open session stays until it closes.
-		await held.close(BACKGROUND_CONTEXT);
-		await (await sessions.create(scope, 'four', BACKGROUND_CONTEXT)).close(BACKGROUND_CONTEXT);
+		for (const id of ids) await sessions.create(scope, id);
 		const kept = [];
-		for (const id of ids) {
-			const opened = await sessions.open(scope, id, BACKGROUND_CONTEXT);
-			if (opened !== undefined) kept.push(opened.metadata.id);
-			await opened?.close(BACKGROUND_CONTEXT);
-		}
+		for (const id of ids) if ((await sessions.open(scope, id)) !== undefined) kept.push(id);
 		expect(kept).toEqual(['three', 'four']);
+		// The seat of another room keeps its own.
+		expect(await sessions.open({ room: 'other', seat: 'product' }, 'four')).toBeUndefined();
 	});
 });

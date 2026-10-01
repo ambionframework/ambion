@@ -316,8 +316,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		await drafted;
 		// the first summary attempt failed: priya is owed, and the room waits for the backoff
 		expect(await summaries(session)).toHaveLength(0);
+		const redrafted = assistantEnded(session);
 		await visit.send({ text: 'Second?' });
 		await waitForRoom(session, 'settled');
+		// the failure of the second summary attempt lands in the journal before the crash
+		await redrafted;
 		expect(await summaries(session)).toHaveLength(0);
 		const questions = (await messagesOf(session)).filter((m) => isSaid(m) && m.from === 'priya');
 		crash(first, session);

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+**Breaking: the Pi executor runs on `@earendil-works/pi-durable` 1.0.0.**
+`@ambionframework/pi` drops `@earendil-works/pi-agent-core` and its
+`AgentHarness`. It depends on `@earendil-works/pi-durable` pinned to exactly
+`1.0.0`, on `@earendil-works/chord` `^1.0.0`, and on `@earendil-works/pi-ai`
+`^1.0.0`. Every other package that names `pi-ai` takes `^1.0.0`, and
+`@ambionframework/ambion` and `@ambionframework/cloudflare` drop
+`pi-agent-core`. The pin is exact because the executor reads the storage
+format and the failure reasons of pi-durable. These changes break:
+
+- **The `compaction` option.** It takes a partial Pi `CompactionPolicy` in
+  place of the `CompactionSettings` of `pi-agent-core`. The harness holds the
+  default, and `DEFAULT_COMPACTION_SETTINGS` is gone. `pi()` throws when a
+  count is negative or not a safe integer, and when `enabled` is not a
+  boolean.
+- **Overflow recovery needs compaction on.** A context-overflow error fails
+  the pass when `compaction.enabled` is `false`. Before, the harness
+  compacted once whatever the setting.
+- **The disk session format.** A session is a pi-durable JSONL storage at
+  `<sessionDir>/<room>/<seat>/<id>`. A session of an earlier release does not
+  open, and the activation starts a fresh one. A JSONL file with a corrupt
+  line also starts a fresh session.
+- **Exports.** `@ambionframework/pi` exports `StreamFn`, `NativePiTool`,
+  `CreatedSession`, `CompactionOptions`, and `ThinkingLevel`. It defines them
+  itself, because `pi-agent-core` no longer supplies them. `PiSessions` takes
+  `create(scope, id)` and `open(scope, id)` over a pi-durable `Storage`.
+- **Tool results reach the model whole.** The executor sets the output
+  limits of every tool to the largest safe integer. The harness would bound
+  a result to 2000 lines and 50 KiB otherwise.
+- **The system prompt has no tag.** The model reads the prompt as the
+  executor built it.
+- **`runAgent`** keeps its session in a private memory storage and ignores
+  `services.sessions`.
+
+The executor aborts the work that a lost process left in a session before
+the next submit, because a submit would resume it. A pass that failed, was
+cut, or ended before a steered line leaves its entries after the last answer.
+The executor omits them with one `ambion.omit` entry, and the delta gives the
+model each range of the record once. A steered line that the answer outruns
+reports `consumed: false`, and the next pass carries it. A storage that fails a
+commit fails the pass as transient.
+
 **The workspace owns its port.** `@ambionframework/workspace`,
 `@ambionframework/workstation`, and `@ambionframework/just-bash` import no
 Pi package and declare no dependency on `@earendil-works/pi-agent-core`. A

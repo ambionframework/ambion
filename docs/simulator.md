@@ -322,7 +322,7 @@ the discussion, and its next move answers it or stops.
 
 ## The model call
 
-**Both agents run on Pi's AgentHarness through `@ambionframework/pi`.**
+**Both agents run on the Pi harness through `@ambionframework/pi`.**
 The Pi package gains one export:
 
 ```ts
@@ -367,9 +367,9 @@ export function runAgent(
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation, and it ends every provider request of the run. The lane
-  ignores an abort that lands before it admits the prompt, so the signal
-  cuts the request itself. A run whose signal aborted rejects with the
+  activation, and it ends every provider request of the run. An abort
+  of the signal aborts the submission of the run, and it cuts the request
+  itself. A run whose signal aborted rejects with the
   signal's reason, even when an end landed first. `agentActor` and
   `agentJudge` abort at `timeoutMs`.
 - **The usage.** `runAgent` sums the usage of each request, and it maps a

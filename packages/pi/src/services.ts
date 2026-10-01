@@ -1,8 +1,8 @@
 /** Model, stream and session services that a Pi execution host composes. */
 
 import { PermanentError } from '@ambionframework/ambion/hosting';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, CredentialStore, Model, Models } from '@earendil-works/pi-ai';
+import type { StreamFn } from './models.ts';
 import { defaultSessionDir, diskSessions, memorySessions, type PiSessions } from './sessions.ts';
 
 /** Resolves an agent's `provider/model-id` to the model Pi's harness runs. */

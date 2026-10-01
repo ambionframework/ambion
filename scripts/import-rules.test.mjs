@@ -33,7 +33,7 @@ const coreSource = 'packages/ambion/src';
  * refuses. Each layer override repeats them, so each layer probe holds them.
  */
 const CORE_BANS = [
-	'@earendil-works/pi-agent-core',
+	'@earendil-works/pi-durable',
 	'@ambionframework/pi',
 	'cloudflare:workers',
 	'node:sqlite',
@@ -134,11 +134,11 @@ const CASES = [
 	['packages/workspace/src', 'just-bash', true],
 	['packages/workspace/src', '@ambionframework/just-bash', true],
 	// The workspace owns its port: it imports no Pi package, in any file.
-	['packages/workspace/src', '@earendil-works/pi-agent-core', true],
+	['packages/workspace/src', '@earendil-works/pi-durable', true],
 	['packages/workspace/src', '@earendil-works/pi-ai', true],
 	[
 		'packages/workspace/src',
-		['@ambionframework/just-bash', '@ambionframework/ambion', '@earendil-works/pi-agent-core'],
+		['@ambionframework/just-bash', '@ambionframework/ambion', '@earendil-works/pi-durable'],
 		true,
 		'backend.ts',
 	],
@@ -151,7 +151,7 @@ const CASES = [
 			['@ambionframework/ambion', true],
 			['./tools.ts', true],
 			['just-bash', true],
-			['@earendil-works/pi-agent-core', true],
+			['@earendil-works/pi-durable', true],
 			['./resource.ts', false],
 		],
 		null,
@@ -168,7 +168,7 @@ const CASES = [
 	['packages/workstation/src', 'just-bash/browser', true],
 	['packages/workstation/src', '@ambionframework/just-bash/git', true],
 	['packages/workstation/src', '@ambionframework/ambion/hosting', true],
-	['packages/workstation/src', '@earendil-works/pi-agent-core', true],
+	['packages/workstation/src', '@earendil-works/pi-durable', true],
 	// The just-bash backends know the workspace interface and no room.
 	['packages/just-bash/src', '@ambionframework/workspace', false],
 	['packages/just-bash/src', '@ambionframework/workspace/resource', false],
@@ -178,7 +178,7 @@ const CASES = [
 	['packages/just-bash/src', '@ambionframework/ambion', true],
 	['packages/just-bash/src', 'node:sqlite', true],
 	['packages/just-bash/src', '@ambionframework/workspace/git', true],
-	['packages/just-bash/src', '@earendil-works/pi-agent-core', true],
+	['packages/just-bash/src', '@earendil-works/pi-durable', true],
 	// The git backend of just-bash knows the workspace interface and no room,
 	// and it alone loads just-git's server and node:sqlite.
 	['packages/just-bash/src/git', '@ambionframework/workspace', false],
@@ -193,7 +193,7 @@ const CASES = [
 	['packages/just-bash/src/git', 'just-bash/browser', true],
 	['packages/just-bash/src/git', '@ambionframework/just-bash/git', true],
 	['packages/just-bash/src/git', '@ambionframework/ambion/hosting', true],
-	['packages/just-bash/src/git', '@earendil-works/pi-agent-core', true],
+	['packages/just-bash/src/git', '@earendil-works/pi-durable', true],
 	// The journal sits below everything.
 	['packages/journal/src', '@ambionframework/ambion', true],
 	['packages/journal/src', '../../ambion/src/room.ts', true],
