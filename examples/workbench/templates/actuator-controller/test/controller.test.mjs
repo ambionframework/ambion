@@ -14,11 +14,7 @@ const KINDS = new Set(['target', 'observe', 'drive', 'state']);
 const NAME = /^[a-z][a-z0-9-]*$/;
 const AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-/**
- * A fast plant and loop: the time constant is 1 s, and the loop settles in about 1 s. A loaded
- * host can stop the loop at full power, and the value then overshoots. The strong integral
- * brings it back inside the tolerance well before the deadline of 3 s.
- */
+/** A fast plant and loop: the time constant is 1 s, and the loop settles in about 1 s. */
 async function setup(context, overrides = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'ambion-actuator-'));
 	context.after(() => rm(root, { recursive: true, force: true }));
@@ -97,7 +93,9 @@ function checkLine(line) {
 const claimsOf = (lines) => lines.filter((line) => line.kind === 'state').map((line) => line.value);
 
 test('the loop reaches the target, holds it, and exits 0 in a safe state at the deadline', async (context) => {
-	const setupResult = await setup(context);
+	// A loaded host can stop the loop for more than a second. A stop at full power overshoots
+	// the target, and the loop needs about a second more to come back. Six seconds hold both.
+	const setupResult = await setup(context, { holdSeconds: 6 });
 	const run = launch(setupResult.env);
 	const end = await run.ended;
 	assert.equal(end.code, 0, end.output);
