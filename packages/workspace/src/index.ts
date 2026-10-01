@@ -43,7 +43,12 @@ export type {
 	WorkspacePort,
 	WorkspacePorts,
 } from './backend.ts';
-export type { ScriptRun, WorkspaceExecOptions } from './execution-env.ts';
+export type {
+	FileExpect,
+	FileOperations,
+	ScriptRun,
+	WorkspaceExecOptions,
+} from './execution-env.ts';
 export {
 	boundedView,
 	DEFAULT_TIMEOUT_SECONDS,

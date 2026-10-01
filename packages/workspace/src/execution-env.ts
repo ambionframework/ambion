@@ -3,13 +3,14 @@
  * filesystem behind it.
  *
  * Seven rules live here: `resolvePath`, the `~` and relative path rule that
- * every backend resolves a path with; `HomeEnv`, the members that follow
- * from that rule alone; `Deadline` and `withDeadline`, which tell an abort
- * apart from a timeout; `boundedView` and `deliverView`, the bounded output
- * view that a shell command's caller reads before `exec` resolves; the
- * temporary names and paths under `/tmp` that a temp file and a temp
- * directory share; and `runScript` and `shellQuote`, which run one script
- * and quote one word in it.
+ * every backend resolves a path with; `HomeEnv`, which implements the file
+ * members once over the storage operations and the error classifier of a
+ * backend; `Deadline` and `withDeadline`, which tell an abort apart from a
+ * timeout; `boundedView` and `deliverView`, the bounded output view that a
+ * shell command's caller reads before `exec` resolves; the temporary names
+ * and paths under `/tmp` that a temp file and a temp directory share; and
+ * `runScript` and `shellQuote`, which run one script and quote one word in
+ * it.
  *
  * A backend writes no spill file: every `bash` call writes its whole output
  * to a process file. This module imports no `just-bash`.
@@ -20,7 +21,7 @@ import { posix } from 'node:path';
 import type {
 	Context,
 	ExecutionEnv,
-	FileError,
+	FileInfo,
 	Result,
 	ShellExecOptions,
 	ShellExecResult,
@@ -31,6 +32,7 @@ import {
 	applyShellOutputUpdate,
 	ExecutionError,
 	err,
+	FileError,
 	ok,
 	truncateHead,
 	truncateTail,
@@ -67,10 +69,55 @@ export function resolvePath(home: string, cwd: string, path: string): string {
 	return posix.resolve(cwd, expanded);
 }
 
+/** What the failed call expected at the path: a file, a directory, or either. */
+export type FileExpect = 'file' | 'directory' | 'any';
+
 /**
- * The members of an `ExecutionEnv` that follow from the agent's home and the
- * working directory alone. `cwd` is the home for the life of the env. A
- * backend extends this class and supplies every file and shell member.
+ * The storage operations of a backend, one for each file member of
+ * `ExecutionEnv`. Each operation takes a resolved absolute path and throws
+ * what the storage throws. `HomeEnv` resolves the path, checks the abort
+ * signal, and classifies the error.
+ */
+export interface FileOperations {
+	readText(path: string): Promise<string>;
+	readBinary(path: string): Promise<Uint8Array>;
+	write(path: string, content: string | Uint8Array): Promise<void>;
+	append(path: string, content: string | Uint8Array): Promise<void>;
+	rename(source: string, destination: string): Promise<void>;
+	info(path: string): Promise<FileInfo>;
+	/** One `FileInfo` for each entry, with the path of the entry under `path`. */
+	list(path: string): Promise<FileInfo[]>;
+	canonical(path: string): Promise<string>;
+	exists(path: string): Promise<boolean>;
+	makeDir(path: string, recursive: boolean): Promise<void>;
+	/**
+	 * Takes the context because a backend can remove a tree through `exec`.
+	 * The workstation runs `rm -rf`.
+	 */
+	remove(
+		path: string,
+		options: Parameters<ExecutionEnv['remove']>[1],
+		context: Context,
+	): Promise<void>;
+	/** Create the directory at `path`. `HomeEnv` chose the path. */
+	makeTempDir(path: string): Promise<void>;
+	/** Create the empty file at `path`. `HomeEnv` chose the path. */
+	makeTempFile(path: string): Promise<void>;
+}
+
+type FileResult<T> = Promise<Result<T, FileError>>;
+
+/**
+ * The members of an `ExecutionEnv` that follow from the agent's home, the
+ * working directory, and the file operations of a backend. `cwd` is the home
+ * for the life of the env.
+ *
+ * A backend extends this class. It supplies `files`, the throwing storage
+ * operations, and `classify`, which turns what an operation threw into a
+ * `FileError`. Both are abstract members: they read the state of the
+ * backend, which exists only after `super()` returns. A backend supplies the
+ * shell members, `exec` and `cleanup`, and can override a file member that
+ * needs more than one operation.
  */
 export abstract class HomeEnv {
 	readonly cwd: string;
@@ -79,9 +126,36 @@ export abstract class HomeEnv {
 		this.cwd = home;
 	}
 
+	/** The storage operations. Each takes a resolved absolute path. */
+	protected abstract readonly files: FileOperations;
+
+	/** Turn what an operation threw at `path` into a `FileError`. */
+	protected abstract classify(
+		error: unknown,
+		path: string,
+		expect: FileExpect,
+	): FileError | Promise<FileError>;
+
 	/** `~` and `~/` are the agent's home, and a relative path is under `cwd`. */
 	protected resolve(path: string): string {
 		return resolvePath(this.home, this.cwd, path);
+	}
+
+	/** Run one operation. An aborted context gives `aborted`, and a throw goes to `classify`. */
+	private async attempt<T>(
+		path: string,
+		expect: FileExpect,
+		context: Context,
+		run: () => Promise<T>,
+	): FileResult<T> {
+		if (context.abortSignal?.aborted) {
+			return err(new FileError('aborted', 'Operation aborted', path));
+		}
+		try {
+			return ok(await run());
+		} catch (error) {
+			return err(await this.classify(error, path, expect));
+		}
 	}
 
 	async absolutePath(path: string): Promise<Result<string, FileError>> {
@@ -92,7 +166,93 @@ export abstract class HomeEnv {
 		return ok(posix.join(...parts));
 	}
 
-	abstract readTextFile(path: string, context: Context): Promise<Result<string, FileError>>;
+	readTextFile(path: string, context: Context): FileResult<string> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', context, () => this.files.readText(resolved));
+	}
+
+	readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', context, () => this.files.readBinary(resolved));
+	}
+
+	writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', context, () => this.files.write(resolved, content));
+	}
+
+	appendFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'file', context, () => this.files.append(resolved, content));
+	}
+
+	/** An error carries the source path. */
+	renameFile(sourcePath: string, destinationPath: string, context: Context): FileResult<void> {
+		const source = this.resolve(sourcePath);
+		const destination = this.resolve(destinationPath);
+		return this.attempt(source, 'any', context, () => this.files.rename(source, destination));
+	}
+
+	fileInfo(path: string, context: Context): FileResult<FileInfo> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () => this.files.info(resolved));
+	}
+
+	listDir(path: string, context: Context): FileResult<FileInfo[]> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'directory', context, () => this.files.list(resolved));
+	}
+
+	canonicalPath(path: string, context: Context): FileResult<string> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () => this.files.canonical(resolved));
+	}
+
+	exists(path: string, context: Context): FileResult<boolean> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () => this.files.exists(resolved));
+	}
+
+	createDir(
+		path: string,
+		options: { recursive?: boolean } | undefined,
+		context: Context,
+	): FileResult<void> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () =>
+			this.files.makeDir(resolved, options?.recursive ?? true),
+		);
+	}
+
+	remove(
+		path: string,
+		options: Parameters<ExecutionEnv['remove']>[1],
+		context: Context,
+	): FileResult<void> {
+		const resolved = this.resolve(path);
+		return this.attempt(resolved, 'any', context, () =>
+			this.files.remove(resolved, options, context),
+		);
+	}
+
+	createTempDir(prefix: string | undefined, context: Context): FileResult<string> {
+		const dir = tempDirPath(prefix);
+		return this.attempt(dir, 'any', context, async () => {
+			await this.files.makeTempDir(dir);
+			return dir;
+		});
+	}
+
+	createTempFile(
+		options: { prefix?: string; suffix?: string } | undefined,
+		context: Context,
+	): FileResult<string> {
+		const file = tempFilePath(options);
+		return this.attempt(file, 'any', context, async () => {
+			await this.files.makeTempFile(file);
+			return file;
+		});
+	}
 
 	async readTextLines(
 		path: string,

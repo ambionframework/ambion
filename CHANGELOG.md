@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**`HomeEnv` implements the file members of `ExecutionEnv`.**
+`@ambionframework/workspace` exports two new types: `FileOperations` and
+`FileExpect`. `FileOperations` holds one throwing storage operation for each
+file member. `FileExpect` is `'file' | 'directory' | 'any'`: what a failed
+call expected at the path. A backend that extends `HomeEnv` now supplies two
+abstract members: `files`, a `FileOperations`, and `classify`, which turns
+what an operation threw into a `FileError`. `HomeEnv` resolves the path,
+checks the abort signal, runs the operation, and classifies a throw. Before,
+each backend wrote that skeleton for every member. `readTextFile` is no
+longer abstract. `BashEnv` and `SshEnv` now supply operations and a
+classifier, and `SshEnv` overrides `renameFile` alone. No behaviour
+changes.
+
 **One function holds the decisions of repository registration.**
 `@ambionframework/workspace/git` exports two new names:
 `registerRepositories(steps, { templates, shared })` and the type
