@@ -50,8 +50,8 @@ A key that Pi passes in its own stream options wins over the variable.
 Max (`anthropic`) and to ChatGPT Plus and Pro (`openai-codex`) with OAuth.
 Run `loginPi('anthropic', fileCredentials(path))` once on a host that has a
 browser. Pass the same store to `piExecution({ credentials })`. A provider
-with a stored sign-in answers with it, and its `<PROVIDER>_API_KEY` is not
-read. A provider with none keeps the key rule above. [Subscriptions](#subscriptions)
+with a stored sign-in answers with it, and Pi does not read its
+`<PROVIDER>_API_KEY`. A provider with none keeps the key rule above. [Subscriptions](#subscriptions)
 holds the steps.
 
 **The registry loads on the first request.** A room with a scripted `stream`
@@ -533,18 +533,18 @@ Pi seats.
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                      |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.       |
-| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                         |
-| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.  |
-| `OAuth refresh failed` or `Provider is not configured`              | The stored sign-in expired, or the store holds none. Run `loginPi` again, and pass the same `credentials`. |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.  |
-| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                     |
-| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                |
-| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.       |
-| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again. |
-| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                   |
-| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.               |
-| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                 |
-| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                 |
+| Symptom                                                             | Cause                                                                                                                                                                |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.                                                                 |
+| `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                   |
+| The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                            |
+| `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries. |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.                                                            |
+| `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                               |
+| `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                          |
+| The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                 |
+| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                           |
+| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                                                                             |
+| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.                                                                         |
+| The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                           |
+| The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                           |

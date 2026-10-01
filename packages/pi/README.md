@@ -40,7 +40,7 @@ suffix `_API_KEY`. The id `anthropic/claude-sonnet-5` reads
 Claude Pro and Max, or `loginPi('openai-codex', store)` for ChatGPT Plus and
 Pro, once on a host with a browser. `store` is `fileCredentials(path)`.
 Pass the same store as `piExecution({ credentials: store })`. A provider with
-a stored sign-in ignores its `<PROVIDER>_API_KEY`. The
+a stored sign-in never reads its `<PROVIDER>_API_KEY`. The
 [guide](https://github.com/ambionframework/ambion/blob/main/docs/pi.md#subscriptions)
 holds the steps and the limits.
 

@@ -41,8 +41,8 @@ export interface ExecutionServicesOptions {
 	readonly sessionDir?: string;
 	/**
 	 * Where the subscription sign-ins live, such as `fileCredentials(path)`.
-	 * A provider with a stored credential answers with it, and its
-	 * `<PROVIDER>_API_KEY` is not read. Absent, the registry reads the
+	 * A provider with a stored credential answers with it, and Pi does
+	 * not read its `<PROVIDER>_API_KEY`. Absent, the registry reads the
 	 * environment alone.
 	 */
 	readonly credentials?: CredentialStore;
@@ -65,7 +65,7 @@ const loadRegistry = (credentials?: CredentialStore): Promise<Models> =>
 
 const sharedRegistry = () => (builtinRegistry ??= loadRegistry());
 
-/** The registry stream. A stored credential owns its provider, so the environment key stands down. */
+/** The registry stream. A stored credential owns its provider, so the store skips the environment key. */
 const registryStream =
 	(registry: () => Promise<Models>, credentials?: CredentialStore): StreamFn =>
 	async (model, context, streamOptions) => {

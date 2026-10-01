@@ -72,14 +72,10 @@ export async function loginPi(
 	interaction?: AuthInteraction,
 ): Promise<Credential> {
 	const { builtinModels } = await import('@earendil-works/pi-ai/providers/all');
-	const terminal = interaction === undefined ? terminalInteraction() : undefined;
+	const terminal = terminalInteraction();
 	try {
-		return await builtinModels({ credentials }).login(
-			provider,
-			'oauth',
-			interaction ?? (terminal as AuthInteraction),
-		);
+		return await builtinModels({ credentials }).login(provider, 'oauth', interaction ?? terminal);
 	} finally {
-		terminal?.close();
+		terminal.close();
 	}
 }

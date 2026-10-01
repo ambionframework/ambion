@@ -4,7 +4,7 @@
  * provider: a real provider needs an account.
  */
 
-import { stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -72,6 +72,52 @@ describe('fileCredentials', () => {
 		expect(await store.read('anthropic')).toMatchObject({ access: 'after-crash' });
 	});
 
+	it('waits for a lock that another process holds, and writes when it ends', async () => {
+		const path = join(await tempDir('ambion-credentials-'), 'auth.json');
+		const lock = `${path}.lock`;
+		await writeFile(lock, 'another-process');
+		const store = fileCredentials(path);
+		const written = store.modify('anthropic', async () => oauth('after-wait'));
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		expect(await store.read('anthropic')).toBeUndefined();
+		await rm(lock);
+		await written;
+		expect(await store.read('anthropic')).toMatchObject({ access: 'after-wait' });
+	});
+
+	it('stops waiting for a lock when the sign-in is cancelled', async () => {
+		const path = join(await tempDir('ambion-credentials-'), 'auth.json');
+		await writeFile(`${path}.lock`, 'another-process');
+		const controller = new AbortController();
+		const written = fileCredentials(path).modify('anthropic', async () => oauth('x'), {
+			signal: controller.signal,
+		});
+		setTimeout(() => controller.abort(new Error('cancelled')), 100);
+		await expect(written).rejects.toThrow('cancelled');
+	});
+
+	it('removes only its own lock, so a lock another process took stays', async () => {
+		const path = join(await tempDir('ambion-credentials-'), 'auth.json');
+		const lock = `${path}.lock`;
+		await fileCredentials(path).modify('anthropic', async () => {
+			await writeFile(lock, 'the-new-owner');
+			return oauth('slow');
+		});
+		expect(await readFile(lock, 'utf8')).toBe('the-new-owner');
+	});
+
+	it('leaves no temporary file when the write fails, and writes on the next call', async () => {
+		const dir = await tempDir('ambion-credentials-');
+		const path = join(dir, 'auth.json');
+		await mkdir(path);
+		const store = fileCredentials(path);
+		await expect(store.modify('anthropic', async () => oauth('x'))).rejects.toThrow();
+		expect((await readdir(dir)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+		await rm(path, { recursive: true });
+		await store.modify('anthropic', async () => oauth('later'));
+		expect(await store.read('anthropic')).toMatchObject({ access: 'later' });
+	});
+
 	it('refuses to overwrite a file it cannot read', async () => {
 		const path = join(await tempDir('ambion-credentials-'), 'auth.json');
 		await writeFile(path, '{ not json');
@@ -108,7 +154,7 @@ async function stream(services: ReturnType<typeof createExecutionServices>, base
 }
 
 describe('a stored sign-in', () => {
-	it('answers for its provider, and the key in the environment stands down', async () => {
+	it('answers for its provider, and the store skips the key in the environment', async () => {
 		vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-api-from-environment');
 		onTestFinished(() => void vi.unstubAllEnvs());
 		const path = join(await tempDir('ambion-credentials-'), 'auth.json');

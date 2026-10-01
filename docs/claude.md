@@ -52,9 +52,10 @@ host once. The executable keeps the sign-in in the home of the host user.
 A host with no browser runs `claude setup-token` elsewhere and passes the
 token as `CLAUDE_CODE_OAUTH_TOKEN`. Remove `ANTHROPIC_API_KEY` from the
 environment, because a key takes precedence over the sign-in. A custom `env`
-needs `PATH`, `HOME`, and the token. The `usage` steps report a notional
-cost, so `maxBudgetUsd` caps notional dollars, and the subscription has its
-own usage limit, which is a permanent failure. A provider may restrict the
+needs `PATH` and `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` when the sign-in came
+from `claude setup-token`. The `usage` steps report a notional cost, so
+`maxBudgetUsd` caps notional dollars. The subscription has its own usage
+limit, which is a permanent failure. A provider may restrict the
 use of a consumer subscription outside its own clients. Read its terms
 first.
 

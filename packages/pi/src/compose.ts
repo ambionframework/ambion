@@ -25,8 +25,8 @@ export interface PiExecutionOptions {
 	readonly sessionDir?: string;
 	/**
 	 * Where the subscription sign-ins live, such as `fileCredentials(path)`.
-	 * A provider with a stored credential answers with it, and its
-	 * `<PROVIDER>_API_KEY` is not read. Absent, the registry reads the
+	 * A provider with a stored credential answers with it, and Pi does
+	 * not read its `<PROVIDER>_API_KEY`. Absent, the registry reads the
 	 * environment alone.
 	 */
 	readonly credentials?: CredentialStore;
