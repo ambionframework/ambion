@@ -260,7 +260,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
 		});
-		cut.cancel();
+		cut.cut();
 		expect(await cut.pass({ kind: 'view', view: await viewOf('message:2:product:1') })).toEqual({
 			failed: false,
 		});
@@ -281,7 +281,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		});
 		const running = session.pass({ kind: 'view', view: await viewOf('message:1:product:1') });
 		await requested.promise;
-		session.cancel();
+		session.cut();
 		// The driver closes the harness while the abort of the run is still active.
 		session.close();
 		expect(await running).toEqual({ failed: false });

@@ -239,7 +239,7 @@ const baseCases: readonly ExecutorCase[] = [
 			check(claims(run.room) === 1, 'the seat claimed again after the cut');
 			check(releaseWith(run).readThrough >= 1, 'the release reads through less than the view');
 			const end = stepsOf(await run.trace(), 'end');
-			check(end.length === 1 && end[0]?.stop === 'aborted', 'the end step is not aborted');
+			check(end.length === 1 && end[0]?.stop === 'cut', 'the end step is not cut');
 		},
 	},
 	{

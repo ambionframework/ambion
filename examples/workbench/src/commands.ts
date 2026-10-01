@@ -17,7 +17,7 @@ const COMMANDS: readonly Command[] = [
 	{ name: 'ps', summary: 'Show the background processes of the agents' },
 	{ name: 'attach', summary: 'Attach a local file to your next message', argument: 'text' },
 	{ name: 'try', summary: 'Fill the composer with the room’s suggested question' },
-	{ name: 'abort', summary: 'Cancel the open exchange' },
+	{ name: 'cancel', summary: 'Cancel the open exchange' },
 	{ name: 'dismiss', summary: 'Dismiss a say that waits to return: /dismiss <n>', argument: 'say' },
 	{ name: 'stop', summary: 'Stop the room' },
 	{ name: 'resume', summary: 'Resume the room' },

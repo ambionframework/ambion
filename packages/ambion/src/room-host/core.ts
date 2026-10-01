@@ -73,8 +73,8 @@ export interface RoomHostState {
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void>;
 	/** A cancellation append in flight, with its key retained across uncertainty. */
-	abortInFlight: Promise<void> | undefined;
-	abortKey: string | undefined;
+	cancelInFlight: Promise<void> | undefined;
+	cancelKey: string | undefined;
 	now(): number;
 	/** Every fact about the room, folded over the journal as it stands. */
 	state(): RoomState;

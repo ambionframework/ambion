@@ -161,7 +161,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
-		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
+		// An exchange cancelled after a follow-up: no agent replied, so there is nothing to show directly.
 		const exchange = closedExchange(4, 9, 'mira');
 		const blocks = build([said(4, 'mira'), said(9, 'mira')], [exchange]);
 		expect(shape(blocks)).toEqual(['question:4', 'discussion:4(1)']);

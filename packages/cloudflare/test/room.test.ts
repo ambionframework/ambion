@@ -151,7 +151,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 	const again = roomOf(name);
 	// The next call builds the object again, and its constructor resumes the name.
 	// The room takes the visit from journal presence, so a send needs no second
-	// visit. The abort may still be settling: the call that finds it retries.
+	// visit. The cancel may still be settling: the call that finds it retries.
 	const retry = await until(async () => {
 		try {
 			return await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });

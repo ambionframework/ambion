@@ -502,7 +502,7 @@ export type Step =
 	/** The activation stops. `failure` is present when it failed. */
 	| {
 			type: 'end';
-			stop: 'stopped' | 'length' | 'aborted';
+			stop: 'stopped' | 'length' | 'cut';
 			failure?: { cause: FailureCause; message: string };
 	  };
 

@@ -33,8 +33,8 @@ import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from 
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
 
-/** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
-export type RoomAction = 'abort' | 'stop' | 'resume';
+/** What a person can do to a room's work. Cancel ends the open exchange. Stop and resume end and start a run. */
+export type RoomAction = 'cancel' | 'stop' | 'resume';
 
 export function fail(message: string): never {
 	throw new Error(message);
@@ -282,8 +282,8 @@ export async function openRooms(
 					entry.enabled = 0;
 					save(entry);
 					break;
-				case 'abort':
-					await liveRoom(entry).abort();
+				case 'cancel':
+					await liveRoom(entry).cancel();
 					break;
 			}
 			return status(entry);

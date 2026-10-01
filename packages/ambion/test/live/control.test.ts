@@ -36,7 +36,7 @@ const calendar = defineTool({
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 live('control', () => {
-	it('abort ends an activation mid-request without a mark, and the room keeps running', async () => {
+	it('cancel ends an activation mid-request without a mark, and the room keeps running', async () => {
 		const essayist = agent('essayist', {
 			identity: 'Writes at length.',
 			instructions: `
@@ -45,7 +45,7 @@ live('control', () => {
 				that word alone with one say, and write no essay.
 			`,
 		});
-		const { session, events } = await open('abort', { agents: [essayist] });
+		const { session, events } = await open('cancel', { agents: [essayist] });
 		const visit = await enter(session, person);
 		const started = new Promise<void>((resolve) => {
 			session.subscribe((e) => {
@@ -56,8 +56,8 @@ live('control', () => {
 		await within(started, 30_000, 'the activation starting');
 		// Long enough for the request to be open and streaming; too short for an essay.
 		await settle(2_000);
-		await session.abort();
-		await within(exchange.waitForClose(), 15_000, 'the exchange closing after abort');
+		await session.cancel();
+		await within(exchange.waitForClose(), 15_000, 'the exchange closing after cancel');
 
 		expect(saidBy(await messagesOf(session), 'essayist')).toEqual([]);
 		expect(errorsIn(events)).toEqual([]);
@@ -70,7 +70,7 @@ live('control', () => {
 			}),
 		);
 
-		// The room is still running: the next question is answered. The aborted
+		// The room is still running: the next question is answered. The cancelled
 		// request left no mark, so the record still asks for the essay, and the
 		// follow-up withdraws it in so many words.
 		await visit.send({
@@ -82,7 +82,7 @@ live('control', () => {
 		expect(said[0]?.text).toMatch(/ready/i);
 		expect(said[0]?.text.length).toBeLessThan(120);
 		await invariants(session, events);
-		report('abort', await spent(session));
+		report('cancel', await spent(session));
 		await session.stop();
 	});
 

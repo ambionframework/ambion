@@ -56,7 +56,7 @@ export interface RoomToolBinding {
 	/** The result of call `call` carries the record through `seq` to the model. */
 	resultExpected(call: string, seq: Seq): void;
 	/** End the activation. */
-	abort(): void;
+	cut(): void;
 }
 
 /** What an executor adds to the say and the schedule of its harness. */
@@ -196,7 +196,7 @@ function toolResultOf(value: string | ToolResult): RoomToolResult {
 function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResult {
 	if ('committed' in response || 'unchanged' in response) return text(landedLine(response));
 	if ('refused' in response) return text(response.refused, true);
-	binding.abort();
+	binding.cut();
 	if ('unknown' in response) {
 		// The message may already be on the record, so the activation ends here. A
 		// second say under a new key would land the same message twice.

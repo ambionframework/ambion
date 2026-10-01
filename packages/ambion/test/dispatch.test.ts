@@ -1,7 +1,7 @@
 /**
  * Activation dispatch: the room sends a wake for each recorded cause at
  * once, sends it again after a lost or failed delivery, and a durable
- * abort or unseat holds against a wake or a claim that never returns.
+ * cancel or unseat holds against a wake or a claim that never returns.
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
@@ -270,7 +270,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		);
 	});
 
-	it('does not block durable abort on a wake that never resolves, then keeps cancellation on restart', async () => {
+	it('does not block durable cancel on a wake that never resolves, then keeps cancellation on restart', async () => {
 		const {
 			opened,
 			clock,
@@ -281,7 +281,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		});
 		const exchange = await (await first.visit(priya)).send({ text: 'Cancel this delivery.' });
 		await flush();
-		await first.abort();
+		await first.cancel();
 		expect(stateOf(first).exchange).toBeUndefined();
 
 		crash(runtime, first);
@@ -301,7 +301,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 	});
 
 	it.each([
-		['abort', async (room: Room) => room.abort()],
+		['cancel', async (room: Room) => room.cancel()],
 		['unseat', async (room: Room) => room.unseat(worker.name)],
 	] as const)('lets durable %s reject a delayed claim', async (_operation, finish) => {
 		const claimStarted = deferred();

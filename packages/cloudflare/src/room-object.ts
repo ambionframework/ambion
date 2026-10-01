@@ -195,8 +195,8 @@ export class RoomObject extends DurableObject<Env> {
 		await this.running().unseat(name);
 	}
 
-	async abort(): Promise<void> {
-		await this.running().abort();
+	async cancel(): Promise<void> {
+		await this.running().cancel();
 	}
 
 	/** Dismiss one scheduled say by its seq. True when the room dismissed it now. */

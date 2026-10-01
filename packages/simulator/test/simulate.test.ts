@@ -149,17 +149,21 @@ describe('simulate', () => {
 
 	it.each([
 		[
-			'the abort rejects',
+			'the cancel rejects',
 			() => Promise.reject(new Error('The journal refused the cancel.')),
-			/abort at the deadline failed: The journal refused the cancel/,
+			/cancel at the deadline failed: The journal refused the cancel/,
 		],
-		['no close follows the abort', () => Promise.resolve(), /did not close 200 ms after the abort/],
-	] as const)('ends with `failed` when %s', async (_case, abort, error) => {
+		[
+			'no close follows the cancel',
+			() => Promise.resolve(),
+			/did not close 200 ms after the cancel/,
+		],
+	] as const)('ends with `failed` when %s', async (_case, cancel, error) => {
 		const room = await open(byAgent({ desk: () => forever() }), ['desk']);
-		// The room itself, with an abort that cannot end the exchange.
+		// The room itself, with a cancel that cannot end the exchange.
 		const stuck = new Proxy(room, {
 			get(target, key) {
-				if (key === 'abort') return abort;
+				if (key === 'cancel') return cancel;
 				const value: unknown = Reflect.get(target, key);
 				return typeof value === 'function' ? value.bind(target) : value;
 			},
@@ -189,19 +193,19 @@ describe('simulate', () => {
 		expect(run.exchanges).toEqual([]);
 	});
 
-	it('ends with `failed` when the room stops while the abort at the deadline runs', async () => {
+	it('ends with `failed` when the room stops while the cancel at the deadline runs', async () => {
 		const script = byAgent({
 			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
 			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
-		// The room itself, stopped before its abort runs: the abort then rejects.
+		// The room itself, stopped before its cancel runs: the cancel then rejects.
 		const stopping = new Proxy(room, {
 			get(target, key) {
-				if (key === 'abort')
+				if (key === 'cancel')
 					return async () => {
 						await target.stop();
-						return target.abort();
+						return target.cancel();
 					};
 				const value: unknown = Reflect.get(target, key);
 				return typeof value === 'function' ? value.bind(target) : value;
@@ -214,7 +218,7 @@ describe('simulate', () => {
 			exchangeMs: 2_000,
 		});
 		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/abort at the deadline failed: .*stopped/);
+		expect(run.error).toMatch(/cancel at the deadline failed: .*stopped/);
 	});
 
 	it('ends with `failed` when the room refuses a send', async () => {

@@ -94,14 +94,14 @@ press Ctrl+R to pick a room.
 | `/ps`                  | Show the background processes of the agents           |
 | `/attach <local path>` | Copy a local file into the workspace, ref it next     |
 | `/try`                 | Fill the composer with the room's suggested prompt    |
-| `/abort`               | Cancel the open exchange                              |
+| `/cancel`              | Cancel the open exchange                              |
 | `/dismiss <n>`         | Dismiss the say n that waits to return                |
 | `/stop`, `/resume`     | Stop the room, or start it again                      |
 | `/steps [n]`           | Show the steps of the newest activation of exchange n |
 | `/expand`, `/collapse` | Open or close every discussion                        |
 | `/help`, `/quit`       | Show the commands and keys, or leave                  |
 
-`/abort` runs at once. Typing the command is the confirmation. Switching
+`/cancel` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
 **A say that waits to return shows as a note.** An agent calls `schedule`

@@ -448,7 +448,7 @@ describe('scriptedOpener', () => {
 	it('runs no pass and takes no steer once cut, and the session sees the cut', async () => {
 		const { state, activation, passes, steered, steps } = around(async () => ({ failed: false }));
 		state.steer(3, 4, 'first');
-		state.cancel();
+		state.cut();
 		state.steer(4, 5, 'second');
 		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(activation.signal.aborted).toBe(true);

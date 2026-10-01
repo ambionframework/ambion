@@ -128,7 +128,7 @@ async function untilQuiet(room: Room): Promise<void> {
 	try {
 		await settled(room, { timeout: QUIET_MS });
 	} catch (error) {
-		await room.abort().catch(() => undefined);
+		await room.cancel().catch(() => undefined);
 		throw error;
 	}
 }

@@ -301,7 +301,7 @@ call to a tool the model does not hold gets an error result, and the run
 continues. A continued session takes the tools of the activation that
 continues it: a closing activation holds `say` alone.
 
-**An `unknown` or `stale` answer ends the run.** The executor aborts the activation
+**An `unknown` or `stale` answer ends the run.** The executor cuts the activation
 and stands the seat down. The tool result names why the turn ended, and no
 further pass follows.
 

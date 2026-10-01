@@ -317,23 +317,23 @@ export async function dismissSay(host: RoomHostState, seq: Seq): Promise<boolean
 	return true;
 }
 
-export async function abort(host: RoomHostState): Promise<void> {
+export async function cancel(host: RoomHostState): Promise<void> {
 	host.assertRunning();
-	if (host.abortInFlight !== undefined) return host.abortInFlight;
-	const key = host.abortKey ?? crypto.randomUUID();
-	host.abortKey = key;
-	const operation = cancel(host, key);
-	host.abortInFlight = operation;
+	if (host.cancelInFlight !== undefined) return host.cancelInFlight;
+	const key = host.cancelKey ?? crypto.randomUUID();
+	host.cancelKey = key;
+	const operation = appendCancel(host, key);
+	host.cancelInFlight = operation;
 	try {
 		await operation;
-		host.abortKey = undefined;
+		host.cancelKey = undefined;
 	} finally {
-		if (host.abortInFlight === operation) host.abortInFlight = undefined;
+		if (host.cancelInFlight === operation) host.cancelInFlight = undefined;
 	}
 }
 
 /** Append the cancellation marker after every earlier journal request. */
-async function cancel(host: RoomHostState, key: string): Promise<void> {
+async function appendCancel(host: RoomHostState, key: string): Promise<void> {
 	await host.ready;
 	host.assertRunning();
 	const appended = await decideAndAppend(

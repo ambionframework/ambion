@@ -95,7 +95,7 @@ describe('stepsView', () => {
 					{ type: 'approval', call: 'd', name: 'edit', decision: 'allow' },
 					{
 						type: 'end',
-						stop: 'aborted',
+						stop: 'cut',
 						failure: { cause: 'error', message: 'provider down' },
 					},
 				],

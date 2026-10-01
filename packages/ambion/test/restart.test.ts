@@ -390,7 +390,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		crash(first, session);
 
 		// the resumed run inherits the live lease and never wakes alpha, so it
-		// holds no port for that seat when the abort revokes what it inherited
+		// holds no port for that seat when the cancel revokes what it inherited
 		const cuts: string[] = [];
 		const second = createRuntime({ storage: opened.storage, clock });
 		wraps.set(second, (execution) =>
@@ -407,7 +407,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		);
 		const resumed = await resume(name, second, script);
 		expect(await seat(resumed, 'alpha')).toMatchObject({ status: 'active' });
-		await resumed.abort();
+		await resumed.cancel();
 		await waitForRoom(resumed);
 		await tick();
 		// the seat side hears the cut over the wire, and the room opened it to say so
@@ -469,7 +469,7 @@ describe('a room dropped from memory', () => {
 		['at once', false],
 		['after the activation starts', true],
 	])(
-		'rejects the exchange wait and writes nothing for an abort, a departure or a stop, evicted %s',
+		'rejects the exchange wait and writes nothing for a cancel, a departure or a stop, evicted %s',
 		async (_, started) => {
 			const { opened, runtime, evict } = await evictable();
 			const held = deferred();
@@ -487,7 +487,7 @@ describe('a room dropped from memory', () => {
 
 			await tick();
 			const before = (await storedOf(opened.journals, session.name)).length;
-			await expect(session.abort()).rejects.toThrow(/evicted|stopped|interrupted/i);
+			await expect(session.cancel()).rejects.toThrow(/evicted|stopped|interrupted/i);
 			await tick();
 			await tick();
 			await visit.leave();
