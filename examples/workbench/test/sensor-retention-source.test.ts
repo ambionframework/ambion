@@ -274,7 +274,12 @@ async function createStore(root: string): Promise<{
 		backend: fileObjectBackend({ bash: bash.use, host, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'sensor-source-retention', host, bash: bash.use, objects: objects.use },
+		store: {
+			workspace: 'sensor-source-retention',
+			mirrorAgent: host,
+			bash: bash.use,
+			objects: objects.use,
+		},
 		async dispose() {
 			await objects.dispose();
 			await bash.dispose();

@@ -76,7 +76,7 @@ const summarize: ActivationView = {
 };
 
 describe('the rendered prompt', () => {
-	it('renders an ordinary activation', () => {
+	it('renders a respond activation', () => {
 		const { mechanism, agent, context: read } = renderActivation(respond, worker);
 		expect(mechanism).toMatchSnapshot('mechanism');
 		expect(agent).toMatchSnapshot('agent');

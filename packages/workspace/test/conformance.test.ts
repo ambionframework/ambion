@@ -83,7 +83,7 @@ describe.each(objectStores)('$name', (fixture) => {
 		});
 		const snapshotStore = {
 			workspace: 'retention-conformance',
-			host: { name: 'retention-host' },
+			mirrorAgent: { name: 'retention-host' },
 			bash: resource.use,
 			objects: objects.use,
 		};

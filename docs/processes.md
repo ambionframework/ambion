@@ -117,7 +117,7 @@ echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '<dir>/exit.tmp' && mv '<dir>/exit.tm
 ```
 
 The trap keeps the wrapper alive through the `SIGTERM` of a cancel
-([The stop](#the-stop)). The subshell keeps an `exit` in the command from
+([The cancel](#the-cancel)). The subshell keeps an `exit` in the command from
 ending the wrapper. The command stands on lines of its own, so a comment
 or a here-document at its end does not reach the parenthesis. The rename
 makes `exit` whole or absent. The shell can write before the redirect
@@ -330,11 +330,11 @@ writes `stop`, aborts a process of this run, or sends a signal to an
 adopted one. A step opens at most one short channel on the workstation.
 A step never waits for an end, so a cancel with a long grace holds no later
 cancel of the same agent. A cancel, a timeout, a cancel by the host, and
-`dispose()` cancel a process this way ([The stop](#the-stop)). The
+`dispose()` cancel a process this way ([The cancel](#the-cancel)). The
 workstation sends one signal channel at a time for each client
 ([Workstation](workstation.md#the-ssh-client)).
 
-## The stop
+## The cancel
 
 **A cancel sends `SIGTERM` to the process group, waits for the grace, and
 then sends `SIGKILL`.** The `grace` of the `bash` call sets the wait: 1 to
@@ -434,7 +434,7 @@ process record.
 table arms its timeout again from `startedAt` and `timeout` in `spec`. A
 process past its timeout cancels at once. `cancel` and the timeout cancel it
 through its pid: the table writes `stop`, and a script signals the
-process group of the pid ([The stop](#the-stop)). The script signals the
+process group of the pid ([The cancel](#the-cancel)). The script signals the
 group only when the group is not its own, so a backend that runs
 commands in the host's group loses one shell and no more.
 
@@ -731,7 +731,7 @@ seat's host.
 
 **`cancel` cancels the process and waits up to 15 seconds for it to end.**
 The state becomes `cancelled`, or `exited` for a command that ended inside
-the grace ([The stop](#the-stop)). A process that has not ended after 15
+the grace ([The cancel](#the-cancel)). A process that has not ended after 15
 seconds still reads `running` with `stopping: true`, for example when its
 grace is 30 seconds. Its cancel goes on, and a later `status` gives its end. A
 `cancel` of a process in a final state gives that state again.
