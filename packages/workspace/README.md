@@ -29,10 +29,10 @@ returns its handle, and `drive.processes` lists them for the host; see [Processe
 
 A bash backend with workstation `endpoints` also adds `connect` and `observe`.
 Connect a running server process, then call `observe({ sensor: 'bench/temperature' })`;
-the result includes a manifest snapshot ref and export paths. Set
-`drive.tools({ images: false })` to receive image paths instead of attachments.
-`observe` still retains frame bytes in its snapshot and export. The `read` tool
-leaves its source file unchanged.
+the result includes a manifest snapshot ref and export paths. A frame returns
+as an image, and the text of the result names its export path. A `read` of an
+image does the same with `Image path: <path>`. `observe` retains frame bytes
+in its snapshot and export. The `read` tool leaves its source file unchanged.
 See [Sensors](https://github.com/ambionframework/ambion/blob/main/docs/sensors.md)
 for the server lifecycle and observation contract.
 

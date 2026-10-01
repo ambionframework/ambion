@@ -124,6 +124,15 @@ activation, after `RoomState.due`. In the core, `PendingActivation` becomes
 `SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
 body changes.
 
+**`workspace.tools({ images: false })` is removed.** Every executor kind
+carries image parts, so a workspace has one tool bundle. `observe` returns
+each frame as an image part, and `read` of an image returns the image part.
+Each result also states the path of the image in text: the export path in
+`observe`, and `Image path: <path>` in `read`. A model that cannot read
+images still learns where the file is. This is a breaking change for a
+caller that passes `images`. Remove the option. `WorkspaceToolsOptions`
+keeps `skills`.
+
 **An image from a tool reaches a default Codex seat.** The catalog patch of
 `nativeTools: 'none'` no longer sets `input_modalities` and
 `supports_image_detail_original`. The model keeps its own modalities, so a

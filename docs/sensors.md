@@ -574,10 +574,11 @@ short description and an exported data path. File parts render as paths.
 Source text is marked as sensor data. The audit entry holds the request,
 connection facts, and the returned snapshot ref.
 
-**Text-only executors receive paths for images.**
-`workspace.tools({ images: false })` disables image rendering for that
-bundle. It changes no wire request and drops no retained bytes. The
-initial `observe` schema has no per-call image override.
+**Every image result states its path as text.** A frame returns as an
+image part, and the text of the result names its export path. A model that
+cannot read images, such as a model with no image input, still learns where
+the file is. The bundle has one form for every executor. The `observe`
+schema has no image option.
 
 ## Failure and lifecycle
 
@@ -637,7 +638,7 @@ Git repositories.
 - Frame, series, text, and file bytes survive server and host shutdown.
 - A failed file fetch or snapshot write cannot produce a successful result.
 - Measurement timestamps remain unchanged, including in snapshots.
-- A text-only bundle retains images and returns their paths.
+- A frame result holds the image part and the export path in its text.
 
 **A scripted seat proves transport and storage.** One optional live case
 checks that a model follows the workflow and cites the returned ref.
