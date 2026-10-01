@@ -17,7 +17,8 @@ import type {
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { type ClaudeOptions, claude, createClaudeExecutor } from '../src/index.ts';
+import { createClaudeExecutor } from '../src/executor.ts';
+import { type ClaudeOptions, claude } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
 export const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));

@@ -8,7 +8,7 @@
 import type { PassInput } from '@ambionframework/ambion/hosting';
 import { expect, it } from 'vitest';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
-import { createCodexExecutor } from '../../src/index.ts';
+import { createCodexExecutor } from '../../src/executor.ts';
 import { lands, roomOf, viewOf } from '../support.ts';
 import { errorsIn, live, open, person, saidBy, seat, untilQuiet } from './support.ts';
 

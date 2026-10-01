@@ -207,15 +207,15 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Exports
 
-| Export                                          | Use                                                       |
-| ----------------------------------------------- | --------------------------------------------------------- |
-| `pi(options)`                                   | The executor of an agent definition                       |
-| `fromPiTool(tool)`                              | Adapt a native Pi tool to an Ambion tool                  |
-| `piExecution({ stream, sessions, sessionDir })` | The `execution` value for `startRoom` and `createRuntime` |
-| `createPiExecutor`, `createExecutionServices`   | The parts for a host that runs seats apart from the room  |
-| `memorySessions`, `PiSessions`, `SessionScope`  | A store of sessions in memory, and the store contract     |
-| `stubModel`                                     | The model that a custom stream receives                   |
-| `piExecutorHarness` (`/testing`)                | The executor suite on a scripted stream                   |
+| Export                                          | Use                                                         |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| `pi(options)`                                   | The executor of an agent definition                         |
+| `fromPiTool(tool)`                              | Adapt a native Pi tool to an Ambion tool                    |
+| `piExecution({ stream, sessions, sessionDir })` | The `execution` value for `startRoom` and `createRuntime`   |
+| `createExecutionServices`                       | The services for a host that runs seats apart from the room |
+| `memorySessions`, `PiSessions`, `SessionScope`  | A store of sessions in memory, and the store contract       |
+| `stubModel`                                     | The model that a custom stream receives                     |
+| `piExecutorHarness` (`/testing`)                | The executor suite on a scripted stream                     |
 
 ## Troubleshooting
 

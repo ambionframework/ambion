@@ -53,7 +53,7 @@ function stub(connected: string[] = [], kind?: string) {
 }
 
 /** An executor whose sessions never run a pass: the stub of a default counts only its builds. */
-const idle: Executor = { open: () => ({ pass: async () => ({ failed: false }) }) };
+const idle: Executor = () => ({ pass: async () => ({ failed: false }) });
 
 /** A default of `kind`, defined the way an executor package defines one, that counts its builds. */
 function defaultOf(kind: string) {

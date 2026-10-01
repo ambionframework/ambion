@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**`Executor` is a function of the activation.**
+`@ambionframework/ambion/hosting` exports `Executor` as
+`(activation: ExecutorActivation) => ExecutorSession`. Before, it was an
+object with an `open` method and an optional `harness` string. The
+`harness` field is gone. The core records the session of a seat, and
+resumes it, under the executor kind of the seat: `definition.executor.kind`.
+Every shipped family served one kind and set `harness` to that kind, so the
+recorded sessions do not change. The scripted executor, `speakOnce`, the
+executor of a seat with no execution, and the workbench `unavailable`
+report no session, so a release records none and no pass gets a `resume`.
+`createPiExecutor` and `PiExecutorOptions` leave the entry of
+`@ambionframework/pi`. `createClaudeExecutor` and `ClaudeExecutorOptions`
+leave the entry of `@ambionframework/claude`. `createCodexExecutor` and
+`CodexExecutorOptions` leave the entry of `@ambionframework/codex`. Use
+`piExecution`, `claudeExecution`, and `codexExecution`.
+
 **One rule turns a thrown error into a failed pass.**
 `@ambionframework/ambion/hosting` exports `PermanentError` and `failedPass`.
 `PermanentError` names an executor fault that a retry cannot clear, because

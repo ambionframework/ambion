@@ -28,7 +28,8 @@ import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { ROOM_SERVER } from '../src/codex-trace.ts';
-import { type CodexOptions, codex, createCodexExecutor } from '../src/index.ts';
+import { createCodexExecutor } from '../src/executor.ts';
+import { type CodexOptions, codex } from '../src/index.ts';
 import { citing, type RoomTool, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
 
@@ -288,21 +289,19 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 	let served: RoomTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
-	const executor: Executor = {
-		open: (activation) => {
-			signal = activation.signal;
-			return {
-				roomTools: citing(changed, () => ordinary),
-				pass: async (pass) => {
-					activation.read({ after: 0, through: pass.view.through });
-					served = servedTools([...pass.tools, ...pass.agentTools], {
-						callId: (tool) => `${tool}:${serial++}`,
-						delivered: (call) => activation.delivered(call),
-					});
-					return { failed: false };
-				},
-			};
-		},
+	const executor: Executor = (activation) => {
+		signal = activation.signal;
+		return {
+			roomTools: citing(changed, () => ordinary),
+			pass: async (pass) => {
+				activation.read({ after: 0, through: pass.view.through });
+				served = servedTools([...pass.tools, ...pass.agentTools], {
+					callId: (tool) => `${tool}:${serial++}`,
+					delivered: (call) => activation.delivered(call),
+				});
+				return { failed: false };
+			},
+		};
 	};
 	const state = new ActivationState(executor, {
 		id: view.spec.id,

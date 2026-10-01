@@ -85,12 +85,7 @@ export const HARNESS_NOTE =
 
 /** The Codex executor. One instance per seat, for as long as the room runs. */
 export function createCodexExecutor(options: CodexExecutorOptions): Executor {
-	return {
-		harness: 'codex',
-		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options);
-		},
-	};
+	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
 }
 
 /**

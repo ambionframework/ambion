@@ -117,12 +117,10 @@ function knownKinds(input: RouteInput): string {
 function missingExecutor(request: ConnectorRequest, known: string): Executor {
 	const seat = request.seat;
 	const reason = `No execution serves seat '${seat}' of kind '${request.definition.executor.kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: ${known}.`;
-	return {
-		open() {
-			const error = new AmbionError('no_execution', reason);
-			return {
-				pass: async () => ({ failed: true, cause: 'permanent', message: reason, error }),
-			};
-		},
+	return () => {
+		const error = new AmbionError('no_execution', reason);
+		return {
+			pass: async () => ({ failed: true, cause: 'permanent', message: reason, error }),
+		};
 	};
 }

@@ -147,10 +147,6 @@ it back.
 | `codexPath` | The bundled binary | A `codex` executable to run       |
 | `env`       | `process.env`      | The environment of the executable |
 
-**`createCodexExecutor(options)` builds the executor of one seat.** It takes
-`definition`, `codexPath`, and `env`. It also takes `client`, a function that
-builds the SDK client. The tests use `client` to replay recorded events.
-
 **The executor always sets `skipGitRepoCheck`.** A room seat runs where the
 application puts it, and that place is often no git repository.
 

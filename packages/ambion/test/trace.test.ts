@@ -8,7 +8,8 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createExecutionServices, createPiExecutor, pi, piExecution } from '../../pi/src/index.ts';
+import { createPiExecutor } from '../../pi/src/executor.ts';
+import { createExecutionServices, pi, piExecution } from '../../pi/src/index.ts';
 import {
 	loggedToolResult,
 	openTrace,
@@ -472,9 +473,7 @@ describe('the steps the driver owns', () => {
 
 	it('ends a failure that names no message, and raises one error event for it', async () => {
 		const log = collectSteps();
-		const failing: Executor = {
-			open: () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) }),
-		};
+		const failing: Executor = () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) });
 		const { actor, events } = play(
 			scripted(() => quiet()),
 			log.logger,

@@ -6,12 +6,10 @@ import { type Execution, localExecution } from '@ambionframework/ambion/hosting'
  * event. The other seats keep running.
  */
 export function unavailable(kind: string, reason: string): Execution {
-	return localExecution(kind, () => (request) => ({
-		open: () => ({
-			async pass() {
-				const message = `Seat '${request.seat}' cannot run: ${reason}`;
-				return { failed: true, cause: 'permanent', message };
-			},
-		}),
+	return localExecution(kind, () => (request) => () => ({
+		async pass() {
+			const message = `Seat '${request.seat}' cannot run: ${reason}`;
+			return { failed: true, cause: 'permanent', message };
+		},
 	}));
 }

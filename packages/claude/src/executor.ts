@@ -60,12 +60,7 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	return {
-		harness: 'claude',
-		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options);
-		},
-	};
+	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
 }
 
 /** A steered line held until its pass starts. */
@@ -288,7 +283,7 @@ class Activation implements ExecutorSession {
 	private handle(message: SDKMessage): void {
 		this.heard = true;
 		const session = sessionOf(message);
-		if (session !== undefined) this.reported = session.id;
+		if (session !== undefined) this.reported = session;
 		for (const step of this.steps.steps(message)) {
 			this.trace.record(step);
 			// The SDK reports a tool result as the model reads it next.

@@ -33,7 +33,8 @@ import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createExecutionServices, createPiExecutor, stubModel } from '../src/index.ts';
+import { createPiExecutor } from '../src/executor.ts';
+import { createExecutionServices, stubModel } from '../src/index.ts';
 import {
 	defaultSessionDir,
 	diskSessions,

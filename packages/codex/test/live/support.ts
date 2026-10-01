@@ -28,13 +28,8 @@ import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conf
 import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
-import {
-	type CodexExecutorOptions,
-	type CodexOptions,
-	codex,
-	codexExecution,
-	createCodexExecutor,
-} from '../../src/index.ts';
+import { type CodexExecutorOptions, createCodexExecutor } from '../../src/executor.ts';
+import { type CodexOptions, codex, codexExecution } from '../../src/index.ts';
 import { dumpDirectory, liveDump } from './dump.ts';
 
 /** The model every live Codex seat runs on. */

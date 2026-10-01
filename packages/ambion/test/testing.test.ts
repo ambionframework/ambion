@@ -354,17 +354,15 @@ describe('scriptedExecutor', () => {
 		const steered: number[] = [];
 		const events: ExecutionEvent[] = [];
 		const state = new ActivationState(
-			{
-				open: (activation) => {
-					opened.push(activation);
-					return {
-						pass: (one) => {
-							passes.push(one);
-							return pass(one);
-						},
-						steer: (_after, seq) => void steered.push(seq),
-					};
-				},
+			(activation) => {
+				opened.push(activation);
+				return {
+					pass: (one) => {
+						passes.push(one);
+						return pass(one);
+					},
+					steer: (_after, seq) => void steered.push(seq),
+				};
 			},
 			{
 				id: 'act-1',

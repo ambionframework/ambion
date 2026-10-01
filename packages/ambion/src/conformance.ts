@@ -65,21 +65,19 @@ const SAID = 'The pour is Saturday.';
  * the line.
  */
 export function speakOnce(): Executor {
-	return {
-		open(activation: ExecutorActivation): ExecutorSession {
-			const lines: string[] = [];
-			return {
-				async pass({ view, tools }: Pass) {
-					activation.read({ after: 0, through: view.through });
-					const say = tools.find((tool) => tool.name === 'say');
-					await say?.run({ text: SAID }, `${activation.id}:say`);
-					return { failed: false };
-				},
-				steer(_after, _seq, line) {
-					lines.push(line);
-				},
-			};
-		},
+	return (activation: ExecutorActivation): ExecutorSession => {
+		const lines: string[] = [];
+		return {
+			async pass({ view, tools }: Pass) {
+				activation.read({ after: 0, through: view.through });
+				const say = tools.find((tool) => tool.name === 'say');
+				await say?.run({ text: SAID }, `${activation.id}:say`);
+				return { failed: false };
+			},
+			steer(_after, _seq, line) {
+				lines.push(line);
+			},
+		};
 	};
 }
 

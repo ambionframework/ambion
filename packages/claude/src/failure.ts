@@ -2,7 +2,7 @@
  * How a Claude Agent SDK result maps to a pass result: the failure it
  * reports, its cause, and the length stop.
  */
-import type { HarnessSession, PassResult } from '@ambionframework/ambion/hosting';
+import type { PassResult } from '@ambionframework/ambion/hosting';
 import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -53,11 +53,12 @@ export function unresumableResult(result: SDKResultMessage): boolean {
 }
 
 /**
- * The session a `system` init or a `result` message names, or nothing. The
- * SDK generates the id, and the room records it to resume the seat later.
+ * The id of the session a `system` init or a `result` message names, or
+ * nothing. The SDK generates the id, and the room records it to resume the
+ * seat later.
  */
-export function sessionOf(message: SDKMessage): HarnessSession | undefined {
+export function sessionOf(message: SDKMessage): string | undefined {
 	if (message.type !== 'result' && !(message.type === 'system' && message.subtype === 'init'))
 		return undefined;
-	return message.session_id === '' ? undefined : { harness: 'claude', id: message.session_id };
+	return message.session_id === '' ? undefined : message.session_id;
 }

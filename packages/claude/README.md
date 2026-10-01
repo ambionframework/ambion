@@ -209,12 +209,11 @@ settings sources, or a resume. The package has no live tier.
 
 ## Exports
 
-| Export                                                 | Use                                                        |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| `claude(options)`                                      | The executor of an agent definition                        |
-| `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime`  |
-| `createClaudeExecutor`                                 | The executor of one seat, for a host that composes its own |
-| `claudeExecutorHarness`, `scenarioOf`                  | From `/testing`: the suite harness and its scenarios       |
+| Export                                                 | Use                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| `claude(options)`                                      | The executor of an agent definition                       |
+| `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime` |
+| `claudeExecutorHarness`, `scenarioOf`                  | From `/testing`: the suite harness and its scenarios      |
 
 ## Troubleshooting
 

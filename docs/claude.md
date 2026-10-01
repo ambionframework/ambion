@@ -151,8 +151,7 @@ hold. [History and limits](room.md#history-and-limits) states the rule.
 | `env`                        | The environment of the host process | The environment of the executable. A value **replaces** the environment. See the trust section. |
 
 The runtime supplies the clock, the call limits, the trace limits, and the
-logger. `createClaudeExecutor` builds one executor for a seat, and its
-`query` option replaces the SDK entry.
+logger.
 
 ## How an activation runs
 

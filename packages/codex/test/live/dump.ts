@@ -15,7 +15,7 @@ import type {
 	Pass,
 } from '@ambionframework/ambion/hosting';
 import { Codex, type CodexOptions, type ThreadOptions, type TurnOptions } from '@openai/codex-sdk';
-import type { CodexExecutorOptions } from '../../src/index.ts';
+import type { CodexExecutorOptions } from '../../src/executor.ts';
 
 /** The variable that names the directory of the dump. */
 const DUMP_VAR = 'AMBION_LIVE_DUMP';
@@ -132,14 +132,13 @@ export function liveDump(dir: string) {
 	return {
 		/** The options that route the Codex client of `options` through the dump. */
 		options: (options: CodexExecutorOptions): CodexExecutorOptions => ({ ...options, client }),
-		wrap: (executor: Executor): Executor => ({
-			...(executor.harness === undefined ? {} : { harness: executor.harness }),
-			open: (activation) => {
+		wrap:
+			(executor: Executor): Executor =>
+			(activation) => {
 				const seen: Seen = { id: activation.id, core: [], passes: [], codex: [] };
 				activations.push(seen);
-				return session(executor.open(watched(activation, seen)), seen);
+				return session(executor(watched(activation, seen)), seen);
 			},
-		}),
 		write: (report: ExecutorCaseReport) => {
 			const name = report.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
 			const file = join(dir, `${name}.json`);
