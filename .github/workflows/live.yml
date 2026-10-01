@@ -32,25 +32,25 @@ env:
 
 jobs:
   live:
-    name: Live tests on ${{ matrix.harness }}
+    name: Live tests on ${{ matrix.kind }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      # One harness failing does not stop the others: each run costs money
+      # One executor kind failing does not stop the others: each run costs money
       # and says something about its own executor.
       fail-fast: false
       matrix:
-        harness: [pi, claude, codex]
+        kind: [pi, claude, codex]
     env:
-      AMBION_EXECUTOR: ${{ matrix.harness }}
+      AMBION_EXECUTOR: ${{ matrix.kind }}
       AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
       # `pi` and `claude` read the Anthropic key. `codex` reads its own key
-      # and runs its own model. A job sees the key of its harness only.
-      ANTHROPIC_API_KEY: ${{ matrix.harness != 'codex' && secrets.ANTHROPIC_API_KEY || '' }}
-      CODEX_API_KEY: ${{ matrix.harness == 'codex' && secrets.CODEX_API_KEY || '' }}
+      # and runs its own model. A job sees the key of its executor kind only.
+      ANTHROPIC_API_KEY: ${{ matrix.kind != 'codex' && secrets.ANTHROPIC_API_KEY || '' }}
+      CODEX_API_KEY: ${{ matrix.kind == 'codex' && secrets.CODEX_API_KEY || '' }}
     steps:
-      # A harness whose secret is empty skips: every later step waits on
-      # this one. The run says which harness skipped.
+      # An executor kind whose secret is empty skips: every later step waits on
+      # this one. The run says which executor kind skipped.
       - name: the key is present
         id: key
         run: |
@@ -58,7 +58,7 @@ jobs:
           if [ -n "$key" ]; then
             echo 'present=true' >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No key for the $AMBION_EXECUTOR harness: the repository secret is empty, so the job skips."
+            echo "::warning::No key for the $AMBION_EXECUTOR executor kind: the repository secret is empty, so the job skips."
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v5

@@ -68,12 +68,9 @@ it.each([
 	['codex', 'The request failed.', 403, 'permanent'],
 	['codex', 'The request failed.', 500, 'transient'],
 	['codex', 'The request failed.', null, 'transient'],
-] as const)(
-	'classifies what %s reports: %j with status %s as %s',
-	(_harness, text, status, cause) => {
-		expect(classifyCause({ text, status })).toBe(cause);
-	},
-);
+] as const)('classifies what %s reports: %j with status %s as %s', (_kind, text, status, cause) => {
+	expect(classifyCause({ text, status })).toBe(cause);
+});
 
 it('classifies a failure with no text by its status alone', () => {
 	expect(classifyCause({ status: 402 })).toBe('permanent');
