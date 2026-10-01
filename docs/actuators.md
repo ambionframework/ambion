@@ -2,13 +2,8 @@
 
 > **Actuators are a pattern over processes.** The workbench ships the
 > [actuator controller template](../examples/workbench/templates/actuator-controller),
-> and its tests pass today. A stop sends `SIGTERM`, waits the `grace` of
-> the `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-stop)).
-> Two optional features of `bash` have no code yet: `finally`, and the
-> event log with its fold.
-> [Processes](processes.md#pending-finally-and-the-event-log) owns their
-> contract. The backlog holds the work in
-> [D24](../planning/backlog.md#for-actuators).
+> and its tests pass. A stop sends `SIGTERM`, waits the `grace` of the
+> `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-stop)).
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
@@ -21,9 +16,9 @@ loop where its latency fits. It then verifies convergence through a sensor
 of its own.
 
 **The design goal is convergence within guardrails.** The command drives
-the world toward a desired state. The trap, `finally`, the account
-permissions, and the device keep every end safe. The fold reports what the
-command claims, and the agent checks it.
+the world toward a desired state. The stop handler, the `finally.mjs`
+script, the account permissions, and the device keep every end safe. The
+log states what the command claims, and the agent checks it.
 
 **The command owns its inputs.** Its instruments, its feedback, its
 target, and its configuration live inside the command: its code, its
@@ -34,16 +29,16 @@ command reads one.
 
 **Every mechanism that an actuator needs serves other processes too.**
 
-| Need                                      | Mechanism                  | Also serves                                   |
-| ----------------------------------------- | -------------------------- | --------------------------------------------- |
-| Time to reach a safe state at a stop      | `grace` on `bash`          | A server or a database that flushes           |
-| A cleanup after a crash or a kill         | `finally` on `bash`        | A lock to release, a machine to stop          |
-| A status that the agent and host can read | The event log and its fold | A training run, a long build, a sensor server |
+| Need                                 | Mechanism                                 | Also serves                                   |
+| ------------------------------------ | ----------------------------------------- | --------------------------------------------- |
+| Time to reach a safe state at a stop | `grace` on `bash`                         | A server or a database that flushes           |
+| A cleanup after a crash or a kill    | A cleanup script that the agent runs      | A lock to release, a machine to stop          |
+| A status that the agent can read     | A JSON-lines file that the command writes | A training run, a long build, a sensor server |
 
 **A separate tool would add a label and no authority.** An agent can run
-any command through `bash`, so a separate actuation tool or an `act` kind
-of process gates nothing. The account permissions on the workstation
-decide which devices an agent reaches.
+any command through `bash`, so a separate actuation tool or a new kind of
+process gates nothing. The account permissions on the workstation decide
+which devices an agent reaches.
 
 **A Git template carries the practice.** The host registers
 `templates/actuator-controller` as it registers the sensor template. The
@@ -60,16 +55,15 @@ flowchart LR
   device -- flow --> stock[(Stock in the world)]
   stock --> instrument[Instrument]
   instrument -- internal feedback --> command
-  command -- events.jsonl --> fold[Workspace: the fold]
-  fold -- status, reminder --> agent
+  command -- events.jsonl --> agent
   stock --> sensor[Sensor server]
   sensor -- observe --> agent
 ```
 
 **The command closes the fast loop.** It reads its instrument, drives the
 device, and repeats at the period that the plant needs. The agent closes
-the slow loop. It writes the command, reads the fold, observes its
-sensors, and revises the command.
+the slow loop. It writes the command, reads its log, observes its sensors,
+and revises the command.
 
 ### Two paths of feedback
 
@@ -135,7 +129,7 @@ so a hold that ends and a hold that hangs read differently.
 | Oscillation from delay | An agent switches a pump at each activation                      | The command closes the fast loop                                |
 | Policy resistance      | Two commands drive one heater to 40 °C and 60 °C in turn         | `flock` in the command; one owner for each device               |
 | An unconfirmed effect  | An agent reports "the bath is at 37 °C" from the log alone       | The log is a claim; the agent cites a sensor                    |
-| A silent hang          | A controller stops logging while its process lives               | `interval` and the `stale` flag of the fold                     |
+| A silent hang          | A controller stops logging while its process lives               | The log declares its interval; the agent checks the last line   |
 
 ## The controller contract
 
@@ -152,15 +146,15 @@ of them. The template follows them, and its tests check them.
    above it.
 4. **Set `grace` to the time that the device needs.** A heater cuts its
    power in milliseconds. A valve can need 20 seconds to close.
-5. **Give a `finally` that is idempotent and needs no state.** "Heater
-   off" qualifies.
+5. **Ship a cleanup script that is idempotent and needs no state.**
+   "Heater off" qualifies. The agent runs it after an unclean end.
 6. **Lock the device with `flock`** when one command at a time may drive
    it.
-7. **Log to `$AMBION_EVENTS` at the agent's timescale.** Put fast data in
-   a file of its own.
+7. **Log JSON lines at the agent's timescale.** Put fast data in a file
+   of its own.
 
-**A controller logs one of six `state` words.** The event log accepts any
-word. The pattern uses these six.
+**A controller logs one of six `state` words.** The agent reads one
+vocabulary across every controller.
 
 | Value      | The command claims that it              |
 | ---------- | --------------------------------------- |
@@ -173,20 +167,19 @@ word. The pattern uses these six.
 
 ## Read the end of a controller
 
-**The process state and `finally` give the safety of the world.** The
-agent reads them from `status` and the pattern names them.
+**The state of the process gives the safety of the world.** The agent
+reads it with `status`.
 
-| The process ended                            | `finally`                  | The world                                          |
-| -------------------------------------------- | -------------------------- | -------------------------------------------------- |
-| `exited` with code 0, with or without a stop | Did not run                | Safe; the log says whether the goal was reached    |
-| Unclean: a code other than 0, a kill, lost   | Runs                       | Unknown until `finally` ends                       |
-| Unclean                                      | Exited 0                   | Safe now; unknown from the end until `finally` ran |
-| Unclean                                      | None given                 | Unknown                                            |
-| Unclean                                      | Failed, timed out, or lost | Unknown                                            |
+| The process ended                                 | The world                                       | The agent                          |
+| ------------------------------------------------- | ----------------------------------------------- | ---------------------------------- |
+| `exited` with code 0, with or without a stop      | Safe; the log says whether the goal was reached | Confirms the goal through a sensor |
+| `exited` with another code                        | Unknown                                         | Runs the cleanup script            |
+| Killed after the grace, or lost with no exit code | Unknown                                         | Runs the cleanup script            |
 
 **An unknown world comes first.** When the world is unknown, the agent
-checks it through a sensor before it starts another command. It reports a
-claim of `reached` or `holding` on an unclean end as a contradiction.
+runs the cleanup script and checks the world through a sensor before it
+starts another command. It reports a claim of `reached` or `holding` on
+an unclean end as a contradiction.
 
 ## The actuator template
 
@@ -197,12 +190,12 @@ It needs Node 22.19 or newer and has no dependencies. `start` also needs
 
 | File             | Role                                                            | The agent customizes it |
 | ---------------- | --------------------------------------------------------------- | ----------------------- |
-| `controller.mjs` | The harness: stop handlers, deadline, claims, and the event log | No                      |
+| `controller.mjs` | The harness: stop handlers, deadline, claims, and the log       | No                      |
 | `device.mjs`     | The driver: `read()`, `drive(output)`, and `safe()`             | Yes                     |
 | `law.mjs`        | The control law: a PI law with output limits                    | Yes                     |
 | `config.json`    | Target, tolerance, times, lock, limits, gains, and plant model  | Yes                     |
 | `plant.mjs`      | A simulated plant with the interface of a device                | To match the real plant |
-| `finally.mjs`    | The backstop: it calls `safe()` alone                           | Rarely                  |
+| `finally.mjs`    | The cleanup script: it calls `safe()` alone                     | Rarely                  |
 | `start`          | Takes the lock, then replaces itself with `node controller.mjs` | No                      |
 
 **The harness holds the contract.** It installs the stop handlers before
@@ -210,11 +203,16 @@ it opens the device. One queue serializes every call to the device, so
 `safe()` comes after an output that was already on its way. An error makes
 the device safe when it can, and the process exits 1.
 
+**The log is a file in the checkout.** The controller appends JSON lines
+to `events.jsonl`, or to the file that `ACTUATOR_EVENTS` names. Each line
+has `v`, `at`, and `kind`: `target`, `observe`, `drive`, or `state`. The
+agent reads the log with `read` or `bash`.
+
 **`start` keeps `node` as the only process.** It takes the lock on a file
 descriptor and replaces itself with `node`. A probe showed why: a forking
 `flock` reported 143 on `SIGTERM` while its child cleaned up and exited 0.
 `flock -F` and `exec` both passed the 0 through. A busy lock makes `start`
-log `gave_up` and exit 0, so `finally` does not act on the device of the
+log `gave_up` and exit 0, so no cleanup acts on the device of the
 controller that holds the lock.
 
 **The template tests check the contract with real signals.** They run
@@ -233,29 +231,19 @@ registers the template and that a fork holds every file. It runs the
 template tests, then removes the stop handlers and checks that the
 `SIGTERM` case fails.
 
-**The agent starts it and returns later.** `grace` exists. `finally` does
-not exist yet. Until it does, the agent runs `node finally.mjs` in the
-checkout after an unclean end: an exit code other than 0, or a kill after
-the grace.
+**The agent starts it and returns later.**
 
 ```ts
-bash({
-  command: 'bash ~/bath-control/start',
-  grace: 5,
-  finally: 'cd ~/bath-control && node finally.mjs',
-  name: 'bath-hold',
-  timeout: 3900,
-  wait: 0,
-});
+bash({ command: 'bash ~/bath-control/start', grace: 5, name: 'bath-hold', timeout: 3900, wait: 0 });
 // Result: process bash-3f9a2c1d0b7e is running.
-schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' });
+schedule({ after: 900, text: 'Check bath-hold, read its log, and observe bath/temperature.' });
 ```
 
-## Compose the six capabilities
+## Combine the capabilities
 
-**The workspace gives six capabilities, and a loop uses all of them.**
+**A loop uses five workspace capabilities and the actuator pattern.**
 
-| Capability   | Tools                                    | Role in a loop                                               |
+| Part         | Tools                                    | Role in a loop                                               |
 | ------------ | ---------------------------------------- | ------------------------------------------------------------ |
 | Files        | `read`, `write`, `edit`                  | The common medium: logs, exports, working copies, and plans  |
 | Processes    | `bash`, `ps`, `status`, `wait`, `cancel` | The life of every command, and the checks of the agent       |
@@ -264,9 +252,9 @@ schedule({ after: 900, text: 'Check bath-hold, and observe bath/temperature.' })
 | Sensors      | `connect`, `observe`                     | The agent's own view of the stock, retained as evidence      |
 | Actuators    | `bash` and the actuator template         | The controller: a command that stops safe and logs its state |
 
-**Composition happens while the application runs.** A new loop needs no
-restart of the host and no new host code. An agent can build each of
-these compositions in one exchange:
+**An agent builds a new loop while the application runs.** A new loop
+needs no restart of the host and no new host code. An agent can build
+each of these loops in one exchange:
 
 1. **A tuned loop.** Fork the actuator template. Run a step on a
    simulated plant, and record the overshoot and the settling time in a
@@ -286,9 +274,9 @@ these compositions in one exchange:
 workstation decide which devices an agent reaches: device groups,
 `sudoers`, and file modes.
 
-**The device holds the last guardrail.** Between a kill and `finally`, and
-while no host runs, only a watchdog or an interlock protects the world.
-Hard real-time limits belong in the device.
+**The device holds the last guardrail.** Between a kill and the cleanup
+script, and while no host runs, only a watchdog or an interlock protects
+the world. Hard real-time limits belong in the device.
 
 **The log is a claim.** The command writes it, and the agent can edit the
 command. A sensor confirms it.
@@ -317,3 +305,5 @@ world before any `say` commits. The room does not run an effect once
 - A lock in the workspace; `flock` in the command does it.
 - A check of the goal by the workspace; the agent confirms convergence.
 - Hard real-time guarantees on any path through the workspace.
+- A cleanup that the workspace runs, and a status that the workspace reads
+  from the log. [D24](../planning/backlog.md#for-actuators) holds them.

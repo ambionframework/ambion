@@ -26,7 +26,7 @@ each page.
 | [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                   |
 | [Roster](roster.md)                   | Agent membership, reserve, and attention                                     |
 | [Sensors](sensors.md)                 | Sensor protocol, Git-template lifecycle, workstation transport, and evidence |
-| [Actuators](actuators.md)             | A pattern over processes: the controller template and the pending features   |
+| [Actuators](actuators.md)             | A pattern over processes: the controller contract and the template           |
 | [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend       |
 | [Patterns](patterns.md)               | The human collaboration patterns the room represents                         |
 | [Summaries](summary.md)               | Optional closing work and context replacement                                |

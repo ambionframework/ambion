@@ -30,7 +30,7 @@ workspace. See the [Workbench repository](https://github.com/fastforwardengine/w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives six capabilities that an agent composes while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes, and the pattern is a design: an agent runs a controller command with bash. The command reads its own instruments, traps SIGTERM to stop safe, and logs JSON lines that the workspace folds into a status. A stop gives the command the grace of its bash call, and an optional finally is pending. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files, with read, write, and edit. The other capabilities write their files there. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
 </picture>
 
 **The journal records what is said. The workspace holds what is made, and a
@@ -64,16 +64,15 @@ truth. See [Sensors](docs/sensors.md).
 **Actuators are a pattern over processes.** An agent starts a controller
 command with `bash`. The command reads its own instruments, drives a
 device, and handles `SIGTERM` to stop safe inside the `grace` of the call.
-The workbench ships an actuator controller template with tests. An
-optional `finally` and a folded JSON-lines log are pending. The agent
+The workbench ships an actuator controller template with tests. The agent
 confirms convergence through a sensor. See [Actuators](docs/actuators.md).
 
-**The six capabilities compose while the application runs.** Repositories
-hold the code of a loop, and processes run it. Tables hold the plans, and
-files hold the exports. Sensors bring the state of the world in, and the
-actuator design closes the loop on it. Each step is a tool call that the
-agent chooses, so a new loop needs no new host code. See
-[Compose the six capabilities](docs/actuators.md#compose-the-six-capabilities).
+**An agent combines the capabilities while the application runs.**
+Repositories hold the code of a loop, and processes run it. Tables hold
+the plans, and files hold the exports. Sensors bring the state of the
+world in, and an actuator closes the loop on it. Each step is a tool call
+that the agent chooses, so a new loop needs no new host code. See
+[Combine the capabilities](docs/actuators.md#combine-the-capabilities).
 
 **An agent comes back to its work later.** It calls `schedule` with `after`,
 in seconds. The exchange closes while the say waits. When the say is due, the

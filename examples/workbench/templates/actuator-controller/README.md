@@ -83,43 +83,32 @@ code reaches the workspace. A parent such as `npm start` or a forking
 **Set `timeout` above `holdSeconds`.** The controller ends itself at the
 deadline. The timeout of `bash` is a backstop.
 
-**Pending: `finally` on `bash`.** The optional parameter is a design with
-no code yet
-([Processes](../../../../docs/processes.md#pending-finally-and-the-event-log)).
-When it exists, start the controller with it:
+**Run `finally.mjs` after an unclean end.** An exit code other than 0, or
+a kill after the grace, can leave the device driven. `finally.mjs` makes
+it safe, and a second run changes nothing:
 
 ```ts
-bash({
-  command: 'bash ~/bath-control/start',
-  grace: 5,
-  finally: 'cd ~/bath-control && node finally.mjs',
-  name: 'bath-hold',
-  timeout: 3900,
-  wait: 0,
-});
+bash({ command: 'cd ~/bath-control && node finally.mjs', wait: 30 });
 ```
-
-Until then, run `node finally.mjs` in the checkout after an unclean end:
-an exit code other than 0, or a kill after the grace.
 
 ## What the controller promises
 
-| End                               | Exit code | The device                   |
-| --------------------------------- | --------- | ---------------------------- |
-| The deadline `holdSeconds`        | 0         | Safe                         |
-| `SIGTERM` or `SIGINT`             | 0         | Safe                         |
-| Another controller holds the lock | 0         | Not touched                  |
-| An error, after `safe()` succeeds | 1         | Safe; `finally` runs again   |
-| An error, and `safe()` fails      | 1         | Unknown; `finally` runs      |
-| `SIGKILL`                         | None      | Unknown until `finally` runs |
+| End                               | Exit code | The device                         |
+| --------------------------------- | --------- | ---------------------------------- |
+| The deadline `holdSeconds`        | 0         | Safe                               |
+| `SIGTERM` or `SIGINT`             | 0         | Safe                               |
+| Another controller holds the lock | 0         | Not touched                        |
+| An error, after `safe()` succeeds | 1         | Safe; run `finally.mjs` to confirm |
+| An error, and `safe()` fails      | 1         | Unknown; run `finally.mjs`         |
+| `SIGKILL`                         | None      | Unknown; run `finally.mjs`         |
 
 **Exit 0 means safe.** It does not mean that the target was reached. The
 event log states the claim, and you confirm it with a sensor.
 
 ## The event log
 
-The controller appends JSON lines to `$AMBION_EVENTS`. Without that
-variable, it writes `events.jsonl` in the working directory.
+The controller appends JSON lines to `events.jsonl` in the checkout.
+`ACTUATOR_EVENTS` names another file. Read the log with `read` or `bash`.
 
 | Line      | When                                                  |
 | --------- | ----------------------------------------------------- |

@@ -7,7 +7,7 @@
  * - SIGTERM and SIGINT make the device safe, and the process exits 0.
  * - The deadline `holdSeconds` makes the device safe, and the process exits 0.
  * - An error makes the device safe if it can, and the process exits 1, so
- *   the workspace runs `finally`.
+ *   the agent runs `finally.mjs`.
  * - One queue serializes every call to the device, so `safe()` comes after
  *   an output that was already on its way.
  * - It logs the target, the measured value, the output, and its claims.

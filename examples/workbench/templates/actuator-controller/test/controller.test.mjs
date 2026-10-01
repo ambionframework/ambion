@@ -38,7 +38,7 @@ async function setup(context, overrides = {}) {
 	const env = {
 		...process.env,
 		ACTUATOR_CONFIG: join(root, 'config.json'),
-		AMBION_EVENTS: join(root, 'events.jsonl'),
+		ACTUATOR_EVENTS: join(root, 'events.jsonl'),
 	};
 	return { root, config, env };
 }
@@ -58,7 +58,7 @@ function launch(env, file = 'controller.mjs') {
 }
 
 async function events(env) {
-	const text = await readFile(env.AMBION_EVENTS, 'utf8').catch(() => '');
+	const text = await readFile(env.ACTUATOR_EVENTS, 'utf8').catch(() => '');
 	return text
 		.split('\n')
 		.filter((line) => line !== '')
@@ -134,7 +134,7 @@ test('SIGKILL leaves the device driven, and finally makes it safe twice over', a
 	}
 });
 
-test('a failed read makes the device safe and exits 1, so the workspace runs finally', async (context) => {
+test('a failed read makes the device safe and exits 1, so the agent runs finally', async (context) => {
 	const setupResult = await setup(context, { holdSeconds: 30, sim: { failAfterReads: 40 } });
 	const end = await launch(setupResult.env).ended;
 	assert.equal(end.code, 1, end.output);
@@ -152,7 +152,7 @@ test(
 		const first = await setup(context, { holdSeconds: 30 });
 		const run = launch(first.env, 'start');
 		await until(first.env, (line) => line.value === 'acting');
-		const second = { ...first.env, AMBION_EVENTS: join(first.root, 'second.jsonl') };
+		const second = { ...first.env, ACTUATOR_EVENTS: join(first.root, 'second.jsonl') };
 		const busy = await launch(second, 'start').ended;
 		assert.equal(busy.code, 0, busy.output);
 		assert.deepEqual(claimsOf(await events(second)), ['gave_up']);

@@ -374,14 +374,22 @@ one of these capabilities. No order between these items is promised.
 
 ### For actuators
 
-**D24. Actuators as a pattern over processes.**
-[Actuators](../docs/actuators.md) designs a controller as an ordinary
-`bash` process. The stop and the `grace` of D6 exist. The work adds two
-optional process features that
-[Processes](../docs/processes.md#pending-finally-and-the-event-log)
-designs: `finally`, and the `AMBION_EVENTS` log with its fold. The
-workbench already ships `templates/actuator-controller`, a Node controller
-with a simulated plant and tests. **Condition:** an application must drive
+**D24. Two process features for the actuator pattern.**
+[Actuators](../docs/actuators.md) runs a controller as an ordinary `bash`
+process, and the workbench ships `templates/actuator-controller`. Today
+the agent runs the cleanup script itself and reads the log as a file. Two
+optional features of `bash` would move that work into the workspace:
+
+1. **`finally`.** A command that runs once after an unclean end: an exit
+   code other than 0, a kill after the grace, or a lost process. A
+   `mkdir` claim in the process directory picks one runner among the
+   wrapper, the table, and a second host run.
+2. **An event log and its fold.** The workspace names a JSON-lines file
+   for each process, and folds its `target`, `observe`, `drive`, and
+   `state` lines into a status for `status`, `wait`, the reminder, and
+   the host's view.
+
+**Condition:** an application must drive
 a device from a room, and the workstation accounts hold the device
 permissions.
 

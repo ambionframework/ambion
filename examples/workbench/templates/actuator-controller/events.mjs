@@ -1,7 +1,6 @@
 /**
- * The event log. The workspace sets `AMBION_EVENTS` to a file that it folds
- * into the status of the process. Without it, the log is `events.jsonl` in
- * the working directory.
+ * The event log. `ACTUATOR_EVENTS` names the file, and the default is
+ * `events.jsonl` in the working directory.
  */
 
 import { appendFileSync } from 'node:fs';
@@ -9,7 +8,7 @@ import { resolve } from 'node:path';
 
 /** The path of the event log. */
 export function eventsPath() {
-	return process.env.AMBION_EVENTS ?? resolve('events.jsonl');
+	return process.env.ACTUATOR_EVENTS ?? resolve('events.jsonl');
 }
 
 /**
