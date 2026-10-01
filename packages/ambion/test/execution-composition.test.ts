@@ -11,17 +11,17 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import {
+	type ActivationOpener,
 	defineExecution,
 	type Execution,
-	type Executor,
 	hostingOf,
 	localExecution,
 } from '../src/hosting.ts';
 import {
-	type AgentExecutor,
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	type Executor,
 	isSpoken,
 	type Message,
 	resumeRoom,
@@ -53,7 +53,7 @@ function stub(connected: string[] = [], kind?: string) {
 }
 
 /** An executor whose sessions never run a pass: the stub of a default counts only its builds. */
-const idle: Executor = () => ({ pass: async () => ({ failed: false }) });
+const idle: ActivationOpener = () => ({ pass: async () => ({ failed: false }) });
 
 /** A default of `kind`, defined the way an executor package defines one, that counts its builds. */
 function defaultOf(kind: string) {
@@ -69,7 +69,7 @@ function defaultOf(kind: string) {
 }
 
 function seat(kind: string, name = 'worker') {
-	const executor: AgentExecutor = { kind, instructions: 'answer', tools: [] };
+	const executor: Executor = { kind, instructions: 'answer', tools: [] };
 	return defineAgent({ name, identity: 'Answers.', executor });
 }
 

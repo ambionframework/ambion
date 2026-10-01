@@ -28,7 +28,7 @@ import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conf
 import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
-import { type CodexExecutorOptions, createCodexExecutor } from '../../src/executor.ts';
+import { type CodexOpenerOptions, createCodexOpener } from '../../src/executor.ts';
 import { type CodexOptions, codex, codexExecution } from '../../src/index.ts';
 import { dumpDirectory, liveDump } from './dump.ts';
 
@@ -165,15 +165,15 @@ export function codexExecutorHarness(): ExecutorHarness {
 				// A binary that does not exist fails before Codex reads the catalog.
 				...(failing === 'transient' ? { nativeTools: 'codex' as const } : {}),
 			});
-			const options: CodexExecutorOptions = {
+			const options: CodexOpenerOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
 					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
 			};
-			if (dump === undefined) return createCodexExecutor(options);
-			return dump.wrap(createCodexExecutor(dump.options(options)));
+			if (dump === undefined) return createCodexOpener(options);
+			return dump.wrap(createCodexOpener(dump.options(options)));
 		},
 		can: { steer: false, usage: false, permanentFailure: true, memory: true },
 		patience: QUIET_MS,

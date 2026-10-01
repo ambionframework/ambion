@@ -7,11 +7,11 @@
  */
 import type { Message, Step } from '@ambionframework/ambion';
 import type {
+	ActivationOpener,
 	ActivationView,
 	CommitRequest,
 	CommitResult,
-	Executor,
-	ExecutorSession,
+	RunningActivation,
 } from '@ambionframework/ambion/hosting';
 import { callTool, quiet } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
@@ -19,7 +19,7 @@ import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createPiExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../src/executor.ts';
 import { memorySessions, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { contextText, type PiScript, scripted } from '../src/testing.ts';
@@ -66,26 +66,26 @@ function activation(
 		return base(model, context, options);
 	};
 	const definition = scriptedAgent('worker');
-	const piExecutor = createPiExecutor({
+	const piExecutor = createPiOpener({
 		definition,
 		model: stubModel,
 		stream,
 		now: () => 0,
 		sessions: memorySessions(),
 	});
-	const sessions: ExecutorSession[] = [];
-	const executor: Executor = (opened) => {
+	const sessions: RunningActivation[] = [];
+	const opener: ActivationOpener = (opened) => {
 		const one = piExecutor(opened);
 		sessions.push(one);
 		return one;
 	};
-	const raw = (): ExecutorSession => {
+	const raw = (): RunningActivation => {
 		const one = sessions[0];
 		if (one === undefined) throw new Error('The core opened no session.');
 		return one;
 	};
 	const commits: CommitRequest[] = [];
-	const session = stateOf(executor, definition, {
+	const session = stateOf(opener, definition, {
 		room: answer === undefined ? unusedRoom : roomThatCommits(commits, answer),
 		trace: {
 			record: (step) => {
@@ -174,7 +174,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const ready = deferred();
 		const resolving = deferred();
 		const definition = scriptedAgent('worker');
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: async (id, agent) => {
 				resolving.resolve();
@@ -186,7 +186,7 @@ describe('the Pi executor across the passes of one activation', () => {
 			sessions: memorySessions(),
 		});
 		const steps: Step[] = [];
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			trace: {
 				record: (step) => void steps.push(step),
 			},
@@ -244,7 +244,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		const resolving = deferred();
 		const steps: Step[] = [];
 		const definition = scriptedAgent('worker');
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: async (id, agent) => {
 				resolving.resolve();
@@ -255,7 +255,7 @@ describe('the Pi executor across the passes of one activation', () => {
 			now: () => 0,
 			sessions: memorySessions(),
 		});
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			trace: {
 				record: (step) => void steps.push(step),
 			},

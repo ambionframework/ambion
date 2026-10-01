@@ -28,17 +28,17 @@
  * design contract for the wire.
  */
 
-export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
+export type { ExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
 export type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 } from './execution/executor.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
 export type { RoomTool, RoomToolOptions } from './execution/room-tools.ts';
@@ -70,8 +70,8 @@ export type {
 export { visitOf } from './room.ts';
 export type {
 	AgentDefinition,
-	AgentExecutor,
 	ExecutionEvent,
+	Executor,
 	FailureCause,
 	HarnessSession,
 	Seq,

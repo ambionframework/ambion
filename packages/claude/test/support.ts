@@ -9,17 +9,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import type {
+	ActivationOpener,
 	ActivationView,
 	AgentDefinition,
 	CommitRequest,
 	ExecutionEvent,
-	Executor,
-	ExecutorSession,
 	RoomProtocol,
+	RunningActivation,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { createClaudeExecutor } from '../src/executor.ts';
+import { createClaudeOpener } from '../src/executor.ts';
 import { type ClaudeOptions, claude } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
@@ -119,14 +119,14 @@ export function fakeRoom(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createClaudeExecutor({
+	const opener = createClaudeOpener({
 		definition,
 		pathToClaudeCodeExecutable: executable,
 		env: { ...process.env, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 	});
-	const sessions: ExecutorSession[] = [];
-	const recording: Executor = (activation) => {
-		const session = executor(activation);
+	const sessions: RunningActivation[] = [];
+	const recording: ActivationOpener = (activation) => {
+		const session = opener(activation);
 		sessions.push(session);
 		return session;
 	};

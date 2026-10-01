@@ -17,7 +17,7 @@ import type {
 	ExecutionHost,
 } from '../host/runtime.ts';
 import { localConnector } from './connector.ts';
-import type { Executor } from './executor.ts';
+import type { ActivationOpener } from './executor.ts';
 import type { AgentRunner } from './runner.ts';
 
 /** The execution that each kind defined last. A room with no execution for a kind runs it. */
@@ -31,7 +31,7 @@ const defaults = new Map<string, Execution>();
  */
 export function localExecution(
 	kind: string,
-	build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+	build: (host: ExecutionHost) => (request: ConnectorRequest) => ActivationOpener,
 ): Execution<AgentRunner> {
 	return { kind, connector: (host) => localConnector(host, build(host)) };
 }
@@ -44,7 +44,7 @@ export function localExecution(
 type ExecutionBuild<Options> = (
 	host: ExecutionHost,
 	options: Options | undefined,
-) => (request: ConnectorRequest) => Executor;
+) => (request: ConnectorRequest) => ActivationOpener;
 
 /**
  * The executions of one executor family. The result takes the options of the
@@ -86,7 +86,7 @@ export function route(input: RouteInput): ExecutionConnector {
 		connectors.set(execution, known);
 		return known;
 	};
-	const missing = localConnector(host, (request) => missingExecutor(request, knownKinds(input)));
+	const missing = localConnector(host, (request) => missingOpener(request, knownKinds(input)));
 	const connectorOf = (kind: string): ExecutionConnector => {
 		const execution = input.executions.find((one) => one.kind === undefined || one.kind === kind);
 		if (execution !== undefined) return explicit(execution);
@@ -113,8 +113,8 @@ function knownKinds(input: RouteInput): string {
 	return kinds.size === 0 ? 'none' : [...kinds].sort().join(', ');
 }
 
-/** The executor of a seat with no execution: each activation fails at once, and a retry cannot fix it. */
-function missingExecutor(request: ConnectorRequest, known: string): Executor {
+/** The opener of a seat with no execution: each activation fails at once, and a retry cannot fix it. */
+function missingOpener(request: ConnectorRequest, known: string): ActivationOpener {
 	const seat = request.seat;
 	const reason = `No execution serves seat '${seat}' of kind '${request.definition.executor.kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: ${known}.`;
 	return () => {

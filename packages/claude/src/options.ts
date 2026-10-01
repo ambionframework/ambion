@@ -6,7 +6,7 @@
  * room tools, the agent's own tools, and the built-in tools the policy names.
  */
 import {
-	type AgentExecutor,
+	type Executor,
 	executorOfKind,
 	present,
 	ROOM_SERVER,
@@ -71,7 +71,7 @@ function seatEnv(
 }
 
 /** The Claude executor a definition names, or an error that names its kind. */
-export function claudeOf(executor: AgentExecutor): ClaudeExecutor {
+export function claudeOf(executor: Executor): ClaudeExecutor {
 	return executorOfKind<ClaudeExecutor>(executor, 'claude');
 }
 

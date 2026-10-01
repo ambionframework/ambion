@@ -53,12 +53,12 @@ export function defineExecution<Options = undefined>(
   build: (
     host: ExecutionHost,
     options: Options | undefined,
-  ) => (request: ConnectorRequest) => Executor,
+  ) => (request: ConnectorRequest) => ActivationOpener,
 ): (options?: Options) => Execution<AgentRunner>;
 
 export function localExecution(
   kind: string,
-  build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
+  build: (host: ExecutionHost) => (request: ConnectorRequest) => ActivationOpener,
 ): Execution<AgentRunner>;
 ```
 
@@ -66,7 +66,7 @@ export function localExecution(
 `build` runs once for each connector. The room builds the connector of
 its own execution when the first seat that the execution serves connects.
 `startRoom` does not build it. The function that `build` returns builds the
-executor of one seat. Every seat keeps the trace limits and the logger
+opener of one seat. Every seat keeps the trace limits and the logger
 of the host. The runner receives a plain `RoomProtocol` facade with
 `view`, `commit`, and `lease`. The facade gives no access to room lifecycle
 methods.
@@ -81,8 +81,8 @@ execution once, and awaits `AgentRunner.run` inside its alarm.
 
 **`AgentRunner` is the driver.** It owns the lease, its renewal, and the
 wake queue. It knows no model and no provider. For each activation it opens
-one `ActivationState` over the executor of the seat, and the state opens one
-`ExecutorSession`. The driver asks the room for the windowed view and runs
+one `ActivationState` over the opener of the seat, and the state opens one
+`RunningActivation`. The driver asks the room for the windowed view and runs
 one pass after another until the activation stops.
 
 ## The pass contract
@@ -105,8 +105,8 @@ fact of it, so no executor keeps a copy.
 steps, resumes a harness session, hosts the tools, and reports the signal
 that the model consumed input.
 
-**An executor is a function of the activation.** It takes an
-`ExecutorActivation` and returns an `ExecutorSession`. The activation
+**An `ActivationOpener` is a function of the activation.** It takes an
+`ExecutorActivation` and returns a `RunningActivation`. The activation
 holds what serves the whole activation, in these members:
 
 | Member            | What it is                                                                              |
@@ -131,7 +131,7 @@ members:
 | `resume`        | The id of the harness session to resume, when `spec.resume` names the executor kind.           |
 | `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
 
-**The session reports back.** `ExecutorSession` has these members:
+**The running activation reports back.** `RunningActivation` has these members:
 
 | Member                     | What it does                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------- |
@@ -143,7 +143,7 @@ members:
 
 **The core records the session under the executor kind.** The release
 records `{ harness, id }`, where `harness` is `definition.executor.kind`,
-such as `pi`. An executor session with no `session` id records none.
+such as `pi`. A running activation with no `session` id records none.
 
 **`pass` returns a `PassResult`.** It has these members:
 
@@ -155,13 +155,13 @@ such as `pi`. An executor session with no `session` id records none.
 | `error`   | On failure: the error that the `error` event carries. Absent, the core builds one from `message`. |
 | `stop`    | `'length'` when the model reached a length limit. The pass did not fail.                          |
 
-**A session follows these rules.** The core reads the session at fixed
+**A running activation follows these rules.** The core reads it at fixed
 points.
 
 - **A pass that the cut ends reports no failure.** The cut aborts `signal`,
   and the pass returns `failed: false`.
 - **The core reads `roomTools` once, before the first pass.** Set it on the
-  session that the executor returns. A later change reaches no tool.
+  running activation that the opener returns. A later change reaches no tool.
 - **The core reads `session` after the last pass.** Keep the id of the
   harness session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.
@@ -201,7 +201,8 @@ internal. Participant views omit `sessionId`.
 | `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor`       | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
 | `present`, `pickPresent` | The option fields that hold a value, which a family spreads into its executor                                                                                  |
-| `Executor`               | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
+| `Executor`               | The value in an agent definition: `kind`, `instructions`, `tools`, and the fields that the room reads                                                          |
+| `ActivationOpener`       | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `RunningActivation`                              |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
@@ -320,7 +321,7 @@ harness.** Each family adapts them to its own tool shape.
   and the commit takes it as its key. The core binds each room tool to the
   read position and the cut of the activation. A call of a tool of the
   definition reads the view of the pass that runs it.
-- **`session.roomTools`** is a `RoomToolOptions` value that adds to a say
+- **`roomTools` of the running activation** is a `RoomToolOptions` value that adds to a say
   and to a schedule: `refs` changes the refs it cites, and `spoke` runs
   when the room takes an ordinary say or a scheduled say.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
@@ -601,10 +602,10 @@ An adapter is a package that builds an `Execution` and an executor for one
 family. `@ambionframework/claude` is the worked example, and
 `@ambionframework/pi` is the second family.
 
-1. **Implement `Executor` and `ExecutorSession`.** The executor is a
-   function that takes the activation and returns a session. Keep the model
-   loop for one activation inside the session. The core records the session
-   under the executor kind of the seat.
+1. **Implement `ActivationOpener` and `RunningActivation`.** The opener is a
+   function that takes the activation and returns a running activation. Keep
+   the model loop for one activation inside the running activation. The core
+   records the harness session under the executor kind of the seat.
 2. **Place the prompt.** Put `pass.mechanism` and `pass.agent` where the
    harness caches them, and send the text of `pass.record()`.
    [The prompt the core renders](#the-prompt-the-core-renders) states the

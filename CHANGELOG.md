@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**`Executor` now names one thing: the value in an agent definition.** The
+word named three things before. The hosting entry renames the function type
+`Executor` to `ActivationOpener`. It renames `ExecutorSession` to
+`RunningActivation`. The main and hosting entries rename the value type
+`AgentExecutor` to `Executor`. The hosting entry renames
+`AgentExecutorBaseOptions` to `ExecutorBaseOptions`. The `/testing` entry
+renames `scriptedExecutor` to `scriptedOpener`. The fields that hold an
+`ActivationOpener` take the name `opener`: `AgentExecutionContext.executor`
+becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
+`createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
+`createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
+`ExecutorActivation`, and `ExecutorOptions` keep their names.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

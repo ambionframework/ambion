@@ -7,7 +7,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import {
-	type AgentExecutor,
+	type Executor,
 	executorOfKind,
 	present,
 	ROOM_SERVER,
@@ -25,7 +25,7 @@ export interface CodexRuntime {
 }
 
 /** The Codex executor a definition names, or an error that names its kind. */
-export function codexOf(executor: AgentExecutor): CodexExecutor {
+export function codexOf(executor: Executor): CodexExecutor {
 	return executorOfKind<CodexExecutor>(executor, 'codex');
 }
 

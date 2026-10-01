@@ -111,7 +111,7 @@ it('exports exactly the conformance suite, its shared parts, and its in-process 
 it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<hosting.AgentPort>().toHaveProperty('wake');
 	expectTypeOf<hosting.RoomProtocol>().toHaveProperty('view');
-	expectTypeOf<hosting.AgentExecutionContext>().toHaveProperty('executor');
+	expectTypeOf<hosting.AgentExecutionContext>().toHaveProperty('opener');
 	expectTypeOf<main.Visit['lastDeparture']>().toEqualTypeOf<Seq | undefined>();
 	expectTypeOf<
 		Extract<
@@ -127,13 +127,13 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
 	expectTypeOf<main.HarnessSession>().toEqualTypeOf<hosting.HarnessSession>();
 	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.HarnessSession | undefined>();
-	expectTypeOf<hosting.ExecutorSession['session']>().toEqualTypeOf<string | undefined>();
+	expectTypeOf<hosting.RunningActivation['session']>().toEqualTypeOf<string | undefined>();
 	// The room windows the record: a view names one message at most, and a seat names its estimator.
 	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<
 		[activation: string, message?: Seq]
 	>();
 	expectTypeOf<hosting.ActivationView['context']>().not.toHaveProperty('earliest');
-	expectTypeOf<main.AgentExecutor['estimateTokens']>().toEqualTypeOf<string | undefined>();
+	expectTypeOf<main.Executor['estimateTokens']>().toEqualTypeOf<string | undefined>();
 	expectTypeOf<main.CreateRuntimeOptions>().toHaveProperty('estimators');
 });
 

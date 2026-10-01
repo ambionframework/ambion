@@ -12,7 +12,7 @@ import {
 	quiet,
 	type Script,
 	ScriptedFailure,
-	scriptedExecutor,
+	scriptedOpener,
 	speak,
 	spend,
 } from '../src/testing.ts';
@@ -47,10 +47,10 @@ function scriptOf(plan: ExecutorPlan): Script {
 }
 
 const harness: ExecutorHarness = {
-	open: (plan, definition) => scriptedExecutor(scriptOf(plan), definition),
+	open: (plan, definition) => scriptedOpener(scriptOf(plan), definition),
 	can: { steer: false, usage: true, permanentFailure: true },
 };
 
-describe('scriptedExecutor', () => {
+describe('scriptedOpener', () => {
 	for (const c of executorConformance(harness)) it(c.name, c.run);
 });

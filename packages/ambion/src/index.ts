@@ -54,7 +54,6 @@ export type { PendingSay } from './scheduling.ts';
 export type {
 	ActivationOutcome,
 	AgentDefinition,
-	AgentExecutor,
 	AgentParticipantInfo,
 	Attention,
 	Clock,
@@ -66,6 +65,7 @@ export type {
 	ExchangeRef,
 	ExchangeView,
 	ExecutionEvent,
+	Executor,
 	HarnessSession,
 	HumanDefinition,
 	HumanParticipantInfo,

@@ -20,7 +20,7 @@ export {
 	ScriptedFailure,
 	type Step,
 	scripted,
-	scriptedExecutor,
+	scriptedOpener,
 	seat,
 	speak,
 	spend,

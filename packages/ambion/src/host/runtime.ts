@@ -23,7 +23,7 @@
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import { AmbionError } from '../errors.ts';
-import type { Executor } from '../execution/executor.ts';
+import type { ActivationOpener } from '../execution/executor.ts';
 import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
@@ -179,8 +179,8 @@ export interface AgentExecutionContext {
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	/** The executor of the seat: a function that opens one session per activation. */
-	readonly executor: Executor;
+	/** The opener of the seat: a function that opens one running activation per activation. */
+	readonly opener: ActivationOpener;
 	readonly emit?: (event: ExecutionEvent) => void;
 	/** Opens the trace sink of each activation. The driver closes it. */
 	readonly trace: TraceOpener;

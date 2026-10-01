@@ -9,13 +9,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ExecutorCaseReport } from '@ambionframework/ambion/conformance';
 import type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
+	RunningActivation,
 } from '@ambionframework/ambion/hosting';
 import { Codex, type CodexOptions, type ThreadOptions, type TurnOptions } from '@openai/codex-sdk';
-import type { CodexExecutorOptions } from '../../src/executor.ts';
+import type { CodexOpenerOptions } from '../../src/executor.ts';
 
 /** The variable that names the directory of the dump. */
 const DUMP_VAR = 'AMBION_LIVE_DUMP';
@@ -75,7 +75,7 @@ function recorded(pass: Pass, entry: Record<string, unknown>): Pass {
 }
 
 /** The session the executor opened, with each pass written to `seen`. */
-function session(inner: ExecutorSession, seen: Seen): ExecutorSession {
+function session(inner: RunningActivation, seen: Seen): RunningActivation {
 	return {
 		get session() {
 			return inner.session;
@@ -131,13 +131,13 @@ export function liveDump(dir: string) {
 	};
 	return {
 		/** The options that route the Codex client of `options` through the dump. */
-		options: (options: CodexExecutorOptions): CodexExecutorOptions => ({ ...options, client }),
+		options: (options: CodexOpenerOptions): CodexOpenerOptions => ({ ...options, client }),
 		wrap:
-			(executor: Executor): Executor =>
+			(opener: ActivationOpener): ActivationOpener =>
 			(activation) => {
 				const seen: Seen = { id: activation.id, core: [], passes: [], codex: [] };
 				activations.push(seen);
-				return session(executor(watched(activation, seen)), seen);
+				return session(opener(watched(activation, seen)), seen);
 			},
 		write: (report: ExecutorCaseReport) => {
 			const name = report.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');

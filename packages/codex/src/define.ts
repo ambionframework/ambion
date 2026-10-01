@@ -4,10 +4,10 @@
  * `codex()` builds the executor an agent definition takes. The room reads
  * none of the fields Codex adds; the Codex executor does.
  */
-import type { AgentExecutor } from '@ambionframework/ambion';
+import type { Executor } from '@ambionframework/ambion';
 import {
-	type AgentExecutorBaseOptions,
 	describeExecutor,
+	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from '@openai/codex-sdk';
@@ -30,7 +30,7 @@ export interface CodexPolicy {
 	readonly additionalDirectories?: readonly string[];
 }
 
-export interface CodexOptions extends AgentExecutorBaseOptions, CodexPolicy {
+export interface CodexOptions extends ExecutorBaseOptions, CodexPolicy {
 	/** A Codex model identifier. */
 	model: string;
 	/**
@@ -46,7 +46,7 @@ export interface CodexOptions extends AgentExecutorBaseOptions, CodexPolicy {
 }
 
 /** An agent's Codex executor: the Codex SDK loop, model, instructions, tools and policy. */
-export interface CodexExecutor extends AgentExecutor, CodexPolicy {
+export interface CodexExecutor extends Executor, CodexPolicy {
 	readonly kind: 'codex';
 	readonly model: string;
 	readonly nativeTools?: 'none' | 'codex';

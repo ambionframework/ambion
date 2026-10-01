@@ -7,12 +7,12 @@ import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import { ActivationState } from '../src/execution/activation.ts';
 import type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassInput,
 	PassResult,
+	RunningActivation,
 } from '../src/execution/executor.ts';
 import { PermanentError } from '../src/execution/failure.ts';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
@@ -26,11 +26,11 @@ import {
 	quiet,
 	type Script,
 	scripted,
-	scriptedExecutor,
+	scriptedOpener,
 	settled,
 	speak,
 } from '../src/testing.ts';
-import type { AgentExecutor, ExecutionEvent, Step } from '../src/types.ts';
+import type { ExecutionEvent, Executor, Step } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -41,7 +41,7 @@ const echo = defineTool({
 	execute: () => 'echoed',
 });
 
-const agent = (name: string, tools: AgentExecutor['tools'] = []) =>
+const agent = (name: string, tools: Executor['tools'] = []) =>
 	defineAgent({
 		name,
 		identity: `The ${name} seat.`,
@@ -214,7 +214,7 @@ describe('fakeClock', () => {
 });
 
 /** The executor contract, driven with no room and no driver. */
-describe('scriptedExecutor', () => {
+describe('scriptedOpener', () => {
 	const view = (through: number, purpose: ActivationView['spec']['purpose']): ActivationView => ({
 		spec: { id: 'act-1', seat: 'a', attempt: 1, purpose },
 		through,
@@ -226,8 +226,8 @@ describe('scriptedExecutor', () => {
 	function harness(commit: (request: CommitRequest) => CommitResult) {
 		const commits: CommitRequest[] = [];
 		const events: ExecutionEvent[] = [];
-		const open = (executor: Executor) =>
-			new ActivationState(executor, {
+		const open = (opener: ActivationOpener) =>
+			new ActivationState(opener, {
 				id: 'act-1',
 				room: {
 					view: async () => ({ stale: 'unused' }),
@@ -251,7 +251,7 @@ describe('scriptedExecutor', () => {
 	it('commits a say and a schedule against the position it read and advances readThrough', async () => {
 		const { open, commits } = harness(() => said(3 + commits.length));
 		const session = open(
-			scriptedExecutor(
+			scriptedOpener(
 				(_step, _seat, call) =>
 					call === 1 ? speak('hi') : call === 2 ? later('Check the build.', 600) : quiet(),
 				agent('a'),
@@ -278,7 +278,7 @@ describe('scriptedExecutor', () => {
 		});
 		const seen: string[] = [];
 		const session = open(
-			scriptedExecutor((step) => {
+			scriptedOpener((step) => {
 				seen.push(step.results.map((result) => result.text).join(','));
 				return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
 			}, agent('a')),
@@ -292,7 +292,7 @@ describe('scriptedExecutor', () => {
 
 	it('stops when the room answers stale, and never asks again', async () => {
 		const { open, commits } = harness(() => ({ stale: 'lease ended' }));
-		const session = open(scriptedExecutor(() => speak('hi'), agent('a')));
+		const session = open(scriptedOpener(() => speak('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
@@ -308,7 +308,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => later('Again.', 60), agent('a')));
+		const session = open(scriptedOpener(() => later('Again.', 60), agent('a')));
 		await expect(session.pass(input(closing))).resolves.toMatchObject({
 			failed: true,
 			cause: 'transient',
@@ -326,7 +326,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => speak('summary'), agent('a')));
+		const session = open(scriptedOpener(() => speak('summary'), agent('a')));
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');
@@ -335,7 +335,7 @@ describe('scriptedExecutor', () => {
 	it('reports a script that throws as a transient failure and emits the error', async () => {
 		const { open, events } = harness(() => said(4));
 		const session = open(
-			scriptedExecutor(() => {
+			scriptedOpener(() => {
 				throw new Error('broke');
 			}, agent('a')),
 		);
@@ -359,7 +359,7 @@ describe('scriptedExecutor', () => {
 			one: Pass,
 			handle: { readonly state: ActivationState; readonly activation: ExecutorActivation },
 		) => Promise<PassResult>,
-		tools: AgentExecutor['tools'] = [],
+		tools: Executor['tools'] = [],
 		steering: 'takes' | 'none' | 'throws' | 'readsThenThrows' = 'takes',
 	) {
 		const opened: ExecutorActivation[] = [];
@@ -370,7 +370,7 @@ describe('scriptedExecutor', () => {
 		const state: ActivationState = new ActivationState(
 			(activation) => {
 				opened.push(activation);
-				const session: ExecutorSession = {
+				const session: RunningActivation = {
 					pass: (one) => {
 						passes.push(one);
 						return pass(one, { state, activation });

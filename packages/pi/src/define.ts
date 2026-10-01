@@ -4,14 +4,14 @@
  * `pi()` builds the executor an agent definition takes. `fromPiTool` adapts
  * one native Pi tool to the tool the room normalizes.
  */
-import type { AgentExecutor, AmbionTool } from '@ambionframework/ambion';
+import type { AmbionTool, Executor } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
-import { type AgentExecutorBaseOptions, describeExecutor } from '@ambionframework/ambion/hosting';
+import { describeExecutor, type ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
 import type { AgentTool, CompactionSettings, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { DEFAULT_COMPACTION_SETTINGS } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 
-export interface PiOptions extends AgentExecutorBaseOptions {
+export interface PiOptions extends ExecutorBaseOptions {
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
 	/**
@@ -32,7 +32,7 @@ export interface PiOptions extends AgentExecutorBaseOptions {
  * tools. Built by `pi()`. The room reads none of the fields Pi adds; the Pi
  * executor does.
  */
-export interface PiExecutor extends AgentExecutor {
+export interface PiExecutor extends Executor {
 	readonly kind: 'pi';
 	readonly model: string;
 	readonly compaction?: CompactionSettings;
@@ -108,19 +108,19 @@ export function fromPiTool<TParameters extends TSchema, TDetails>(
 }
 
 /** The model identifier `pi()` gave the executor. Another family's executor has none. */
-export function modelOf(executor: AgentExecutor): string {
+export function modelOf(executor: Executor): string {
 	if ('model' in executor && typeof executor.model === 'string') return executor.model;
 	throw new Error(`The Pi executor cannot run an executor of kind '${executor.kind}'.`);
 }
 
 /** The compaction settings `pi()` gave the executor, or Pi's defaults. */
-export function compactionOf(executor: AgentExecutor): CompactionSettings {
+export function compactionOf(executor: Executor): CompactionSettings {
 	if ('compaction' in executor && isCompaction(executor.compaction)) return executor.compaction;
 	return DEFAULT_COMPACTION_SETTINGS;
 }
 
 /** The thinking level `pi()` gave the executor, or `off`. */
-export function thinkingOf(executor: AgentExecutor): ThinkingLevel {
+export function thinkingOf(executor: Executor): ThinkingLevel {
 	return 'thinking' in executor && isThinking(executor.thinking) ? executor.thinking : 'off';
 }
 

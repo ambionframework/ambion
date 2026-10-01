@@ -1,5 +1,5 @@
 /**
- * The cases every `Executor` must pass. The suite plays the driver and the
+ * The cases every `ActivationOpener` must pass. The suite plays the driver and the
  * room for one executor. It runs the executor through the real driver over a
  * scripted room, then checks the room calls and the steps the logger
  * receives. It never checks what an executor says beyond the neutral plans
@@ -18,7 +18,7 @@ import {
 } from './conformance-support.ts';
 import { defineAgent, describeExecutor } from './define.ts';
 import { seatContext } from './execution/connector.ts';
-import type { Executor } from './execution/executor.ts';
+import type { ActivationOpener } from './execution/executor.ts';
 import { AgentRunner } from './execution/runner.ts';
 import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
@@ -71,11 +71,14 @@ export interface ExecutorCapabilities {
 /** What an executor under test gives the suite. */
 export interface ExecutorHarness {
 	/**
-	 * Build the executor for one seat, ready to perform `plan`. The scripted
+	 * Build the opener for one seat, ready to perform `plan`. The scripted
 	 * family maps the plan to a script, and a model family maps it to a fake
 	 * model stream or a fake executable.
 	 */
-	open(plan: ExecutorPlan, definition: AgentDefinition): Executor | Promise<Executor>;
+	open(
+		plan: ExecutorPlan,
+		definition: AgentDefinition,
+	): ActivationOpener | Promise<ActivationOpener>;
 	readonly can: ExecutorCapabilities;
 	/** How long a case waits, in milliseconds. The default is 5_000. */
 	readonly patience?: number;
@@ -450,7 +453,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			executor: describeExecutor({ kind: 'conformance', instructions: '' }),
 		});
 		try {
-			const executor = await harness.open(one.plan, definition);
+			const opener = await harness.open(one.plan, definition);
 			const emit = (event: ExecutionEvent) => void events.push(event);
 			const port = new AgentRunner(
 				room.protocol,
@@ -460,7 +463,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 					definition,
 					room: names.room,
 					seat: names.seat,
-					executor,
+					opener,
 					emit,
 					logger: (record) => void records.push(record),
 					limits: DEFAULT_TRACE_LIMITS,

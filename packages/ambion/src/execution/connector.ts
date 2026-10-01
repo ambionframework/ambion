@@ -4,7 +4,7 @@
  * `seatContext` is the inner value: the context one seat needs to run, with
  * a trace opener over the host's logger, the host's trace limits, and the
  * definition's policy. `localConnector` builds one runner for each seat
- * that the room connects, over the executor that `executorOf` builds.
+ * that the room connects, over the opener that `openerOf` builds.
  */
 
 import { DEFAULT_TRACE } from '../define.ts';
@@ -16,18 +16,18 @@ import type {
 	Limits,
 } from '../host/runtime.ts';
 import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
-import type { Executor } from './executor.ts';
+import type { ActivationOpener } from './executor.ts';
 import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
 
-/** What one seat needs to run: its definition, its executor, and where its trace goes. */
+/** What one seat needs to run: its definition, its opener, and where its trace goes. */
 export interface SeatContextInput {
 	readonly clock: Clock;
 	readonly call: Limits['call'];
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	readonly executor: Executor;
+	readonly opener: ActivationOpener;
 	readonly emit: (event: ExecutionEvent) => void;
 	/** Where the steps of each activation go. Absent, the trace drops them. */
 	readonly logger?: TraceLogger;
@@ -50,10 +50,10 @@ export function seatContext(input: SeatContextInput): AgentExecutionContext {
 	};
 }
 
-/** A connector that runs each seat in this process, on the executor that `executorOf` builds for it. */
+/** A connector that runs each seat in this process, on the opener that `openerOf` builds for it. */
 export function localConnector(
 	host: ExecutionHost,
-	executorOf: (request: ConnectorRequest) => Executor,
+	openerOf: (request: ConnectorRequest) => ActivationOpener,
 ): ExecutionConnector<AgentRunner> {
 	return {
 		connect(room, request) {
@@ -65,7 +65,7 @@ export function localConnector(
 					definition: request.definition,
 					room: request.room,
 					seat: request.seat,
-					executor: executorOf(request),
+					opener: openerOf(request),
 					emit: request.emit,
 					logger: host.logger,
 					limits: host.limits.trace,

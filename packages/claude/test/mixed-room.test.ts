@@ -11,8 +11,8 @@ import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { createPiExecutor } from '../../pi/src/executor.ts';
-import { createClaudeExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../../pi/src/executor.ts';
+import { createClaudeOpener } from '../src/executor.ts';
 import { claude, claudeExecution } from '../src/index.ts';
 import { executable } from './support.ts';
 
@@ -65,7 +65,7 @@ it('routes a Pi seat and a Claude seat to the default of each family, which a bu
 	defineExecution('pi', (host) => {
 		const services = createExecutionServices({ sessions: 'memory', stream: pilotStream() });
 		return (request) =>
-			createPiExecutor({
+			createPiOpener({
 				...services,
 				definition: request.definition,
 				now: () => host.clock.now(),
@@ -73,7 +73,7 @@ it('routes a Pi seat and a Claude seat to the default of each family, which a bu
 	});
 	defineExecution(
 		'claude',
-		() => (request) => createClaudeExecutor({ definition: request.definition, ...sonnetOptions() }),
+		() => (request) => createClaudeOpener({ definition: request.definition, ...sonnetOptions() }),
 	);
 	// An execution that a host builds for one room does not change the default.
 	piExecution({ sessions: 'memory', stream: scripted(() => speak('Leaked from another room.')) });

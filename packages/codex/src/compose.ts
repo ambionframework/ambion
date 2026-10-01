@@ -1,7 +1,7 @@
 /** The Codex execution: one Codex executor for each seat. */
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import { createCodexExecutor } from './executor.ts';
+import { createCodexOpener } from './executor.ts';
 import type { CodexRuntime } from './options.ts';
 
 /**
@@ -13,5 +13,5 @@ import type { CodexRuntime } from './options.ts';
 export const codexExecution = defineExecution<CodexRuntime>(
 	'codex',
 	(_host, options) => (request) =>
-		createCodexExecutor({ definition: request.definition, ...options }),
+		createCodexOpener({ definition: request.definition, ...options }),
 );
