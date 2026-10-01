@@ -43,7 +43,7 @@ import {
 	type PiSessions,
 	privateDirectory,
 } from '../src/sessions.ts';
-import { contextText, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 import { tempDir } from './support/temp.ts';
 
@@ -134,7 +134,7 @@ function seatOn(
 	const executor = createPiExecutor({
 		definition,
 		model: stubModel,
-		stream: scripted((context, agent, call) => {
+		stream: scriptedStream((context, agent, call) => {
 			seen.push({ ...context, messages: [...context.messages] });
 			return script(context, agent, call);
 		}),
@@ -399,7 +399,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const executor = createPiExecutor({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions,
 		});
@@ -584,7 +584,7 @@ describe('exchange continuity on the local disk', () => {
 		expect(dir).toBe(join(temporary, `ambion-pi-sessions-${process.getuid?.()}`));
 		expect((await stat(dir)).mode & 0o777).toBe(0o700);
 		// With no option, every stream keeps its sessions there.
-		const services = createExecutionServices({ stream: scripted(() => quiet()) });
+		const services = createExecutionServices({ stream: scriptedStream(() => quiet()) });
 		const scope = { room: 'room', seat: 'seat' };
 		await (
 			await services.sessions.create(scope, 'kept', BACKGROUND_CONTEXT)
@@ -622,7 +622,7 @@ describe('exchange continuity on the local disk', () => {
 		const dir = await tempDir('ambion-services-');
 		const services = () =>
 			createExecutionServices({
-				stream: scripted(() => quiet()),
+				stream: scriptedStream(() => quiet()),
 				...(named ? { sessionDir: dir } : { sessions: 'memory' }),
 			});
 		const scope = { room: 'room', seat: 'seat' };

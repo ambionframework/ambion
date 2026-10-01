@@ -18,7 +18,7 @@ import {
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message, Without } from '../types.ts';
-import type { Cancellation, Close, Composition, Fence, LeaseChange } from './events.ts';
+import type { Cancellation, Close, Composition, Fence, LeaseChange } from './entries.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The entry kinds the room writes to its journal. */

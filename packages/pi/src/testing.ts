@@ -84,7 +84,7 @@ function messageOf(output: Reply | AssistantMessage): AssistantMessage {
  * a script that throws into an error on the stream. It turns a reply into a
  * message: one tool call for each call, or a text that ends the run.
  */
-export function scripted(script: PiScript): StreamFn {
+export function scriptedStream(script: PiScript): StreamFn {
 	const calls = new Map<string, number>();
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
@@ -244,7 +244,7 @@ export function piExecutorHarness(): ExecutorHarness {
 					executor: pi({ instructions: '', model: `scripted/${definition.name}` }),
 				},
 				model: stubModel,
-				stream: scripted(scriptOf(plan)),
+				stream: scriptedStream(scriptOf(plan)),
 				now: Date.now,
 				sessions: memorySessions(),
 			}),

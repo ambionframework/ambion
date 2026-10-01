@@ -150,7 +150,7 @@ that allows it.
 `nativeTools: 'codex'`, so a seat that turns the network off does not get
 it back.
 
-**`codexExecution(options)` takes the runtime of the executable.**
+**`codexExecution(options)` takes the options of the executable.**
 
 | Option      | Default            | What it does                      |
 | ----------- | ------------------ | --------------------------------- |

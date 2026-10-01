@@ -32,7 +32,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import { foldLeases } from '../../src/room/lease.ts';
 import { isLive } from '../../src/room/rules.verified.ts';
 import { type FakeClock, fakeClock } from '../../src/testing.ts';
@@ -51,7 +51,7 @@ import {
 import { invariants } from './invariants.ts';
 import { serializing } from './ports.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
-import { scripted } from './scripted.ts';
+import { scriptedStream } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 
 /**
@@ -187,7 +187,9 @@ export class World {
 
 	/** The execution of each run: every request and response crosses as JSON. */
 	private execution(): Execution {
-		return serializing(piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }));
+		return serializing(
+			piExecution({ sessions: 'memory', stream: scriptedStream(this.cast.script) }),
+		);
 	}
 
 	private watch(): void {

@@ -18,7 +18,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scriptedStream } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
 const quietRoom = (name: string, runtime: Runtime) =>
@@ -27,7 +27,7 @@ const quietRoom = (name: string, runtime: Runtime) =>
 		runtime,
 		seats: { [assistant.name]: 'none' },
 		agents: [assistant],
-		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 	});
 
 type Limits = NonNullable<CreateRuntimeOptions['limits']>;

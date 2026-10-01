@@ -12,6 +12,15 @@ names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
 `Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
 `<name>-host` stays. `WorkstationOptions.host` and
 `WorkstationGitOptions.host` become `server`.
+**The executor options and the Pi test stream get their own names.**
+`@ambionframework/claude` exports `ClaudeExecutionOptions`, and
+`@ambionframework/codex` exports `CodexExecutionOptions`. They replace
+`ClaudeRuntime` and `CodexRuntime`, and they match `PiExecutionOptions`.
+The word `Runtime` now names the core `Runtime` alone.
+`@ambionframework/pi/testing` exports `scriptedStream` in place of
+`scripted`. The core testing entry keeps `scripted`, the scripted
+execution. The Codex tool that the stdio server lists is `CodexTool`. It
+replaces a `RoomTool` that shadowed the core type of the same name.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets

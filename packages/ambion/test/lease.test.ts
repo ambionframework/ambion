@@ -29,7 +29,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
@@ -55,7 +55,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	speak,
 	summarise,
 } from './support/scripted.ts';
@@ -80,7 +80,7 @@ async function open(
 	const clock = fakeClock();
 	const runtime =
 		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),

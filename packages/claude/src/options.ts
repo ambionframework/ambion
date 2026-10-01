@@ -17,7 +17,7 @@ import { plainName } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
 
 /** The services a Claude execution brings: where the executable is and what it runs with. */
-export interface ClaudeRuntime {
+export interface ClaudeExecutionOptions {
 	/** A Claude Code executable to run. Absent, the SDK finds the one it ships with. */
 	readonly pathToClaudeCodeExecutable?: string;
 	/**
@@ -124,13 +124,13 @@ export interface QueryInput {
 	/** The names of the room tools, as the SDK knows them. */
 	readonly names: readonly string[];
 	readonly canUseTool: CanUseTool;
-	readonly runtime: ClaudeRuntime;
+	readonly options: ClaudeExecutionOptions;
 	/** The session to resume, when the room named one in `spec.resume`. */
 	readonly resume?: string;
 }
 
 export function queryOptions(input: QueryInput): Options {
-	const { executor, runtime } = input;
+	const { executor, options } = input;
 	// The approver answers for the room tools. A mode that never asks needs them listed.
 	const listed = executor.permissionMode === 'dontAsk' ? input.names : [];
 	const allowed = [...listed, ...(executor.allowedTools ?? [])];
@@ -158,8 +158,8 @@ export function queryOptions(input: QueryInput): Options {
 			effort: executor.effort,
 			cwd: executor.cwd,
 			additionalDirectories: executor.additionalDirectories && [...executor.additionalDirectories],
-			pathToClaudeCodeExecutable: runtime.pathToClaudeCodeExecutable,
+			pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
 		}),
-		env: seatEnv(runtime.env ?? process.env),
+		env: seatEnv(options.env ?? process.env),
 	};
 }

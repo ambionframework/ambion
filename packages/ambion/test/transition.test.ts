@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommitRequest } from '../src/hosting.ts';
-import type { Seating } from '../src/journal/events.ts';
+import type { Seating } from '../src/journal/entries.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import type { RoomState } from '../src/room/fold.ts';
@@ -63,9 +63,9 @@ const commit = (state: RoomState, request: CommitRequest, bytes?: number) =>
 const summary = (state: RoomState, intent: CommitRequest['intent'], bytes?: number) =>
 	commit(state, { activation: 'closed:3:writer:1', key: 'summary', intent }, bytes);
 
-const event = (decision: RoomDecision<Kind>, seq: number): Entry => {
-	if (!('event' in decision) || decision.event === undefined) throw new Error('Expected an event.');
-	return { ...decision.event, seq };
+const entryAt = (decision: RoomDecision<Kind>, seq: number): Entry => {
+	if (!('entry' in decision) || decision.entry === undefined) throw new Error('Expected an entry.');
+	return { ...decision.entry, seq };
 };
 const refused = (category: string) => ({ refusal: { category } });
 
@@ -102,7 +102,7 @@ describe('room transition', () => {
 		],
 	] as const)('turns a recovered retry of %s into a no-op', (_case, state, change) => {
 		expect(decide(state, { type: 'presence', change, route: false }, now)).toEqual({
-			event: undefined,
+			entry: undefined,
 		});
 	});
 
@@ -122,7 +122,7 @@ describe('room transition', () => {
 	it('normalizes a closing said into a room-owned summary, skips freshness, and refuses other intents', () => {
 		const state = closing();
 		expect(summary(state, { kind: 'said', text: 'Done.' })).toMatchObject({
-			event: {
+			entry: {
 				kind: 'message',
 				body: {
 					kind: 'summary',
@@ -153,7 +153,7 @@ describe('room transition', () => {
 		expect(say(undefined)).toMatchObject(refused('refused'));
 		expect(say(0)).toMatchObject(refused('missed'));
 		expect(say(3, 'nobody')).toMatchObject(refused('unknown_participant'));
-		expect(say(3)).toMatchObject({ event: { body: { kind: 'said', from: 'product' } } });
+		expect(say(3)).toMatchObject({ entry: { body: { kind: 'said', from: 'product' } } });
 	});
 
 	it('refuses a delivery, an ordinary say, and a closing summary over the byte cap, in bytes', () => {
@@ -164,7 +164,7 @@ describe('room transition', () => {
 				{ type: 'deliver', from: 'priya', text, ...(bytes === undefined ? {} : { bytes }) },
 				now,
 			);
-		const accepted = { event: { body: { kind: 'said' } } };
+		const accepted = { entry: { body: { kind: 'said' } } };
 		expect(deliver('123456789', 8)).toMatchObject(refused('message_too_large'));
 		expect(deliver('12345678', 8)).toMatchObject(accepted);
 		expect(deliver('h\u00e9llo', 5)).toMatchObject(refused('message_too_large'));
@@ -185,11 +185,11 @@ describe('room transition', () => {
 
 		const done = { kind: 'said', text: 'Done.' } as const;
 		expect(summary(closing(), done, 4)).toMatchObject(refused('message_too_large'));
-		expect(summary(closing(), done, 5)).toMatchObject({ event: { body: { kind: 'summary' } } });
-		expect(summary(closing(), done)).toMatchObject({ event: { body: { kind: 'summary' } } });
+		expect(summary(closing(), done, 5)).toMatchObject({ entry: { body: { kind: 'summary' } } });
+		expect(summary(closing(), done)).toMatchObject({ entry: { body: { kind: 'summary' } } });
 	});
 
-	it('returns durable membership no-ops without writing another event', () => {
+	it('returns durable membership no-ops without writing another entry', () => {
 		const state = answering();
 		for (const intent of [
 			{ kind: 'seated', name: 'product' },
@@ -217,7 +217,7 @@ describe('room transition', () => {
 		expect(decision).toMatchObject(refused('refused'));
 	});
 
-	it('allows the summary writer to unseat itself when its seating said fixed: false, and removes its authority after the event', () => {
+	it('allows the summary writer to unseat itself when its seating said fixed: false, and removes its authority after the entry', () => {
 		const state = answering(
 			'writer',
 			composition('writer', [product, { ...writer, fixed: false }]),
@@ -227,8 +227,8 @@ describe('room transition', () => {
 			key: 'leave',
 			intent: { kind: 'unseated', name: 'writer' },
 		});
-		expect(decision).toMatchObject({ event: { body: { kind: 'unseated', subject: 'writer' } } });
-		const after = evolve(evolve(state, event(decision, 5), options), seated(6), options);
+		expect(decision).toMatchObject({ entry: { body: { kind: 'unseated', subject: 'writer' } } });
+		const after = evolve(evolve(state, entryAt(decision, 5), options), seated(6), options);
 		expect(activationSpec('message:3:writer:1', after)).toBeUndefined();
 	});
 
@@ -240,13 +240,13 @@ describe('room transition', () => {
 				{ type: 'end', id: 'message:3:product:1', reason, readThrough: 0, ...extra },
 				now,
 			);
-		expect(end('expired')).toEqual({ event: undefined });
+		expect(end('expired')).toEqual({ entry: undefined });
 		const plain = end('released');
-		expect(plain).toMatchObject({ event: { body: { phase: 'ended', reason: 'released' } } });
+		expect(plain).toMatchObject({ entry: { body: { phase: 'ended', reason: 'released' } } });
 		expect(JSON.stringify(plain)).not.toContain('usage');
 		const usage = { input: 3, output: 2, cacheRead: 1, cacheWrite: 0, cost: 0.25 };
 		expect(end('released', { usage })).toMatchObject({
-			event: { body: { phase: 'ended', usage } },
+			entry: { body: { phase: 'ended', usage } },
 		});
 	});
 
@@ -307,7 +307,7 @@ describe('room transition', () => {
 			options,
 		);
 		expect(claim(released)).toMatchObject({
-			event: { body: { id: 'message:6:writer:1', phase: 'running' } },
+			entry: { body: { id: 'message:6:writer:1', phase: 'running' } },
 		});
 	});
 
@@ -401,7 +401,7 @@ describe('a scheduled say', () => {
 
 	it('writes a say to oneself with no owner, and wakes nobody', () => {
 		expect(say(answering(), later())).toEqual({
-			event: {
+			entry: {
 				kind: 'message',
 				body: {
 					kind: 'said',
@@ -433,8 +433,8 @@ describe('a scheduled say', () => {
 				},
 				now,
 			);
-		expect(commit(undefined, later())).toHaveProperty('event');
-		expect(commit(state.lastSeq - 1, later())).toHaveProperty('event');
+		expect(commit(undefined, later())).toHaveProperty('entry');
+		expect(commit(state.lastSeq - 1, later())).toHaveProperty('entry');
 		expect(commit(state.lastSeq - 1, { kind: 'said', text: 'Hi.' })).toMatchObject({
 			refusal: { category: 'missed' },
 		});
@@ -461,7 +461,7 @@ describe('a scheduled say', () => {
 	it('takes a say with after outside every exchange, and refuses one in a closing response', () => {
 		const quiet = fold(composition(), person(), lease('message:2:product:1', 3));
 		expect(quiet.exchange).toBeUndefined();
-		expect(say(quiet, later(), 'message:2:product:1')).toHaveProperty('event');
+		expect(say(quiet, later(), 'message:2:product:1')).toHaveProperty('entry');
 		expect(summary(closing(), { kind: 'said', text: 'Later.', after: 600 })).toMatchObject(
 			because(/cannot schedule/),
 		);
@@ -492,15 +492,15 @@ describe('a scheduled say', () => {
 		expect(reconcile(closedWaiting, due).steps).toEqual([{ type: 'return', message: 5 }]);
 		const written = decide(closedWaiting, { type: 'return', message: 5 }, due);
 		expect(written).toEqual({
-			event: { kind: 'message', body: { ...returned, wakes: ['product'] } },
+			entry: { kind: 'message', body: { ...returned, wakes: ['product'] } },
 		});
-		const after = evolve(closedWaiting, event(written, 8), options);
+		const after = evolve(closedWaiting, entryAt(written, 8), options);
 		expect(after.scheduled).toEqual([]);
 		expect(after.exchange).toEqual({ from: 8, at: returned.at });
 		expect(after.due.map((owed) => owed.id)).toEqual(['message:8:product:1']);
-		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
 		// A dismissal that loses the race to the due time changes nothing.
-		expect(decide(after, { type: 'dismiss', message: 5 }, due)).toEqual({ event: undefined });
+		expect(decide(after, { type: 'dismiss', message: 5 }, due)).toEqual({ entry: undefined });
 	});
 
 	it('returns the say after the close that the same pass writes', () => {
@@ -516,7 +516,7 @@ describe('a scheduled say', () => {
 		expect(steps.map((step) => step.type)).toEqual(['end']);
 		const [ending] = steps;
 		if (ending?.type !== 'end') throw new Error('Expected the ending.');
-		const ended = evolve(expired, event(decide(expired, ending, due), 6), options);
+		const ended = evolve(expired, entryAt(decide(expired, ending, due), 6), options);
 		expect(reconcile(ended, due).steps.map((step) => step.type)).toEqual(['close', 'return']);
 	});
 
@@ -527,7 +527,7 @@ describe('a scheduled say', () => {
 		];
 		const state = waiting(released(6), quietClose(7, 6), ...sam);
 		const written = decide(state, { type: 'return', message: 5 }, due);
-		const after = evolve(state, event(written, 10), options);
+		const after = evolve(state, entryAt(written, 10), options);
 		expect(after.exchange).toMatchObject({ person: 'sam', from: 9 });
 		expect(after.scheduled).toEqual([]);
 	});
@@ -556,7 +556,7 @@ describe('a scheduled say', () => {
 		const state = waiting();
 		const decision = dismiss(state, 5);
 		expect(decision).toEqual({
-			event: {
+			entry: {
 				kind: 'message',
 				body: {
 					kind: 'dismissed',
@@ -567,17 +567,17 @@ describe('a scheduled say', () => {
 				},
 			},
 		});
-		const after = evolve(state, event(decision, 6), options);
+		const after = evolve(state, entryAt(decision, 6), options);
 		expect(after.scheduled).toEqual([]);
 		expect(after.deliveries.get(6)).toEqual({ wakes: [], steers: [] });
-		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+		expect(decide(after, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
 		expect(dismiss(after, 5)).toEqual({ unchanged: { kind: 'dismissed', message: 5 } });
-		expect(say(after, later())).toHaveProperty('event');
+		expect(say(after, later())).toHaveProperty('entry');
 		// A say that returned before the seat dismissed it reads the same way.
 		const raced = waiting();
 		const back = evolve(
 			raced,
-			event(decide(raced, { type: 'return', message: 5 }, due), 6),
+			entryAt(decide(raced, { type: 'return', message: 5 }, due), 6),
 			options,
 		);
 		expect(dismiss(back, 5)).toEqual({ unchanged: { kind: 'dismissed', message: 5 } });
@@ -602,12 +602,12 @@ describe('a scheduled say', () => {
 		const state = waiting(lease('message:3:writer:1', 6));
 		const decision = decide(state, { type: 'dismiss', message: 5 }, now);
 		expect(decision).toEqual({
-			event: { kind: 'message', body: { kind: 'dismissed', message: 5, at } },
+			entry: { kind: 'message', body: { kind: 'dismissed', message: 5, at } },
 		});
-		const after = evolve(state, event(decision, 7), options);
+		const after = evolve(state, entryAt(decision, 7), options);
 		expect(after.deliveries.get(7)).toEqual({ wakes: [], steers: [] });
 		expect(after.scheduled).toEqual([]);
-		expect(decide(after, { type: 'dismiss', message: 5 }, now)).toEqual({ event: undefined });
+		expect(decide(after, { type: 'dismiss', message: 5 }, now)).toEqual({ entry: undefined });
 	});
 
 	it("lists the seat's own pending says in its response view, with the seq as the handle", () => {
@@ -662,6 +662,6 @@ describe('a scheduled say', () => {
 	])('drops a say at %s', (_case, entry) => {
 		const state = waiting(entry);
 		expect(state.scheduled).toEqual([]);
-		expect(decide(state, { type: 'return', message: 5 }, due)).toEqual({ event: undefined });
+		expect(decide(state, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
 	});
 });
