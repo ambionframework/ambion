@@ -83,6 +83,8 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/** The agents that used the workspace in this run: the host reads their tables. */
 	const agents = new Set<string>();
 	const listeners = new Set<(event: ProcessEvent) => void>();
+	/** The processes that this run saw end, as `agent`, a NUL, and `handle`. */
+	const endedKeys = new Set<string>();
 	let closed = false;
 	/** Set when `close` has returned: the backend may release, so no new environment opens. */
 	let released = false;
@@ -126,10 +128,11 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		process.timer.unref();
 	};
 
-	/** A live process has ended: forget it, and tell the host. */
+	/** A live process has ended: forget it, record the end, and tell the host. */
 	const settle = (process: Live, status: ProcessStatus): void => {
 		clearTimeout(process.timer);
 		live.delete(process.spec.handle);
+		endedKeys.add(`${process.agent}\0${process.spec.handle}`);
 		emit({ type: 'ended', process: status });
 	};
 
@@ -468,6 +471,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		markSeen,
 		remind,
 		hostList,
+		ended: (agent: string, handle: string) => endedKeys.has(`${agent}\0${handle}`),
 		subscribe: (listener: (event: ProcessEvent) => void) => {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);

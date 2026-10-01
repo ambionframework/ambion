@@ -43,6 +43,7 @@ export async function connectionRig(): Promise<ConnectionRig> {
 	let blocked:
 		{ entered: () => void; gate: Promise<void>; expected: number; arrived: number } | undefined;
 	const listeners = new Set<(event: ProcessEvent) => void>();
+	const endedKeys = new Set<string>();
 	const indexRequests: number[] = [];
 	const server = createServer(async (request, response) => {
 		if (request.method !== 'GET' || request.url !== '/') {
@@ -82,6 +83,9 @@ export async function connectionRig(): Promise<ConnectionRig> {
 			if (found === undefined)
 				throw new Error(`Process '${handle}' is not owned by '${agent.name}'.`);
 			return found;
+		},
+		ended(agent: string, handle: string) {
+			return endedKeys.has(`${agent}/${handle}`);
 		},
 		subscribe(listener: (event: ProcessEvent) => void) {
 			listeners.add(listener);
@@ -142,6 +146,7 @@ export async function connectionRig(): Promise<ConnectionRig> {
 				endedAt: new Date().toISOString(),
 			};
 			statuses.set(`${agent}/${handle}`, ended);
+			endedKeys.add(`${agent}/${handle}`);
 			for (const listener of listeners) listener({ type: 'ended', process: ended });
 		},
 		async close() {

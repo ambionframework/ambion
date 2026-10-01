@@ -278,12 +278,19 @@ async function untilFile(path: string): Promise<void> {
 	throw new Error('The connected sensor server did not receive its index request.');
 }
 
+/**
+ * Wait until the SSH server holds at most `atMost` forwarded channels. A
+ * registered transport holds one channel only while the idle HTTP connection
+ * of its index request lives, and that connection closes after three
+ * seconds. A slow runner can pass that limit, so a wait for one channel
+ * accepts none. A leaked channel of a failed attempt stays above the limit.
+ */
 async function waitForForwards(
-	expected: number,
+	atMost: number,
 	ssh: Awaited<ReturnType<typeof startSshServer>>,
 ): Promise<void> {
 	const deadline = Date.now() + 1_000;
-	while (ssh.forwards.size !== expected && Date.now() < deadline)
+	while (ssh.forwards.size > atMost && Date.now() < deadline)
 		await new Promise((resolve) => setTimeout(resolve, 10));
-	expect(ssh.forwards.size).toBe(expected);
+	expect(ssh.forwards.size).toBeLessThanOrEqual(atMost);
 }
