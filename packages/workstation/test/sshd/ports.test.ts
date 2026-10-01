@@ -24,16 +24,16 @@ async function http() {
 	return fixture;
 }
 
-describe('workstation ports on real OpenSSH', () => {
+describe('workstation endpoints on real OpenSSH', () => {
 	it.skipIf(!sshdAvailable)(
 		'reaches a real loopback HTTP service through OpenSSH direct-tcpip',
 		async () => {
 			const ssh = await rootless();
 			const service = await http();
-			const ports = ssh.backend.ports;
-			if (ports === undefined) throw new Error('The workstation has no port capability.');
-			const port = await ports.open({ name: 'opener' }, service.port);
-			expect(ports.hostname).toBe(ssh.options.host);
+			const endpoints = ssh.backend.endpoints;
+			if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+			const port = await endpoints.forward({ name: 'opener' }, service.port);
+			expect(endpoints.machine).toBe(ssh.options.server);
 			expect(new URL(port.url).hostname).toBe('127.0.0.1');
 			expect(await (await fetch(port.url)).text()).toBe('served GET /');
 			expect(service.requests).toBe(1);
@@ -45,9 +45,9 @@ describe('workstation ports on real OpenSSH', () => {
 	it.skipIf(!sshdAvailable)('reports OpenSSH forwarding policy denial', async () => {
 		const ssh = await rootless(false);
 		const service = await http();
-		const ports = ssh.backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
-		await expect(ports.open({ name: 'opener' }, service.port)).rejects.toThrow(
+		const endpoints = ssh.backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+		await expect(endpoints.forward({ name: 'opener' }, service.port)).rejects.toThrow(
 			/SSH port forwarding.*127\.0\.0\.1/i,
 		);
 	});
@@ -87,9 +87,9 @@ describe('workstation ports on real OpenSSH', () => {
 		const service = await http();
 		const backend = workstationBackend({ ...ssh.options, hostKey: `SHA256:${'A'.repeat(43)}` });
 		cleanups.push(async () => backend.dispose?.());
-		const ports = backend.ports;
-		if (ports === undefined) throw new Error('The workstation has no port capability.');
-		await expect(ports.open({ name: 'opener' }, service.port)).rejects.toThrow(/host key/i);
+		const endpoints = backend.endpoints;
+		if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+		await expect(endpoints.forward({ name: 'opener' }, service.port)).rejects.toThrow(/host key/i);
 		expect(service.requests).toBe(0);
 	});
 
@@ -100,9 +100,9 @@ describe('workstation ports on real OpenSSH', () => {
 			const backend = workstationBackend(options);
 			const service = await http();
 			cleanups.push(async () => backend.dispose?.());
-			const ports = backend.ports;
-			if (ports === undefined) throw new Error('The workstation has no port capability.');
-			const port = await ports.open({ name: 'analyst' }, service.port);
+			const endpoints = backend.endpoints;
+			if (endpoints === undefined) throw new Error('The workstation has no endpoint capability.');
+			const port = await endpoints.forward({ name: 'analyst' }, service.port);
 			expect(await (await fetch(port.url)).text()).toBe('served GET /');
 			await port.close();
 			await expect(fetch(port.url)).rejects.toThrow();

@@ -29,9 +29,9 @@ import {
 	contextText,
 	type PiScript,
 	quiet,
-	scripted,
+	say,
+	scriptedStream,
 	seat,
-	speak,
 	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -69,7 +69,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summaryWriter: writer.name } : {}),
 		runtime,
-		execution: piExecution({ sessions: 'memory', stream: scripted(options.script) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(options.script) }),
 	});
 	return stopAtEnd(session);
 }
@@ -77,7 +77,7 @@ async function open(options: {
 const kinds = (record: readonly Message[]) => record.map((message) => message.kind);
 const presence = (record: readonly Message[]) => record.filter(isPresence);
 const activated = (events: RoomNotification[]) =>
-	events.filter((event) => event.type === 'activation_start').map((event) => event.agent);
+	events.filter((event) => event.type === 'activation_start').map((event) => event.seat);
 const seatNames = async (session: Room) =>
 	(await participantsOf(session)).filter((seat) => seat.kind === 'agent').map((seat) => seat.name);
 describe('ordinary participation', () => {
@@ -94,7 +94,7 @@ describe('ordinary participation', () => {
 					tools.push(toolNames(context));
 					return call === 1 ? seat(surveyor.name) : quiet();
 				},
-				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes on site.') : quiet()),
+				surveyor: (_context, _name, call) => (call === 1 ? say('11.7 tonnes on site.') : quiet()),
 				greeter: () => quiet(),
 			}),
 		});
@@ -180,7 +180,7 @@ describe('ordinary participation', () => {
 					return quiet();
 				},
 				surveyor: (_context, _name, call) =>
-					call === 1 ? speak('The drawings will settle this.', product.name) : quiet(),
+					call === 1 ? say('The drawings will settle this.', product.name) : quiet(),
 			}),
 		});
 		const events = collect(session);
@@ -188,7 +188,7 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'How should we plan the pour?' });
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end' || event.agent !== surveyor.name) return;
+				if (event.type !== 'activation_end' || event.seat !== surveyor.name) return;
 				off();
 				resolve();
 			});
@@ -256,7 +256,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(session.name, {
 			agents: [product, surveyor],
 			runtime,
-			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({})) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(byAgent({})) }),
 		});
 		expect(await seatNames(stopAtEnd(resumed))).toEqual([product.name]);
 	});

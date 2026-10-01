@@ -34,12 +34,17 @@ await visit.send({ text: 'Is the plan ready?' });
 @ambionframework/codex`. The package needs Node 22.19 or newer. The Codex SDK
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
 or run `codex login`. A ChatGPT sign-in runs the seat on a ChatGPT Plus or
-Pro subscription: leave `CODEX_API_KEY` out,
-and keep `HOME` or `CODEX_HOME` in a custom `env`.
+Pro subscription: leave `CODEX_API_KEY` out, and keep `HOME` in a custom
+`env`. Every seat runs in the Codex home `home`, `~/.ambion/codex` by
+default, and links the file `auth.json` of the host. The `config.toml` and
+the `AGENTS.md` of `~/.codex` reach no seat. A login in the OS keyring
+cannot be shared: use the file store, or run `codex login` with
+`CODEX_HOME` set to the seat home.
 
 **Codex owns the loop, and the room owns the record.** One Codex thread
-serves each activation. The first pass sends the mechanism, the agent
-instructions, and the whole view. A later pass sends the delta.
+serves each activation. The seat text, which holds the mechanism and the
+agent instructions, goes in the client config. The first pass sends the whole
+view. A later pass sends the delta.
 
 **Room tools reach Codex through a stdio server.** Codex spawns
 `dist/room-tools-server.mjs`. The server forwards each call over a local
@@ -92,9 +97,11 @@ environment of the process, key included, reaches the binary unless you pass
 belongs to `codex` 0.155.1. Trust a newer version only when
 `test/live/exclusive.test.ts` passes on it.
 
-**Test on recorded events, and run the executor suite live.** The unit tests
-read event streams that a real `codex` recorded. A real model cannot be
-scripted, so the executor suite runs in the live tier. Run it with
+**Test on recorded events and a scripted model, and run the executor suite
+live.** The unit tests read event streams that a real `codex` recorded. They
+also run the real `codex` binary against a local endpoint that plays a script
+of model replies. The executor suite runs in the live tier on a real model.
+Run it with
 `CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`. It
 costs money.
 

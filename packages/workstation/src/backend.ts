@@ -25,15 +25,15 @@ import {
 	type BashBackend,
 	type BashServices,
 	MAX_TIMER_SECONDS,
+	type WorkspaceEndpoint,
+	type WorkspaceEndpoints,
 	type WorkspaceEnv,
 	type WorkspaceLayout,
-	type WorkspacePort,
-	type WorkspacePorts,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
 import { WORKSTATION_TRANSPORTS, writeGitFiles } from './git-agent.ts';
 import type { WorkstationGitAccess } from './git-backend.ts';
-import { openWorkspacePort } from './ports.ts';
+import { forwardWorkspaceEndpoint } from './ports.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -42,7 +42,7 @@ export const DEFAULT_IDLE_TIMEOUT_SECONDS = 300;
 
 export interface WorkstationOptions {
 	/** The server's address. */
-	readonly host: string;
+	readonly server: string;
 	/** The server's SSH port. The default is 22. */
 	readonly port?: number;
 	/** The server's host key fingerprint, as `ssh-keygen -lf` prints it: `SHA256:` and then base64. */
@@ -73,13 +73,13 @@ interface Entry {
 	readonly startup: AbortController;
 	ready?: Session;
 	timer: NodeJS.Timeout | undefined;
-	/** Environments, pending acquisitions, and open ports that hold this session. */
+	/** Environments, pending acquisitions, and open endpoints that hold this session. */
 	open: number;
 }
 
 /** The address and the idle timeout that both backends of the package take. */
 interface ServerOptions {
-	readonly host: string;
+	readonly server: string;
 	readonly port?: number;
 	readonly hostKey: string;
 	readonly idleTimeout?: number;
@@ -111,9 +111,9 @@ export function checkedServer(
 /** A `BashBackend` over SSH to one server, with one account for each agent. */
 export function workstationBackend(options: WorkstationOptions): BashBackend {
 	const { port, idleMs } = checkedServer('workstationBackend', options);
-	const address = { host: options.host, port, hostKey: options.hostKey };
+	const address = { host: options.server, port, hostKey: options.hostKey };
 	const entries = new Map<string, Entry>();
-	const activePorts = new Set<() => Promise<void>>();
+	const activeEndpoints = new Set<() => Promise<void>>();
 	let disposed = false;
 
 	const forget = (name: string, entry: Entry) => {
@@ -225,9 +225,9 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 		return new SshEnv(lease.session, lease.release);
 	};
 
-	const ports: WorkspacePorts = {
-		hostname: options.host,
-		async open(agent, remotePort, signal): Promise<WorkspacePort> {
+	const endpoints: WorkspaceEndpoints = {
+		machine: options.server,
+		async forward(agent, remotePort, signal): Promise<WorkspaceEndpoint> {
 			if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65_535) {
 				throw new RangeError('The workstation service port must be an integer from 1 to 65535.');
 			}
@@ -236,17 +236,17 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 				lease.release();
 				throw new Error('The workstation backend is disposed.');
 			}
-			return openWorkspacePort(lease.session, remotePort, signal, lease.release, (close) => {
-				activePorts.add(close);
-				return () => activePorts.delete(close);
+			return forwardWorkspaceEndpoint(lease.session, remotePort, signal, lease.release, (close) => {
+				activeEndpoints.add(close);
+				return () => activeEndpoints.delete(close);
 			});
 		},
 	};
 
 	return {
 		layout: options.layout,
-		guidance: guidance(options.host, port),
-		ports,
+		guidance: guidance(options.server, port),
+		endpoints,
 		gitTransports: WORKSTATION_TRANSPORTS,
 		async connect(
 			agent: WorkspaceAgent,
@@ -273,7 +273,7 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 				clearTimeout(entry.timer);
 				entry.startup.abort(new Error('Workstation backend disposed.'));
 			}
-			await Promise.all([...activePorts].map((close) => close()));
+			await Promise.all([...activeEndpoints].map((close) => close()));
 			for (const entry of all) {
 				void entry.session.then(
 					(session) => session.close(),

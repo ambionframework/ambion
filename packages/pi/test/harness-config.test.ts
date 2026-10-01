@@ -29,7 +29,7 @@ import { openHarness } from '../src/harness.ts';
 import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, isClosingContext, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, isClosingContext, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -88,7 +88,7 @@ function recording(script: PiScript) {
 		options: SimpleStreamOptions | undefined;
 		model: string;
 	}[] = [];
-	const base = scripted(script);
+	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
 			context: scriptContext(context),
@@ -158,7 +158,7 @@ describe('the harness of an activation', () => {
 		]);
 		const rendered = renderActivation(view, definition);
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
-		// The closing activation continues the session with fewer tools and its own prompt.
+		// The summary activation continues the session with fewer tools and its own prompt.
 		expect(names(closed?.context as Context)).toEqual(['say']);
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
@@ -182,9 +182,9 @@ describe('the harness of an activation', () => {
 		}).open('message:1:worker:1');
 		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
 		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
-		await session.pass({ kind: 'delta', since: 1, view: respond(both, 2) });
+		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
 		const both3 = [...both, said(3, 'And the hose?')];
-		await session.pass({ kind: 'delta', since: 2, view: respond(both3, 3) });
+		await session.pass({ kind: 'delta', after: 2, view: respond(both3, 3) });
 
 		expect(requests.some((request) => summarizing(request.context))).toBe(true);
 		const answers = requests.filter((request) => !summarizing(request.context));
@@ -243,7 +243,7 @@ describe('the harness of an activation', () => {
 			session: await repo.create({}, BACKGROUND_CONTEXT),
 			models: streamModels(
 				model,
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 			),
 			model,
 			tools: [],
@@ -277,7 +277,7 @@ describe('the harness of an activation', () => {
 				session: refusing,
 				models: streamModels(
 					model,
-					scripted(() => quiet()),
+					scriptedStream(() => quiet()),
 				),
 				model,
 				tools: [],
@@ -300,7 +300,7 @@ describe('the harness of an activation', () => {
 			"Activation names another seat: 'other'.",
 		],
 		[
-			'an executor of another family',
+			'an executor of another kind',
 			defineAgent({
 				name: 'worker',
 				identity: 'Works.',
@@ -313,7 +313,7 @@ describe('the harness of an activation', () => {
 		const executor = createPiExecutor({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});
@@ -454,7 +454,7 @@ describe('the harness of an activation', () => {
 		const events: HarnessEvent[] = [];
 		const next = await openHarness(
 			setup(
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 				(event) => events.push(event),
 			),
 		);

@@ -51,7 +51,7 @@ import {
 	type RoomProjection,
 	replay,
 } from '../room/projection.ts';
-import { captureMessageSelection, type MessageSelection, readView } from '../room/read.ts';
+import { captureMessageSelection, type MessageSelection, toRoomRead } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
 import type { TokenWindow } from '../room/view.ts';
@@ -110,7 +110,7 @@ export interface Room {
 	readonly name: string;
 	/**
 	 * Observe one detached room read without waiting for agent work. The read
-	 * holds the scheduled says, and `pendingFor(read, person)` selects the
+	 * holds the scheduled says, and `awaitingFor(read, person)` selects the
 	 * closed exchanges that wait on one person.
 	 */
 	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
@@ -431,7 +431,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		const messages = captureMessageSelection(options.messages);
 		await this.ready;
 		await this.journal.settled();
-		return readView(
+		return toRoomRead(
 			this.name,
 			this.state(),
 			this.runtime.clock.now(),

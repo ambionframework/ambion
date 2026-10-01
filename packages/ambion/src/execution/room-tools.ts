@@ -2,9 +2,9 @@
  * The room tools of one activation, and the agent's own tools, in a shape
  * that names no harness.
  *
- * Every ordinary activation can speak, schedule a say to itself, seat an
+ * Every respond activation can speak, schedule a say to itself, seat an
  * agent, remove an agent, dismiss a scheduled say, or recall messages of the
- * room by URI. A closing activation
+ * room by URI. A summary activation
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
@@ -64,10 +64,10 @@ export interface RoomToolOptions {
 	/** The refs a say cites, from the refs the model gave, each trimmed and none empty. */
 	readonly refs?: (cited: readonly string[]) => readonly string[];
 	/** The room took an ordinary say or a scheduled say. */
-	readonly spoke?: () => void;
+	readonly said?: () => void;
 }
 
-/** A closing activation: its person, everyone it addresses, and how many it has answered. */
+/** A summary activation: its person, everyone it addresses, and how many it has answered. */
 interface Closing {
 	readonly person: string;
 	readonly people: readonly string[];
@@ -136,7 +136,7 @@ export function roomTools(
 }
 
 /**
- * The agent's own tools, as room tools. A closing activation holds none. Each
+ * The agent's own tools, as room tools. A summary activation holds none. Each
  * call reads the view of the pass that runs it, so the room and the open
  * exchange it names are current. A tool that throws gives the model its
  * message as an error result.
@@ -267,7 +267,7 @@ function scheduledBy(seat: string, args: ScheduleArgs, options: RoomToolOptions)
 	};
 }
 
-/** The tool that speaks for an ordinary activation or publishes its close. */
+/** The tool that speaks for a respond activation or publishes its close. */
 function sayTool(binding: RoomToolBinding, options: RoomToolOptions, closing?: Closing): RoomTool {
 	return {
 		name: SAY.name,
@@ -308,7 +308,7 @@ function sayResult(
 	if ('committed' in response) accepted(binding, options, response.committed, closing);
 	const result = landed(binding, response);
 	if (closing === undefined || result.isError) return result;
-	// The closing activation ends after the last recipient has a message.
+	// The summary activation ends after the last recipient has a message.
 	return closing.answered >= closing.people.length ? { ...result, terminate: true } : result;
 }
 
@@ -330,7 +330,7 @@ function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolO
 				intent: scheduledBy(seat, args as ScheduleArgs, options),
 			});
 			if (!('committed' in response)) return answered(landed(binding, response), response);
-			options.spoke?.();
+			options.said?.();
 			const result = scheduleResult(binding, call, response.committed, response.unread ?? []);
 			return answered(result, response);
 		},
@@ -368,7 +368,7 @@ function accepted(
 	if (closing !== undefined) {
 		closing.answered += 1;
 	} else if (message.kind === 'said') {
-		options.spoke?.();
+		options.said?.();
 		binding.acknowledgeThrough(message.seq);
 	}
 }
@@ -411,7 +411,7 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 	};
 }
 
-/** The room tool that dismisses one pending say of the seat, by its seq. */
+/** The room tool that dismisses one scheduled say of the seat, by its seq. */
 function dismissTool(binding: RoomToolBinding): RoomTool {
 	return {
 		name: DISMISS.name,

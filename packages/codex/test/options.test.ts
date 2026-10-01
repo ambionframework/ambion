@@ -17,6 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PermanentError, ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
 	EXCLUSIVE_FEATURES,
@@ -28,37 +29,86 @@ import {
 	scratchFor,
 } from '../src/catalog.ts';
 import { codex } from '../src/define.ts';
-import { clientOptions, serverPath, threadOptions } from '../src/options.ts';
+import { seatHome } from '../src/home.ts';
+import {
+	clientOptions,
+	DEVELOPER_TEXT_LIMIT,
+	HARNESS_NOTE,
+	seatText,
+	serverPath,
+	threadOptions,
+} from '../src/options.ts';
 import { catalogFixture, recordedCatalog } from './support.ts';
 
 const luna = catalogFixture.models.find((entry) => entry.slug === 'gpt-5.6-luna');
 if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');
 
+describe('seatText', () => {
+	it('joins the harness note, the mechanism, and the agent part, in that order', () => {
+		expect(seatText({ mechanism: 'How a room works.', agent: 'Who the seat is.' })).toBe(
+			`${HARNESS_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
+		);
+	});
+});
+
 describe('clientOptions', () => {
-	it('serves only the approved room server, with the socket path, without a scratch', () => {
-		const config = clientOptions({}, '/tmp/room.sock').config as {
-			mcp_servers: Record<string, { default_tools_approval_mode?: string; args: string[] }>;
+	it('carries the seat text as developer_instructions, and serves only the approved room server, without a scratch', () => {
+		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text').config as {
+			developer_instructions: string;
+			mcp_servers: Record<
+				string,
+				{ default_tools_approval_mode?: string; required?: boolean; args: string[] }
+			>;
 		};
-		expect(Object.keys(config)).toEqual(['mcp_servers']);
+		expect(Object.keys(config)).toEqual(['developer_instructions', 'mcp_servers']);
+		expect(config.developer_instructions).toBe('seat text');
 		const servers = Object.values(config.mcp_servers);
 		expect(servers).toHaveLength(1);
 		expect(servers[0]?.default_tools_approval_mode).toBe('approve');
+		// Codex then waits for the server before the first model request.
+		expect(servers[0]?.required).toBe(true);
 		expect(servers[0]?.args.at(-1)).toBe('/tmp/room.sock');
 	});
 
-	it('adds the config and disables node_repl beside the room server with a scratch', () => {
-		const scratch = new Scratch(luna);
+	it('refuses as permanent a seat text that one command argument cannot hold', () => {
+		const long = 'x'.repeat(DEVELOPER_TEXT_LIMIT);
+		expect(() => clientOptions({}, seatHome({}), '/tmp/room.sock', long)).toThrow(PermanentError);
+	});
+
+	it('names the instructions file, adds the config, and disables node_repl beside the room server with a scratch', () => {
+		const scratch = new Scratch(luna, 'seat text');
 		try {
-			const config = clientOptions({}, '/tmp/room.sock', scratch).config as {
+			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text', scratch)
+				.config as {
 				model_catalog_json: string;
-				mcp_servers: Record<string, { enabled?: boolean; command: string }>;
+				model_instructions_file: string;
+				mcp_servers: Record<string, { enabled?: boolean; required?: boolean; command: string }>;
 			};
+			expect(config).not.toHaveProperty('developer_instructions');
+			expect(config.model_instructions_file).toBe(scratch.instructions);
 			expect(config.model_catalog_json).toBe(scratch.catalog);
 			expect(config.mcp_servers[NODE_REPL]).toEqual({ command: 'true', enabled: false });
 			expect(Object.keys(config.mcp_servers)).toHaveLength(2);
+			expect(config.mcp_servers[ROOM_SERVER]?.required).toBe(true);
 		} finally {
 			scratch.remove();
 		}
+	});
+});
+
+describe('clientOptions environment', () => {
+	it('gives the binary the environment of the execution with the home of the seat', () => {
+		const home = seatHome({
+			home: '/srv/seat',
+			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
+		});
+		expect(
+			clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'seat'),
+		).toMatchObject({
+			codexPathOverride: '/bin/codex',
+			env: { PATH: '/bin', HOME: '/h', CODEX_HOME: '/srv/seat' },
+		});
+		expect(clientOptions({}, home, '/tmp/room.sock', 'seat').env).not.toHaveProperty('GONE');
 	});
 });
 
@@ -93,7 +143,7 @@ describe('threadOptions', () => {
 
 	it('applies the options as they are without a scratch, and fixes the policy under a scratch', () => {
 		expect(threadOptions(executor)).toMatchObject(policy);
-		const scratch = new Scratch(luna);
+		const scratch = new Scratch(luna, 'seat text');
 		try {
 			expect(threadOptions(executor, scratch)).toMatchObject({
 				sandboxMode: 'read-only',
@@ -198,19 +248,21 @@ it('exclusiveConfig names the patched catalog, turns every listed feature off an
 });
 
 describe('Scratch', () => {
-	it('holds the patched catalog and an empty directory, and removes both', () => {
-		const scratch = new Scratch(luna);
+	it('holds the patched catalog, the seat text, and an empty directory, and removes all', () => {
+		const scratch = new Scratch(luna, 'seat text');
 		const stored = JSON.parse(readFileSync(scratch.catalog, 'utf8')) as { models: unknown[] };
 		expect(stored.models).toEqual([exclusiveEntry(luna)]);
+		expect(readFileSync(scratch.instructions, 'utf8')).toBe('seat text');
 		expect(readdirSync(scratch.directory)).toEqual([]);
 		scratch.remove();
 		expect(existsSync(scratch.catalog)).toBe(false);
+		expect(existsSync(scratch.instructions)).toBe(false);
 		expect(existsSync(scratch.directory)).toBe(false);
 		scratch.remove();
 	});
 
 	it('fails for a model that the catalog lacks, and names the model', async () => {
-		await expect(scratchFor('gpt-unknown', recordedCatalog)).rejects.toThrow(
+		await expect(scratchFor('gpt-unknown', recordedCatalog, 'seat text')).rejects.toThrow(
 			/'gpt-unknown'.*nativeTools 'none' needs/,
 		);
 	});
@@ -231,7 +283,7 @@ describe('installedCatalog', () => {
 	it('reads the entry of a model from the binary', async () => {
 		const source = installedCatalog(
 			binary('ok', `echo '{"models":[{"slug":"m1"},{"slug":"m2"}]}'`),
-			undefined,
+			{},
 		);
 		expect(await source('m2')).toMatchObject({ slug: 'm2' });
 		expect(await source('absent')).toBeUndefined();
@@ -240,14 +292,23 @@ describe('installedCatalog', () => {
 	it('gives up on a binary that does not answer in time', async () => {
 		const path = binary('hang', 'sleep 30');
 		const started = Date.now();
-		await expect(installedCatalog(path, undefined, 200)('m1')).rejects.toThrow();
+		await expect(installedCatalog(path, {}, 200)('m1')).rejects.toThrow();
 		expect(Date.now() - started).toBeLessThan(5_000);
+	});
+
+	it('keeps one catalog for each home of the same binary', async () => {
+		const path = binary('homes', `echo "{\\"models\\":[{\\"slug\\":\\"$CODEX_HOME\\"}]}"`);
+		const one = installedCatalog(path, { CODEX_HOME: '/homes/one' });
+		const two = installedCatalog(path, { CODEX_HOME: '/homes/two' });
+		expect(await one('/homes/one')).toBeDefined();
+		expect(await two('/homes/two')).toBeDefined();
+		expect(await two('/homes/one')).toBeUndefined();
 	});
 
 	it('fails with a message when the binary prints no JSON, then tries again and does not keep the failed run', async () => {
 		const path = binary('flaky', 'echo not json');
-		await expect(installedCatalog(path, undefined)('m1')).rejects.toThrow(/not JSON/);
+		await expect(installedCatalog(path, {})('m1')).rejects.toThrow(/not JSON/);
 		writeFileSync(path, `#!/bin/sh\necho '{"models":[{"slug":"m1"}]}'\n`);
-		expect(await installedCatalog(path, undefined)('m1')).toMatchObject({ slug: 'm1' });
+		expect(await installedCatalog(path, {})('m1')).toMatchObject({ slug: 'm1' });
 	});
 });

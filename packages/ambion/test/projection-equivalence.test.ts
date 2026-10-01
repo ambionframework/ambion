@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
-import { readView } from '../src/room/read.ts';
+import { toRoomRead } from '../src/room/read.ts';
 import { freeze, mulberry32 } from './support/core-failure.ts';
 import { foldRoom } from './support/fold.ts';
 
@@ -247,9 +247,9 @@ describe('the incremental projection equals the fold', () => {
 				const reference = foldRoom(walk.entries, retry);
 				expect(state, `seed ${seed} step ${step} (${entry.kind})`).toEqual(reference);
 				// The outcomes and the summaries of every closed exchange agree as well.
-				const seen = readView('room', state, start, entry.seq, false);
+				const seen = toRoomRead('room', state, start, entry.seq, false);
 				expect(seen.exchanges, `seed ${seed} step ${step} exchanges`).toEqual(
-					readView('room', reference, start, entry.seq, false).exchanges,
+					toRoomRead('room', reference, start, entry.seq, false).exchanges,
 				);
 				retained.push({ state, snapshot: structuredClone(state) });
 				freeze(state);
@@ -258,8 +258,8 @@ describe('the incremental projection equals the fold', () => {
 					projection = replay(walk.entries, retry);
 					expect(projectState(projection), `seed ${seed} replay`).toEqual(reference);
 					expect(
-						readView('room', projectState(projection), start, entry.seq, false).exchanges,
-					).toEqual(readView('room', reference, start, entry.seq, false).exchanges);
+						toRoomRead('room', projectState(projection), start, entry.seq, false).exchanges,
+					).toEqual(toRoomRead('room', reference, start, entry.seq, false).exchanges);
 				}
 			}
 			for (const held of retained) expect(held.state).toEqual(held.snapshot);

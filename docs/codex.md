@@ -5,7 +5,7 @@ holds what is specific to the Codex adapter. [Executors](executors.md)
 holds the shared contract: the activation flow, the room tools, exchange
 continuity, failure classification, the step vocabulary, and the trace. [The
 Pi guide](pi.md) and [the Claude guide](claude.md) cover the other two
-shipped families. [The
+shipped executor kinds. [The
 README](../README.md) holds the positioning.
 
 ## What the package is
@@ -19,8 +19,8 @@ the room tools and the tools that you give it, as a Pi seat does. Set
 `nativeTools: 'codex'` to give the seat the tools of Codex: file edits,
 shell commands, and web search. Both kinds of seat join one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
-an execution. Pass `codexExecution({ codexPath, env })` for another binary
-or environment.
+an execution. Pass `codexExecution({ codexPath, env, home, login })` for
+another binary, environment, Codex home, or login.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
@@ -51,22 +51,59 @@ that runs your process.
 
 - Set `CODEX_API_KEY` in the environment of the process. The binary reads it
   on each run.
-- Run `codex login` once. The binary reads the sign-in from `~/.codex`.
-  Sign in with ChatGPT to run on a ChatGPT Plus or Pro subscription. A
-  host with no browser runs `codex login --device-auth`.
+- Run `codex login` once. The seats link the sign-in file that the command
+  writes, `~/.codex/auth.json`. Sign in with ChatGPT to run on a ChatGPT
+  Plus or Pro subscription. A host with no browser runs
+  `codex login --device-auth`.
 
 **A subscription needs no key.** Leave `CODEX_API_KEY` out of the
 environment, so that the binary runs on the ChatGPT sign-in. A
-custom `env` on `codexExecution()` needs `HOME`, or `CODEX_HOME`, so that the
-binary finds `~/.codex`. A subscription has its own usage limit, which is a
-permanent failure. Codex reports no cost, so the executor records none. A
-provider may restrict the use of a consumer subscription outside its own
-clients. Read its terms first.
+custom `env` on `codexExecution()` needs `HOME`, so that the execution finds
+`~/.codex/auth.json`, or a `login` option. A subscription has its own usage
+limit, which is a permanent failure. Codex reports no cost, so the executor
+records none. A provider may restrict the use of a consumer subscription
+outside its own clients. Read its terms first.
+
+**The seats of an execution share a Codex home of their own.** The default home is
+`~/.ambion/codex`, under the `HOME` of `env`. The execution sets
+`CODEX_HOME` to it for each run of the binary, and the `CODEX_HOME` of the
+host never reaches the binary. A seat reads no `config.toml` and no
+`AGENTS.md` from `~/.codex`, and it starts none of the MCP servers that
+file names. The home persists, so a thread survives a restart of the host.
+The execution creates the home when the first activation starts, with the
+mode `0700`, because it holds full transcripts, logs, and the linked login.
+
+**The home links the login of the host.** The first activation creates the
+symbolic link `auth.json` in the home. It points to the login file of the
+host: `auth.json` in the `CODEX_HOME` of `env` when that
+variable is set, else `~/.codex/auth.json`. Codex writes that file in
+place, and it reads the file again before it refreshes a token. The host and
+all seats then share one login. A copy would hold a refresh token that
+Codex rotates, and the copy and the original would diverge.
+
+**The link has rules.**
+
+- A home that already holds an `auth.json` keeps it. The execution never
+  replaces or edits that file.
+- A host with no login file gets no link. A seat on `CODEX_API_KEY` needs
+  none. `login: false` links nothing in any case.
+- Where the host refuses symbolic links, such as Windows with no privilege,
+  the execution makes a hard link. If both fail, the activation fails as
+  permanent. The message names both paths.
+- Several activations can start at once. A link that another activation made
+  counts as success.
+
+**A keyring login cannot be shared.** With `cli_auth_credentials_store`
+set to `keyring`, or to `auto` on a host with a keyring, Codex stores the
+login in the keyring under a key that holds a hash of the `CODEX_HOME` path.
+A seat home has another path, so it finds no login. Set the store to `file`
+in `~/.codex/config.toml` and run `codex login` again. Or sign in to the
+home: `CODEX_HOME=~/.ambion/codex codex login`.
 
 ## A complete example
 
 ```ts
-import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
 import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
@@ -88,7 +125,7 @@ const room = await startRoom({
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'Is the plan ready?' });
 const messages = await exchange.waitForClose();
-console.log(messages.filter(isSpoken).map((message) => message.text));
+console.log(messages.filter(isSaid).map((message) => message.text));
 await room.stop();
 ```
 
@@ -106,7 +143,7 @@ The executor passes each policy field to the Codex SDK unchanged.
 | `model`                 | Required           | A Codex model identifier                                     |
 | `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server |
 | `bundles`               | None               | Tool bundles with guidance                                   |
-| `speaking`              | `DEFAULT_GUIDANCE` | The speaking policy that replaces the default                |
+| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                |
 | `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads          |
 | `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens  |
 | `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them   |
@@ -150,12 +187,20 @@ that allows it.
 `nativeTools: 'codex'`, so a seat that turns the network off does not get
 it back.
 
-**`codexExecution(options)` takes the runtime of the executable.**
+**`codexExecution(options)` takes the options of the executable.**
 
-| Option      | Default            | What it does                      |
-| ----------- | ------------------ | --------------------------------- |
-| `codexPath` | The bundled binary | A `codex` executable to run       |
-| `env`       | `process.env`      | The environment of the executable |
+| Option      | Default                                   | What it does                                                                   |
+| ----------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `codexPath` | The bundled binary                        | A `codex` executable to run                                                    |
+| `env`       | `process.env`                             | The environment of the executable. Its `CODEX_HOME` names the home of the host |
+| `home`      | `.ambion/codex` under the `HOME` of `env` | The Codex home of every seat                                                   |
+| `login`     | The `auth.json` of the host               | The `auth.json` to link into the home. `false` links nothing                   |
+
+**`CODEX_HOME` in `env` names the Codex home of the host.** It sets the
+default `login` to `<CODEX_HOME>/auth.json`. It never reaches the binary.
+The execution sets `CODEX_HOME` to `home` in the environment of every run
+of the binary, including the `codex debug models` run for the catalog. A
+host can spread `process.env` into `env` with no further step.
 
 **The executor always sets `skipGitRepoCheck`.** A room seat runs where the
 application puts it, and that place is often no git repository.
@@ -187,6 +232,7 @@ flowchart LR
    socket. The bridge runs the call on the tool that the core bound, takes
    the id of the call with `callId`, and returns the result.
 5. `close` stops the socket. The server exits when the socket closes.
+   It first stops `codex exec` if that process is still its parent.
 
 **Codex spawns the built server.** The package ships
 `dist/room-tools-server.mjs` and starts it with `node`. In the source tree
@@ -194,9 +240,20 @@ the same path resolves to `src/room-tools-server.ts`, which Node runs by
 stripping types. `serverPath` picks the file from the extension of the module
 that calls it, and a test covers both cases.
 
-**The config key sets three limits and one mode.**
-`startup_timeout_sec` is 30. `tool_timeout_sec` is 600.
-`default_tools_approval_mode` is `approve`.
+**The config key sets two limits, one flag, and one mode.**
+`startup_timeout_sec` is 30. `tool_timeout_sec` is 600. `required` is
+`true`. `default_tools_approval_mode` is `approve`.
+
+**A required server is ready before the first model request.** Codex starts
+its MCP servers in the background. For an optional server, it waits one
+second (`mcp_optional_startup_grace_ms`) and then sends the first request
+with the tools that exist at that time. A Node process on a loaded host
+needs more than one second, so that request listed no room tool. With
+`required = true`, Codex waits for the server up to `startup_timeout_sec`
+while it creates the session. The room tools are then ready before the
+first model request, and a default seat lists them on every request. The
+binary tier asserts it. Under `nativeTools: 'codex'`, the model reaches them
+through Code Mode or tool search, as its catalog entry says.
 
 **Approval is set because a headless run cannot answer.** Under
 `approvalPolicy: 'never'`, Codex denies an MCP call that needs approval. The
@@ -212,11 +269,27 @@ native tools.
 [How an activation runs](executors.md#how-an-activation-runs) states the
 read position. Codex sends no echo of the prompt.
 
-**The first prompt of an activation carries the seat's part.** The Codex
-SDK has no system prompt option, so the first prompt carries the mechanism,
-the agent instructions, and the whole view. A later pass sends the delta,
-the lines that landed since the pass read, as the next run of the same
-thread. The `turn.*` events of Codex mark each run.
+**The client config of an activation carries the seat's part.** The Codex
+SDK has no system prompt option, so the executor puts the seat text in the
+config of the client. The seat text is the harness note, the mechanism, and
+the agent instructions, in that order, with a blank line between them. The
+core fixes all three for an activation, so the executor builds the text once,
+from the first pass. The first prompt holds the whole view. A later pass sends
+the delta, the lines that landed since the pass read, as the next run of the
+same thread. The `turn.*` events of Codex mark each run.
+
+**The config key depends on `nativeTools`.**
+
+| `nativeTools`      | Config key                | Effect                                                                            |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------------- |
+| `'none'` (default) | `model_instructions_file` | The file replaces the base prompt of Codex. The file is in the scratch directory. |
+| `'codex'`          | `developer_instructions`  | The text adds a developer message. The base prompt of Codex stays.                |
+
+A seat with no native tools needs nothing from the base prompt, which teaches
+`apply_patch` and the shell. A seat with native tools needs the base prompt,
+because it teaches the model those tools. The SDK passes the text as a TOML
+string with `JSON.stringify`, so quotes, backslashes, newlines, and
+non-ASCII characters arrive as written. The binary tier proves it.
 
 **A run ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
 events for trouble that it survives, such as a reconnect. An `error` event
@@ -231,14 +304,25 @@ moves the position to the last of the messages it carries, and a
 [Executors](executors.md#how-an-activation-runs).
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
-states what a family without steering does. The Codex session has no
-`steer` member, and the seat reads a line on the next delta pass. The core
+states what an executor kind without steering does. The Codex session has no
+`steer` method, and the seat reads a line on the next delta pass. The core
 records the `steer` step of that line with `consumed: false`; see
 [Executors](executors.md#how-an-activation-runs).
 
 **A cut signals the run.** The signal of the activation signals the run in
 flight. `close` stops the socket and the server. A late cut signals no dead
 process.
+
+**A host that dies takes `codex exec` with it.** The SDK closes the input of
+`codex exec` at once. When the host process dies (SIGKILL, out of memory, a
+crash), the OS gives `codex exec` to init and the process runs its turn to the
+end. It keeps calling the model and keeps writing the thread. The
+room tools server sees the host socket close. If `codex exec` is still its
+parent, the server sends it SIGTERM and then exits. A `codex exec` that
+exited first has left the server to init, so the server sends no signal. On
+Windows, Node cannot tell that the parent is gone, so this guard holds on
+Linux and macOS only. A test kills a real host in the middle of a model request and proves that
+`codex exec` and its server go away within seconds.
 
 ## Step mapping
 
@@ -336,6 +420,12 @@ A seat with `nativeTools: 'none'` reads the model catalog from the binary.
 The executor throws `PermanentError` when the platform has no binary, or
 when `@openai/codex` is not installed and no `codexPath` is set.
 
+**A room tools server that fails to start is transient.** The server is
+`required`, so `codex exec` exits with an error that starts "required MCP
+servers failed to initialize: ambion". The SDK throws it, and the executor
+reports a transient failure. The room retries the activation. Codex has sent
+no model request at that time.
+
 **A bad `codexPath` or a socket error is transient.** The executor uses a
 `codexPath` (see [Options](#options)) as given. A path that names no file
 fails when `codex debug models` or the SDK starts it, and that failure is
@@ -359,9 +449,32 @@ before `thread.started`. The executor then starts a fresh thread, runs the
 same prompt, and records the new id. A failure after `thread.started` is an
 ordinary failure.
 
-**Threads live in the Codex store.** The SDK persists threads under
-`~/.codex/sessions`. A host that loses that directory falls back to a fresh
-thread.
+**A resumed thread takes the seat text by the config key.** This is a fact
+about Codex 0.158.0, from two runs of `codex exec` against a scripted
+endpoint: one run starts a thread with text A, and `codex exec resume <id>`
+runs it again with text B.
+
+- With `model_instructions_file`, the second request holds text B and no
+  text A. A resumed activation under `nativeTools: 'none'` sends the seat
+  text of its own activation.
+- With `developer_instructions`, the second request holds text A and no
+  text B. Codex keeps the developer message in the thread. The config of a
+  resumed activation under `nativeTools: 'codex'` cannot replace it.
+
+**A `codex` seat that resumes sends the seat text in its first prompt.**
+The seat text depends on the purpose of the activation, and Codex ignores a
+new `developer_instructions` on resume. The first prompt of such an
+activation holds the seat text, a blank line, and the view. A fresh thread
+keeps the view alone. A seat with `nativeTools: 'none'` never sends the text
+in a prompt. If the resume fails, the fresh thread runs the same prompt, so
+it holds the seat text twice.
+
+**Threads live in the Codex store of the seat home.** The SDK persists
+threads under `sessions` in the home, `~/.ambion/codex/sessions` by default.
+A host that loses that directory falls back to a fresh thread. A thread that
+an earlier version started under `~/.codex/sessions` is not in the seat home,
+so it starts fresh. Give `home` a directory that persists. Codex refuses to
+create its helper binaries under a temporary directory.
 
 ## The trust boundary
 
@@ -406,8 +519,8 @@ path as `model_catalog_json`. The recipe has five parts:
    network, no approval, and an empty temporary directory as its working
    directory. No repository and no host file is the default context.
 
-The temporary directory of each activation holds the patched catalog and the
-empty working directory. The executor removes it when the activation closes,
+The temporary directory of each activation holds the patched catalog, the
+file with the seat text, and the empty working directory. The executor removes it when the activation closes,
 and at process exit.
 
 **A model with no catalog entry does not start.** The activation fails as
@@ -423,6 +536,15 @@ and the network. A `sandboxMode` and `approvalPolicy` set what a command
 may do, and Code Mode is outside their reach. Use it only for a seat that
 may use the host.
 
+**A dead host ends the native commands of a seat.** `codex exec` ends the
+commands that it started when it receives SIGTERM, and the room tools server
+sends that signal when the host dies. The test runs `sleep 47` through the
+native `exec_command` tool, kills the host, and finds the command ended within
+seconds. The test does not cover a command that detaches itself from the
+process tree of Codex, such as a daemon. Only the OS can bound such a command.
+Use a container or a dedicated account for the seat, as the section above
+advises.
+
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
 0.155.1, which brings `codex` 0.155.1. The feature names and the catalog
 fields belong to that version. A newer `codex` can add a native tool that
@@ -431,26 +553,111 @@ the recipe does not turn off. Run the live exclusivity test
 only when it passes.
 
 **The environment includes the key by default.** With no `env` on
-`codexExecution()`, the binary inherits `process.env`. A command that runs
-under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it. Pass an `env`
-that leaves the key out to prevent that, and sign in with `codex login`
-instead.
+`codexExecution()`, the binary runs with a copy of `process.env`. A command
+that runs under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it.
+Pass an `env` that leaves the key out to prevent that, and sign in with
+`codex login`.
+
+**The seat home keeps the config of the host user out.** The binary reads
+its config, its instructions, and its MCP servers from `CODEX_HOME`. The
+execution points that variable at the seat home, so the `~/.codex` of the
+host user changes no seat: its `model_provider` reroutes no request, its
+`mcp_servers` start no process, and its `AGENTS.md` joins no prompt. The
+binary tier proves each of the three. Put a `config.toml` in `home` to
+configure every seat on purpose.
+
+**A linked login is shared with the host.** A command of a seat under
+`nativeTools: 'codex'` runs as the user of the process. It can read the
+seat home, and through the link it can read and write the login file of the
+host. Set `login: false` and `CODEX_API_KEY` to give such a seat no login
+file.
 
 **The room tools are approved.** They only call the room, and the room
 checks each call.
 
 ## Testing
 
-**A real model cannot be scripted, so the executor suite runs live.** Pi and
-Claude have a fake model or a fake executable that plays a plan from
-`@ambionframework/ambion/conformance`. A fake `codex` proves only that the
-adapter agrees with its own guess about the SDK, so the package has none.
-The package has no `./testing` entry for that reason. The live file
+**Three tiers test the package.** Recorded events and the real binary on a
+scripted model run in the unit tier. The live tier runs the real binary on a
+real model.
+
+**The binary tier scripts the model.** `codex` accepts a custom model
+provider through its config. A local HTTP endpoint in `test/responses.ts`
+speaks the Responses API and plays one reply for each request: assistant
+text, or a call to a named tool. It records the body of each request. The
+tests in `test/binary.test.ts` run the bundled `codex`, its MCP client, the
+room tools server, the bridge, and a room over a journal. Only the model is
+scripted.
+
+**The binary tier runs in a seat home of its own.** `test/binary.ts` writes
+a temporary home with a `config.toml` that sends the provider to the
+endpoint, and passes it as `home`. The environment of the binary holds
+`PATH`, a host home as `HOME`, a dummy key variable, and a proxy that
+records and refuses every outbound connection. The catalog lookup
+(`codex debug models`) runs in the same environment. No real sign-in reaches
+the binary, and every model request goes to the endpoint. The file skips on
+a platform with no bundled binary, except under CI, where it fails.
+
+**The host home holds traps.** Its `.codex` has a `config.toml` that
+reroutes the provider to a dead port and starts an MCP server that writes a
+marker file, and an `AGENTS.md` with a unique text. A test asserts that the
+endpoint got the requests, that the marker file does not exist, and that the
+text is in no request body.
+
+**The login test uses an API key file.** A host `auth.json` holds an API
+key, and the provider takes the sign-in of the home. The test asserts that
+every request carries the key of the host file, that the home holds a
+symbolic link to that file, and that the file is as it was. A ChatGPT login
+file makes Codex connect to `chatgpt.com`, so the test does not use one. The
+proxy would show it. `test/home.test.ts` covers the rest of the rules of the
+link on real files.
+
+**A scripted call names the namespace of an MCP tool.** The model calls a
+room tool with `name: 'say'` and `namespace: 'mcp__ambion'`. A call with the
+name alone gets the tool result `unsupported call: say`, and nothing reaches
+the room.
+
+**Every request lists the room tools.** The config marks the room tools
+server as `required`, and Codex waits for it before the first model request.
+The endpoint does not retry or skip a request that lacks a tool. A request
+without `say` gets the result `unsupported call`, and the assertions on the
+request count and on the tool list fail. A test ran the tier on 4 cores with
+24 busy loops. Without `required`, every run had requests that listed no
+room tool. With `required`, every run passed.
+
+**A room tools server that cannot start fails the pass.** One test points
+the server at a command that does not exist. Codex exits with "required MCP
+servers failed to initialize: ambion", before it sends a model request. The
+pass reports a transient failure, and the test asserts the message.
+
+**The binary tier proves what the model receives.** The recorded request
+bodies show the tool list, the prompts, and the items of an earlier pass.
+A default seat receives the seat text as the first developer message, and no
+developer message starts with "You are Codex". The last user message holds
+the view alone. Today Codex still adds the skills of its home as a developer
+message, and it lists the tools in an `additional_tools` input item. The
+top-level `instructions` field of the request stays empty. A test states each
+of these facts, so a change to one shows in a failing assertion.
+
+**The binary tier covers both modes of native tools.** One test sends a seat
+text with quotes, backslashes, a newline, and non-ASCII characters under
+`'none'` and under `'codex'`. It asserts that the text arrives unchanged in
+the developer message of each mode. Under `'codex'` the text follows the
+prompt of Codex. The `'codex'` seat keeps the plugin features of Codex, which
+sync a marketplace from GitHub and ask `chatgpt.com`. The test home sets
+`plugins` and `remote_plugin` to `false` under `[features]`, so the run
+reaches no network. The proxy and the endpoint prove it.
+
+**The binary tier cannot prove that a model obeys.** A scripted model does
+what the script says. The live tier proves the claims that need a real model.
+
+**The live tier runs the executor suite.** The live file
 `test/live/conformance.test.ts` runs the suite through
 `codexExecutorHarness` in `test/live/support.ts`: the model follows each
 plan from its instructions. A key that the provider refuses gives the
 permanent failure, and a `codex` binary that does not exist gives the
-transient one.
+transient one. The package has no `./testing` entry, because a fake `codex`
+proves only that the adapter agrees with its own guess about the SDK.
 
 **A dump shows what a live case saw.** Set `AMBION_LIVE_DUMP=<dir>` to write
 one JSON file for each case of the live suite. The file holds the room calls
@@ -467,7 +674,7 @@ runs the executor on the recorded events to test exchange continuity. A
 turn of the replay client can also call `say` through the socket of the
 bridge, as the room tools server does.
 
-**The live tier proves the claims that recorded events cannot.** Each file
+**The live tier proves the claims that a scripted model cannot.** Each file
 holds the smallest room that proves one claim.
 
 | File                            | Claim                                                                                                               |
@@ -497,18 +704,20 @@ vitest.live.config.ts test/live/loop.test.ts`.
 ## Troubleshooting
 
 **The seat answers in its final message and nobody hears it.** Codex has its
-own final-answer channel. The room hears only `say`. The first prompt of a
-thread says so. A seat that still ends with plain text and no `say` shows a
+own final-answer channel. The room hears only `say`. The harness note at the
+start of the seat text says so. A seat that still ends with plain text and no `say` shows a
 `text` step and no `tool_call` in its trace, and `activation_end` reports
-`spoke: false`.
+`said: false`.
 
 **Every say is denied.** The seat answers in plain text, and the record holds
 nothing. The trace shows a `tool_result` with "MCP tool call requires
 approval". The config key `default_tools_approval_mode` must be `approve`. A
 custom `config` that replaces `mcp_servers` removes it.
 
-**The server does not start.** Codex reports the startup as failed after 30
-seconds. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
+**The server does not start.** Codex waits up to 30 seconds. It then exits
+with "required MCP servers failed to initialize: ambion", and the activation
+fails as transient. A server that exits at once fails the activation at
+once. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
 and that `node` on the `PATH` of the process is Node 22.19 or newer. Run
 `node dist/room-tools-server.mjs /tmp/none.sock` to see its error.
 
@@ -518,16 +727,27 @@ a built package with a syntax or an engine error.
 
 **A thread cannot resume.** The executor starts a fresh thread and the seat
 loses what the old thread held. The record still holds every line. Look for a
-missing `~/.codex/sessions` directory, a `codex` of another version, or a
-different account than the one that started the thread.
+missing `sessions` directory in the seat home, a changed `home` option, a
+`codex` of another version, or a different account than the one that started
+the thread.
 
 **A run fails with a sign-in message.** The failure is permanent, so the room
 does not retry. Set `CODEX_API_KEY`, or run `codex login`. A custom `env`
-needs `HOME` or `CODEX_HOME` for the sign-in.
+needs `HOME`, or the `login` option, for the sign-in. A login in the OS
+keyring is invisible to a seat: see "A keyring login cannot be shared".
+
+**`Cannot link .../auth.json to the login file ...`** The activation could
+make neither a symbolic link nor a hard link, and the failure is permanent.
+Run `CODEX_HOME=<home> codex login` to sign in to the home, or pass
+`login: false` and set `CODEX_API_KEY`.
+
+**A seat starts with no login although the host has one.** The host login
+file is `<CODEX_HOME>/auth.json` when the environment sets `CODEX_HOME`, else
+`~/.codex/auth.json`. Check that path, or pass `login`.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
 Claude seat reached a Codex executor through an execution with no kind.
-Pass the execution of each family.
+Pass the execution of each executor kind.
 
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours. A newer `codex` added a

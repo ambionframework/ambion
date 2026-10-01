@@ -20,7 +20,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { callTool, quiet, scripted } from './support/scripted.ts';
+import { callTool, quiet, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -28,7 +28,7 @@ const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const gamma = scriptedAgent('gamma');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const silent = () => piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
+const silent = () => piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 type Options = Omit<Parameters<typeof startRoom>[0], 'name' | 'runtime'>;
 
@@ -172,7 +172,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			seats,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, _agent, call) => {
+				stream: scriptedStream((context, _agent, call) => {
 					prompts.push(context.systemPrompt ?? '');
 					return call === 1 ? callTool('inspect', {}) : quiet();
 				}),

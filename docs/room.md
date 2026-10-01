@@ -3,7 +3,7 @@
 **A room is a shared journal with rules for taking part.** The room orders
 every contribution into one journal. It wakes a seat when a message matches
 the attention of that seat. It folds the journal into the state of the
-membership, the presence, and each exchange.
+roster, the presence, and each exchange.
 
 The [repository README](../README.md) holds the positioning and the current
 surface. The [runnable example](example.md) shows a room at work. The
@@ -22,7 +22,7 @@ call is work that the room does not replay.
 | ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Definition   | An immutable value: a name, an identity, and an executor                            | [agent.md](agent.md)                                                     |
 | Room         | Participants that collaborate through one ordered journal                           | This page                                                                |
-| Seat         | An agent's membership in a room, with its attention                                 | [roster.md](roster.md)                                                   |
+| Seat         | An agent's place on the roster, with its attention                                  | [roster.md](roster.md)                                                   |
 | Attention    | Which messages wake an idle seat                                                    | [roster.md](roster.md)                                                   |
 | Reserve      | The definitions that the room knows and has not seated                              | [roster.md](roster.md)                                                   |
 | Visit        | A person's speaking identity and presence lifetime                                  | [presence.md](presence.md)                                               |
@@ -68,11 +68,11 @@ An activation may contain more than one provider request. The exchange spans
 every activation from its opening question to its durable close. See
 [exchange.md](exchange.md) for the lifecycle.
 
-## Membership and people
+## Roster and people
 
 `startRoom` writes a composition and starts the room. `seats` names
-the initial members and their attention. If `seats` is omitted, every defined
-agent starts as a member with `broadcast` attention. An empty map starts all
+the initial seated agents and their attention. If `seats` is omitted, every defined
+agent starts seated with `broadcast` attention. An empty map starts all
 defined agents in the reserve.
 
 ```ts
@@ -85,12 +85,12 @@ const room = await startRoom({
 });
 ```
 
-`room.seat(name)` adds a defined agent to membership. `room.unseat(name)`
-removes a member and returns the definition to the reserve. A live activation
+`room.seat(name)` adds a defined agent to the roster. `room.unseat(name)`
+removes a seated agent and returns the definition to the reserve. A live activation
 may call the same operations for another agent or itself, unless the target
 seat is fixed: the summary writer's seat is fixed by default, and only the
 host can unseat it. The room refuses an unknown name and a name that belongs
-to a human visitor. See [Roster](roster.md) for membership, attention, and
+to a human visitor. See [Roster](roster.md) for seating, attention, and
 duplicate-operation semantics. Attention selects work and does not authorize
 contributions.
 
@@ -103,12 +103,12 @@ result. See [presence.md](presence.md) and [summary.md](summary.md).
 
 ## The journal is the authority
 
-**The journal is the authority.** A room derives membership, presence,
+**The journal is the authority.** A room derives the roster, presence,
 activations, leases, routing, exchange boundaries, and completion by folding
 recorded entries. A host can resume the same behavior by replaying the
 journal.
 
-The journal records messages, membership changes, leases, exchange closes,
+The journal records messages, seating changes, leases, exchange closes,
 composition, cancellation boundaries, and run fences. A post is a message
 of the system, with no author: the host writes one with `room.post`, and
 the room writes a returned say when a scheduled say is due. It also records the
@@ -135,7 +135,7 @@ Nested routing lists and summary ranges follow the same rule.
 inside that notification are detached from the room and from other listeners.
 Error notifications retain the original `Error` object, with its cause and
 provider fields. Errors describe execution and are not room facts. An
-execution event names its activation.
+activation event names its activation.
 
 **An in-process port has the same ownership boundary as a remote call.**
 The room captures commit and lease requests before it awaits work. Results and
@@ -149,7 +149,7 @@ either to answer a message or to write a closing summary. The room derives the
 purpose from the activation id and the journal state. A caller cannot
 construct authority by changing fields in a request.
 
-An ordinary activation reads the goal, the participants, the reserve
+A respond activation reads the goal, the participants, the reserve
 identities, and the messages that its context boundary allows. A summary
 activation reads every message through its fixed exchange, plus its recipient
 and the preferences of that person. It cannot change the recipient or the
@@ -217,7 +217,7 @@ credentials, process lifetime, and recovery.
 - [Default assistant](assistant.md): the `assistant` room option and package.
 - [Exchange](exchange.md): human questions, completion, and result handles.
 - [Presence](presence.md): visits, arrivals, departures, and catch-up.
-- [Roster](roster.md): membership, reserve, and attention.
+- [Roster](roster.md): seating, reserve, and attention.
 - [Summaries](summary.md): closing work and context replacement.
 - [Resources](resources.md): the resource contract, references, and provenance.
 - [Workspace](workspace.md): the workspace interface, its backends, and its tools.

@@ -39,7 +39,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -59,7 +59,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -79,7 +79,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -95,7 +95,7 @@
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
@@ -121,7 +121,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -137,7 +137,7 @@
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
@@ -151,5 +151,5 @@
 			}
 		}
 	],
-	"watermark": 24
+	"through": 24
 }

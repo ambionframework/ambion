@@ -12,7 +12,7 @@
 import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
 import {
 	openWorkspace,
-	type ProcessStatus,
+	type ProcessRecord,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
@@ -326,7 +326,7 @@ async function call(workspace: Workspace, name: string, params: unknown) {
 	const result = await tool.invoke(params, context(OWNER));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-	const details = result.details as { process?: ProcessStatus; processes?: ProcessStatus[] };
+	const details = result.details as { process?: ProcessRecord; processes?: ProcessRecord[] };
 	return { process: details.process, processes: details.processes ?? [], text };
 }
 
@@ -342,7 +342,7 @@ async function lostStatus(workspace: Workspace, handle: string) {
 }
 
 describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
-	it('adopts the live processes of an earlier run, reads and waits for one, and stops each through its process group', async () => {
+	it('adopts the live processes of an earlier run, reads and waits for one, and cancels each through its process group', async () => {
 		// An earlier run of the host starts two processes over OpenSSH, and then goes away.
 		const earlier = workstationBackend(await options());
 		const pids = await withEnv(earlier, OWNER, async (env) => {
@@ -363,7 +363,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		const { workspace, backend } = await nextRun();
 		try {
 			// The first read adopts both: the pid of the late one is in /proc, so the listing runs ps
-			// for it despite its lost stop. The one past its timeout stops at once.
+			// for it despite its lost stop. The one past its timeout cancels at once.
 			const listed = await call(workspace, 'ps', {});
 			expect(listed.processes.map((one) => one.handle).sort()).toEqual([
 				'bash-0000000000a1',
@@ -460,15 +460,15 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		}
 	});
 
-	it('stops an owned process with SIGTERM: a trap ends it inside the grace, and SIGKILL ends one that ignores TERM', async () => {
+	it('cancels an owned process with SIGTERM: a trap ends it inside the grace, and SIGKILL ends one that ignores TERM', async () => {
 		const { workspace, backend } = await nextRun();
 		try {
 			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
 			const clean = "trap 'echo cleanup; exit 0' TERM\nsleep 300 &\nwait";
 			const started = await call(workspace, 'bash', { command: clean, wait: 0 });
-			const stopped = await call(workspace, 'cancel', { handle: started.process?.handle });
-			expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
-			expect(stopped.text).toMatch(/^cleanup\n\n\[Process /);
+			const cancelled = await call(workspace, 'cancel', { handle: started.process?.handle });
+			expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
+			expect(cancelled.text).toMatch(/^cleanup\n\n\[Process /);
 			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
 			const ignoring = await call(workspace, 'bash', { command: stubborn, wait: 1 });
 			const began = Date.now();
@@ -485,7 +485,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		}
 	});
 
-	it('stops an owned process that ignores TERM after the grace of its call', async () => {
+	it('cancels an owned process that ignores TERM after the grace of its call', async () => {
 		const { workspace, backend } = await nextRun();
 		try {
 			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
@@ -495,7 +495,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			const began = Date.now();
 			const killed = await call(workspace, 'cancel', { handle: started.process?.handle });
 			const elapsed = Date.now() - began;
-			// The default grace of 10 s would hold the stop for longer.
+			// The default grace of 10 s would hold the cancel for longer.
 			expect(elapsed).toBeGreaterThanOrEqual(2_000);
 			expect(elapsed).toBeLessThan(9_000);
 			expect(killed.process?.state).toBe('cancelled');

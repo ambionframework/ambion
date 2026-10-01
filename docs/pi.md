@@ -4,7 +4,7 @@
 specific to the Pi adapter. [Executors](executors.md) holds the shared
 contract: the activation flow, the room tools, exchange continuity, failure
 classification, the step vocabulary, and the trace.
-[The Claude guide](claude.md) covers a second shipped family, and [the
+[The Claude guide](claude.md) covers a second shipped executor kind, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -119,7 +119,7 @@ validates the shared fields. Pi adds `model` and `compaction`.
 | `model`                | Yes      | None                          | A Pi model id, `provider/model-id`.                                              |
 | `tools`                | No       | None                          | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
 | `bundles`              | No       | None                          | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                                    |
+| `speaking`             | No       | `DEFAULT_SPEAKING`            | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit` | No       | The whole record              | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`       | No       | `'length'`                    | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `compaction`           | No       | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session. Pi's `CompactionSettings`.                |
@@ -220,8 +220,8 @@ read position and the record window. Pi adds these facts.
 **One harness serves one activation.** The first pass resolves the model,
 opens the session, binds the tools, and attaches one Pi `AgentHarness` to
 the session. Every pass of the activation prompts the lane `main` of that
-harness once, and resolves when the run ends. The harness runs with
-`thinkingLevel: 'off'`, and no option changes it.
+harness once, and resolves when the pass ends. Pi calls one such prompt a
+run. The harness runs with `thinkingLevel: 'off'`, and no option changes it.
 
 **The system prompt is the mechanism and the agent part.** The executor
 gives the harness `pass.mechanism` and `pass.agent` as the system prompt.
@@ -244,16 +244,16 @@ with the same text never counts. The room tool answers also move the
 position; see [Executors](executors.md#how-an-activation-runs).
 
 **A steer goes to the steer queue of the lane.** A line that lands during a
-run joins the queue as a `[new]` range, and the harness delivers it with
+pass joins the queue as a `[new]` range, and the harness delivers it with
 the next provider request. The executor calls `read` for the line when a
 provider request holds it. A line that lands while the pass prepares its
-run joins the prompt of the run. A line that no request holds by the end
-of the run leaves the queue. The core records the `steer` step; see
+prompt joins that prompt. A line that no request holds by the end of the
+pass leaves the queue. The core records the `steer` step; see
 [Executors](executors.md#how-an-activation-runs).
 
 **A line that lands between passes waits for the record.** The core runs a
 pass with the delta when the last position of the room is past
-`readThrough`. A delta with no message in it starts no run, and the core
+`readThrough`. A delta with no message in it starts no pass, and the core
 takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
@@ -297,11 +297,11 @@ passes the room tools, the tools of the definition, and the tools of its
 bundles as the harness `tools`, and names each one in `activeToolNames`.
 The harness adds no built-in tool, no skill, and no prompt template. The
 skills of an agent come from its workspace bundle ([Skills](skills.md)). A
-call to a tool the model does not hold gets an error result, and the run
+call to a tool the model does not hold gets an error result, and the pass
 continues. A continued session takes the tools of the activation that
-continues it: a closing activation holds `say` alone.
+continues it: a summary activation holds `say` alone.
 
-**An `unknown` or `stale` answer ends the run.** The executor aborts the activation
+**An `unknown` or `stale` answer ends the pass.** The executor aborts the activation
 and stands the seat down. The tool result names why the turn ended, and no
 further pass follows.
 
@@ -312,7 +312,7 @@ and how a bundle adds tools and guidance. Pi adds these facts.
 
 **The executor wraps a tool as a harness tool.** Its context carries
 `agent`, `signal`, `callId`, `onUpdate`, `room`, `activation`, and
-`exchange`. The signal is the abort signal of the run. A string result
+`exchange`. The signal is the abort signal of the pass. A string result
 becomes text content. A thrown error becomes a tool error.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
@@ -366,7 +366,7 @@ records `{ kind: 'pi', id }`. An activation reopens the session only
 when `pass.resumeId` names that id. Its first prompt is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
-delta with no message starts no run. A closing activation reads the whole
+delta with no message starts no pass. A summary activation reads the whole
 view. `readThrough` starts at the position the session read through.
 
 **A custom entry holds the position the session read through.** After each
@@ -390,7 +390,7 @@ not continue the failed one. The retry reads the whole view.
 
 **A continued session goes back to the last position it read.** The lane
 tip moves back to the newest `ambion.read` entry, or to the root when there
-is none. A run that failed or was cut after that entry leaves the provider
+is none. A pass that failed or was cut after that entry leaves the provider
 input. A retry of a failed activation therefore gives the model each range
 of the record once.
 
@@ -463,19 +463,19 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 ## Testing
 
 **A scripted stream tests the room with no model and no key.**
-`@ambionframework/pi/testing` exports `scripted`, `PiScript`,
+`@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `speak`, `callTool`, `later`, `seat`,
+`@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
 `quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
 `Models` collection, which holds the model of the seat under its provider
 and id.
 
 ```ts
-import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
-import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
+import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
+import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted } from '@ambionframework/pi/testing';
+import { scriptedStream } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -483,9 +483,9 @@ const inventory = defineAgent({
   executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
 });
 
-const stream = scripted(
+const stream = scriptedStream(
   byAgent({
-    inventory: (_context, _agent, call) => (call === 1 ? speak('42 units in stock.') : quiet()),
+    inventory: (_context, _agent, call) => (call === 1 ? say('42 units in stock.') : quiet()),
   }),
 );
 
@@ -498,7 +498,7 @@ const room = await startRoom({
 try {
   const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Asks.' }));
   const exchange = await visit.send({ text: 'How many units?' });
-  const said = (await exchange.waitForClose()).filter(isSpoken);
+  const said = (await exchange.waitForClose()).filter(isSaid);
   console.log(said.map((message) => message.text));
 } finally {
   await room.stop();
@@ -507,14 +507,14 @@ try {
 
 **The scripted stream routes on the seat.** The stub model carries the seat
 name in `model.name`, so a script never reads the prompt to learn who it
-serves. `scripted` counts calls for each seat, answers an abort with an
+serves. `scriptedStream` counts calls for each seat, answers an abort with an
 aborted message, and turns a script that throws into an error message. A
 test that needs no Pi imports `scripted` from
 `@ambionframework/ambion/testing`, which runs a script with no model at all.
 
 **The stream turns a reply into a message.** A reply with calls becomes one
 message with one tool call for each call, and the stop reason `toolUse`. An
-empty reply becomes a text message that ends the run. A script can also
+empty reply becomes a text message that ends the pass. A script can also
 return a Pi `AssistantMessage`, which the stream passes on unchanged. A test
 uses a message for an error, a length stop, or a usage report.
 
@@ -553,12 +553,12 @@ Pi seats.
 | `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                   |
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                            |
 | `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries. |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.                                                            |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each kind.                                                              |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                               |
 | `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                          |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                 |
 | A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                           |
-| A steer shows `consumed: false`                                     | No provider request held the line before the run ended. The next delta carries the line.                                                                             |
+| A steer shows `consumed: false`                                     | No provider request held the line before the pass ended. The next delta carries the line.                                                                            |
 | The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.                                                                         |
 | The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                           |
 | The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                           |

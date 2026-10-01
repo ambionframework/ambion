@@ -327,7 +327,7 @@ describe('room transition', () => {
 		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3]);
 	});
 
-	it('starts a new summary assignment after reseating before close, and never revives one ended after close', () => {
+	it('starts a new summary activation after reseating before close, and never revives one ended after close', () => {
 		const start = [composition('writer'), person(), question()];
 		const beforeClose = fold(...start, unseated(4), seated(5), closed(6, 5));
 		expect(owedOf(beforeClose)).toMatchObject([{ seat: 'writer', position: 5 }]);
@@ -453,7 +453,7 @@ describe('a scheduled say', () => {
 		['under the least after', answering(), later('product', 59), /from 60 to 3600 seconds/],
 		['over the most after', answering(), later('product', 3_601), /from 60 to 3600 seconds/],
 		['in a part of a second', answering(), later('product', 60.5), /whole number/],
-		['past the pending says of the seat', waiting(), later(), /at most 1 for one seat/],
+		['past the scheduled says of the seat', waiting(), later(), /at most 1 for one seat/],
 	] as const)('refuses a say %s', (_case, state, intent, reason) => {
 		expect(say(state, intent)).toMatchObject(because(reason));
 	});
@@ -552,7 +552,7 @@ describe('a scheduled say', () => {
 			now,
 		);
 
-	it('lets a seat dismiss its own pending say: no wake, no return, a free place, and unchanged after', () => {
+	it('lets a seat dismiss its own scheduled say: no wake, no return, a free place, and unchanged after', () => {
 		const state = waiting();
 		const decision = dismiss(state, 5);
 		expect(decision).toEqual({
@@ -591,13 +591,13 @@ describe('a scheduled say', () => {
 		expect(dismiss(state, handle, activation)).toMatchObject(because(reason));
 	});
 
-	it('refuses a dismissal in a closing activation', () => {
+	it('refuses a dismissal in a summary activation', () => {
 		expect(summary(closing(), { kind: 'dismissed', message: 5 })).toMatchObject(
 			because(/cannot submit/),
 		);
 	});
 
-	it('lets the host dismiss any pending say with no author, and write nothing for one gone', () => {
+	it('lets the host dismiss any scheduled say with no author, and write nothing for one gone', () => {
 		// A running lease of another seat: an entry with no author steers no seat.
 		const state = waiting(lease('message:3:writer:1', 6));
 		const decision = decide(state, { type: 'dismiss', message: 5 }, now);
@@ -610,7 +610,7 @@ describe('a scheduled say', () => {
 		expect(decide(after, { type: 'dismiss', message: 5 }, now)).toEqual({ entry: undefined });
 	});
 
-	it("lists the seat's own pending says in its response view, with the seq as the handle", () => {
+	it("lists the seat's own scheduled says in its response view, with the seq as the handle", () => {
 		const state = waiting(lease('message:3:writer:1', 6));
 		const view = (activation: string) => {
 			const spec = activationSpec(activation, state);

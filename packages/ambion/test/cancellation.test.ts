@@ -31,7 +31,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
+import { byAgent, isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 
@@ -41,7 +41,7 @@ const assistant = defineAgent({
 	executor: pi({ instructions: 'summarise the discussion', model: 'scripted/assistant' }),
 });
 
-const deaf = scripted(() => new Promise<never>(() => {}));
+const deaf = scriptedStream(() => new Promise<never>(() => {}));
 
 /** A room with one broadcast worker that never answers, stopped when the test ends. */
 async function workerRoom(runtime?: Runtime, options: Partial<StartRoomOptions> = {}) {
@@ -125,7 +125,7 @@ describe('durable cancellation', () => {
 			const execution = around(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(() => {
+					stream: scriptedStream(() => {
 						started.resolve();
 						return new Promise<never>(() => {});
 					}),
@@ -233,9 +233,9 @@ describe('durable cancellation', () => {
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(
+				stream: scriptedStream(
 					byAgent({
-						worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
+						worker: (_context, _agent, call) => (call === 1 ? say('answer') : quiet()),
 						assistant: (context) => {
 							if (!isClosingContext(context)) return quiet();
 							summaryStarted.resolve();
@@ -303,7 +303,7 @@ it('does not retry cancelled work after a restart', async () => {
 	const runtime = createRuntime({ storage: opened.storage, clock: time.clock });
 	let calls = 0;
 	const started = deferred();
-	const stream = scripted(() => {
+	const stream = scriptedStream(() => {
 		calls += 1;
 		started.resolve();
 		return new Promise<never>(() => {});

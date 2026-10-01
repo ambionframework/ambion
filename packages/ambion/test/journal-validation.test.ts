@@ -68,6 +68,7 @@ describe('room journal body validation', () => {
 		],
 		['lease', ended],
 		['lease', { ...ended, session: { kind: 'claude', id: 'abc' } }],
+		['lease', { ...ended, reason: 'failed', cause: 'transient' }],
 		['close', { person: 'andrei', from: 1, through: 5, at, summaryWriter: 'assistant' }],
 		[
 			'composition',
@@ -130,6 +131,7 @@ describe('room journal body validation', () => {
 			'body.id',
 		],
 		['lease', { ...ended, session: { kind: 'claude' } }, 'body.session.id'],
+		['lease', { ...ended, reason: 'failed', cause: 'sometimes' }, 'body.cause'],
 		[
 			'lease',
 			{ id: 'x', phase: 'running', expiresAt: Infinity, at: 'now', readThrough: 0 },

@@ -73,7 +73,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		expect(await commit(first, { kind: 'seated', name: 'alpha' })).toHaveProperty('stale');
 	});
 
-	it('settles an unclaimed closing assignment when the host removes its writer, across replay', async () => {
+	it('settles an unclaimed summary activation when the host removes its writer, across replay', async () => {
 		const opened = await openFor(storage);
 		const clock = fakeClock();
 		const runtime = createRuntime({ storage: opened.storage, clock, execution: recording([]) });
@@ -107,7 +107,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		await room.unseat('alpha');
 		await expect(first.waitForSummary()).rejects.toThrow(/interrupted/);
 		await room.seat('alpha', { attention: 'none' });
-		if (closing === undefined) throw new Error('Expected closing assignment.');
+		if (closing === undefined) throw new Error('Expected summary activation.');
 		expect(await peer.lease({ operation: 'claim', activation: closing.id })).toHaveProperty(
 			'stale',
 		);

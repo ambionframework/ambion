@@ -13,7 +13,7 @@ describe('the sensor connection registry', () => {
 	let registry: ReturnType<typeof createSensorConnections>;
 	beforeEach(async () => {
 		rig = await connectionRig();
-		registry = createSensorConnections(rig.ports, rig.processes);
+		registry = createSensorConnections(rig.endpoints, rig.processes);
 	});
 	afterEach(async () => {
 		await registry.close();

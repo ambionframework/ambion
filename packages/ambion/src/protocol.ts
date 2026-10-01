@@ -13,16 +13,15 @@
  * lease the room ended.
  */
 
-import type { PendingSay } from './scheduling.ts';
+import type { Static } from 'typebox';
+import type { leaseEndedSchema } from './bodies.ts';
+import type { ScheduledSay } from './scheduling.ts';
 import type {
-	AgentParticipantInfo,
-	EndReason,
-	FailureCause,
-	HumanParticipantInfo,
+	AgentParticipant,
+	HumanParticipant,
 	Intent,
 	Message,
 	Seq,
-	Usage,
 	VendorSession,
 	Without,
 } from './types.ts';
@@ -35,7 +34,7 @@ export type ActivationPurpose =
 			readonly exchange: Seq;
 			/** The person of the exchange, whose summary completes the close. */
 			readonly person: string;
-			/** Every person the closing activation addresses, `person` first. */
+			/** Every person the summary activation addresses, `person` first. */
 			readonly people: readonly string[];
 			readonly through: Seq;
 	  };
@@ -84,8 +83,8 @@ export interface AgentPort {
 
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
-	| AgentParticipantInfo
-	| (HumanParticipantInfo & {
+	| AgentParticipant
+	| (HumanParticipant & {
 			readonly changedAt?: string;
 			readonly lastDeparture?: Seq;
 			readonly messagesSinceDeparture: number;
@@ -108,7 +107,7 @@ export interface CollaborationContext {
 	 * The says of this seat that wait to return, for a response. The seq of
 	 * each names it. Absent when none waits.
 	 */
-	readonly scheduled?: readonly PendingSay[];
+	readonly scheduled?: readonly ScheduledSay[];
 	/**
 	 * How many messages of the record this activation may read lie below the
 	 * first one in `messages`. The room reports it when the cap or the token
@@ -184,23 +183,18 @@ export type CommitResult =
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
 	| { activation: string; operation: 'renew'; readThrough?: Seq }
-	| {
-			activation: string;
-			operation: 'release';
-			reason: EndReason;
-			readThrough: Seq;
-			cause?: FailureCause;
-			usage?: Usage;
-			session?: VendorSession;
-	  };
+	| ({ activation: string; operation: 'release' } & Pick<
+			Static<typeof leaseEndedSchema>,
+			'reason' | 'readThrough' | 'cause' | 'usage' | 'session'
+	  >);
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat
- * reads `lastSeq` against what its view held: the record moved when it grew.
+ * reads `through` against what its view held: the record moved when it grew.
  * An entry beside the record moves neither, so a renewal never reports its
  * own landing as movement.
  */
-export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
+export type LeaseResponse = { ok: { expiresAt: number; through: Seq } } | Stale;
 
 export interface RoomProtocol {
 	/**

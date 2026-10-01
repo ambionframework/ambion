@@ -43,10 +43,11 @@ it('builds every entry the manifest names', async () => {
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
-		'DEFAULT_GUIDANCE',
+		'DEFAULT_SPEAKING',
 		'PACKAGE_NAME',
 		'REF_LIMITS',
 		'addUsage',
+		'awaitingFor',
 		'commitUri',
 		'contentText',
 		'createRuntime',
@@ -56,14 +57,13 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'defineTool',
 		'isPosted',
 		'isPresence',
-		'isSpoken',
+		'isSaid',
 		'isSummary',
 		'loggedToolResult',
 		'messageUri',
 		'parseCommitUri',
 		'parseRoomUri',
 		'parseSnapshotUri',
-		'pendingFor',
 		'readExchange',
 		'readRoom',
 		'resumeRoom',
@@ -123,6 +123,11 @@ it('names the ports, the reads, and the visit by their final names', () => {
 		main.ExchangeRead | undefined
 	>();
 	expectTypeOf<Awaited<ReturnType<typeof main.readRoom>>>().toEqualTypeOf<main.RoomRead>();
+	expectTypeOf<main.ExchangeRead['exchange']>().toEqualTypeOf<main.Exchange>();
+	expectTypeOf<main.RoomRead['through']>().toEqualTypeOf<Seq>();
+	expectTypeOf<
+		Extract<main.RoomEvent, { type: 'exchange_closed' }>['exchange']
+	>().toEqualTypeOf<main.ExchangeRange>();
 	expectTypeOf<main.StartRoomOptions>().toHaveProperty('execution');
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
 	expectTypeOf<main.VendorSession>().toEqualTypeOf<hosting.VendorSession>();

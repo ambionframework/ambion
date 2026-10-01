@@ -12,20 +12,27 @@
  *   `timeout`. An abort that fails, or a close that does not land in a
  *   second period, ends the loop with `failed`.
  * - **Failure.** A rejected wait, a refused send, and an actor that throws
- *   end the loop with `failed`, and the run keeps the message.
+ *   end the loop with `failed`, and the simulation keeps the message.
  * - **The room.** The test started the room, and the test stops it.
  */
 import {
 	AmbionError,
 	addUsage,
-	type ClosedExchangeView,
+	type Exchange,
 	type Room,
 	type RoomNotification,
 	type Seq,
 	type Usage,
 	type Visit,
 } from '@ambionframework/ambion';
-import type { Ended, Move, Run, RunExchange, Seen, SimulateOptions } from './types.ts';
+import type {
+	Ended,
+	Move,
+	Seen,
+	SimulateOptions,
+	Simulation,
+	SimulationExchange,
+} from './types.ts';
 
 /** The default of `exchangeMs`: real milliseconds for one exchange. */
 export const DEFAULT_EXCHANGE_MS = 150_000;
@@ -36,9 +43,9 @@ const noop = () => {};
 
 /**
  * Run the actor against a room that the test started, one exchange at a
- * time, and return the run. The loop does not stop the room.
+ * time, and return the simulation. The loop does not stop the room.
  */
-export async function simulate(room: Room, options: SimulateOptions): Promise<Run> {
+export async function simulate(room: Room, options: SimulateOptions): Promise<Simulation> {
 	checkOptions(options);
 	const events: RoomNotification[] = [];
 	const off = room.subscribe((event) => events.push(event));
@@ -81,7 +88,7 @@ const isStop = (move: Move): move is Extract<Move, { readonly stop: string }> =>
 /** The state of one simulation while it runs. */
 class Loop {
 	readonly moves: Move[] = [];
-	readonly exchanges: RunExchange[] = [];
+	readonly exchanges: SimulationExchange[] = [];
 	ended: Ended = 'limit';
 	error: string | undefined;
 	private readonly room: Room;
@@ -101,7 +108,7 @@ class Loop {
 			this.ended = 'failed';
 			this.error = error instanceof Error ? error.message : String(error);
 		}
-		// A stopped room refuses the departure. The run keeps the reason it ended.
+		// A stopped room refuses the departure. The simulation keeps the reason it ended.
 		await visit.leave().catch(noop);
 	}
 
@@ -163,7 +170,7 @@ class Loop {
 		}
 	}
 
-	private async closedView(from: Seq): Promise<ClosedExchangeView> {
+	private async closedView(from: Seq): Promise<Extract<Exchange, { readonly status: 'closed' }>> {
 		const read = await this.room.read({ messages: false });
 		const view = read.exchanges.find((exchange) => exchange.from === from);
 		if (view?.status !== 'closed') throw new Error(`The exchange at ${from} did not close.`);

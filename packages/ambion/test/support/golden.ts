@@ -22,12 +22,12 @@ import {
 	callTool,
 	contextText,
 	isClosingContext,
-	later,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	schedule,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './scripted.ts';
@@ -58,7 +58,7 @@ interface Setup {
 	readonly agents: (typeof worker)[];
 	readonly summaryWriter?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
-	readonly stream: Parameters<typeof scripted>[0];
+	readonly stream: Parameters<typeof scriptedStream>[0];
 	readonly attempts?: number;
 	readonly drive: Drive;
 }
@@ -77,7 +77,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		agents: setup.agents,
 		...(setup.summaryWriter === undefined ? {} : { summaryWriter: setup.summaryWriter }),
 		seats: setup.seats,
-		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(setup.stream) }),
 	});
 	try {
 		await setup.drive(room, clock);
@@ -110,8 +110,8 @@ const complete = (): Promise<readonly JournalEntry[]> =>
  */
 const asksTheChecker: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
-	return speak('Is the crew free on Thursday?', 'checker');
+	if (contextText(context).includes('[checker → worker]')) return say('Thursday works.');
+	return say('Is the crew free on Thursday?', 'checker');
 };
 
 /**
@@ -139,7 +139,7 @@ function session(): Promise<readonly JournalEntry[]> {
 		}),
 		async drive(room) {
 			room.subscribe((event) => {
-				if (event.type === 'activation_end' && event.agent === worker.name) ended();
+				if (event.type === 'activation_end' && event.seat === worker.name) ended();
 			});
 			const person = await room.visit(priya);
 			await person.send({ to: worker.name, text: 'Can I tell the client Thursday?' });
@@ -195,9 +195,8 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  */
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[posted → worker, returns'))
-		return speak('The slab is poured.');
-	return later('Check the pour log.', 600);
+	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
+	return schedule('Check the pour log.', 600);
 };
 
 /**
@@ -230,8 +229,8 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
 const changesItsMind: PiScript = (context) => {
 	const results = toolResultTexts(context);
 	const [first] = results.flatMap((text) => /^scheduled #(\d+):/.exec(text)?.[1] ?? []);
-	if (results.length === 0) return later('Check the pour log.', 600);
-	if (results.length === 1) return later('Check the crane log.', 1200);
+	if (results.length === 0) return schedule('Check the pour log.', 600);
+	if (results.length === 1) return schedule('Check the crane log.', 1200);
 	if (results.length === 2) return callTool('dismiss', { message: Number(first) });
 	return quiet();
 };
@@ -268,7 +267,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 		});
 	const execution = piExecution({
 		sessions: 'memory',
-		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
+		stream: scriptedStream(byAgent({ worker: says(['Thursday works.']) })),
 	});
 	const first = runtime();
 	const room = await startRoom({

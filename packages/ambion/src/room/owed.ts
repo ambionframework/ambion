@@ -10,12 +10,12 @@
 
 import type { Close } from '../journal/entries.ts';
 import type { Message, Seq } from '../types.ts';
-import { draftsOf, type SummaryClose, summaryCompletion } from './exchange.ts';
+import { type SummaryClose, summaryCompletion, summaryLeasesOf } from './exchange.ts';
 import {
+	type DueActivation,
+	type DueActivationOptions,
+	dueActivation,
 	type LeaseHold,
-	type PendingActivation,
-	type PendingActivationOptions,
-	pendingActivation,
 } from './lease.ts';
 import { countsAgainst } from './rules.verified.ts';
 
@@ -24,7 +24,7 @@ import { countsAgainst } from './rules.verified.ts';
  * seat is the writer that the close named, and the position is the close's
  * `through`, the boundary that the summary must retain.
  */
-export interface Owed extends PendingActivation {
+export interface Owed extends DueActivation {
 	person: string;
 	/** The opening question that identifies the closed exchange. */
 	from: Seq;
@@ -33,8 +33,8 @@ export interface Owed extends PendingActivation {
 /** What `judgeOwed` reads: the summary and removal messages, the closing leases, the marker. */
 export interface OwedFacts {
 	/** The summary and unseated messages. `summaryCompletion` reads no other kind. */
-	record: readonly Message[];
-	/** The leases of closing activations, by the position they name. */
+	summaryFacts: readonly Message[];
+	/** The leases of summary activations, by the position they name. */
 	closedLeases: ReadonlyMap<Seq, ReadonlyMap<string, LeaseHold>>;
 	cancelledAt: Seq | undefined;
 }
@@ -46,17 +46,17 @@ const closeOf = (owed: Owed): SummaryClose => ({
 	summaryWriter: owed.seat,
 });
 
-/** The summary a close owes, or nothing when the close owes no draft for good. */
+/** The summary a close owes, or nothing when the close owes no summary for good. */
 export function judgeOwed(
 	close: SummaryClose,
 	facts: OwedFacts,
-	options: PendingActivationOptions,
+	options: DueActivationOptions,
 ): Owed | undefined {
-	// A close with no writer owes no draft. A close with one names its person.
+	// A close with no writer owes no summary. A close with one names its person.
 	if (close.summaryWriter === undefined) return undefined;
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
-	const completion = summaryCompletion(close, facts.record, leases, facts.cancelledAt);
-	if (completion.status !== 'pending' || completion.writer === undefined) return undefined;
+	const completion = summaryCompletion(close, facts.summaryFacts, leases, facts.cancelledAt);
+	if (completion.kind !== 'pending' || completion.writer === undefined) return undefined;
 	return withAttempts(close, completion.writer, leases, options);
 }
 
@@ -65,7 +65,7 @@ export function rejudgeOwed(
 	owed: readonly Owed[],
 	affected: (owed: Owed) => boolean,
 	facts: OwedFacts,
-	options: PendingActivationOptions,
+	options: DueActivationOptions,
 ): Owed[] {
 	return owed.flatMap((entry) => {
 		if (!affected(entry)) return [entry];
@@ -75,23 +75,23 @@ export function rejudgeOwed(
 }
 
 /**
- * What a person is owed, as an activation: how many drafts over the close
- * came to nothing, when the next may start, and the id it claims. The room
- * reads the attempts only while the close owes a draft. Then no draft stood
- * down, so an ended draft failed or expired.
+ * What a person is owed, as an activation: how many summary attempts over
+ * the close came to nothing, when the next may start, and the id it claims.
+ * The room reads the attempts only while the close owes a summary. Then no
+ * attempt stood down, so an ended attempt failed or expired.
  */
 export function withAttempts(
 	close: Pick<Close, 'from' | 'through'> & { readonly person: string },
 	writer: string,
 	leases: ReadonlyMap<string, LeaseHold>,
-	options: PendingActivationOptions,
+	options: DueActivationOptions,
 ): Owed {
-	const failed = draftsOf(leases, close.through, writer).filter((lease) =>
+	const failed = summaryLeasesOf(leases, close.through, writer).filter((lease) =>
 		countsAgainst(lease, close.through),
 	);
 	return {
 		person: close.person,
 		from: close.from,
-		...pendingActivation('closed', close.through, writer, failed, options),
+		...dueActivation('closed', close.through, writer, failed, options),
 	};
 }

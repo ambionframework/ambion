@@ -201,7 +201,7 @@ export function scriptedRoom(name: string, seat: string, script: RoomScript): Sc
 			state.advanced = true;
 			append('And bring the forms.');
 		}
-		return { ok: { expiresAt: Date.now() + LEASE_MS, lastSeq: lastSeq() } };
+		return { ok: { expiresAt: Date.now() + LEASE_MS, through: lastSeq() } };
 	};
 
 	const protocol: RoomProtocol = {

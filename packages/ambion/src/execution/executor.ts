@@ -7,7 +7,7 @@
  * event. An executor owns one harness: the mapping of its events to steps,
  * the resume of a vendor session, the place where it hosts the tools, and
  * the signal that the model consumed input. A session's `steer` is optional
- * because an executor family may only take context between passes. The core
+ * because an executor kind may only take context between passes. The core
  * records the `steer` step of every steered line.
  */
 import type { ActivationView } from '../protocol.ts';
@@ -60,12 +60,12 @@ export interface ExecutorActivation {
 /**
  * Which record one pass reads. The first pass of an activation gets the
  * `view`: the record it reads whole. Every later pass gets a `delta`: the
- * record as it stands now, and `since`, the position the activation had read
+ * record as it stands now, and `after`, the position the activation had read
  * through before the driver asked again.
  */
 export type PassInput =
 	| { readonly kind: 'view'; readonly view: ActivationView }
-	| { readonly kind: 'delta'; readonly since: Seq; readonly view: ActivationView };
+	| { readonly kind: 'delta'; readonly after: Seq; readonly view: ActivationView };
 
 /** The record one pass reads, rendered, and the range of the record it holds. */
 export interface PassRecord {
@@ -82,17 +82,18 @@ export type Pass = PassInput & {
 	/**
 	 * The record this pass reads. The first pass reads the whole view, with
 	 * the reminders of the tool bundles. A later pass reads the delta after
-	 * `since`. `after` names the position that a resumed vendor session read
-	 * through: the first pass of a respond activation then reads the
-	 * reminders, the pending says, and the delta after it. It gives nothing
-	 * when no message is new, and the core then counts the view read.
+	 * the `after` of its input. The argument `after` names the position that
+	 * a resumed vendor session read through: the first pass of a respond
+	 * activation then reads the reminders, the scheduled says, and the delta
+	 * after it. It gives nothing when no message is new, and the core then
+	 * counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
 	/** The id of the vendor session to resume: `spec.resume`, when its kind is the kind of the executor. */
 	readonly resumeId?: string;
 	/**
 	 * The room tools that the purpose grants, then the tools of the
-	 * definition, bound to the activation. A closing activation gets the room
+	 * definition, bound to the activation. A summary activation gets the room
 	 * tools alone. Every pass holds the same values.
 	 */
 	readonly tools: readonly RoomTool[];
@@ -141,8 +142,8 @@ export interface ExecutorSession {
 	 * `steer` step, and the executor records none. The executor reads
 	 * `{ after, through: seq }` when the model consumes the line. A line that
 	 * the pass does not read waits for the next delta, and the step says so. A
-	 * `steer` that throws counts as a line the pass does not read. A family
-	 * that cannot steer mid-run leaves `steer` out. The record already holds
+	 * `steer` that throws counts as a line the pass does not read. An executor
+	 * kind that cannot steer mid-run leaves `steer` out. The record already holds
 	 * the line, and the next pass reads it.
 	 */
 	steer?(after: Seq, seq: Seq, line: string): void;

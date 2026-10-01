@@ -5,7 +5,8 @@
  *
  * `AMBION_MODEL` names the model of the assistant and of the actor, and
  * `JUDGE_MODEL` names the judge's model, `AMBION_MODEL` by default. A suite
- * that grades one model family names another family for the judge.
+ * that grades one provider's model names a model of another provider
+ * for the judge.
  * `AMBION_THINKING` sets the thinking level of the assistant and the actor,
  * and `JUDGE_THINKING` sets the judge's. Each one is `off` by default.
  */
@@ -16,16 +17,16 @@ import {
 	defineAgent,
 	defineHuman,
 	type HumanDefinition,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
-	type SpokenMessage,
+	type SaidMessage,
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
-import { byAgent, quiet, type Script, scripted, speak } from '@ambionframework/ambion/testing';
+import { byAgent, quiet, type Script, say, scripted } from '@ambionframework/ambion/testing';
 import { type PiOptions, piExecution } from '@ambionframework/pi';
-import type { Run, RunExchange, Verdict } from '@ambionframework/simulator';
+import type { Simulation, SimulationExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
 import { defineAssistant } from '../../src/index.ts';
 
@@ -146,7 +147,7 @@ export type Reply = string | { readonly text: string; readonly to: string } | un
  * runtime, so it cannot tell one exchange from the next.
  */
 export const answers =
-	(evidence: (requests: readonly SpokenMessage[]) => Reply): Script =>
+	(evidence: (requests: readonly SaidMessage[]) => Reply): Script =>
 	({ view, results }) => {
 		// One say for each activation: the view of a later step may not hold it yet.
 		if (results.length > 0) return quiet();
@@ -154,18 +155,18 @@ export const answers =
 		if (view.context.exchange === undefined) return quiet();
 		const { from } = view.context.exchange;
 		const exchange = view.context.messages.filter(
-			(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
+			(message): message is SaidMessage => isSaid(message) && message.seq >= from,
 		);
 		if (exchange.some((message) => message.from === 'inventory')) return quiet();
 		const reply = evidence(exchange.filter((message) => message.from === priya.name));
 		if (reply === undefined) return quiet();
 		// A specialist reports to the room. It addresses a participant only with a question for it.
-		return typeof reply === 'string' ? speak(reply) : speak(reply.text, reply.to);
+		return typeof reply === 'string' ? say(reply) : say(reply.text, reply.to);
 	};
 
 /** The presence entries of one kind about `subject` in one exchange, in record order. */
 export const presence = (
-	exchange: RunExchange | undefined,
+	exchange: SimulationExchange | undefined,
 	kind: 'seated' | 'unseated',
 	subject: string,
 ): Message[] =>
@@ -174,14 +175,14 @@ export const presence = (
 	);
 
 /** What one participant said in one exchange, in record order. */
-export const saidBy = (exchange: RunExchange | undefined, name: string): SpokenMessage[] =>
+export const saidBy = (exchange: SimulationExchange | undefined, name: string): SaidMessage[] =>
 	(exchange?.discussion ?? []).filter(
-		(message): message is SpokenMessage => isSpoken(message) && message.from === name,
+		(message): message is SaidMessage => isSaid(message) && message.from === name,
 	);
 
 /** What a case keeps for a person to read when it fails. */
 export interface Evidence {
-	run?: Run;
+	simulation?: Simulation;
 	verdict?: Verdict;
 }
 
@@ -198,9 +199,9 @@ export function track(name: string): Evidence {
 	const evidence: Evidence = {};
 	onTestFinished(() => {
 		const cost = (usage: { cost?: number } | undefined) => (usage?.cost ?? 0).toFixed(4);
-		const { run, verdict } = evidence;
+		const { simulation, verdict } = evidence;
 		process.stdout.write(
-			`assistant eval · ${MODEL} · ${name}: room $${cost(run?.usage.room)}, actor $${cost(run?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
+			`assistant eval · ${MODEL} · ${name}: room $${cost(simulation?.usage.room)}, actor $${cost(simulation?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
 		);
 	});
 	onTestFailed(() => {

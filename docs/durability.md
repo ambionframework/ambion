@@ -101,7 +101,7 @@ write appears in a later read, and a resumed run replays the full record before
 answering. `subscribe()` is the push view of the same facts: one `message`
 notification per message seen by that run, with no historical replay.
 
-To recover a client, subscribe first, read with an exclusive `since` cursor,
+To recover a client, subscribe first, read with an exclusive `after` position,
 merge overlap by `seq`, and advance the cursor only after consumption. Recreate
 subscriptions after restart.
 
@@ -116,7 +116,7 @@ backoff. Repeated claims renew the same activation; repeated release is stale
 and harmless.
 
 Lease ids derive from cause, journal position, seat, and attempt. No caller
-mints them. The room derives pending wakes and summary assignments from the
+mints them. The room derives pending wakes and summary activations from the
 record. It retries under `hostingOf(runtime).limits.activation` and records
 `abandoned` at `attempts`. `hostingOf` comes from
 `@ambionframework/ambion/hosting`, a host's own entry. Each claim or renewal
@@ -193,7 +193,7 @@ execution has started.
 orders cancellation with messages and executor commits. Work before that boundary
 loses publication authority, including expired leases, pending retries, unread
 steering, and scheduled says that wait to return. Messages recorded afterward can
-start fresh work. Membership and human
+start fresh work. The roster and human
 presence remain unchanged.
 
 Cancellation closes the current exchange without assigning a summary. An existing
@@ -295,7 +295,7 @@ After a process failure:
    definitions for every recorded agent name.
 2. Recreate authenticated visits and preserve recorded presence until the host
    confirms departure.
-3. Recreate subscriptions before reading `room.read({ messages: { since } })`; merge by `seq`.
+3. Recreate subscriptions before reading `room.read({ messages: { after } })`; merge by `seq`.
 4. Reacquire exchange handles with `room.exchange(from)` and recreate waits.
 5. Reconnect remote runners to the current room host. Preserve unexpired leases;
    let expired leases follow normal retry policy.

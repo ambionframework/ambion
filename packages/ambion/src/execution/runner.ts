@@ -22,8 +22,8 @@ import type {
 } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import type {
+	ActivationEvent,
 	EndReason,
-	ExecutionEvent,
 	FailureCause,
 	Seq,
 	Step,
@@ -215,7 +215,7 @@ export class AgentRunner implements AgentPort {
 
 	/**
 	 * Pass over the record until the activation stops: an executor failure, a
-	 * closing purpose (which never rebuilds), a cut activation, or nothing
+	 * summarize purpose (which never rebuilds), a cut activation, or nothing
 	 * left the executor or the room needs it to see again. A cut activation
 	 * earns no further room call on its behalf: an abort mid-pass is not a
 	 * provider failure, but it still ends the loop here, before the freshness
@@ -230,14 +230,14 @@ export class AgentRunner implements AgentPort {
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
-		let since: Seq | undefined;
+		let after: Seq | undefined;
 		try {
 			for (;;) {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await passOver(state, trace, passInput(view, since));
-				since = state.readThrough;
+				last = await passOver(state, trace, passInput(view, after));
+				after = state.readThrough;
 				if (last.failed || state.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, state, cancelled))) return last;
 			}
@@ -443,7 +443,7 @@ export class AgentRunner implements AgentPort {
 			throw renewed.error;
 		}
 		if ('stale' in renewed.value) return false;
-		return state.shouldRefresh(renewed.value.ok.lastSeq);
+		return state.shouldRefresh(renewed.value.ok.through);
 	}
 
 	/** The record a pass reads, as the room windows it for this seat. */
@@ -460,10 +460,10 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
+		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
 	}
 
-	private emit(event: ExecutionEvent): void {
+	private emit(event: ActivationEvent): void {
 		try {
 			this.context.emit?.(event);
 		} catch {
@@ -545,7 +545,7 @@ function endStep(current: Current, last: PassResult | undefined): Step {
 	return { type: 'end', stop };
 }
 
-/** The first pass reads the whole view. A later pass reads what came after `since`. */
-function passInput(view: ActivationView, since: Seq | undefined): PassInput {
-	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
+/** The first pass reads the whole view. A later pass reads what came after `after`. */
+function passInput(view: ActivationView, after: Seq | undefined): PassInput {
+	return after === undefined ? { kind: 'view', view } : { kind: 'delta', after, view };
 }

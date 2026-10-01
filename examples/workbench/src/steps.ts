@@ -67,7 +67,7 @@ export function activationLine(activation: ExchangeActivation): string {
 		activation.seat,
 		activation.purpose,
 		`attempt ${activation.attempt}`,
-		...(activation.outcome.status === 'running' ? ['running'] : []),
+		...(activation.outcome.kind === 'running' ? ['running'] : []),
 		...(cost ? [cost] : []),
 	];
 	return parts.join(' · ');

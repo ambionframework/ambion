@@ -166,7 +166,7 @@ const messages = new Map<number, Message>();
 const unsubscribe = room.subscribe((event) => {
   if (event.type === 'message') messages.set(event.message.seq, event.message);
 });
-const snapshot = await room.read({ messages: { since: saved.lastConsumedSeq } });
+const snapshot = await room.read({ messages: { after: saved.lastConsumedSeq } });
 for (const message of snapshot.messages) {
   messages.set(message.seq, message);
 }

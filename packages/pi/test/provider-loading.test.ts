@@ -50,7 +50,7 @@ describe('provider loading', () => {
 				`const { readRoom, startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
 			const { pi, piExecution } = await import(${JSON.stringify(entry)});
 			const { quiet } = await import('@ambionframework/ambion/testing');
-			const { scripted } = await import(${JSON.stringify(testing)});
+			const { scriptedStream } = await import(${JSON.stringify(testing)});
 			await readRoom('lazy-provider-test');
 			const agent = (name) =>
 				defineAgent({
@@ -62,7 +62,7 @@ describe('provider loading', () => {
 				name: 'lazy-scripted-check',
 				agents: [agent('worker'), agent('assistant')],
 				summaryWriter: 'assistant',
-				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });

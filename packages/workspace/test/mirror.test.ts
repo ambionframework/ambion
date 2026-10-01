@@ -36,13 +36,13 @@ function fakeRoom(
 		name: roomName,
 		async read(options): Promise<RoomRead> {
 			const selection = options?.messages;
-			const since = selection === false ? undefined : selection?.since;
+			const after = selection === false ? undefined : selection?.after;
 			const messages =
 				selection === false
 					? []
-					: since === undefined
+					: after === undefined
 						? backlog
-						: backlog.filter((m) => m.seq > since);
+						: backlog.filter((m) => m.seq > after);
 			return {
 				name: roomName,
 				initialized: true,
@@ -51,7 +51,7 @@ function fakeRoom(
 				participants: [],
 				exchanges: [],
 				exchange: undefined,
-				watermark: backlog.at(-1)?.seq ?? 0,
+				through: backlog.at(-1)?.seq ?? 0,
 			};
 		},
 		async dismiss() {

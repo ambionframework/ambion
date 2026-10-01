@@ -32,7 +32,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -48,7 +48,7 @@
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
@@ -62,5 +62,5 @@
 			}
 		}
 	],
-	"watermark": 12
+	"through": 12
 }

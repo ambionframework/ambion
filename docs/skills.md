@@ -246,7 +246,7 @@ copied for that agent in this process. In a room, the reminder has already
 copied, so a tool call adds no operation.
 
 **A summarize activation makes no copy.** The executor calls no reminder
-for it, and a closing activation holds `say` alone.
+for it, and a summary activation holds `say` alone.
 
 ## Scripts and resources
 

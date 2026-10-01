@@ -7,7 +7,7 @@
  * `wait` with their handles until both end.
  */
 
-import type { TraceRecord } from '@ambionframework/ambion';
+import type { TracedStep } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import {
 	agent,
@@ -38,7 +38,7 @@ interface TracedCall {
  * `tool_result` step with an error. On Codex every call reaches the room
  * tools server, and `defineTool` refuses it with the same pair of steps.
  */
-function callsOf(records: readonly TraceRecord[], seat: string, tool: string): TracedCall[] {
+function callsOf(records: readonly TracedStep[], seat: string, tool: string): TracedCall[] {
 	const steps = records.filter((record) => record.seat === seat).map((record) => record.step);
 	return steps.flatMap((step) => {
 		if (step.type !== 'tool_call' || step.name !== tool) return [];
@@ -75,7 +75,7 @@ live('the workspace', () => {
 		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
-			e.type === 'tool_execution_start' && e.agent === 'librarian' ? [e.toolName] : [],
+			e.type === 'tool_call' && e.seat === 'librarian' ? [e.name] : [],
 		);
 		expect(tools.some((tool) => tool === 'read' || tool === 'bash')).toBe(true);
 		expect(tools.some((tool) => ['write', 'edit', 'bash'].includes(tool))).toBe(true);
@@ -125,7 +125,7 @@ live('the workspace', () => {
 		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
-			e.type === 'tool_execution_start' && e.agent === 'analyst' ? [e.toolName] : [],
+			e.type === 'tool_call' && e.seat === 'analyst' ? [e.name] : [],
 		);
 		expect(tools).toContain('sql');
 		const answer = saidBy((await session.read()).messages, 'analyst');

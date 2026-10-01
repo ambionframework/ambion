@@ -315,7 +315,7 @@ it('keeps a stopped record readable without resuming the room, and runs the alar
 		name: 'room-stopped-status',
 		initialized: true,
 		exchange: undefined,
-		exchanges: [{ status: 'closed', from: exchange.from, summary: { status: 'silent' } }],
+		exchanges: [{ status: 'closed', from: exchange.from, summary: { kind: 'silent' } }],
 	});
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
 });
@@ -325,7 +325,7 @@ it('reads a stopped open exchange and reconstructs it after eviction', async () 
 	const again = roomOf('room-stopped-open');
 	const stopped = await again.read({ messages: false });
 	expect(stopped.exchange).toMatchObject({ status: 'open', from: 4 });
-	expect(stopped.watermark).toBe(4);
+	expect(stopped.through).toBe(4);
 	expect((await again.read()).messages).toHaveLength(2);
 });
 

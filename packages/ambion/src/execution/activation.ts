@@ -16,7 +16,7 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
-import type { AgentDefinition, ExecutionEvent, Seq, VendorSession } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
 import type {
 	Executor,
 	ExecutorSession,
@@ -40,7 +40,7 @@ export interface ActivationInput {
 	/** The room calls of the activation. The room tools commit and read through it. */
 	readonly room: RoomToolBinding['room'];
 	readonly definition: AgentDefinition;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 	/** The sink of the activation. The driver owns it and closes it. */
 	readonly trace: StepSink;
 }
@@ -71,8 +71,8 @@ export class ActivationState {
 	constructor(executor: Executor, input: ActivationInput) {
 		this.id = input.id;
 		this.input = input;
-		const calls = new ToolCalls(input.id, (type, toolName) =>
-			input.emit({ type, agent: input.definition.name, activation: input.id, toolName }),
+		const calls = new ToolCalls(input.id, (type, name) =>
+			input.emit({ type, seat: input.definition.name, activation: input.id, name }),
 		);
 		const freshness = this.freshness;
 		this.executor = executor({
@@ -167,7 +167,7 @@ export class ActivationState {
 		if (result.failed) {
 			this.input.emit({
 				type: 'error',
-				agent: this.input.definition.name,
+				seat: this.input.definition.name,
 				activation: this.id,
 				error: result.error ?? new Error(result.message ?? 'The activation failed.'),
 				...(result.cause === undefined ? {} : { cause: result.cause }),
@@ -252,14 +252,14 @@ export class ActivationState {
 	}
 
 	/**
-	 * The record a pass reads. A delta follows `since`, or the position a
+	 * The record a pass reads. A delta follows `after`, or the position a
 	 * resumed session read through on the first pass of a respond activation.
 	 * Any other pass reads the whole view. A pass with no new message counts
 	 * the view read.
 	 */
 	private async record(input: PassInput, after: Seq | undefined): Promise<PassRecord | undefined> {
 		const { view } = input;
-		const from = input.kind === 'delta' ? input.since : after;
+		const from = input.kind === 'delta' ? input.after : after;
 		const continues = input.kind === 'delta' || view.spec.purpose.kind === 'respond';
 		const rendered =
 			from !== undefined && continues ? await this.delta(input, from) : await this.whole(view);
@@ -269,7 +269,7 @@ export class ActivationState {
 
 	/**
 	 * The messages after `from`. The first pass of an activation also reads
-	 * the reminders of the bundles and the pending says, which the whole view
+	 * the reminders of the bundles and the scheduled says, which the whole view
 	 * holds. The reminders resolve only when a message is new.
 	 */
 	private async delta(input: PassInput, from: Seq): Promise<PassRecord | undefined> {

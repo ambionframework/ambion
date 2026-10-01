@@ -7,7 +7,7 @@
  * that the room connects, over the executor that `executorOf` builds.
  */
 
-import { DEFAULT_TRACE } from '../define.ts';
+import { DEFAULT_TRACE_POLICY } from '../define.ts';
 import type {
 	AgentExecutionContext,
 	ConnectorRequest,
@@ -15,7 +15,7 @@ import type {
 	ExecutionHost,
 	Limits,
 } from '../host/runtime.ts';
-import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import type { Executor } from './executor.ts';
 import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
@@ -28,7 +28,7 @@ export interface SeatContextInput {
 	readonly room: string;
 	readonly seat: string;
 	readonly executor: Executor;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 	/** Where the steps of each activation go. Absent, the trace drops them. */
 	readonly logger?: TraceLogger;
 	readonly limits: Limits['trace'];
@@ -44,7 +44,7 @@ export function seatContext(input: SeatContextInput): AgentExecutionContext {
 			seat: input.seat,
 			logger,
 			limits,
-			policy: input.definition.trace ?? DEFAULT_TRACE,
+			policy: input.definition.trace ?? DEFAULT_TRACE_POLICY,
 			now: () => input.clock.now(),
 		}),
 	};

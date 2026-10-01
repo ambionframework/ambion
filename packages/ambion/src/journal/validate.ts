@@ -1,162 +1,48 @@
 import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
+import {
+	cancelSchema,
+	closeSchema,
+	compositionSchema,
+	dismissedSchema,
+	leaseEndedSchema,
+	leaseRunningSchema,
+	leaseSchema,
+	postedSchema,
+	presenceSchema,
+	runSchema,
+	saidSchema,
+	summarySchema,
+} from '../bodies.ts';
 import { refsRefusal } from '../refs.ts';
 import type { Kind } from './journal.ts';
 
-const extra = { additionalProperties: true } as const;
-const seq = Type.Integer({ minimum: 0 });
-const attention = Type.Union([
-	Type.Literal('none'),
-	Type.Literal('named'),
-	Type.Literal('broadcast'),
-	Type.Literal('presence'),
-]);
-const wakes = Type.Optional(Type.Array(Type.String()));
-const refs = Type.Optional(Type.Array(Type.String()));
-const activation = Type.Optional(Type.String());
-const commonMessage = { activation, wakes, at: Type.String() };
-const seating = Type.Object(
-	{ name: Type.String(), identity: Type.String(), attention, fixed: Type.Optional(Type.Boolean()) },
-	extra,
-);
-const covers = Type.Object({ from: seq, through: seq }, extra);
-
 const messageSchemas: Record<string, TSchema> = {
-	said: Type.Object(
-		{
-			...commonMessage,
-			kind: Type.Literal('said'),
-			from: Type.String(),
-			to: Type.Optional(Type.String()),
-			text: Type.String(),
-			refs,
-			after: Type.Optional(Type.Integer({ minimum: 1 })),
-		},
-		extra,
-	),
-	dismissed: Type.Object(
-		{
-			...commonMessage,
-			kind: Type.Literal('dismissed'),
-			from: Type.Optional(Type.String()),
-			message: Type.Integer({ minimum: 1 }),
-		},
-		{ additionalProperties: false },
-	),
-	posted: Type.Object(
-		{
-			...commonMessage,
-			kind: Type.Literal('posted'),
-			to: Type.Optional(Type.String()),
-			text: Type.String(),
-			refs,
-			returns: Type.Optional(Type.Integer({ minimum: 1 })),
-		},
-		extra,
-	),
-	arrived: presenceSchema('arrived'),
-	left: presenceSchema('left'),
-	seated: presenceSchema('seated'),
-	unseated: presenceSchema('unseated'),
-	summary: Type.Object(
-		{
-			...commonMessage,
-			kind: Type.Literal('summary'),
-			from: Type.String(),
-			to: Type.String(),
-			text: Type.String(),
-			covers,
-			refs,
-		},
-		extra,
-	),
+	said: saidSchema,
+	dismissed: dismissedSchema,
+	posted: postedSchema,
+	arrived: presenceSchema,
+	left: presenceSchema,
+	seated: presenceSchema,
+	unseated: presenceSchema,
+	summary: summarySchema,
 };
-const message = Type.Union(Object.values(messageSchemas));
-
-function presenceSchema(kind: string): TSchema {
-	return Type.Object(
-		{
-			...commonMessage,
-			kind: Type.Literal(kind),
-			from: Type.Optional(Type.String()),
-			subject: Type.String(),
-			identity: Type.Optional(Type.String()),
-			attention: Type.Optional(attention),
-			fixed: Type.Optional(Type.Boolean()),
-			preferences: Type.Optional(Type.String()),
-		},
-		extra,
-	);
-}
-
-const leaseRunning = Type.Object(
-	{
-		id: Type.String(),
-		phase: Type.Literal('running'),
-		expiresAt: Type.Number(),
-		at: Type.String(),
-		readThrough: seq,
-	},
-	extra,
-);
-const usage = Type.Object(
-	{
-		input: Type.Number(),
-		output: Type.Number(),
-		cacheRead: Type.Number(),
-		cacheWrite: Type.Number(),
-		cost: Type.Optional(Type.Number()),
-	},
-	extra,
-);
-const vendorSession = Type.Object({ kind: Type.String(), id: Type.String() }, extra);
-const leaseEnded = Type.Object(
-	{
-		id: Type.String(),
-		phase: Type.Literal('ended'),
-		reason: Type.Union([
-			Type.Literal('released'),
-			Type.Literal('failed'),
-			Type.Literal('revoked'),
-			Type.Literal('expired'),
-			Type.Literal('abandoned'),
-		]),
-		at: Type.String(),
-		readThrough: seq,
-		usage: Type.Optional(usage),
-		session: Type.Optional(vendorSession),
-	},
-	extra,
-);
-const lease = Type.Union([leaseRunning, leaseEnded]);
+const message = Type.Union([
+	saidSchema,
+	dismissedSchema,
+	postedSchema,
+	presenceSchema,
+	summarySchema,
+]);
 
 const schemas: Record<Kind, TSchema> = {
 	message,
-	lease,
-	close: Type.Object(
-		{
-			// `person` names the first person who spoke.
-			person: Type.Optional(Type.String()),
-			from: seq,
-			through: seq,
-			at: Type.String(),
-			summaryWriter: Type.Optional(Type.String()),
-		},
-		extra,
-	),
-	composition: Type.Object(
-		{
-			goal: Type.Optional(Type.String()),
-			summaryWriter: Type.Optional(Type.String()),
-			seated: Type.Array(seating),
-			reserve: Type.Array(seating),
-			at: Type.String(),
-		},
-		extra,
-	),
-	run: Type.Object({ at: Type.String() }, extra),
-	cancel: Type.Object({ at: Type.String() }, extra),
+	lease: leaseSchema,
+	close: closeSchema,
+	composition: compositionSchema,
+	run: runSchema,
+	cancel: cancelSchema,
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
@@ -277,8 +163,8 @@ function leaseSchemaFor(
 	body: Record<string, unknown> | undefined,
 ): TSchema | undefined {
 	if (kind !== 'lease') return undefined;
-	if (body?.phase === 'running') return leaseRunning;
-	if (body?.phase === 'ended') return leaseEnded;
+	if (body?.phase === 'running') return leaseRunningSchema;
+	if (body?.phase === 'ended') return leaseEndedSchema;
 	return undefined;
 }
 
