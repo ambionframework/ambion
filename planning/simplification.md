@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Fourteen reductions have landed.** `pnpm check` passes on them, and the
+**Fifteen reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -48,6 +48,7 @@ changelog names each change to an export and to a behavior.
 | The core stamps every steer (E1)            | Two `Held` stampers, Pi `early` and `drop`, the Claude echo stamp        | `execution/activation.ts`                |
 | One option type for the Pi services (E4)    | `ExecutionServicesOptions`, the unread `clock`, `call`, `trace` fields   | `pi/src/services.ts`                     |
 | The hosting entry exports what is used (K4) | 28 exports with no user outside the core                                 | `hosting.ts`                             |
+| One scripted test language (E7)             | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -122,7 +123,7 @@ concepts, high confidence.
 | E4  | Pi has three option types for its services (done)              | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
 | E5  | The kind narrowing and the policy copy are written three times | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
 | E6  | A pass carries `tools` and `agentTools` apart                  | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
-| E7  | Two scripted test languages export the same six verbs          | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
+| E7  | Two scripted test languages export the same six verbs (done)   | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
 | E8  | Small helpers repeat                                           | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
 
 **E1 hides a defect.** `ActivationState.steer` (`activation.ts:116`)

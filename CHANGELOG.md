@@ -15,8 +15,8 @@ reads these verbs from the core entry. The Pi type `Script` is now
 so the name `isClosing` means only the view check of the core. The Pi
 `scripted` stream turns a reply into a message: one tool call for each call,
 or a text that ends the run for an empty reply. It turns a `spend` reply
-into an error message. The Pi `quiet` no longer takes a text. A test that
-reads the text builds the message with `fauxAssistantMessage`.
+into an error message. `quiet` takes no text. A test that reads the text
+builds the message with `fauxAssistantMessage`.
 
 **The hosting entry exports what a host or an executor family uses.**
 `@ambionframework/ambion/hosting` no longer exports 28 names. No package,

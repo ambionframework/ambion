@@ -27,6 +27,8 @@ const CASES = [
 	['packages/claude/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/claude/src', '../../ambion/src/room.ts', true],
 	['packages/pi/src', '@ambionframework/ambion/testing', true],
+	// The Pi test entry builds on the core test entry.
+	['packages/pi/src', '@ambionframework/ambion/testing', false, 'testing.ts'],
 	['packages/codex/src', '../../ambion/src/room.ts', true],
 	['packages/cloudflare/src', '@ambionframework/ambion/hosting', false],
 	['packages/simulator/src', '@ambionframework/ambion', false],

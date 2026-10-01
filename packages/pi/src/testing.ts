@@ -34,15 +34,24 @@ export type PiScript = (
 	call: number,
 ) => Reply | AssistantMessage | Promise<Reply | AssistantMessage>;
 
-/** The value as JSON data. A value that JSON cannot hold, such as `undefined`, is an error. */
+/**
+ * The value as JSON data. A value that JSON cannot hold, such as `undefined`
+ * or an instance of a class, is an error.
+ */
 function jsonValue(value: unknown): JsonValue {
 	if (value === null) return value;
 	if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
 		return value;
 	}
 	if (Array.isArray(value)) return value.map(jsonValue);
-	if (typeof value === 'object') return jsonObject(value);
+	if (typeof value === 'object' && isPlain(value)) return jsonObject(value);
 	throw new Error(`A Pi script call carries a value that is not JSON: ${String(value)}.`);
+}
+
+/** Whether `value` is a plain object: its prototype is `Object.prototype` or none. */
+function isPlain(value: object): boolean {
+	const prototype: unknown = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
 }
 
 function jsonObject(value: object): JsonObject {

@@ -78,6 +78,7 @@ it('turns an empty reply into a message that ends the run', async () => {
 it.each([
 	['a spend call', spend({ input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }), /cannot spend/],
 	['a value that is not JSON', callTool('say', { text: undefined }), /not JSON/],
+	['an instance of a class', callTool('say', { at: new Date(0) }), /not JSON/],
 ] as const)('turns a reply with %s into an error message', async (_name, reply, error) => {
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (

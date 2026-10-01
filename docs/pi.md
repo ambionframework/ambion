@@ -453,10 +453,9 @@ return a Pi `AssistantMessage`, which the stream passes on unchanged. A test
 uses a message for an error, a length stop, or a usage report.
 
 **A reply that Pi cannot carry becomes an error message.** A `spend` reply
-has no Pi meaning.
-A script that needs a usage report returns a message with a `usage` field.
-A call whose arguments JSON cannot hold also fails, because Pi tool calls
-carry JSON.
+has no Pi meaning. A script that needs a usage report returns a message
+with a `usage` field. A call whose arguments JSON cannot hold also fails,
+because Pi tool calls carry JSON.
 
 **`piExecutorHarness()` runs the executor suite.** It maps each plan of
 `@ambionframework/ambion/conformance` to a script, and declares steering,
