@@ -530,8 +530,8 @@ describe('the byte order mark', () => {
 			...inner,
 			connect: async (who, signal) => {
 				const env = await inner.connect(who, signal);
-				env.readTextFile = async (path, context) => {
-					const bytes = await env.readBinaryFile(path, context);
+				env.readTextFile = async (path, signal) => {
+					const bytes = await env.readBinaryFile(path, signal);
 					return bytes.ok
 						? { ok: true, value: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.value) }
 						: bytes;
@@ -546,6 +546,39 @@ describe('the byte order mark', () => {
 		await seed(site, { 'f.txt': '﻿a\nb\n' });
 		await call(site, 'edit', { path: 'f.txt', edits: [edit('b', 'B')] });
 		expect(await textOf(site, 'f.txt')).toBe('﻿a\nB\n');
+		await site.dispose();
+	});
+});
+
+describe('an abort during a call', () => {
+	/** A backend whose `readTextFile` aborts `controller` once it has read, as a cut call does mid-way. */
+	function abortingAfterRead(controller: AbortController): BashBackend {
+		const inner = memoryBackend();
+		return {
+			...inner,
+			connect: async (who, signal) => {
+				const env = await inner.connect(who, signal);
+				const read = env.readTextFile.bind(env);
+				env.readTextFile = async (path, signal) => {
+					const result = await read(path, signal);
+					controller.abort();
+					return result;
+				};
+				return env;
+			},
+		};
+	}
+
+	it('stops an edit before it writes, and leaves the file untouched', async () => {
+		const controller = new AbortController();
+		const site = openWorkspace({ name: 'cut', backend: { bash: abortingAfterRead(controller) } });
+		await seed(site, { 'f.txt': 'a\nb\n' });
+		const outcome = toolOf(site, 'edit').invoke(
+			{ path: 'f.txt', edits: [edit('b', 'B')] },
+			callAs(agent.name, { signal: controller.signal }),
+		);
+		await expect(outcome).rejects.toThrow('Operation aborted');
+		expect(await textOf(site, 'f.txt')).toBe('a\nb\n');
 		await site.dispose();
 	});
 });
