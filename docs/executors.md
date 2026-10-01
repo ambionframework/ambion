@@ -137,7 +137,6 @@ properties:
 | -------------------------- | ----------------------------------------------------------------------------------- |
 | `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
 | `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
-| `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
 | `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the executor cannot.                    |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
@@ -160,8 +159,6 @@ points.
 
 - **A pass that the cut ends reports no failure.** The cut aborts `signal`,
   and the pass returns `failed: false`.
-- **The core reads `roomTools` once, before the first pass.** Set it on the
-  running activation that the opener returns. A later change reaches no tool.
 - **The core reads `session` after the last pass.** Keep the id of the
   harness session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.
@@ -321,9 +318,6 @@ harness.** Each executor kind adapts them to its own tool shape.
   and the commit takes it as its key. The core binds each room tool to the
   read position and the cut of the activation. A call of a tool of the
   definition reads the view of the pass that runs it.
-- **`roomTools` of the running activation** is a `RoomToolOptions` value that adds to a say
-  and to a schedule: `refs` changes the refs it cites, and `said` runs
-  when the room takes an ordinary say or a scheduled say.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
   `ToolContext` of one call of a definition tool, for an executor that
   hosts the tools of the definition itself. It carries the view's

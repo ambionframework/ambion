@@ -10,7 +10,6 @@ import {
 	type Executor,
 	executorOfKind,
 	type Pass,
-	PermanentError,
 	present,
 	ROOM_SERVER,
 } from '@ambionframework/ambion/hosting';
@@ -62,86 +61,44 @@ export function serverPath(from: string | URL = import.meta.url): string {
 }
 
 /**
- * The options of the thread: the model and the policy the executor names.
- * With a `scratch`, the seat has no native tools. The policy is then fixed:
- * a read-only sandbox, no network, no approval, and an empty directory.
+ * The options of the thread: the model and the fixed policy. The seat has no
+ * native tools, so the sandbox is read-only, no command may use the network,
+ * Codex asks for no approval, and the working directory is the empty scratch.
  */
-export function threadOptions(executor: CodexExecutor, scratch?: Scratch): ThreadOptions {
-	if (scratch !== undefined) {
-		return {
-			model: executor.model,
-			skipGitRepoCheck: true,
-			sandboxMode: 'read-only',
-			approvalPolicy: 'never',
-			networkAccessEnabled: false,
-			workingDirectory: scratch.directory,
-			...present({ modelReasoningEffort: executor.modelReasoningEffort }),
-		};
-	}
+export function threadOptions(executor: CodexExecutor, scratch: Scratch): ThreadOptions {
 	return {
 		model: executor.model,
-		// A room seat runs where the application puts it, which is often no git repository.
 		skipGitRepoCheck: true,
-		// Codex runs its commands with no sandbox of its own. Isolate such a seat on the host.
-		// On Linux the Codex sandbox needs user namespaces, and a host can refuse them.
-		sandboxMode: executor.sandboxMode ?? 'danger-full-access',
-		...present({
-			approvalPolicy: executor.approvalPolicy,
-			modelReasoningEffort: executor.modelReasoningEffort,
-			networkAccessEnabled: executor.networkAccessEnabled,
-			workingDirectory: executor.workingDirectory,
-			additionalDirectories: executor.additionalDirectories && [...executor.additionalDirectories],
-		}),
+		sandboxMode: 'read-only',
+		approvalPolicy: 'never',
+		networkAccessEnabled: false,
+		workingDirectory: scratch.directory,
+		...present({ modelReasoningEffort: executor.modelReasoningEffort }),
 	};
 }
 
 /**
- * The config key that carries the seat text. With a `scratch`, the key
- * `model_instructions_file` names the instructions file of the scratch, and
- * the file replaces the base prompt of Codex. Without one, the key
- * `developer_instructions` holds the text and adds a developer message. The
- * base prompt stays, because it teaches the model its native tools.
- */
-function instructionConfig(seat: string, scratch?: Scratch): Record<string, string> {
-	if (scratch !== undefined) return { model_instructions_file: scratch.instructions };
-	// The SDK passes the text as one argument. Linux refuses an argument of 128 KiB or more.
-	const bytes = Buffer.byteLength(JSON.stringify(seat));
-	if (bytes > DEVELOPER_TEXT_LIMIT) {
-		throw new PermanentError(
-			`The seat text of a Codex seat with nativeTools 'codex' is ${bytes} bytes. ` +
-				`Codex takes it as one command argument, and the limit is ${DEVELOPER_TEXT_LIMIT} bytes. ` +
-				'Shorten the instructions of the agent.',
-		);
-	}
-	return { developer_instructions: seat };
-}
-
-/** The largest seat text, as a TOML string, that one command argument holds with room to spare. */
-export const DEVELOPER_TEXT_LIMIT = 120_000;
-
-/**
  * The options of the client for one activation: the executable, its
- * environment with the Codex home of the seat, the seat text, the reasoning
- * summary, and the room tools server. With a `scratch`, the config also turns
- * off the native tools.
+ * environment with the Codex home of the seat, the instructions file with the
+ * seat text, the reasoning summary, the room tools server, and the config that
+ * turns off the native tools.
  */
 export function clientOptions(
 	execution: CodexExecutionOptions,
 	home: SeatHome,
 	socketPath: string,
-	seat: string,
 	summary: ReasoningSummary,
-	scratch?: Scratch,
+	scratch: Scratch,
 ): CodexOptions {
 	return {
 		...present({ codexPathOverride: execution.codexPath }),
 		env: { ...home.env },
 		config: {
-			...instructionConfig(seat, scratch),
+			model_instructions_file: scratch.instructions,
 			model_reasoning_summary: summary,
-			...(scratch === undefined ? {} : exclusiveConfig(scratch.catalog)),
+			...exclusiveConfig(scratch.catalog),
 			mcp_servers: {
-				...(scratch === undefined ? {} : { [NODE_REPL]: NODE_REPL_OFF }),
+				[NODE_REPL]: NODE_REPL_OFF,
 				[ROOM_SERVER]: {
 					command: process.execPath,
 					args: [serverPath(), socketPath],

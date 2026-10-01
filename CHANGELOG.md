@@ -64,6 +64,25 @@ The read field `scheduled` and the tool `schedule` already used the new name.
 This renames the one remaining shape and adds no shape. The journal and the
 golden journals do not change.
 
+**A Codex seat has no native tools, ever.** Files and a shell come only from
+the workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The option `nativeTools` of `codex()` is gone, and so is the mode
+`'codex'`. The policy options `sandboxMode`, `approvalPolicy`,
+`networkAccessEnabled`, `workingDirectory`, and `additionalDirectories` are
+gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
+`reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
+runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
+no network, no approval, an empty working directory, and the seat text in
+`model_instructions_file`. The seat no longer uses `developer_instructions`,
+and a seat text has no size limit from a command argument. A seat that needed
+a shell or file edits now takes the workspace tools in `bundles`. The trace
+maps only the items that a seat can produce: `agent_message`, `reasoning`,
+`mcp_tool_call`, `error`, and the usage of a turn. An item of any other type
+becomes a warning `notice` that names the type. A say no longer cites the
+paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
+type `RoomToolOptions`, because only the Codex executor used them.
+
 **`View` names only what a seat receives, and a read position is `through`
 or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
 that the `exchange_closed` event carries, is now `ExchangeRange`.
@@ -84,6 +103,20 @@ activation, after `RoomState.due`. In the core, `PendingActivation` becomes
 `draftsClose` becomes `summarizesClose`. In the Cloudflare package,
 `SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
 body changes.
+
+**An image from a tool reaches a default Codex seat.** The catalog patch of
+`nativeTools: 'none'` no longer sets `input_modalities` and
+`supports_image_detail_original`. The model keeps its own modalities, so a
+workspace `read` of a picture and the frames of `observe` reach it as images.
+The tool list does not change, because `view_image` stays off. A model with
+no image input stays text-only, and Codex shows a placeholder.
+
+**The trace logs the size of an image in a tool result of every executor.**
+`loggedToolResult` replaced the bytes of an image with their count only in
+the `content` array of a record. The Claude and Codex executors log the
+content parts with no record, so their images went into the log whole. The
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
 **`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
 describes one activation. The main entry and the hosting entry export the
 new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each

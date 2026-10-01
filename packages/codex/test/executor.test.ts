@@ -66,25 +66,9 @@ describe('exchange continuity', () => {
 		const room = open([plain]);
 		await run(room.activate(), { harness, id: 'saved' });
 		expect(room.seen.opened).toEqual([{ resume }]);
+		// The seat text stays in the instructions file, also for a thread that resumes.
+		expect(room.seen.prompts[0]).not.toContain(HARNESS_NOTE);
 	});
-
-	it.each([
-		{ nativeTools: 'none', resume: undefined, carries: false },
-		{ nativeTools: 'none', resume: 'saved', carries: false },
-		{ nativeTools: 'codex', resume: undefined, carries: false },
-		{ nativeTools: 'codex', resume: 'saved', carries: true },
-	] as const)(
-		'puts the seat text in the first prompt only for a $nativeTools seat that resumes ($resume)',
-		async ({ nativeTools, resume, carries }) => {
-			const room = open([plain], seat({ nativeTools }));
-			await run(room.activate(), resume && { harness: 'codex', id: resume });
-			const [prompt] = room.seen.prompts;
-			const config = room.seen.clients[0]?.config as { developer_instructions?: string };
-			expect(prompt?.includes(HARNESS_NOTE)).toBe(carries);
-			// Codex keeps the developer message stored with a resumed thread, so the prompt repeats the text.
-			if (carries) expect(prompt?.startsWith(`${config.developer_instructions}\n\n`)).toBe(true);
-		},
-	);
 
 	it('starts a fresh thread when the resume fails before the thread starts', async () => {
 		const room = open([new Error('Codex Exec exited with code 1: no session'), plain]);
@@ -150,7 +134,7 @@ describe('room tools', () => {
 });
 
 describe('native tools', () => {
-	it('runs a seat under the exclusive recipe by default, and removes the scratch on close', async () => {
+	it('runs a seat under the exclusive recipe, and removes the scratch on close', async () => {
 		const room = open([plain]);
 		const session = room.activate();
 		const result = await session.pass(input());
@@ -171,20 +155,6 @@ describe('native tools', () => {
 		session.close?.();
 		expect(existsSync(config.model_catalog_json)).toBe(false);
 		expect(existsSync(config.model_instructions_file)).toBe(false);
-	});
-
-	it('adds only the seat text to the client config with nativeTools codex', async () => {
-		const room = open([plain], seat({ nativeTools: 'codex', sandboxMode: 'workspace-write' }));
-		await run(room.activate());
-		const config = room.seen.clients[0]?.config as { developer_instructions: string };
-		expect(Object.keys(config)).toEqual([
-			'developer_instructions',
-			'model_reasoning_summary',
-			'mcp_servers',
-		]);
-		expect(config.developer_instructions.startsWith(HARNESS_NOTE)).toBe(true);
-		expect(config.developer_instructions).toContain('Answer once.');
-		expect(room.seen.threads[0]?.sandboxMode).toBe('workspace-write');
 	});
 
 	it('does not start a model that the catalog lacks, and fails as permanent', async () => {

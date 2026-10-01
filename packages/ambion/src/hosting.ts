@@ -41,7 +41,7 @@ export type {
 	RunningActivation,
 } from './execution/executor.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
-export type { RoomTool, RoomToolOptions } from './execution/room-tools.ts';
+export type { RoomTool } from './execution/room-tools.ts';
 export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';

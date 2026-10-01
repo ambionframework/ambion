@@ -70,11 +70,11 @@ one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK. One
 list of `bundles` serves every seat, so every seat holds the room tools and
 the workspace tools and no other tool.
 
-| Kind   | On                             | Off                                    | How the package enforces it                                                               | Test that guards it                                                                                                                    |
-| ------ | ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only               | `examples/workbench/test/live/tool-set.test.ts`                                                                                        |
-| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model             |
-| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | `nativeTools: 'none'` sets the tool policy and replaces the model catalog entry           | `packages/codex/test/options.test.ts` on the options; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
+| Kind   | On                             | Off                                    | How the package enforces it                                                                 | Test that guards it                                                                                                                                                                      |
+| ------ | ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pi     | Room tools and workspace tools | Everything else; Pi has no native tool | The executor gives the model the room tools and the tools of `bundles` only                 | `examples/workbench/test/live/tool-set.test.ts`                                                                                                                                          |
+| Claude | Room tools and workspace tools | Every built-in tool of Claude Code     | With no `allowedTools`, the executor passes an empty `--tools` list and reads no settings   | `packages/claude/test/policy.test.ts` on the fake executable; `examples/workbench/test/live/tool-set.test.ts` on the model                                                               |
+| Codex  | Room tools and workspace tools | Every native tool, and Code Mode       | The executor fixes the tool policy and replaces the model catalog entry; no option opens it | `packages/codex/test/options.test.ts` on the options; `packages/codex/test/binary.test.ts` on the wire; `packages/codex/test/live/exclusive.test.ts` and the workbench test on the model |
 
 **What the live tests prove.** One tool set, one filesystem, and no native
 tool rest on the live exclusivity tests. `tool-set.test.ts` lists the tools
@@ -84,8 +84,9 @@ It also shows that a seat cannot read `/etc/hosts`.
 `packages/codex/test/live/exclusive.test.ts` does the same for a Codex seat.
 Both tiers skip an executor kind with no key, and they run only on request.
 
-**`nativeTools: 'none'` turns off Codex Code Mode.** Its JavaScript runtime
-reads the host filesystem outside the sandbox on Codex 0.155.1. See
+**A Codex seat has no native tools, ever.** The Code Mode runtime of Codex
+reads the host filesystem outside the sandbox on Codex 0.155.1, so the
+executor patches it out of every seat. See
 [Codex](codex.md#the-trust-boundary).
 
 Each executor kind has a guide with its options and its tests. Read the

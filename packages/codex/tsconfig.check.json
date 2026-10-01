@@ -14,7 +14,9 @@
 			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/ambion/conformance": ["../ambion/src/conformance.ts"],
 			"@ambionframework/ambion/testing": ["../ambion/src/testing.ts"],
-			"@ambionframework/pi": ["../pi/src/index.ts"]
+			"@ambionframework/pi": ["../pi/src/index.ts"],
+			"@ambionframework/just-bash": ["../just-bash/src/index.ts"],
+			"@ambionframework/workspace": ["../workspace/src/index.ts"]
 		}
 	},
 	"include": ["src", "test"]

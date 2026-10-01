@@ -74,11 +74,11 @@ the workspace, the lab, and the instrument tools, in that order. All three
 executor kinds share one workspace instance, so a file that one agent writes is
 the file that another agent reads.
 
-| Kind   | How it enforces the guarantee                                        |
-| ------ | -------------------------------------------------------------------- |
-| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
-| Claude | Passes no built-in tool. The definition sets no `allowedTools`.      |
-| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+| Kind   | How it enforces the guarantee                                       |
+| ------ | ------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives. |
+| Claude | Passes no built-in tool. The definition sets no `allowedTools`.     |
+| Codex  | Has no native tool. The seat holds only the tools that it receives. |
 
 `test/tool-set.test.ts` fails when a definition drifts from this. The live
 test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a

@@ -6,5 +6,5 @@
  */
 
 export { codexExecution } from './compose.ts';
-export { type CodexExecutor, type CodexOptions, type CodexPolicy, codex } from './define.ts';
+export { type CodexExecutor, type CodexOptions, codex } from './define.ts';
 export type { CodexExecutionOptions } from './options.ts';
