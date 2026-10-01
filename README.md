@@ -96,7 +96,6 @@ const experiments = defineAgent({
   executor: codex({
     model: 'gpt-5.6-luna',
     modelReasoningEffort: 'medium',
-    nativeTools: 'none',
     instructions: 'Write a plan of at most five steps.',
     bundles,
   }),

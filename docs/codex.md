@@ -14,10 +14,13 @@ README](../README.md) holds the positioning.
 `codexExecution()` gives a room or a runtime the services that run it.
 Codex owns the model loop and its thread.
 
-**A seat has no native tools by default.** It reaches the world only through
-the room tools and the tools that you give it, as a Pi seat does. Set
-`nativeTools: 'codex'` to give the seat the tools of Codex: file edits,
-shell commands, and web search. Both kinds of seat join one room.
+**A Codex seat has no native tools, ever.** Files and a shell come only from
+the workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The seat reaches the world through the room tools and the tools that you
+give it, as a Pi seat does. [Workspace](workspace.md#give-the-resource-to-an-agent)
+states the workspace tools: `read`, `write`, `edit`, `bash`, and the
+others. A seat of any executor kind joins one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution. Pass `codexExecution({ codexPath, env, home, login })` for
 another binary, environment, Codex home, or login.
@@ -129,31 +132,49 @@ console.log(messages.filter(isSaid).map((message) => message.text));
 await room.stop();
 ```
 
-A test in the package typechecks this block against the source of the
+**A seat gets files and a shell from a workspace.** Give the seat the tools
+of a workspace in `bundles`. The tools run behind the workspace port, so the
+backend is a choice of the host: in memory here, a directory, or a
+workstation.
+
+```ts
+import { defineAgent } from '@ambionframework/ambion';
+import { codex } from '@ambionframework/codex';
+import { memoryBackend } from '@ambionframework/just-bash';
+import { openWorkspace } from '@ambionframework/workspace';
+
+const workspace = openWorkspace({ name: 'site', backend: { bash: memoryBackend() } });
+
+const writer = defineAgent({
+  name: 'writer',
+  identity: 'Writes the notes of the site.',
+  executor: codex({
+    instructions: 'Keep the notes in your workspace, and say where they are.',
+    model: 'gpt-5.6-luna',
+    bundles: [workspace.tools()],
+  }),
+});
+```
+
+A test in the package typechecks these blocks against the source of the
 package. The block in `packages/codex/README.md` gets the same check.
 
 ## Options
 
-**`codex(options)` takes the fields of an agent and the policy of Codex.**
-The executor passes each policy field to the Codex SDK unchanged.
+**`codex(options)` takes the fields of an agent and two settings of the
+model.** The executor passes each setting to the Codex SDK unchanged.
 
-| Option                  | Default            | What it does                                                        |
-| ----------------------- | ------------------ | ------------------------------------------------------------------- |
-| `instructions`          | Required           | The private voice of the agent                                      |
-| `model`                 | Required           | A Codex model identifier                                            |
-| `tools`                 | None               | Tools from `defineTool`. They reach Codex through the server        |
-| `bundles`               | None               | Tool bundles with guidance                                          |
-| `speaking`              | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
-| `activationTokenLimit`  | The whole record   | The token limit for the record one activation reads                 |
-| `estimateTokens`        | `'length'`         | The name of the estimator in the runtime that counts tokens         |
-| `nativeTools`           | `'none'`           | `'none'` turns off every native tool; `'codex'` keeps them          |
-| `sandboxMode`           | No sandbox         | `read-only`, `workspace-write`, or `danger-full-access`             |
-| `approvalPolicy`        | Codex default      | `never`, `on-request`, `on-failure`, or `untrusted`                 |
-| `modelReasoningEffort`  | Codex default      | `minimal` up to `ultra`, as the SDK lists them                      |
-| `reasoningSummary`      | `'auto'`           | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
-| `networkAccessEnabled`  | Codex default      | The network of a command, under `workspace-write` only              |
-| `workingDirectory`      | Process directory  | The directory where Codex works                                     |
-| `additionalDirectories` | None               | More writable directories, under `workspace-write` only             |
+| Option                 | Default            | What it does                                                        |
+| ---------------------- | ------------------ | ------------------------------------------------------------------- |
+| `instructions`         | Required           | The private voice of the agent                                      |
+| `model`                | Required           | A Codex model identifier                                            |
+| `tools`                | None               | Tools from `defineTool`. They reach Codex through the server        |
+| `bundles`              | None               | Tool bundles with guidance                                          |
+| `speaking`             | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
+| `activationTokenLimit` | The whole record   | The token limit for the record one activation reads                 |
+| `estimateTokens`       | `'length'`         | The name of the estimator in the runtime that counts tokens         |
+| `modelReasoningEffort` | Codex default      | `minimal` up to `ultra`, as the SDK lists them                      |
+| `reasoningSummary`     | `'auto'`           | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,
@@ -161,32 +182,11 @@ the default, counts `Math.ceil(text.length / 4)`. `createRuntime({ estimators })
 registers other names, and a room start fails on a name the runtime does not
 hold. [History and limits](room.md#history-and-limits) states the rule.
 
-**`nativeTools: 'none'` fixes the policy.** The executor then sets
-`sandboxMode` to `read-only`, `approvalPolicy` to `never`,
-`networkAccessEnabled` to `false`, and `workingDirectory` to an empty
-temporary directory. It ignores those four options and
-`additionalDirectories`.
-They apply only with `nativeTools: 'codex'`.
-
-**`nativeTools: 'codex'` runs with no Codex sandbox by default.** An absent
-`sandboxMode` is `danger-full-access`. Codex then runs each command
-directly on the host of the `codex` process, as the user of that process,
-with write access and the network. Run such a seat only on an isolated
-host, such as a container or a dedicated account. The workstation backend
-does not confine it: the workstation serves the workspace tools, and a
-native command never reaches it.
-
-**The Codex sandbox needs a user namespace on Linux.** It runs each command
-through bubblewrap, which needs an unprivileged user namespace. A host that
-refuses one runs no command. AppArmor on Ubuntu 24.04 restricts such
-namespaces by default. Set `sandboxMode` to use the Codex sandbox on a host
-that allows it.
-
-**`networkAccessEnabled` needs `workspace-write`.** Codex reads it, and
-`additionalDirectories`, only under that sandbox. `codex()` refuses
-`networkAccessEnabled` with any other `sandboxMode` under
-`nativeTools: 'codex'`, so a seat that turns the network off does not get
-it back.
+**The executor fixes the policy of the thread.** A seat has no option for
+it. The executor sets `sandboxMode` to `read-only`, `approvalPolicy` to
+`never`, `networkAccessEnabled` to `false`, and `workingDirectory` to an
+empty temporary directory. [The trust boundary](#the-trust-boundary) states
+why.
 
 **`codexExecution(options)` takes the options of the executable.**
 
@@ -252,17 +252,15 @@ with the tools that exist at that time. A Node process on a loaded host
 needs more than one second, so that request listed no room tool. With
 `required = true`, Codex waits for the server up to `startup_timeout_sec`
 while it creates the session. The room tools are then ready before the
-first model request, and a default seat lists them on every request. The
-binary tier asserts it. Under `nativeTools: 'codex'`, the model reaches them
-through Code Mode or tool search, as its catalog entry says.
+first model request, and a seat lists them on every request. The binary
+tier asserts it.
 
 **Approval is set because a headless run cannot answer.** Under
 `approvalPolicy: 'never'`, Codex denies an MCP call that needs approval. The
 real binary answers every `say` with "MCP tool call requires approval, but
 approval policy is never", and the seat answers in plain text that the room
 never records. The room tools belong to the seat, so the config approves
-them. With `nativeTools: 'codex'`, Codex applies its own policy to its
-native tools.
+them.
 
 ## How an activation runs
 
@@ -279,18 +277,13 @@ from the first pass. The first prompt holds the whole view. A later pass sends
 the delta, the lines that landed since the pass read, as the next run of the
 same thread. The `turn.*` events of Codex mark each run.
 
-**The config key depends on `nativeTools`.**
-
-| `nativeTools`      | Config key                | Effect                                                                            |
-| ------------------ | ------------------------- | --------------------------------------------------------------------------------- |
-| `'none'` (default) | `model_instructions_file` | The file replaces the base prompt of Codex. The file is in the scratch directory. |
-| `'codex'`          | `developer_instructions`  | The text adds a developer message. The base prompt of Codex stays.                |
-
-A seat with no native tools needs nothing from the base prompt, which teaches
-`apply_patch` and the shell. A seat with native tools needs the base prompt,
-because it teaches the model those tools. The SDK passes the text as a TOML
-string with `JSON.stringify`, so quotes, backslashes, newlines, and
-non-ASCII characters arrive as written. The binary tier proves it.
+**The seat text is an instructions file.** The config key
+`model_instructions_file` names a file in the scratch directory of the
+activation. The file replaces the base prompt of Codex, which teaches
+`apply_patch` and the shell. A seat has no native tools and needs nothing
+from the base prompt. The SDK passes the path, and Codex reads the file as
+written, so quotes, backslashes, newlines, and non-ASCII characters arrive
+unchanged. The binary tier proves it.
 
 **A run ends on `turn.completed` or `turn.failed`.** Codex also sends `error`
 events for trouble that it survives, such as a reconnect. An `error` event
@@ -340,12 +333,9 @@ then a closing step.
 | `agent_message`     | `text` deltas, then a closing `text`                                                            |
 | `reasoning`         | `thinking` deltas, then a closing `thinking`                                                    |
 | `mcp_tool_call`     | `tool_call` and `tool_result`; a room tool has its own name                                     |
-| `command_execution` | `tool_call` named `command`; the result holds the output and the exit code                      |
-| `file_change`       | `tool_call` named `file_change`; the result holds the changes                                   |
-| `web_search`        | `tool_call` named `web_search`, with the query                                                  |
-| `todo_list`         | `tool_call` named `update_plan` with the `items`; the result holds them                         |
 | `error` item        | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
 | `error` event       | `notice` at level `warning`, with the message of Codex, up to 2000 characters                   |
+| Any other item      | `notice` at level `warning` that names the item type, when the item completes                   |
 | `turn.started`      | Once for each thread: `notice` at level `info`, with the thread, the home, and the rollout file |
 | `turn.completed`    | `usage`                                                                                         |
 | `turn.failed`       | No step; the failure goes to the `end` step                                                     |
@@ -356,20 +346,20 @@ number of the turn, and the item id, as in `message:3:gpt:1:1:item_1`. A room
 tool takes that id as the key of its commit, so the say of each activation
 lands under its own key.
 
-**A failed item marks its result.** A failed command gives the error "The
-command failed with exit code N". A failed patch gives "The patch failed".
-A failed MCP call gives the message that Codex reported.
+**A failed tool call marks its result.** A failed MCP call gives the
+message that Codex reported.
 
 **A tool of another server shows with its server.** The step name is
 `server__tool`. A room tool shows with its plain name, such as `say` or
 `schedule`. The core raises no tool event for a room tool that commits an
 entry; see [Executors](executors.md#the-room-tools).
 
-**A completed patch feeds `refs`.** The executor collects the paths of each
-completed `file_change`. The next ordinary `say` cites them in `refs`,
-through the `roomTools` options of the session, and the executor holds each
-path once. A ref is an absolute URI with a scheme, so
-the executor writes each path as a `file:` URI. The room refuses a bare path.
+**An item of another type shows that a native tool exists.** A seat has no
+native tool, so Codex reports only the items above. A command, a file
+change, a web search, or a plan item means that a newer `codex` added a tool
+that the recipe does not turn off. The trace keeps a warning `notice` with
+the item type. The executor maps nothing else from such an item.
+[The trust boundary](#the-trust-boundary) states the guard.
 
 **A notice never gates the activation.** Codex reports its own diagnostics
 as `error` items and `error` events, such as an unknown setting in the
@@ -412,8 +402,8 @@ runs do not show whether `output_tokens` includes them. A field that an older
 
 **The trace shows each step of the model.** Give the `logger` option of
 `createRuntime` a function that keeps the steps. Each activation logs its
-`thinking`, `text`, `tool_call`, and `tool_result` steps, the plan of the
-agent as `update_plan`, the `room` answers, and the `usage`. The `end` step
+`thinking`, `text`, `tool_call`, and `tool_result` steps, the `room`
+answers, and the `usage`. The `end` step
 holds the failure of a turn that failed.
 
 **The reasoning summary feeds `thinking`.** Codex shows no raw reasoning.
@@ -461,8 +451,7 @@ a length stop.** The pass reports `stop: 'length'`. This is no failure.
 failure reaches the host as an `error` event before the driver sees it.
 
 **A missing `codex` binary is permanent when the executor looks for it.**
-A seat with `nativeTools: 'none'` reads the model catalog from the binary.
-The executor throws `PermanentError` when the platform has no binary, or
+The executor reads the model catalog from the binary. It throws `PermanentError` when the platform has no binary, or
 when `@openai/codex` is not installed and no `codexPath` is set.
 
 **A room tools server that fails to start is transient.** The server is
@@ -474,8 +463,7 @@ no model request at that time.
 **A bad `codexPath` or a socket error is transient.** The executor uses a
 `codexPath` (see [Options](#options)) as given. A path that names no file
 fails when `codex debug models` or the SDK starts it, and that failure is
-transient. A seat with `nativeTools: 'codex'` leaves the lookup to the SDK,
-and a lookup that fails there is transient. A lost connection to the room
+transient. A lost connection to the room
 tools server is transient.
 
 ## Exchange continuity
@@ -494,25 +482,13 @@ before `thread.started`. The executor then starts a fresh thread, runs the
 same prompt, and records the new id. A failure after `thread.started` is an
 ordinary failure.
 
-**A resumed thread takes the seat text by the config key.** This is a fact
-about Codex 0.158.0, from two runs of `codex exec` against a scripted
+**A resumed thread takes the seat text of its own activation.** This is a
+fact about Codex 0.158.0, from two runs of `codex exec` against a scripted
 endpoint: one run starts a thread with text A, and `codex exec resume <id>`
-runs it again with text B.
-
-- With `model_instructions_file`, the second request holds text B and no
-  text A. A resumed activation under `nativeTools: 'none'` sends the seat
-  text of its own activation.
-- With `developer_instructions`, the second request holds text A and no
-  text B. Codex keeps the developer message in the thread. The config of a
-  resumed activation under `nativeTools: 'codex'` cannot replace it.
-
-**A `codex` seat that resumes sends the seat text in its first prompt.**
-The seat text depends on the purpose of the activation, and Codex ignores a
-new `developer_instructions` on resume. The first prompt of such an
-activation holds the seat text, a blank line, and the view. A fresh thread
-keeps the view alone. A seat with `nativeTools: 'none'` never sends the text
-in a prompt. If the resume fails, the fresh thread runs the same prompt, so
-it holds the seat text twice.
+runs it again with text B. With `model_instructions_file`, the second
+request holds text B and no text A. The first prompt of a resumed
+activation holds the view alone, as the first prompt of a fresh thread
+does. If the resume fails, the fresh thread runs the same prompt.
 
 **Threads live in the Codex store of the seat home.** The SDK persists
 threads under `sessions` in the home, `~/.ambion/codex/sessions` by default.
@@ -523,13 +499,17 @@ create its helper binaries under a temporary directory.
 
 ## The trust boundary
 
-**A seat has no native tools by default.** `nativeTools: 'none'` gives the
-seat the room tools (`say`, `seat`, `unseat`) and the tools of `tools` and
-`bundles`. Every seat of a room that uses the default has the same tools.
-Files reach the seat only through the tools that the application gives it,
-such as the workspace tools.
+**A seat has no native tools, ever.** Files and a shell come only from the
+workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The seat has the room tools (`say`, `schedule`, `seat`, `unseat`,
+`dismiss`, `recall`) and the tools of `tools` and `bundles`. Every Codex seat
+has the same kind of tools. No option gives a seat the shell, the file
+edits, the web search, or the sandbox of Codex, and the workstation backend
+needs no separate guard against a native command.
 
-**Code Mode ignores the sandbox.** This is a fact about Codex 0.155.1.
+**Code Mode ignores the sandbox.** This is a fact about Codex 0.155.1, and
+the reason that the recipe patches the catalog.
 Code Mode is a JavaScript runtime that the model calls through `exec` and
 `wait`. On a read-only sandbox, with no network and a deny permission
 profile, its JavaScript still read `/etc/hosts` and listed `/Users` through
@@ -538,18 +518,26 @@ permission profiles do not confine it. A feature flag cannot turn it off,
 because the model catalog turns it on: `gpt-5.6-luna` has
 `tool_mode: 'code_mode_only'`. `gpt-5.5` has no tool mode.
 
-**The default replaces the catalog entry.** A custom catalog overrides the
+**An image from a tool of the seat reaches the model.** A tool that returns
+an image part, such as the workspace `read` of a picture, sends the image to
+a model that reads images. Codex puts it in the tool output as an
+`input_image`, and the trace keeps the part. No native tool reads an image,
+because the `view_image` feature is off. A model with no image input in its
+catalog entry stays text-only. Codex then replaces the image with a text
+placeholder.
+
+**The recipe replaces the catalog entry.** A custom catalog overrides the
 entry of a model. The executor runs `codex debug models` on the installed
 binary once for each binary in the process and patches the entry of the seat
 model. It writes the patched catalog to a temporary directory and passes the
 path as `model_catalog_json`. The recipe has five parts:
 
 1. **The catalog entry.** `tool_mode`, `apply_patch_tool_type`, and
-   `multi_agent_version` are `null`. `input_modalities` is `['text']`.
-   `supports_search_tool`, `supports_image_detail_original`, and the three
+   `multi_agent_version` are `null`. `supports_search_tool` and the three
    `include_*_usage_instructions` flags are `false`. `node_repl_disabled` is
    `true`. `experimental_supported_tools` is empty. This removes Code Mode,
-   the patch tool, image input, and the search tool.
+   the patch tool, and the search tool. The patch leaves `input_modalities`
+   and `supports_image_detail_original` as the entry has them.
 2. **The features.** The config sets 31 features to `false`, among them
    `shell_tool`, `unified_exec`, `code_mode`, `code_mode_only`, `apps`,
    `plugins`, `computer_use`, `multi_agent`, and `hooks`. This removes the
@@ -569,38 +557,21 @@ file with the seat text, and the empty working directory. The executor removes i
 and at process exit.
 
 **A model with no catalog entry does not start.** The activation fails as
-permanent. The message names the model and says that `nativeTools: 'none'`
-needs a catalog entry. The executor never leaves native tools on by
-accident. Use a model that `codex debug models` lists, or set
-`nativeTools: 'codex'`.
-
-**`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
-model. A seat with Code Mode reads host files whatever `sandboxMode` says.
-With no `sandboxMode`, a command runs with no sandbox, with write access
-and the network. A `sandboxMode` and `approvalPolicy` set what a command
-may do, and Code Mode is outside their reach. Use it only for a seat that
-may use the host.
-
-**A dead host ends the native commands of a seat.** `codex exec` ends the
-commands that it started when it receives SIGTERM, and the room tools server
-sends that signal when the host dies. The test runs `sleep 47` through the
-native `exec_command` tool, kills the host, and finds the command ended within
-seconds. The test does not cover a command that detaches itself from the
-process tree of Codex, such as a daemon. Only the OS can bound such a command.
-Use a container or a dedicated account for the seat, as the section above
-advises.
+permanent. The message names the model. The executor never leaves native
+tools on by accident. Use a model that `codex debug models` lists.
 
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
 0.155.1, which brings `codex` 0.155.1. The feature names and the catalog
 fields belong to that version. A newer `codex` can add a native tool that
 the recipe does not turn off. Run the live exclusivity test
 (`test/live/exclusive.test.ts`) against a new version, and trust the version
-only when it passes.
+only when it passes. A native item that Codex reports shows in the trace as
+a warning `notice`.
 
 **The environment includes the key by default.** With no `env` on
-`codexExecution()`, the binary runs with a copy of `process.env`. A command
-that runs under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it.
-Pass an `env` that leaves the key out to prevent that, and sign in with
+`codexExecution()`, the binary runs with a copy of `process.env`. No tool of
+the seat reads that copy, because a seat has no native tools. Pass an `env`
+that leaves the key out to keep it from the `codex` process, and sign in with
 `codex login`.
 
 **The seat home keeps the config of the host user out.** The binary reads
@@ -611,11 +582,10 @@ host user changes no seat: its `model_provider` reroutes no request, its
 binary tier proves each of the three. Put a `config.toml` in `home` to
 configure every seat on purpose.
 
-**A linked login is shared with the host.** A command of a seat under
-`nativeTools: 'codex'` runs as the user of the process. It can read the
-seat home, and through the link it can read and write the login file of the
-host. Set `login: false` and `CODEX_API_KEY` to give such a seat no login
-file.
+**A linked login is shared with the host.** The seat home holds a link to the
+login file of the host. A seat has no native tool, so no tool of the seat
+reads or writes the seat home. The workspace tools reach the workspace
+only. Set `login: false` and `CODEX_API_KEY` to give a seat no login file.
 
 **The room tools are approved.** They only call the room, and the room
 checks each call.
@@ -684,14 +654,17 @@ message, and it lists the tools in an `additional_tools` input item. The
 top-level `instructions` field of the request stays empty. A test states each
 of these facts, so a change to one shows in a failing assertion.
 
-**The binary tier covers both modes of native tools.** One test sends a seat
-text with quotes, backslashes, a newline, and non-ASCII characters under
-`'none'` and under `'codex'`. It asserts that the text arrives unchanged in
-the developer message of each mode. Under `'codex'` the text follows the
-prompt of Codex. The `'codex'` seat keeps the plugin features of Codex, which
-sync a marketplace from GitHub and ask `chatgpt.com`. The test home sets
-`plugins` and `remote_plugin` to `false` under `[features]`, so the run
-reaches no network. The proxy and the endpoint prove it.
+**The binary tier sends the seat text unchanged.** One test sends a seat
+text with quotes, backslashes, a newline, and non-ASCII characters. It
+asserts that the text arrives unchanged as the first developer message.
+
+**The binary tier proves the rule on the workspace tools.** One test gives a
+seat the workspace tools over the in-memory backend. The scripted model
+calls `write` and then `bash` to read the file back, and then `say`. The
+test asserts that the tool list holds the workspace tools beside the room
+tools and no native tool, that the file exists in the workspace when the
+port reads it, and that the output of `bash` reaches the model in the next
+request.
 
 **The binary tier cannot prove that a model obeys.** A scripted model does
 what the script says. The live tier proves the claims that need a real model.
@@ -712,8 +685,7 @@ variable, the suite writes nothing.
 
 **The unit tests run on recorded events.** `test/fixtures/` holds event
 streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
-model `gpt-5.6-luna`. The tests map them to steps, count usage, and report
-the changed paths. Pure parts have their own tests: the wire framing, the
+model `gpt-5.6-luna`. The tests map them to steps and count usage. Pure parts have their own tests: the wire framing, the
 room tools, the options, and the failure classification. A replay client
 runs the executor on the recorded events to test exchange continuity. A
 turn of the replay client can also call `say` through the socket of the
@@ -722,16 +694,17 @@ bridge, as the room tools server does.
 **The live tier proves the claims that a scripted model cannot.** Each file
 holds the smallest room that proves one claim.
 
-| File                            | Claim                                                                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                                    |
-| `test/live/tools.test.ts`       | A command and a file change become steps; the next say cites the path                                               |
-| `test/live/exclusive.test.ts`   | The default seat has exactly the room tools and its own; it reads no host file; `'codex'` restores the native tools |
-| `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                                        |
-| `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                                           |
-| `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                                               |
-| `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file                         |
-| `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan                        |
+| File                            | Claim                                                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `test/live/loop.test.ts`        | A seat speaks through `say`; no approval error; usage above zero                                    |
+| `test/live/tools.test.ts`       | A seat writes a file and runs a command through the workspace tools, and says what the command read |
+| `test/live/exclusive.test.ts`   | A seat has exactly the room tools and its own; it reads no host file                                |
+| `test/live/image.test.ts`       | An image from a tool of the default seat reaches the model, and the seat names its color            |
+| `test/live/steer.test.ts`       | A line sent during a run is held, and the next pass reads it                                        |
+| `test/live/memory.test.ts`      | Each exchange starts a fresh thread and records it; a bogus id falls back                           |
+| `test/live/mixed.test.ts`       | A Pi seat and a Codex seat both speak                                                               |
+| `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file         |
+| `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan        |
 
 **Run the live tier with a key.** Every definition sets the model
 `gpt-5.6-luna` and `modelReasoningEffort: 'medium'`. A file skips when
@@ -796,7 +769,8 @@ Claude seat reached a Codex executor through an execution with no kind.
 Pass the execution of each executor kind.
 
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
-tool that is not a room tool and not one of yours. A newer `codex` added a
+tool that is not a room tool and not one of yours, and the trace holds a
+warning `notice` that names an item type. A newer `codex` added a
 feature or a catalog field that the recipe does not cover. Run
 `test/live/exclusive.test.ts` to see the name. Compare `codex debug models`
 and the feature list of the new version with `src/catalog.ts`. Add the

@@ -306,7 +306,7 @@ export class ActivationState {
 			abort: () => this.cancel(),
 		};
 		this.tools = [
-			...roomTools(view, binding, this.executor.roomTools),
+			...roomTools(view, binding),
 			...agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
 		];
 		return this.tools;

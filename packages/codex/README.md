@@ -57,43 +57,32 @@ read. The executor tells the core that the model read the prompt when a run
 starts, and that a tool result reached the model when the tool returns. Codex takes
 no steer: a line that lands during a run waits for the next pass.
 
-**Items become steps.** `command_execution`, `file_change`, `mcp_tool_call`,
-and `web_search` items become `tool_call` and `tool_result` steps.
-`agent_message` and `reasoning` items become `text` and `thinking` steps.
-`todo_list` items become an `update_plan` tool call. `error` items and
-`error` events become `notice` steps. `turn.completed` becomes a `usage`
-step. Codex reports no cost. The next
-ordinary say cites the paths of a completed `file_change` in `refs`, as
-`file:` URIs.
+**Items become steps.** `mcp_tool_call` items become `tool_call` and
+`tool_result` steps. `agent_message` and `reasoning` items become `text` and
+`thinking` steps. `error` items and `error` events become `notice` steps.
+`turn.completed` becomes a `usage` step. Codex reports no cost. An item of
+any other type becomes a warning `notice` that names the type.
 
 **A seat keeps its thread for one exchange.** Each release records the
 thread id. The next activation of the seat in the same exchange resumes
 that thread, and the first activation in a new exchange starts a fresh
 one. A resume that Codex cannot honor starts a fresh thread.
 
-**A seat has no native tools by default.** `nativeTools: 'none'` gives the
-seat the room tools and the tools that you pass in `tools`. Codex 0.155.1
-has a JavaScript runtime, Code Mode, that reads host files under a read-only
-sandbox. The model catalog turns it on, so no feature flag can turn it off.
-The executor patches the catalog entry of the model, turns off every feature
-and tool that the config controls, and runs the thread on a read-only
-sandbox in an empty directory. A model with no catalog entry fails as
-permanent.
+**A seat has no native tools, ever.** Files and a shell come only from the
+workspace tools, behind the workspace port, so it makes no difference whether
+the workspace is in memory, a directory, or a remote workstation. Pass the
+tools of a workspace in `bundles`, and the tools that you write in `tools`.
+Codex 0.155.1 has a JavaScript runtime, Code Mode, that reads host files
+under a read-only sandbox. The model catalog turns it on, so no feature flag
+can turn it off. The executor patches the catalog entry of the model, turns
+off every feature and tool that the config controls, and runs the thread on
+a read-only sandbox in an empty directory with no network. A model with no
+catalog entry fails as permanent.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` when an MCP server is
 on. They reach only the room tools server, which offers no resource and
 answers `Method not found`, so they read nothing. A unit test proves it.
-
-**`nativeTools: 'codex'` opens the host.** The seat keeps the tools of the
-model, and a seat with Code Mode reads host files whatever `sandboxMode`
-says. Codex runs its commands with no sandbox of its own, with write
-access and the network, unless you set `sandboxMode`. Run such a seat only
-on an isolated host. The policy options apply only under `'codex'`:
-`sandboxMode`, `approvalPolicy`, `networkAccessEnabled`, and
-`workingDirectory`. `networkAccessEnabled` needs `workspace-write`. The
-environment of the process, key included, reaches the binary unless you pass
-`env` to `codexExecution()`.
 
 **Pin the version, and run the exclusivity test on an upgrade.** The recipe
 belongs to `codex` 0.155.1. Trust a newer version only when

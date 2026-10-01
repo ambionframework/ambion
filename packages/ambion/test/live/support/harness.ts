@@ -61,7 +61,6 @@ export function executorFor(options: Omit<PiOptions, 'model'> & { model?: string
 		return codex({
 			model: CODEX_MODEL,
 			modelReasoningEffort: 'medium',
-			nativeTools: 'none',
 			...rest,
 		});
 	}

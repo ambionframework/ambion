@@ -8,10 +8,10 @@
  * them. Each one carries a comment that starts with "Today".
  */
 
-import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+	type AmbionTool,
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -24,6 +24,8 @@ import {
 	type TraceStep,
 } from '@ambionframework/ambion';
 import { memoryJournals } from '@ambionframework/journal';
+import { memoryBackend } from '@ambionframework/just-bash';
+import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
@@ -36,12 +38,6 @@ import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.t
 const TEST_MS = 60_000;
 
 const NAMESPACE = 'mcp__ambion';
-
-/**
- * Under nativeTools 'codex' the binary keeps its plugin features. They sync a marketplace
- * from GitHub and ask chatgpt.com. The home of the test switches them off.
- */
-const NO_SYNC = '[features]\nplugins = false\nremote_plugin = false\n';
 
 /** A reasoning summary longer than the 280 characters that the default trace policy keeps. */
 const THOUGHT = 'Check the pour schedule against the weather before the answer. '.repeat(8).trim();
@@ -61,6 +57,26 @@ const lookup = defineTool({
 	execute: () => 'found r1',
 });
 
+/** A 1x1 PNG, base64. */
+const PIXEL =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+
+/** The text that Codex puts in place of an image when the model does not read images. */
+const OMITTED = 'image content omitted';
+
+const look = defineTool({
+	name: 'look',
+	description: 'Look at one frame.',
+	parameters: Type.Object({}),
+	execute: () => ({
+		content: [
+			{ type: 'text', text: 'frame at t=1' },
+			{ type: 'image', data: PIXEL, mimeType: 'image/png' },
+		],
+		details: {},
+	}),
+});
+
 const say = (text: string): Reply => ({ call: 'say', namespace: NAMESPACE, args: { text } });
 
 /** Open a room with one default seat on the binary. The room stops when the test ends. */
@@ -68,7 +84,8 @@ async function roomOn(
 	execution: Execution,
 	options: {
 		tools?: boolean;
-		native?: Partial<CodexOptions>;
+		extraTools?: readonly AmbionTool[];
+		seat?: Partial<CodexOptions>;
 		instructions?: string;
 		trace?: TracePolicy;
 	} = {},
@@ -85,8 +102,10 @@ async function roomOn(
 		executor: codex({
 			instructions: options.instructions ?? 'Answer in one sentence.',
 			model: MODEL,
-			...(options.tools ? { tools: [lookup] } : {}),
-			...options.native,
+			...(options.tools || options.extraTools
+				? { tools: [...(options.tools ? [lookup] : []), ...(options.extraTools ?? [])] }
+				: {}),
+			...options.seat,
 		}),
 		...(options.trace === undefined ? {} : { trace: options.trace }),
 	});
@@ -121,10 +140,10 @@ const AWKWARD =
 	'Say "yes" or \\no\\.\nSecond line: tab\t, quote \', café, 日本語, 🙂, \\n, # not a comment.';
 
 /** Run one exchange on the binary, and give the developer texts of its first request. */
-async function developerTexts(native: Partial<CodexOptions>): Promise<string[]> {
-	const on = await codexOn([say('hello room'), { text: 'done' }], undefined, { config: NO_SYNC });
+async function developerTexts(): Promise<string[]> {
+	const on = await codexOn([say('hello room'), { text: 'done' }]);
 	try {
-		const { visit } = await roomOn(on.execution, { instructions: AWKWARD, native });
+		const { visit } = await roomOn(on.execution, { instructions: AWKWARD });
 		await (await visit.send({ text: 'Is the plan ready?' })).waitForClose();
 		const [request] = on.responses.requests as [ResponsesRequest];
 		expect(on.responses.others).toEqual([]);
@@ -274,6 +293,127 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 			TEST_MS,
 		);
 
+		it(
+			'sends an image from a tool of the seat to the model, and keeps the tool list as it was',
+			async () => {
+				const on = await codexOn([
+					{ call: 'look', namespace: NAMESPACE, args: {} },
+					say('a pixel'),
+					{ text: 'done' },
+				]);
+				try {
+					const { visit, steps } = await roomOn(on.execution, { extraTools: [look] });
+					await (await visit.send({ text: 'What is in the frame?' })).waitForClose();
+
+					expect(on.responses.requests).toHaveLength(3);
+					const [first, second] = on.responses.requests as [ResponsesRequest, ResponsesRequest];
+					// The image reaches the model as an `input_image` with the same bytes, and no placeholder.
+					const output = second.input.find((item) => item.type === 'function_call_output');
+					expect(output?.output).toEqual(
+						expect.arrayContaining([
+							{ type: 'input_text', text: 'frame at t=1' },
+							{ type: 'input_image', image_url: `data:image/png;base64,${PIXEL}` },
+						]),
+					);
+					expect(JSON.stringify(second.input)).not.toContain(OMITTED);
+					// The trace keeps the text part and the image part, with the size of the image in place of its bytes.
+					const result = steps.find(
+						(step) => step.type === 'tool_result' && JSON.stringify(step.output).includes('frame'),
+					);
+					expect(result).toMatchObject({
+						output: [
+							{ type: 'text', text: 'frame at t=1' },
+							{ type: 'image', mimeType: 'image/png', bytes: expect.any(Number) },
+						],
+					});
+					expect(JSON.stringify(result)).not.toContain(PIXEL);
+					// No native tool reads images, so the tool list holds the room tools and the seat tool.
+					expect(toolsOf(first)).toEqual({
+						functions: ['list_mcp_resource_templates', 'list_mcp_resources', 'read_mcp_resource'],
+						[NAMESPACE]: ['dismiss', 'look', 'recall', 'say', 'schedule', 'seat', 'unseat'],
+					});
+					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
+					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'gives a seat files and a shell only through the workspace tools, and no native tool',
+			async () => {
+				const workspace = openWorkspace({ name: 'site', backend: { bash: memoryBackend() } });
+				const on = await codexOn([
+					{
+						call: 'write',
+						namespace: NAMESPACE,
+						args: { path: 'note.txt', content: 'pour at noon' },
+					},
+					{ call: 'bash', namespace: NAMESPACE, args: { command: 'cat note.txt' } },
+					say('The note reads: pour at noon'),
+					{ text: 'done' },
+				]);
+				try {
+					const { visit, steps } = await roomOn(on.execution, {
+						seat: { bundles: [workspace.tools()] },
+					});
+					await (await visit.send({ text: 'Write the note and read it back.' })).waitForClose();
+
+					expect(on.responses.requests).toHaveLength(4);
+					const [first, , third] = on.responses.requests as [
+						ResponsesRequest,
+						ResponsesRequest,
+						ResponsesRequest,
+					];
+					// The workspace tools sit beside the room tools in the namespace of the room server.
+					// Codex lists nothing else: no native tool, only its three MCP helpers.
+					expect(toolsOf(first)).toEqual({
+						functions: ['list_mcp_resource_templates', 'list_mcp_resources', 'read_mcp_resource'],
+						[NAMESPACE]: [
+							'bash',
+							'cancel',
+							'dismiss',
+							'edit',
+							'ps',
+							'read',
+							'recall',
+							'restore',
+							'say',
+							'schedule',
+							'seat',
+							'snapshot',
+							'status',
+							'unseat',
+							'wait',
+							'write',
+						],
+					});
+					expect(first.tools).toEqual([]);
+
+					// The file exists in the workspace, in the home of the seat. The port reads it back.
+					const note = await workspace.use({ name: 'gpt' }, (env) =>
+						env.readTextFile('/home/gpt/note.txt', BACKGROUND_CONTEXT),
+					);
+					expect(note).toMatchObject({ ok: true, value: 'pour at noon' });
+
+					// The output of the shell reached the model in the next request.
+					const outputs = third.input.filter((item) => item.type === 'function_call_output');
+					expect(JSON.stringify(outputs.at(-1))).toContain('pour at noon');
+					const called = steps.flatMap((step) => (step.type === 'tool_call' ? [step.name] : []));
+					expect(called).toEqual(['write', 'bash', 'say']);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
 		it.each([
 			{ configured: undefined, sent: 'auto' },
 			{ configured: 'concise', sent: 'concise' },
@@ -286,7 +426,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 				const on = await codexOn([{ ...say('hello room'), reasoning: THOUGHT }, { text: 'done' }]);
 				try {
 					const { visit, steps } = await roomOn(on.execution, {
-						native: configured === undefined ? {} : { reasoningSummary: configured },
+						seat: configured === undefined ? {} : { reasoningSummary: configured },
 						trace: { thinking: 'full', toolOutput: 'full' },
 					});
 					await (await visit.send({ text: 'Is the plan ready?' })).waitForClose();
@@ -306,27 +446,13 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 		);
 
 		it(
-			'sends the seat text as one developer text in both modes of native tools, whatever characters it holds',
+			'sends the seat text as the first developer text, unchanged, whatever characters it holds',
 			async () => {
-				const work = mkdtempSync(join(tmpdir(), 'ambion-codex-work-'));
-				try {
-					const none = await developerTexts({ nativeTools: 'none' });
-					const native = {
-						nativeTools: 'codex',
-						workingDirectory: work,
-						approvalPolicy: 'never',
-					} as const;
-					const codex = await developerTexts(native);
-					// Under 'none' the seat text replaces the prompt of Codex, and it is the first text.
-					const seat = none[0];
-					expect(seat?.startsWith(HARNESS_NOTE)).toBe(true);
-					expect(seat).toContain(AWKWARD);
-					// Under 'codex' the same text follows the prompt of Codex, which teaches the native tools.
-					expect(codex[0]).toMatch(/^You are Codex/);
-					expect(codex).toContain(seat);
-				} finally {
-					rmSync(work, { recursive: true, force: true });
-				}
+				const texts = await developerTexts();
+				// The seat text replaces the prompt of Codex, and it is the first text.
+				expect(texts[0]?.startsWith(HARNESS_NOTE)).toBe(true);
+				expect(texts[0]).toContain(AWKWARD);
+				expect(texts.filter((text) => text.startsWith('You are Codex'))).toEqual([]);
 			},
 			TEST_MS,
 		);

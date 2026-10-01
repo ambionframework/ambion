@@ -25,16 +25,20 @@ const run = promisify(execFile);
 /** One model of the catalog that `codex debug models` prints. The executor reads only `slug`. */
 export type CatalogEntry = Readonly<Record<string, unknown>> & { readonly slug: string };
 
-/** The catalog fields that give a model a native tool, and the value that removes it. */
+/**
+ * The catalog fields that give a model a native tool, and the value that removes it.
+ * The patch leaves `input_modalities` and `supports_image_detail_original` as the
+ * entry has them. An image from a tool of the seat then reaches a model that reads
+ * images. No native tool reads an image, because the `view_image` feature is off.
+ * A model with no image input stays text-only, and Codex shows a placeholder.
+ */
 const NO_NATIVE_TOOLS = {
 	tool_mode: null,
 	apply_patch_tool_type: null,
-	input_modalities: ['text'],
 	supports_search_tool: false,
 	experimental_supported_tools: [],
 	node_repl_disabled: true,
 	multi_agent_version: null,
-	supports_image_detail_original: false,
 	include_apps_usage_instructions: false,
 	include_plugin_usage_instructions: false,
 	include_skills_usage_instructions: false,
@@ -250,8 +254,8 @@ export async function scratchFor(
 	const entry = await source(model);
 	if (entry === undefined) {
 		throw new PermanentError(
-			`The model '${model}' has no entry in the Codex catalog, and nativeTools 'none' needs one. ` +
-				`Set nativeTools: 'codex', or use a model that 'codex debug models' lists.`,
+			`The model '${model}' has no entry in the Codex catalog, and a Codex seat needs one. ` +
+				`Use a model that 'codex debug models' lists.`,
 		);
 	}
 	return new Scratch(entry, instructions);
