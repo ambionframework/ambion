@@ -65,11 +65,15 @@ cd ~/bath-control && npm test && git add -A && git commit -m "Tune the PI law" &
 Start the controller with `bash`. `start` takes the lock in
 `config.json`, so a second controller of the same device gives up and
 exits 0. Run it as `bash start`, because a fork of a template keeps no
-file modes:
+file modes. Give `grace` the seconds that `safe()` needs:
 
 ```ts
-bash({ command: 'bash ~/bath-control/start', name: 'bath-hold', timeout: 3900, wait: 0 });
+bash({ command: 'bash ~/bath-control/start', grace: 5, name: 'bath-hold', timeout: 3900, wait: 0 });
 ```
+
+**A cancel gives the controller its grace.** The workspace sends
+`SIGTERM`, waits `grace` seconds, then sends `SIGKILL`. The controller
+makes the device safe and exits 0 inside the grace.
 
 **Keep `node` as the only process.** `start` replaces itself with
 `node`, so a stop signal reaches the controller directly and its exit
@@ -79,10 +83,10 @@ code reaches the workspace. A parent such as `npm start` or a forking
 **Set `timeout` above `holdSeconds`.** The controller ends itself at the
 deadline. The timeout of `bash` is a backstop.
 
-**Pending: `grace` and `finally` on `bash`.** Two optional parameters of
-`bash` are a design with no code yet
-([Processes](../../../../docs/processes.md#pending-grace-finally-and-the-event-log)).
-When they exist, start the controller with both:
+**Pending: `finally` on `bash`.** The optional parameter is a design with
+no code yet
+([Processes](../../../../docs/processes.md#pending-finally-and-the-event-log)).
+When it exists, start the controller with it:
 
 ```ts
 bash({
@@ -95,8 +99,8 @@ bash({
 });
 ```
 
-Until then, a `cancel` sends `SIGKILL`, and the controller cannot clean
-up. After a cancel, run `node finally.mjs` in the checkout.
+Until then, run `node finally.mjs` in the checkout after an unclean end:
+an exit code other than 0, or a kill after the grace.
 
 ## What the controller promises
 

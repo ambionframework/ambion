@@ -17,6 +17,7 @@
 
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
+import type { PendingSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { messageDelivery } from './delivery.ts';
 import { exchangeAfter } from './exchange.ts';
@@ -32,7 +33,7 @@ import {
 import { applyLease, type LeaseHold } from './lease.ts';
 import { judgeOwed, type Owed, type OwedFacts, rejudgeOwed } from './owed.ts';
 import { advancePeople, type PersonState } from './presence.ts';
-import { changesScheduled, type ScheduledSay, scheduleStep } from './scheduled.ts';
+import { changesScheduled, scheduleStep } from './scheduled.ts';
 import { dropSeat, type OpenWake, pendingOf, rejudgeSeat, wakesOf } from './wakes.ts';
 
 /** Leases of one kind of activation, grouped by a key, then by activation id. */
@@ -57,7 +58,7 @@ export interface RoomProjection {
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: OpenWake[];
 	readonly owed: Owed[];
-	readonly scheduled: ScheduledSay[];
+	readonly scheduled: PendingSay[];
 	readonly lastSeq: Seq;
 }
 

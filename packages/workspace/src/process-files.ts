@@ -41,6 +41,8 @@ export interface ProcessStatus {
 	readonly output: string;
 	/** Seconds the process may run before the table stops it. */
 	readonly timeout: number;
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	readonly grace: number;
 	/** The room of the call that started the process, when it had one. Metadata alone. */
 	readonly room?: string;
 	readonly startedAt: string;
@@ -50,6 +52,8 @@ export interface ProcessStatus {
 	readonly exitCode?: number;
 	/** Set when the state is `failed`. */
 	readonly error?: string;
+	/** True while the state is `running` and a stop of the table waits for the end. */
+	readonly stopping?: boolean;
 }
 
 /** What `spec` holds: the facts of a process at its start. */
@@ -60,9 +64,14 @@ export interface ProcessSpec {
 	readonly agent: string;
 	readonly command: string;
 	readonly timeout: number;
+	/** Seconds from `SIGTERM` to `SIGKILL` when the table stops the process. */
+	readonly grace: number;
 	readonly room?: string;
 	readonly startedAt: string;
 }
+
+/** The grace of a `bash` call that names none. */
+export const DEFAULT_GRACE_SECONDS = 10;
 
 /** The directory in each agent's home that holds its processes. */
 export const PROCESSES_DIR = '~/.processes';
@@ -132,10 +141,18 @@ export async function writeSpec(
  * the command from ending the wrapper, and the command stands on lines of
  * its own, so a comment or a here-document at its end does not reach the
  * closing parenthesis.
+ *
+ * `trap : TERM` keeps the wrapper alive through the `SIGTERM` of a stop, so
+ * it writes `exit` when the command ends inside the grace. The handler
+ * resets to the default in the subshell, so the command gets the signal as
+ * usual. An ignored signal stays ignored in each program that the command
+ * runs, so the wrapper does not ignore `TERM`. just-bash has no `trap`, and
+ * the redirect hides its error.
  */
 export function wrapped(command: string, dir: string): string {
 	const at = shellQuote(dir);
 	return [
+		'trap : TERM 2>/dev/null',
 		`echo "$$" > ${at}/pid`,
 		`(`,
 		command,
@@ -239,14 +256,15 @@ function parseSpec(text: string): ProcessSpec | undefined {
 	try {
 		const spec: unknown = JSON.parse(text);
 		if (typeof spec !== 'object' || spec === null) return undefined;
-		const { handle, agent, command, timeout, startedAt } = spec as Record<string, unknown>;
+		const { handle, agent, command, timeout, startedAt, grace } = spec as Record<string, unknown>;
 		const valid =
 			typeof handle === 'string' &&
 			isHandle(handle) &&
 			typeof agent === 'string' &&
 			typeof command === 'string' &&
 			typeof timeout === 'number' &&
-			typeof startedAt === 'string';
+			typeof startedAt === 'string' &&
+			typeof grace === 'number';
 		return valid ? (spec as ProcessSpec) : undefined;
 	} catch {
 		return undefined;
@@ -326,7 +344,7 @@ export async function readFiles(
 	);
 }
 
-type Ending = Pick<ProcessStatus, 'state' | 'endedAt' | 'exitCode' | 'error'>;
+type Ending = Pick<ProcessStatus, 'state' | 'endedAt' | 'exitCode' | 'error' | 'stopping'>;
 
 /**
  * The end that `stop` names: its cause, its time, and for a failure its
@@ -342,6 +360,20 @@ function stopEnding(stop: string): Ending {
 	return { state: 'failed', ...endedAt, error: error || 'The process failed.' };
 }
 
+/**
+ * A process that still runs. A `stop` that names a cancel or a timeout
+ * means that the table stopped the process. A `failed` line, from a run
+ * that broke or from a read that found the process lost, names no stop.
+ */
+function runningEnding(stop: string | undefined): Ending {
+	const state = stop === undefined ? undefined : stopEnding(stop).state;
+	const stopping = state === 'cancelled' || state === 'timed_out';
+	return stopping ? { state: 'running', stopping } : { state: 'running' };
+}
+
+/** The exit code of a shell that `SIGTERM` ended: 128 + 15. */
+const TERM_EXIT = 143;
+
 /** The end that `exit` names: the exit code and the time. */
 function exitEnding(exit: string): Ending {
 	const [code = '', at] = exit.split(' ');
@@ -352,16 +384,34 @@ function exitEnding(exit: string): Ending {
 }
 
 /**
+ * The end that `exit` names, after a stop of the table when `stop` names
+ * one. The wrapper outlives the `SIGTERM` of a stop and writes the code of
+ * the command. Code 143 is the code of a command that the `SIGTERM` ended,
+ * so the cause in `stop` names that end. Every other code is the end that
+ * the command chose inside the grace.
+ */
+function exitedEnding(exit: string, stop: string | undefined): Ending {
+	const ending = exitEnding(exit);
+	if (ending.exitCode !== TERM_EXIT || stop === undefined) return ending;
+	const stopped = stopEnding(stop);
+	if (stopped.state === 'failed') return ending;
+	return ending.endedAt === undefined
+		? { state: stopped.state }
+		: { state: stopped.state, endedAt: ending.endedAt };
+}
+
+/**
  * The end that the files give. `exit` is the end the command chose, and
  * a stop writes no `stop` after it. `stop` names the cause of a stop: the
- * table writes it before it aborts. A process whose shell still runs stays
+ * table writes it before it aborts. A command that the `SIGTERM` of the
+ * stop ended reads that cause. A process whose shell still runs stays
  * `running` until the stop ends it. With no file of an end, the process
  * runs while this run of the host owns it or its shell still runs, and it
  * is lost otherwise.
  */
 function endingOf(files: ProcessFiles, live: boolean): Ending {
-	if (files.exit !== undefined) return exitEnding(files.exit);
-	if (live) return { state: 'running' };
+	if (files.exit !== undefined) return exitedEnding(files.exit, files.stop);
+	if (live) return runningEnding(files.stop);
 	if (files.stop !== undefined) return stopEnding(files.stop);
 	return { state: 'failed', error: LOST };
 }
@@ -378,31 +428,40 @@ export function statusOf(files: ProcessFiles, owned: boolean): ProcessStatus {
 		command: spec.command,
 		output: `${files.dir}/out`,
 		timeout: spec.timeout,
+		grace: spec.grace,
 		...(spec.room === undefined ? {} : { room: spec.room }),
 		startedAt: spec.startedAt,
 		...ending,
 	});
 }
 
+/** The signals of a stop: `TERM` first, and `KILL` after the grace. */
+export type StopSignal = 'TERM' | 'KILL';
+
 /**
- * The script that kills the process group of a process that an earlier run
- * of the host started. It checks the pid first, as the listing does. It
- * kills the group only when the group is not the killer's own, so a
- * backend that runs commands in the host's group loses one shell and no
- * more.
+ * The script that signals the process group of a process that an earlier
+ * run of the host started. It checks the pid first, as the listing does, so
+ * a stop sends no signal after the wrapper has ended. It signals the group
+ * only when the group is not the script's own, so a backend that runs
+ * commands in the host's group loses one shell and no more.
  */
-function killScript(dir: string, handle: string): string {
+function signalScript(dir: string, handle: string, signal: StopSignal): string {
 	return [
 		`pid=$(cat ${shellQuote(`${dir}/pid`)} 2>/dev/null) || exit 0`,
 		`ps -ww -o args= -p "$pid" 2>/dev/null | grep -q -- ${shellQuote(handle)} || exit 0`,
 		`group=$(ps -o pgid= -p "$pid" | tr -d ' ')`,
 		`own=$(ps -o pgid= -p "$$" | tr -d ' ')`,
-		`if [ -n "$group" ] && [ "$group" != "$own" ]; then kill -KILL -- "-$group"; else kill -KILL "$pid"; fi`,
+		`if [ -n "$group" ] && [ "$group" != "$own" ]; then kill -${signal} -- "-$group"; else kill -${signal} "$pid"; fi`,
 		`exit 0`,
 	].join('\n');
 }
 
-/** Run the kill script. Best-effort: a process that ended already leaves nothing to kill. */
-export async function killGroup(env: WorkspaceEnv, dir: string, handle: string): Promise<void> {
-	await env.exec(killScript(dir, handle), undefined, BACKGROUND_CONTEXT);
+/** Run the signal script. Best-effort: a process that ended already leaves nothing to signal. */
+export async function signalGroup(
+	env: WorkspaceEnv,
+	dir: string,
+	handle: string,
+	signal: StopSignal,
+): Promise<void> {
+	await env.exec(signalScript(dir, handle, signal), undefined, BACKGROUND_CONTEXT);
 }

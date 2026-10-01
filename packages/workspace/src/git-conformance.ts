@@ -20,7 +20,12 @@
  * ```
  */
 
-import type { ConformanceCase } from '@ambionframework/ambion/conformance';
+import {
+	type ConformanceCase,
+	type ConformanceHarness,
+	check,
+	conformanceSuite,
+} from '@ambionframework/ambion/conformance';
 import type { BashBackend } from './backend.ts';
 import type { GitBackend } from './git-backend.ts';
 import { resolvesBranchTagAndHash } from './git-conformance-revisions.ts';
@@ -33,7 +38,7 @@ import {
 	sharedPushesMergeFromBothAgents,
 	sharedRegistrationPersists,
 } from './git-conformance-shared.ts';
-import { ANALYST, check, ctx, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
+import { ANALYST, ctx, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import type { SourceInput } from './sources.ts';
 import { openWorkspace, type Workspace } from './workspace.ts';
@@ -86,11 +91,12 @@ export interface GitConformanceProbe {
  * answer the credential facts of the pair, each over the backend and the
  * workspace that the case opened.
  */
-export interface GitConformanceBackend<B extends GitBackend = GitBackend> {
+export interface GitConformanceBackend<
+	B extends GitBackend = GitBackend,
+> extends ConformanceHarness<GitConformanceStore<B>> {
 	readonly name: string;
 	/** The shortest `credentialTtl`, in seconds, that the backend takes. */
 	readonly shortestCredentialTtl: number;
-	open(): Promise<GitConformanceStore<B>>;
 	/** Issue the credentials of `agent`, the way its bash backend asks for them. Rejects for a reserved name. */
 	issueCredentials(pair: GitConformancePair<B>, agent: WorkspaceAgent): Promise<void>;
 	/** Resolves `true` when `agent` holds a write credential for the repository at `url`. */
@@ -117,13 +123,13 @@ type Body = <B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
 ) => Promise<void>;
 
-/** Run `body` over a fresh store and a workspace over it, and dispose both after. */
+/** Run `body` over a workspace on `store`, and dispose the workspace after. */
 async function withWorkspace<B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
+	store: GitConformanceStore<B>,
 	body: Body,
 	options: GitConformanceOptions = { templates: TEMPLATES, shared: SHARED_FIXTURE },
 ): Promise<void> {
-	const store = await harness.open();
 	const backend = store.backend(options);
 	const workspace = openWorkspace({
 		name: 'git-conformance',
@@ -133,7 +139,6 @@ async function withWorkspace<B extends GitBackend>(
 		await body({ backend, workspace }, harness);
 	} finally {
 		await workspace.dispose();
-		await store.dispose();
 	}
 }
 
@@ -396,45 +401,71 @@ async function checkLateFork(workspace: Workspace, before: string): Promise<void
 }
 
 const registrationFollowsSource = async <B extends GitBackend>(
-	harness: GitConformanceBackend<B>,
+	store: GitConformanceStore<B>,
 ): Promise<void> => {
-	const store = await harness.open();
-	try {
-		const before = await registered(store, { templates: TEMPLATES }, async (workspace) => {
-			await forkAs(workspace, ANALYST, 'templates/blank', 'early');
-			return mainOf(workspace, 'templates/blank');
-		});
-		check(typeof before === 'string', 'the first registration made no template');
-		const again = await registered(store, { templates: TEMPLATES }, (w) =>
-			mainOf(w, 'templates/blank'),
+	const before = await registered(store, { templates: TEMPLATES }, async (workspace) => {
+		await forkAs(workspace, ANALYST, 'templates/blank', 'early');
+		return mainOf(workspace, 'templates/blank');
+	});
+	check(typeof before === 'string', 'the first registration made no template');
+	const again = await registered(store, { templates: TEMPLATES }, (w) =>
+		mainOf(w, 'templates/blank'),
+	);
+	check(again === before, 'a second registration wrote a commit');
+	const updated = await registered(store, { templates: CHANGED }, async (workspace) => {
+		const template = await git(workspace, ANALYST, (env) => env.get('templates/blank'));
+		check(template?.description === 'An empty start.', 'the description did not update');
+		check(
+			(await mainOf(workspace, 'analyst/early')) === before,
+			'the update moved a fork made before it',
 		);
-		check(again === before, 'a second registration wrote a commit');
-		const updated = await registered(store, { templates: CHANGED }, async (workspace) => {
-			const template = await git(workspace, ANALYST, (env) => env.get('templates/blank'));
-			check(template?.description === 'An empty start.', 'the description did not update');
-			check(
-				(await mainOf(workspace, 'analyst/early')) === before,
-				'the update moved a fork made before it',
-			);
-			await checkLateFork(workspace, before ?? '');
-			return template?.branches.main;
+		await checkLateFork(workspace, before ?? '');
+		return template?.branches.main;
+	});
+	check(updated !== undefined && updated !== before, 'a changed source did not update');
+	const last = await registered(store, { templates: CHANGED }, (w) => mainOf(w, 'templates/blank'));
+	check(last === updated, 'a registration after the update wrote a commit');
+};
+
+const REFUSED: readonly [GitConformanceOptions, string][] = [
+	[
+		{ templates: { bad: { files: { '../x': 'y' } } } },
+		"The template 'bad' holds the path '../x', which leaves its root.",
+	],
+	[
+		{ templates: {}, shared: { bad: { source: { '.git/config': 'y' } } } },
+		"The shared repository 'bad' holds the path '.git/config', which leaves its root.",
+	],
+];
+
+const refusesPathsOutsideTheRoot = async <B extends GitBackend>(
+	store: GitConformanceStore<B>,
+): Promise<void> => {
+	for (const [options, message] of REFUSED) {
+		await registered(store, options, async (workspace) => {
+			// A failed registration lets the next call try again, and it fails the same way.
+			for (const attempt of ['first', 'second']) {
+				const error = await git(workspace, ANALYST, (env) => env.list()).then(
+					() => undefined,
+					(reason: unknown) => reason,
+				);
+				check(
+					error instanceof Error && error.message.includes(message),
+					`the ${attempt} call after a refused registration did not name it: ${String(error)}`,
+				);
+			}
 		});
-		check(updated !== undefined && updated !== before, 'a changed source did not update');
-		const last = await registered(store, { templates: CHANGED }, (w) =>
-			mainOf(w, 'templates/blank'),
-		);
-		check(last === updated, 'a registration after the update wrote a commit');
-	} finally {
-		await store.dispose();
 	}
 };
 
 const credentialExpires = async <B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
+	store: GitConformanceStore<B>,
 ): Promise<void> => {
 	if (harness.shortestCredentialTtl > 5) return;
 	await withWorkspace(
 		harness,
+		store,
 		async (pair, hooks) => {
 			await git(pair.workspace, ANALYST, (env) => env.list());
 			const probe = await hooks.probeCredential(pair, ANALYST);
@@ -479,47 +510,49 @@ const CASES: readonly [string, Body][] = [
 	],
 ];
 
-/** The cases of a git backend, as named test bodies. */
+/** The cases of a git backend, as named test bodies. Each case opens a fresh store. */
 export function gitConformance<B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
 ): readonly ConformanceCase[] {
-	return [
-		...CASES.map(([name, body]) => ({ name, run: () => withWorkspace(harness, body) })),
-		{
-			name: 'a registration with the same source writes nothing, and a changed one fast-forwards the template',
-			run: () => registrationFollowsSource(harness),
-		},
-		{
-			name: 'a shared repository persists through restart, ignores changed and unreadable sources, and stays writable when omitted',
-			run: () => sharedRegistrationPersists(harness, SHARED_FIXTURE),
-		},
-		{
-			name: 'both agents push shared main, and a stale second push rebases with both commits intact',
-			run: () =>
-				withWorkspace(harness, async ({ workspace }) => sharedPushesMergeFromBothAgents(workspace)),
-		},
-		{
-			name: 'two concurrent same-base pushes to shared main have one winner and one rejection',
-			run: () =>
-				withWorkspace(harness, async ({ workspace }) => concurrentSharedMainPushes(workspace)),
-		},
-		{
-			name: 'shared main refuses deletion and non-fast-forward updates, while side branches can be rewritten or deleted',
-			run: () =>
-				withWorkspace(harness, async ({ workspace }) => sharedMainAndSideBranchPolicy(workspace)),
-		},
-		{
-			name: 'a fork of a shared repository has ordinary permissions and its refs roundtrip',
-			run: () =>
-				withWorkspace(harness, async ({ workspace }) => sharedForkAndRefsRoundTrip(workspace)),
-		},
-		{
-			name: 'git guidance explains shared repository names and shared main policy',
-			run: () =>
-				withWorkspace(harness, async ({ workspace }) =>
-					sharedGuidanceExplainsPushPolicy(workspace),
-				),
-		},
-		{ name: 'a credential is refused after it expires', run: () => credentialExpires(harness) },
-	];
+	const inWorkspace =
+		(body: Body) =>
+		(store: GitConformanceStore<B>): Promise<void> =>
+			withWorkspace(harness, store, body);
+	const sharedCase =
+		(body: (workspace: Workspace) => Promise<void>) =>
+		(store: GitConformanceStore<B>): Promise<void> =>
+			withWorkspace(harness, store, ({ workspace }) => body(workspace));
+	return conformanceSuite(harness, [
+		...CASES.map(([name, body]) => [name, inWorkspace(body)] as const),
+		[
+			'a registration with the same source writes nothing, and a changed one fast-forwards the template',
+			registrationFollowsSource,
+		],
+		['a registration with a path that leaves its root is refused', refusesPathsOutsideTheRoot],
+		[
+			'a shared repository persists through restart, ignores changed and unreadable sources, and stays writable when omitted',
+			(store) => sharedRegistrationPersists(store, SHARED_FIXTURE),
+		],
+		[
+			'both agents push shared main, and a stale second push rebases with both commits intact',
+			sharedCase(sharedPushesMergeFromBothAgents),
+		],
+		[
+			'two concurrent same-base pushes to shared main have one winner and one rejection',
+			sharedCase(concurrentSharedMainPushes),
+		],
+		[
+			'shared main refuses deletion and non-fast-forward updates, while side branches can be rewritten or deleted',
+			sharedCase(sharedMainAndSideBranchPolicy),
+		],
+		[
+			'a fork of a shared repository has ordinary permissions and its refs roundtrip',
+			sharedCase(sharedForkAndRefsRoundTrip),
+		],
+		[
+			'git guidance explains shared repository names and shared main policy',
+			sharedCase(sharedGuidanceExplainsPushPolicy),
+		],
+		['a credential is refused after it expires', (store) => credentialExpires(harness, store)],
+	]);
 }

@@ -2,11 +2,12 @@
 
 > **Actuators are a pattern over processes.** The workbench ships the
 > [actuator controller template](../examples/workbench/templates/actuator-controller),
-> and its tests pass today. The pattern also uses three optional features
-> of `bash` that no code implements yet: `grace`, `finally`, and the event
-> log with its fold.
-> [Processes](processes.md#pending-grace-finally-and-the-event-log) owns
-> their contract. The backlog holds the work in
+> and its tests pass today. A stop sends `SIGTERM`, waits the `grace` of
+> the `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-stop)).
+> Two optional features of `bash` have no code yet: `finally`, and the
+> event log with its fold.
+> [Processes](processes.md#pending-finally-and-the-event-log) owns their
+> contract. The backlog holds the work in
 > [D24](../planning/backlog.md#for-actuators).
 
 **An actuator is a controller command that runs as a process.** The
@@ -232,9 +233,10 @@ registers the template and that a fork holds every file. It runs the
 template tests, then removes the stop handlers and checks that the
 `SIGTERM` case fails.
 
-**The agent starts it and returns later.** `grace` and `finally` do not
-exist yet. Until they do, a `cancel` sends `SIGKILL`, and the agent runs
-`node finally.mjs` in the checkout after it.
+**The agent starts it and returns later.** `grace` exists. `finally` does
+not exist yet. Until it does, the agent runs `node finally.mjs` in the
+checkout after an unclean end: an exit code other than 0, or a kill after
+the grace.
 
 ```ts
 bash({

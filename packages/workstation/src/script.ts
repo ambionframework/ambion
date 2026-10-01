@@ -12,6 +12,10 @@
  * the same as in Pi's `NodeExecutionEnv`: it is the body of a quoted heredoc,
  * so bash reads it as text, and its standard input is `/dev/null`, so it
  * cannot read the rest of the script.
+ *
+ * `trap : TERM` keeps the script's shell alive through the `SIGTERM` of a
+ * stop. It waits for the command, so the channel reports the command's own
+ * exit status. The handler resets to the default in the command.
  */
 
 import { randomName, shellQuote } from '@ambionframework/workspace';
@@ -47,6 +51,7 @@ export function commandScript(
 	);
 	return [
 		`printf '\\n${PGID_PREFIX}%s\\n' "$$" >&2`,
+		'trap : TERM',
 		`cd -- ${shellQuote(cwd)} || exit 1`,
 		...exports,
 		`bash -c "$(cat <<'${delimiter}'`,

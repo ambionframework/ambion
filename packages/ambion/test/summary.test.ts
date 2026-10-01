@@ -1155,10 +1155,10 @@ describe('a summary for each person who spoke', () => {
 		if (changed?.status === 'closed' && changed.summary.status === 'published')
 			(changed.summary.summary as { text: string }).text = 'changed';
 		expect((await session.read()).exchanges).toEqual(before.exchanges);
-		const pending = await session.pendingFor('sam');
+		const pending = pendingFor(await session.read(), 'sam');
 		expect(pending).toHaveLength(1);
 		expect(pending[0]?.outcome).toEqual({ kind: 'awaiting', person: 'sam' });
-		expect(await session.pendingFor('priya')).toEqual([]);
+		expect(pendingFor(await session.read(), 'priya')).toEqual([]);
 
 		await session.stop();
 		const after = await readRoom(session.name, { runtime });

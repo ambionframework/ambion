@@ -1,8 +1,9 @@
 /** Conformance cases for shared repositories: writable by every agent, with main protected. */
 
+import { check } from '@ambionframework/ambion/conformance';
 import type { GitBackend } from './git-backend.ts';
-import type { GitConformanceBackend, GitConformanceOptions } from './git-conformance.ts';
-import { ANALYST, check, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
+import type { GitConformanceOptions, GitConformanceStore } from './git-conformance.ts';
+import { ANALYST, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import { openWorkspace, type Workspace } from './workspace.ts';
 
 /** The shared repository seeded for each ordinary conformance case. */
@@ -202,10 +203,9 @@ export async function sharedGuidanceExplainsPushPolicy(workspace: Workspace): Pr
 
 /** Reopening registration keeps a shared repository and does not re-read a changed or broken source. */
 export async function sharedRegistrationPersists<B extends GitBackend>(
-	harness: GitConformanceBackend<B>,
+	store: GitConformanceStore<B>,
 	fixture: NonNullable<GitConformanceOptions['shared']>,
 ): Promise<void> {
-	const store = await harness.open();
 	const open = async (options: GitConformanceOptions) => {
 		const borrowedBash = new Proxy(store.bash, {
 			get(target, property, receiver) {
@@ -218,116 +218,110 @@ export async function sharedRegistrationPersists<B extends GitBackend>(
 			backend: { bash: borrowedBash, git: store.backend(options) },
 		});
 	};
+	const first = await open({ templates: {}, shared: fixture });
+	let initial: string | undefined;
+	let url = '';
 	try {
-		const first = await open({ templates: {}, shared: fixture });
-		let initial: string | undefined;
-		let url = '';
-		try {
-			const repo = await git(first, ANALYST, (env) => env.get('shared/room-notes'));
-			initial = repo?.branches.main;
-			url = repo?.url ?? '';
-			check(initial !== undefined, 'the first shared registration made no main commit');
-			check(repo?.description === 'Notes for the room.', 'the shared description was lost');
-			const empty = await git(first, ANALYST, (env) => env.get('shared/empty'));
-			check(
-				typeof empty?.branches.main === 'string' && empty.branches.main.length >= 40,
-				'an empty shared source did not get a real initial main commit',
-			);
-			const seeded = await git(first, ANALYST, (env) =>
-				env.show('shared/room-notes', initial ?? ''),
-			);
-			check(seeded?.author.name === 'ambion', 'the initial shared commit was not seeded by ambion');
-		} finally {
-			await first.dispose();
-		}
-		const changed = await open({
-			templates: {},
-			shared: {
-				'room-notes': {
-					source: { 'README.md': 'changed source\n', 'new.md': 'new source\n' },
-					description: 'Updated description.',
-				},
-			},
-		});
-		try {
-			const repo = await git(changed, REVIEWER, (env) => env.get('shared/room-notes'));
-			check(
-				repo?.branches.main === initial,
-				'a restarted registration changed shared main from its new source',
-			);
-			check(
-				repo?.description === 'Updated description.',
-				'a restarted registration did not update description',
-			);
-		} finally {
-			await changed.dispose();
-		}
-		const unreadable = await open({
-			templates: {},
-			shared: {
-				'room-notes': {
-					source: {
-						read: async () => {
-							throw new Error('existing shared source was read');
-						},
-					},
-					description: 'Description without reading source.',
-				},
-			},
-		});
-		try {
-			const repo = await git(unreadable, ANALYST, (env) => env.get('shared/room-notes'));
-			check(repo?.branches.main === initial, 'an unreadable source changed shared main');
-			check(
-				repo?.description === 'Description without reading source.',
-				'an unreadable source blocked a description update',
-			);
-		} finally {
-			await unreadable.dispose();
-		}
-		const omitted = await open({ templates: {} });
-		let pushedHead: string | undefined;
-		try {
-			const repo = await git(omitted, REVIEWER, (env) => env.get('shared/room-notes'));
-			check(repo?.branches.main === initial, 'omitting shared registration removed the repository');
-			const pushed = await sh(
-				omitted,
-				REVIEWER,
-				`git clone ${url} ~/omitted-shared && cd ~/omitted-shared && echo persisted > persisted.txt && git add persisted.txt && git commit -m persisted && git push origin main`,
-			);
-			check(pushed.code === 0, `an omitted shared registration was not writable: ${pushed.output}`);
-			pushedHead = (await git(omitted, REVIEWER, (env) => env.get('shared/room-notes')))?.branches
-				.main;
-			check(
-				typeof pushedHead === 'string' && pushedHead !== initial,
-				'the omitted shared push did not move main',
-			);
-		} finally {
-			await omitted.dispose();
-		}
-		const afterPushRestart = await open({
-			templates: {},
-			shared: {
-				'room-notes': {
-					source: {
-						read: async () => {
-							throw new Error('a restart read the already-published shared source');
-						},
-					},
-					description: 'Description without reading source.',
-				},
-			},
-		});
-		try {
-			const repo = await git(afterPushRestart, ANALYST, (env) => env.get('shared/room-notes'));
-			check(
-				repo?.branches.main === pushedHead,
-				'a restart replaced an agent push with the registered seed',
-			);
-		} finally {
-			await afterPushRestart.dispose();
-		}
+		const repo = await git(first, ANALYST, (env) => env.get('shared/room-notes'));
+		initial = repo?.branches.main;
+		url = repo?.url ?? '';
+		check(initial !== undefined, 'the first shared registration made no main commit');
+		check(repo?.description === 'Notes for the room.', 'the shared description was lost');
+		const empty = await git(first, ANALYST, (env) => env.get('shared/empty'));
+		check(
+			typeof empty?.branches.main === 'string' && empty.branches.main.length >= 40,
+			'an empty shared source did not get a real initial main commit',
+		);
+		const seeded = await git(first, ANALYST, (env) => env.show('shared/room-notes', initial ?? ''));
+		check(seeded?.author.name === 'ambion', 'the initial shared commit was not seeded by ambion');
 	} finally {
-		await store.dispose();
+		await first.dispose();
+	}
+	const changed = await open({
+		templates: {},
+		shared: {
+			'room-notes': {
+				source: { 'README.md': 'changed source\n', 'new.md': 'new source\n' },
+				description: 'Updated description.',
+			},
+		},
+	});
+	try {
+		const repo = await git(changed, REVIEWER, (env) => env.get('shared/room-notes'));
+		check(
+			repo?.branches.main === initial,
+			'a restarted registration changed shared main from its new source',
+		);
+		check(
+			repo?.description === 'Updated description.',
+			'a restarted registration did not update description',
+		);
+	} finally {
+		await changed.dispose();
+	}
+	const unreadable = await open({
+		templates: {},
+		shared: {
+			'room-notes': {
+				source: {
+					read: async () => {
+						throw new Error('existing shared source was read');
+					},
+				},
+				description: 'Description without reading source.',
+			},
+		},
+	});
+	try {
+		const repo = await git(unreadable, ANALYST, (env) => env.get('shared/room-notes'));
+		check(repo?.branches.main === initial, 'an unreadable source changed shared main');
+		check(
+			repo?.description === 'Description without reading source.',
+			'an unreadable source blocked a description update',
+		);
+	} finally {
+		await unreadable.dispose();
+	}
+	const omitted = await open({ templates: {} });
+	let pushedHead: string | undefined;
+	try {
+		const repo = await git(omitted, REVIEWER, (env) => env.get('shared/room-notes'));
+		check(repo?.branches.main === initial, 'omitting shared registration removed the repository');
+		const pushed = await sh(
+			omitted,
+			REVIEWER,
+			`git clone ${url} ~/omitted-shared && cd ~/omitted-shared && echo persisted > persisted.txt && git add persisted.txt && git commit -m persisted && git push origin main`,
+		);
+		check(pushed.code === 0, `an omitted shared registration was not writable: ${pushed.output}`);
+		pushedHead = (await git(omitted, REVIEWER, (env) => env.get('shared/room-notes')))?.branches
+			.main;
+		check(
+			typeof pushedHead === 'string' && pushedHead !== initial,
+			'the omitted shared push did not move main',
+		);
+	} finally {
+		await omitted.dispose();
+	}
+	const afterPushRestart = await open({
+		templates: {},
+		shared: {
+			'room-notes': {
+				source: {
+					read: async () => {
+						throw new Error('a restart read the already-published shared source');
+					},
+				},
+				description: 'Description without reading source.',
+			},
+		},
+	});
+	try {
+		const repo = await git(afterPushRestart, ANALYST, (env) => env.get('shared/room-notes'));
+		check(
+			repo?.branches.main === pushedHead,
+			'a restart replaced an agent push with the registered seed',
+		);
+	} finally {
+		await afterPushRestart.dispose();
 	}
 }

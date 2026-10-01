@@ -18,7 +18,11 @@ import {
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
-import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
+import {
+	BACKGROUND_CONTEXT,
+	type ShellOutputUpdate,
+	withAbortSignal,
+} from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../src/index.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
@@ -220,10 +224,16 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		expect(text).toBe('in-f\nAMBION_x\n');
 	});
 
-	it('gives 128 plus the signal number for a command a signal ends', async () => {
+	it.each([
+		{ shell: "the command's shell", command: 'kill -9 $$' },
+		{
+			shell: "the script's shell, whose channel then reports the signal",
+			command: 'kill -9 $PPID',
+		},
+	])('gives 128 plus the signal number when a signal ends $shell', async ({ command }) => {
 		const started = await server();
 		const backend = backendFor(started.options);
-		const { result } = await withEnv(backend, 'ada', (env) => run(env, 'kill -9 $$'));
+		const { result } = await withEnv(backend, 'ada', (env) => run(env, command));
 		expect(result).toMatchObject({ ok: true, value: { exitCode: 137 } });
 	});
 
@@ -235,8 +245,80 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 			expect(missing).toMatchObject({ ok: false, error: { code: 'spawn_error' } });
 			const bad = await env.exec('true', { env: { 'A;B': 'x' } }, ctx);
 			expect(bad).toMatchObject({ ok: false, error: { code: 'spawn_error' } });
+			for (const grace of [-1, Number.NaN, 3_000_000]) {
+				const refused = await env.exec('true', { grace }, ctx);
+				expect(refused, String(grace)).toMatchObject({
+					ok: false,
+					error: { code: 'spawn_error', message: expect.stringContaining('Invalid grace') },
+				});
+			}
 		});
 	});
+
+	it.each([
+		{
+			stop: 'SIGTERM, and a trap that exits inside the grace',
+			grace: 3,
+			trap: "trap 'echo term > marker; exit 0' TERM",
+			marker: true,
+			inGrace: true,
+		},
+		{
+			stop: 'SIGTERM, then SIGKILL after the grace to a command that ignores TERM',
+			grace: 3,
+			trap: "trap '' TERM",
+			marker: false,
+			inGrace: false,
+		},
+		{
+			stop: 'SIGKILL at once with no grace, so no trap runs',
+			grace: undefined,
+			trap: "trap 'echo term > marker; exit 0' TERM",
+			marker: false,
+			inGrace: true,
+		},
+	])('stops an aborted command with $stop', async ({ grace, trap, marker, inGrace }) => {
+		const started = await server();
+		const backend = backendFor(started.options);
+		const home = started.homes.get('ada') ?? '';
+		const controller = new AbortController();
+		const command = `${trap}\nsleep 30 & echo $! > child.pid\nwait`;
+		const { result, stoppedIn } = await withEnv(backend, 'ada', async (env) => {
+			const options = { timeout: 60, ...(grace === undefined ? {} : { grace }) };
+			const running = env.exec(command, options, withAbortSignal(controller.signal, ctx));
+			await until(() => spawnSync('test', ['-s', join(home, 'child.pid')]).status === 0);
+			const abortedAt = Date.now();
+			controller.abort();
+			return { result: await running, stoppedIn: Date.now() - abortedAt };
+		});
+		expect(result).toMatchObject({ ok: false });
+		expect(stoppedIn < (grace ?? 3) * 1000).toBe(inGrace);
+		const pid = Number((await readFile(join(home, 'child.pid'), 'utf8')).trim());
+		await until(() => ended(pid));
+		expect(ended(pid)).toBe(true);
+		expect(spawnSync('test', ['-f', join(home, 'marker')]).status === 0).toBe(marker);
+	});
+
+	it('opens one kill channel at a time for each client, and ends every aborted command', async () => {
+		const started = await server();
+		// Each kill channel stays open for 200 ms, so a second kill channel would overlap the first.
+		started.kills.delayMs = 200;
+		const backend = backendFor(started.options);
+		const controller = new AbortController();
+		const results = await withEnv(backend, 'ada', async (env) => {
+			const aborted = withAbortSignal(controller.signal, ctx);
+			const runs = [1, 2, 3, 4].map(() =>
+				env.exec('trap : TERM\nsleep 30 & wait', { timeout: 60, grace: 1 }, aborted),
+			);
+			// Let each command report its group before the abort.
+			await new Promise((resolve) => setTimeout(resolve, 1_000));
+			controller.abort();
+			return Promise.all(runs);
+		});
+		for (const result of results) expect(result).toMatchObject({ ok: false });
+		// The abort of 4 commands sends 4 TERM signals.
+		expect(started.kills.peak).toBe(1);
+	}, 20_000);
 
 	it.each([
 		{ noise: '', shell: 'a quiet login shell' },
@@ -345,6 +427,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 				agent: 'ada',
 				command: 'exec sleep 30',
 				timeout,
+				grace: 10,
 				startedAt,
 			};
 			await writeFile(join(dir, 'spec'), JSON.stringify(spec));
@@ -376,7 +459,12 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const spec = { handle: 'bash-00000000000e', kind: 'bash', agent: 'ada', command: 'true' };
 		await writeFile(
 			join(lost, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+			JSON.stringify({
+				...spec,
+				timeout: 600,
+				grace: 10,
+				startedAt: new Date().toISOString(),
+			}),
 		);
 		await writeFile(join(lost, 'pid'), `${spawnSync('true').pid}\n`);
 		await env.cleanup();

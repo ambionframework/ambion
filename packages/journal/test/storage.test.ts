@@ -4,7 +4,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { storageConformance } from '../src/conformance.ts';
+import { check, conformanceSuite, storageConformance } from '../src/conformance.ts';
 import { type Entries, Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
@@ -58,6 +58,33 @@ const backends: readonly { name: string; open(): Opened }[] = [
 
 describe.each(backends)('$name JournalStorage', (backend) => {
 	for (const c of storageConformance(backend)) it(c.name, c.run);
+});
+
+describe('conformanceSuite', () => {
+	it('disposes after a body that throws, and skips the dispose of a subject that did not open', async () => {
+		const log: string[] = [];
+		const opened = { name: 'counted', open: () => ({ dispose: () => void log.push('dispose') }) };
+		const [broken] = conformanceSuite(opened, [
+			['breaks', async () => check(1 > 2, 'the body broke')],
+		]);
+		expect(broken?.name).toBe('breaks');
+		await expect(broken?.run()).rejects.toThrow('the body broke');
+		expect(log).toEqual(['dispose']);
+
+		const refused = {
+			name: 'refused',
+			open: () => Promise.reject(new Error('no subject')),
+		};
+		const [unopened] = conformanceSuite(refused, [
+			['never runs', async () => void log.push('body')],
+		]);
+		await expect(unopened?.run()).rejects.toThrow('no subject');
+		expect(log).toEqual(['dispose']);
+
+		const bare = { name: 'bare', open: () => ({}) };
+		const [plain] = conformanceSuite(bare, [['needs no dispose', async () => {}]]);
+		await expect(plain?.run()).resolves.toBeUndefined();
+	});
 });
 
 describe.each(backends)('$name Journal contract', ({ open }) => {

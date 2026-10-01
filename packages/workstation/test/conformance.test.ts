@@ -5,7 +5,8 @@
  */
 
 import {
-	type ConformanceBackend,
+	type ConformanceHarness,
+	type WorkspaceConformanceStore,
 	workspaceConformance,
 } from '@ambionframework/workspace/conformance';
 import { describe, it } from 'vitest';
@@ -13,7 +14,7 @@ import { workstationBackend } from '../src/index.ts';
 import { startSshServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
 
-const harness: ConformanceBackend = {
+const harness: ConformanceHarness<WorkspaceConformanceStore> = {
 	name: 'workstation',
 	async open() {
 		const server = await startSshServer(['conformance']);

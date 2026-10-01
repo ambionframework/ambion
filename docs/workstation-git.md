@@ -413,33 +413,32 @@ process group ([Workstation](workstation.md#commands-and-aborts)). The
 staging folder stays until the next sweep. A repeated `fork` is safe, the
 same as on `justGitBackend`.
 
-**Registration builds a template in `.staging` and renames it into
-`templates/`.** It keeps the three cases of
-[Git](git.md#templates), and it compares by blob hashes.
+**Registration builds a repository in `.staging` and renames it into its
+folder.** [Git](git.md#templates) states the decisions: the name rule, the
+path rule, the three cases of a template, and the read after each write.
+This backend implements the storage steps.
 
-1. The template exists, and `git ls-tree -r` of its tip gives the blob
-   hashes of the source. Nothing happens.
-2. The template exists, and the hashes differ. The backend writes the
-   files into a staging folder over SFTP and commits them on the tip of
-   `main` as `ambion`. `git update-ref` then moves `main` to that commit,
-   and it compares the old commit.
-3. The template does not exist. The backend writes the files into a
-   staging folder over SFTP, commits them to a new bare repository on
-   `main` as `ambion`, writes the description, installs the
-   `pre-receive` hook, and renames the repository to
-   `templates/<name>.git`.
+- **A read of a template runs `git ls-tree -r` on its tip.** The step gives
+  the blob hashes at the tip, and `registerRepositories` compares them. The
+  script writes the description when it differs.
+- **A new template or a new shared repository is a bare repository.** The
+  backend writes the files into a staging folder over SFTP, and commits
+  them to a new bare repository on `main` as `ambion`. It writes the
+  description and installs the `pre-receive` hook. It renames the
+  repository to `templates/<name>.git` or `shared/<name>.git`.
+- **A changed template takes a commit on its tip.** The backend writes the
+  files into a staging folder over SFTP and commits them on the tip of
+  `main` as `ambion`. `git update-ref` then moves `main` to that commit,
+  and it compares the old commit.
 
 **A commit of registration adds every file with `git add -A --force`.** A
 `.gitignore` in the source then skips no file, and the tip holds the blob
 hashes of the source.
 
-**Registration compares the template that landed.** After case 2 or case
-3, the backend reads the tip again. Two host processes that register one
-template at once then agree, or the one that lost fails with the name of
-the template. When `git update-ref` fails for another cause, such as a
-lock, the error holds the message of git.
-
-**Each case writes the description when it differs.**
+**A refused move of `main` names the error of git.** When `git update-ref`
+fails, such as for a lock, the step throws with the message of git.
+[Git](git.md#templates) states when the registration still succeeds. The
+next registration moves `main`.
 
 **An update does not change a fork.** A fork is a `git clone --bare` on
 the git account, so it holds its own objects and refs.
@@ -521,9 +520,10 @@ one scope on one repository. The SSH keys name the agent, and `serve`
 applies the rule. Shared repositories accept every agent; other forks
 keep their owner.
 
-**The template helpers live in the workspace package.** `filesOf`,
-`hashesOf`, `sameFiles`, `changeTo`, `RepositoryRegistration`, and the name
-rules are in `@ambionframework/workspace/git`. `fromDirectory` and the
+**The registration helpers live in the workspace package.**
+`registerRepositories`, `RegistrationSteps`, `filesOf`, `hashesOf`,
+`sameFiles`, `changeTo`, `RepositoryRegistration`, and the name rules are
+in `@ambionframework/workspace/git`. `fromDirectory` and the
 source types are in the root entry. Both entries load `node:fs` and
 `node:crypto` and no git library, so the workstation installs no
 `just-git`. `tipHashes` reads `just-git/repo`, so it stays in just-bash.
@@ -537,11 +537,11 @@ override of the workstation allows `@ambionframework/workspace/git`.
 
 **`gitConformance` asks the harness for each credential fact.** The
 suite stays blind to transports. Four cases touch a credential, and each
-calls a hook of `GitConformanceBackend` that the package of the pair
-implements. Each hook takes the opened backend and workspace.
-[Tests](#tests) lists them. The store of each harness maps
-`credentialTtl` to the option of its backend: `tokenTtl` of
-`justGitBackend` or `keyTtl` of `workstationGitBackend`.
+calls a hook of `GitConformanceBackend`, a `ConformanceHarness` of
+`GitConformanceStore`, that the package of the pair implements. Each hook
+takes the opened backend and workspace. [Tests](#tests) lists them. The
+store of each harness maps `credentialTtl` to the option of its backend:
+`tokenTtl` of `justGitBackend` or `keyTtl` of `workstationGitBackend`.
 
 **The [changelog](../CHANGELOG.md) names each export change of G1 and
 G2.**

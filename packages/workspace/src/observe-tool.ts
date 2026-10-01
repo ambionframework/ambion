@@ -3,11 +3,11 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
-import type { WorkspaceResource } from './resource.ts';
+import type { Capability } from './capability.ts';
+import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
 import type { SensorClient } from './sensor-client.ts';
 import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
+import { boundedSensorReminder } from './sensor-reminder.ts';
 import { retainSensorObservation, type SensorRetentionMetadata } from './sensor-retention.ts';
 import {
 	type ObserveRequest,
@@ -16,7 +16,6 @@ import {
 	SensorSpanSchema,
 } from './sensors.ts';
 import type { SnapshotStore } from './snapshots.ts';
-import { recordedOnShell } from './tools.ts';
 
 const observeSchema = Type.Object(
 	{
@@ -49,11 +48,9 @@ interface ObserveDetails {
 }
 
 /** Build the observe tool over a workspace's connection and snapshot owners. */
-export function createObserveTool(options: {
+function createObserveTool(options: {
 	readonly connections: SensorConnections;
 	readonly store: SnapshotStore;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
-	readonly audit?: AuditLog;
 	readonly images?: boolean;
 }): AmbionTool {
 	return defineTool({
@@ -61,12 +58,7 @@ export function createObserveTool(options: {
 		label: 'Observe sensor',
 		description: 'Read a connected sensor and retain its evidence as a workspace snapshot.',
 		parameters: observeSchema,
-		execute: recordedOnShell(
-			'observe',
-			options.shell,
-			options.audit,
-			(params: ObserveParams, ctx: ToolContext) => executeObserve(params, ctx, options),
-		),
+		execute: (params: ObserveParams, ctx: ToolContext) => executeObserve(params, ctx, options),
 	});
 }
 
@@ -168,8 +160,25 @@ async function receiveFiles(
 	return received;
 }
 
+/**
+ * The sensor capability: `connect` and `observe` over the connections, their
+ * notes, and the reminder of the connected sensors.
+ */
+export function sensorCapability(options: {
+	readonly connections: SensorConnections;
+	readonly store: SnapshotStore;
+	readonly images: boolean;
+}): Capability {
+	const { connections } = options;
+	return {
+		tools: [createConnectTool({ connections }), createObserveTool(options)],
+		notes: [connectToolGuidance(), observeToolGuidance(options.images)],
+		remind: (_seat, signal) => boundedSensorReminder(connections, signal),
+	};
+}
+
 /** Guidance for reading connected sensor evidence. */
-export function observeToolGuidance(images = true): string {
+function observeToolGuidance(images = true): string {
 	return [
 		`observe reads one connected <connection>/<sensor> and retains its returned evidence as snapshots.`,
 		`Use span only when the sensor advertises span support. Cite the returned manifest snapshot ref; it names the complete result and all file snapshots.`,

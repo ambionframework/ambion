@@ -17,6 +17,7 @@ interface BashProcessSpec {
 	readonly command: string;
 	readonly name?: string;
 	readonly timeout: number;
+	readonly grace: number;
 	readonly room?: string;
 }
 
@@ -61,8 +62,15 @@ export interface ProcessTable {
 		seconds: number,
 		signal?: AbortSignal,
 	): Promise<readonly ProcessStatus[]>;
-	/** Stop a process of `agent`, and return its status once it ends or the grace ends. */
-	cancel(agent: WorkspaceAgent, handle: string): Promise<ProcessStatus>;
+	/**
+	 * Stop a process of `agent`, and return its status once it ends or the
+	 * wait of the stop ends. `stopped` is false for a process that had ended
+	 * before the cancel.
+	 */
+	cancel(
+		agent: WorkspaceAgent,
+		handle: string,
+	): Promise<{ readonly status: ProcessStatus; readonly stopped: boolean }>;
 	/** Write `seen` for a process in a final state, through `env` on the bash owner. */
 	markSeen(env: WorkspaceEnv, process: ProcessStatus): Promise<void>;
 	/**
@@ -80,6 +88,6 @@ export interface ProcessTable {
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/** Stop the process `handle` of any agent of this run: the host's cancel. */
 	hostCancel(handle: string): Promise<ProcessStatus>;
-	/** Refuse new processes, stop every running process, and wait up to the grace for each one to end. */
+	/** Refuse new processes, stop every running process, and wait up to the grace and the slack for each one to end. */
 	close(): Promise<void>;
 }

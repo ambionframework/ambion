@@ -131,7 +131,14 @@ it.each([
 	[
 		'./conformance',
 		conformance,
-		['gitConformance', 'objectConformance', 'sensorConformance', 'workspaceConformance'],
+		[
+			'check',
+			'conformanceSuite',
+			'gitConformance',
+			'objectConformance',
+			'sensorConformance',
+			'workspaceConformance',
+		],
 	],
 	[
 		'./git',
@@ -147,6 +154,7 @@ it.each([
 			'hashesOf',
 			'namespaceOf',
 			'readOnly',
+			'registerRepositories',
 			'revisionOf',
 			'sameFiles',
 			'validName',

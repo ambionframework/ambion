@@ -141,12 +141,17 @@ export function expectSuccess(label: string): NonNullable<Action['verify']> {
 	return (text) => expectExitCode(text, 0, label);
 }
 
-/** Require cancellation to report the requested process as stopped. */
-export function expectCancelled(handle: string): NonNullable<Action['verify']> {
+/**
+ * Require cancellation to report the requested process as stopped: the
+ * state `cancelled`, or exit code 0 when the server ended cleanly inside
+ * the grace after `SIGTERM`.
+ */
+export function expectStopped(handle: string): NonNullable<Action['verify']> {
 	return (text) => {
 		const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		if (!new RegExp(`^\\[Process ${escaped}(?: \\([^)]+\\))? is cancelled\\.`, 'm').test(text)) {
-			throw new Error(`Process ${handle} was not confirmed cancelled: ${text}`);
+		const line = `^\\[Process ${escaped}(?: \\([^)]+\\))? (?:is cancelled|exited with code 0)\\.`;
+		if (!new RegExp(line, 'm').test(text)) {
+			throw new Error(`Process ${handle} was not confirmed stopped: ${text}`);
 		}
 	};
 }

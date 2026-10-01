@@ -5,11 +5,10 @@
  * receives. It never checks what an executor says beyond the neutral plans
  * it asks for.
  */
-import type { ConformanceCase } from '@ambionframework/journal/conformance';
+import { type ConformanceCase, check } from '@ambionframework/journal/conformance';
 import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import {
 	type Call,
-	check,
 	claims,
 	leases,
 	operations,

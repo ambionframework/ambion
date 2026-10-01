@@ -1,8 +1,8 @@
 # Backlog
 
-Everything that is not in [next.md](next.md). Each item names the
-condition that brings it into a release. Nothing here blocks a release
-until the item moves to that file.
+Everything that is not in [next.md](next.md) or [0.6.0.md](0.6.0.md).
+Each item names the condition that brings it into a release. Nothing here
+blocks a release until the item moves to one of those files.
 
 **The sections come in the order of their priority.** Known defects come
 first, then the release and CI, then the rules and proofs, then
@@ -169,17 +169,26 @@ the five tools.
    The workstation gives the PTY. just-bash has none, so it refuses the
    kind. Today stdin is `/dev/null`, so a command that prompts waits until
    its timeout.
-2. **A graceful cancel.** `cancel` and the timeout send `SIGTERM` to the
-   group, and `SIGKILL` after the grace. Today a stop sends `SIGKILL`, so
-   a server or a database gets no time to flush. D24 needs this change
-   first. It changes the abort of `WorkspaceEnv.exec` on the workstation,
-   the kill of an adopted process, and the wrapper, which handles `TERM`.
+2. **A graceful cancel.** Implemented: `cancel`, the timeout, a cancel by
+   the host, and `dispose()` send `SIGTERM` to the group, and `SIGKILL`
+   after a grace of 10 seconds. The grace goes to the backend in the
+   options of `exec`. [Processes](../docs/processes.md#the-stop) states
+   the contract. Implemented: `dispose()` aborts the processes of this run
+   of one agent at once and waits for them together, so 4 processes that
+   ignore `TERM` take about 15 seconds. Implemented: a grace for each call.
+   `bash` takes `grace`, 1 to 300 seconds, and `cancel` waits at most 15
+   seconds ([Processes](../docs/processes.md#the-stop)). No stop holds the
+   chain of its agent for the grace, and the workstation opens one signal
+   channel at a time for each client
+   ([Workstation](../docs/workstation.md#the-ssh-client)). D24 builds on
+   this stop.
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
 
 **Condition:** an agent that must drive a prompt or a REPL. The
-interactive kind comes first.
+interactive kind comes first. The head and the tail in a result stay
+open.
 
 **D7. One stored source for the roster.** A composition seeds the roster
 from its `agents`, and each seating and unseating changes it. A
@@ -367,12 +376,12 @@ one of these capabilities. No order between these items is promised.
 
 **D24. Actuators as a pattern over processes.**
 [Actuators](../docs/actuators.md) designs a controller as an ordinary
-`bash` process. The work adds three optional process features that
-[Processes](../docs/processes.md#pending-grace-finally-and-the-event-log)
-designs: `grace`, `finally`, and the `AMBION_EVENTS` log with its fold. The
+`bash` process. The stop and the `grace` of D6 exist. The work adds two
+optional process features that
+[Processes](../docs/processes.md#pending-finally-and-the-event-log)
+designs: `finally`, and the `AMBION_EVENTS` log with its fold. The
 workbench already ships `templates/actuator-controller`, a Node controller
-with a simulated plant and tests. The order of work is D6's graceful
-cancel, then the three features. **Condition:** an application must drive
+with a simulated plant and tests. **Condition:** an application must drive
 a device from a room, and the workstation accounts hold the device
 permissions.
 

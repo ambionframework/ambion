@@ -29,27 +29,34 @@ seat that no execution serves fails at once with a `no_execution` error,
 and the failure is permanent. A room with no execution still runs its
 people and its record.
 
-**`localExecution(kind, build)` makes the execution of one kind.** It
-returns an `Execution` of that kind and changes no default. Each executor
-package builds its execution with it, such as `piExecution(options)`. An
-execution with options serves only the rooms and the runtimes that it is
-passed to.
+**`defineExecution(kind, build)` defines an executor family.** It returns
+the function that gives an execution of the kind for a set of options, such
+as `piExecution(options)`. An execution with options serves only the rooms
+and the runtimes that it is passed to, and it changes no default. The call
+also makes the execution with no options the default of the kind. A later
+definition of the same kind replaces the default. Each executor package
+calls `defineExecution` once, when the host loads it.
 
-**`defineExecution(kind, build)` also makes the execution the default of
-the kind.** A later definition of the same kind replaces the default. The
-registry holds functions and stays outside the journal, the captured
-definition, and the JSON protocol. The kernel imports no executor package.
-Each executor package defines its default once, with no options, when the
-host loads it. The runtime builds the default of a kind once, on the first
-seat of that kind, over its own storage, clock, limits, and logger.
+**The registry holds functions.** It stays outside the journal, the
+captured definition, and the JSON protocol. The kernel imports no executor
+package. The runtime builds the default of a kind once, on the first seat
+of that kind, over its own storage, clock, limits, and logger.
+
+**`localExecution(kind, build)` makes one execution of a kind.** It changes
+no default. `defineExecution` builds each execution with it. A host uses it
+for an execution that is not a family, such as a stub for a kind that is
+not available.
 
 ```ts
-export function localExecution(
+export function defineExecution<Options = undefined>(
   kind: string,
-  build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
-): Execution<AgentRunner>;
+  build: (
+    host: ExecutionHost,
+    options: Options | undefined,
+  ) => (request: ConnectorRequest) => Executor,
+): (options?: Options) => Execution<AgentRunner>;
 
-export function defineExecution(
+export function localExecution(
   kind: string,
   build: (host: ExecutionHost) => (request: ConnectorRequest) => Executor,
 ): Execution<AgentRunner>;
@@ -187,8 +194,8 @@ internal. Participant views omit `sessionId`.
 | `AgentPort`          | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
 | `RoomProtocol`       | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
 | `AgentRunner`        | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
-| `localExecution`     | Builds the execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
-| `defineExecution`    | Builds the execution of one kind as `localExecution` does, and makes it the default                                                                            |
+| `defineExecution`    | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
+| `localExecution`     | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
 | `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
 | `visitOf`            | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
@@ -595,10 +602,10 @@ family. `@ambionframework/claude` is the worked example, and
    and the fresh start. A harness with no session records none.
 8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
-   execution. Claude offers `claude()` and `claudeExecution()`. Build the
-   execution with `localExecution` and the kind. Define the default once
-   with `defineExecution` when the package loads, so a room with no
-   `execution` serves the seats of the family.
+   execution. Claude offers `claude()` and `claudeExecution()`. Export the
+   result of `defineExecution` as the second function. The call defines the
+   default when the package loads, so a room with no `execution` serves the
+   seats of the family.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';

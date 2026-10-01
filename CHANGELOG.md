@@ -2,6 +2,124 @@
 
 ## Unreleased
 
+**`bash` takes a `grace` for each call.** The new optional parameter `grace`
+is a number of seconds from 1 to 300, 10 by default. A value outside the
+range fails the call with `Invalid`. The table writes `grace` to `spec`,
+so an adopted process keeps the grace of its own call. A `spec` with no
+`grace` is no spec: a read skips it. `ProcessStatus` gains
+`grace: number`. `cancel` and `workspace.processes.cancel` wait for the end up to the grace, at most 10
+seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
+they give the status `running` with `stopping: true`, and the stop goes on.
+No stop holds the chain of its agent while it waits for the grace, so a
+later cancel or timeout of the agent does not wait for it. `dispose()` still
+waits for the full grace and 5 seconds of each process. The message of the
+workbench for a cancel that did not end now reads `did not end within the
+wait of the stop.` The workstation backend sends one signal channel at a
+time for each SSH client, so overlapping stops stay inside the 10 sessions
+of OpenSSH. No journal body changes.
+
+**`dispose()` stops the processes of one agent at the same time.** Before,
+an agent with 4 processes that ignore `SIGTERM` took about 60 seconds to
+stop. Now the processes of this run stop in about one grace and 5 seconds.
+An adopted process takes one chain step for each signal, and waits for the
+end outside the chain.
+
+**One function holds the decisions of repository registration.**
+`@ambionframework/workspace/git` exports two new names:
+`registerRepositories(steps, { templates, shared })` and the type
+`RegistrationSteps`. The function registers the templates, then the shared
+repositories, each in name order. It checks each name and each source path,
+chooses create, update, or no write, and reads each repository after a
+write. A backend supplies five storage steps: `template`, `createTemplate`,
+`updateTemplate`, `shared`, and `seedShared`. `justGitBackend` and
+`workstationGitBackend` now implement only those steps. Two behaviours of
+`justGitBackend` change. It now refuses a source path with an empty part,
+`.`, `..`, or `.git`, as `workstationGitBackend` did. Before, it stored such
+a path in the tree. It also reads each repository after its registration
+writes it, so a repository that did not land fails with its name. When an
+update step throws, the function reads the tip again. If the tip holds the
+source, another host process landed the same files, and the registration
+succeeds. Otherwise the function throws the error of the step. The
+refusal of a moved `main` in `workstationGitBackend` now reads
+`The template '<name>' did not move to its new source: git update-ref failed:
+<message>`. It is the same text as in `justGitBackend`, with the git message
+after it. The path error of a shared repository now reads
+`The shared repository '<name>' holds the path ...`.
+
+**A stop gives a process time to clean up.** `cancel`, the timeout, a
+cancel by the host, and `dispose()` now send `SIGTERM` to the process
+group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a
+stop sent `SIGKILL` at once. The wrapper of a process installs
+`trap : TERM`, so it writes `exit` when the command ends inside the grace.
+A command that traps `TERM` and exits 0 reads `exited` with code 0 after
+a cancel or a timeout. A command that the `SIGTERM` ends, with code 143,
+reads the cause of the stop. `cancel` waits up to 15 seconds, the grace
+and 5 seconds. On just-bash a stop still ends the command at once.
+`@ambionframework/workspace` exports the type `WorkspaceExecOptions`: the
+exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
+workstation sends the two signals for an abort with a grace, and refuses
+a grace outside 0 to 2,147,483 seconds. `ProcessStatus` gains `stopping`,
+which is `true` while a process that the table stopped still runs. The
+workstation's command script adds `trap : TERM`. A channel that a signal
+ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
+prefix gave 128. No journal body changes.
+
+**One harness type, one `check`, and one case runner serve the conformance
+suites.** `@ambionframework/journal/conformance` exports three new parts:
+`check(condition, what)`, `ConformanceHarness<Subject>`, and
+`conformanceSuite(harness, cases)`. `ConformanceHarness<Subject>` has a
+`name` and an `open()` that returns the subject. `conformanceSuite` opens the
+subject for each case, runs the body, and disposes the subject after it.
+`@ambionframework/ambion/conformance` and
+`@ambionframework/workspace/conformance` export the same three. The harness
+type replaces four names, and each suite keeps its subject type:
+`StorageBackend` is now `ConformanceHarness<OpenedBackend>`,
+`ConformanceBackend` is now `ConformanceHarness<WorkspaceConformanceStore>`,
+`ObjectConformanceBackend` is now `ConformanceHarness<ObjectConformanceStore>`,
+and `SensorConformanceHarness` is now
+`ConformanceHarness<SensorConformanceProbe>`. A storage harness now needs a
+`name`, as the three other harnesses had. `@ambionframework/workspace/conformance`
+also exports `WorkspaceConformanceStore`, the subject of
+`workspaceConformance`. `GitConformanceBackend` extends
+`ConformanceHarness<GitConformanceStore>`. The case names and messages do not
+change.
+
+**One rule records every tool call.** `workspaceTools` passes each tool of
+the bundle through one function, `audited`, when the workspace has an audit
+log. The entry is one more operation on the bash owner after the call ends.
+Another operation can run between the call and its entry. The file tools
+`read`, `write`, and `edit` now follow this rule. Before, their entry ran
+inside the operation of the call. A call with invalid arguments now has an
+entry, as `docs/workspace.md` states. A call that ends after `dispose`
+starts has no entry, because the bash owner refuses the record. The `onError`
+of the audit log, now also a field of `AuditLog`, receives an error that
+names the tool and the call id. The tool factories drop their `audit`
+option. No journal body changes.
+
+**One shape holds each workspace capability.** `workspaceTools` builds the
+bundle from six capabilities in a fixed order: the file tools, the
+processes, the snapshots, `sql`, git, and the sensors. Each capability gives
+its tools, its guidance notes, and its reminder. The bundle merges the
+reminders, and `withSkills` uses the same merge. The tool line of the
+guidance reads the names of the tools, so it no longer keeps name lists. The
+text the model reads does not change. No export changes.
+
+**An executor family is one call.** `defineExecution(kind, build)` in
+`@ambionframework/ambion/hosting` now returns the function that gives an
+execution for a set of options, and it registers the execution with no
+options as the default of the kind. `build` takes the host and the
+options. `piExecution`, `claudeExecution`, and `codexExecution` are the
+results of that call, with unchanged signatures. `localExecution` stays for an execution that is not a
+family. `@ambionframework/claude` drops the `ClaudeExecutionOptions` alias
+and `@ambionframework/codex` drops `CodexExecutionOptions`; use
+`ClaudeRuntime` and `CodexRuntime`.
+
+**A room read is the one read of pending says and waits.** `Room` drops
+`pendingFor(person)` and `scheduled()`, and the Cloudflare `RoomObject`
+drops `scheduledSays()`. Read `scheduled` from `room.read()`, and call
+`pendingFor(read, person)` on the read. Journal bodies and stored formats do
+not change.
+
 **Git backends support shared repositories.** Both `justGitBackend` and
 `workstationGitBackend` accept `shared` registrations. Every workspace
 agent can push to `shared/<name>`; templates stay read-only and agent forks

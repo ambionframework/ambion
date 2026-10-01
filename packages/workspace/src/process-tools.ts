@@ -14,8 +14,7 @@
  * process starts after every earlier operation of the owner. The process
  * then runs off the owner. Each handle tool reads the end of the output
  * file as one more operation on the bash owner. No tool holds the owner
- * while it waits for a process. The audit entry of a call runs on the bash
- * owner after the call ends. `docs/processes.md` states the texts.
+ * while it waits for a process. `docs/processes.md` states the texts.
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
@@ -26,14 +25,14 @@ import {
 	type ShellOutputTruncation,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
-import { PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
+import type { Capability } from './capability.ts';
+import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { recordedOnShell, ToolFailure } from './tools.ts';
+import { ToolFailure } from './tools.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -62,14 +61,14 @@ const NOT_CUT = { cut: false } as const;
 /** The largest timeout a Node timer holds, in seconds. */
 const MAX_TIMEOUT_SECONDS = 2_147_483;
 
-/** The tool names, in the order the tool line of the guidance lists them. */
-export const PROCESS_TOOL_NAMES = ['bash', 'ps', 'status', 'wait', 'cancel'] as const;
+/** The least and the most seconds of the grace of a process. */
+const MIN_GRACE_SECONDS = 1;
+const MAX_GRACE_SECONDS = 300;
 
-/** What the process tools need from the workspace: the bash owner, the process table, and the audit log. */
+/** What the process tools need from the workspace: the bash owner and the process table. */
 export interface ProcessToolOptions {
 	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly processes: ProcessTable;
-	readonly audit?: AuditLog;
 }
 
 /** Guidance for the process tools. */
@@ -82,6 +81,7 @@ export function processToolGuidance(): string {
 		`status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,`,
 		`wait waits for the first of them to end, and cancel stops one. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
+		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
@@ -110,6 +110,11 @@ const bashSchema = Type.Object({
 	wait: Type.Optional(
 		Type.Number({
 			description: `Seconds this call waits for the process to end before it returns. The default is ${DEFAULT_BASH_WAIT_SECONDS}. Set 0 to return at once.`,
+		}),
+	),
+	grace: Type.Optional(
+		Type.Number({
+			description: `Seconds from SIGTERM to SIGKILL when the workspace stops the process, from ${MIN_GRACE_SECONDS} to ${MAX_GRACE_SECONDS}. The default is ${DEFAULT_GRACE_SECONDS}. A command that traps TERM uses this time to clean up.`,
 		}),
 	),
 });
@@ -154,12 +159,17 @@ export interface PsDetails {
 	processes: readonly ProcessStatus[];
 }
 
+/** The process capability: the five process tools, their note, and the reminder of the table. */
+export function processCapability(options: ProcessToolOptions): Capability {
+	return {
+		tools: createProcessTools(options),
+		notes: [processToolGuidance()],
+		remind: options.processes.remind,
+	};
+}
+
 /** Build the `bash`, `ps`, `status`, `wait` and `cancel` tools over the process table. */
-export function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
-	const recorded = <P, D>(
-		name: string,
-		execute: (params: P, ctx: ToolContext) => Promise<AgentToolResult<D>>,
-	) => recordedOnShell(name, options.shell, options.audit, execute);
+function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
 	const table = options.processes;
 	return Object.freeze([
 		defineTool({
@@ -167,14 +177,14 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			label: 'bash',
 			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
-			execute: recorded('bash', (params: BashParams, ctx) => started(options, params, ctx)),
+			execute: (params: BashParams, ctx) => started(options, params, ctx),
 		}),
 		defineTool({
 			name: 'ps',
 			label: 'Processes',
 			description: 'List your running processes.',
 			parameters: psSchema,
-			execute: recorded('ps', async (_params: object, ctx) => listed(table, ctx)),
+			execute: async (_params: object, ctx) => listed(table, ctx),
 		}),
 		defineTool({
 			name: 'status',
@@ -182,11 +192,11 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
-			execute: recorded('status', async (params: HandleParams, ctx) => {
+			execute: async (params: HandleParams, ctx) => {
 				const process = await table.find(ctx.agent, params.handle, ctx.signal);
 				const note = deadlineLine(NOT_CUT, process, [process], ctx);
 				return failedOr(await described(options, process, ctx, note), [process]);
-			}),
+			},
 		}),
 		defineTool({
 			name: 'wait',
@@ -194,17 +204,18 @@ export function createProcessTools(options: ProcessToolOptions): readonly Ambion
 			description:
 				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. A process that has ended makes a wait return at once, so drop its handle from handles.',
 			parameters: waitSchema,
-			execute: recorded('wait', (params: WaitParams, ctx) => waited(options, params, ctx)),
+			execute: (params: WaitParams, ctx) => waited(options, params, ctx),
 		}),
 		defineTool({
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
+				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. A command can trap TERM, clean up, and exit in that time. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
-			execute: recorded('cancel', async (params: HandleParams, ctx) =>
-				cancelled(await described(options, await table.cancel(ctx.agent, params.handle), ctx)),
-			),
+			execute: async (params: HandleParams, ctx) => {
+				const { status, stopped } = await table.cancel(ctx.agent, params.handle);
+				return cancelled(await described(options, status, ctx), stopped);
+			},
 		}),
 	]);
 }
@@ -214,6 +225,17 @@ function checkedSeconds(value: number | undefined, fallback: number, max: number
 	if (value === undefined) return fallback;
 	if (!Number.isFinite(value) || value < 0 || value > max) {
 		throw new Error(`Invalid number of seconds: give a number from 0 to ${max}.`);
+	}
+	return value;
+}
+
+/** The grace of a process: `DEFAULT_GRACE_SECONDS` when the caller names none. */
+function checkedGrace(value: number | undefined): number {
+	if (value === undefined) return DEFAULT_GRACE_SECONDS;
+	if (!Number.isFinite(value) || value < MIN_GRACE_SECONDS || value > MAX_GRACE_SECONDS) {
+		throw new Error(
+			`Invalid grace: give a number of seconds from ${MIN_GRACE_SECONDS} to ${MAX_GRACE_SECONDS}.`,
+		);
 	}
 	return value;
 }
@@ -277,6 +299,7 @@ async function started(
 	const spec = {
 		command: params.command,
 		timeout,
+		grace: checkedGrace(params.grace),
 		...(params.name === undefined ? {} : { name: params.name }),
 		...(ctx.room === undefined ? {} : { room: ctx.room }),
 	};
@@ -391,11 +414,15 @@ function dropLine(ended: readonly ProcessStatus[]): string {
 
 /**
  * The result of `cancel`. A process that had ended before the cancel leads
- * with a line that says so: the cancel stopped nothing.
+ * with a line that says so: the cancel stopped nothing. A process that the
+ * stop ended can read `exited`, when its command ended inside the grace.
  */
-function cancelled(result: AgentToolResult<ProcessDetails>): AgentToolResult<ProcessDetails> {
+function cancelled(
+	result: AgentToolResult<ProcessDetails>,
+	stopped: boolean,
+): AgentToolResult<ProcessDetails> {
 	const { process } = result.details;
-	if (process.state === 'cancelled' || process.state === 'running') return result;
+	if (stopped || process.state === 'running') return result;
 	const lead = `Process ${process.handle} had ended before the cancel, so the cancel stopped nothing.`;
 	return { ...result, content: [{ type: 'text', text: `${lead}\n\n${textOf(result)}` }] };
 }

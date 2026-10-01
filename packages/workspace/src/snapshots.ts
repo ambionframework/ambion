@@ -29,13 +29,12 @@ import {
 } from '@ambionframework/ambion';
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
 import type { ObjectEnv } from './object-backend.ts';
 import { contextOf, unwrap } from './object-files.ts';
 import { assertObjectSize, MAX_OBJECT_BYTES } from './object-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
-import { recordedOnShell } from './tools.ts';
 
 /**
  * The most files one snapshot takes, and the most bytes one file holds. A
@@ -250,29 +249,24 @@ export interface SnapshotDetails {
 }
 
 /** Build the `snapshot` tool. Each call reads the files as the calling agent. */
-export function createSnapshotTool(store: SnapshotStore, audit?: AuditLog): AmbionTool {
+function createSnapshotTool(store: SnapshotStore): AmbionTool {
 	return defineTool({
 		name: 'snapshot',
 		label: 'Snapshot',
 		description:
 			'Freeze files of the workspace and give one ref for each. A ref names the bytes the file holds now, and a later change to the file does not change them. Put the refs in the refs of a say to cite the files.',
 		parameters: snapshotSchema,
-		execute: recordedOnShell(
-			'snapshot',
-			store.shell,
-			audit,
-			async (params: SnapshotParams, ctx: ToolContext) => {
-				const refs = await takeSnapshot(store, params.paths, {
-					agent: ctx.agent,
-					...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
-				});
-				const lines = params.paths.map((path, index) => `${path}: ${refs[index]}`);
-				return {
-					content: [{ type: 'text' as const, text: lines.join('\n') }],
-					details: { refs } satisfies SnapshotDetails,
-				};
-			},
-		),
+		execute: async (params: SnapshotParams, ctx: ToolContext) => {
+			const refs = await takeSnapshot(store, params.paths, {
+				agent: ctx.agent,
+				...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
+			});
+			const lines = params.paths.map((path, index) => `${path}: ${refs[index]}`);
+			return {
+				content: [{ type: 'text' as const, text: lines.join('\n') }],
+				details: { refs } satisfies SnapshotDetails,
+			};
+		},
 	});
 }
 
@@ -333,14 +327,14 @@ async function restoreSnapshot(
 }
 
 /** Build the `restore` tool. Each call writes the bytes as the calling agent. */
-export function createRestoreTool(store: SnapshotStore, audit?: AuditLog): AmbionTool {
+export function createRestoreTool(store: SnapshotStore): AmbionTool {
 	return defineTool({
 		name: 'restore',
 		label: 'Restore a snapshot',
 		description:
 			'Put the bytes of a snapshot ref in a file of your own, and give its path. The bytes are the ones the file held at the snapshot.',
 		parameters: restoreSchema,
-		execute: recordedOnShell('restore', store.shell, audit, async (params: RestoreParams, ctx) => {
+		execute: async (params: RestoreParams, ctx) => {
 			const details = await restoreSnapshot(
 				store,
 				ctx.agent,
@@ -356,8 +350,16 @@ export function createRestoreTool(store: SnapshotStore, audit?: AuditLog): Ambio
 				],
 				details,
 			};
-		}),
+		},
 	});
+}
+
+/** The snapshot capability: `snapshot` and `restore` over the store, and the citation note. */
+export function snapshotCapability(store: SnapshotStore): Capability {
+	return {
+		tools: [createSnapshotTool(store), createRestoreTool(store)],
+		notes: [snapshotGuidance(store.workspace)],
+	};
 }
 
 /** The note that tells every agent how to cite a file, and how to read one that is cited. */

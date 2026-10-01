@@ -15,8 +15,7 @@
  * a bash operation, so neither owner waits on the other.
  *
  * A refusal comes back as text that tells the agent what to do next. A
- * fault and an abort reject. The audit entry of a call runs on the bash
- * owner after the call ends. `docs/git.md` states the texts.
+ * fault and an abort reject. `docs/git.md` states the texts.
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
@@ -27,14 +26,13 @@ import {
 	withAbortSignal,
 } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
+import type { Capability } from './capability.ts';
 import { runScript, shellQuote } from './execution-env.ts';
 import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
 import { unwrap } from './object-files.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { recordedOnShell } from './tools.ts';
 
 /** The most branches one line of the `repos` table shows. */
 const SHOWN_BRANCHES = 5;
@@ -45,16 +43,12 @@ const CLONE_TIMEOUT_SECONDS = 300;
 /** How much of a failed clone's output the result keeps. */
 const CLONE_OUTPUT = { maxBytes: 4000, maxLines: 20 };
 
-/** What the git tools need from the workspace: the two owners, the server name, and the audit log. */
+/** What the git tools need from the workspace: the two owners and the server name. */
 export interface GitToolOptions {
 	readonly git: WorkspaceResource<GitEnv>['use'];
 	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly server: string;
-	readonly audit?: AuditLog;
 }
-
-/** The tool names, in the order the tool line of the guidance lists them. */
-export const GIT_TOOL_NAMES = ['repos', 'clone', 'fork'] as const;
 
 /**
  * Guidance for the git tools over a server that the workspace names
@@ -110,17 +104,25 @@ const cloneSchema = Type.Object({
 
 type CloneParams = Static<typeof cloneSchema>;
 
+/** The git capability: `repos`, `clone` and `fork`, and the git note for the workspace `workspace`. */
+export function gitCapability(
+	options: GitToolOptions & { readonly workspace: string },
+): Capability {
+	return {
+		tools: createGitTools(options),
+		notes: [gitToolGuidance(options.server, options.workspace)],
+	};
+}
+
 /** Build the git tools. Repository operations run on the git owner. */
-export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
+function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 	const repos = defineTool({
 		name: 'repos',
 		label: 'Repositories',
 		description:
 			"List the repositories on the workspace's git server: read-only templates, shared repositories, and every agent's forks, with clone URLs.",
 		parameters: reposSchema,
-		execute: recordedOnShell('repos', options.shell, options.audit, (params: ReposParams, ctx) =>
-			listed(options, params, ctx),
-		),
+		execute: (params: ReposParams, ctx) => listed(options, params, ctx),
 	});
 	const clone = defineTool({
 		name: 'clone',
@@ -128,9 +130,7 @@ export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		description:
 			'Clone any repository into your workspace without creating a fork. The source remains origin.',
 		parameters: cloneSchema,
-		execute: recordedOnShell('clone', options.shell, options.audit, (params: CloneParams, ctx) =>
-			cloned(options, params, ctx),
-		),
+		execute: (params: CloneParams, ctx) => cloned(options, params, ctx),
 	});
 	const fork = defineTool({
 		name: 'fork',
@@ -138,9 +138,7 @@ export function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		description:
 			'Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace.',
 		parameters: forkSchema,
-		execute: recordedOnShell('fork', options.shell, options.audit, (params: ForkParams, ctx) =>
-			forked(options, params, ctx),
-		),
+		execute: (params: ForkParams, ctx) => forked(options, params, ctx),
 	});
 	return Object.freeze([repos, clone, fork]);
 }

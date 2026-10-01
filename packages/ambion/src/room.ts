@@ -93,32 +93,37 @@ function connectorFor(
 	});
 }
 
-export async function startRoom(options: StartRoomOptions): Promise<Room> {
-	assertRoomName(options.name);
-	const runtime = options.runtime ?? defaultRuntime();
-	assertFree(runtime, options.name);
-	const hosted = roomRuntime(runtime, options.name);
-	const cast = composeFrom(options);
-	assertEstimators(cast.definitions, hosted);
-	const room = RoomHost.start(options.name, hosted, cast, connectorFor(runtime, options.execution));
-	registerRoom(runtime, room);
-	try {
-		await room.started();
-	} catch (error) {
-		releaseRoom(runtime, room.name, room);
-		throw error;
-	}
-	return room;
+export function startRoom(options: StartRoomOptions): Promise<Room> {
+	return acquire(options.name, options, (hosted, connector) => {
+		const cast = composeFrom(options);
+		assertEstimators(cast.definitions, hosted);
+		return RoomHost.start(options.name, hosted, cast, connector);
+	});
 }
 
-export async function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
+export function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
+	return acquire(name, options, (hosted, connector) => {
+		const bindings = definitionsOf(options.agents);
+		assertEstimators(bindings.values(), hosted);
+		return RoomHost.resume(name, hosted, bindings, connector);
+	});
+}
+
+/**
+ * One run takes a name in its runtime. The room is built over the runtime,
+ * registered, and started as one step: a start that fails releases the name,
+ * and the runtime then holds no room under it. `open` builds the room from
+ * its definitions; only the start and the resume differ there.
+ */
+async function acquire(
+	name: string,
+	options: Pick<StartRoomOptions, 'runtime' | 'execution'>,
+	open: (hosted: RoomRuntime, connector: ExecutionConnector) => RoomHost,
+): Promise<Room> {
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, name);
-	const hosted = roomRuntime(runtime, name);
-	const bindings = definitionsOf(options.agents);
-	assertEstimators(bindings.values(), hosted);
-	const room = RoomHost.resume(name, hosted, bindings, connectorFor(runtime, options.execution));
+	const room = open(roomRuntime(runtime, name), connectorFor(runtime, options.execution));
 	registerRoom(runtime, room);
 	try {
 		await room.started();

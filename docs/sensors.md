@@ -454,9 +454,10 @@ generated schema. `@ambionframework/workspace/conformance` exports
 `sensorConformance`. The package count stays at eleven; there is no separate
 sensor package.
 
-**A host supplies the transport and expected evidence.** The harness opens a
-probe for each case. A probe sends a method, path, and optional JSON body. It
-returns the HTTP status, content type, and JSON body or file bytes. Its
+**A host supplies the transport and expected evidence.** The harness is a
+`ConformanceHarness<SensorConformanceProbe>`. It opens a probe for each case.
+A probe sends a method, path, and optional JSON body. It returns the HTTP
+status, content type, and JSON body or file bytes. Its
 `dispose` method closes the request resources. The fixture gives each sensor's
 name, span capability, expected latest observations, expected span response,
 and the expected bytes for every file digest.

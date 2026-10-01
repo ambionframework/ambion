@@ -1,6 +1,6 @@
 /**
- * What the git conformance cases share: the agents, the check, and the
- * helpers that run the git owner and the shell as one agent.
+ * What the git conformance cases share: the agents and the helpers that run
+ * the git owner and the shell as one agent.
  */
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
@@ -13,11 +13,6 @@ export const ctx = BACKGROUND_CONTEXT;
 
 export const ANALYST: WorkspaceAgent = { name: 'analyst' };
 export const REVIEWER: WorkspaceAgent = { name: 'reviewer' };
-
-/** Throw `what` when `condition` fails. */
-export function check(condition: boolean, what: string): void {
-	if (!condition) throw new Error(what);
-}
 
 /** Run `operation` on the git owner as `agent`. */
 export function git<T>(

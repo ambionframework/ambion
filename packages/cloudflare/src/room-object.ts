@@ -11,7 +11,6 @@ import type {
 	Clock,
 	ExchangeRef,
 	Message,
-	PendingSay,
 	ReadRoomOptions,
 	Room,
 	RoomRead,
@@ -213,15 +212,6 @@ export class RoomObject extends DurableObject<Env> {
 		key?: string;
 	}): Promise<ExchangeRef> {
 		return exchangeRef(await this.running().post(input));
-	}
-
-	/**
-	 * The scheduled says that wait to return, including those of a stopped
-	 * record. Workers keep the name `scheduled` for the cron handler, and RPC
-	 * does not expose it, so this method has a name of its own.
-	 */
-	async scheduledSays(): Promise<PendingSay[]> {
-		return [...(await this.read({ messages: false })).scheduled];
 	}
 
 	async stop(): Promise<void> {

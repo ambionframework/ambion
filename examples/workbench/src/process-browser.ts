@@ -125,7 +125,7 @@ export class ProcessBrowser {
 			const ended = await this.host.cancelProcess(process.handle);
 			this.message =
 				ended.state === 'running'
-					? `${label(ended)} did not end within 10 seconds.`
+					? `${label(ended)} did not end within the wait of the stop.`
 					: `${label(ended)} is ${ended.state.replace('_', ' ')}.`;
 		} catch (error) {
 			this.message = errorText(error);

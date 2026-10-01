@@ -14,7 +14,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { ConformanceCase } from '@ambionframework/ambion/conformance';
+import {
+	type ConformanceCase,
+	type ConformanceHarness,
+	check,
+	conformanceSuite,
+} from '@ambionframework/ambion/conformance';
 import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 
 /** One store under test. `reopen` opens a second backend over the same store. */
@@ -22,16 +27,6 @@ export interface ObjectConformanceStore {
 	readonly backend: ObjectBackend;
 	reopen?(): Promise<ObjectBackend>;
 	dispose(): Promise<void>;
-}
-
-/** A store factory. `open` runs inside every case, so each case gets a fresh store. */
-export interface ObjectConformanceBackend {
-	readonly name: string;
-	open(): Promise<ObjectConformanceStore>;
-}
-
-function check(condition: boolean, what: string): void {
-	if (!condition) throw new Error(what);
 }
 
 const digestOf = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
@@ -153,17 +148,9 @@ const CASES: readonly [string, Body][] = [
 	['the bytes outlast dispose, when the store can open again', bytesOutlastDispose],
 ];
 
-/** The cases of an object backend, as named test bodies. */
-export function objectConformance(harness: ObjectConformanceBackend): readonly ConformanceCase[] {
-	return CASES.map(([name, body]) => ({
-		name,
-		run: async () => {
-			const store = await harness.open();
-			try {
-				await body(store);
-			} finally {
-				await store.dispose();
-			}
-		},
-	}));
+/** The cases of an object backend, as named test bodies. Each case opens a fresh store. */
+export function objectConformance(
+	harness: ConformanceHarness<ObjectConformanceStore>,
+): readonly ConformanceCase[] {
+	return conformanceSuite(harness, CASES);
 }

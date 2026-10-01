@@ -260,12 +260,22 @@ one entry out of many, by `room`, `tool`, `agent`, or `activation`.
 a note naming the path and what each line holds to the bundle's guidance, so
 an agent that reads its own tool guidance already knows to look for it.
 
-**Recording one entry runs inside the tool call's own queued operation.**
-The workspace resource lets one operation touch the filesystem at a time
-(see [Open one resource](#open-one-resource)), and the audit write shares
-the same `ExecutionEnv` as the call it records. The entry and the call never
-separate under concurrent work from other agents, and this is also what
-serializes the log's own rotation decision.
+**The entry is one more operation on the bash owner after the call ends.**
+Every tool follows this one rule, the file tools and the tools that run on
+another owner alike. Another operation can run between the call and its
+entry. The entry is an operation on the one bash owner (see
+[Open one resource](#open-one-resource)), so the log's own rotation
+decisions stay serialized. `audited` in `src/tools.ts` applies the rule to a
+tool, and `workspaceTools` applies it once to every tool of the bundle.
+
+**A call with invalid arguments has an entry.** The tool refuses the call
+before it runs. The entry holds the arguments of the call as the tool
+received them, and the validation error.
+
+**A call that ends after `dispose` starts leaves no entry.** The bash owner
+refuses the record of that call, the same as any operation queued after
+`dispose`. The call keeps its own result, and its other effects stay.
+The log's `onError` receives an error that names the tool and the call id.
 
 **A cut or aborted call is still recorded.** The record runs after the call
 ends, whatever ended it, over its own unconditional context. It does not
@@ -278,8 +288,8 @@ line naming the call and the failure, in place of the full entry. The
 fallback retries the write alone. A failure to create the log's directory
 goes to `onError` and never becomes this notice.
 
-**A directory, write, or rotation failure calls `onError`.** The tool call
-itself keeps its own result. The log is best-effort: a full disk delays the
+**A directory, write, or rotation failure calls `onError`, and so does a
+refused record.** The tool call itself keeps its own result. The log is best-effort: a full disk delays the
 record. It does not delay the agent. A throwing `onError` callback is
 caught inside the log, so it never reaches the tool call's own outcome.
 
@@ -580,8 +590,9 @@ owner, and the git owner, in that order, so a use that starts after
 `dispose` is refused at once.
 
 **A new object backend passes `objectConformance`** from
-`@ambionframework/workspace/conformance`. A harness opens a store and gives
-the backend. A harness that can open the same store again gives `reopen`.
+`@ambionframework/workspace/conformance`. A
+`ConformanceHarness<ObjectConformanceStore>` opens a store and gives the
+backend. A harness that can open the same store again gives `reopen`.
 
 - `put` then `get` gives the same bytes: 1 byte, bytes with zeros, 0 bytes,
   and 1 MiB.
@@ -931,11 +942,9 @@ owner, and then the bash owner.
 its own operations. A `bash` call and a `sql` call from two agents can
 finish in either order.
 
-**The audit log stays on the shell's filesystem.** The entry of a `sql`
-call is one more operation on the bash owner after the call ends. It runs
-over its own unconditional context, so a cut call still leaves its entry.
-Another operation on the bash owner can run between the call and its
-entry.
+**The audit log stays on the shell's filesystem.** A `sql` call runs on the
+SQL owner. Its entry is an operation on the bash owner, by the one rule of
+[Record every tool call](#record-every-tool-call).
 
 **The SQL cases run on `sqliteBackend` alone.** They live in the SQLite
 tests (`packages/workspace/test/support/sql-cases.ts`) until a second SQL
@@ -998,8 +1007,10 @@ distinct name under `/tmp` for each temporary file or directory.
 
 A case is a `ConformanceCase`: a name and a `run` that throws on failure.
 The entry loads no test framework and no just-bash, so any backend runs it.
-`workspaceConformance(harness)` takes a named backend with an `open()` that
-returns a fresh `BashBackend` and a `dispose()`, and returns the cases:
+`workspaceConformance(harness)` takes a
+`ConformanceHarness<WorkspaceConformanceStore>`: a name and an `open()` that
+returns a `WorkspaceConformanceStore`, a fresh `BashBackend` with a
+`dispose()`. It returns the cases:
 
 ```ts
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
@@ -1009,6 +1020,15 @@ describe.each(backends)('$name', (harness) => {
   for (const c of workspaceConformance(harness)) it(c.name, c.run);
 });
 ```
+
+**One harness type serves every conformance suite.**
+`ConformanceHarness<Subject>` has a `name` and an `open()` that
+returns the subject of one case. `conformanceSuite(harness, cases)` opens the
+subject for each case, runs the body, and disposes the subject after, also
+when the body throws. `check(condition, what)` throws `what` when the
+condition fails. The entries `@ambionframework/journal/conformance`,
+`@ambionframework/ambion/conformance`, and
+`@ambionframework/workspace/conformance` export the three.
 
 The memory and directory backends run the suite first
 (`packages/just-bash/test/conformance.test.ts`). A new backend runs it

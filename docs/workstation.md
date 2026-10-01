@@ -272,11 +272,15 @@ standard input:
 
 1. `printf 'AMBION_PGID=%s\n' "$$" >&2`, which gives the process group
    ID.
-2. `cd -- '<dir>' || exit 1`, which stops the script when the directory
+2. `trap : TERM`, which keeps the script's shell alive through the
+   `SIGTERM` of a stop. The shell waits for the command, so the channel
+   reports the command's exit status. The handler resets to the default in
+   the command.
+3. `cd -- '<dir>' || exit 1`, which stops the script when the directory
    went away after the check.
-3. One `export NAME='value'` for each variable, with each value quoted
+4. One `export NAME='value'` for each variable, with each value quoted
    for the shell.
-4. The command as the body of a quoted heredoc, passed to `bash -c` with
+5. The command as the body of a quoted heredoc, passed to `bash -c` with
    standard input from `/dev/null` and its stderr joined to its stdout:
 
    ```sh
@@ -308,10 +312,39 @@ of one agent to another account.
 **Each command runs in its own process group.** Pi's `NodeExecutionEnv`
 starts each command detached and kills the whole group with `SIGKILL`.
 `setsid --wait` makes `bash` the leader of a new group and waits for it,
-so the channel reports the exit status of the command. An abort opens a
-second channel and sends `kill -KILL -- -<group>`. An abort that comes
-before the `AMBION_PGID=` line waits for that line, which is the first
-thing the script prints.
+so the channel reports the exit status of the command. An abort that
+comes before the `AMBION_PGID=` line waits for that line, which is the
+first thing the script prints.
+
+**An abort stops the group with `SIGTERM`, a grace, and `SIGKILL`.** The
+`grace` field of `WorkspaceExecOptions` gives the seconds between the two
+signals. Each signal opens a short channel that runs
+`kill -<signal> -- -<group>`, in the queue of the client's signals.
+
+| `grace`            | What an abort sends                                                       |
+| ------------------ | ------------------------------------------------------------------------- |
+| Absent, or 0       | `SIGKILL` at once, as `NodeExecutionEnv` does                             |
+| 1 or more          | `SIGTERM`, then `SIGKILL` after `grace` seconds if the command still runs |
+| Not 0 to 2,147,483 | No command: `exec` fails with `spawn_error`                               |
+
+**The host holds the timer of the grace.** No channel stays open while
+the grace runs. The `SIGKILL` after the grace goes only to a group whose
+command has not exited. After the exit, the group can be empty, and the
+system can give its ID to another program. A child that the command left
+in the group keeps running, as after a natural exit. The first signal
+goes to the group also after the exit. A deadline that comes while a
+child holds the output open sends that child the first signal. With a
+grace, that signal is `SIGTERM`, so a child that ignores `TERM` keeps
+running until the channel closes. A host that stops during the grace
+sends no `SIGKILL`.
+
+**A command that ends inside the grace gives its own exit status.** The
+channel reports it, and `exec` still returns the abort as `aborted` or
+`timeout`. The process table reads the code from the `exit` file
+([Processes](processes.md#the-stop)). The command's channel closes 2
+seconds after the time of the `SIGKILL` at the latest. The times of the
+signals count from the `AMBION_PGID=` line. Until that line comes, the
+channel closes after the grace and 2 seconds.
 
 **A login shell can write lines before the script's first line.**
 `sshd` runs the command through the account's login shell, and Debian's
@@ -328,7 +361,8 @@ session's own child, and a pipeline's other processes keep running.
 
 **A deadline takes the same path and reports `timeout`.** `Deadline`
 tells an abort apart from a timeout, and a command with no timeout gets
-30 seconds. `SshEnv` supplies the group kill for both.
+30 seconds. `SshEnv` supplies the same signals and the same grace for
+both.
 
 **`SshEnv` hands one view to `onUpdate`.** The conformance suite expects
 one update for each command, the same as the just-bash backends give.
@@ -362,9 +396,10 @@ while output still arrives, the view ends with a line that says so. Over
 a slow link, that line also marks output of the command itself that the
 channel still held.
 
-**A process that starts its own session escapes the kill.** After a kill,
-its channel closes 2 seconds later. When the client cannot open a channel,
-the backend drops the client, and the next `connect()` builds a new one.
+**A process that starts its own session escapes the kill.** After the
+`SIGKILL`, its channel closes 2 seconds later. When the client cannot open
+a channel, the backend drops the client, and the next `connect()` builds a
+new one.
 
 ## Connections
 
@@ -402,17 +437,43 @@ call adds network round trips to every tool call.
   no data on the server. The host removes a workspace's folders with its own
   tools.
 
+**A client opens one signal channel at a time.** `Session` holds one FIFO
+queue of signals for each client. A `SIGTERM` or a `SIGKILL` of any
+command waits for the earlier signal channel of the same client to close,
+and then opens. The `SIGKILL` timer starts when the `SIGTERM` joins the queue, so a
+delay in the queue shortens the time between the two signals by that
+delay. An entry ends when its channel closes, when the session ends,
+or after 5 seconds, so a channel that never closes does not hold the
+queue. When the session ends, every waiting entry ends with it, and no signal
+opens on a closed client.
+
 **The channels stay under the server's limit.** OpenSSH allows 10 sessions
-on one connection by default (`MaxSessions`). The bash owner runs one
-operation at a time, so the owner's work holds at most three channels of
-a client: SFTP, one command, and one abort. Each running process of the
-agent holds one command channel, and the process table allows 4. The table
-stops the processes of one agent one at a time, and a timeout stops a
-process the same way, so the stops hold at most one abort channel. A
-client then holds at most 8 channels, while each stop ends within its
-grace of 10 seconds. A process that outlives its grace meets the
-backend's own deadline later, and that kill opens one more channel
-([Processes](processes.md#a-process)).
+on one connection by default (`MaxSessions`). The count below holds at the
+same time on one client of one agent. It does not assume a drained bash
+owner, so it covers `dispose()` and a live cancel or timeout alike.
+
+| Holder                                                                                                                             | Channels |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| The SFTP channel                                                                                                                   | 1        |
+| The bash owner: one operation, one `exec`                                                                                          | 1        |
+| The processes: a command channel for each process of this run, and one poll read for each adopted process, with 4 processes in all | up to 4  |
+| One signal channel, for every abort and every stop of the client                                                                   | 1        |
+| One `exec` of the table on a stop step: `writeStop`, or the signal script of an adopted stop                                       | 1        |
+| The total                                                                                                                          | 8        |
+
+**The process table allows 4 running processes.** A process of this run
+holds one command channel. An adopted process holds none, because its
+shell ran on an earlier client, and a poll read of the files holds one
+channel at a time for it. A process of this run or an adopted one counts
+as one of the 4, so the commands and the polls together stay at 4. The
+final read of a process of this run (`settleOwned`, `finalStatus`,
+`readFiles`: one listing `exec`) runs after its command channel closed,
+and takes the place of that channel. The stops of one agent take their
+steps one at a time, so the table holds one `exec` on a stop step. The
+owner's own abort signal uses the one signal channel. The worst case is
+8 channels, 2 below the limit of 10. The count of one signal channel
+assumes that a kill channel closes within 5 seconds, the time after which
+the queue releases an entry.
 
 **The bash owner serializes every agent's file work and the start of each
 process.** A workstation keeps one queue in v1, and each operation now waits
@@ -505,20 +566,24 @@ has mode `0600`, and each temporary directory has mode `0700`.
 
 ## Tests
 
-**Both tiers run `workspaceConformance`.** A `ConformanceBackend` harness
-opens a fresh `workstationBackend` and disposes of it. The cases check the
-`ExecutionEnv` rules that the file tools and the process tools need. The scripted harness
+**Both tiers run `workspaceConformance`.** A
+`ConformanceHarness<WorkspaceConformanceStore>` opens a fresh
+`workstationBackend` and disposes of it. The cases check the `ExecutionEnv`
+rules that the file tools and the process tools need. The scripted harness
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
 ```ts
-import type { ConformanceBackend } from '@ambionframework/workspace/conformance';
+import type {
+  ConformanceHarness,
+  WorkspaceConformanceStore,
+} from '@ambionframework/workspace/conformance';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { workstationBackend } from '@ambionframework/workstation';
 import { describe, it } from 'vitest';
 import { startSshServer } from './support/server.ts';
 
-const harness: ConformanceBackend = {
+const harness: ConformanceHarness<WorkspaceConformanceStore> = {
   name: 'workstation',
   async open() {
     const server = await startSshServer(['conformance']);

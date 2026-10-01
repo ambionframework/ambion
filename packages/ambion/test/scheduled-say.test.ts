@@ -190,12 +190,12 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const room = await start(runtime(), by === 'seat' ? changesItsMind : checksLater);
 		await (await (await room.visit(priya)).send({ text: 'Is the build green?' })).waitForClose();
 		if (by === 'host') {
-			const [say] = await room.scheduled();
+			const [say] = (await room.read({ messages: false })).scheduled;
 			expect(say).toMatchObject({ seat: 'worker' });
 			expect(await room.dismiss(say?.seq ?? 0)).toBe(true);
 			expect(await room.dismiss(say?.seq ?? 0)).toBe(false);
 		}
-		expect(await room.scheduled()).toEqual([]);
+		expect((await room.read({ messages: false })).scheduled).toEqual([]);
 		await clock.advance(AFTER * 1000);
 		await waitForRoom(room);
 		const { messages } = await room.read({ messages: {} });

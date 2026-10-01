@@ -4,8 +4,8 @@
  * framework: a runner names each case and awaits it.
  *
  * ```ts
- * describe.each(backends)('$name', (backend) => {
- * 	for (const c of storageConformance(backend)) it(c.name, c.run);
+ * describe.each(harnesses)('$name', (harness) => {
+ * 	for (const c of storageConformance(harness)) it(c.name, c.run);
  * });
  * ```
  */
@@ -18,20 +18,48 @@ export interface ConformanceCase {
 	run(): Promise<void>;
 }
 
+/** Throws `what` when `condition` fails, and narrows the type of `condition` after it. */
+export function check(condition: boolean, what: string): asserts condition {
+	if (!condition) throw new Error(what);
+}
+
+/**
+ * A subject under test, and how a case opens it. `open` runs inside every
+ * case, so a harness may bind the subject to the case: a workerd harness
+ * binds it to the state of the object. The suite disposes the subject after
+ * the case.
+ */
+export interface ConformanceHarness<Subject extends { dispose?(): void | Promise<void> }> {
+	readonly name: string;
+	open(): Subject | Promise<Subject>;
+}
+
+/**
+ * The cases of one suite, from a table of names and bodies. Each case opens
+ * the subject, runs its body over it, and disposes the subject, also when the
+ * body throws. A subject that fails to open has nothing to dispose.
+ */
+export function conformanceSuite<Subject extends { dispose?(): void | Promise<void> }>(
+	harness: ConformanceHarness<Subject>,
+	cases: readonly (readonly [name: string, body: (subject: Subject) => Promise<void>])[],
+): readonly ConformanceCase[] {
+	return cases.map(([name, body]) => ({
+		name,
+		async run() {
+			const subject = await harness.open();
+			try {
+				await body(subject);
+			} finally {
+				await subject.dispose?.();
+			}
+		},
+	}));
+}
+
 /** The storage a case writes to, and how the case releases it. */
 export interface OpenedBackend {
 	readonly opener: JournalOpener;
 	dispose?(): void | Promise<void>;
-}
-
-/** A storage under test. `open` runs inside every case, so a workerd harness may bind it to the object's state. */
-export interface StorageBackend {
-	/**
-	 * The storage a case writes to. The same storage may come back every
-	 * time: a case mints its own journal names and reads back only what it
-	 * wrote.
-	 */
-	open(): Promise<OpenedBackend> | OpenedBackend;
 }
 
 type Kind = 'note' | 'run';
@@ -43,10 +71,6 @@ const words: Vocabulary<Kind> = {
 };
 
 const note = (text: string) => ({ text });
-
-function check(condition: boolean, what: string): void {
-	if (!condition) throw new Error(what);
-}
 
 function sorted(item: unknown): unknown {
 	if (item === null || typeof item !== 'object') return item;
@@ -308,23 +332,22 @@ const cases: readonly (readonly [string, Body])[] = [
 	],
 ];
 
-/** The cases every `JournalStorage` must pass. The order is stable and the names are the contract. */
-export function storageConformance(backend: StorageBackend): readonly ConformanceCase[] {
+/**
+ * The cases every `JournalStorage` must pass. The order is stable and the
+ * names are the contract. The harness may give the same storage every time:
+ * a case mints its own journal names and reads back only what it wrote.
+ */
+export function storageConformance(
+	harness: ConformanceHarness<OpenedBackend>,
+): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
 	let count = 0;
 	const fresh = () => {
 		count += 1;
 		return `${suite}-${count}`;
 	};
-	return cases.map(([name, body]) => ({
-		name,
-		async run() {
-			const opened = await backend.open();
-			try {
-				await body(opened.opener, fresh);
-			} finally {
-				await opened.dispose?.();
-			}
-		},
-	}));
+	return conformanceSuite(
+		harness,
+		cases.map(([name, body]) => [name, ({ opener }) => body(opener, fresh)] as const),
+	);
 }

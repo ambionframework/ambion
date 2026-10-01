@@ -3,11 +3,7 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
-import type { AuditLog } from './audit.ts';
-import type { WorkspaceEnv } from './backend.ts';
-import type { WorkspaceResource } from './resource.ts';
 import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
-import { recordedOnShell } from './tools.ts';
 
 const CONNECT_TOOL_NAME = 'connect';
 
@@ -42,23 +38,16 @@ interface ConnectDetails {
 /** Create the `connect` tool for a workspace that has workstation ports. */
 export function createConnectTool(options: {
 	readonly connections: SensorConnections;
-	readonly shell: WorkspaceResource<WorkspaceEnv>['use'];
-	readonly audit?: AuditLog;
 }): AmbionTool {
 	return defineTool({
 		name: CONNECT_TOOL_NAME,
 		label: 'Connect sensor server',
 		description: 'Connect a running process you own to its sensor API and discover its sensors.',
 		parameters: connectSchema,
-		execute: recordedOnShell(
-			'connect',
-			options.shell,
-			options.audit,
-			async (params: ConnectParams, ctx: ToolContext) => {
-				const connection = await options.connections.connect(ctx.agent, params, ctx.signal);
-				return result(connection);
-			},
-		),
+		execute: async (params: ConnectParams, ctx: ToolContext) => {
+			const connection = await options.connections.connect(ctx.agent, params, ctx.signal);
+			return result(connection);
+		},
 	});
 }
 

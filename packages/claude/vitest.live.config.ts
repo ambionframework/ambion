@@ -17,6 +17,10 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: source('../ambion/src/hosting.ts') },
 			{ find: '@ambionframework/ambion', replacement: source('../ambion/src/index.ts') },
+			{
+				find: '@ambionframework/journal/conformance',
+				replacement: source('../journal/src/conformance.ts'),
+			},
 			{ find: '@ambionframework/journal', replacement: source('../journal/src/index.ts') },
 			{ find: '@ambionframework/pi', replacement: source('../pi/src/index.ts') },
 		],
