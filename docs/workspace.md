@@ -1030,7 +1030,7 @@ gives `Result<T, FileError>`, and `exec` gives
 aborted signal ends the operation with the code `aborted`. `cleanup` takes no
 signal. A caller that has no signal passes none.
 
-| Member                              | What it does                                                   |
+| Name                                | What it does                                                   |
 | ----------------------------------- | -------------------------------------------------------------- |
 | `cwd`                               | The home of the agent, and the directory of a relative path    |
 | `absolutePath`, `canonicalPath`     | The absolute path, and the path with every link resolved       |
@@ -1045,7 +1045,7 @@ signal. A caller that has no signal passes none.
 `onUpdate`. `capture.limits` bounds the output view. `onUpdate` receives
 the one `ShellOutputView` after the command ends and before `exec` resolves.
 
-**The port has no member that nothing calls.** It has no `joinPath`,
+**The port holds only what the repository calls.** It has no `joinPath`,
 `readTextLines`, `openTextLineReader`, `createTempDir`, or `createTempFile`.
 The shapes derive from the harness types of Pi (MIT License).
 
