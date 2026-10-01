@@ -102,7 +102,7 @@
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   execution/                   the execution side of the wire: driver, contract, rendering
 		//   testing/                      the deterministic test tools, over the vocabulary and the execution contract
-		//   room-host/                    core.ts, the shared view and helpers, and one file per mechanism
+		//   room-host/                    room.ts (state, phases), core.ts (shared view), one file per mechanism
 		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
