@@ -58,6 +58,8 @@ device = await openDevice(config);
 const law = createLaw(config);
 const deadline = Date.now() + config.holdSeconds * 1000;
 const claims = { current: 'acting', inBandSince: undefined, loggedAt: 0 };
+/** When the loop read the device last. The law steps by the time that passed since. */
+let sampledAt;
 
 /** Log a claim when it changes. */
 function claim(value, note) {
@@ -94,7 +96,10 @@ async function tick() {
 	if (Date.now() >= deadline) return stop('deadline', 0);
 	const value = await serial(() => device.read());
 	if (stopping) return;
-	const output = law.next(value, config.periodMs / 1000);
+	const at = Date.now();
+	const seconds = sampledAt === undefined ? config.periodMs / 1000 : (at - sampledAt) / 1000;
+	sampledAt = at;
+	const output = law.next(value, seconds);
 	await serial(() => device.drive(output));
 	const now = Date.now();
 	judge(value, now);
