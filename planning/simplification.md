@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Eight reductions have landed.** `pnpm check` passes on them, and the
+**Nine reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                      | Concepts removed                                                         | Files                                    |
@@ -42,6 +42,7 @@ changelog names each change to an export and to a behavior.
 | One shape holds each capability (W2)        | `sqlPart`, `gitPart`, `sensorTools`, `workspaceReminder`, the name lists | `capability.ts`, `workspace.ts`          |
 | One harness for the conformance suites (W4) | Four harness types, six `check` copies, the hand-written case runners    | `journal/src/conformance.ts`, the suites |
 | One registration state machine (B1)         | Two register pairs, two name and path checks, two equal-tree decisions   | `workspace/src/git-registration.ts`      |
+| One file adapter for the backends (B3)      | Two `attempt` helpers, two `FileResult` types, 26 member bodies          | `workspace/src/execution-env.ts`         |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -190,7 +191,7 @@ the same promise twice, so each call has a purpose and no work repeats.
 | --- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
 | B1  | Repository registration is one state machine written twice (done) | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
 | B2  | A transport pairing guards a mismatch that one factory prevents   | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
-| B3  | The file adapter skeleton is written twice                        | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
+| B3  | The file adapter skeleton is written twice (done)                 | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
 | B4  | Git constants repeat                                              | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
 
 **B1 closed a gap.** The just-bash backend accepted a source path such
@@ -265,7 +266,7 @@ CLAUDE.md requires for a change that merges tests.
 
 1. X1: one name rule, exported by the core.
 2. W3, W2, and W4 are done.
-3. B3: the file adapter. B1, the registration step, is done.
+3. B1 and B3 are done: the registration step and the file adapter.
 4. E1, E2, E3: the steer, the failure, and the executor level.
 5. K2 and K16: one runtime state and one room host view.
 6. E7: one scripted test language. It depends on the `Turn` rename.

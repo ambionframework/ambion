@@ -3,27 +3,25 @@
  * members return `Result`s and never throw, over `Bash`, whose filesystem
  * throws plain `Error`s.
  *
- * The adapter holds the just-bash mapping alone: classify just-bash's
- * thrown errors into Pi's codes, build `listDir` from one `readdir` plus
- * one `lstat` per entry, and call each `Bash.fs` member for its matching
- * `ExecutionEnv` member. `@ambionframework/workspace` holds the rules every
- * backend needs — path resolution and the members that follow from it, the
- * deadline, the bounded output view, and the temporary names — and this
- * adapter calls them.
+ * The adapter holds the just-bash mapping alone: `files` calls each
+ * `Bash.fs` member, `list` adds one `lstat` per entry to one `readdir`, and
+ * `classify` turns just-bash's thrown errors into Pi's codes.
+ * `@ambionframework/workspace` holds the rules every backend needs. `HomeEnv`
+ * implements the file members over `files` and `classify`, and the module
+ * supplies the deadline, the bounded output view, and the temporary names.
  *
  * `cwd` is the agent's home for the life of the env. just-bash restores its
  * working directory after every `exec`, so a `cd` lasts for one command.
  */
 
 import { posix } from 'node:path';
+import type { FileOperations } from '@ambionframework/workspace';
 import {
 	boundedView,
 	DEFAULT_TIMEOUT_SECONDS,
 	deliverView,
 	HomeEnv,
 	TMP,
-	tempDirPath,
-	tempFilePath,
 	withDeadline,
 } from '@ambionframework/workspace';
 import type {
@@ -38,8 +36,6 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { err, FileError, ok } from '@earendil-works/pi-agent-core';
 import type { Bash, FsStat } from 'just-bash';
-
-type FileResult<T> = Promise<Result<T, FileError>>;
 
 /** just-bash puts the code at the front of the message; the wording after it differs per filesystem. */
 const ERROR_CODES: Record<string, FileErrorCode> = {
@@ -79,125 +75,46 @@ export class BashEnv extends HomeEnv implements ExecutionEnv {
 		this.timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
 	}
 
-	/** Run one filesystem call, and turn whatever it throws into a `FileError`. */
-	private async attempt<T>(
-		path: string,
-		signal: AbortSignal | undefined,
-		fn: () => Promise<T>,
-	): FileResult<T> {
-		if (signal?.aborted) return err(new FileError('aborted', 'Operation aborted', path));
-		try {
-			return ok(await fn());
-		} catch (error) {
-			return err(toFileError(error, path));
-		}
-	}
-
-	readTextFile(path: string, context: Context): FileResult<string> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () => this.bash.fs.readFile(resolved));
-	}
-
-	readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () => this.bash.fs.readFileBuffer(resolved));
-	}
-
-	writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () =>
-			this.bash.fs.writeFile(resolved, content),
-		);
-	}
-
-	appendFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () =>
-			this.bash.fs.appendFile(resolved, content),
-		);
-	}
-
-	renameFile(sourcePath: string, destinationPath: string, context: Context): FileResult<void> {
-		const source = this.resolve(sourcePath);
-		const destination = this.resolve(destinationPath);
-		return this.attempt(source, context.abortSignal, () => this.bash.fs.mv(source, destination));
-	}
-
-	fileInfo(path: string, context: Context): FileResult<FileInfo> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, async () =>
-			toFileInfo(resolved, await this.bash.fs.lstat(resolved)),
-		);
-	}
-
-	/** Pi's `FileInfo` carries a size and a time, and only `lstat` has them. */
-	listDir(path: string, context: Context): FileResult<FileInfo[]> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, async () => {
-			const names = await this.bash.fs.readdir(resolved);
+	/**
+	 * One `Bash.fs` call for each file member. `readdir` gives no sizes, so
+	 * `list` adds one `lstat` per entry.
+	 */
+	protected readonly files: FileOperations = {
+		readText: (path) => this.bash.fs.readFile(path),
+		readBinary: (path) => this.bash.fs.readFileBuffer(path),
+		write: (path, content) => this.bash.fs.writeFile(path, content),
+		append: (path, content) => this.bash.fs.appendFile(path, content),
+		rename: (source, destination) => this.bash.fs.mv(source, destination),
+		info: async (path) => toFileInfo(path, await this.bash.fs.lstat(path)),
+		list: async (path) => {
+			const names = await this.bash.fs.readdir(path);
 			return Promise.all(
 				names.map(async (name) => {
-					const entry = posix.join(resolved, name);
+					const entry = posix.join(path, name);
 					return toFileInfo(entry, await this.bash.fs.lstat(entry));
 				}),
 			);
-		});
-	}
-
-	canonicalPath(path: string, context: Context): FileResult<string> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () => this.bash.fs.realpath(resolved));
-	}
-
-	exists(path: string, context: Context): FileResult<boolean> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () => this.bash.fs.exists(resolved));
-	}
-
-	createDir(
-		path: string,
-		options: { recursive?: boolean } | undefined,
-		context: Context,
-	): FileResult<void> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () =>
-			this.bash.fs.mkdir(resolved, { recursive: options?.recursive ?? true }),
-		);
-	}
-
-	remove(
-		path: string,
-		options: Parameters<ExecutionEnv['remove']>[1],
-		context: Context,
-	): FileResult<void> {
-		const resolved = this.resolve(path);
-		return this.attempt(resolved, context.abortSignal, () =>
-			this.bash.fs.rm(resolved, {
+		},
+		canonical: (path) => this.bash.fs.realpath(path),
+		exists: (path) => this.bash.fs.exists(path),
+		makeDir: (path, recursive) => this.bash.fs.mkdir(path, { recursive }),
+		remove: (path, options) =>
+			this.bash.fs.rm(path, {
 				recursive: options?.recursive ?? false,
 				force: options?.force ?? false,
 			}),
-		);
-	}
-
-	/** Neither filesystem starts with `/tmp`, and a random component keeps agents sharing one apart. */
-	createTempDir(prefix: string | undefined, context: Context): FileResult<string> {
-		const dir = tempDirPath(prefix);
-		return this.attempt(dir, context.abortSignal, async () => {
-			await this.bash.fs.mkdir(dir, { recursive: true });
-			return dir;
-		});
-	}
-
-	createTempFile(
-		options: { prefix?: string; suffix?: string } | undefined,
-		context: Context,
-	): FileResult<string> {
-		const file = tempFilePath(options);
-		return this.attempt(file, context.abortSignal, async () => {
+		makeTempDir: (path) => this.bash.fs.mkdir(path, { recursive: true }),
+		// Neither filesystem starts with `/tmp`, and a random component keeps
+		// agents that share one apart. The file needs `TMP` first.
+		makeTempFile: async (path) => {
 			await this.bash.fs.mkdir(TMP, { recursive: true });
-			await this.bash.fs.writeFile(file, '');
-			return file;
-		});
+			await this.bash.fs.writeFile(path, '');
+		},
+	};
+
+	/** just-bash codes carry no hint of the expected kind, so the hint goes unused. */
+	protected classify(error: unknown, path: string): FileError {
+		return toFileError(error, path);
 	}
 
 	/**

@@ -3,22 +3,56 @@
  * suite does not reach them: the members `HomeEnv` derives from the home, an
  * output view with no limits, a line reader, and a command that throws under `withDeadline`.
  */
-import { BACKGROUND_CONTEXT, err, FileError, ok, type Result } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, FileError } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { boundedView, HomeEnv, withDeadline } from '../src/execution-env.ts';
+import {
+	boundedView,
+	type FileExpect,
+	type FileOperations,
+	HomeEnv,
+	withDeadline,
+} from '../src/execution-env.ts';
 
 const ctx = BACKGROUND_CONTEXT;
 
-/** A `HomeEnv` over a fixed map of files. */
+/** A `HomeEnv` over a fixed map of files. It records each operation and each expect hint. */
 class FixedEnv extends HomeEnv {
-	constructor(private readonly files: Record<string, string>) {
+	readonly calls: string[] = [];
+	readonly hints: string[] = [];
+
+	constructor(private readonly contents: Record<string, string>) {
 		super('/home/ada');
 	}
 
-	async readTextFile(path: string): Promise<Result<string, FileError>> {
-		const resolved = this.resolve(path);
-		const text = this.files[resolved];
-		return text === undefined ? err(new FileError('not_found', 'no file', resolved)) : ok(text);
+	protected readonly files: FileOperations = {
+		readText: async (path) => {
+			this.calls.push(`readText ${path}`);
+			const text = this.contents[path];
+			if (text === undefined) throw new Error(`no file ${path}`);
+			return text;
+		},
+		readBinary: async (path) => new TextEncoder().encode(this.contents[path]),
+		write: async () => {},
+		append: async () => {},
+		rename: async () => {},
+		info: async () => {
+			throw new Error('no info');
+		},
+		list: async () => {
+			throw new Error('no list');
+		},
+		canonical: async (path) => path,
+		exists: async (path) => this.contents[path] !== undefined,
+		makeDir: async () => {},
+		remove: async () => {},
+		makeTempDir: async () => {},
+		makeTempFile: async () => {},
+	};
+
+	/** The classifier is asynchronous, as the workstation's is. */
+	protected async classify(error: unknown, path: string, expect: FileExpect): Promise<FileError> {
+		this.hints.push(expect);
+		return new FileError('not_found', String(error), path);
 	}
 }
 
@@ -39,6 +73,30 @@ describe('HomeEnv', () => {
 		});
 		const missing = await env.readTextLines('b.txt', undefined, ctx);
 		expect(!missing.ok && missing.error.code).toBe('not_found');
+	});
+
+	it('resolves the path, awaits the classifier with the path and the hint, and checks the abort first', async () => {
+		const files = new FixedEnv({ '/home/ada/a.txt': 'one' });
+		const missing = await files.readTextFile('b.txt', ctx);
+		expect(!missing.ok && missing.error.path).toBe('/home/ada/b.txt');
+		const listed = await files.listDir('d', ctx);
+		expect(!listed.ok && [listed.error.message, listed.error.path]).toEqual([
+			'Error: no list',
+			'/home/ada/d',
+		]);
+		const info = await files.fileInfo('d', ctx);
+		expect(!info.ok && info.error.message).toBe('Error: no info');
+		expect(files.hints).toEqual(['file', 'directory', 'any']);
+
+		const controller = new AbortController();
+		controller.abort();
+		const aborted = await files.readTextFile('a.txt', { ...ctx, abortSignal: controller.signal });
+		expect(!aborted.ok && [aborted.error.code, aborted.error.path]).toEqual([
+			'aborted',
+			'/home/ada/a.txt',
+		]);
+		expect(files.calls).toEqual(['readText /home/ada/b.txt']);
+		expect(files.hints).toEqual(['file', 'directory', 'any']);
 	});
 
 	it.each([

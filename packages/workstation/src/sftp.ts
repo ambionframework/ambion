@@ -11,6 +11,7 @@
  */
 
 import { posix } from 'node:path';
+import type { FileExpect } from '@ambionframework/workspace';
 import { FileError, type FileErrorCode } from '@earendil-works/pi-agent-core';
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2';
 
@@ -19,9 +20,6 @@ const NO_SUCH_FILE = 2;
 const PERMISSION_DENIED = 3;
 const FAILURE = 4;
 const OP_UNSUPPORTED = 8;
-
-/** What the failed call expected at the path: a file, a directory, or either. */
-export type Expect = 'file' | 'directory' | 'any';
 
 /** Run one callback-style SFTP call as a promise, and catch what it throws at once. */
 export function call<T>(
@@ -65,7 +63,7 @@ async function kindAt(sftp: SFTPWrapper, path: string): Promise<'directory' | 'o
 }
 
 /** The Pi code for a path that exists, by what the call expected there. */
-function codeForExisting(kind: 'directory' | 'other', expect: Expect): FileErrorCode {
+function codeForExisting(kind: 'directory' | 'other', expect: FileExpect): FileErrorCode {
 	if (kind === 'directory' && expect === 'file') return 'is_directory';
 	if (kind === 'other' && expect === 'directory') return 'not_directory';
 	return 'invalid';
@@ -78,7 +76,11 @@ async function codeForMissing(sftp: SFTPWrapper, path: string): Promise<FileErro
 	return (await kindAt(sftp, parent)) === 'other' ? 'not_directory' : 'not_found';
 }
 
-async function coarseCode(sftp: SFTPWrapper, path: string, expect: Expect): Promise<FileErrorCode> {
+async function coarseCode(
+	sftp: SFTPWrapper,
+	path: string,
+	expect: FileExpect,
+): Promise<FileErrorCode> {
 	const kind = await kindAt(sftp, path);
 	return kind === undefined ? codeForMissing(sftp, path) : codeForExisting(kind, expect);
 }
@@ -88,7 +90,7 @@ export async function toFileError(
 	sftp: SFTPWrapper,
 	error: unknown,
 	path: string,
-	expect: Expect,
+	expect: FileExpect,
 ): Promise<FileError> {
 	if (error instanceof FileError) return error;
 	const cause = error instanceof Error ? error : new Error(String(error));
