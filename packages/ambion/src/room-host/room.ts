@@ -32,7 +32,7 @@ import {
 	tokenWindowOf,
 } from '../host/runtime.ts';
 import type { Composition } from '../journal/entries.ts';
-import { type Entry, type RoomJournal, roomJournal } from '../journal/journal.ts';
+import { type RoomEntry, type RoomJournal, roomJournal } from '../journal/journal.ts';
 import type {
 	AgentPort,
 	CommitRequest,
@@ -495,7 +495,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	 * same way to both, so it has one path from the record to a host and
 	 * never a second one for the entries it wrote itself.
 	 */
-	private hear(entry: Entry): void {
+	private hear(entry: RoomEntry): void {
 		dispatch.hearEntry(this, entry);
 	}
 

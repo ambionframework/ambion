@@ -11,7 +11,7 @@
  */
 
 import type { Close, Composition, Seating } from '../journal/entries.ts';
-import { type Entry, placed } from '../journal/journal.ts';
+import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { ScheduledSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
@@ -71,7 +71,7 @@ export const older = (): BaseFacts => ({
  * open before the entry, which the base facts do not hold. Only a
  * cancellation reads it: it closes that exchange.
  */
-export function applyEntry(read: BaseFacts, entry: Entry, open: ExchangeRef | undefined): void {
+export function applyEntry(read: BaseFacts, entry: RoomEntry, open: ExchangeRef | undefined): void {
 	if (entry.kind === 'message') {
 		const message = placed(entry);
 		read.deliveries.set(message.seq, messageDelivery(message, read.leases));

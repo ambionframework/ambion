@@ -1,7 +1,7 @@
 # @ambionframework/journal
 
 `@ambionframework/journal` serializes an append-only journal. It owns the
-queue, envelope, fencing, idempotency, and conditional appends. A caller
+queue, entry shape, fencing, idempotency, and conditional appends. A caller
 owns entry kinds and body validation.
 
 The package has no Pi dependency. It stores JSON data through a narrow
@@ -25,7 +25,7 @@ position. It returns `undefined` when the position moved. A read returns the
 last scanned position. Adapters advance that position across foreign entries.
 
 Journal storage positions order stored bytes. `seq` orders accepted journal
-entries. The journal writes each stored value as a nested envelope:
+entries. The journal writes each stored value as one entry with a nested body:
 
 ```ts
 { kind, body, seq, key?, run? }

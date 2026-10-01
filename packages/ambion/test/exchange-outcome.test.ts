@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Close } from '../src/journal/entries.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { awaitingFor, toRoomRead } from '../src/room/read.ts';
@@ -17,7 +17,7 @@ const at = '2026-01-01T09:00:00.000Z';
 const cancelledAt = '2026-01-01T09:01:00.000Z';
 const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -26,17 +26,17 @@ const composition: Entry = {
 		at,
 	},
 };
-const arrival = (seq: number, name: string): Entry => ({
+const arrival = (seq: number, name: string): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'arrived', at, from: name, subject: name, identity: 'Person.' },
 });
-const said = (seq: number, from: string, to?: string): Entry => ({
+const said = (seq: number, from: string, to?: string): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'said', at, from, text: `Message ${seq}.`, ...(to === undefined ? {} : { to }) },
 });
-const summary = (seq: number, to: string, from: number, through: number): Entry => ({
+const summary = (seq: number, to: string, from: number, through: number): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'summary', at, from: 'worker', to, text: `For ${to}.`, covers: { from, through } },
@@ -48,12 +48,16 @@ const closeBody = (from: number, through: number, writer?: string): Close => ({
 	at,
 	...(writer === undefined ? {} : { summary: writer }),
 });
-const close = (seq: number, from: number, through: number, writer?: string): Entry => ({
+const close = (seq: number, from: number, through: number, writer?: string): RoomEntry => ({
 	kind: 'close',
 	seq,
 	body: closeBody(from, through, writer),
 });
-const ended = (seq: number, id: string, reason: 'abandoned' | 'released' | 'revoked'): Entry => ({
+const ended = (
+	seq: number,
+	id: string,
+	reason: 'abandoned' | 'released' | 'revoked',
+): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: {
@@ -65,23 +69,23 @@ const ended = (seq: number, id: string, reason: 'abandoned' | 'released' | 'revo
 		...(reason === 'abandoned' ? { cause: 'permanent' } : {}),
 	},
 });
-const running = (seq: number, id: string): Entry => ({
+const running = (seq: number, id: string): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: { id, phase: 'running', expiresAt: Date.parse(cancelledAt) - 1, at, readThrough: 2 },
 });
-const cancel = (seq: number): Entry => ({ kind: 'cancel', seq, body: { at: cancelledAt } });
+const cancel = (seq: number): RoomEntry => ({ kind: 'cancel', seq, body: { at: cancelledAt } });
 
 describe('exchange outcomes', () => {
 	const room = [composition, arrival(2, 'priya'), arrival(3, 'sam')];
-	const readOf = (entries: readonly Entry[]): RoomRead =>
+	const readOf = (entries: readonly RoomEntry[]): RoomRead =>
 		toRoomRead('room', replayState(entries, retry), 0, entries.length, false);
 	const closed = (read: RoomRead) =>
 		read.exchanges.filter(
 			(exchange): exchange is Extract<Exchange, { status: 'closed' }> =>
 				exchange.status === 'closed',
 		);
-	const outcomes = (entries: readonly Entry[]) =>
+	const outcomes = (entries: readonly RoomEntry[]) =>
 		closed(readOf(entries)).map((exchange) => exchange.outcome);
 	const asked = [...room, said(4, 'priya')];
 
@@ -131,12 +135,12 @@ describe('exchange outcomes', () => {
 	});
 
 	it('reads awaiting in the exchange of a returned say, also for an approver who asks back', () => {
-		const returned: Entry = {
+		const returned: RoomEntry = {
 			kind: 'message',
 			seq: 4,
 			body: { kind: 'posted', at, to: 'worker', returns: 3, text: 'Check the build.' },
 		};
-		const closeOf = (through: number, person?: string): Entry => ({
+		const closeOf = (through: number, person?: string): RoomEntry => ({
 			kind: 'close',
 			seq: through + 1,
 			body: { ...(person === undefined ? {} : { person }), from: 4, through, at },
@@ -318,7 +322,7 @@ describe('summary completion query', () => {
 	});
 
 	it("counts only the writer's summary attempts, in the fold and in the projection", () => {
-		const failed = (seq: number, id: string): Entry[] => [
+		const failed = (seq: number, id: string): RoomEntry[] => [
 			{ kind: 'lease', seq, body: { id, phase: 'running', expiresAt: 0, at, readThrough: 0 } },
 			{
 				kind: 'lease',
@@ -345,20 +349,20 @@ describe('summary completion query', () => {
 });
 
 describe('cancellation fold', () => {
-	const question: Entry = {
+	const question: RoomEntry = {
 		kind: 'message',
 		seq: 3,
 		body: { kind: 'said', at, from: 'priya', text: 'Question?', wakes: ['worker'] },
 	};
 	const asked = [composition, arrival(2, 'priya'), question];
 	const worked = [...asked, running(4, 'message:3:worker:1')];
-	const completion = (entries: readonly Entry[], closes: Close) => {
+	const completion = (entries: readonly RoomEntry[], closes: Close) => {
 		const state = replayState(entries, retry);
 		return summaryCompletion(closes, state.messages, state.leases, state.cancelledAt);
 	};
 
 	it('matches replay and incremental evolution before and after a fresh prompt', () => {
-		const prompt: Entry = {
+		const prompt: RoomEntry = {
 			kind: 'message',
 			seq: 6,
 			body: { kind: 'said', at: cancelledAt, from: 'priya', text: 'New?', wakes: ['worker'] },
@@ -390,7 +394,7 @@ describe('cancellation fold', () => {
 	});
 
 	it('preserves published and silent summary outcomes after cancellation', () => {
-		const published: Entry = {
+		const published: RoomEntry = {
 			kind: 'message',
 			seq: 5,
 			body: {

@@ -10,7 +10,7 @@
  */
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
 import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
-import type { Entry } from '../../src/journal/journal.ts';
+import type { RoomEntry } from '../../src/journal/journal.ts';
 import type { MessageDelivery } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
 import {
@@ -45,7 +45,7 @@ export function activationOf(id: string): ActivationId {
 }
 
 /** The state after every entry, folded over the whole journal. */
-export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
+export function foldRoom(entries: readonly RoomEntry[], options: FoldOptions): RoomState {
 	const read = older();
 	for (const entry of entries)
 		applyEntry(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
@@ -203,5 +203,5 @@ function foldOwed(
 }
 
 /** The state the room derives: the projection after every entry. */
-export const replayState = (entries: readonly Entry[], options: FoldOptions): RoomState =>
+export const replayState = (entries: readonly RoomEntry[], options: FoldOptions): RoomState =>
 	projectState(replay(entries, options));
