@@ -14,7 +14,11 @@ const KINDS = new Set(['target', 'observe', 'drive', 'state']);
 const NAME = /^[a-z][a-z0-9-]*$/;
 const AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-/** A fast plant and loop: the time constant is 1 s, and the loop settles in about 1 s. */
+/**
+ * A fast plant and loop: the time constant is 1 s, and the loop settles in about 1 s. A loaded
+ * host can stop the loop at full power, and the value then overshoots. The strong integral
+ * brings it back inside the tolerance well before the deadline of 3 s.
+ */
 async function setup(context, overrides = {}) {
 	const root = await mkdtemp(join(tmpdir(), 'ambion-actuator-'));
 	context.after(() => rm(root, { recursive: true, force: true }));
@@ -30,7 +34,7 @@ async function setup(context, overrides = {}) {
 		device: 'sim',
 		lock: join(root, 'bath.lock'),
 		output: { name: 'power', unit: '%', min: 0, max: 100, safe: 0 },
-		law: { kp: 20, ki: 20 },
+		law: { kp: 20, ki: 60 },
 		...overrides,
 		sim: { ambient: 20, tau: 1, gain: 0.6, state: join(root, 'plant.json'), ...overrides.sim },
 	};
