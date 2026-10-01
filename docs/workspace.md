@@ -342,7 +342,7 @@ carries `at`, an ISO timestamp the runtime stamps when the message lands.
 
 | `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                                                  |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `after` on a scheduled say                      |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `delaySeconds` on a scheduled say               |
 | `posted`                                | `to` (absent for the room), `text`, `refs`, and `returns` (the seq of the scheduled say) on a returned say |
 | `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                                     |
 | `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                                        |

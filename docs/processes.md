@@ -237,7 +237,7 @@ compiling 14 of 120
   `schedule` call.
 
 ```text
-Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, call schedule with after, in seconds.
+Your activation ends in 95 seconds. Process bash-3f9a2c1d0b7e can run longer. To look at a process later, call schedule with delaySeconds.
 ```
 
 **The note names the seconds left before the deadline.** The agent weighs
@@ -614,7 +614,7 @@ then, the end stays in the files.
 ### The agent can come back later
 
 **An agent schedules its own next activation.** It calls `schedule` with
-`after`, in seconds, before its activation ends. The room gives the say
+`delaySeconds` before its activation ends. The room gives the say
 back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
 reads the process in its reminder, and `status` gives the output. When the
@@ -798,7 +798,7 @@ A process keeps running after your activation ends. It stops after timeout secon
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.
-To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
+To check a long process later, call schedule with delaySeconds. The room wakes you with it then.
 ```
 
 ## Out of scope

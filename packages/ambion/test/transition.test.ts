@@ -337,7 +337,7 @@ describe('room transition', () => {
 });
 
 describe('a scheduled say', () => {
-	const schedule = { minAfter: 60, maxAfter: 3_600, pending: 1 };
+	const schedule = { minDelaySeconds: 60, maxDelaySeconds: 3_600, pending: 1 };
 	const say = (
 		state: RoomState,
 		intent: CommitRequest['intent'],
@@ -353,16 +353,16 @@ describe('a scheduled say', () => {
 			now,
 		);
 	const because = (reason: RegExp) => ({ refusal: { category: 'refused', reason } });
-	const later = (to = 'product', after = 600) =>
-		({ kind: 'said', to, text: 'Check the build.', after }) as const;
-	const scheduled = (seq = 5, after = 600) =>
+	const later = (to = 'product', delaySeconds = 600) =>
+		({ kind: 'said', to, text: 'Check the build.', delaySeconds }) as const;
+	const scheduled = (seq = 5, delaySeconds = 600) =>
 		message(seq, {
 			kind: 'said',
 			from: 'product',
 			to: 'product',
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
-			after,
+			delaySeconds,
 			activationId: 'message:3:product:1',
 		});
 	/** A question, the say that the answering seat scheduled, and the close of the exchange. */
@@ -407,7 +407,7 @@ describe('a scheduled say', () => {
 					kind: 'said',
 					to: 'product',
 					text: 'Check the build.',
-					after: 600,
+					delaySeconds: 600,
 					at,
 					activationId: 'message:3:product:1',
 					from: 'product',
@@ -443,26 +443,31 @@ describe('a scheduled say', () => {
 	it.each([
 		['to another seat', answering(), later('writer'), /goes to its author/],
 		['to a person', answering(), later('priya'), /goes to its author/],
-		['to the room', answering(), { kind: 'said', text: 'Hi.', after: 600 } as const, /author/],
 		[
-			'to oneself with no after',
+			'to the room',
+			answering(),
+			{ kind: 'said', text: 'Hi.', delaySeconds: 600 } as const,
+			/author/,
+		],
+		[
+			'to oneself with no delaySeconds',
 			answering(),
 			{ kind: 'said', to: 'product', text: 'Hi.' } as const,
 			/cannot address yourself.*`schedule`/,
 		],
-		['under the least after', answering(), later('product', 59), /from 60 to 3600 seconds/],
-		['over the most after', answering(), later('product', 3_601), /from 60 to 3600 seconds/],
+		['under the least delaySeconds', answering(), later('product', 59), /from 60 to 3600 seconds/],
+		['over the most delaySeconds', answering(), later('product', 3_601), /from 60 to 3600 seconds/],
 		['in a part of a second', answering(), later('product', 60.5), /whole number/],
 		['past the scheduled says of the seat', waiting(), later(), /at most 1 for one seat/],
 	] as const)('refuses a say %s', (_case, state, intent, reason) => {
 		expect(say(state, intent)).toMatchObject(because(reason));
 	});
 
-	it('takes a say with after outside every exchange, and refuses one in a closing response', () => {
+	it('takes a say with delaySeconds outside every exchange, and refuses one in a closing response', () => {
 		const quiet = fold(composition(), person(), lease('message:2:product:1', 3));
 		expect(quiet.exchange).toBeUndefined();
 		expect(say(quiet, later(), 'message:2:product:1')).toHaveProperty('event');
-		expect(summary(closing(), { kind: 'said', text: 'Later.', after: 600 })).toMatchObject(
+		expect(summary(closing(), { kind: 'said', text: 'Later.', delaySeconds: 600 })).toMatchObject(
 			because(/cannot schedule/),
 		);
 	});

@@ -87,7 +87,7 @@ than 1 items`. The model reads this text as a tool error.
 Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`,
 `dismiss`, and `recall`, plus the tools from its definition. A closing
 activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
-`schedule` accepts `{ after, text, refs? }` and writes a scheduled say
+`schedule` accepts `{ delaySeconds, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent name.
 `dismiss` accepts `{ message }`, the seq of a scheduled say. The room

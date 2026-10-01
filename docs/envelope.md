@@ -13,22 +13,22 @@ partial value and the runtime fills each missing field with the default in
 the table. `Limits` in
 [`host/runtime.ts`](../packages/ambion/src/host/runtime.ts) is the type.
 
-| Field                          | Bounds                                                      | Default                |
-| ------------------------------ | ----------------------------------------------------------- | ---------------------- |
-| `limits.delivery.resend`       | How long a wake stays unanswered before the room resends it | 5,000 ms               |
-| `limits.lease.ttl`             | How long a lease lasts from each claim or renewal           | 60,000 ms              |
-| `limits.lease.deadline`        | How long an activation runs from its first claim            | 600,000 ms             |
-| `limits.activation.attempts`   | Attempts the room makes at one wake or one draft            | 3                      |
-| `limits.activation.backoff`    | The wait before each retry, from the attempt number         | `attempt * 30_000` ms  |
-| `limits.call.timeout`          | Each executor call to the room                              | 10,000 ms              |
-| `limits.call.attempts`         | Retries of a claim or a release                             | 2                      |
-| `limits.context.messages`      | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
-| `limits.message.bytes`         | UTF-8 bytes in one spoken message or summary text           | unbounded (`Infinity`) |
-| `limits.schedule.minAfter`     | The least `after` of a scheduled say, in seconds            | 60                     |
-| `limits.schedule.maxAfter`     | The most `after` of a scheduled say, in seconds             | 604,800 (7 days)       |
-| `limits.schedule.pending`      | Scheduled says of one seat that wait to return              | 4                      |
-| `limits.trace.toolOutputBytes` | Bytes of tool output that a logged step keeps               | 65,536                 |
-| `limits.trace.stepsPerPass`    | Steps that one pass logs                                    | 1,000                  |
+| Field                             | Bounds                                                      | Default                |
+| --------------------------------- | ----------------------------------------------------------- | ---------------------- |
+| `limits.delivery.resend`          | How long a wake stays unanswered before the room resends it | 5,000 ms               |
+| `limits.lease.ttl`                | How long a lease lasts from each claim or renewal           | 60,000 ms              |
+| `limits.lease.deadline`           | How long an activation runs from its first claim            | 600,000 ms             |
+| `limits.activation.attempts`      | Attempts the room makes at one wake or one draft            | 3                      |
+| `limits.activation.backoff`       | The wait before each retry, from the attempt number         | `attempt * 30_000` ms  |
+| `limits.call.timeout`             | Each executor call to the room                              | 10,000 ms              |
+| `limits.call.attempts`            | Retries of a claim or a release                             | 2                      |
+| `limits.context.messages`         | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
+| `limits.message.bytes`            | UTF-8 bytes in one spoken message or summary text           | unbounded (`Infinity`) |
+| `limits.schedule.minDelaySeconds` | The least `delaySeconds` of a scheduled say                 | 60                     |
+| `limits.schedule.maxDelaySeconds` | The most `delaySeconds` of a scheduled say                  | 604,800 (7 days)       |
+| `limits.schedule.pending`         | Scheduled says of one seat that wait to return              | 4                      |
+| `limits.trace.toolOutputBytes`    | Bytes of tool output that a logged step keeps               | 65,536                 |
+| `limits.trace.stepsPerPass`       | Steps that one pass logs                                    | 1,000                  |
 
 **Two limits change what the room does with a message.**
 `limits.context.messages` windows the view and refuses nothing. The room

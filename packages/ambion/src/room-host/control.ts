@@ -109,7 +109,8 @@ function unreadBefore(
 	message: Message,
 ): { unread?: Message[] } {
 	const { readThrough, intent } = commit;
-	if (intent.kind !== 'said' || intent.after === undefined || readThrough === undefined) return {};
+	if (intent.kind !== 'said' || intent.delaySeconds === undefined || readThrough === undefined)
+		return {};
 	const unread = host
 		.state()
 		.messages.filter((entry) => entry.seq > readThrough && entry.seq < message.seq);

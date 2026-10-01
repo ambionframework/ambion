@@ -277,7 +277,7 @@ describe('Workbench host', () => {
 			stream: scriptedStream((agent, call, closing) => {
 				if (closing || agent !== 'assistant' || call !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
-				const later = { text: 'Check the bench supply.', after: 600 };
+				const later = { text: 'Check the bench supply.', delaySeconds: 600 };
 				return fauxAssistantMessage([fauxToolCall('schedule', later)], { stopReason: 'toolUse' });
 			}),
 		});

@@ -29,7 +29,7 @@ export type FailureCause = 'permanent' | 'transient';
 
 /** What a seat asks the room to record. The room stamps everything else. */
 export type Intent =
-	| { kind: 'said'; to?: string; text: string; refs?: string[]; after?: number }
+	| { kind: 'said'; to?: string; text: string; refs?: string[]; delaySeconds?: number }
 	| { kind: 'seated'; name: string }
 	| { kind: 'unseated'; name: string }
 	| { kind: 'dismissed'; message: Seq };
@@ -192,7 +192,7 @@ export interface SpokenMessage extends Landed {
 	 * Seconds after `at` when the room returns the say to its author. Present
 	 * only on a say that an agent addressed to itself: a scheduled say.
 	 */
-	after?: number;
+	delaySeconds?: number;
 }
 
 /**

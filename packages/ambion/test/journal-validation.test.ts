@@ -48,7 +48,7 @@ describe('room journal body validation', () => {
 		],
 		['message', { ...summary, refs: ['https://x/a'] }],
 		['message', summary],
-		['message', { kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', after: 600 }],
+		['message', { kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', delaySeconds: 600 }],
 		['message', { ...returned, refs: ['https://x/a'], wakes: ['alpha'] }],
 		['message', posted],
 		['message', { ...posted, to: 'priya', refs: ['https://x/a'] }],
@@ -102,8 +102,16 @@ describe('room journal body validation', () => {
 	it.each([
 		['message', { kind: 'said', at: 'now', from: 'alpha' }, 'body.text'],
 		['message', { ...summary, covers: { from: 1 } }, 'body.covers.through'],
-		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 0 }, 'body.after'],
-		['message', { kind: 'said', at, from: 'alpha', text: 'x', after: 1.5 }, 'body.after'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', text: 'x', delaySeconds: 0 },
+			'body.delaySeconds',
+		],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', text: 'x', delaySeconds: 1.5 },
+			'body.delaySeconds',
+		],
 		['message', { ...returned, returns: 0 }, 'body.returns'],
 		['message', { ...posted, returns: 3 }, 'body.to'],
 		['message', { ...returned, from: 'alpha' }, 'body.from'],
@@ -117,7 +125,11 @@ describe('room journal body validation', () => {
 			'body.from',
 		],
 		['message', { kind: 'dismissed', at, message: 3, text: 'x' }, 'body.text'],
-		['message', { kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', after: 60 }, 'body.to'],
+		[
+			'message',
+			{ kind: 'said', at, from: 'alpha', to: 'beta', text: 'x', delaySeconds: 60 },
+			'body.to',
+		],
 		['message', { kind: 'seated', at, subject: 'andrei', fixed: 'yes' }, 'body.fixed'],
 		[
 			'message',

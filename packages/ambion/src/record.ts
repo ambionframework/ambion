@@ -46,8 +46,8 @@ function lineBody(message: Message): string {
 /** A said or summary line. A scheduled say names the time it returns. */
 function spokenLine(message: Extract<Message, { kind: 'said' | 'summary' }>): string {
 	const returns =
-		message.kind === 'said' && message.after !== undefined
-			? ` (returns at ${new Date(Date.parse(message.at) + message.after * 1000).toISOString()})`
+		message.kind === 'said' && message.delaySeconds !== undefined
+			? ` (returns at ${new Date(Date.parse(message.at) + message.delaySeconds * 1000).toISOString()})`
 			: '';
 	return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refsOf(message)}${returns}`;
 }

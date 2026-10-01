@@ -75,7 +75,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	const say = async (
 		key: string,
 		text: string,
-		extra: { refs?: string[]; readThrough?: number; after?: number } = {},
+		extra: { refs?: string[]; readThrough?: number; delaySeconds?: number } = {},
 	) =>
 		world.peer.commit({
 			activation,
@@ -85,7 +85,9 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 				kind: 'said',
 				text,
 				...(extra.refs === undefined ? {} : { refs: extra.refs }),
-				...(extra.after === undefined ? {} : { to: worker.name, after: extra.after }),
+				...(extra.delaySeconds === undefined
+					? {}
+					: { to: worker.name, delaySeconds: extra.delaySeconds }),
 			},
 		});
 	return { ...world, exchange, activation, say, first };
@@ -263,9 +265,9 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect(stored[0]).toMatchObject({ refs: ['https://x/a'] });
 
 		// A scheduled say lands past what its author has not read, and names it.
-		const behind = { after: 600, readThrough: world.first };
+		const behind = { delaySeconds: 600, readThrough: world.first };
 		const later = await world.say('after-key', 'Check later.', behind);
-		expect(later).toMatchObject({ committed: { after: 600 } });
+		expect(later).toMatchObject({ committed: { delaySeconds: 600 } });
 		expect(later).not.toHaveProperty('committed.owner');
 		const unread = 'unread' in later ? (later.unread ?? []) : [];
 		expect(unread.map((message) => (message.kind === 'said' ? message.text : ''))).toEqual([
@@ -274,7 +276,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			'An answer.',
 		]);
 		expect(await world.say('after-key', 'Check later.', behind)).toEqual(later);
-		expect(await world.say('after-key', 'Check later.', { after: 900 })).toEqual(
+		expect(await world.say('after-key', 'Check later.', { delaySeconds: 900 })).toEqual(
 			differentOperation,
 		);
 

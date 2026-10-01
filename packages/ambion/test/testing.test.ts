@@ -262,7 +262,7 @@ describe('scriptedExecutor', () => {
 		expect(commits[0]).toMatchObject({ readThrough: 3, intent: { kind: 'said', text: 'hi' } });
 		expect(commits[1]).toMatchObject({
 			readThrough: 4,
-			intent: { kind: 'said', to: 'a', text: 'Check the build.', after: 600 },
+			intent: { kind: 'said', to: 'a', text: 'Check the build.', delaySeconds: 600 },
 		});
 		expect(session.readThrough).toBe(5);
 		expect(session.shouldRefresh(5)).toBe(false);

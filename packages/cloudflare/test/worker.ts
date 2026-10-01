@@ -50,7 +50,7 @@ export const configuration = {
 	estimators: { chars: (text: string) => text.length },
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often,
 	// and a scheduled say may return one second after it lands.
-	limits: { delivery: { resend: 50 }, schedule: { minAfter: 1 } },
+	limits: { delivery: { resend: 50 }, schedule: { minDelaySeconds: 1 } },
 };
 
 configure(configuration);

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**A delay is `delaySeconds`, and `after` names only a seq cursor.** The
+`said` body of the journal holds `delaySeconds` where it held `after`, and the
+`said` intent and message hold the same field. The `schedule` tool takes
+`delaySeconds` where it took `after`, so the model sees a new parameter name.
+The limits `schedule.minAfter` and `schedule.maxAfter` are now
+`schedule.minDelaySeconds` and `schedule.maxDelaySeconds`. The refusals of the
+room and of the runtime name the new fields. The two process texts that tell
+a model to call `schedule` name `delaySeconds`. The kernel does not read a
+journal of an earlier release. The golden journals change in this one key.
+
 **A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
 person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
 now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.

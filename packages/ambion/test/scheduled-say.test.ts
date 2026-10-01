@@ -1,5 +1,5 @@
 /**
- * A scheduled say, end to end: an agent calls `schedule` with `after`, the
+ * A scheduled say, end to end: an agent calls `schedule` with `delaySeconds`, the
  * exchange closes while the say waits, and the room gives the say back when
  * it is due. The returned entry opens an exchange with no person, and the
  * agent answers the person who asked. A room that stops or crashes
@@ -35,7 +35,7 @@ import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const AFTER = 600;
+const DELAY_SECONDS = 600;
 
 /**
  * The worker starts a check on a question, and answers when the check comes
@@ -51,7 +51,7 @@ const checksLater: PiScript = (context) => {
 	return callTool('schedule', {
 		text: 'Check the build.',
 		refs: ['file:///builds/out.log'],
-		after: AFTER,
+		delaySeconds: DELAY_SECONDS,
 	});
 };
 
@@ -67,7 +67,7 @@ const changesItsMind: PiScript = (context) => {
 	if (seq !== undefined) return callTool('dismiss', { message: Number(seq) });
 	if (last?.startsWith('dismissed')) return speak('I dropped the check.', 'priya');
 	if (last !== undefined) return quiet();
-	return schedule('Check the build.', AFTER);
+	return schedule('Check the build.', DELAY_SECONDS);
 };
 
 const kinds = (messages: readonly Message[]) =>
@@ -107,7 +107,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await first.waitForClose();
 		const [say] = stateOf(room).scheduled;
 		expect(say).toMatchObject({ seat: 'worker', text: 'Check the build.' });
-		const due = new Date(clock.now() + AFTER * 1000).toISOString();
+		const due = new Date(clock.now() + DELAY_SECONDS * 1000).toISOString();
 		expect(results).toContain(
 			`scheduled #${say?.seq}: the room wakes you with this message at ${due}`,
 		);
@@ -115,7 +115,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			{
 				seq: say?.seq,
 				seat: 'worker',
-				due: new Date(clock.now() + AFTER * 1000).toISOString(),
+				due: new Date(clock.now() + DELAY_SECONDS * 1000).toISOString(),
 				text: 'Check the build.',
 				refs: ['file:///builds/out.log'],
 			},
@@ -129,7 +129,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 				resolve(event.exchange.from);
 			});
 		});
-		await clock.advance(AFTER * 1000 - 1);
+		await clock.advance(DELAY_SECONDS * 1000 - 1);
 		expect(stateOf(room).scheduled).toHaveLength(1);
 		await clock.advance(1);
 		const from = await opened;
@@ -160,10 +160,10 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 	});
 
 	it.each([
-		['a stop before the say is due', 'stop', AFTER * 500],
-		['a stop while the say is overdue', 'stop', AFTER * 2000],
-		['a crash before the say is due', 'crash', AFTER * 500],
-		['a crash while the say is overdue', 'crash', AFTER * 2000],
+		['a stop before the say is due', 'stop', DELAY_SECONDS * 500],
+		['a stop while the say is overdue', 'stop', DELAY_SECONDS * 2000],
+		['a crash before the say is due', 'crash', DELAY_SECONDS * 500],
+		['a crash while the say is overdue', 'crash', DELAY_SECONDS * 2000],
 	] as const)('returns the say once after %s', async (_case, end, stopped) => {
 		const { clock, runtime } = await setup();
 		const first = runtime();
@@ -175,7 +175,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(read.scheduled).toMatchObject([{ seat: 'worker' }]);
 		await clock.advance(stopped);
 		const resumed = await resume(room, runtime());
-		await clock.advance(AFTER * 1000);
+		await clock.advance(DELAY_SECONDS * 1000);
 		await waitForRoom(resumed);
 		const { messages } = await resumed.read({ messages: {} });
 		expect(kinds(messages).filter((kind) => kind === 'posted')).toHaveLength(1);
@@ -196,7 +196,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 			expect(await room.dismiss(say?.seq ?? 0)).toBe(false);
 		}
 		expect((await room.read({ messages: false })).scheduled).toEqual([]);
-		await clock.advance(AFTER * 1000);
+		await clock.advance(DELAY_SECONDS * 1000);
 		await waitForRoom(room);
 		const { messages } = await room.read({ messages: {} });
 		const dismissed = messages.find((message) => message.kind === 'dismissed');

@@ -61,7 +61,7 @@ export function stateLine(process: ProcessStatus): string {
 }
 
 /** The end of the note for running processes past the reach of a wait: the scheduled say. */
-export const LATER_LINE = 'To look at a process later, call schedule with after, in seconds.';
+export const LATER_LINE = 'To look at a process later, call schedule with delaySeconds.';
 
 /** `Process <h> can run longer.`, or `Processes <h>, <h> can run longer.` */
 function longerLine(handles: readonly string[]): string {

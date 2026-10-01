@@ -33,7 +33,7 @@ export function messageDelivery(
 			source === 'message' &&
 			seat !== message.from &&
 			(message.kind !== 'posted' || message.to === undefined || seat === message.to) &&
-			!(message.kind === 'said' && message.after !== undefined) &&
+			!(message.kind === 'said' && message.delaySeconds !== undefined) &&
 			message.kind !== 'dismissed' &&
 			!wakes.has(seat) &&
 			atWork(lease, message.seq);

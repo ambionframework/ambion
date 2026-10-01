@@ -74,8 +74,8 @@ world in, and an actuator closes the loop on it. Each step is a tool call
 that the agent chooses, so a new loop needs no new host code. See
 [Combine the capabilities](docs/actuators.md#combine-the-capabilities).
 
-**An agent comes back to its work later.** It calls `schedule` with `after`,
-in seconds. The exchange closes while the say waits. When the say is due, the
+**An agent comes back to its work later.** It calls `schedule` with `delaySeconds`.
+The exchange closes while the say waits. When the say is due, the
 room gives it back, and the returned say opens an exchange of its own. An
 agent checks a long build this way with no event source and no host code. A
 host posts an event of its own with `room.post`. See [Exchange](docs/exchange.md#6-a-scheduled-say).

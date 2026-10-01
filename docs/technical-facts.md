@@ -99,7 +99,7 @@ positioning and the current capabilities.
   the versioned client and schema exports. `observe` stores the response
   manifest and verified file bytes as ordinary snapshot objects. The server
   owns acquisition and reducer state.
-- **A clock that the agent sets.** An agent calls `schedule` with `after`,
+- **A clock that the agent sets.** An agent calls `schedule` with `delaySeconds`,
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See
   [Exchange](exchange.md#6-a-scheduled-say).

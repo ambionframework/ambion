@@ -107,7 +107,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('shows a returned say as the opening of its own exchange, and the answer after it', () => {
-		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const scheduled = { ...said(61, 'agent', 'agent'), delaySeconds: 600 } as Message;
 		const returned = {
 			seq: 70,
 			kind: 'posted',
@@ -127,7 +127,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('marks a scheduled say that a dismissal names, in the open and in a discussion', () => {
-		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const scheduled = { ...said(61, 'agent', 'agent'), delaySeconds: 600 } as Message;
 		const dismissed = { seq: 62, kind: 'dismissed', message: 61, at: AT } as Message;
 		const open = build([said(59, 'mira'), scheduled, dismissed], []);
 		expect(open.find((block) => block.type === 'message' && block.message.seq === 61)).toEqual({
@@ -152,7 +152,7 @@ describe('buildTimeline', () => {
 			text: 'Check the build.',
 			at: AT,
 		} as Message;
-		const scheduled = { ...said(61, 'agent', 'agent'), after: 600 } as Message;
+		const scheduled = { ...said(61, 'agent', 'agent'), delaySeconds: 600 } as Message;
 		const messages = [said(59, 'mira'), scheduled, returned, said(72, 'agent'), said(75, 'agent')];
 		expect(shape(build(messages, [closedExchange(59, 75, 'mira')]))).toEqual([
 			'question:59',
