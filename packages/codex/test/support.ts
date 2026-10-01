@@ -3,16 +3,18 @@
  * one activation opened over a room that records what the seat commits, and
  * a client of the room tools server.
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
+	type ActivationEvent,
 	type ActivationView,
 	type AgentDefinition,
 	type CommitRequest,
 	type CommitResult,
-	type ExecutionEvent,
 	type Executor,
 	ROOM_SERVER,
 	type RoomProtocol,
@@ -30,7 +32,7 @@ import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { createCodexExecutor } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
-import { citing, type RoomTool, servedTools } from '../src/tools.ts';
+import { type CodexTool, citing, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
 
 /** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
@@ -235,6 +237,10 @@ function replay(turns: readonly Turn[]) {
 	return { client, seen };
 }
 
+/** The Codex home of the executors in this file. The replay client never reads it, and it never holds a login. */
+const SEAT_HOME = mkdtempSync(join(tmpdir(), 'ambion-codex-seat-'));
+process.once('exit', () => rmSync(SEAT_HOME, { recursive: true, force: true }));
+
 /** An executor of `definition` over a replay client, and a way to open its activations. */
 export function open(
 	turns: readonly Turn[],
@@ -243,13 +249,19 @@ export function open(
 	catalog: CatalogSource = recordedCatalog,
 ) {
 	const steps: Step[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const { room, commits } = roomOf(answer);
 	const { client, seen } = replay(turns);
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createCodexExecutor({ definition, client, catalog });
+	const executor = createCodexExecutor({
+		definition,
+		client,
+		catalog,
+		home: SEAT_HOME,
+		login: false,
+	});
 	/** The core state of one activation, as the driver opens it. */
 	const activate = (id = 'message:1:gpt:1') =>
 		new ActivationState(executor, {
@@ -286,7 +298,7 @@ const noTrace: StepSink = {
 async function bindTools(room: RoomProtocol, view: ActivationView, definition: AgentDefinition) {
 	const changed = new Set<string>();
 	const ordinary = view.spec.purpose.kind !== 'summarize';
-	let served: RoomTool[] = [];
+	let served: CodexTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
 	const executor: Executor = (activation) => {

@@ -55,11 +55,11 @@ it('keeps each object record in one row, and applies each change whole', async (
 		await Promise.all(
 			Array.from({ length: 8 }, async (_, index) =>
 				(index % 2 === 0 ? seat : other).change((current) => ({
-					patch: { wakes: (current.wakes ?? 0) + 1 },
+					patch: { wakeCount: (current.wakeCount ?? 0) + 1 },
 				})),
 			),
 		);
-		expect(seat.read()).toEqual({ wakes: 8 });
+		expect(seat.read()).toEqual({ wakeCount: 8 });
 		expect(room.read()).toEqual({ name: 'room', agents: ['assistant'] });
 		const rows = state.storage.sql.exec('SELECT name FROM ambion_metadata ORDER BY name').toArray();
 		expect(rows.map((row) => row.name)).toEqual(['room', 'seat']);

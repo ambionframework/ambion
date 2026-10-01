@@ -8,7 +8,7 @@
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { AmbionTool, Reminder } from './bundle.ts';
-import type { PendingSay } from './scheduling.ts';
+import type { ScheduledSay } from './scheduling.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -48,35 +48,35 @@ export interface ExchangeRef {
 }
 
 /** An exchange the room has finished, and the range it turned out to hold. */
-export interface ClosedExchange extends ExchangeRef {
+export interface ExchangeRange extends ExchangeRef {
 	/** The last seq on the record when the room went quiet. */
 	readonly through: Seq;
 }
 
 /** The durable outcome of the optional summary work for a closed exchange. */
 export type SummaryOutcome =
-	| { readonly status: 'pending'; readonly writer?: string }
-	| { readonly status: 'published'; readonly summary: SummaryMessage }
-	| { readonly status: 'silent' }
-	| { readonly status: 'failed' };
+	| { readonly kind: 'pending'; readonly writer?: string }
+	| { readonly kind: 'published'; readonly summary: SummaryMessage }
+	| { readonly kind: 'silent' }
+	| { readonly kind: 'failed' };
 
 /** How an activation stands: at work, or ended for a reason. */
 export type ActivationOutcome =
-	| { readonly status: 'running' }
+	| { readonly kind: 'running' }
 	| {
-			readonly status: EndReason;
+			readonly kind: EndReason;
 			/** Set when a cancellation ended the activation. */
 			readonly cancelled?: true;
 			/** Why the activation failed, on a failed or abandoned activation. */
 			readonly cause?: FailureCause;
 	  };
 
-/** One activation of an exchange, as the exchange read lists it. */
+/** One activation of an exchange, as `Exchange` lists it. */
 export interface ExchangeActivation {
 	/** The activation id. */
 	readonly id: string;
 	readonly seat: string;
-	/** The attempt number. A retry of a wake is a new attempt. */
+	/** The attempt number. A retry is a new attempt of one due activation. */
 	readonly attempt: number;
 	/** `respond` answers a message. `summarize` writes the closing summary. */
 	readonly purpose: 'respond' | 'summarize';
@@ -100,14 +100,14 @@ export type ExchangeOutcome =
 	/** The last spoken message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
 
-/** A detached exchange view that can be read without starting a room. */
-export type ExchangeView =
+/** A detached exchange, open or closed, that a host reads without starting a room. */
+export type Exchange =
 	| (ExchangeRef & {
 			readonly status: 'open';
 			/** Every activation since the exchange opened, in journal order. */
 			readonly activations: readonly ExchangeActivation[];
 	  })
-	| (ClosedExchange & {
+	| (ExchangeRange & {
 			readonly status: 'closed';
 			/** Every activation in the range, every attempt and the summary included. */
 			readonly activations: readonly ExchangeActivation[];
@@ -119,19 +119,16 @@ export type ExchangeView =
 			readonly usage?: Usage;
 	  });
 
-/** A closed exchange view: the one that carries an outcome. */
-export type ClosedExchangeView = Extract<ExchangeView, { readonly status: 'closed' }>;
-
 interface RoomReadFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
 	/** The scheduled says that wait to return, in the order they landed. */
-	readonly scheduled: readonly PendingSay[];
+	readonly scheduled: readonly ScheduledSay[];
 	readonly participants: readonly Participant[];
-	readonly exchanges: readonly ExchangeView[];
-	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
+	readonly exchanges: readonly Exchange[];
+	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
-	readonly watermark: Seq;
+	readonly through: Seq;
 }
 
 /** A detached room read. Missing records have no room facts. */
@@ -179,7 +176,7 @@ interface Landed {
 }
 
 /** What a participant said. */
-export interface SpokenMessage extends Landed {
+export interface SaidMessage extends Landed {
 	kind: 'said';
 	/**
 	 * URIs the message cites. The room validates and stores them and never reads
@@ -295,14 +292,14 @@ export interface DismissedMessage extends Landed {
 }
 
 export type Message =
-	SpokenMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
+	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
 /** Copy a recorded message before it crosses an ownership boundary. */
 export function copyMessage<T extends Message>(message: T): T {
 	return structuredClone(message);
 }
 
-export function isSpoken(message: Message): message is SpokenMessage {
+export function isSaid(message: Message): message is SaidMessage {
 	return message.kind === 'said';
 }
 
@@ -399,48 +396,48 @@ export type RoomEvent =
 	 * before any summary: the configured writer is one reader of this, not the only
 	 * one.
 	 */
-	| { type: 'exchange_closed'; exchange: ClosedExchange };
+	| { type: 'exchange_closed'; exchange: ExchangeRange };
 
 /** What one activation did, or what happened to it. Every member names the activation. */
-export type ExecutionEvent =
+export type ActivationEvent =
 	/**
 	 * The room woke a seat. One per activation, however many requests to a
 	 * provider it takes: an activation is the room's span, and Pi's own `turn`
 	 * — one request and the tools it calls — never surfaces here.
 	 */
-	| { type: 'activation_start'; agent: string; activation: string }
+	| { type: 'activation_start'; seat: string; activation: string }
 	/**
 	 * The lock refused ordinary speech because the record moved after its
 	 * author read it. The event includes the messages the author missed.
 	 */
-	| { type: 'conflict'; author: string; activation: string; missed: Message[] }
-	| { type: 'tool_execution_start'; agent: string; activation: string; toolName: string }
-	| { type: 'tool_execution_end'; agent: string; activation: string; toolName: string }
-	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
+	| { type: 'conflict'; seat: string; activation: string; missed: Message[] }
+	| { type: 'tool_call'; seat: string; activation: string; name: string }
+	| { type: 'tool_result'; seat: string; activation: string; name: string }
+	/** The seat stopped, and `said` says whether it left a mark on the record. */
 	| {
 			type: 'activation_end';
-			agent: string;
+			seat: string;
 			activation: string;
-			spoke: boolean;
+			said: boolean;
 			/** What the activation spent. Absent when it reached no provider or the room ended it. */
 			usage?: Usage;
 	  }
-	| { type: 'error'; agent: string; activation: string; error: Error; cause?: FailureCause }
+	| { type: 'error'; seat: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
 			type: 'delivery_error';
-			agent: string;
+			seat: string;
 			activation: string;
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
 			error: Error;
 	  }
 	/**
-	 * The room gave up: a permanent failure, or every attempt at a wake or a
-	 * draft came to nothing and the cap is reached. `activation` names the
+	 * The room gave up: a permanent failure, or every attempt of a due
+	 * activation came to nothing and the cap is reached. `activation` names the
 	 * attempt the room did not make, `cause` says why, and the journal holds
 	 * the entry that says so.
 	 */
-	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause };
+	| { type: 'abandoned'; seat: string; activation: string; cause: FailureCause };
 
 // -- steps --------------------------------------------------------------------
 
@@ -475,7 +472,7 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 }
 
 /**
- * One thing an activation did, in a vocabulary every executor family shares.
+ * One thing an activation did, in a vocabulary every executor kind shares.
  * The trace gives each step to the host's logger once. A step is plain JSON.
  */
 export type Step =
@@ -517,7 +514,7 @@ export type TraceStep = Step & {
 };
 
 /** One step of one activation, as the trace gives it to the host's logger. */
-export interface TraceRecord {
+export interface TracedStep {
 	/** The room the activation ran in. */
 	readonly room: string;
 	/** The seat that ran the activation. */
@@ -531,7 +528,7 @@ export interface TraceRecord {
  * calls it once for each step, in order, on the path of the activation, so
  * it must not block. A logger that throws or rejects changes nothing.
  */
-export type TraceLogger = (record: TraceRecord) => void;
+export type TraceLogger = (traced: TracedStep) => void;
 
 /** What the trace keeps of an agent's work. */
 export interface TracePolicy {
@@ -540,16 +537,16 @@ export interface TracePolicy {
 	readonly toolOutput: 'omit' | 'full';
 }
 
-/** The room's event stream: room facts and execution events, under one `subscribe`. */
-export type RoomNotification = RoomEvent | ExecutionEvent;
+/** The room's event stream: room facts and activation events, under one `subscribe`. */
+export type RoomNotification = RoomEvent | ActivationEvent;
 
 /**
- * What an agent runs on: a family name, instructions, and tools. The room
- * reads the fields below and no other. An executor family adds its own
+ * What an agent runs on: an executor kind, instructions, and tools. The room
+ * reads the fields below and no other. An executor kind adds its own
  * fields, such as a model, and reads them itself.
  */
 export interface AgentExecutor {
-	/** The executor family, such as `pi`. The host that composes execution resolves it. */
+	/** The executor kind, such as `pi`. The host that composes execution resolves it. */
 	readonly kind: string;
 	readonly instructions: string;
 	readonly tools: readonly AmbionTool[];
@@ -557,7 +554,7 @@ export interface AgentExecutor {
 	readonly guidance?: string;
 	/** The reminders of the agent's tool bundles, in bundle order. */
 	readonly reminders?: readonly Reminder[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the room

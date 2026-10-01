@@ -15,14 +15,14 @@
  * that resumes rebuilds it by `replay`.
  */
 
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { PendingSay } from '../scheduling.ts';
+import type { ScheduledSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { messageDelivery } from './delivery.ts';
 import { exchangeAfter } from './exchange.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	older,
@@ -49,7 +49,7 @@ export interface RoomProjection {
 	/** The spoken messages and posts after the boundary: all that can open an exchange. */
 	readonly tail: Message[];
 	/** The summary and unseated messages, which the summary rules read. */
-	readonly record: Message[];
+	readonly summaryFacts: Message[];
 	/** The leases at work. A message steers only these. */
 	readonly running: Map<string, LeaseHold>;
 	/** The leases a wake claims, by seat. */
@@ -58,7 +58,7 @@ export interface RoomProjection {
 	readonly closedLeases: LeaseIndex<Seq>;
 	readonly wakes: OpenWake[];
 	readonly owed: Owed[];
-	readonly scheduled: PendingSay[];
+	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
 
@@ -77,7 +77,7 @@ export function emptyProjection(): RoomProjection {
 		exchange: undefined,
 		boundary: 0,
 		tail: [],
-		record: [],
+		summaryFacts: [],
 		running: new Map(),
 		seatLeases: new Map(),
 		closedLeases: new Map(),
@@ -148,7 +148,7 @@ function pushed<T>(items: T[], item: T, own: boolean): T[] {
 }
 
 const factsOf = (projection: RoomProjection): OwedFacts => ({
-	record: projection.record,
+	summaryFacts: projection.summaryFacts,
 	closedLeases: projection.closedLeases,
 	cancelledAt: projection.base.cancelledAt,
 });
@@ -192,18 +192,18 @@ function exchangeOf(
 	return exchangeAfter(projection.tail, [...projection.people.keys()], projection.boundary);
 }
 
-/** The tail and the record after a message. */
+/** The tail and the summary facts after a message. */
 function notedBy(
 	prev: RoomProjection,
 	message: Message,
 	step: Step,
-): { tail: Message[]; record: Message[] } {
+): { tail: Message[]; summaryFacts: Message[] } {
 	const opens = message.kind === 'said' || message.kind === 'posted';
 	const speaks = opens && message.seq > prev.boundary;
 	const keeps = message.kind === 'summary' || message.kind === 'unseated';
 	return {
 		tail: speaks ? pushed(prev.tail, message, step.own) : prev.tail,
-		record: keeps ? pushed(prev.record, message, step.own) : prev.record,
+		summaryFacts: keeps ? pushed(prev.summaryFacts, message, step.own) : prev.summaryFacts,
 	};
 }
 
@@ -315,7 +315,7 @@ function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomPro
 		leases: new Map(prev.base.leases),
 		closes: [...prev.base.closes],
 	};
-	applyEvent(base, entry, prev.exchange);
+	applyEntry(base, entry, prev.exchange);
 	const marked = {
 		...prev,
 		base,

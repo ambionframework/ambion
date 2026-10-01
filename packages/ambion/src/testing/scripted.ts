@@ -49,11 +49,12 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Repl
 ];
 
 /** A reply that calls `say`, to one seat or to the room. */
-export const speak = (text: string, to?: string): Reply =>
+export const say = (text: string, to?: string): Reply =>
 	callTool('say', to ? { to, text } : { text });
 
 /** A reply that calls `schedule`: the room wakes the seat with the say after `after` seconds. */
-export const later = (text: string, after: number): Reply => callTool('schedule', { text, after });
+export const schedule = (text: string, after: number): Reply =>
+	callTool('schedule', { text, after });
 
 /** A reply that calls `seat`: the seat puts the named agent in the room. */
 export const seat = (name: string): Reply => callTool('seat', { name });
@@ -160,7 +161,7 @@ class ScriptedSession implements ExecutorSession {
 
 	async pass(pass: Pass): Promise<PassResult> {
 		// The script reads the whole view, so the pass reads the record through it.
-		const after = pass.kind === 'delta' ? pass.since : 0;
+		const after = pass.kind === 'delta' ? pass.after : 0;
 		this.activation.read({ after, through: pass.view.through });
 		try {
 			while (!this.over) {

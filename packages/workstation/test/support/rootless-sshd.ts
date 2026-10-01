@@ -59,7 +59,7 @@ export async function startRootlessSshd({
 		await waitForListener(daemon, port, () => stderr);
 		const privateKey = await readFile(clientKey, 'utf8');
 		const options: WorkstationOptions = {
-			host: '127.0.0.1',
+			server: '127.0.0.1',
 			port,
 			hostKey: fingerprint,
 			layout: {

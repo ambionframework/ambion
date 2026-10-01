@@ -5,13 +5,13 @@
  * the assistant, so the live suite's plumbing runs with no key.
  */
 
-import { byAgent, quiet, seat, speak } from '@ambionframework/ambion/testing';
+import { byAgent, quiet, say, seat } from '@ambionframework/ambion/testing';
 import { piExecution } from '@ambionframework/pi';
 import {
 	contextText,
 	isClosingContext,
 	type PiScript,
-	scripted,
+	scriptedStream,
 } from '@ambionframework/pi/testing';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 import { describe, expect, it } from 'vitest';
@@ -26,12 +26,12 @@ function assistant(route: Route, seen: string[]): PiScript {
 	return byAgent({
 		assistant: (context) => {
 			if (isClosingContext(context)) {
-				return contextText(context).includes('Summary:') ? quiet() : speak('Summary: 8 units.');
+				return contextText(context).includes('Summary:') ? quiet() : say('Summary: 8 units.');
 			}
 			seen.push(contextText(context));
 			if (routed) return quiet();
 			routed = true;
-			return route === 'ask' ? speak('Check the stock of SKU A.', 'inventory') : seat('inventory');
+			return route === 'ask' ? say('Check the stock of SKU A.', 'inventory') : seat('inventory');
 		},
 	});
 }
@@ -40,7 +40,7 @@ type Route = 'quiet' | 'ask' | 'seat';
 
 const scriptedAssistant = (route: Route, seen: string[] = []) => ({
 	model: 'scripted/assistant',
-	execution: piExecution({ stream: scripted(assistant(route, seen)), sessions: 'memory' }),
+	execution: piExecution({ stream: scriptedStream(assistant(route, seen)), sessions: 'memory' }),
 });
 
 describe('the eval support', () => {
@@ -60,27 +60,27 @@ describe('the eval support', () => {
 						: '8 units of SKU A.',
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor(questions),
 				exchanges: questions.length,
 				exchangeMs: 10_000,
 			});
-			expect(run.ended).toBe('limit');
+			expect(simulation.ended).toBe('limit');
 			// The specialist answers once in each exchange, from what that exchange holds.
 			expect(
-				run.exchanges.map((exchange) => saidBy(exchange, 'inventory').map((m) => m.text)),
+				simulation.exchanges.map((exchange) => saidBy(exchange, 'inventory').map((m) => m.text)),
 			).toEqual(
 				['8 units of SKU A.', '5 units of SKU B.'].slice(0, questions.length).map((text) => [text]),
 			);
-			expect(run.exchanges[0]?.summary?.text).toBe('Summary: 8 units.');
+			expect(simulation.exchanges[0]?.summary?.text).toBe('Summary: 8 units.');
 			if (route === 'seat') {
-				expect(run.room.messages).toContainEqual(
+				expect(simulation.room.messages).toContainEqual(
 					expect.objectContaining({ kind: 'seated', subject: 'inventory', from: 'assistant' }),
 				);
 			}
 			if (route === 'ask') {
-				expect(saidBy(run.exchanges[0], 'assistant')).toEqual([
+				expect(saidBy(simulation.exchanges[0], 'assistant')).toEqual([
 					expect.objectContaining({ to: 'inventory', text: 'Check the stock of SKU A.' }),
 				]);
 			}
@@ -95,14 +95,14 @@ describe('the eval support', () => {
 			assistant: scriptedAssistant('ask', seen),
 			specialist: answers(() => '8 units of SKU A.'),
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['How many units of SKU A?']),
 			exchanges: 1,
 			exchangeMs: 10_000,
 		});
-		expect(run.ended, run.error).toBe('limit');
-		const [exchange] = run.exchanges;
+		expect(simulation.ended, simulation.error).toBe('limit');
+		const [exchange] = simulation.exchanges;
 		// The departure follows the question in the exchange, and the person does not come back.
 		expect(exchange?.discussion.map((message) => [message.kind, message.from])).toEqual([
 			['said', 'priya'],
@@ -110,7 +110,7 @@ describe('the eval support', () => {
 			['said', 'assistant'],
 			['said', 'inventory'],
 		]);
-		expect(run.room.messages.filter((message) => message.kind === 'left')).toHaveLength(1);
+		expect(simulation.room.messages.filter((message) => message.kind === 'left')).toHaveLength(1);
 		// The first activation of the assistant already reads the person as absent.
 		expect(seen[0]).toContain('- priya (absent');
 		expect(exchange?.summary).toMatchObject({ to: 'priya', text: 'Summary: 8 units.' });

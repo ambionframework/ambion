@@ -1,7 +1,7 @@
 /**
  * Evals for Ambion rooms. `simulate` drives a room that the test started:
- * an actor plays a person, one exchange at a time, and the run it returns
- * holds what the room did. Checks in code read the run, and a judge grades
+ * an actor plays a person, one exchange at a time, and the simulation it returns
+ * holds what the room did. Checks in code read the simulation, and a judge grades
  * the criteria that code cannot decide. See `docs/simulator.md`.
  */
 
@@ -22,11 +22,11 @@ export type {
 	Ended,
 	Move,
 	MoveCall,
-	Run,
-	RunExchange,
 	Seen,
 	SeenExchange,
 	SimulateOptions,
+	Simulation,
+	SimulationExchange,
 } from './types.ts';
 
 /** Kept in step with package.json by a test. */

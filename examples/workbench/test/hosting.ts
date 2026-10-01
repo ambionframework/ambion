@@ -16,7 +16,7 @@ import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbenc
  * Scripted executions for the Claude and Codex seats. Each runs a script and
  * needs no key and no network. Without a script, a seat stays quiet.
  */
-export function scriptedFamilies(
+export function scriptedKinds(
 	script: Script = byAgent({}),
 ): NonNullable<OpenOptions['executions']> {
 	return { claude: scripted(script), codex: scripted(script) };
@@ -43,7 +43,7 @@ type Respond = (agent: string, call: number, closing: boolean) => AssistantMessa
  * A model stream that answers each request of each Pi seat from `respond`. A
  * request whose signal has aborted ends with an abort.
  */
-export function scriptedStream(respond: Respond): PiExecutionOptions['stream'] {
+export function respondingStream(respond: Respond): PiExecutionOptions['stream'] {
 	const calls = new Map<string, number>();
 	return (_model, context, options) => {
 		const output = createAssistantMessageEventStream();
@@ -87,7 +87,7 @@ export async function freshDirectory(): Promise<string> {
 export async function openHost(options: Partial<OpenOptions> = {}): Promise<Workbench> {
 	const workbench = await openWorkbench({
 		stream: quietStream(),
-		executions: scriptedFamilies(),
+		executions: scriptedKinds(),
 		...options,
 		directory: options.directory ?? (await freshDirectory()),
 	});

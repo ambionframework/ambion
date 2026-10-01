@@ -38,10 +38,10 @@ export type {
 	BashBackend,
 	BashServices,
 	WorkspaceBackends,
+	WorkspaceEndpoint,
+	WorkspaceEndpoints,
 	WorkspaceEnv,
 	WorkspaceLayout,
-	WorkspacePort,
-	WorkspacePorts,
 } from './backend.ts';
 export type {
 	FileExpect,
@@ -79,7 +79,7 @@ export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export type { ObjectBackend, ObjectDigest, ObjectEnv } from './object-backend.ts';
-export type { ProcessKind, ProcessState, ProcessStatus } from './process-files.ts';
+export type { ProcessKind, ProcessRecord, ProcessState } from './process-files.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';

@@ -43,8 +43,8 @@ export type { ActivationSteps } from './steps.ts';
 export interface Workbench {
 	readonly people: readonly Person[];
 	rooms(): Promise<RoomView[]>;
-	/** Read one room. Messages come back only after `since`, an exclusive position. */
-	read(room: string, since: number): Promise<RoomView>;
+	/** Read one room. Messages come back only above `after`, an exclusive seq. */
+	read(room: string, after: number): Promise<RoomView>;
 	/**
 	 * Watch one room for live changes. A running room calls `changed` after each
 	 * entry it records and each activation step, so a reader can read again at
@@ -170,7 +170,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 	return {
 		people,
 		rooms: () => rooms.list(),
-		read: (room, since) => rooms.read(room, since),
+		read: (room, after) => rooms.read(room, after),
 		watch: (room, changed) => rooms.watch(room, changed),
 		async join(room, person) {
 			const who = personNamed(person);

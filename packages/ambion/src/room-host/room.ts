@@ -31,7 +31,7 @@ import {
 	type RuntimeState,
 	tokenWindowOf,
 } from '../host/runtime.ts';
-import type { Composition } from '../journal/events.ts';
+import type { Composition } from '../journal/entries.ts';
 import { type Entry, type RoomJournal, roomJournal } from '../journal/journal.ts';
 import type {
 	AgentPort,
@@ -51,7 +51,7 @@ import {
 	type RoomProjection,
 	replay,
 } from '../room/projection.ts';
-import { captureMessageSelection, type MessageSelection, readView } from '../room/read.ts';
+import { captureMessageSelection, type MessageSelection, toRoomRead } from '../room/read.ts';
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
 import type { TokenWindow } from '../room/view.ts';
@@ -67,7 +67,7 @@ import type {
 } from '../types.ts';
 import * as control from './control.ts';
 import {
-	acceptedEvent,
+	acceptedEntry,
 	compositionOf,
 	decideAndAppend,
 	notificationFor,
@@ -110,7 +110,7 @@ export interface Room {
 	readonly name: string;
 	/**
 	 * Observe one detached room read without waiting for agent work. The read
-	 * holds the scheduled says, and `pendingFor(read, person)` selects the
+	 * holds the scheduled says, and `awaitingFor(read, person)` selects the
 	 * closed exchanges that wait on one person.
 	 */
 	read(options?: { messages?: MessageSelection }): Promise<RoomRead>;
@@ -254,7 +254,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		this.enter('running');
 		dispatch.seedHeard(this);
 		// The composition is decided before the fence, so a refused one writes nothing.
-		acceptedEvent(decide(this.state(), { type: 'compose', composition }, this.now()));
+		acceptedEntry(decide(this.state(), { type: 'compose', composition }, this.now()));
 		requireSubmission(await decideAndAppend(this, 'run', { type: 'run' }));
 		requireSubmission(await decideAndAppend(this, 'composition', { type: 'compose', composition }));
 		await this.reconcile();
@@ -279,7 +279,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 				const current = this.state();
 				this.validateDefinitions(current);
 				const priorComposition = current.composition;
-				if (priorComposition === undefined) return { event: undefined };
+				if (priorComposition === undefined) return { entry: undefined };
 				const roster = new Set(current.roster.map((seat) => seat.name));
 				const definitions = new Map(
 					[...priorComposition.agents, ...priorComposition.available, ...current.roster].map(
@@ -431,7 +431,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		const messages = captureMessageSelection(options.messages);
 		await this.ready;
 		await this.journal.settled();
-		return readView(
+		return toRoomRead(
 			this.name,
 			this.state(),
 			this.runtime.clock.now(),

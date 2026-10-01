@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { describeUnavailable } from './families.ts';
+import { describeUnavailable } from './kinds.ts';
 import { runWorkbench } from './tui.ts';
 
 const USAGE = 'Usage: pnpm start [directory] [--as <person>]';

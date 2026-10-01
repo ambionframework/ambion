@@ -3,7 +3,7 @@
  * run without an approval error, and the activation reports its usage and
  * its steps.
  */
-import { isSpoken } from '@ambionframework/ambion';
+import { isSaid } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { errorsIn, live, open, person, saidBy, seat, untilQuiet } from './support.ts';
 
@@ -27,11 +27,11 @@ live('the loop', () => {
 			expect(said.length).toBeGreaterThanOrEqual(1);
 			expect(said.map((message) => message.text).join(' ')).toContain('4');
 			const ended = events.filter((event) => event.type === 'activation_end');
-			expect(ended).toContainEqual(expect.objectContaining({ agent: 'clerk', spoke: true }));
+			expect(ended).toContainEqual(expect.objectContaining({ seat: 'clerk', said: true }));
 			expect(errorsIn(events)).toEqual([]);
 
 			// (b) No tool result carries an approval error.
-			const activation = ended.find((event) => event.agent === 'clerk')?.activation ?? '';
+			const activation = ended.find((event) => event.seat === 'clerk')?.activation ?? '';
 			const steps = stepsOf(activation);
 			const results = steps.filter((step) => step.type === 'tool_result');
 			expect(steps.some((step) => step.type === 'tool_call' && step.name === 'say')).toBe(true);
@@ -40,10 +40,10 @@ live('the loop', () => {
 			}
 
 			// (d) One activation reports usage above zero, and its steps can be read.
-			const usage = ended.find((event) => event.agent === 'clerk')?.usage;
+			const usage = ended.find((event) => event.seat === 'clerk')?.usage;
 			expect((usage?.input ?? 0) + (usage?.output ?? 0)).toBeGreaterThan(0);
 			expect(steps.length).toBeGreaterThan(0);
-			expect(messages.some(isSpoken)).toBe(true);
+			expect(messages.some(isSaid)).toBe(true);
 		} finally {
 			await room.stop();
 		}

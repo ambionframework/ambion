@@ -9,7 +9,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, providerMessage } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
 import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -50,7 +50,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 				runtime,
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(() => {
+					stream: scriptedStream(() => {
 						calls += 1;
 						throw new Error(message);
 					}),
@@ -62,7 +62,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		await waitForRoom(room);
 		expect(calls).toBe(cause === 'permanent' ? 1 : hostingOf(runtime).limits.activation.attempts);
 		expect(events.filter((event) => event.type === 'abandoned')).toEqual([
-			expect.objectContaining({ agent: worker.name, cause }),
+			expect.objectContaining({ seat: worker.name, cause }),
 		]);
 		const errors = events.filter((event) => event.type === 'error');
 		expect(errors.length).toBeGreaterThan(0);

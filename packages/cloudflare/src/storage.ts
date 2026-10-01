@@ -91,7 +91,7 @@ export interface SeatMetadata {
 	seat?: string;
 	activation?: string;
 	phase?: 'pending' | 'running';
-	wakes?: number;
+	wakeCount?: number;
 	cuts?: number;
 	hold?: boolean;
 }

@@ -1,7 +1,7 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { Close, LeaseChange } from '../src/journal/entries.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
 import { foldLeases, type LeaseHold } from '../src/room/lease.ts';
 import {

@@ -9,12 +9,12 @@
  * projection equal to it after every entry of a seeded walk.
  */
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
-import type { Close, Composition, Seating } from '../../src/journal/events.ts';
+import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
 import type { Entry } from '../../src/journal/journal.ts';
 import type { MessageDelivery } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	older,
@@ -23,18 +23,18 @@ import {
 	reserveOf,
 } from '../../src/room/fold.ts';
 import {
+	type DueActivation,
+	type DueWake,
+	dueOf,
 	type LeaseHold,
-	type PendingActivation,
-	type PendingWake,
 	removedAfter,
-	statusOf,
 } from '../../src/room/lease.ts';
 import { type Owed, withAttempts } from '../../src/room/owed.ts';
 import { advancePeople, type PersonState } from '../../src/room/presence.ts';
 import { projectState, replay } from '../../src/room/projection.ts';
 import { coversAttempt } from '../../src/room/rules.verified.ts';
 import { changesScheduled, scheduleStep } from '../../src/room/scheduled.ts';
-import type { PendingSay } from '../../src/scheduling.ts';
+import type { ScheduledSay } from '../../src/scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../../src/types.ts';
 
 /** The fields an id encodes, as the fold decodes them for a lease that a test writes by hand. */
@@ -48,7 +48,7 @@ export function activationOf(id: string): ActivationId {
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
 	const read = older();
 	for (const entry of entries)
-		applyEvent(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
+		applyEntry(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
 	return project(read, options);
 }
 
@@ -88,11 +88,11 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 }
 
 /** The wakes the room owes, from a state's `due`. */
-export const pendingOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+export const pendingOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'message');
 
-/** The summary drafts the room owes, from a state's `due`. */
-export const owedOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+/** The summary activations the room owes, from a state's `due`. */
+export const owedOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'closed');
 
 /** Every person the record knows, in the order the record met them. */
@@ -122,8 +122,8 @@ function openExchange(
 }
 
 /** The says that wait to return, folded over the record after the last cancellation. */
-function foldScheduled(messages: readonly Message[], cancelledAt: Seq | undefined): PendingSay[] {
-	let list: PendingSay[] = [];
+function foldScheduled(messages: readonly Message[], cancelledAt: Seq | undefined): ScheduledSay[] {
+	let list: ScheduledSay[] = [];
 	for (const message of after(messages, cancelledAt)) {
 		if (changesScheduled(message)) list = scheduleStep(list, message);
 	}
@@ -146,16 +146,16 @@ export function pendingWakes(
 	roster: ReadonlySet<string>,
 	options: FoldOptions,
 	cancelledAt?: Seq,
-): PendingWake[] {
+): DueWake[] {
 	const bySeat = leasesBySeat(leases, roster);
-	const pending: PendingWake[] = [];
+	const pending: DueWake[] = [];
 	for (const message of after(messages, cancelledAt)) {
 		const delivery = deliveries.get(message.seq);
 		if (delivery === undefined) continue;
 		for (const seat of reached(delivery, roster)) {
 			if (removedAfter(messages, seat, message.seq)) continue;
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options);
+			const wake = dueOf(message, seat, taken, options);
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
@@ -197,7 +197,7 @@ function foldOwed(
 	return closes.flatMap((close) => {
 		if (close.summary === undefined) return [];
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
-		if (completion.status !== 'pending' || completion.writer === undefined) return [];
+		if (completion.kind !== 'pending' || completion.writer === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];
 	});
 }

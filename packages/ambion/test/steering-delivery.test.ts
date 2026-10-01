@@ -23,7 +23,14 @@ import {
 	stateOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, quiet, says, scripted, summarise } from './support/scripted.ts';
+import {
+	byAgent,
+	contextText,
+	quiet,
+	says,
+	scriptedStream,
+	summarise,
+} from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -80,7 +87,7 @@ function holdingAlpha(hold: number) {
 	const contexts: string[] = [];
 	const execution = piExecution({
 		sessions: 'memory',
-		stream: scripted(
+		stream: scriptedStream(
 			byAgent({
 				alpha: async (context, _agent, call) => {
 					contexts.push(contextText(context));
@@ -183,7 +190,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		expect(first.contexts.at(-1)).toContain('Second correction.');
 		expect(observed.wakes).toHaveLength(1);
 		expect(
-			events.filter((event) => event.type === 'activation_start').map((event) => event.agent),
+			events.filter((event) => event.type === 'activation_start').map((event) => event.seat),
 		).toEqual(['alpha']);
 		expect(pendingOf(stateOf(room))).toEqual([]);
 		const last = observed.steers.at(-1);
@@ -226,7 +233,7 @@ describe.each(storages)('steering on $name', (storage) => {
 				agents: [alpha, beta, assistant],
 				execution: piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							alpha: (context) => {
 								contexts.push(contextText(context));
@@ -266,7 +273,7 @@ describe.each(storages)('steering on $name', (storage) => {
 				execution: observed.wrap(
 					piExecution({
 						sessions: 'memory',
-						stream: scripted(
+						stream: scriptedStream(
 							byAgent({
 								alpha: says(['First fact.', 'Second fact.']),
 								beta: async (_context, _agent, call) => {

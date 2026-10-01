@@ -9,7 +9,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -83,11 +83,9 @@ function startExecution(execution: Execution): Execution {
 function diagnostics(room: Room): void {
 	room.subscribe((event: RoomNotification) => {
 		if (event.type === 'error')
-			process.stderr.write(`restart error agent=${event.agent}: ${event.error.message}\n`);
+			process.stderr.write(`restart error seat=${event.seat}: ${event.error.message}\n`);
 		if (event.type === 'abandoned')
-			process.stderr.write(
-				`restart abandoned agent=${event.agent} activation=${event.activation}\n`,
-			);
+			process.stderr.write(`restart abandoned seat=${event.seat} activation=${event.activation}\n`);
 	});
 }
 
@@ -100,10 +98,10 @@ async function start(): Promise<void> {
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
 	diagnostics(room);
 	room.subscribe((event) => {
-		if (event.type === 'message' && isSpoken(event.message) && event.message.from === fast.name) {
+		if (event.type === 'message' && isSaid(event.message) && event.message.from === fast.name) {
 			fastSeq.resolve(event.message.seq);
 		}
-		if (event.type === 'activation_end' && event.agent === fast.name) fastReleased.resolve();
+		if (event.type === 'activation_end' && event.seat === fast.name) fastReleased.resolve();
 	});
 	const visit = await room.visit(person);
 	const exchange = await visit.send(request);
@@ -158,11 +156,9 @@ async function resume(): Promise<void> {
 		assert.equal(retry.from, checkpoint.from);
 		const discussion = await exchange.waitForClose();
 		const messages = await messagesOf(room);
-		const questions = messages.filter(
-			(message) => isSpoken(message) && message.key === request.key,
-		);
-		const fastAnswers = discussion.filter(isSpoken).filter((message) => message.from === fast.name);
-		const slowAnswers = discussion.filter(isSpoken).filter((message) => message.from === slow.name);
+		const questions = messages.filter((message) => isSaid(message) && message.key === request.key);
+		const fastAnswers = discussion.filter(isSaid).filter((message) => message.from === fast.name);
+		const slowAnswers = discussion.filter(isSaid).filter((message) => message.from === slow.name);
 		const arrivals = messages.filter((message) => message.kind === 'arrived');
 		assert.equal(questions.length, 1);
 		assert.equal(fastAnswers.length, 1);

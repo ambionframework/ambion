@@ -8,7 +8,7 @@ import { workstationBackend, workstationGitBackend } from '../../src/index.ts';
 import {
 	action,
 	dynamicAction,
-	expectStopped,
+	expectCancelled,
 	expectSuccess,
 	latest,
 	manifestRef,
@@ -191,7 +191,7 @@ async function makeWorkspace(): Promise<{
 	const setup = await readSetup();
 	const bash = workstationBackend(ssh);
 	const git = workstationGitBackend({
-		host: setup.host,
+		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		account: { username: 'lab-git', privateKey: await keyOf(setup, 'lab-git') },
@@ -338,7 +338,7 @@ async function cleanupOrphan(
 					},
 					expectSuccess('Read the retained orphan process output'),
 				),
-				action('cancel', { handle: discovered }, expectStopped(discovered)),
+				action('cancel', { handle: discovered }, expectCancelled(discovered)),
 			]);
 			const port = readyPort(latest(status.results, 'bash'));
 			if (remote !== undefined && port !== remote.port) {

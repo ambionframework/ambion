@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import type { LeaseHold } from '../src/room/lease.ts';

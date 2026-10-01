@@ -1,12 +1,12 @@
 /** The `/testing` subpath: the scripted stream, and the stub model it routes on. */
 
-import { byAgent, callTool, later, quiet, speak, spend } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say, schedule, spend } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, normalizeContext } from '@earendil-works/pi-ai';
 import { expect, expectTypeOf, it } from 'vitest';
 import { streamModels } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
-import { isClosingContext, scripted, scriptOf } from '../src/testing.ts';
+import { isClosingContext, scriptedStream, scriptOf } from '../src/testing.ts';
 
 it('names the seat in the stub model and needs no cast', async () => {
 	const model = await stubModel('anthropic/x', 'product');
@@ -17,7 +17,7 @@ it('names the seat in the stub model and needs no cast', async () => {
 
 it('routes on the seat the stub model names, whatever the model id', async () => {
 	const seen: string[] = [];
-	const stream = scripted(
+	const stream = scriptedStream(
 		byAgent({
 			a: (_context, seat, call) => {
 				seen.push(`${seat}:${call}`);
@@ -36,7 +36,7 @@ it('answers an already aborted signal with an aborted message', async () => {
 	controller.abort();
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scripted(() => speak('never'))(model, normalizeContext({ messages: [] }), {
+		await scriptedStream(() => say('never'))(model, normalizeContext({ messages: [] }), {
 			signal: controller.signal,
 		})
 	).result();
@@ -46,7 +46,7 @@ it('answers an already aborted signal with an aborted message', async () => {
 it('turns a script that throws into an error message', async () => {
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scripted(() => {
+		await scriptedStream(() => {
 			throw new Error('script failed');
 		})(model, normalizeContext({ messages: [] }))
 	).result();
@@ -57,7 +57,7 @@ it('turns a script that throws into an error message', async () => {
 it('turns a reply into one message with one tool call for each call', async () => {
 	const model = await stubModel('anthropic/x', 'product');
 	const args = { text: 'Yes.', list: [1, 'two', null, { deep: true }] };
-	const stream = scripted(() => [{ tool: 'say', args }, ...later('Soon.', 60)]);
+	const stream = scriptedStream(() => [{ tool: 'say', args }, ...schedule('Soon.', 60)]);
 	const result = await (await stream(model, normalizeContext({ messages: [] }))).result();
 	expect(result.stopReason).toBe('toolUse');
 	expect(result.content).toMatchObject([
@@ -69,7 +69,7 @@ it('turns a reply into one message with one tool call for each call', async () =
 it('turns an empty reply into a message that ends the run', async () => {
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scripted(() => quiet())(model, normalizeContext({ messages: [] }))
+		await scriptedStream(() => quiet())(model, normalizeContext({ messages: [] }))
 	).result();
 	expect(result.stopReason).toBe('stop');
 	expect(result.content).toEqual([{ type: 'text', text: 'nothing to add' }]);
@@ -82,7 +82,7 @@ it.each([
 ] as const)('turns a reply with %s into an error message', async (_name, reply, error) => {
 	const model = await stubModel('anthropic/x', 'product');
 	const result = await (
-		await scripted(() => reply)(model, normalizeContext({ messages: [] }))
+		await scriptedStream(() => reply)(model, normalizeContext({ messages: [] }))
 	).result();
 	expect(result.stopReason).toBe('error');
 	expect(result.errorMessage).toMatch(error);
@@ -98,7 +98,7 @@ it('serves the stream through one provider that holds the model under its provid
 	const seen: string[] = [];
 	const models = streamModels(
 		model,
-		scripted((_context, seat) => {
+		scriptedStream((_context, seat) => {
 			seen.push(seat);
 			return fauxAssistantMessage('Here.', { stopReason: 'stop' });
 		}),
@@ -119,7 +119,7 @@ const fails =
 it.each([
 	[
 		'answers later',
-		scripted(() => fauxAssistantMessage('Later.', { stopReason: 'stop' })),
+		scriptedStream(() => fauxAssistantMessage('Later.', { stopReason: 'stop' })),
 		{ content: [{ type: 'text', text: 'Later.' }] },
 	],
 	[

@@ -19,8 +19,8 @@ import {
 	type Action,
 	action,
 	dynamicAction,
+	expectCancelled,
 	expectExitCode,
-	expectStopped,
 	expectSuccess,
 	latest,
 	manifestRef,
@@ -194,7 +194,7 @@ async function openLifecycleWorkspace(): Promise<LifecycleWorkspace> {
 		description: 'A deterministic server for SN35 lifecycle acceptance.',
 	};
 	const git = workstationGitBackend({
-		host: setup.host,
+		server: setup.host,
 		port: setup.port,
 		hostKey: setup.hostKey,
 		account: { username: 'lab-git', privateKey: await keyOf(setup, 'lab-git') },
@@ -557,7 +557,7 @@ function cancelAction() {
 	return dynamicAction(
 		'cancel',
 		(results) => ({ handle: processHandle(lastReady(results)) }),
-		(text, prior) => expectStopped(processHandle(lastReady(prior)))(text, prior),
+		(text, prior) => expectCancelled(processHandle(lastReady(prior)))(text, prior),
 	);
 }
 

@@ -223,7 +223,7 @@ describe('sensor evidence retention', () => {
 		const started = new Promise<void>((resolve) => (startedPut = resolve));
 		const gate = new Promise<void>((resolve) => (releasePuts = resolve));
 		const delayedBackend: ObjectBackend = {
-			store: 'delayed',
+			label: 'delayed',
 			connect: async () => ({
 				async put(digest, bytes) {
 					startedPut();
@@ -420,7 +420,7 @@ describe('sensor evidence retention', () => {
 		const stored = new Map<string, Uint8Array>();
 		let writes = 0;
 		const failingBackend: ObjectBackend = {
-			store: 'failing',
+			label: 'failing',
 			connect: async () => ({
 				put: async (digest, bytes) => {
 					writes++;

@@ -1,15 +1,15 @@
 /**
  * The loop on the scripted tier: each way it ends, what the person sees,
- * and the run it returns. Every room is a real room on the scripted
+ * and the simulation it returns. Every room is a real room on the scripted
  * execution, and every person is a `scriptedActor` or a plain function.
  */
-import { defineHuman, isSpoken, type Message } from '@ambionframework/ambion';
+import { defineHuman, isSaid, type Message } from '@ambionframework/ambion';
 import {
 	byAgent,
 	isSummarizing,
 	quiet,
 	ScriptedFailure,
-	speak,
+	say,
 	spend,
 } from '@ambionframework/ambion/testing';
 import { describe, expect, it } from 'vitest';
@@ -29,50 +29,50 @@ const answering = byAgent({
 	desk: (step) => {
 		const done = step.results.length;
 		if (done === 0) return spend({ input: 10, output: 0, cacheRead: 0, cacheWrite: 0 });
-		return done === 1 ? speak('Thursday is dry.') : quiet();
+		return done === 1 ? say('Thursday is dry.') : quiet();
 	},
 });
 
-const spoken = (messages: readonly Message[]) => messages.filter(isSpoken);
+const spoken = (messages: readonly Message[]) => messages.filter(isSaid);
 
 describe('simulate', () => {
 	it('ends with `stopped` when the list ends, and keeps the stop as the last move', async () => {
 		const room = await open(answering, ['desk']);
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour on Thursday?']),
 			exchanges: 3,
 		});
-		expect(run.ended).toBe('stopped');
-		expect(run.moves).toEqual([{ text: 'Can we pour on Thursday?' }, { stop: LIST_ENDED }]);
-		expect(run.exchanges).toHaveLength(1);
-		expect(run.exchanges[0]?.sent).toBe('Can we pour on Thursday?');
-		expect(spoken(run.exchanges[0]?.discussion ?? []).map((m) => m.from)).toEqual([
+		expect(simulation.ended).toBe('stopped');
+		expect(simulation.moves).toEqual([{ text: 'Can we pour on Thursday?' }, { stop: LIST_ENDED }]);
+		expect(simulation.exchanges).toHaveLength(1);
+		expect(simulation.exchanges[0]?.sent).toBe('Can we pour on Thursday?');
+		expect(spoken(simulation.exchanges[0]?.discussion ?? []).map((m) => m.from)).toEqual([
 			'priya',
 			'desk',
 		]);
-		expect(run.error).toBeUndefined();
+		expect(simulation.error).toBeUndefined();
 	});
 
 	it('ends with `limit` after `exchanges` messages, one exchange for each, and leaves the room running', async () => {
 		const room = await open(answering, ['desk']);
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['First?', 'Second?', 'Third?']),
 			exchanges: 2,
 		});
-		expect(run.ended).toBe('limit');
-		expect(run.moves).toHaveLength(2);
-		const views = run.exchanges.map((exchange) => exchange.view);
+		expect(simulation.ended).toBe('limit');
+		expect(simulation.moves).toHaveLength(2);
+		const views = simulation.exchanges.map((exchange) => exchange.view);
 		expect(views.map((view) => view.outcome.kind)).toEqual(['complete', 'complete']);
 		expect(new Set(views.map((view) => view.from)).size).toBe(2);
-		expect(run.room.exchanges.filter((view) => view.status === 'closed')).toHaveLength(2);
+		expect(simulation.room.exchanges.filter((view) => view.status === 'closed')).toHaveLength(2);
 		// The room usage is the sum of the closed views.
-		expect(run.usage.room).toMatchObject({ input: 20 });
-		expect(run.usage.actor).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+		expect(simulation.usage.room).toMatchObject({ input: 20 });
+		expect(simulation.usage.actor).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 		// The events start at the subscription, and the person left at the end.
-		expect(run.events.filter((event) => event.type === 'exchange_opened')).toHaveLength(2);
-		expect(run.room.messages.at(-1)).toMatchObject({ kind: 'left', from: 'priya' });
+		expect(simulation.events.filter((event) => event.type === 'exchange_opened')).toHaveLength(2);
+		expect(simulation.room.messages.at(-1)).toMatchObject({ kind: 'left', from: 'priya' });
 		// The test owns the room: it still takes a question.
 		const again = await (await room.visit(priya)).send({ text: 'Friday?' });
 		expect(again.opened).toBe(true);
@@ -82,11 +82,11 @@ describe('simulate', () => {
 		const script = byAgent({
 			desk: (step) => {
 				if (step.results.length > 0) return quiet();
-				const asked = step.view.context.messages.some((m) => isSpoken(m) && m.text === 'Thursday.');
-				return asked ? speak('Thursday is dry.', 'priya') : speak('Which day?', 'priya');
+				const asked = step.view.context.messages.some((m) => isSaid(m) && m.text === 'Thursday.');
+				return asked ? say('Thursday is dry.', 'priya') : say('Which day?', 'priya');
 			},
 			editor: (step) =>
-				isSummarizing(step.view) && step.results.length === 0 ? speak('Summary.') : quiet(),
+				isSummarizing(step.view) && step.results.length === 0 ? say('Summary.') : quiet(),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
 		const seen: Seen[] = [];
@@ -98,21 +98,21 @@ describe('simulate', () => {
 				return { text: question?.text === 'Which day?' ? 'Thursday.' : '?' };
 			return { stop: 'I have my answer.' };
 		};
-		const run = await simulate(room, { person: priya, actor, exchanges: 3 });
-		expect(run.ended).toBe('stopped');
-		expect(run.moves.map((move) => ('text' in move ? move.text : move.stop))).toEqual([
+		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		expect(simulation.ended).toBe('stopped');
+		expect(simulation.moves.map((move) => ('text' in move ? move.text : move.stop))).toEqual([
 			'Can we pour?',
 			'Thursday.',
 			'I have my answer.',
 		]);
 		// A question to the owner answers the owner, so the exchange closes complete.
-		expect(run.exchanges[0]?.view.outcome.kind).toBe('complete');
+		expect(simulation.exchanges[0]?.view.outcome.kind).toBe('complete');
 		expect(seen[2]?.exchanges.map((exchange) => exchange.summary?.text)).toEqual([
 			'Summary.',
 			'Summary.',
 		]);
 		expect(
-			seen[2]?.exchanges[1]?.discussion.some((m) => isSpoken(m) && m.text === 'Thursday is dry.'),
+			seen[2]?.exchanges[1]?.discussion.some((m) => isSaid(m) && m.text === 'Thursday is dry.'),
 		).toBe(true);
 		// What the actor saw carries no view of the room.
 		expect(seen[2]?.exchanges[0]).not.toHaveProperty('view');
@@ -126,25 +126,25 @@ describe('simulate', () => {
 		const script = byAgent({
 			desk: (step) => {
 				if (hanging === 'a seat keeps the exchange open') return forever();
-				return step.results.length > 0 ? quiet() : speak('Thursday is dry.');
+				return step.results.length > 0 ? quiet() : say('Thursday is dry.');
 			},
 			editor: (step) => (isSummarizing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?', 'And Friday?']),
 			exchanges: 2,
 			// Long enough for the desk to speak on a loaded runner before the deadline.
 			exchangeMs: 2_000,
 		});
-		expect(run.ended).toBe('timeout');
-		expect(run.moves).toHaveLength(1);
-		const exchange = run.exchanges[0];
+		expect(simulation.ended).toBe('timeout');
+		expect(simulation.moves).toHaveLength(1);
+		const exchange = simulation.exchanges[0];
 		expect(exchange?.view.outcome.kind).toBe(outcome);
 		expect(exchange?.summary).toBeUndefined();
-		if (outcome === 'complete') expect(exchange?.view.summary.status).toBe('failed');
-		expect(run.error).toBeUndefined();
+		if (outcome === 'complete') expect(exchange?.view.summary.kind).toBe('failed');
+		expect(simulation.error).toBeUndefined();
 	});
 
 	it.each([
@@ -164,34 +164,34 @@ describe('simulate', () => {
 				return typeof value === 'function' ? value.bind(target) : value;
 			},
 		});
-		const run = await simulate(stuck, {
+		const simulation = await simulate(stuck, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
 			exchanges: 1,
 			exchangeMs: 200,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(error);
-		expect(run.exchanges).toEqual([]);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(error);
+		expect(simulation.exchanges).toEqual([]);
 	});
 
 	it('ends with `failed` when the message joins an exchange that was already open', async () => {
 		const room = await open(byAgent({ desk: () => forever() }), ['desk']);
 		const sam = defineHuman({ name: 'sam', identity: 'Another manager.' });
 		await (await room.visit(sam)).send({ text: 'Sam asks first.' });
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Priya asks second.']),
 			exchanges: 1,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/joined the open exchange/);
-		expect(run.exchanges).toEqual([]);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(/joined the open exchange/);
+		expect(simulation.exchanges).toEqual([]);
 	});
 
 	it('ends with `failed` when the room stops while the abort at the deadline runs', async () => {
 		const script = byAgent({
-			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
+			desk: (step) => (step.results.length > 0 ? quiet() : say('Thursday is dry.')),
 			editor: (step) => (isSummarizing(step.view) ? forever() : quiet()),
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
@@ -207,26 +207,26 @@ describe('simulate', () => {
 				return typeof value === 'function' ? value.bind(target) : value;
 			},
 		});
-		const run = await simulate(stopping, {
+		const simulation = await simulate(stopping, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
 			exchanges: 1,
 			exchangeMs: 2_000,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/abort at the deadline failed: .*stopped/);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(/abort at the deadline failed: .*stopped/);
 	});
 
 	it('ends with `failed` when the room refuses a send', async () => {
 		const room = await open(answering, ['desk']);
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([{ text: '   ' }]),
 			exchanges: 1,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/blank|empty|text/i);
-		expect(run.exchanges).toEqual([]);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(/blank|empty|text/i);
+		expect(simulation.exchanges).toEqual([]);
 	});
 
 	it('ends with `failed` when the room stops during an exchange', async () => {
@@ -241,32 +241,32 @@ describe('simulate', () => {
 			['desk'],
 		);
 		stop = () => void room.stop();
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
 			exchanges: 1,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/stop/i);
-		expect(run.exchanges).toEqual([]);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(/stop/i);
+		expect(simulation.exchanges).toEqual([]);
 	});
 
 	it('ends with `failed` when a required summary fails', async () => {
 		const script = byAgent({
-			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
+			desk: (step) => (step.results.length > 0 ? quiet() : say('Thursday is dry.')),
 			editor: (step) => {
 				if (!isSummarizing(step.view)) return quiet();
 				throw new ScriptedFailure('permanent', 'The editor cannot write.');
 			},
 		});
 		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
 			exchanges: 1,
 		});
-		expect(run.ended).toBe('failed');
-		expect(run.error).toMatch(/summary/i);
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toMatch(/summary/i);
 	});
 
 	it('ends with `failed` when the actor throws, and sums the usage of the moves', async () => {
@@ -278,20 +278,20 @@ describe('simulate', () => {
 			return move;
 		};
 		const room = await open(answering, ['desk']);
-		const run = await simulate(room, { person: priya, actor, exchanges: 3 });
-		expect(run.ended).toBe('failed');
-		expect(run.error).toBe('The actor timed out.');
-		expect(run.usage.actor).toEqual(usage);
+		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		expect(simulation.ended).toBe('failed');
+		expect(simulation.error).toBe('The actor timed out.');
+		expect(simulation.usage.actor).toEqual(usage);
 	});
 
 	it('returns a detached value', async () => {
 		const room = await open(answering, ['desk']);
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
 			exchanges: 1,
 		});
-		expect(structuredClone(run)).toEqual(run);
+		expect(structuredClone(simulation)).toEqual(simulation);
 	});
 
 	it.each([

@@ -1,8 +1,8 @@
 /**
- * The graceful stop of a process on a real signal path: the table over the
+ * The graceful cancel of a process on a real signal path: the table over the
  * workstation's in-process SSH server, which runs each command in a real
- * shell on this machine. A stop sends `SIGTERM` to the process group, waits
- * for the grace, and then sends `SIGKILL`. The just-bash case, a stop with
+ * shell on this machine. A cancel sends `SIGTERM` to the process group, waits
+ * for the grace, and then sends `SIGKILL`. The just-bash case, a cancel with
  * no signals, is in `processes.test.ts`.
  */
 
@@ -15,7 +15,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { workstationBackend } from '../../workstation/src/index.ts';
 import { startSshServer, type TestServer } from '../../workstation/test/support/server.ts';
 import { hasSetsid } from '../../workstation/test/support/setsid.ts';
-import type { ProcessStatus } from '../src/process-files.ts';
+import type { ProcessRecord } from '../src/process-files.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { toolOf } from './support/backends.ts';
 
@@ -61,7 +61,7 @@ const invoke = async (workspace: Workspace, tool: string, params: unknown, agent
 	).catch((error: unknown) => ({ content: [{ type: 'text' as const, text: String(error) }] }));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-	const details = 'details' in result ? (result.details as { process?: ProcessStatus }) : {};
+	const details = 'details' in result ? (result.details as { process?: ProcessRecord }) : {};
 	return { text, process: details.process };
 };
 
@@ -107,7 +107,7 @@ async function earlierProcess(
 	return { dir, pid };
 }
 
-describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
+describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 	it('lets a command that traps TERM end inside the grace: a cancel and a timeout read its own exit code', async () => {
 		const started = await server(['ada']);
 		const workspace = workspaceOn(started);
@@ -115,7 +115,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		const running = await invoke(workspace, 'bash', { command, wait: 0 });
 		const handle = running.process?.handle ?? '';
 		const cancelled = await invoke(workspace, 'cancel', { handle });
-		// The cancel stopped the process, so the result has no line that says it stopped nothing.
+		// The cancel ended the process, so the result has no line that says it stopped nothing.
 		expect(cancelled.text).toMatch(/^cleanup\n\n\[Process bash-[0-9a-f]{12} exited with code 0\./);
 		expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
 		expect(await readFile(join(dirname(cancelled.process?.output ?? ''), 'stop'), 'utf8')).toMatch(
@@ -129,7 +129,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		);
 	});
 
-	it('sends SIGKILL after the grace to an owned and an adopted process that ignore TERM, and shows the stop while it waits', async () => {
+	it('sends SIGKILL after the grace to an owned and an adopted process that ignore TERM, and shows the cancel while it waits', async () => {
 		const started = await server(['ada', 'bob']);
 		const { dir, pid: adopted } = await earlierProcess(started, 'bob', 'bash-0000000000b1');
 		const workspace = workspaceOn(started);
@@ -137,12 +137,12 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		const handle = owned.process?.handle ?? '';
 		expect((await invoke(workspace, 'ps', {}, 'bob')).text).toContain('bash-0000000000b1');
 		const began = Date.now();
-		const stops = Promise.all([
+		const cancels = Promise.all([
 			invoke(workspace, 'cancel', { handle }),
 			invoke(workspace, 'cancel', { handle: 'bash-0000000000b1' }, 'bob'),
 		]);
-		// While the grace runs, the status reads running, and names the stop that waits.
-		let listed: ProcessStatus | undefined;
+		// While the grace runs, the status reads running, and names the cancel that waits.
+		let listed: ProcessRecord | undefined;
 		for (let reads = 0; listed?.stopping !== true && reads < 50; reads += 1) {
 			[listed] = await workspace.processes.list({ agent: 'ada' });
 		}
@@ -150,7 +150,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		expect((await invoke(workspace, 'status', { handle })).text).toContain(
 			'is running, and the table stopped it. It has not ended yet.',
 		);
-		const [ownedEnd, adoptedEnd] = await stops;
+		const [ownedEnd, adoptedEnd] = await cancels;
 		expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);
 		expect(ownedEnd.process?.state).toBe('cancelled');
 		expect(adoptedEnd.process?.state).toBe('cancelled');
@@ -183,7 +183,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		20_000,
 	);
 
-	it('lets a stop with a long grace hold nothing: cancel returns after 15 s, a later cancel of the agent does not wait, and SIGKILL comes after the grace', async () => {
+	it('lets a cancel with a long grace hold nothing: cancel returns after 15 s, a later cancel of the agent does not wait, and SIGKILL comes after the grace', async () => {
 		const started = await server(['ada']);
 		const workspace = workspaceOn(started);
 		const stubborn = await invoke(workspace, 'bash', {
@@ -199,10 +199,10 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		expect(stubborn.process?.grace).toBe(30);
 		const began = Date.now();
 		const first = invoke(workspace, 'cancel', { handle });
-		// A second cancel of the same process joins the stop that runs.
+		// A second cancel of the same process joins the cancel that runs.
 		const joined = invoke(workspace, 'cancel', { handle });
 		await new Promise((resolve) => setTimeout(resolve, 1_000));
-		// The grace of the first stop does not hold the chain of the agent.
+		// The grace of the first cancel does not hold the chain of the agent.
 		const second = await invoke(workspace, 'cancel', { handle: quick.process?.handle ?? '' });
 		expect(Date.now() - began).toBeLessThan(10_000);
 		expect(second.process).toMatchObject({ state: 'exited', exitCode: 0 });
@@ -225,7 +225,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		expect((await workspace.processes.list({ agent: 'ada' }))[0]).toMatchObject({ grace: 2 });
 		const began = Date.now();
 		const cancelled = await invoke(workspace, 'cancel', { handle: 'bash-0000000000a1' });
-		// The default grace of 10 s would hold the stop longer.
+		// The default grace of 10 s would hold the cancel longer.
 		expect(Date.now() - began).toBeLessThan(9_000);
 		expect(cancelled.process?.state).toBe('cancelled');
 		expect(ended(pid)).toBe(true);

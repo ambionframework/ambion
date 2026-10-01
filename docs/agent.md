@@ -1,7 +1,7 @@
 # Definitions and tools
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
-room owns the journal, membership, presence, execution authority, and exchange
+room owns the journal, roster, presence, execution authority, and exchange
 rules. `agents` supplies every executable definition for one room run.
 
 This page is not the entry point. Read [The room](room.md) first for the
@@ -35,7 +35,7 @@ public roster text. `executor` names the loop the agent runs on and its
 configuration. `pi`, `claude`, and `codex` are the executors that ship; see
 [the Pi guide](pi.md), [the Claude guide](claude.md), and [the Codex
 guide](codex.md). The `instructions`
-are private model guidance. `model` names a model of that family. `tools`
+are private model guidance. `model` names a model of that executor kind. `tools`
 and `bundles` supply the agent's domain tools. `activationTokenLimit`
 bounds the record one activation reads. Without a limit, an activation reads
 the whole record the room serves. See `limits.context.messages` in
@@ -90,7 +90,7 @@ activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ after, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent name.
-`dismiss` accepts `{ message }`, the seq of a pending scheduled say. The room
+`dismiss` accepts `{ message }`, the seq of a scheduled say. The room
 validates operations at the commit boundary.
 
 **`recall` reads messages of the room by seq or by URI.** It accepts `{ refs
