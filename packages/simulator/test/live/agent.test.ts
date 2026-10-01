@@ -13,7 +13,7 @@ import {
 	type AgentJudgeOptions,
 	agentActor,
 	agentJudge,
-	type Run,
+	type Simulation,
 	simulate,
 	type Verdict,
 } from '../../src/index.ts';
@@ -27,8 +27,11 @@ const keyOf = (model: string) =>
 	`${(model.split('/')[0] ?? '').toUpperCase().replace(/-/g, '_')}_API_KEY`;
 const live = describe.skipIf(!process.env[keyOf(MODEL)] || !process.env[keyOf(JUDGE_MODEL)]);
 
-/** Write the run and the verdict of a failed case where a person can read them. */
-function keepOnFailure(name: string, evidence: { run?: Run; verdict?: Verdict }): void {
+/** Write the simulation and the verdict of a failed case where a person can read them. */
+function keepOnFailure(
+	name: string,
+	evidence: { simulation?: Simulation; verdict?: Verdict },
+): void {
 	onTestFailed(() => {
 		const dir = new URL('./runs/', import.meta.url);
 		mkdirSync(dir, { recursive: true });
@@ -42,7 +45,7 @@ function keepOnFailure(name: string, evidence: { run?: Run; verdict?: Verdict })
 
 live('an agent actor and an agent judge on a real model', () => {
 	it('asks about Thursday, stops with the answer, and passes the judge', async () => {
-		const evidence: { run?: Run; verdict?: Verdict } = {};
+		const evidence: { simulation?: Simulation; verdict?: Verdict } = {};
 		keepOnFailure('agent', evidence);
 		const room = await open(
 			byAgent({
@@ -57,19 +60,19 @@ live('an agent actor and an agent judge on a real model', () => {
 			brief: 'Ask the desk whether Thursday will be dry. Stop as soon as you know.',
 		});
 		// A polite model may thank the desk before it stops, so the bound leaves room for it.
-		evidence.run = await simulate(room, { person: priya, actor, exchanges: 3 });
-		const { run } = evidence;
-		expect(['stopped', 'limit']).toContain(run.ended);
-		expect(run.moves[0]).toHaveProperty('text');
+		evidence.simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		const { simulation } = evidence;
+		expect(['stopped', 'limit']).toContain(simulation.ended);
+		expect(simulation.moves[0]).toHaveProperty('text');
 		const judge = agentJudge({
 			model: JUDGE_MODEL,
 			...(JUDGE_THINKING === undefined ? {} : { thinking: JUDGE_THINKING }),
 		});
-		evidence.verdict = await judge(run, ['The desk tells the person that Thursday is dry.']);
+		evidence.verdict = await judge(simulation, ['The desk tells the person that Thursday is dry.']);
 		const { verdict } = evidence;
-		const cost = (run.usage.actor.cost ?? 0) + (verdict.usage?.cost ?? 0);
+		const cost = (simulation.usage.actor.cost ?? 0) + (verdict.usage?.cost ?? 0);
 		process.stdout.write(
-			`simulator live · agent: ${run.moves.length} moves, $${cost.toFixed(4)} for the actor and the judge\n`,
+			`simulator live · agent: ${simulation.moves.length} moves, $${cost.toFixed(4)} for the actor and the judge\n`,
 		);
 		expect(verdict.findings).toHaveLength(1);
 		expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);

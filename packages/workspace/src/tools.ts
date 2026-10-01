@@ -120,7 +120,7 @@ export function audited(
 			);
 		await bestEffort(async () => {
 			const entry = auditEntry(tool.name, params, ctx, outcome);
-			await shell(ctx.agent, (env) => audit.record(env, entry, BACKGROUND_CONTEXT));
+			await shell(ctx.agent, (env) => audit.append(env, entry, BACKGROUND_CONTEXT));
 		}, lost);
 	};
 	return Object.freeze({

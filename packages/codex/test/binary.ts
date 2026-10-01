@@ -51,7 +51,7 @@ function bundledBinary(): string | undefined {
 export const hasBinary = bundledBinary() !== undefined;
 
 /** The config of a Codex home that sends every model request to `url`. */
-export function homeConfig(url: string, signIn = false): string {
+export function homeConfig(url: string, signIn = false, extra = ''): string {
 	return [
 		'model_provider = "scripted"',
 		'check_for_update_on_startup = false',
@@ -62,6 +62,7 @@ export function homeConfig(url: string, signIn = false): string {
 		'wire_api = "responses"',
 		signIn ? 'requires_openai_auth = true' : `env_key = "${DUMMY_KEY_VAR}"`,
 		'',
+		extra,
 	].join('\n');
 }
 
@@ -124,6 +125,8 @@ export interface CodexOnOptions {
 	readonly hostLogin?: string;
 	/** Whether the provider takes the sign-in of the home and not the dummy key. */
 	readonly signIn?: boolean;
+	/** More lines for the `config.toml` of the home. */
+	readonly config?: string;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
@@ -164,7 +167,10 @@ export async function codexOn(
 	}
 	const home = options.runtime?.home ?? join(dir, 'seats');
 	mkdirSync(home, { recursive: true });
-	writeFileSync(join(home, 'config.toml'), homeConfig(responses.url, options.signIn));
+	writeFileSync(
+		join(home, 'config.toml'),
+		homeConfig(responses.url, options.signIn, options.config),
+	);
 	const env = {
 		PATH: process.env.PATH,
 		HOME: hostHome,

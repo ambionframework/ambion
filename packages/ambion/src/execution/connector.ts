@@ -7,7 +7,7 @@
  * that the room connects, over the executor that `executorOf` builds.
  */
 
-import { DEFAULT_TRACE } from '../define.ts';
+import { DEFAULT_TRACE_POLICY } from '../define.ts';
 import type {
 	AgentExecutionContext,
 	ConnectorRequest,
@@ -44,7 +44,7 @@ export function seatContext(input: SeatContextInput): AgentExecutionContext {
 			seat: input.seat,
 			logger,
 			limits,
-			policy: input.definition.trace ?? DEFAULT_TRACE,
+			policy: input.definition.trace ?? DEFAULT_TRACE_POLICY,
 			now: () => input.clock.now(),
 		}),
 	};
