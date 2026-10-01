@@ -19,14 +19,14 @@ import { BACKGROUND_CONTEXT, openWorkspace, type RoomMirror } from '@ambionframe
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
+import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
-	type Family,
+	type ExecutorKind,
 	hasKey,
 	keyVariable,
 	unavailableSeats,
-} from './families.ts';
-import { openInstrument } from './instrument.ts';
+} from './kinds.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
@@ -75,8 +75,8 @@ export interface RoomsOptions {
 	/** A model stream for the Pi seats. */
 	stream?: PiExecutionOptions['stream'];
 	/**
-	 * Executions that replace the Claude and Codex families. A test passes a
-	 * scripted execution for each. Without them, the real family runs.
+	 * Executions that replace the Claude and Codex executors. A test passes a
+	 * scripted execution for each. Without them, the real executor runs.
 	 */
 	executions?: { claude?: Execution; codex?: Execution };
 	/** The environment that holds the keys. The default is the environment of the process. */
@@ -84,22 +84,22 @@ export interface RoomsOptions {
 }
 
 /**
- * The execution of each family, for the seats of that family alone. A family
- * with a replacement or a stream runs that. A live family with no key gets
+ * The execution of each executor kind, for the seats of that kind alone. A kind
+ * with a replacement or a stream runs that. A live kind with no key gets
  * an execution that fails its seats with the name of the missing variable,
  * so the other seats keep running.
  */
-function familyExecutions(options: RoomsOptions = {}): readonly Execution[] {
+function kindExecutions(options: RoomsOptions = {}): readonly Execution[] {
 	const { stream, executions, env = process.env } = options;
 	const scripted = stream !== undefined || executions !== undefined;
-	const pick = (family: Family, live: () => Execution, replacement?: Execution): Execution => {
-		if (replacement) return { kind: family, connector: (host) => replacement.connector(host) };
+	const pick = (kind: ExecutorKind, live: () => Execution, replacement?: Execution): Execution => {
+		if (replacement) return { kind, connector: (host) => replacement.connector(host) };
 		if (scripted)
-			return unavailable(family, `the test gave the ${family} family no scripted execution.`);
-		if (hasKey(family, env)) return live();
+			return unavailable(kind, `the test gave the ${kind} executor no scripted execution.`);
+		if (hasKey(kind, env)) return live();
 		return unavailable(
-			family,
-			`${keyVariable(family, env)} is not set, and the ${family} family needs it.`,
+			kind,
+			`${keyVariable(kind, env)} is not set, and the ${kind} executor needs it.`,
 		);
 	};
 	return [
@@ -126,7 +126,7 @@ export async function openRooms(
 		},
 		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
 	};
-	// A test that supplies executions runs no live family, so no seat lacks a key.
+	// A test that supplies executions runs no live executor, so no seat lacks a key.
 	const missing =
 		options.stream || options.executions
 			? []
@@ -137,7 +137,7 @@ export async function openRooms(
 	const log = stepLog();
 	const runtime = createRuntime({
 		storage: sqliteJournals(sql),
-		execution: familyExecutions(options),
+		execution: kindExecutions(options),
 		logger: (record) => {
 			log.logger(record);
 			const entry = entries.get(record.room);
@@ -376,7 +376,7 @@ function roomView(
 ) {
 	return {
 		...snapshot,
-		/** The seats that cannot run because their family has no key. */
+		/** The seats that cannot run because their executor kind has no key. */
 		unavailable,
 		goal: snapshot.initialized ? snapshot.goal : entry.goal,
 		status: entry.lifecycle.status,

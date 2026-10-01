@@ -4,8 +4,8 @@
  * execution for its executor kind, and an execution with no kind serves
  * every kind. A room with no execution still runs its people and its
  * record. A seat whose kind no execution serves fails at once and for good,
- * and the room does not wake it again. Stub executions stand in for a
- * family, because the kernel imports no executor package.
+ * and the room does not wake it again. Stub executions stand in for an
+ * executor kind, because the kernel imports no executor package.
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';

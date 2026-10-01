@@ -317,7 +317,7 @@ interface WorkspaceEndpoints {
   ): Promise<WorkspaceEndpoint>;
 }
 
-// Optional member of BashBackend:
+// Optional property of BashBackend:
 // readonly endpoints?: WorkspaceEndpoints;
 ```
 

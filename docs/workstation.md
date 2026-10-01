@@ -226,7 +226,7 @@ mode `0600`, and a temporary directory with mode `0700`.
 goes over SFTP. Each `exec` opens one channel on the SSH client. The root
 entry's helpers supply the rest:
 
-- `HomeEnv` for the file members: `SshEnv` supplies the SFTP operations and
+- `HomeEnv` for the file methods: `SshEnv` supplies the SFTP operations and
   the error classifier, and overrides `renameFile` to classify an `invalid`
   error against the destination
 - `resolvePath` for `~` and a relative path
