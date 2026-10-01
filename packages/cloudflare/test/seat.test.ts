@@ -33,7 +33,7 @@ async function asked(name: string) {
 	// At least one wake reached the seat. The room sends a wake nobody has taken
 	// again every 50 ms here, so how many arrive before the alarm runs is the
 	// runner's speed and not the room's behaviour.
-	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
+	expect(await until(() => seat.wakeCount())).toBeGreaterThanOrEqual(1);
 	return { room, seat, exchange };
 }
 
@@ -77,7 +77,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
-	expect(await until(async () => (await seat.wakes()) >= 3)).toBe(true);
+	expect(await until(async () => (await seat.wakeCount()) >= 3)).toBe(true);
 	expect(
 		(await room.read({ messages: false })).participants.find((s) => s.name === 'product'),
 	).toMatchObject({
@@ -173,7 +173,7 @@ it('keeps the first pending activation when different wakes arrive together', as
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'first' }),
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'second' }),
 	]);
-	expect(await seat.wakes()).toBe(1);
+	expect(await seat.wakeCount()).toBe(1);
 });
 
 it('forwards steering to the live runner without recording a wake', async () => {
@@ -206,7 +206,7 @@ it('forwards steering to the live runner without recording a wake', async () => 
 	expect(
 		await inside<Holder, Steer | undefined>(seat, async (object) => object.runner?.last),
 	).toEqual(steer);
-	expect(await seat.wakes()).toBe(0);
+	expect(await seat.wakeCount()).toBe(0);
 	expect(
 		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
 	).toBeNull();

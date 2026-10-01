@@ -52,6 +52,7 @@ export type {
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type { PendingSay } from './scheduling.ts';
 export type {
+	ActivationEvent,
 	ActivationOutcome,
 	AgentDefinition,
 	AgentParticipantInfo,
@@ -64,7 +65,6 @@ export type {
 	ExchangeOutcome,
 	ExchangeRef,
 	ExchangeView,
-	ExecutionEvent,
 	Executor,
 	HarnessSession,
 	HumanDefinition,

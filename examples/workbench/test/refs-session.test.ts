@@ -19,7 +19,7 @@ const exchange = {
 	person: 'mira',
 	at: AT,
 	outcome: { kind: 'complete' },
-	summary: { status: 'silent' },
+	summary: { kind: 'silent' },
 	activations: [],
 };
 

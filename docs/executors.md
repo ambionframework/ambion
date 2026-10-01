@@ -381,8 +381,8 @@ names the reason: `the lease ended` or `the activation has no room grant`.
 A claim or a renewal that the room refuses answers `the lease ended`.
 
 **A room tool that commits an entry raises no tool event.** `say`,
-`schedule`, `seat`, `unseat`, and `dismiss` raise no `tool_execution_start`
-and no `tool_execution_end` event. The entry that each one commits reaches
+`schedule`, `seat`, `unseat`, and `dismiss` raise no `tool_call` event
+and no `tool_result` event. The entry that each one commits reaches
 the host as a `message` event, and a tool event would report the same
 fact a second time. `recall` commits nothing, so it raises tool events, as
 every tool of the definition does.

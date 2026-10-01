@@ -297,7 +297,7 @@ export class World {
 
 	/**
 	 * Time moves until the room is quiet with nothing owed: every lease the
-	 * dead run held expires, every retry's backoff passes, and every draft is
+	 * dead run held expires, every retry's backoff passes, and every summary is
 	 * written. A crash on the way is resumed like any other.
 	 */
 	async quiet(): Promise<void> {

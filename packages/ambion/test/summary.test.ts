@@ -301,7 +301,7 @@ describe('closing summaries', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSaid(m))?.seq);
 	});
 
-	it('keeps a draft on its closed exchange while a later question arrives', async () => {
+	it('keeps a summary on its closed exchange while a later question arrives', async () => {
 		const held = deferred();
 		const contexts: string[] = [];
 		const session = await open({
@@ -406,8 +406,8 @@ describe('closing summaries', () => {
 		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 		expect(
-			events.filter((e) => e.type === 'activation_end' && e.agent === 'assistant'),
-		).toMatchObject([{ spoke: false }]);
+			events.filter((e) => e.type === 'activation_end' && e.seat === 'assistant'),
+		).toMatchObject([{ said: false }]);
 	});
 
 	it('drafts again after the backoff when its activation fails outright', async () => {
@@ -584,8 +584,8 @@ describe('closing summaries', () => {
 		const written = summaries(await messagesOf(session));
 		expect(written.map((m) => m.to)).toEqual(['priya', 'sam']);
 		// one seat, so the two activations ran one after the other
-		const starts = seen.filter((e) => e.type === 'activation_start' && e.agent === 'assistant');
-		const ends = seen.filter((e) => e.type === 'activation_end' && e.agent === 'assistant');
+		const starts = seen.filter((e) => e.type === 'activation_start' && e.seat === 'assistant');
+		const ends = seen.filter((e) => e.type === 'activation_end' && e.seat === 'assistant');
 		expect(starts).toHaveLength(2);
 		expect(seen.indexOf(starts[1] as RoomNotification)).toBeGreaterThan(
 			seen.indexOf(ends[0] as RoomNotification),
@@ -611,7 +611,7 @@ describe('closing summaries', () => {
 		});
 		// an agent-only room never activates it
 		expect(
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant'),
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant'),
 		).toHaveLength(0);
 
 		const twin = defineHuman({ name: 'assistant', identity: 'Not the assistant.' });
@@ -679,7 +679,7 @@ describe('closing summaries', () => {
 		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
 	});
 
-	it('writes off a draft the host revoked, and publishes no response', async () => {
+	it('writes off a summary activation the host revoked, and publishes no response', async () => {
 		const drafting = deferred();
 		const hangs: PiScript = () => {
 			drafting.resolve();
@@ -688,7 +688,7 @@ describe('closing summaries', () => {
 		const session = await open({ script: byAgent({ product: twoAnswers, assistant: hangs }) });
 		const events = collect(session);
 		const starts = () =>
-			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant').length;
+			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant').length;
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
@@ -786,7 +786,7 @@ describe('an exchange', () => {
 	const askedAsStops = (session: Room, seat: string, ask: () => Promise<unknown>) =>
 		new Promise<{ landed: Promise<unknown> }>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end' || event.agent !== seat) return;
+				if (event.type !== 'activation_end' || event.seat !== seat) return;
 				off();
 				resolve({ landed: ask() });
 			});
@@ -847,7 +847,7 @@ describe('an exchange', () => {
 				),
 			).toEqual([[first?.seq, next?.seq]]);
 			expect(
-				events.filter((e) => e.type === 'activation_start' && e.agent === 'product'),
+				events.filter((e) => e.type === 'activation_start' && e.seat === 'product'),
 			).toHaveLength(starts);
 			expect(record.some((m) => m.kind === 'seated')).toBe(false);
 			expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
@@ -938,7 +938,7 @@ describe('a room without a summary writer', () => {
 	it('opens and closes an exchange, and owes no summary', async () => {
 		// Nothing holds a room to an assistant. The room closes the exchange
 		// the way it always does, and no close names a seat, so nothing is
-		// owed and nobody drafts.
+		// owed and nobody summarizes.
 		const session = stopAtEnd(
 			await startRoom({
 				name: roomName(),
@@ -1145,14 +1145,14 @@ describe('a summary for each person who spoke', () => {
 			outcome: { kind: 'awaiting', person: 'sam' },
 		});
 		if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
-		expect(exchange.summary).toMatchObject({ status: 'published', summary: { to: 'priya' } });
+		expect(exchange.summary).toMatchObject({ kind: 'published', summary: { to: 'priya' } });
 		expect(exchange.summaries?.map((s) => s.to)).toEqual(['priya', 'sam']);
 		// The first recipient is the person of the close: the first person who spoke.
 		expect(exchange.person).toBe('priya');
 		expect(exchange.summaries?.[0]?.to).toBe(exchange.person);
 		// A live read shares no value with the room, so a change to one read reaches no later read.
 		const [changed] = (await session.read()).exchanges;
-		if (changed?.status === 'closed' && changed.summary.status === 'published')
+		if (changed?.status === 'closed' && changed.summary.kind === 'published')
 			(changed.summary.summary as { text: string }).text = 'changed';
 		expect((await session.read()).exchanges).toEqual(before.exchanges);
 		const pending = pendingFor(await session.read(), 'sam');

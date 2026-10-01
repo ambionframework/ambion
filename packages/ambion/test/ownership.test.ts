@@ -273,7 +273,7 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 		expect(result.missed.filter(isSaid).map((message) => message.text)).toEqual(['New context.']);
 		expect(events).toContainEqual({
 			type: 'conflict',
-			author: 'alpha',
+			seat: 'alpha',
 			activation: agent.activation,
 			missed: result.missed,
 		});
@@ -302,10 +302,10 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 		});
 		room.subscribe((event) => seen.push(event));
 		const emit = connection('alpha').context.emit;
-		emit?.({ type: 'error', agent: 'alpha', activation: 'audit', error });
-		emit?.({ type: 'activation_start', agent: 'alpha', activation: 'audit' });
-		expect(seen).toContainEqual({ type: 'error', agent: 'alpha', activation: 'audit', error });
+		emit?.({ type: 'error', seat: 'alpha', activation: 'audit', error });
+		emit?.({ type: 'activation_start', seat: 'alpha', activation: 'audit' });
+		expect(seen).toContainEqual({ type: 'error', seat: 'alpha', activation: 'audit', error });
 		expect(seen.find((event) => event.type === 'error')?.error).toBe(error);
-		expect(seen).toContainEqual({ type: 'activation_start', agent: 'alpha', activation: 'audit' });
+		expect(seen).toContainEqual({ type: 'activation_start', seat: 'alpha', activation: 'audit' });
 	});
 });

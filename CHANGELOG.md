@@ -14,6 +14,25 @@ becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
 `createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
 `createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
 `ExecutorActivation`, and `ExecutorOptions` keep their names.
+**Outcomes use one discriminator, `kind`, and `wake` names only the port
+request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
+`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
+exchange read model. The room calls the activation that it owes a seat a due
+activation, after `RoomState.due`. In the core, `PendingActivation` becomes
+`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
+`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
+`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
+`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
+body changes.
+**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
+describes one activation. The main entry and the hosting entry export the
+new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
+member names its seat in `seat`, where the members said `agent` and the
+`conflict` member said `author`. The tool members use `name` in place of
+`toolName`. The member types `tool_execution_start` and `tool_execution_end`
+are now `tool_call` and `tool_result`, the names that `Step` uses. The
+`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
+log line carries the new member types in its `event` field.
 **The verb `say` names the message type, its guard, the test verb, and the
 speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
 kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now

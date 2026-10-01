@@ -99,7 +99,7 @@ const twoWorkspaces: Scenario = {
 		// alpha has written; dispose its workspace while its activation runs
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
-				if (event.type !== 'tool_execution_end' || event.agent !== 'alpha') return;
+				if (event.type !== 'tool_result' || event.seat !== 'alpha') return;
 				off();
 				resolve();
 			});

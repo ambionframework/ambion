@@ -46,7 +46,7 @@ async function twoQuestions() {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
 		session.subscribe((e) => {
-			if (e.type === 'activation_start' && e.agent === 'keeper') ids.push(e.activation);
+			if (e.type === 'activation_start' && e.seat === 'keeper') ids.push(e.activation);
 		});
 		await visit.send({ text: 'Please read code.txt.' });
 		await untilQuiet(session);

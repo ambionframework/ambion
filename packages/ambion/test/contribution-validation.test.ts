@@ -150,7 +150,7 @@ describe('the message byte limit', () => {
 		expect((await messagesOf(room)).some((m) => m.from === 'worker' && m.kind === 'said')).toBe(
 			false,
 		);
-		expect(events.some((e) => e.type === 'activation_end' && e.spoke === false)).toBe(true);
+		expect(events.some((e) => e.type === 'activation_end' && e.said === false)).toBe(true);
 	});
 });
 
@@ -400,7 +400,7 @@ describe('the room protocol on a lease', () => {
 		expect(await say('stale-blank', '', { readThrough: first })).toHaveProperty('stale');
 	});
 
-	it('releases a live activation with its usage, and refuses a draft nobody claimed', async () => {
+	it('releases a live activation with its usage, and refuses a summary activation nobody claimed', async () => {
 		const { opened, room, peer, activation, exchange } = await claimedSummary(memory, {
 			limits: { context: { messages: 1 } },
 		});

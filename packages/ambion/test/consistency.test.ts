@@ -195,7 +195,7 @@ class Cluster {
 	/** Every run is held to its own bound: a run that dies is checked before the next one starts. */
 	private bounded(): void {
 		const errors = this.events.flatMap((e) =>
-			e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+			e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 		);
 		expect(errors.length, `errors on a run: ${errors.join('; ')}`).toBeLessThanOrEqual(
 			this.allowance(),
@@ -281,7 +281,7 @@ class Cluster {
 		await this.clock.advance(ms);
 	}
 
-	/** Time moves until nothing is live: every lease expires, every backoff passes, every draft is due. */
+	/** Time moves until nothing is live: every lease expires, every backoff passes, every summary activation is due. */
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;
@@ -471,7 +471,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const stored = await storedOf(opened.journals, cluster.name);
 				const errors = cluster.events.flatMap((e) =>
-					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+					e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : [],
 				);
 				const brief = cluster.events
 					.map((e) => {
