@@ -401,7 +401,7 @@ export function openWorkspace(options: {
 	});
 	const store: SnapshotStore = {
 		workspace: options.name,
-		host: mirrorAgent,
+		mirrorAgent,
 		bash: resource.use,
 		objects: objects.use,
 	};

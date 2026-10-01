@@ -292,7 +292,7 @@ without declaring the process ended, so an explicit `connect` can retry the
 process check and renew its transport. A failed observe request is not
 replayed. This boundary adds no public `Workspace` method or package export.
 
-## Workstation ports
+## Workstation endpoints
 
 **The backend names where commands run.** Its guidance and tool results
 give the configured workstation hostname. They distinguish the remote

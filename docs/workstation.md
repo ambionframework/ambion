@@ -1,7 +1,7 @@
 # The workstation
 
 **The workstation forwards endpoints through SSH.** See
-[Workstation ports](sensors.md#workstation-ports) for the transport contract.
+[Workstation endpoints](sensors.md#workstation-endpoints) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
 workspace interface that [Workspace](workspace.md) states. The
@@ -344,7 +344,7 @@ sends no `SIGKILL`.
 **A command that ends inside the grace gives its own exit status.** The
 channel reports it, and `exec` still returns the abort as `aborted` or
 `timeout`. The process table reads the code from the `exit` file
-([Processes](processes.md#the-stop)). The command's channel closes 2
+([Processes](processes.md#the-cancel)). The command's channel closes 2
 seconds after the time of the `SIGKILL` at the latest. The times of the
 signals count from the `AMBION_PGID=` line. Until that line comes, the
 channel closes after the grace and 2 seconds.

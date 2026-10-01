@@ -43,7 +43,12 @@ async function defaultStore(
 		backend: fileObjectBackend({ bash: bash.use, host: owner, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'retention-test', host: owner, bash: bash.use, objects: objects.use },
+		store: {
+			workspace: 'retention-test',
+			mirrorAgent: owner,
+			bash: bash.use,
+			objects: objects.use,
+		},
 		async dispose() {
 			await objects.dispose();
 			await bash.dispose();
@@ -249,7 +254,7 @@ describe('sensor evidence retention', () => {
 			.connect(owner);
 		const store: SnapshotStore = {
 			workspace: 'retention-clone',
-			host: owner,
+			mirrorAgent: owner,
 			bash: bash.use,
 			objects: objects.use,
 		};
@@ -437,7 +442,7 @@ describe('sensor evidence retention', () => {
 		});
 		const store: SnapshotStore = {
 			workspace: 'retention-write-failure',
-			host: owner,
+			mirrorAgent: owner,
 			bash: bash.use,
 			objects: objects.use,
 		};
@@ -509,7 +514,7 @@ describe('sensor evidence retention', () => {
 			});
 			const store: SnapshotStore = {
 				workspace: 'retention-partial',
-				host: owner,
+				mirrorAgent: owner,
 				bash: bash.use,
 				objects: objects.use,
 			};

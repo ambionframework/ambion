@@ -3,7 +3,7 @@
  *
  * `snapshot` reads each file as the agent that asks, on the bash resource,
  * and hashes its bytes with SHA-256. It then puts the bytes under their
- * digest on the object resource, as the host agent. The ref is the kernel's snapshot
+ * digest on the object resource, as the mirror agent. The ref is the kernel's snapshot
  * URI: `ambion://workspace/<name>/snapshot/<digest>/<path>`. The same bytes
  * give the same object.
  *
@@ -48,7 +48,7 @@ export const SNAPSHOT_LIMITS = { count: REF_LIMITS.count, bytes: MAX_OBJECT_BYTE
 /** Who reads the files of a snapshot, and the signal that stops it. */
 export interface SnapshotOptions {
 	/**
-	 * The agent that reads the files. The default is the workspace's host
+	 * The agent that reads the files. The default is the workspace's mirror
 	 * agent. On a backend with one account for each agent, name the agent
 	 * whose home holds the files.
 	 */
@@ -56,12 +56,12 @@ export interface SnapshotOptions {
 	readonly signal?: AbortSignal;
 }
 
-/** The two resources a snapshot runs on, the workspace name, and the host agent. */
+/** The two resources a snapshot runs on, the workspace name, and the mirror agent. */
 export interface SnapshotStore {
 	/** The workspace name, the first part of every ref. */
 	readonly workspace: string;
 	/** The agent that puts and gets every object. */
-	readonly host: WorkspaceAgent;
+	readonly mirrorAgent: WorkspaceAgent;
 	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
 	readonly objects: WorkspaceResource<ObjectEnv>['use'];
 }
@@ -114,7 +114,7 @@ export async function retainSnapshotBuffer(
 	const digest = sha256Hex(bytes);
 	const ref = snapshotUri(store.workspace, digest, path);
 	assertRefLength(ref, path);
-	await store.objects(store.host, (env) => env.put(digest, bytes, signal), signal);
+	await store.objects(store.mirrorAgent, (env) => env.put(digest, bytes, signal), signal);
 	return { digest, ref };
 }
 
@@ -162,7 +162,7 @@ export async function takeSnapshot(
 	checkPaths(paths);
 	const { signal } = options;
 	const context = contextOf(signal);
-	const reader = options.agent ?? store.host;
+	const reader = options.agent ?? store.mirrorAgent;
 	const found = await store.bash(reader, (env) => findAll(store, env, paths, context), signal);
 	const refs: string[] = [];
 	for (const file of found) {
@@ -207,7 +207,7 @@ export async function readSnapshot(
 ): Promise<Uint8Array> {
 	const { digest } = namedBy(store, ref);
 	const bytes = await store.objects(
-		store.host,
+		store.mirrorAgent,
 		(env) => env.get(digest, options.signal),
 		options.signal,
 	);
@@ -304,7 +304,7 @@ async function restoreSnapshot(
 	const bytes = verified(
 		request.ref,
 		digest,
-		await store.objects(store.host, (env) => env.get(digest, signal), signal),
+		await store.objects(store.mirrorAgent, (env) => env.get(digest, signal), signal),
 	);
 	const path = request.path ?? `~/snapshots/${digest}/${posix.basename(named)}`;
 	const context = contextOf(signal);

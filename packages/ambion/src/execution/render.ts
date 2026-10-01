@@ -292,7 +292,7 @@ function renderTurnContext(
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-		`nothing reaches it and you cannot address it. A closing assignment writes the one`,
+		`nothing reaches it and you cannot address it. A summary assignment writes the one`,
 		`message a person reads when their exchange closes.`,
 		`(active: in an activation now; idle: at rest.)`,
 		renderAgents(context.participants),
@@ -338,7 +338,7 @@ export function renderPending(view: ActivationView): string | undefined {
 	].join('\n');
 }
 
-/** The agents that are available to seat. Every ordinary activation may read this list. */
+/** The agents that are available to seat. Every respond activation may read this list. */
 function renderReserve(reserve: readonly { name: string; identity: string }[]): string[] {
 	return [
 		`The reserve: agents not in the room. You may seat a colleague when the question needs them.`,
@@ -379,14 +379,14 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = openingLine(view, def.name);
 	return (
-		`${open}Begin your activation, ${def.name}: this is ordinary work. ` +
+		`${open}Begin your activation, ${def.name}: this is a respond activation. ` +
 		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
 		`and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
-		`A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. ` +
+		`A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. ` +
 		`These speech defaults yield to explicit instructions in your agent definition. ` +
-		`Closing summaries require a separate closing assignment.`
+		`Closing summaries require a separate summary assignment.`
 	);
 }
 
