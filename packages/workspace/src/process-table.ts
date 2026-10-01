@@ -84,6 +84,13 @@ export interface ProcessTable {
 	): Promise<string | undefined>;
 	/** The host's list: the processes of the agents that used the workspace in this run. */
 	hostList(query?: ProcessQuery): Promise<readonly ProcessRecord[]>;
+	/**
+	 * Whether this table saw the process `handle` of `agent` end. It answers
+	 * at once and stays true for the run. A process that ended before this
+	 * run, or that this table did not settle, answers false: `find` gives
+	 * its state.
+	 */
+	ended(agent: string, handle: string): boolean;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/** Cancel the process `handle` of any agent of this run: the host's cancel. */

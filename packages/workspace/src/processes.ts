@@ -4,9 +4,10 @@
  * The files in each agent's home are the source of truth
  * (`./process-files.ts`). The table reads them for every answer, so a new
  * run of the host reads the same table. Memory holds only what no file can:
- * one record for each live process, with its timer. The record of a
- * process that this run started also holds its environment and its abort
- * controller. The table adopts a live process of an earlier run when a
+ * one record for each live process, with its timer, and the key of each
+ * process that this run saw end. `ended` answers from those keys. The
+ * record of a process that this run started also holds its environment and
+ * its abort controller. The table adopts a live process of an earlier run when a
  * read finds it, and cancels it through its pid.
  *
  * A process runs on an environment of its own, which the table connects
@@ -83,6 +84,8 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	/** The agents that used the workspace in this run: the host reads their tables. */
 	const agents = new Set<string>();
 	const listeners = new Set<(event: ProcessEvent) => void>();
+	/** The processes that this run saw end, as `agent`, a NUL, and `handle`. */
+	const endedKeys = new Set<string>();
 	let closed = false;
 	/** Set when `close` has returned: the backend may release, so no new environment opens. */
 	let released = false;
@@ -126,10 +129,11 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		process.timer.unref();
 	};
 
-	/** A live process has ended: forget it, and tell the host. */
+	/** A live process has ended: forget it, record the end, and tell the host. */
 	const settle = (process: Live, status: ProcessRecord): void => {
 		clearTimeout(process.timer);
 		live.delete(process.spec.handle);
+		endedKeys.add(`${process.agent}\0${process.spec.handle}`);
 		emit({ type: 'ended', process: status });
 	};
 
@@ -468,6 +472,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		markSeen,
 		remind,
 		hostList,
+		ended: (agent: string, handle: string) => endedKeys.has(`${agent}\0${handle}`),
 		subscribe: (listener: (event: ProcessEvent) => void) => {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);
