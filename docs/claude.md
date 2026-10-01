@@ -137,7 +137,7 @@ unchanged.
 | `model`                 | Yes      | None                              | A Claude model id. The executor passes it as `--model`.                          |
 | `tools`                 | No       | None                              | The tools of the agent, from `defineTool`. They run in the host process.         |
 | `bundles`               | No       | None                              | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`              | No       | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                                    |
+| `speaking`              | No       | `DEFAULT_SPEAKING`                | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit`  | No       | The whole record                  | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`        | No       | `'length'`                        | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `permissionMode`        | No       | The SDK default, `default`        | The SDK permission mode. The executor passes it unchanged.                       |

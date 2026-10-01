@@ -12,7 +12,7 @@ import {
 	type AmbionErrorCode,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
@@ -176,7 +176,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		expect(await currentExchange(resumed)).toEqual(exchange);
 		// the pending wake is sent again, and beta answers into the same exchange
 		await ended(resumed, 'beta');
-		expect((await messagesOf(resumed)).filter(isSpoken).map((m) => m.from)).toEqual([
+		expect((await messagesOf(resumed)).filter(isSaid).map((m) => m.from)).toEqual([
 			'priya',
 			'beta',
 			'beta',
@@ -319,7 +319,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		await visit.send({ text: 'Second?' });
 		await waitForRoom(session, 'settled');
 		expect(await summaries(session)).toHaveLength(0);
-		const questions = (await messagesOf(session)).filter((m) => isSpoken(m) && m.from === 'priya');
+		const questions = (await messagesOf(session)).filter((m) => isSaid(m) && m.from === 'priya');
 		crash(first, session);
 
 		// the resumed room's assistant writes at the first draft it is given

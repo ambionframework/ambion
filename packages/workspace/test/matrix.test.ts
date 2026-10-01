@@ -8,7 +8,7 @@
  * its own test support.
  */
 
-import { isSpoken, startRoom } from '@ambionframework/ambion';
+import { isSaid, startRoom } from '@ambionframework/ambion';
 import { piExecution } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
@@ -23,8 +23,8 @@ import {
 	byAgent,
 	callTool,
 	quiet,
+	say,
 	scripted,
-	speak,
 	toolNames,
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
@@ -68,14 +68,14 @@ const twoWorkspaces: Scenario = {
 									await disposed.promise;
 									return callTool('read', { path: '/home/alpha/note.txt' });
 								}
-								return call === 3 ? speak('alpha done') : quiet();
+								return call === 3 ? say('alpha done') : quiet();
 							},
 							beta: (context, _name, call) => {
 								betaResults.push(...toolResultTexts(context).slice(betaResults.length));
 								if (call === 1)
 									return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
 								if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
-								return call === 3 ? speak('beta done') : quiet();
+								return call === 3 ? say('beta done') : quiet();
 							},
 							gamma: (context) => {
 								expect(toolNames(context)).toEqual([
@@ -111,7 +111,7 @@ const twoWorkspaces: Scenario = {
 
 		expect(alphaResults.some((r) => r.includes('no longer available'))).toBe(true);
 		expect(betaResults.some((r) => r.includes('two'))).toBe(true);
-		const said = (await session.read()).messages.filter(isSpoken).map((m) => m.text);
+		const said = (await session.read()).messages.filter(isSaid).map((m) => m.text);
 		expect(said).toContain('alpha done');
 		expect(said).toContain('beta done');
 		await finish(session, events, runtime);

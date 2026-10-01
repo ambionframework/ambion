@@ -582,7 +582,7 @@ const answers =
     const spoke = view.context.messages.some(
       (m) => m.kind === 'said' && m.from === 'inventory' && m.seq >= from,
     );
-    return spoke ? quiet() : speak(fact);
+    return spoke ? quiet() : say(fact);
   };
 ```
 

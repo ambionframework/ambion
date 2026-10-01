@@ -38,7 +38,7 @@ import {
 	type ExchangeRef,
 	type ExchangeView,
 	type HarnessSession,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Seq,
@@ -190,7 +190,7 @@ function awaitedPerson(
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
 	const asker = range[0]?.from;
-	const last = range.findLast(isSpoken);
+	const last = range.findLast(isSaid);
 	const person = last?.to;
 	if (last === undefined || person === undefined || person === asker) return undefined;
 	if (!people.has(person)) return undefined;
@@ -442,7 +442,7 @@ export function exchangeAfter(
 	const question = openingQuestion(messages, people, closedThrough);
 	if (question === undefined) return undefined;
 	const person = messages.find(
-		(message) => message.seq >= question.seq && isSpoken(message) && people.includes(message.from),
+		(message) => message.seq >= question.seq && isSaid(message) && people.includes(message.from),
 	)?.from;
 	return { ...(person === undefined ? {} : { person }), from: question.seq, at: question.at };
 }

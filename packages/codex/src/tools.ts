@@ -53,7 +53,7 @@ export function citing(changed: Set<string>, ordinary: () => boolean): RoomToolO
 			const all = [...cited, ...(ordinary() ? changed : [])];
 			return [...new Set(all.map(refOf).filter((ref) => ref.length > 0))];
 		},
-		spoke: () => changed.clear(),
+		said: () => changed.clear(),
 	};
 }
 

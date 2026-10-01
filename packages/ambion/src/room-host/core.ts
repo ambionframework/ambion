@@ -20,13 +20,7 @@ import {
 	type Refusal,
 	type RoomDecision,
 } from '../room/transition.ts';
-import type {
-	AgentDefinition,
-	Message,
-	RoomNotification,
-	SpokenMessage,
-	Without,
-} from '../types.ts';
+import type { AgentDefinition, Message, RoomNotification, SaidMessage, Without } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { DeliveryState } from './dispatch.ts';
 import type { CompositionDraft } from './room.ts';
@@ -169,7 +163,7 @@ export const sameRefs = (
 
 /** A recorded `said` carries the recipient, the text, the refs, and the `after` that a same-key retry sent. */
 export const saidContentMatches = (
-	message: Pick<SpokenMessage, 'to' | 'text' | 'refs' | 'after'>,
+	message: Pick<SaidMessage, 'to' | 'text' | 'refs' | 'after'>,
 	said: { to?: string; text: string; refs?: readonly string[]; after?: number },
 ): boolean =>
 	message.to === said.to &&

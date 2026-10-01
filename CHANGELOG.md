@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The verb `say` names the message type, its guard, the test verb, and the
+speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
+kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
+`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
+`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
+`AgentExecutor.speaking`. `AgentExecutor.guidance` keeps its name. The
+callback `RoomToolOptions.spoke` is now `said`. The kind string, the
+journal bodies, and the text that a model reads do not change.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

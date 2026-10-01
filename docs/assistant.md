@@ -45,7 +45,7 @@ field, which reaches ordinary activations only. Shared instructions describe
 closing behavior and application precedence. Both activation purposes retain
 the application's additional instructions.
 
-The kernel owns the shared speaking policy as `DEFAULT_GUIDANCE`. The package
+The kernel owns the shared speaking policy as `DEFAULT_SPEAKING`. The package
 keeps only the orchestration guidance that the kernel does not enforce.
 
 **Additional instructions can override any assistant behavioral default.**

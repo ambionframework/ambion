@@ -5,7 +5,7 @@
  * the assistant, so the live suite's plumbing runs with no key.
  */
 
-import { byAgent, quiet, seat, speak } from '@ambionframework/ambion/testing';
+import { byAgent, quiet, say, seat } from '@ambionframework/ambion/testing';
 import { piExecution } from '@ambionframework/pi';
 import {
 	contextText,
@@ -26,12 +26,12 @@ function assistant(route: Route, seen: string[]): PiScript {
 	return byAgent({
 		assistant: (context) => {
 			if (isClosingContext(context)) {
-				return contextText(context).includes('Summary:') ? quiet() : speak('Summary: 8 units.');
+				return contextText(context).includes('Summary:') ? quiet() : say('Summary: 8 units.');
 			}
 			seen.push(contextText(context));
 			if (routed) return quiet();
 			routed = true;
-			return route === 'ask' ? speak('Check the stock of SKU A.', 'inventory') : seat('inventory');
+			return route === 'ask' ? say('Check the stock of SKU A.', 'inventory') : seat('inventory');
 		},
 	});
 }

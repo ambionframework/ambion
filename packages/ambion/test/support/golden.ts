@@ -25,9 +25,9 @@ import {
 	later,
 	type PiScript,
 	quiet,
+	say,
 	says,
 	scripted,
-	speak,
 	summarise,
 	toolResultTexts,
 } from './scripted.ts';
@@ -110,8 +110,8 @@ const complete = (): Promise<readonly JournalEntry[]> =>
  */
 const asksTheChecker: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
-	return speak('Is the crew free on Thursday?', 'checker');
+	if (contextText(context).includes('[checker → worker]')) return say('Thursday works.');
+	return say('Is the crew free on Thursday?', 'checker');
 };
 
 /**
@@ -195,8 +195,7 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  */
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[posted → worker, returns'))
-		return speak('The slab is poured.');
+	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
 	return later('Check the pour log.', 600);
 };
 

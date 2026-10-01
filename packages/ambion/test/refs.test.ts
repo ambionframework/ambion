@@ -9,7 +9,7 @@ import {
 	commitUri,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	messageUri,
@@ -247,7 +247,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 		expect(await exchange.waitForSummary()).toMatchObject({ kind: 'summary', refs: cited });
 		const notified = events.flatMap((event) =>
 			event.type === 'message' &&
-			(isSpoken(event.message) || isSummary(event.message)) &&
+			(isSaid(event.message) || isSummary(event.message)) &&
 			event.message.refs !== undefined
 				? [event.message.refs]
 				: [],

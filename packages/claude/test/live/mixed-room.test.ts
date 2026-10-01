@@ -4,7 +4,7 @@
  */
 
 import { expect, it } from 'vitest';
-import { defineAgent, isSpoken } from '../../../ambion/src/index.ts';
+import { defineAgent, isSaid } from '../../../ambion/src/index.ts';
 import { invariants } from '../../../ambion/test/support/invariants.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { pi, piExecution } from '../../../pi/src/index.ts';
@@ -45,7 +45,7 @@ live('a mixed room', () => {
 				text: 'What is booked for Saturday on site? I need the truck and the crane.',
 			});
 			await untilQuiet(session);
-			const said = (await messagesOf(session)).filter(isSpoken);
+			const said = (await messagesOf(session)).filter(isSaid);
 			expect(said.filter((m) => m.from === 'pilot').length).toBeGreaterThanOrEqual(1);
 			expect(said.filter((m) => m.from === 'sonnet').length).toBeGreaterThanOrEqual(1);
 			await invariants(session, events);

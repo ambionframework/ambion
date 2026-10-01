@@ -15,7 +15,7 @@ import {
 } from '../../src/index.ts';
 import { fakeClock } from '../../src/testing.ts';
 import { messagesOf } from './room.ts';
-import { quiet, scripted, speak } from './scripted.ts';
+import { quiet, say, scripted } from './scripted.ts';
 import { nodeSql } from './storage.ts';
 
 const [phase, directory] = process.argv.slice(2);
@@ -41,7 +41,7 @@ const runtime = createRuntime({
 	execution: piExecution({
 		sessions: 'memory',
 		stream: scripted(async (_context, _agent, call) => {
-			if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
+			if (phase === 'resume') return call === 1 ? say('Recovered answer.') : quiet();
 			started.resolve();
 			return new Promise<ReturnType<typeof quiet>>(() => {});
 		}),

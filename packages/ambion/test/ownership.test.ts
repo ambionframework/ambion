@@ -15,7 +15,7 @@ import type {
 } from '../src/hosting.ts';
 import {
 	createRuntime,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -25,7 +25,7 @@ import {
 } from '../src/index.ts';
 import { portExecution } from './support/ports.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
-import { isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scripted } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
@@ -68,7 +68,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 					: source === 'snapshot'
 						? (await readRoom(room.name, { runtime })).messages
 						: await exchange.waitForClose();
-			const question = messages.find(isSpoken);
+			const question = messages.find(isSaid);
 			if (question === undefined) throw new Error('No question was read.');
 			changeMessage(question);
 			expect(await messagesOf(room)).toEqual(expected.messages);
@@ -98,7 +98,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		liveOptions.messages = { since: Number.MAX_SAFE_INTEGER };
 		recordedOptions.messages = { since: Number.MAX_SAFE_INTEGER };
 		for (const snapshot of await Promise.all(readings)) {
-			expect(snapshot.messages.filter(isSpoken).map((message) => message.text)).toEqual([
+			expect(snapshot.messages.filter(isSaid).map((message) => message.text)).toEqual([
 				'Original question.',
 			]);
 		}
@@ -119,7 +119,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scripted((context) =>
-					isClosingContext(context) ? speak('Original result.') : quiet(),
+					isClosingContext(context) ? say('Original result.') : quiet(),
 				),
 			}),
 		});
@@ -270,7 +270,7 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 			intent: { kind: 'said', text: 'A stale answer.' },
 		});
 		if (!('missed' in result)) throw new Error('The stale contribution was accepted.');
-		expect(result.missed.filter(isSpoken).map((message) => message.text)).toEqual(['New context.']);
+		expect(result.missed.filter(isSaid).map((message) => message.text)).toEqual(['New context.']);
 		expect(events).toContainEqual({
 			type: 'conflict',
 			author: 'alpha',

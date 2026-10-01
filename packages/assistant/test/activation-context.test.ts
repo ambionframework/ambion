@@ -4,7 +4,7 @@
  * and do not evaluate model judgment.
  */
 import { defineAgent, defineHuman, type Room, startRoom } from '@ambionframework/ambion';
-import { quiet, seat, speak } from '@ambionframework/ambion/testing';
+import { quiet, say, seat } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scripted, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
@@ -47,8 +47,8 @@ interface Capture {
 async function captureActivations(attention: 'reserve' | 'named'): Promise<Capture[]> {
 	const captures: Capture[] = [];
 	let phase = 0;
-	const route = () => speak('Handle R-19 only, two sentences, no file edits.', 'writer');
-	const answer = () => speak('R-19 is unsupported email delivery. No files edited.', 'assistant');
+	const route = () => say('Handle R-19 only, two sentences, no file edits.', 'writer');
+	const answer = () => say('R-19 is unsupported email delivery. No files edited.', 'assistant');
 	const planned = new Map([
 		['assistant:0', attention === 'reserve' ? seat('writer') : route()],
 		['assistant:1', route()],
@@ -65,7 +65,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 			system: context.systemPrompt ?? '',
 			input: JSON.stringify(context.messages),
 		});
-		if (closing) return speak(summary);
+		if (closing) return say(summary);
 		const key = `${name}:${phase}`;
 		const message = planned.get(key);
 		planned.delete(key);
@@ -156,16 +156,16 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 	const inventory = () => {
 		if (specialistAnswered) return quiet();
 		specialistAnswered = true;
-		return speak('There are 8 units in stock.', 'assistant');
+		return say('There are 8 units in stock.', 'assistant');
 	};
 	const assistant = async (context: Context) => {
-		if (isClosing(context)) return speak('8 units.');
+		if (isClosing(context)) return say('8 units.');
 		const tail = context.messages.at(-1);
 		if (tail?.role === 'user' && lastText(context).startsWith('[')) {
 			captured = { system: context.systemPrompt ?? '', steered: lastText(context) };
 			return quiet();
 		}
-		if (tail?.role !== 'toolResult') return speak('Check the stock of SKU A.', 'inventory');
+		if (tail?.role !== 'toolResult') return say('Check the stock of SKU A.', 'inventory');
 		for (let wait = 0; wait < 200 && !(await specialistSpoke()); wait += 1) await sleep(10);
 		await sleep(50);
 		return quiet();
