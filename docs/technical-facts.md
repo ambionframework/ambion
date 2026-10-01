@@ -37,7 +37,8 @@ positioning and the current capabilities.
   freshness. A framework supplies one session with passes. Pi, the Claude
   Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
   room tools through an MCP server. A conformance suite proves the Pi
-  and Claude adapters on fakes. The Codex adapter runs live.
+  and Claude adapters on fakes. The Codex adapter runs the real binary on
+  a scripted model, and runs the suite live.
 - **Speech through `say` only; everything else into a trace.** Every
   activation gives its steps to the host's logger as they happen: thinking,
   text, tool calls, room calls, steers, approvals, and usage. The release

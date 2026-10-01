@@ -21,8 +21,8 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
   returns the run that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
-  library. The `claude` tests run on a fake executable. `codex` has no fake;
-  its live tier runs the real SDK.
+  library. The `claude` tests run on a fake executable. The `codex` tests run
+  the real binary on a scripted model, and its live tier runs a real model.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of
