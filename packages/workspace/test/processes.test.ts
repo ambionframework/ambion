@@ -234,6 +234,9 @@ describe('bash', () => {
 	it.each([
 		['bash', { command: 'true', timeout: 0 }],
 		['bash', { command: 'true', wait: -1 }],
+		['bash', { command: 'true', grace: 0 }],
+		['bash', { command: 'true', grace: 301 }],
+		['bash', { command: 'true', grace: 'long' }],
 		['wait', { handles: ['bash-000000000000'], timeout: 601 }],
 		['bash', { command: 'true', name: 'Not A Name' }],
 	])('refuses an invalid number of seconds or an invalid name in %s', async (tool, params) => {
@@ -241,6 +244,21 @@ describe('bash', () => {
 		await expect(
 			Promise.resolve().then(() => toolOf(workspace, tool).invoke(params, callAs('alpha'))),
 		).rejects.toThrow(/Invalid/);
+	});
+});
+
+describe('the grace of a process', () => {
+	it.each([
+		{ params: {}, grace: 10 },
+		{ params: { grace: 1 }, grace: 1 },
+		{ params: { grace: 30 }, grace: 30 },
+		{ params: { grace: 300 }, grace: 300 },
+	])('gives the grace to the status and the spec for $params', async ({ params, grace }) => {
+		const workspace = site();
+		const { details } = await call(workspace, 'bash', { command: 'true', ...params });
+		expect(details.process.grace).toBe(grace);
+		const dir = details.process.output.slice(0, details.process.output.lastIndexOf('/'));
+		expect(JSON.parse(await fileOf(workspace, 'alpha', `${dir}/spec`))).toMatchObject({ grace });
 	});
 });
 
@@ -295,7 +313,12 @@ describe('the process table', () => {
 				const startedAt = new Date(Date.parse(first.startedAt) + i).toISOString();
 				const handle = `bash-${i.toString(16).padStart(12, '0')}`;
 				const spec = { handle, kind: 'bash' as const, agent: 'alpha', command: 'true' };
-				await writeExit(env, await writeSpec(env, root, { ...spec, timeout: 600, startedAt }), 0);
+				const grace = 10;
+				await writeExit(
+					env,
+					await writeSpec(env, root, { ...spec, timeout: 600, grace, startedAt }),
+					0,
+				);
 			}
 		});
 		expect(await workspace.processes.list({ agent: 'alpha' })).toHaveLength(MAX_FINISHED_PROCESSES);
@@ -771,6 +794,7 @@ describe('the files as the source of truth', () => {
 				agent: 'alpha',
 				command: 'true',
 				timeout: 600,
+				grace: 10,
 				startedAt: '2026-01-01T00:00:00.000Z',
 			};
 			const read: ProcessFiles = { dir: '/p', spec, seen: false, pid: true, alive: live, ...files };
@@ -798,9 +822,21 @@ describe('the files as the source of truth', () => {
 		const spec = { handle: lost, kind: 'bash', agent: 'alpha', command: 'sleep 99' };
 		await writeFile(
 			join(home, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: '2026-01-01T00:00:00.000Z' }),
+			JSON.stringify({ ...spec, timeout: 600, grace: 10, startedAt: '2026-01-01T00:00:00.000Z' }),
 		);
 		await writeFile(join(home, 'pid'), '1\n');
+		// A spec with a grace that is not a number, and one with none, are no specs: the table skips them.
+		for (const [handle, extra] of [
+			['bash-00000000000c', { grace: 'long' }],
+			['bash-00000000000d', {}],
+		] as const) {
+			const odd = join(dir, 'home', 'alpha', '.processes', handle);
+			await mkdir(odd, { recursive: true });
+			await writeFile(
+				join(odd, 'spec'),
+				JSON.stringify({ ...spec, handle, timeout: 600, ...extra }),
+			);
+		}
 		const second = openWorkspace({ name: 'files-two', backend: { bash: directoryBackend(dir) } });
 		const live = new AbortController().signal;
 		onTestFinished(() => second.dispose());
@@ -827,6 +863,8 @@ describe('the files as the source of truth', () => {
 		const [cause, , ...message] = (await readFile(join(home, 'stop'), 'utf8')).split(' ');
 		expect([cause, message.join(' ')]).toEqual(['failed', `${LOST}\n`]);
 		expect(reminded).not.toContain(done.handle);
+		expect(reminded).not.toContain('bash-00000000000c');
+		expect(reminded).not.toContain('bash-00000000000d');
 		expect(
 			await second.tools().remind?.({ agent: 'alpha', room: 'r', activation: 'a2' }, live),
 		).toBeUndefined();

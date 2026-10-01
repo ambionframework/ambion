@@ -67,15 +67,26 @@ const invoke = async (workspace: Workspace, tool: string, params: unknown, agent
 
 /**
  * A process that an earlier run of the host started for `agent`: its command
- * logs each TERM and goes on. Give its directory and the pid of its wrapper.
+ * runs `onTerm` for each TERM, by default a log line, and goes on. Give its directory and the pid of its wrapper.
  */
-async function earlierProcess(started: TestServer, agent: string, handle: string) {
+async function earlierProcess(
+	started: TestServer,
+	agent: string,
+	handle: string,
+	grace = 10,
+	onTerm = 'echo term',
+) {
 	const dir = join(started.homes.get(agent) ?? '', '.processes', handle);
 	await mkdir(dir, { recursive: true });
 	const spec = { handle, kind: 'bash', agent, command: 'loop' };
 	await writeFile(
 		join(dir, 'spec'),
-		JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+		JSON.stringify({
+			...spec,
+			timeout: 600,
+			grace,
+			startedAt: new Date().toISOString(),
+		}),
 	);
 	const earlier = workstationBackend(started.options);
 	const env = await earlier.connect({ name: agent });
@@ -83,7 +94,7 @@ async function earlierProcess(started: TestServer, agent: string, handle: string
 		'trap : TERM',
 		`echo "$$" > '${dir}/pid'`,
 		'(',
-		"trap 'echo term' TERM",
+		`trap '${onTerm}' TERM`,
 		'while :; do sleep 0.2; done',
 		`) < /dev/null > '${dir}/out' 2>&1`,
 		`echo "$? x" > '${dir}/exit'`,
@@ -148,6 +159,89 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		expect(await readFile(join(dir, 'out'), 'utf8')).toContain('term');
 		await expect(readFile(join(dir, 'exit'), 'utf8')).rejects.toThrow();
 	}, 30_000);
+
+	it.each([
+		{ grace: 2, nap: 1, state: 'exited' },
+		{ grace: 1, nap: 5, state: 'cancelled' },
+	])(
+		'gives the grace $grace to the backend: a trap that naps $nap s reads $state',
+		async ({ grace, nap, state }) => {
+			const started = await server(['ada']);
+			const workspace = workspaceOn(started);
+			const command = `trap 'sleep ${nap}; exit 0' TERM\nsleep 60 & wait`;
+			const running = await invoke(workspace, 'bash', { command, grace, wait: 0 });
+			expect(running.process?.grace).toBe(grace);
+			const handle = running.process?.handle ?? '';
+			await until(
+				() =>
+					spawnSync('test', ['-s', join(dirname(running.process?.output ?? ''), 'pid')]).status ===
+					0,
+			);
+			const cancelled = await invoke(workspace, 'cancel', { handle });
+			expect(cancelled.process?.state).toBe(state);
+		},
+		20_000,
+	);
+
+	it('lets a stop with a long grace hold nothing: cancel returns after 15 s, a later cancel of the agent does not wait, and SIGKILL comes after the grace', async () => {
+		const started = await server(['ada']);
+		const workspace = workspaceOn(started);
+		const stubborn = await invoke(workspace, 'bash', {
+			command: "trap '' TERM\nsleep 90",
+			grace: 30,
+			wait: 0,
+		});
+		const quick = await invoke(workspace, 'bash', {
+			command: "trap 'exit 0' TERM\nsleep 60 & wait",
+			wait: 0,
+		});
+		const handle = stubborn.process?.handle ?? '';
+		expect(stubborn.process?.grace).toBe(30);
+		const began = Date.now();
+		const first = invoke(workspace, 'cancel', { handle });
+		// A second cancel of the same process joins the stop that runs.
+		const joined = invoke(workspace, 'cancel', { handle });
+		await new Promise((resolve) => setTimeout(resolve, 1_000));
+		// The grace of the first stop does not hold the chain of the agent.
+		const second = await invoke(workspace, 'cancel', { handle: quick.process?.handle ?? '' });
+		expect(Date.now() - began).toBeLessThan(10_000);
+		expect(second.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		const early = await first;
+		expect((await joined).process).toMatchObject({ state: 'running', stopping: true });
+		expect(Date.now() - began).toBeGreaterThanOrEqual(14_000);
+		expect(Date.now() - began).toBeLessThan(25_000);
+		expect(early.process).toMatchObject({ state: 'running', stopping: true });
+		expect(early.text).toContain('is running, and the table stopped it. It has not ended yet.');
+		// The host timer sends SIGKILL after the full grace.
+		const ending = await invoke(workspace, 'wait', { handles: [handle], timeout: 25 });
+		expect(ending.process?.state).toBe('cancelled');
+	}, 60_000);
+
+	it('gives an adopted process the grace of its spec', async () => {
+		const started = await server(['ada']);
+		const { pid } = await earlierProcess(started, 'ada', 'bash-0000000000a1', 2);
+		const workspace = workspaceOn(started);
+		expect((await invoke(workspace, 'ps', {})).text).toContain('bash-0000000000a1');
+		expect((await workspace.processes.list({ agent: 'ada' }))[0]).toMatchObject({ grace: 2 });
+		const began = Date.now();
+		const cancelled = await invoke(workspace, 'cancel', { handle: 'bash-0000000000a1' });
+		// The default grace of 10 s would hold the stop longer.
+		expect(Date.now() - began).toBeLessThan(9_000);
+		expect(cancelled.process?.state).toBe('cancelled');
+		expect(ended(pid)).toBe(true);
+	}, 20_000);
+
+	it('returns at once for an adopted process that ends inside its grace', async () => {
+		const started = await server(['ada']);
+		const { pid } = await earlierProcess(started, 'ada', 'bash-0000000000a2', 30, 'exit 0');
+		const workspace = workspaceOn(started);
+		await invoke(workspace, 'ps', {});
+		const began = Date.now();
+		const cancelled = await invoke(workspace, 'cancel', { handle: 'bash-0000000000a2' });
+		expect(Date.now() - began).toBeLessThan(10_000);
+		expect(cancelled.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		expect(ended(pid)).toBe(true);
+	}, 20_000);
 
 	it('disposes 4 processes of one agent that ignore TERM, and an adopted one, in about one grace, and ends every wrapper', async () => {
 		const started = await server(['ada', 'bob']);

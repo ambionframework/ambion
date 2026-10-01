@@ -273,7 +273,7 @@ async function specOf(
 ): Promise<string> {
 	const dir = await env.absolutePath(`~/.processes/${handle}`, ctx);
 	if (!dir.ok) throw dir.error;
-	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, startedAt };
+	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, grace: 10, startedAt };
 	expect(await env.createDir(dir.value, { recursive: true }, ctx)).toMatchObject({ ok: true });
 	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec), ctx)).toMatchObject({
 		ok: true,
@@ -474,6 +474,30 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			const began = Date.now();
 			const killed = await call(workspace, 'cancel', { handle: ignoring.process?.handle });
 			expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);
+			expect(killed.process?.state).toBe('cancelled');
+			await withEnv(backend, OWNER, async (env) => {
+				const child = await env.readTextFile('child', ctx);
+				if (!child.ok) throw child.error;
+				expect(await allEnded(env, [Number(child.value.trim())])).toBe(true);
+			});
+		} finally {
+			await workspace.dispose();
+		}
+	});
+
+	it('stops an owned process that ignores TERM after the grace of its call', async () => {
+		const { workspace, backend } = await nextRun();
+		try {
+			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
+			const started = await call(workspace, 'bash', { command: stubborn, grace: 2, wait: 1 });
+			expect(started.process).toMatchObject({ state: 'running', grace: 2 });
+			const began = Date.now();
+			const killed = await call(workspace, 'cancel', { handle: started.process?.handle });
+			const elapsed = Date.now() - began;
+			// The default grace of 10 s would hold the stop for longer.
+			expect(elapsed).toBeGreaterThanOrEqual(2_000);
+			expect(elapsed).toBeLessThan(9_000);
 			expect(killed.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
 				const child = await env.readTextFile('child', ctx);

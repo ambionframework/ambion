@@ -173,12 +173,14 @@ the five tools.
    the host, and `dispose()` send `SIGTERM` to the group, and `SIGKILL`
    after a grace of 10 seconds. The grace goes to the backend in the
    options of `exec`. [Processes](../docs/processes.md#the-stop) states
-   the contract. A grace for each call waits for its first caller.
-   Implemented: `dispose()` aborts the processes of this run of one agent
-   at once and waits for them together, so 4 processes that ignore `TERM`
-   take about 15 seconds. The chain stays for adopted processes. Open: a
-   grace for each call. **Condition:** a call that needs a grace of its
-   own.
+   the contract. Implemented: `dispose()` aborts the processes of this run
+   of one agent at once and waits for them together, so 4 processes that
+   ignore `TERM` take about 15 seconds. Implemented: a grace for each call.
+   `bash` takes `grace`, 1 to 300 seconds, and `cancel` waits at most 15
+   seconds ([Processes](../docs/processes.md#the-stop)). No stop holds the
+   chain of its agent for the grace, and the workstation opens one signal
+   channel at a time for each client
+   ([Workstation](../docs/workstation.md#the-ssh-client)).
 3. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.

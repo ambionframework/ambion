@@ -17,6 +17,7 @@ interface BashProcessSpec {
 	readonly command: string;
 	readonly name?: string;
 	readonly timeout: number;
+	readonly grace: number;
 	readonly room?: string;
 }
 
