@@ -26,7 +26,7 @@ import {
 import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, say, scripted } from '@ambionframework/ambion/testing';
 import { type PiOptions, piExecution } from '@ambionframework/pi';
-import type { Run, RunExchange, Verdict } from '@ambionframework/simulator';
+import type { Simulation, SimulationExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
 import { defineAssistant } from '../../src/index.ts';
 
@@ -166,7 +166,7 @@ export const answers =
 
 /** The presence entries of one kind about `subject` in one exchange, in record order. */
 export const presence = (
-	exchange: RunExchange | undefined,
+	exchange: SimulationExchange | undefined,
 	kind: 'seated' | 'unseated',
 	subject: string,
 ): Message[] =>
@@ -175,14 +175,14 @@ export const presence = (
 	);
 
 /** What one participant said in one exchange, in record order. */
-export const saidBy = (exchange: RunExchange | undefined, name: string): SaidMessage[] =>
+export const saidBy = (exchange: SimulationExchange | undefined, name: string): SaidMessage[] =>
 	(exchange?.discussion ?? []).filter(
 		(message): message is SaidMessage => isSaid(message) && message.from === name,
 	);
 
 /** What a case keeps for a person to read when it fails. */
 export interface Evidence {
-	run?: Run;
+	simulation?: Simulation;
 	verdict?: Verdict;
 }
 
@@ -199,9 +199,9 @@ export function track(name: string): Evidence {
 	const evidence: Evidence = {};
 	onTestFinished(() => {
 		const cost = (usage: { cost?: number } | undefined) => (usage?.cost ?? 0).toFixed(4);
-		const { run, verdict } = evidence;
+		const { simulation, verdict } = evidence;
 		process.stdout.write(
-			`assistant eval · ${MODEL} · ${name}: room $${cost(run?.usage.room)}, actor $${cost(run?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
+			`assistant eval · ${MODEL} · ${name}: room $${cost(simulation?.usage.room)}, actor $${cost(simulation?.usage.actor)}, judge $${cost(verdict?.usage)}\n`,
 		);
 	});
 	onTestFailed(() => {

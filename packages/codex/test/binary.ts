@@ -51,7 +51,7 @@ function bundledBinary(): string | undefined {
 export const hasBinary = bundledBinary() !== undefined;
 
 /** The config of a Codex home that sends every model request to `url`. */
-export function homeConfig(url: string, signIn = false): string {
+export function homeConfig(url: string, signIn = false, extra = ''): string {
 	return [
 		'model_provider = "scripted"',
 		'check_for_update_on_startup = false',
@@ -62,6 +62,7 @@ export function homeConfig(url: string, signIn = false): string {
 		'wire_api = "responses"',
 		signIn ? 'requires_openai_auth = true' : `env_key = "${DUMMY_KEY_VAR}"`,
 		'',
+		extra,
 	].join('\n');
 }
 
@@ -96,6 +97,8 @@ async function refusingProxy(): Promise<{ seen: string[]; url: string; close(): 
 	});
 	server.on('connect', (request, socket) => {
 		seen.push(`CONNECT ${request.url}`);
+		// A client that dies mid-CONNECT resets the socket. The refusal stands either way.
+		socket.on('error', () => undefined);
 		socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
 	});
 	await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -124,6 +127,8 @@ export interface CodexOnOptions {
 	readonly hostLogin?: string;
 	/** Whether the provider takes the sign-in of the home and not the dummy key. */
 	readonly signIn?: boolean;
+	/** More lines for the `config.toml` of the home. */
+	readonly config?: string;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
@@ -134,6 +139,8 @@ export interface CodexOnScript {
 	readonly home: string;
 	/** The home of the host user. Its `.codex` holds the traps. */
 	readonly hostHome: string;
+	/** The environment of the binary. A host in another process builds its execution from it. */
+	readonly env: Readonly<Record<string, string | undefined>>;
 	/** Whether the server in the config of the host started. */
 	readonly leaked: () => boolean;
 	/** The connections that the binary tried outside the loopback interface. */
@@ -164,7 +171,10 @@ export async function codexOn(
 	}
 	const home = options.runtime?.home ?? join(dir, 'seats');
 	mkdirSync(home, { recursive: true });
-	writeFileSync(join(home, 'config.toml'), homeConfig(responses.url, options.signIn));
+	writeFileSync(
+		join(home, 'config.toml'),
+		homeConfig(responses.url, options.signIn, options.config),
+	);
 	const env = {
 		PATH: process.env.PATH,
 		HOME: hostHome,
@@ -187,6 +197,7 @@ export async function codexOn(
 		responses,
 		home,
 		hostHome,
+		env,
 		leaked: () => existsSync(spawned),
 		outbound: proxy.seen,
 		close: async () => {

@@ -26,7 +26,7 @@ who drives the room and the judge who reads it.
 ## An eval as a test
 
 **An eval is a vitest test.** It starts a room, runs the simulation, asserts
-on the run, and asks the judge. The local `support.ts` holds the agent
+on the simulation, and asks the judge. The local `support.ts` holds the agent
 definitions, the model ids, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
@@ -55,7 +55,7 @@ it('the assistant asks the weather desk once, and answers the person', async () 
     }),
   );
 
-  const run = await simulate(room, {
+  const simulation = await simulate(room, {
     person: priya,
     actor: agentActor({
       model: MODEL,
@@ -64,12 +64,12 @@ it('the assistant asks the weather desk once, and answers the person', async () 
     exchanges: 3,
   });
 
-  expect(run.ended).toBe('stopped');
-  expect(run.exchanges.map((e) => e.view.outcome.kind)).not.toContain('exhausted');
-  const seats = run.exchanges.flatMap((e) => e.view.activations.map((a) => a.seat));
+  expect(simulation.ended).toBe('stopped');
+  expect(simulation.exchanges.map((e) => e.view.outcome.kind)).not.toContain('exhausted');
+  const seats = simulation.exchanges.flatMap((e) => e.view.activations.map((a) => a.seat));
   expect(seats).not.toContain('payroll');
 
-  const verdict = await agentJudge({ model: JUDGE_MODEL })(run, [
+  const verdict = await agentJudge({ model: JUDGE_MODEL })(simulation, [
     'The person learns whether Thursday is dry, with the forecast as the reason.',
     'No agent repeats a fact that another agent already said.',
   ]);
@@ -91,9 +91,9 @@ sequenceDiagram
         S->>R: visit.send(move)
         R-->>S: waitForClose(), waitForSummary()
     end
-    S-->>T: run
-    T->>T: expect(run)
-    T->>J: judge(run, criteria)
+    S-->>T: simulation
+    T->>T: expect(simulation)
+    T->>J: judge(simulation, criteria)
     J-->>T: verdict
 ```
 
@@ -106,9 +106,9 @@ sequenceDiagram
 - **One iteration of the loop is one exchange.** The actor sends one
   message. The loop waits on the handle of that exchange. The loop never
   sends into an open exchange.
-- **The run groups the record by exchange.** An assistant check reads one
+- **The simulation groups the record by exchange.** An assistant check reads one
   exchange: what the assistant said in it, and the summary that closed it.
-  Each entry of `run.exchanges` holds the message sent, the discussion, the
+  Each entry of `simulation.exchanges` holds the message sent, the discussion, the
   summary, and the closed view.
 - **Every wait is a handle wait.** The loop uses `waitForClose()` and
   `waitForSummary()`. It never polls for a quiet room, and it never calls
@@ -116,9 +116,9 @@ sequenceDiagram
 - **The actor sees what a person sees.** It reads each discussion, each
   summary, and what its tools return. It reads no activation, no event, no
   trace, and no criterion.
-- **Checks are plain `expect` calls on the run.** The package ships no
+- **Checks are plain `expect` calls on the simulation.** The package ships no
   check type and no assertion library.
-- **The judge is a separate call after the run.** `simulate` takes no
+- **The judge is a separate call after the simulation.** `simulate` takes no
   criteria, so the actor cannot read them.
 - **A criterion that code can decide is a check.** The judge grades only
   what a check cannot decide: tone, fidelity, and whether the answer meets
@@ -126,7 +126,7 @@ sequenceDiagram
 - **The package ships no rubric, no score scale, and no threshold.** A
   criterion is a string in the test. A verdict is pass or fail for each
   criterion.
-- **One run is one sample.** The package repeats nothing. A test that
+- **One simulation is one sample.** The package repeats nothing. A test that
   wants several samples writes the loop.
 - **Actor and judge are functions.** A scripted actor and a scripted judge
   are ordinary values, so the scripted tier runs every path with no key.
@@ -167,14 +167,14 @@ Calibration against labels from people needs the labels. Both stay inside
 
 ## The surface
 
-| Export          | What it is                                                      |
-| --------------- | --------------------------------------------------------------- |
-| `simulate`      | Runs the loop on a room and returns a `Run`                     |
-| `Actor`         | `(seen: Seen) => Move \| Promise<Move>`: the person's next move |
-| `Judge`         | `(run: Run, criteria: readonly string[]) => Promise<Verdict>`   |
-| `scriptedActor` | An actor that plays a fixed list of moves                       |
-| `agentActor`    | An agent with tools that plays a person from a brief            |
-| `agentJudge`    | An agent with tools that grades a run                           |
+| Export          | What it is                                                                  |
+| --------------- | --------------------------------------------------------------------------- |
+| `simulate`      | Runs the loop on a room and returns a `Simulation`                          |
+| `Actor`         | `(seen: Seen) => Move \| Promise<Move>`: the person's next move             |
+| `Judge`         | `(simulation: Simulation, criteria: readonly string[]) => Promise<Verdict>` |
+| `scriptedActor` | An actor that plays a fixed list of moves                                   |
+| `agentActor`    | An agent with tools that plays a person from a brief                        |
+| `agentJudge`    | An agent with tools that grades a simulation                                |
 
 ```ts
 /** What the person does next: send a message, or stop and give the reason. */
@@ -209,14 +209,14 @@ export interface SimulateOptions {
   readonly exchangeMs?: number;
 }
 
-export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
+export function simulate(room: Room, options: SimulateOptions): Promise<Simulation>;
 ```
 
 ## The loop
 
 **`simulate` runs these operations in order.**
 
-1. Subscribe to the room, and keep every notification in `run.events`.
+1. Subscribe to the room, and keep every notification in `simulation.events`.
 2. Call `room.visit(person)` once.
 3. Call `actor(seen)`. A `stop` move ends the loop with `ended: 'stopped'`.
 4. Call `visit.send(move)`. The loop sends the next move only after the
@@ -239,14 +239,14 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Run>;
    or a close that does not land in a second period of `exchangeMs`, ends
    the loop with `ended: 'failed'`.
 7. Read the closed `Exchange` from `room.read()`. Add the exchange to
-   `run.exchanges`, and add the discussion and the summary to `seen`.
+   `simulation.exchanges`, and add the discussion and the summary to `seen`.
 8. Go back to operation 3. After `exchanges` messages, end the loop with
    `ended: 'limit'`.
-9. Call `visit.leave()`, read the room once more, and return the run.
+9. Call `visit.leave()`, read the room once more, and return the simulation.
 
 **A rejected wait ends the loop with `ended: 'failed'`.** `waitForClose()`
 rejects when the room stops. `waitForSummary()` rejects when a required
-summary fails. The run keeps the error message in `run.error`. The loop
+summary fails. The simulation keeps the error message in `simulation.error`. The loop
 does not retry.
 
 **The loop does not stop the room.** The test owns the room, and it can
@@ -258,8 +258,8 @@ so the first exchange closes after it ends. A person does the same: they
 arrive and ask.
 
 **Events start at the subscription.** A notification from before
-`simulate` is not in `run.events`. The record holds every entry, so
-`run.room` is complete.
+`simulate` is not in `simulation.events`. The record holds every entry, so
+`simulation.room` is complete.
 
 ## The actor
 
@@ -311,7 +311,7 @@ that outlives the move, and `workspace.processes` shows it.
 **A person with write tools changes the state that the agents read.** This
 is the dual control of [τ²-bench](https://github.com/sierra-research/tau2-bench). The test decides it by the bundles it
 passes. The room records no tool call of the person, so a check reads
-`run.moves[].calls`.
+`simulation.moves[].calls`.
 
 **A question to the person is in the discussion, and the brief decides
 the answer.** The actor opens every exchange with its question. A message
@@ -382,15 +382,15 @@ export function runAgent(
 person as `agent`. The judge passes the name `judge` and itself as
 `agent`.
 
-## The run
+## The simulation
 
-**A run is a detached value.** Each part is a copy that the room gave out.
-`structuredClone` copies a run whole. An `error` event keeps its `Error`
-object, so a test that writes a run to a JSON file loses the error
+**A simulation is a detached value.** Each part is a copy that the room gave out.
+`structuredClone` copies a simulation whole. An `error` event keeps its `Error`
+object, so a test that writes a simulation to a JSON file loses the error
 details.
 
 ```ts
-export interface Run {
+export interface Simulation {
   readonly person: HumanDefinition;
   /** Every move the actor made, in order, the last `stop` included. */
   readonly moves: readonly Move[];
@@ -410,8 +410,8 @@ export interface Run {
 ```
 
 **A move that rejects keeps no usage.** `runAgent` rejects with no spend,
-so `run.usage.actor` misses the requests of the last move of a `failed`
-run.
+so `simulation.usage.actor` misses the requests of the last move of a `failed`
+simulation.
 
 **The room usage can miss the last summary.** The loop reads each closed
 view when `waitForSummary()` returns. The summary activation records its
@@ -419,32 +419,32 @@ usage at its release, which can follow the summary message.
 
 ## Checks
 
-**A check reads the run with `expect`.** Each fact that
+**A check reads the simulation with `expect`.** Each fact that
 [Assistant evaluation](assistant.md#integration-and-evaluation) names has a
-source in the run.
+source in the simulation.
 
-| Fact                              | Where it is in the run                                      |
-| --------------------------------- | ----------------------------------------------------------- |
-| Who spoke, to whom, what text     | `run.room.messages`                                         |
-| A seat stayed silent              | No spoken message from the seat in `run.room.messages`      |
-| What one exchange said            | `run.exchanges[].discussion`                                |
-| Unnecessary activations           | `run.exchanges[].view.activations`, by `seat` and `purpose` |
-| An activation failed or retried   | `run.exchanges[].view.activations[].outcome` and `attempt`  |
-| A tool was called                 | `tool_call` in `run.events`                                 |
-| The lock refused a say            | `conflict` in `run.events`                                  |
-| Complete, cancelled, or exhausted | `run.exchanges[].view.outcome.kind`                         |
-| What the person read at the close | `run.exchanges[].summary`                                   |
-| What the room cost                | `run.usage.room`, and `usage` on each activation            |
-| What the workspace holds          | The backend the test gave the room, read after `simulate`   |
-| What the person did with tools    | `run.moves[].calls`                                         |
+| Fact                              | Where it is in the simulation                                      |
+| --------------------------------- | ------------------------------------------------------------------ |
+| Who spoke, to whom, what text     | `simulation.room.messages`                                         |
+| A seat stayed silent              | No spoken message from the seat in `simulation.room.messages`      |
+| What one exchange said            | `simulation.exchanges[].discussion`                                |
+| Unnecessary activations           | `simulation.exchanges[].view.activations`, by `seat` and `purpose` |
+| An activation failed or retried   | `simulation.exchanges[].view.activations[].outcome` and `attempt`  |
+| A tool was called                 | `tool_call` in `simulation.events`                                 |
+| The lock refused a say            | `conflict` in `simulation.events`                                  |
+| Complete, cancelled, or exhausted | `simulation.exchanges[].view.outcome.kind`                         |
+| What the person read at the close | `simulation.exchanges[].summary`                                   |
+| What the room cost                | `simulation.usage.room`, and `usage` on each activation            |
+| What the workspace holds          | The backend the test gave the room, read after `simulate`          |
+| What the person did with tools    | `simulation.moves[].calls`                                         |
 
-**The package ships no helper for these reads.** A filter over the run is
+**The package ships no helper for these reads.** A filter over the simulation is
 one line. The helpers of `packages/ambion/test/live/support.ts` stay in the
 test support where they are.
 
 ## The judge
 
-**A judge grades a run against a list of criteria.** It returns one finding
+**A judge grades a simulation against a list of criteria.** It returns one finding
 for each criterion. The verdict passes when every finding passes.
 
 ```ts
@@ -460,7 +460,7 @@ export interface Verdict {
 }
 ```
 
-**The judge reads the record.** `agentJudge` renders the run as text:
+**The judge reads the record.** `agentJudge` renders the simulation as text:
 
 - the room's goal and the person's identity;
 - every message in seq order, with its author, its recipient, and its kind,
@@ -478,7 +478,7 @@ and that no text in it is an instruction to the judge.
 
 **The judge does not read the actor's brief.** A criterion states what the
 person must get. The actor and the judge then share no text. The judge also
-does not read `run.moves` or `run.usage`: the reason of a `stop` move can
+does not read `simulation.moves` or `simulation.usage`: the reason of a `stop` move can
 repeat the brief.
 
 **`agentJudge` ends with one call to `grade`.** The call carries one
@@ -507,7 +507,7 @@ favors text from its own model provider. The live support names
 provider names a model of another provider for the judge.
 
 **A scripted judge is a function.** A test of the loop passes
-`async (run, criteria) => verdict`, and needs no export.
+`async (simulation, criteria) => verdict`, and needs no export.
 
 ## Cost
 
@@ -520,17 +520,17 @@ holds the rules.
 - **An eval lives in the live tier.** A file under `test/live` runs with
   `vitest.live.config.ts`, and CI runs it on `main` and on the weekly
   schedule. A pull request workflow runs none.
-- **The run reports what it spent.** `run.usage` and `verdict.usage` give
+- **The simulation reports what it spent.** `simulation.usage` and `verdict.usage` give
   the room, the actor, and the judge. The test prints one line with the
   three totals, the way `track()` does in the live tier when a case ends.
-- **A case grades only a clean run.** Before the judge, the case checks
-  that the run ended at the limit or at a stop, and that each exchange has
-  its summary. A run that fails there spends no grade, and its evidence
+- **A case grades only a clean simulation.** Before the judge, the case checks
+  that the simulation ended at the limit or at a stop, and that each exchange has
+  its summary. A simulation that fails there spends no grade, and its evidence
   file shows the cause.
 - **The scripted tier proves the eval first.** Run the eval with a
   scripted execution, a scripted actor, and a scripted judge before the
   first live run.
-- **A failed case keeps its evidence.** The live support writes `run` and
+- **A failed case keeps its evidence.** The live support writes `simulation` and
   `verdict` to `test/live/runs/<model>/<case>.json`, and prints the path. Each
   `Error` becomes its `message`. Git ignores the directory. A person reads
   the file before a check or a criterion changes. The repository rule
@@ -673,19 +673,19 @@ its evidence below.
 `simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
 `runAgent`, the one change to the Pi package.
 
-| File                      | What it holds                                   |
-| ------------------------- | ----------------------------------------------- |
-| `src/simulate.ts`         | `simulate` and the deadline of an exchange      |
-| `src/types.ts`            | `Run`, `Seen`, `Move`, `Actor`, and the options |
-| `src/actor.ts`            | `scriptedActor`                                 |
-| `src/agent-actor.ts`      | `agentActor`, `send`, and `stop`                |
-| `src/agent-judge.ts`      | `agentJudge`, `Judge`, `Verdict`, and `grade`   |
-| `src/render.ts`           | The prompts of the actor and the judge's record |
-| `src/signal.ts`           | The timeout of a move and of a grade            |
-| `src/index.ts`            | The one entry                                   |
-| `test/simulate.test.ts`   | The loop on a scripted room                     |
-| `test/agent.test.ts`      | The agent actor and judge on a scripted stream  |
-| `test/live/agent.test.ts` | One live case of the actor and the judge        |
+| File                      | What it holds                                          |
+| ------------------------- | ------------------------------------------------------ |
+| `src/simulate.ts`         | `simulate` and the deadline of an exchange             |
+| `src/types.ts`            | `Simulation`, `Seen`, `Move`, `Actor`, and the options |
+| `src/actor.ts`            | `scriptedActor`                                        |
+| `src/agent-actor.ts`      | `agentActor`, `send`, and `stop`                       |
+| `src/agent-judge.ts`      | `agentJudge`, `Judge`, `Verdict`, and `grade`          |
+| `src/render.ts`           | The prompts of the actor and the judge's record        |
+| `src/signal.ts`           | The timeout of a move and of a grade                   |
+| `src/index.ts`            | The one entry                                          |
+| `test/simulate.test.ts`   | The loop on a scripted room                            |
+| `test/agent.test.ts`      | The agent actor and judge on a scripted stream         |
+| `test/live/agent.test.ts` | One live case of the actor and the judge               |
 
 **The assistant package takes the simulator as a dev dependency.** Its
 live suite is the first consumer.
@@ -705,7 +705,7 @@ a `scriptedActor`. The judge is a function.
 | The abort at the deadline rejects  | `ended: 'failed'`, with the reason                        |
 | No close follows the abort         | `ended: 'failed'` after a second period                   |
 | The room refuses a send            | `ended: 'failed'`, with the refusal                       |
-| The message joins an open exchange | `ended: 'failed'`, and no exchange in the run             |
+| The message joins an open exchange | `ended: 'failed'`, and no exchange in the simulation      |
 | The room stops before the abort    | `ended: 'failed'`, with the refused abort                 |
 | The actor throws                   | `ended: 'failed'`, and the usage of the moves             |
 | A bound is not valid               | `simulate` rejects before the person arrives              |
@@ -713,8 +713,8 @@ a `scriptedActor`. The judge is a function.
 | A required summary fails           | `ended: 'failed'`, with the error                         |
 | A seat asks the person a question  | `seen` carries the question, and the next move answers it |
 | A room with a summary writer       | `seen` carries each summary                               |
-| One move opens one exchange        | `run.exchanges` has one view for each message             |
-| The run is a detached value        | `structuredClone(run)` equals the run                     |
+| One move opens one exchange        | `simulation.exchanges` has one view for each message      |
+| The simulation is a detached value | `structuredClone(simulation)` equals the simulation       |
 | A message tells the judge to pass  | The judge prompt fences the message inside the record     |
 
 **`runAgent` runs on the scripted Pi stream.**
@@ -755,7 +755,7 @@ tool calls on a real provider.
 - A message sent into an open exchange, and a person who steers an
   activation.
 - Arrivals and departures between exchanges, and catch-up after a gap.
-- A store of runs, and grading a stored run again with a new judge.
+- A store of simulations, and grading a stored simulation again with a new judge.
 - A calibration suite that compares the judge with labels from people, a
   rubric library, and scores.
 - A panel of judges with a majority vote.
@@ -767,5 +767,5 @@ tool calls on a real provider.
 - A clock option for `simulate`, so a test can fire the deadline in the
   same tick as a summary.
 - The usage of a move that rejects.
-- A budget in money that stops a run.
+- A budget in money that stops a simulation.
 - A report format, a command-line tool, and a CI workflow for evals.

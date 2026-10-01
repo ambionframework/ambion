@@ -76,7 +76,7 @@ export interface AuditLog {
 	/** The callback of the options. The workspace tells it about an entry that a refused operation loses. */
 	readonly onError?: (error: Error) => void;
 	/** Append one entry over `env`. Never throws: a failure goes to `onError` instead. */
-	record(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
+	append(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
 }
 
 /** A short line in place of the full entry, naming why the full one could not be written. */
@@ -128,7 +128,7 @@ async function recordEntry(
 }
 
 /**
- * Open one rotating JSONL audit log. `record` runs inside one `use`
+ * Open one rotating JSONL audit log. `append` runs inside one `use`
  * operation of the bash owner. It needs no queue of its own, because the
  * owner runs one operation at a time.
  */
@@ -138,13 +138,13 @@ export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 		options.rotateBytes ?? DEFAULT_AUDIT_ROTATE_BYTES,
 		'rotateBytes',
 	);
-	const record = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
+	const append = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
 		bestEffort(() => recordEntry(env, path, rotateBytes, entry, context), options.onError);
 	return Object.freeze({
 		path,
 		rotateBytes,
 		...(options.onError === undefined ? {} : { onError: options.onError }),
-		record,
+		append,
 	});
 }
 
