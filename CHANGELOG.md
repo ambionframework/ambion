@@ -6,8 +6,8 @@
 is a number of seconds from 1 to 300, 10 by default. A value outside the
 range fails the call with `Invalid`. The table writes `grace` to `spec`,
 so an adopted process keeps the grace of its own call. A `spec` with no
-`grace` no longer reads: the table skips it, and no reader keeps it. `ProcessStatus` gains `grace: number`. `cancel` and
-`workspace.processes.cancel` wait for the end up to the grace, at most 10
+`grace` is no spec: a read skips it. `ProcessStatus` gains
+`grace: number`. `cancel` and `workspace.processes.cancel` wait for the end up to the grace, at most 10
 seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
 they give the status `running` with `stopping: true`, and the stop goes on.
 No stop holds the chain of its agent while it waits for the grace, so a
