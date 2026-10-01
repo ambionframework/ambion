@@ -35,7 +35,7 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `examples/workbench`: rooms and an OpenTUI terminal in one process.
 - `planning/`: `next.md` is the 0.5.0 scope and plan, `0.6.0.md` is the next
   release, `simplification.md` is the concepts that the repository holds twice,
-  `terminology.md` is one word, one meaning, `backlog.md` is everything else.
+  `backlog.md` is everything else.
 
 ## Read before you change
 

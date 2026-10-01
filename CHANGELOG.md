@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+**Breaking: each word of the vocabulary has one meaning.** A rename pass
+gave each overloaded term one meaning. The glossary in `docs/room.md` lists
+the terms, and `scripts/vocabulary.test.mjs` refuses the old names in
+`pnpm check`. No old name stays as an alias. The kernel does not read a
+journal of an earlier release.
+
+Stored bodies change field names. The golden journals hold the new names.
+
+| Body           | Before                           | After                                |
+| -------------- | -------------------------------- | ------------------------------------ |
+| `said` message | `after`                          | `delaySeconds`                       |
+| Any message    | `activationId`                   | `activation`                         |
+| Ended `lease`  | `session: { harness, id }`       | `session: { kind, id }`              |
+| `composition`  | `agents`, `available`, `summary` | `seated`, `reserve`, `summaryWriter` |
+| `close`        | `summary`                        | `summaryWriter`                      |
+
+The text that a model reads changes in two places. Live cases on Pi,
+Claude, and Codex pass on the new text.
+
+- The prompts and the tool results of `say` say "activation" where they said
+  "turn". The prompt for ordinary work says "Begin your activation".
+- The `schedule` tool takes `delaySeconds` where it took `after`, and the two
+  process texts that name the tool follow.
+
+The exported names change as follows.
+
+| Area                    | Before                                                                                                                           | After                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Executor                | `AgentExecutor`, `AgentExecutorBaseOptions`                                                                                      | `Executor`, `ExecutorBaseOptions`                                                                           |
+| Executor (hosting)      | the function type `Executor`, `ExecutorSession`, `AgentExecutionContext.executor`                                                | `ActivationOpener`, `RunningActivation`, `opener`                                                           |
+| Events                  | `ExecutionEvent`; the fields `agent`, `author`, `toolName`; `tool_execution_start`, `tool_execution_end`; `activation_end.spoke` | `ActivationEvent`; `seat`, `seat`, `name`; `tool_call`, `tool_result`; `said`                               |
+| Messages                | `SpokenMessage`, `isSpoken`, `RoomToolOptions.spoke`, `DEFAULT_GUIDANCE`                                                         | `SaidMessage`, `isSaid`, `said`, `DEFAULT_SPEAKING`                                                         |
+| Exchanges               | `ExchangeView`, `ClosedExchange`, `ClosedExchangeView`                                                                           | `Exchange`, `ExchangeRange`, `Extract<Exchange, { readonly status: 'closed' }>`                             |
+| Read positions          | `watermark`, the lease `lastSeq`, the selection `since`, the delta `since`                                                       | `through`, `through`, `after`, `after`                                                                      |
+| Scheduled says          | `PendingSay`, `pendingFor`, `Intent.after`, `schedule.minAfter`, `schedule.maxAfter`                                             | `ScheduledSay`, `awaitingFor`, `delaySeconds`, `minDelaySeconds`, `maxDelaySeconds`                         |
+| Activations             | the purpose `'summary'`, `ActivationOutcome.status`, `SummaryOutcome.status`                                                     | `'summarize'`, `kind`, `kind`                                                                               |
+| Participants            | `ParticipantInfo`, `AgentParticipantInfo`, `HumanParticipantInfo`                                                                | `Participant`, `AgentParticipant`, `HumanParticipant`                                                       |
+| Ending work             | `Room.abort()`, `AgentRunner.abort()`, `ActivationState.cancel()`, `RoomToolBinding.abort()`, the stop `'aborted'`               | `Room.cancel()`, `cutAll()`, `cut()`, `cut()`, `'cut'`                                                      |
+| Entries                 | the journal `JournalEntry`, the core union `Entry`                                                                               | `Entry`, `RoomEntry`                                                                                        |
+| Stored-field types      | `Landed.activationId`, `HarnessSession`, `Pass.resume`, `Composition.agents`, `Composition.available`                            | `activation`, `VendorSession`, `resumeId`, `seated`, `reserve`                                              |
+| Summary writer          | `summary` on `StartRoomOptions`, `Composition`, `Close`, and the Cloudflare `StartOptions`                                       | `summaryWriter`                                                                                             |
+| Trace                   | `TraceRecord`, `RoomProjection.record`, `OwedFacts.record`, `TracePolicy.thinking: 'summary'`                                    | `TracedStep`, `summaryFacts`, `summaryFacts`, `'start'`                                                     |
+| `/testing`              | `scriptedExecutor`, `speak`, `later`, `isClosing`, `Step`, `Call`, `Result`, the script parameter `call`                         | `scriptedOpener`, `say`, `schedule`, `isSummarizing`, `ScriptStep`, `ScriptCall`, `ScriptResult`, `request` |
+| Conformance             | `ExecutorHarness`, `PortHarness`, `ConformanceHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `ConformanceFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
+| Simulator               | `Run`, `RunExchange`                                                                                                             | `Simulation`, `SimulationExchange`                                                                          |
+| Executor packages       | `ClaudeRuntime`, `CodexRuntime`, `ClaudeHarnessOptions`, Pi testing `scripted`, Claude `FakeScenario.turns`                      | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `ClaudeFixtureOptions`, `scriptedStream`, `passes`       |
+| Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
+| Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
+| Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `ProcessRecord`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
+| Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
+| Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
+
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,
 and `RoomObject` takes the name from its id. `RoomMetadata` holds
@@ -13,25 +65,6 @@ definitions of the agents on its record from `configure`. `RoomRead` gains
 `SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
 and `SeatObject.cuts()`. A room object that no name reaches throws.
 
-**The prompts of the room say "activation" where they said "turn".** The
-word `turn` belongs to Pi, where it is one request to a provider. The room
-tells a model to end its activation, and says that a message arrives during
-its activation. The tool results of `say` and the refusal of an empty message
-use the same word. The prompt for ordinary work says "Begin your activation"
-where it said "Take your turn". The roster line says "in an activation now".
-This changes model-facing text, and the prompt snapshots hold the new words.
-A live case on a real model is owed before the release. The Codex pages and
-comments say "pass" for one Codex turn. The Claude test fixture
-`FakeScenario.turns` becomes `FakeScenario.passes`.
-**A delay is `delaySeconds`, and `after` names only a seq cursor.** The
-`said` body of the journal holds `delaySeconds` where it held `after`, and the
-`said` intent and message hold the same field. The `schedule` tool takes
-`delaySeconds` where it took `after`, so the model sees a new parameter name.
-The limits `schedule.minAfter` and `schedule.maxAfter` are now
-`schedule.minDelaySeconds` and `schedule.maxDelaySeconds`. The refusals of the
-room and of the runtime name the new fields. The two process texts that tell
-a model to call `schedule` name `delaySeconds`. The kernel does not read a
-journal of an earlier release. The golden journals change in this one key.
 **A Claude seat has no built-in tool.** This breaks a host that set a Claude
 policy option. `ClaudePolicy` keeps `effort` and `maxBudgetUsd`. The options
 `permissionMode`, `allowedTools`, `disallowedTools`, `canUseTool`, `cwd`, and
@@ -105,61 +138,6 @@ The Claude executor records one for each `system` init message. `tools` holds
 the room tools by plain name. `servers` holds each MCP server with its
 status. `auth` names the source of the credential. Pi and Codex record none.
 
-**Three words name the three ways work ends.** A stop ends this run of the
-room, and the next run resumes from the record. `room.stop()` keeps its
-name. A cancel ends the open work, and the `cancel` entry keeps that fact.
-`Room.abort()` becomes `Room.cancel()`, and the same rename applies to the
-`RoomObject` of the Cloudflare package and to the `/abort` command of the
-workbench, which becomes `/cancel`. A cut ends one running activation
-through its port. `AgentRunner.abort()` becomes `AgentRunner.cutAll()`.
-`ActivationState.cancel()` and `RoomToolBinding.abort()` become `cut()`. The
-`end` step of the trace reports `stop: 'cut'` where it reported
-`stop: 'aborted'`. `abort` now names only `AbortSignal` and
-`AbortController`. The journal bodies do not change.
-
-**Four stored bodies change field names, and Ambion does not read a
-journal of an earlier release.** A message body holds `activation` for
-`activationId`. An ended `lease` body holds `session: { kind, id }` for
-`session: { harness, id }`. A `composition` body holds `seated`, `reserve`,
-and `summaryWriter` for `agents`, `available`, and `summary`, and a `close`
-body holds `summaryWriter` for `summary`. The Cloudflare room metadata holds
-`definitions` for `agents`. The types follow: `Landed.activationId` is
-`activation`, `HarnessSession` is `VendorSession`, `Pass.resume` is
-`resumeId`, `Composition.agents` and `Composition.available` are `seated` and
-`reserve`, and `summary` is `summaryWriter` on `StartRoomOptions`,
-`Composition`, `Close`, and the Cloudflare `StartOptions`. `StartOptions.agents`
-is `definitions`, and `TracePolicy.thinking` takes `'start'` for `'summary'`.
-The golden journals hold the new names.
-**A conformance fixture is a fixture, and the testing entry names its own
-script types.** `@ambionframework/ambion/conformance` exports
-`ExecutorFixture` and `PortFixture` in place of `ExecutorHarness` and
-`PortHarness`. `ConformanceHarness` is now `ConformanceFixture` in
-`@ambionframework/journal/conformance`, and in the entries that re-export
-it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
-`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
-`ClaudeFixtureOptions`. `@ambionframework/ambion/testing` exports
-`ScriptStep`, `ScriptCall`, and `ScriptResult` in place of `Step`, `Call`,
-and `Result`, so `Step` names the trace step alone. The request counter of a
-script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
-`AMBION_HARNESS`.
-**`Executor` now names one thing: the value in an agent definition.** The
-word named three things before. The hosting entry renames the function type
-`Executor` to `ActivationOpener`. It renames `ExecutorSession` to
-`RunningActivation`. The main and hosting entries rename the value type
-`AgentExecutor` to `Executor`. The hosting entry renames
-`AgentExecutorBaseOptions` to `ExecutorBaseOptions`. The `/testing` entry
-renames `scriptedExecutor` to `scriptedOpener`. The fields that hold an
-`ActivationOpener` take the name `opener`: `AgentExecutionContext.executor`
-becomes `AgentExecutionContext.opener`. The internal `createPiExecutor`,
-`createClaudeExecutor`, and `createCodexExecutor` become `createPiOpener`,
-`createClaudeOpener`, and `createCodexOpener`. `AgentDefinition.executor`,
-`ExecutorActivation`, and `ExecutorOptions` keep their names.
-**`@ambionframework/journal` exports its entry type as `Entry`.** The
-package exported the type as `JournalEntry`. The core imported it as
-`Envelope`, and the room named its own entry union `Entry`. The stored shape
-now has one name, `Entry`, in the journal package and in the core. The
-room's union is `RoomEntry`. The `journal` package no longer exports
-`JournalEntry`.
 **A bash backend takes its git backend, and the types check the pair.**
 `memoryBackend` takes `git` in its options, and `directoryBackend(root,
 options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
@@ -185,16 +163,6 @@ backend for one git backend, in place of the field `bash`. The registration
 cases open a new bash backend for each workspace, so the suite no longer
 borrows one bash backend with a disposal that does nothing.
 
-**The purpose of an activation has one pair of values, and `ParticipantInfo`
-becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
-activation that writes a summary. It now holds `summarize`, the value that
-`ActivationPurpose.kind` already used. The prose names the two purposes a
-respond activation and a summary activation. `isClosing` in
-`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
-`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
-`AgentParticipant`, and `HumanParticipant`. The activation source and the
-activation ids do not change.
-
 **The body schemas are the one source of the body types.** The new file
 `packages/ambion/src/bodies.ts` holds the schema of each stored body.
 Before, a type and a schema each stated the body, and the two drifted.
@@ -218,23 +186,6 @@ once.
 did not name `cause`, so any value passed. The schema now holds `permanent`
 or `transient`. A journal that holds another value stops at replay with an
 error that names `body.cause`.
-
-**Three types, one method, and two fields change name.**
-`@ambionframework/simulator` exports `Simulation` and `SimulationExchange`
-in place of `Run` and `RunExchange`. A run now means one run of a room over
-its journal. `@ambionframework/ambion` exports `TracedStep` in place of
-`TraceRecord`, and the parameter of `TraceLogger` is `traced`.
-`AuditLog.record` of `@ambionframework/workspace` is `append`, the name that
-`WorkspaceLog.append` has for the same act. `RoomProjection.record` and
-`OwedFacts.record` are `summaryFacts`, because a record is the messages
-that participants read. The internal constant `DEFAULT_TRACE` is
-`DEFAULT_TRACE_POLICY`. No journal body changes.
-**A say that waits is a `ScheduledSay`, and `awaitingFor` lists the waits on a
-person.** `PendingSay` is now `ScheduledSay`. `pendingFor(read, person)` is
-now `awaitingFor(read, person)`. The testing verb `later` is now `schedule`.
-The read field `scheduled` and the tool `schedule` already used the new name.
-This renames the one remaining shape and adds no shape. The journal and the
-golden journals do not change.
 
 **The Codex binary runs with an allowlisted environment and a private
 `HOME`.** Before, `codexExecution` passed the whole environment of the host to
@@ -274,27 +225,6 @@ maps only the items that a seat can produce: `agent_message`, `reasoning`,
 becomes a warning `notice` that names the type. A say no longer cites the
 paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
 type `RoomToolOptions`, because only the Codex executor used them.
-
-**`View` names only what a seat receives, and a read position is `through`
-or `after`.** `ExchangeView` is now `Exchange`. `ClosedExchange`, the range
-that the `exchange_closed` event carries, is now `ExchangeRange`.
-`ClosedExchangeView` is gone from the main entry. Write
-`Extract<Exchange, { readonly status: 'closed' }>` in its place.
-`RoomRead.watermark` and `ExchangeRead.watermark` are now `through`. The
-`ok` of a `LeaseResponse` holds `through` where it held `lastSeq`. The
-selection `read({ messages: { since } })` is now `{ after }`, and the delta
-of a `PassInput` holds `after` where it held `since`. The wire carries the
-new names. The journal and the golden journals do not change.
-**Outcomes use one discriminator, `kind`, and `wake` names only the port
-request.** `ActivationOutcome` and `SummaryOutcome` switch from `status` to
-`kind`, as `ExchangeOutcome` already uses it. The `status` field stays on the
-exchange read model. The room calls the activation that it owes a seat a due
-activation, after `RoomState.due`. In the core, `PendingActivation` becomes
-`DueActivation`, `PendingWake` becomes `DueWake`, and `statusOf` becomes
-`dueOf`. The verified rules rename the summary sense of "draft" to "summary":
-`draftsClose` becomes `summarizesClose`. In the Cloudflare package,
-`SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
-body changes.
 
 **`workspace.tools({ images: false })` is removed.** Every executor kind
 carries image parts, so a workspace has one tool bundle. `observe` returns
@@ -341,51 +271,6 @@ the `content` array of a record. The Claude and Codex executors log the
 content parts with no record, so their images went into the log whole. The
 function now takes the array as well, and an image in the shape of the
 Anthropic API, with its bytes in `source.data`.
-**`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
-describes one activation. The main entry and the hosting entry export the
-new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
-member names its seat in `seat`, where the members said `agent` and the
-`conflict` member said `author`. The tool members use `name` in place of
-`toolName`. The member types `tool_execution_start` and `tool_execution_end`
-are now `tool_call` and `tool_result`, the names that `Step` uses. The
-`spoke` field of `activation_end` is now `said`. The Cloudflare `SeatEvent`
-log line carries the new member types in its `event` field.
-**The verb `say` names the message type, its guard, the test verb, and the
-speaking default.** `SpokenMessage` is now `SaidMessage`, which follows the
-kind `'said'` as `PostedMessage` follows `'posted'`. `isSpoken` is now
-`isSaid`. The test verb `speak` of `@ambionframework/ambion/testing` is now
-`say`. `DEFAULT_GUIDANCE` is now `DEFAULT_SPEAKING`, the default of
-`Executor.speaking`. `Executor.guidance` keeps its name. The
-callback `RoomToolOptions.spoke` is now `said`. The kind string, the
-journal bodies, and the text that a model reads do not change.
-**Three names in the process and credential options change.** The option
-`tokenTtl` of `justGitBackend` and the option `keyTtl` of
-`workstationGitBackend` are now `credentialTtl`, the name that
-`GitConformanceOptions` already used. The exported type `ProcessStatus` is
-now `ProcessRecord`. A tool call or the host that ends a process cancels
-it, and the code now says so: `process-stop.ts` is `process-cancel.ts`, and
-`ProcessTable.cancel` gives `cancelled` where it gave `stopped`. The `stop`
-file in the directory of a process keeps its name. The tool names and the
-text for the model do not change.
-**The workspace packages name an endpoint, a label, and a server.** The word
-`host` now names the application that embeds a room, and the word `port`
-names an interface boundary. `WorkspacePort` becomes `WorkspaceEndpoint`.
-`WorkspacePorts` becomes `WorkspaceEndpoints`. Its method `open` becomes
-`forward`, and its field `hostname` becomes `machine`. The field `ports` of
-`BashBackend` becomes `endpoints`. `GitBackend.server`,
-`ObjectBackend.store`, and `SqlBackend.database` become `label`.
-`Workspace.host` becomes `Workspace.mirrorAgent`. The agent name
-`<name>-host` stays. `WorkstationOptions.host` and
-`WorkstationGitOptions.host` become `server`.
-**The executor options and the Pi test stream get their own names.**
-`@ambionframework/claude` exports `ClaudeExecutionOptions`, and
-`@ambionframework/codex` exports `CodexExecutionOptions`. They replace
-`ClaudeRuntime` and `CodexRuntime`, and they match `PiExecutionOptions`.
-The word `Runtime` now names the core `Runtime` alone.
-`@ambionframework/pi/testing` exports `scriptedStream` in place of
-`scripted`. The core testing entry keeps `scripted`, the scripted
-execution. The Codex tool that the stdio server lists is `CodexTool`. It
-replaces a `RoomTool` that shadowed the core type of the same name.
 
 **A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
 Codex 0.158 shows no reasoning unless the request asks for a summary, and
