@@ -4,7 +4,7 @@
  */
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
-import type { BashBackend, WorkspacePort, WorkspacePorts } from '../../src/backend.ts';
+import type { BashBackend, WorkspaceEndpoint, WorkspaceEndpoints } from '../../src/backend.ts';
 import { openWorkspace } from '../../src/index.ts';
 import type { ObjectBackend } from '../../src/object-backend.ts';
 import type { Workspace } from '../../src/workspace.ts';
@@ -32,7 +32,6 @@ export interface SensorObserveRoom {
 /** Open a workspace, start its managed process, and connect the fixture API. */
 export async function openSensorObserveRoom(
 	options: {
-		images?: boolean;
 		defect?: SensorDefect;
 		server?: SensorServerOptions;
 		objects?: ObjectBackend;
@@ -41,17 +40,17 @@ export async function openSensorObserveRoom(
 	const server = await startSensorServer(options.defect, options.server);
 	const address = new URL(server.origin);
 	const port = Number(address.port);
-	const ports: WorkspacePorts = {
-		hostname: 'fixture-workstation',
-		async open() {
-			const opened: WorkspacePort = {
+	const endpoints: WorkspaceEndpoints = {
+		machine: 'fixture-workstation',
+		async forward() {
+			const opened: WorkspaceEndpoint = {
 				url: server.origin,
 				async close() {},
 			};
 			return opened;
 		},
 	};
-	const bash: BashBackend = wrapped(() => ({ ports }));
+	const bash: BashBackend = wrapped(() => ({ endpoints }));
 	const workspace = openWorkspace({
 		name: `sensor-observe-${Math.random().toString(16).slice(2, 10)}`,
 		backend: { bash, ...(options.objects === undefined ? {} : { objects: options.objects }) },
@@ -71,7 +70,7 @@ export async function openSensorObserveRoom(
 			{ name: 'bench-one', process, port },
 			callAs('sensor-owner'),
 		);
-		const bundle = workspace.tools(options);
+		const bundle = workspace.tools();
 		const observe = bundle.tools.find((tool) => tool.name === 'observe');
 		if (observe === undefined) throw new Error('The workspace has no observe tool.');
 		const stopServer = async () => {

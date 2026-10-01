@@ -9,17 +9,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import type {
+	ActivationEvent,
+	ActivationOpener,
 	ActivationView,
 	AgentDefinition,
 	CommitRequest,
-	ExecutionEvent,
-	Executor,
-	ExecutorSession,
 	RoomProtocol,
+	RunningActivation,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
-import { type ClaudeExecutorOptions, createClaudeExecutor } from '../src/executor.ts';
+import { type ClaudeOpenerOptions, createClaudeOpener } from '../src/executor.ts';
 import { type ClaudeOptions, claude } from '../src/index.ts';
 import type { FakeScenario } from '../src/testing.ts';
 
@@ -91,13 +91,13 @@ export function fakeRoom(
 	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
-	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
 	const commits: CommitRequest[] = [];
 	const answers: ('committed' | 'missed')[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	let lastSeq = 1;
 	const room: RoomProtocol = {
 		view: async () => ({ stale: 'unused' }),
@@ -126,15 +126,15 @@ export function fakeRoom(
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createClaudeExecutor({
+	const opener = createClaudeOpener({
 		definition,
 		pathToClaudeCodeExecutable: executable,
 		env: { ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 		...extra,
 	});
-	const sessions: ExecutorSession[] = [];
-	const recording: Executor = (activation) => {
-		const session = executor(activation);
+	const sessions: RunningActivation[] = [];
+	const recording: ActivationOpener = (activation) => {
+		const session = opener(activation);
 		sessions.push(session);
 		return session;
 	};
@@ -184,7 +184,7 @@ export function open(
 	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
-	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
 ) {
 	const room = fakeRoom(scenario, definition, env, extra);
 	return { ...room, session: room.activate('message:1:sonnet:1') };

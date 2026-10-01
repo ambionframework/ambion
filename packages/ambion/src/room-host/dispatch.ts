@@ -5,13 +5,13 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { Close, LeaseChange } from '../journal/events.ts';
-import { type Entry, placed } from '../journal/journal.ts';
+import type { Close, LeaseChange } from '../journal/entries.ts';
+import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
 import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
-import type { ClosedExchange, Seq } from '../types.ts';
+import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { RoomHostState } from './core.ts';
 
@@ -25,7 +25,7 @@ export interface DeliveryState {
 }
 
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
-export function hearEntry(host: RoomHostState, entry: Entry): void {
+export function hearEntry(host: RoomHostState, entry: RoomEntry): void {
 	if (entry.kind === 'message') queueMessage(host, entry);
 	else if (entry.kind === 'close') queueCloses(host);
 	else if (entry.kind === 'lease') queueLease(host, entry.body, opens(host, entry.body.id));
@@ -74,10 +74,10 @@ export function seedHeard(host: RoomHostState): void {
 /**
  * A message on the record: the host hears about it, then what it opened,
  * steers every active ordinary seat, and asks reconciliation to dispatch
- * the pending activations the projection derives. One message, one event,
+ * the pending activations the projection derives. One message, one entry,
  * one order.
  */
-function queueMessage(host: RoomHostState, entry: Extract<Entry, { kind: 'message' }>): void {
+function queueMessage(host: RoomHostState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
 	const message = copyMessage(placed(entry));
 	const state = host.state();
 	const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;
@@ -120,7 +120,7 @@ function queueCloses(host: RoomHostState): void {
  */
 function queueClose(host: RoomHostState, close: Close): void {
 	const question = host.state().messages.find((m) => m.seq === close.from);
-	const exchange: ClosedExchange = {
+	const exchange: ExchangeRange = {
 		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,
@@ -150,9 +150,9 @@ function queueCancellation(host: RoomHostState, seq: Seq): void {
 			if (host.heardLeases.has(lease.id))
 				host.emit({
 					type: 'activation_end',
-					agent: seat,
+					seat,
 					activation: lease.id,
-					spoke: state.messages.some((message) => message.activationId === lease.id),
+					said: state.messages.some((message) => message.activation === lease.id),
 				});
 		}
 	});
@@ -167,7 +167,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(host, () => {
-			if (first) host.emit({ type: 'activation_start', agent: seat, activation: lease.id });
+			if (first) host.emit({ type: 'activation_start', seat, activation: lease.id });
 			// A claim that lost its confirmation never armed the expiry: this pass does.
 			void host.reconcile();
 		});
@@ -181,7 +181,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 			if (lease.reason === 'abandoned') {
 				host.emit({
 					type: 'abandoned',
-					agent: seat,
+					seat,
 					activation: lease.id,
 					cause: lease.cause ?? 'transient',
 				});
@@ -190,20 +190,20 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 		});
 		return;
 	}
-	const spoke = host.state().messages.some((m) => m.activationId === lease.id);
+	const said = host.state().messages.some((m) => m.activation === lease.id);
 	publish(host, () => {
 		if (revoked) cutPort(host, seat, lease.id);
 		host.emit({
 			type: 'activation_end',
-			agent: seat,
+			seat,
 			activation: lease.id,
-			spoke,
+			said,
 			...(lease.usage === undefined ? {} : { usage: lease.usage }),
 		});
 		if (lease.reason === 'expired')
 			host.emit({
 				type: 'error',
-				agent: seat,
+				seat,
 				activation: lease.id,
 				error: new Error('The activation ran past its lease.'),
 			});
@@ -317,7 +317,7 @@ function emitDeliveryError(
 ): void {
 	host.emit({
 		type: 'delivery_error',
-		agent: seat,
+		seat,
 		activation,
 		operation,
 		error: error instanceof Error ? error : new Error(String(error)),

@@ -12,7 +12,7 @@ import { decodeActivationId } from '../src/activation-id.ts';
 import { speakOnce } from '../src/conformance.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import {
-	type ExecutionEvent,
+	type ActivationEvent,
 	hostingOf,
 	type LeaseResponse,
 	localExecution,
@@ -22,14 +22,14 @@ import {
 	type CreateRuntimeOptions,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
@@ -54,9 +54,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
@@ -80,11 +80,11 @@ async function open(
 	const clock = fakeClock();
 	const runtime =
 		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),
-			...(summary ? { summary: assistant.name } : {}),
+			...(summary ? { summaryWriter: assistant.name } : {}),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
@@ -94,7 +94,7 @@ async function open(
 	return { session, clock, runtime };
 }
 
-const speaksOnce: PiScript = (_c, _a, call) => (call === 1 ? speak('hi') : quiet());
+const speaksOnce: PiScript = (_c, _a, request) => (request === 1 ? say('hi') : quiet());
 const starts = (events: ReturnType<typeof collect>) =>
 	events.filter((e) => e.type === 'activation_start').length;
 const ends = (events: ReturnType<typeof collect>) =>
@@ -102,7 +102,7 @@ const ends = (events: ReturnType<typeof collect>) =>
 const expired = (events: ReturnType<typeof collect>) =>
 	events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message));
 const speakers = async (session: Room) =>
-	(await messagesOf(session)).filter(isSpoken).map((m) => m.from);
+	(await messagesOf(session)).filter(isSaid).map((m) => m.from);
 const leaseChanges = async (runtime: Runtime, session: Room) =>
 	(await storedOf(hostingOf(runtime).journals, session.name)).flatMap((entry) =>
 		entry.kind === 'lease' ? [entry.body as LeaseChange] : [],
@@ -176,8 +176,8 @@ describe('a lease', () => {
 	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
 		const held = deferred();
 		const { session, clock, runtime } = await open(
-			async (_c, _a, call) => {
-				if (call === 1) await held.promise;
+			async (_c, _a, request) => {
+				if (request === 1) await held.promise;
 				return quiet();
 			},
 			{ limits: { lease: { ttl: 60_000, deadline: 120_000 } } },
@@ -228,7 +228,7 @@ describe('a lease', () => {
 
 		// the room gives up: the attempt it does not make is on the record, once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
+			{ type: 'abandoned', seat: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
 		]);
 		const gaveUp = (await leaseChanges(runtime, session)).filter(
 			(lease) => lease.phase === 'ended' && lease.reason === 'abandoned',
@@ -262,9 +262,9 @@ describe('a lease', () => {
 		const drafted = assistantEnded(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'answer me' });
-		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		// a room that owes a summary is not quiet, so the failed attempt is the wait
 		await drafted;
-		// the close owes a summary, and the first draft failed
+		// the close owes a summary, and the first summary attempt failed
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
 		await clock.advance(60_000);
@@ -274,8 +274,8 @@ describe('a lease', () => {
 		// the room gives up on the summary, and says so once
 		const abandoned = events.filter((e) => e.type === 'abandoned');
 		expect(abandoned).toHaveLength(1);
-		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
-		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
+		const givenUp = (abandoned[0] as { seat: string; activation: string }).activation;
+		expect(abandoned[0]).toMatchObject({ seat: 'assistant' });
 		expect(decodeActivationId(givenUp)).toMatchObject({
 			source: 'closed',
 			seat: 'assistant',
@@ -295,10 +295,10 @@ describe('a lease', () => {
 		const held = deferred();
 		// the claim goes through; the one renewal before the expiry is lost
 		const { session, clock } = await open(
-			async (_c, _a, call) => {
-				if (call !== 1) return quiet();
+			async (_c, _a, request) => {
+				if (request !== 1) return quiet();
 				await held.promise;
-				return speak('too late');
+				return say('too late');
 			},
 			{ faults: [{ on: 'lease', kind: 'drop', match: operation('renew') }] },
 		);
@@ -348,7 +348,7 @@ describe('a lease', () => {
 		visit = await enter(session);
 		await visit.send({ text: 'First?' });
 		await waitForRoom(session);
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.text)).toEqual([
+		expect((await messagesOf(session)).filter(isSaid).map((m) => m.text)).toEqual([
 			'First?',
 			'solo on First?',
 			'Second?',
@@ -362,9 +362,9 @@ describe('a lease', () => {
 		const contexts: string[] = [];
 		// the first wake starts the activation; the second, the steer into it, is lost
 		const { session } = await open(
-			async (context, _a, call) => {
+			async (context, _a, request) => {
 				contexts.push(contextText(context as Context));
-				if (call === 1) await held.promise;
+				if (request === 1) await held.promise;
 				return quiet();
 			},
 			{ faults: [{ on: 'wake', kind: 'drop', skip: 1 }] },
@@ -404,7 +404,7 @@ describe('a lease', () => {
 		const peer = runningRoom(runtime, session.name);
 		if (peer === undefined) throw new Error('The room is absent.');
 		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const runner = (room: RoomProtocol) =>
 			localExecution('recover', () => () => speakOnce())
 				.connector(hostingOf(runtime))
@@ -452,12 +452,12 @@ describe('a lease judged where its change is written', () => {
 		});
 		const held = deferred();
 		const { session, clock, runtime } = await open(
-			async (_c, _a, call) => {
-				if (call === 1) {
+			async (_c, _a, request) => {
+				if (request === 1) {
 					await held.promise;
-					return speak('late but alive');
+					return say('late but alive');
 				}
-				return call === 2 ? speak('recovered after expiry') : quiet();
+				return request === 2 ? say('recovered after expiry') : quiet();
 			},
 			{ runtime: (clock) => createRuntime({ clock, storage: journals }) },
 		);
@@ -492,7 +492,7 @@ describe('a lease judged where its change is written', () => {
 
 	it('keeps a pending summary for each close when another exchange ends during its claim', async () => {
 		const held = deferred();
-		// the view of the second attempt at the draft is delayed on the wire
+		// the view of the second attempt at the summary is delayed on the wire
 		const delayed: Fault = {
 			on: 'view',
 			kind: 'delay',
@@ -504,16 +504,16 @@ describe('a lease judged where its change is written', () => {
 		};
 		const { session, clock } = await open(
 			byAgent({
-				solo: async (context, name, call) => {
+				solo: async (context, name, request) => {
 					if (!contextText(context).includes('Second?')) {
-						return says(['a1', 'a2'])(context, name, call);
+						return says(['a1', 'a2'])(context, name, request);
 					}
 					await held.promise;
-					return says(['a3', 'a4'])(context, name, call);
+					return says(['a3', 'a4'])(context, name, request);
 				},
-				assistant: (context, _name, call) => {
+				assistant: (context, _name, request) => {
 					if (!isClosingContext(context)) return quiet();
-					if (call === 1) throw new Error('the model failed');
+					if (request === 1) throw new Error('the model failed');
 					return summarise('The one message.');
 				},
 			}),
@@ -523,11 +523,11 @@ describe('a lease judged where its change is written', () => {
 		const visit = await session.visit(priya);
 		const drafted = assistantEnded(session);
 		await visit.send({ text: 'First?' });
-		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		// a room that owes a summary is not quiet, so the failed attempt is the wait
 		await drafted;
 		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
 
-		// the seat works on the second exchange when the backoff passes and the draft is claimed
+		// the seat works on the second exchange when the backoff passes and the summary activation is claimed
 		await visit.send({ text: 'Second?' });
 		await tick();
 		await tick();
@@ -535,7 +535,7 @@ describe('a lease judged where its change is written', () => {
 		expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
 			status: 'active',
 		});
-		// the seat finishes while the draft's view is on the wire: a second close joins the draft
+		// the seat finishes while the view of the summary activation is on the wire: a second close joins it
 		held.resolve();
 		await tick();
 		await tick();
@@ -548,7 +548,7 @@ describe('a lease judged where its change is written', () => {
 		await waitForRoom(session);
 
 		const record = await messagesOf(session);
-		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
+		const questions = record.filter((m) => isSaid(m) && m.from === 'priya');
 		const summaries = record.filter(isSummary);
 		expect(summaries).toHaveLength(2);
 		expect(summaries.map((summary) => summary.covers.from)).toEqual(

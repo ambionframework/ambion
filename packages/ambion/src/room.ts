@@ -17,12 +17,12 @@ import { roomJournal } from './journal/journal.ts';
 import { discussionMessages } from './room/exchange.ts';
 import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
-import { captureMessageSelection, readView } from './room/read.ts';
+import { captureMessageSelection, toRoomRead } from './room/read.ts';
 import { type CompositionDraft, type Room, RoomHost, type Visit } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
-	ExchangeView,
+	Exchange,
 	Message,
 	RoomRead,
 	SeatOptions,
@@ -41,7 +41,7 @@ export interface StartRoomOptions {
 	/** Initial members and attention. Omit to seat all agents at broadcast; `{}` keeps all in reserve. */
 	seats?: Readonly<Record<string, Attention | SeatOptions>>;
 	/** An ordinary defined agent that writes closed exchange summaries. */
-	summary?: string;
+	summaryWriter?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
 	/**
@@ -150,7 +150,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	const journal = roomJournal(state.journals.open(name));
 	await journal.ready;
 	await journal.settled();
-	return readView(
+	return toRoomRead(
 		name,
 		projectState(replay(journal.entries, state.limits.activation)),
 		state.clock.now(),
@@ -161,9 +161,9 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 
 /** An exchange and its original discussion at one observed journal position. */
 export interface ExchangeRead {
-	readonly exchange: ExchangeView;
+	readonly exchange: Exchange;
 	readonly messages: readonly Message[];
-	readonly watermark: Seq;
+	readonly through: Seq;
 }
 
 /** Read one exchange's durable discussion without starting or reconciling a room. */
@@ -176,15 +176,15 @@ export async function readExchange(
 		throw new RangeError('Exchange reference must be a positive safe integer.');
 	const snapshot = await readRoom(name, {
 		runtime: options.runtime,
-		messages: { since: from - 1 },
+		messages: { after: from - 1 },
 	});
 	const exchange = snapshot.exchanges.find((candidate) => candidate.from === from);
 	if (exchange === undefined) return undefined;
-	const through = exchange.status === 'closed' ? exchange.through : snapshot.watermark;
+	const through = exchange.status === 'closed' ? exchange.through : snapshot.through;
 	return {
 		exchange,
 		messages: discussionMessages(snapshot.messages, from, through),
-		watermark: snapshot.watermark,
+		through: snapshot.through,
 	};
 }
 
@@ -210,7 +210,7 @@ function composeFrom(options: StartRoomOptions): CompositionDraft {
 	const definitions = capturedDefinitions(normalized);
 	return {
 		goal: normalized.goal?.trim() || undefined,
-		summary: normalized.summary,
+		summaryWriter: normalized.summaryWriter,
 		definitions,
 		seats: initialSeats(normalized, definitions),
 	};
@@ -227,10 +227,10 @@ function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
 	if (assistant === undefined) return options;
 	const name = assistant.name;
 	if (options.agents?.some((agent) => agent.name === name)) throw duplicate(name);
-	if (options.summary !== undefined && options.summary !== name)
+	if (options.summaryWriter !== undefined && options.summaryWriter !== name)
 		throw new AmbionError(
 			'refused',
-			`Assistant '${name}' conflicts with summary agent '${options.summary}'.`,
+			`Assistant '${name}' conflicts with summary agent '${options.summaryWriter}'.`,
 		);
 	const configured = seatOptionsOf(options.seats?.[name]);
 	if (configured.attention !== undefined && configured.attention !== 'broadcast')
@@ -243,7 +243,7 @@ function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
 		...options,
 		agents: [assistant, ...(options.agents ?? [])],
 		seats,
-		summary: name,
+		summaryWriter: name,
 	};
 }
 
@@ -254,8 +254,11 @@ function capturedDefinitions(options: StartRoomOptions): AgentDefinition[] {
 		if (names.has(definition.name)) throw duplicate(definition.name);
 		names.add(definition.name);
 	}
-	if (options.summary !== undefined && !names.has(options.summary))
-		throw new AmbionError('missing_definition', `Unknown summary agent '${options.summary}'.`);
+	if (options.summaryWriter !== undefined && !names.has(options.summaryWriter))
+		throw new AmbionError(
+			'missing_definition',
+			`Unknown summary agent '${options.summaryWriter}'.`,
+		);
 	return definitions;
 }
 
@@ -272,10 +275,10 @@ function initialSeats(
 	const names = new Set(definitions.map((agent) => agent.name));
 	for (const name of selected)
 		if (!names.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
-	if (options.summary !== undefined && !selected.has(options.summary))
+	if (options.summaryWriter !== undefined && !selected.has(options.summaryWriter))
 		throw new AmbionError(
 			'refused',
-			`Summary writer '${options.summary}' is not seated: add it to 'seats' or omit 'summary'.`,
+			`Summary writer '${options.summaryWriter}' is not seated: add it to 'seats' or omit 'summaryWriter'.`,
 		);
 	return new Map(
 		definitions

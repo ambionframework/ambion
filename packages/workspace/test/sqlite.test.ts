@@ -93,8 +93,8 @@ const engines = [
 	{ name: 'with the text check alone', wrap: withoutAuthorizer },
 ];
 
-describe.each(sqlBackends)('$name', (harness) => {
-	for (const c of sqlCases(harness)) it(c.name, c.run);
+describe.each(sqlBackends)('$name', (fixture) => {
+	for (const c of sqlCases(fixture)) it(c.name, c.run);
 });
 
 describe.each(engines)('no statement opens a host file, $name', ({ wrap }) => {

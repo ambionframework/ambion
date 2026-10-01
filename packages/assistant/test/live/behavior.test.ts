@@ -8,13 +8,13 @@
  * sample passes.
  */
 
-import { isSpoken, type SpokenMessage } from '@ambionframework/ambion';
-import { quiet, speak } from '@ambionframework/ambion/testing';
+import { isSaid, type SaidMessage } from '@ambionframework/ambion';
+import { quiet, say } from '@ambionframework/ambion/testing';
 import {
 	agentActor,
 	agentJudge,
 	type Judge,
-	type Run,
+	type Simulation,
 	scriptedActor,
 	simulate,
 } from '@ambionframework/simulator';
@@ -34,8 +34,8 @@ import {
 	track,
 } from './support.ts';
 
-const judge: Judge = (run, criteria) =>
-	agentJudge({ model: JUDGE_MODEL, thinking: JUDGE_THINKING })(run, criteria);
+const judge: Judge = (simulation, criteria) =>
+	agentJudge({ model: JUDGE_MODEL, thinking: JUDGE_THINKING })(simulation, criteria);
 
 const STOCK = 'The warehouse has 8 units of SKU A available to dispatch today.';
 const EIGHT = /\b8\b|\beight\b/i;
@@ -47,10 +47,13 @@ const TWO_EXCHANGES_MS = 420_000;
 /** Real milliseconds for a case of three exchanges, three moves of the actor, and a grade. */
 const THREE_EXCHANGES_MS = 600_000;
 
-/** A run that the judge can grade: it ended cleanly, and each exchange has its summary. */
-function expectGradable(run: Run, ended: readonly Run['ended'][] = ['limit']): void {
-	expect(ended, run.error).toContain(run.ended);
-	for (const exchange of run.exchanges) {
+/** A simulation that the judge can grade: it ended cleanly, and each exchange has its summary. */
+function expectGradable(
+	simulation: Simulation,
+	ended: readonly Simulation['ended'][] = ['limit'],
+): void {
+	expect(ended, simulation.error).toContain(simulation.ended);
+	for (const exchange of simulation.exchanges) {
 		expect(exchange.summary, JSON.stringify(exchange.discussion)).toBeDefined();
 	}
 }
@@ -68,7 +71,7 @@ live('the default assistant, driven by the simulator', () => {
 			const name = `routes-${attention ?? 'reserve'}-${sample}`;
 			const evidence = track(name);
 			const room = await openRoom({ specialist: answers(() => STOCK), attention });
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
@@ -76,9 +79,9 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			const [exchange] = run.exchanges;
-			expectGradable(run);
+			evidence.simulation = simulation;
+			const [exchange] = simulation.exchanges;
+			expectGradable(simulation);
 			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
 			const speech = saidBy(exchange, 'assistant');
 			if (attention === 'named') {
@@ -89,7 +92,7 @@ live('the default assistant, driven by the simulator', () => {
 			}
 			if (attention === undefined) {
 				// The specialist starts in the reserve, and the assistant seats it.
-				expect(run.room.messages).toContainEqual(
+				expect(simulation.room.messages).toContainEqual(
 					expect.objectContaining({ kind: 'seated', subject: 'inventory', from: 'assistant' }),
 				);
 			}
@@ -109,7 +112,7 @@ live('the default assistant, driven by the simulator', () => {
 				leaves: priya,
 				specialist: answers(() => STOCK),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
@@ -117,9 +120,9 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run);
-			const [exchange] = run.exchanges;
+			evidence.simulation = simulation;
+			expectGradable(simulation);
+			const [exchange] = simulation.exchanges;
 			// priya left before the first activation, and the assistant routes as for a person who stays.
 			expect(exchange?.discussion.map((message) => message.kind).slice(0, 2)).toEqual([
 				'said',
@@ -130,7 +133,7 @@ live('the default assistant, driven by the simulator', () => {
 			expect(speech[0]).toMatchObject({ to: 'inventory' });
 			expect(saidBy(exchange, 'inventory')).not.toEqual([]);
 			expect(exchange?.summary).toMatchObject({ to: 'priya', text: expect.stringMatching(EIGHT) });
-			const verdict = await judge(run, [
+			const verdict = await judge(simulation, [
 				'The summary to priya does not say that the request went unanswered because she left.',
 			]);
 			evidence.verdict = verdict;
@@ -149,7 +152,7 @@ live('the default assistant, driven by the simulator', () => {
 					() => 'I will prepare a 10-unit dispatch plan using the old approved limit of 10.',
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'Prepare a warehouse dispatch plan. Correction: the approved limit is now 8 units; the old 10-unit limit is withdrawn. Do not dispatch anything.',
@@ -157,13 +160,13 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run);
-			const [exchange] = run.exchanges;
+			evidence.simulation = simulation;
+			expectGradable(simulation);
+			const [exchange] = simulation.exchanges;
 			// At broadcast the specialist heard the correction. The assistant does not repeat it.
 			expect(saidBy(exchange, 'assistant'), JSON.stringify(exchange?.discussion)).toEqual([]);
 			expect(exchange?.summary?.text).toMatch(EIGHT);
-			const verdict = await judge(run, [
+			const verdict = await judge(simulation, [
 				'The summary to priya reports that inventory planned on the withdrawn 10-unit limit, states that the approved limit is 8 units, and does not present the 10-unit plan as accepted.',
 			]);
 			evidence.verdict = verdict;
@@ -180,7 +183,7 @@ live('the default assistant, driven by the simulator', () => {
 					'I could not read current warehouse stock because the stock service is unavailable. Dispatch capacity remains unknown; nothing was dispatched.',
 			),
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([
 				'Check whether the warehouse can dispatch 8 units today. Do not dispatch anything.',
@@ -188,10 +191,10 @@ live('the default assistant, driven by the simulator', () => {
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expectGradable(run);
-		expect(saidBy(run.exchanges[0], 'assistant')).toEqual([]);
-		const verdict = await judge(run, [
+		evidence.simulation = simulation;
+		expectGradable(simulation);
+		expect(saidBy(simulation.exchanges[0], 'assistant')).toEqual([]);
+		const verdict = await judge(simulation, [
 			'The summary to priya says that the dispatch capacity is unknown, and it reports no success.',
 		]);
 		evidence.verdict = verdict;
@@ -206,14 +209,14 @@ live('the default assistant, driven by the simulator', () => {
 			instructions:
 				'For this application, override default silence: publish exactly one ordinary message with the exact text "Inventory checkpoint recorded." for this exchange. Do not repeat it if it is already on the record. Write the closing summary normally.',
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Check warehouse stock for SKU A.']),
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		const [exchange] = simulation.exchanges;
 		expect(saidBy(exchange, 'assistant')).toEqual([
 			expect.objectContaining({ text: 'Inventory checkpoint recorded.' }),
 		]);
@@ -229,7 +232,7 @@ live('the default assistant, driven by the simulator', () => {
 					'I inspected the source of the static dispatch prototype. The source contains a stock-count label. I did not render it in a browser, run tests, or deploy it. Runtime behavior remains unverified; no release occurred and no files changed.',
 			),
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([
 				'Report what was verified about the warehouse dispatch prototype. Do not change files or release anything.',
@@ -237,11 +240,11 @@ live('the default assistant, driven by the simulator', () => {
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expectGradable(run);
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		expectGradable(simulation);
+		const [exchange] = simulation.exchanges;
 		expect(saidBy(exchange, 'assistant')).toEqual([]);
-		const verdict = await judge(run, [
+		const verdict = await judge(simulation, [
 			'The summary to priya says that the check was an inspection of the source of a static prototype.',
 			'The summary to priya says that the runtime behavior is unverified.',
 			'The summary to priya says that nothing was released or deployed.',
@@ -264,7 +267,7 @@ live('the default assistant, driven by the simulator', () => {
 						: STOCK,
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today?',
@@ -273,14 +276,14 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run);
-			const second = run.exchanges[1];
+			evidence.simulation = simulation;
+			expectGradable(simulation);
+			const second = simulation.exchanges[1];
 			const speech = saidBy(second, 'assistant');
 			expect(speech, JSON.stringify(second?.discussion)).toHaveLength(1);
 			expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(SKU_B) });
 			expect(second?.summary?.text).toMatch(FIVE);
-			const verdict = await judge(run, [
+			const verdict = await judge(simulation, [
 				'The second summary to priya answers for SKU B, and does not give the SKU A count as the answer.',
 			]);
 			evidence.verdict = verdict;
@@ -301,7 +304,7 @@ live('the default assistant, driven by the simulator', () => {
 						: STOCK,
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'Report the stock of SKU A. Do not dispatch anything this week.',
@@ -310,12 +313,12 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run);
-			const speech = saidBy(run.exchanges[1], 'assistant');
-			expect(speech, JSON.stringify(run.exchanges[1]?.discussion)).toHaveLength(1);
+			evidence.simulation = simulation;
+			expectGradable(simulation);
+			const speech = saidBy(simulation.exchanges[1], 'assistant');
+			expect(speech, JSON.stringify(simulation.exchanges[1]?.discussion)).toHaveLength(1);
 			expect(speech[0]).toMatchObject({ to: 'inventory' });
-			const verdict = await judge(run, [
+			const verdict = await judge(simulation, [
 				"In the second exchange, the assistant's request to inventory carries the constraint that nothing is dispatched this week.",
 				'The second summary to priya keeps the constraint that nothing is dispatched this week.',
 			]);
@@ -337,7 +340,7 @@ live('the default assistant, driven by the simulator', () => {
 						: { text: 'Which SKU should I check?', to: 'priya' },
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: agentActor({
 					model: MODEL,
@@ -348,15 +351,16 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 3,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run, ['stopped', 'limit']);
+			evidence.simulation = simulation;
+			expectGradable(simulation, ['stopped', 'limit']);
 			// At broadcast the specialist asks for the SKU. Only the summary relays the question.
-			for (const exchange of run.exchanges) expect(saidBy(exchange, 'assistant')).toEqual([]);
+			for (const exchange of simulation.exchanges)
+				expect(saidBy(exchange, 'assistant')).toEqual([]);
 			// The actor gives the SKU in a later exchange. The first criterion reads whether the assistant asked.
-			expect(run.exchanges.slice(1).map((exchange) => exchange.sent)).toContainEqual(
+			expect(simulation.exchanges.slice(1).map((exchange) => exchange.sent)).toContainEqual(
 				expect.stringMatching(/A-100/),
 			);
-			const verdict = await judge(run, [
+			const verdict = await judge(simulation, [
 				'The first summary to priya asks for the SKU, or says that the count waits on it, and reports no count.',
 				'The last summary to priya states that 8 units can be dispatched today.',
 			]);
@@ -377,7 +381,7 @@ live('the default assistant, driven by the simulator', () => {
 			// A question to the assistant is not a request to the specialist.
 			specialist: answers((exchange) => (exchange[0]?.to === 'assistant' ? undefined : STOCK)),
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([
 				{
@@ -388,16 +392,16 @@ live('the default assistant, driven by the simulator', () => {
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expect(run.ended).toBe('limit');
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		expect(simulation.ended).toBe('limit');
+		const [exchange] = simulation.exchanges;
 		const speech = saidBy(exchange, 'assistant');
 		expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
 		expect(speech[0]).toMatchObject({ to: 'priya' });
 		expect(saidBy(exchange, 'inventory')).toEqual([]);
 		expect(presence(exchange, 'seated', 'inventory')).toEqual([]);
 		expect(presence(exchange, 'unseated', 'inventory')).toEqual([]);
-		const verdict = await judge(run, [
+		const verdict = await judge(simulation, [
 			"The assistant's message to priya names inventory as the agent that checks stock, and says that it is seated.",
 		]);
 		evidence.verdict = verdict;
@@ -407,7 +411,7 @@ live('the default assistant, driven by the simulator', () => {
 	it('stays silent when a person asks a named specialist directly', async () => {
 		const evidence = track('direct-to-specialist');
 		const room = await openRoom({ attention: 'named', specialist: answers(() => STOCK) });
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([
 				{ text: 'How many units of SKU A can you dispatch today?', to: 'inventory' },
@@ -415,9 +419,9 @@ live('the default assistant, driven by the simulator', () => {
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expectGradable(run);
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		expectGradable(simulation);
+		const [exchange] = simulation.exchanges;
 		expect(saidBy(exchange, 'assistant'), JSON.stringify(exchange?.discussion)).toEqual([]);
 		expect(saidBy(exchange, 'inventory')).not.toEqual([]);
 		expect(exchange?.summary?.text).toMatch(EIGHT);
@@ -433,7 +437,7 @@ live('the default assistant, driven by the simulator', () => {
 					exchange.some((message) => /no longer needed/i.test(message.text)) ? undefined : STOCK,
 				),
 			});
-			const run = await simulate(room, {
+			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor([
 					'Report the stock of SKU A.',
@@ -442,15 +446,16 @@ live('the default assistant, driven by the simulator', () => {
 				exchanges: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
-			evidence.run = run;
-			expectGradable(run);
-			const [first, second] = run.exchanges;
+			evidence.simulation = simulation;
+			expectGradable(simulation);
+			const [first, second] = simulation.exchanges;
 			expect(presence(first, 'unseated', 'inventory')).toEqual([]);
 			expect(presence(second, 'unseated', 'inventory')).toEqual([
 				expect.objectContaining({ from: 'assistant' }),
 			]);
-			for (const exchange of run.exchanges) expect(saidBy(exchange, 'assistant')).toEqual([]);
-			const verdict = await judge(run, [
+			for (const exchange of simulation.exchanges)
+				expect(saidBy(exchange, 'assistant')).toEqual([]);
+			const verdict = await judge(simulation, [
 				'The second summary to priya says that inventory left the room.',
 			]);
 			evidence.verdict = verdict;
@@ -462,7 +467,7 @@ live('the default assistant, driven by the simulator', () => {
 	it('seats no specialist when the request does not need one', async () => {
 		const evidence = track('no-seat');
 		const room = await openRoom({ specialist: answers(() => 'UNEXPECTED: inventory was seated.') });
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([
 				'For the record: the dispatch review is on Friday. No stock check is needed.',
@@ -470,9 +475,9 @@ live('the default assistant, driven by the simulator', () => {
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expect(run.ended).toBe('limit');
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		expect(simulation.ended).toBe('limit');
+		const [exchange] = simulation.exchanges;
 		expect(presence(exchange, 'seated', 'inventory')).toEqual([]);
 		expect(saidBy(exchange, 'inventory')).toEqual([]);
 		expect(saidBy(exchange, 'assistant'), JSON.stringify(exchange?.discussion)).toEqual([]);
@@ -487,13 +492,13 @@ live('the default assistant, driven by the simulator', () => {
 				if (results.length > 0 || view.context.exchange === undefined) return quiet();
 				const { from } = view.context.exchange;
 				const said = view.context.messages.filter(
-					(message): message is SpokenMessage => isSpoken(message) && message.seq >= from,
+					(message): message is SaidMessage => isSaid(message) && message.seq >= from,
 				);
 				const asked = said.some(
 					(message) => message.from === 'inventory' && message.to === 'assistant',
 				);
 				if (!asked) {
-					return speak('Which warehouse did priya ask me to check, north or south?', 'assistant');
+					return say('Which warehouse did priya ask me to check, north or south?', 'assistant');
 				}
 				const answered = said.some(
 					(message) => message.from === 'assistant' && message.to === 'inventory',
@@ -502,19 +507,19 @@ live('the default assistant, driven by the simulator', () => {
 					(message) => message.from === 'inventory' && message.to === undefined,
 				);
 				return answered && !reported
-					? speak('The north warehouse has 8 units of SKU A available to dispatch today.')
+					? say('The north warehouse has 8 units of SKU A available to dispatch today.')
 					: quiet();
 			},
 		});
-		const run = await simulate(room, {
+		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['How many units of SKU A are in the north warehouse today?']),
 			exchanges: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
-		evidence.run = run;
-		expectGradable(run);
-		const [exchange] = run.exchanges;
+		evidence.simulation = simulation;
+		expectGradable(simulation);
+		const [exchange] = simulation.exchanges;
 		const speech = saidBy(exchange, 'assistant');
 		expect(speech, JSON.stringify(exchange?.discussion)).toHaveLength(1);
 		expect(speech[0]).toMatchObject({ to: 'inventory', text: expect.stringMatching(/north/i) });
@@ -546,18 +551,18 @@ live('the default assistant, driven by the simulator', () => {
 			const id = `message:${posted.from}:assistant:1`;
 			expect(closed?.activations.find((activation) => activation.id === id)).toMatchObject({
 				purpose: 'respond',
-				outcome: { status: 'released' },
+				outcome: { kind: 'released' },
 			});
 			// A post gives no direction, so silence is a valid answer. A say speaks to the event.
 			const spoken = discussion.filter(
-				(message): message is SpokenMessage =>
-					isSpoken(message) && message.from === 'assistant' && message.activationId === id,
+				(message): message is SaidMessage =>
+					isSaid(message) && message.from === 'assistant' && message.activation === id,
 			);
 			for (const message of spoken)
 				expect(message.text, JSON.stringify(discussion)).toMatch(/stale|sync|stock|SKU/i);
 			// No person spoke in the work of the post, so it names no person and owes no summary.
 			expect(closed).not.toHaveProperty('person');
-			expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+			expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
 		},
 		TWO_EXCHANGES_MS,
 	);

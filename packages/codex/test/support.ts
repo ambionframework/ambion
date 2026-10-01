@@ -3,17 +3,19 @@
  * one activation opened over a room that records what the seat commits, and
  * a client of the room tools server.
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
+	type ActivationEvent,
+	type ActivationOpener,
 	type ActivationView,
 	type AgentDefinition,
 	type CommitRequest,
 	type CommitResult,
-	type ExecutionEvent,
-	type Executor,
 	ROOM_SERVER,
 	type RoomProtocol,
 	type StepSink,
@@ -28,14 +30,14 @@ import type {
 import { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
-import { createCodexExecutor } from '../src/executor.ts';
+import { createCodexOpener } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
-import { citing, type RoomTool, servedTools } from '../src/tools.ts';
+import { type CodexTool, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
 
-/** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
+/** The catalog entries that a real `codex` 0.158.0 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
 export const catalogFixture = JSON.parse(
-	readFileSync(new URL('./fixtures/catalog-0.155.1.json', import.meta.url), 'utf8'),
+	readFileSync(new URL('./fixtures/catalog-0.158.0.json', import.meta.url), 'utf8'),
 ) as { models: CatalogEntry[] };
 
 /** A catalog source that reads the recorded entries. */
@@ -235,6 +237,10 @@ function replay(turns: readonly Turn[]) {
 	return { client, seen };
 }
 
+/** The Codex home of the executors in this file. The replay client never reads it, and it never holds a login. */
+const SEAT_HOME = mkdtempSync(join(tmpdir(), 'ambion-codex-seat-'));
+process.once('exit', () => rmSync(SEAT_HOME, { recursive: true, force: true }));
+
 /** An executor of `definition` over a replay client, and a way to open its activations. */
 export function open(
 	turns: readonly Turn[],
@@ -243,23 +249,29 @@ export function open(
 	catalog: CatalogSource = recordedCatalog,
 ) {
 	const steps: Step[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const { room, commits } = roomOf(answer);
 	const { client, seen } = replay(turns);
 	const trace: StepSink = {
 		record: (step) => void steps.push(step),
 	};
-	const executor = createCodexExecutor({ definition, client, catalog });
+	const opener = createCodexOpener({
+		definition,
+		client,
+		catalog,
+		home: SEAT_HOME,
+		login: false,
+	});
 	/** The core state of one activation, as the driver opens it. */
 	const activate = (id = 'message:1:gpt:1') =>
-		new ActivationState(executor, {
+		new ActivationState(opener, {
 			id,
 			room,
 			definition,
 			emit: (event) => void events.push(event),
 			trace,
 		});
-	return { executor, steps, commits, events, activate, seen };
+	return { opener, steps, commits, events, activate, seen };
 }
 
 /** A room tools server behind a real socket, and an MCP client of it. */
@@ -270,8 +282,6 @@ export interface Connected {
 	readonly readThrough: () => number;
 	/** Whether the activation was cut. */
 	readonly aborted: () => boolean;
-	/** Paths the agent changed, as Codex reports them. The next ordinary say cites them. */
-	note(paths: readonly string[]): void;
 	close(): Promise<void>;
 }
 
@@ -284,15 +294,12 @@ const noTrace: StepSink = {
  * Codex executor serves them. The pass reads the view and runs no model.
  */
 async function bindTools(room: RoomProtocol, view: ActivationView, definition: AgentDefinition) {
-	const changed = new Set<string>();
-	const ordinary = view.spec.purpose.kind !== 'summarize';
-	let served: RoomTool[] = [];
+	let served: CodexTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
-	const executor: Executor = (activation) => {
+	const opener: ActivationOpener = (activation) => {
 		signal = activation.signal;
 		return {
-			roomTools: citing(changed, () => ordinary),
 			pass: async (pass) => {
 				activation.read({ after: 0, through: pass.view.through });
 				served = servedTools(pass.tools, {
@@ -303,7 +310,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 			},
 		};
 	};
-	const state = new ActivationState(executor, {
+	const state = new ActivationState(opener, {
 		id: view.spec.id,
 		room,
 		definition,
@@ -311,7 +318,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 		trace: noTrace,
 	});
 	await state.pass({ kind: 'view', view });
-	return { state, served, signal, changed };
+	return { state, served, signal };
 }
 
 /** Start the bridge for one activation, and connect an MCP client to the server it spawns. */
@@ -320,7 +327,7 @@ export async function connect(
 	view: ActivationView = viewOf(),
 	definition: AgentDefinition = seat(),
 ): Promise<Connected> {
-	const { state, served, signal, changed } = await bindTools(room, view, definition);
+	const { state, served, signal } = await bindTools(room, view, definition);
 	const bridge = await startBridge(served, signal);
 	const client = new Client({ name: 'test', version: '0.0.0' });
 	await client.connect(
@@ -335,9 +342,6 @@ export async function connect(
 		bridge,
 		readThrough: () => state.readThrough,
 		aborted: () => state.cancelled,
-		note: (paths) => {
-			for (const path of paths) changed.add(path);
-		},
 		close: async () => {
 			await client.close();
 			bridge.close();

@@ -1,8 +1,8 @@
 /** The Claude execution: one Claude executor for each seat. */
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import { createClaudeExecutor } from './executor.ts';
-import type { ClaudeRuntime } from './options.ts';
+import { createClaudeOpener } from './executor.ts';
+import type { ClaudeExecutionOptions } from './options.ts';
 
 /**
  * The Claude execution for a runtime or a room. Pass it as `execution` to
@@ -10,10 +10,10 @@ import type { ClaudeRuntime } from './options.ts';
  * `claude`. It does not change the default of that kind. Loading the package
  * defines that default, with no options.
  */
-export const claudeExecution = defineExecution<ClaudeRuntime>(
+export const claudeExecution = defineExecution<ClaudeExecutionOptions>(
 	'claude',
 	(_host, options) => (request) =>
-		createClaudeExecutor({
+		createClaudeOpener({
 			definition: request.definition,
 			room: request.room,
 			seat: request.seat,

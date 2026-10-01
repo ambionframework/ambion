@@ -7,7 +7,7 @@
  * its definition, which includes the workspace tools of its bundles.
  */
 import {
-	type AgentExecutor,
+	type Executor,
 	executorOfKind,
 	present,
 	ROOM_SERVER,
@@ -17,7 +17,7 @@ import type { ClaudeExecutor } from './define.ts';
 import type { SeatHome } from './home.ts';
 
 /** The services a Claude execution brings: where the executable is and what it runs with. */
-export interface ClaudeRuntime {
+export interface ClaudeExecutionOptions {
 	/** A Claude Code executable to run. Absent, the SDK finds the one it ships with. */
 	readonly pathToClaudeCodeExecutable?: string;
 	/**
@@ -196,7 +196,7 @@ export function toolAliases(names: readonly string[]): Record<string, string> {
 }
 
 /** The Claude executor a definition names, or an error that names its kind. */
-export function claudeOf(executor: AgentExecutor): ClaudeExecutor {
+export function claudeOf(executor: Executor): ClaudeExecutor {
 	return executorOfKind<ClaudeExecutor>(executor, 'claude');
 }
 
@@ -207,7 +207,7 @@ export interface QueryInput {
 	readonly server: NonNullable<Options['mcpServers']>[string];
 	/** The names of the tools of the seat, as the SDK knows them. */
 	readonly names: readonly string[];
-	readonly runtime: ClaudeRuntime;
+	readonly options: ClaudeExecutionOptions;
 	/** The directories of the seat. */
 	readonly home: SeatHome;
 	/** Takes the standard error of the executable. */
@@ -224,7 +224,7 @@ export interface QueryInput {
  * seat.
  */
 export function queryOptions(input: QueryInput): Options {
-	const { executor, runtime, resume } = input;
+	const { executor, options, resume } = input;
 	const aliases = toolAliases(input.names);
 	return {
 		model: executor.model,
@@ -253,8 +253,8 @@ export function queryOptions(input: QueryInput): Options {
 			maxBudgetUsd: executor.maxBudgetUsd,
 			effort: executor.effort,
 			toolAliases: Object.keys(aliases).length === 0 ? undefined : aliases,
-			pathToClaudeCodeExecutable: runtime.pathToClaudeCodeExecutable,
+			pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
 		}),
-		env: seatEnv(runtime.env, input.home),
+		env: seatEnv(options.env, input.home),
 	};
 }

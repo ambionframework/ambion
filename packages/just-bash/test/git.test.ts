@@ -19,7 +19,7 @@ import { justGitBackend, sqliteGitStorage } from '../src/git/index.ts';
 import { openServer } from '../src/git/server.ts';
 import { signToken, tokenOf, verifyToken } from '../src/git/tokens.ts';
 import { memoryBackend } from '../src/index.ts';
-import { SECRET } from './support/git-harness.ts';
+import { SECRET } from './support/git-fixture.ts';
 
 const ANALYST = { name: 'analyst' };
 const REVIEWER = { name: 'reviewer' };
@@ -43,7 +43,10 @@ function workspaceOver(file: string, options: Partial<Parameters<typeof justGitB
 		templates: TEMPLATES,
 		...options,
 	});
-	const workspace = openWorkspace({ name: 'git-test', backend: { bash: memoryBackend(), git } });
+	const workspace = openWorkspace({
+		name: 'git-test',
+		backend: { bash: memoryBackend({ git }) },
+	});
 	cleanup.push(() => workspace.dispose());
 	return { git, workspace };
 }
@@ -298,7 +301,7 @@ describe('justGitBackend', () => {
 		expect(after?.branches.main).toBe(forked.repository.branches.main);
 	});
 
-	it('refuses a fork name outside the rule, and a tokenTtl that is not finite', async () => {
+	it('refuses a fork name outside the rule, and a credentialTtl that is not finite', async () => {
 		const { workspace } = workspaceOver(join(await tempDir(), 'git.db'));
 		const refused = await workspace.git?.use(ANALYST, (env) =>
 			env.fork('templates/blank', 'Bad Name'),
@@ -308,10 +311,10 @@ describe('justGitBackend', () => {
 			reason: 'refused',
 			message: "'Bad Name' is not a valid name.",
 		});
-		for (const tokenTtl of [Number.POSITIVE_INFINITY, 0, Number.NaN]) {
+		for (const credentialTtl of [Number.POSITIVE_INFINITY, 0, Number.NaN]) {
 			expect(() =>
-				justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, tokenTtl }),
-			).toThrow('tokenTtl must be a finite number above 0.');
+				justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: SECRET, credentialTtl }),
+			).toThrow('credentialTtl must be a finite number above 0.');
 		}
 	});
 

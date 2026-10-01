@@ -18,7 +18,7 @@ import type {
 	ToolResult,
 } from './bundle.ts';
 import { AmbionError } from './errors.ts';
-import type { AgentDefinition, AgentExecutor, HumanDefinition, TracePolicy } from './types.ts';
+import type { AgentDefinition, Executor, HumanDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a room and on the record. */
@@ -26,39 +26,39 @@ export interface DefineAgentOptions {
 	/** The agent's public face — injected into every participant's context as part of the roster. */
 	identity: string;
 	/** The executor this agent runs on. Build one with the executor package, such as `pi()`. */
-	executor: AgentExecutor;
-	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE`. */
+	executor: Executor;
+	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE_POLICY`. */
 	trace?: TracePolicy;
 }
 
 /** The default trace policy: full tool output, and the start of each thinking block. */
-export const DEFAULT_TRACE: TracePolicy = Object.freeze({
-	thinking: 'summary',
+export const DEFAULT_TRACE_POLICY: TracePolicy = Object.freeze({
+	thinking: 'start',
 	toolOutput: 'full',
 });
 
-const THINKING = new Set(['omit', 'summary', 'full']);
+const THINKING = new Set(['omit', 'start', 'full']);
 const TOOL_OUTPUT = new Set(['omit', 'full']);
 
 /** A policy checked and copied. Absent gives the default. */
 function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePolicy {
-	if (policy === undefined) return DEFAULT_TRACE;
+	if (policy === undefined) return DEFAULT_TRACE_POLICY;
 	if (!THINKING.has(policy.thinking))
-		throw new Error(`Agent '${agent}' trace.thinking must be omit, summary, or full.`);
+		throw new Error(`Agent '${agent}' trace.thinking must be omit, start, or full.`);
 	if (!TOOL_OUTPUT.has(policy.toolOutput))
 		throw new Error(`Agent '${agent}' trace.toolOutput must be omit or full.`);
 	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
-/** The neutral half of an executor, as an executor family's own options declare it. */
-export interface AgentExecutorBaseOptions {
+/** The neutral half of an executor, as an executor kind's own options declare it. */
+export interface ExecutorBaseOptions {
 	/** The private half: the agent's own voice, and the home of all judgment. */
 	readonly instructions: string;
 	/** The agent's own normalized tools. */
 	readonly tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	readonly bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
@@ -69,17 +69,17 @@ export interface AgentExecutorBaseOptions {
 	readonly estimateTokens?: string;
 }
 
-/** What `describeExecutor` reads: the fields every executor family shares. */
-export interface ExecutorOptions extends AgentExecutorBaseOptions {
+/** What `describeExecutor` reads: the fields every executor kind shares. */
+export interface ExecutorOptions extends ExecutorBaseOptions {
 	readonly kind: string;
 }
 
 /**
- * The executor a definition names, narrowed to one family and its model.
+ * The executor a definition names, narrowed to one kind and its model.
  * Throws when the executor's kind does not match.
  */
-export function executorOfKind<T extends AgentExecutor & { readonly model: string }>(
-	executor: AgentExecutor,
+export function executorOfKind<T extends Executor & { readonly model: string }>(
+	executor: Executor,
 	kind: T['kind'],
 ): T {
 	if (executor.kind === kind && 'model' in executor && typeof executor.model === 'string') {
@@ -105,9 +105,9 @@ export function pickPresent<T extends object, K extends keyof T>(
 
 /**
  * The neutral half of an executor: validated, flattened, and frozen. An
- * executor family adds its own fields to the value this returns.
+ * executor kind adds its own fields to the value this returns.
  */
-export function describeExecutor(options: ExecutorOptions): AgentExecutor {
+export function describeExecutor(options: ExecutorOptions): Executor {
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
 	const reminders = remindersOf(options.bundles);
@@ -163,9 +163,9 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 
 /**
  * Capture one executor at a room boundary. The copy is deep, so a field an
- * executor family adds, such as a model, survives without a name here.
+ * executor kind adds, such as a model, survives without a name here.
  */
-function captureExecutor(executor: AgentExecutor): AgentExecutor {
+function captureExecutor(executor: Executor): Executor {
 	const tools = Object.freeze(
 		executor.tools.map((tool) => {
 			assertTool(tool);
@@ -342,7 +342,7 @@ export const UNSEAT = {
 	}),
 };
 
-/** The room tool that dismisses one pending say of the seat. */
+/** The room tool that dismisses one scheduled say of the seat. */
 export const DISMISS = {
 	name: 'dismiss' as const,
 	description: 'Drop a message you scheduled, by its seq. The room does not wake you with it.',

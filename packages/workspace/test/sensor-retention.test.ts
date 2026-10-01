@@ -120,7 +120,7 @@ function interruptExport(
 describe('sensor evidence retention', () => {
 	it('restores a complete observation and files for another agent after HTTP shutdown', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-'));
-		const storeHarness = await defaultStore(root, 'sensor-owner');
+		const storeFixture = await defaultStore(root, 'sensor-owner');
 		const server = await startSensorServer();
 		const client = createSensorClient(server.origin);
 		const source = await client.index();
@@ -137,7 +137,7 @@ describe('sensor evidence retention', () => {
 
 		try {
 			const retained = await retainSensorObservation(
-				storeHarness.store,
+				storeFixture.store,
 				{ name: 'observer' },
 				{
 					sensor: 'bench-one/bench',
@@ -150,7 +150,7 @@ describe('sensor evidence retention', () => {
 				files,
 			);
 			const repeated = await retainSensorObservation(
-				storeHarness.store,
+				storeFixture.store,
 				{ name: 'observer' },
 				{
 					sensor: 'bench-one/bench',
@@ -163,12 +163,12 @@ describe('sensor evidence retention', () => {
 				files,
 			);
 			expect(repeated.directory).not.toBe(retained.directory);
-			const restored = await createRestoreTool(storeHarness.store).invoke(
+			const restored = await createRestoreTool(storeFixture.store).invoke(
 				{ ref: retained.manifestRef },
 				callAs('reviewer'),
 			);
 			const manifestPath = (restored as { details: { path: string } }).details.path;
-			const manifestContents = await storeHarness.store.shell({ name: 'reviewer' }, async (env) => {
+			const manifestContents = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
 				const result = await env.readTextFile(manifestPath, BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 				return result.value;
@@ -186,12 +186,12 @@ describe('sensor evidence retention', () => {
 			expect(manifest.files).toHaveLength(2);
 
 			for (const item of manifest.files) {
-				const result = await createRestoreTool(storeHarness.store).invoke(
+				const result = await createRestoreTool(storeFixture.store).invoke(
 					{ ref: item.ref },
 					callAs('reviewer'),
 				);
 				const path = (result as { details: { path: string } }).details.path;
-				const bytes = await storeHarness.store.shell({ name: 'reviewer' }, async (env) => {
+				const bytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
 					const found = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
 					if (!found.ok) throw found.error;
 					return found.value;
@@ -201,16 +201,16 @@ describe('sensor evidence retention', () => {
 
 			const firstExport = retained.files[0];
 			if (!firstExport) throw new Error('Expected a retained file export.');
-			await storeHarness.store.shell({ name: 'observer' }, async (env) => {
+			await storeFixture.store.shell({ name: 'observer' }, async (env) => {
 				const changed = await env.writeFile(firstExport.path, 'edited export', BACKGROUND_CONTEXT);
 				if (!changed.ok) throw changed.error;
 			});
-			const originalAgain = await storeHarness.store.objects(owner, (env) =>
+			const originalAgain = await storeFixture.store.objects(owner, (env) =>
 				env.get(firstExport.digest),
 			);
 			expect(originalAgain).toEqual(files.get(firstExport.digest));
 		} finally {
-			await storeHarness.dispose();
+			await storeFixture.dispose();
 			await rm(root, { recursive: true, force: true });
 		}
 	});
@@ -223,7 +223,7 @@ describe('sensor evidence retention', () => {
 		const started = new Promise<void>((resolve) => (startedPut = resolve));
 		const gate = new Promise<void>((resolve) => (releasePuts = resolve));
 		const delayedBackend: ObjectBackend = {
-			store: 'delayed',
+			label: 'delayed',
 			connect: async () => ({
 				async put(digest, bytes) {
 					startedPut();
@@ -307,7 +307,7 @@ describe('sensor evidence retention', () => {
 
 	it('retains text-only observations with no received files', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-text-'));
-		const storeHarness = await defaultStore(root);
+		const storeFixture = await defaultStore(root);
 		const metadata = {
 			sensor: 'bench-one/bench',
 			process: 'bash-777777777777',
@@ -326,14 +326,14 @@ describe('sensor evidence retention', () => {
 		};
 		try {
 			const first = await retainSensorObservation(
-				storeHarness.store,
+				storeFixture.store,
 				{ name: 'observer' },
 				metadata,
 				response,
 				new Map(),
 			);
 			const second = await retainSensorObservation(
-				storeHarness.store,
+				storeFixture.store,
 				{ name: 'observer' },
 				metadata,
 				response,
@@ -343,14 +343,14 @@ describe('sensor evidence retention', () => {
 			expect(first.directory).not.toBe(second.directory);
 			expect(first.manifest.observations).toEqual(response.observations);
 		} finally {
-			await storeHarness.dispose();
+			await storeFixture.dispose();
 			await rm(root, { recursive: true, force: true });
 		}
 	});
 
 	it('rejects missing and changed evidence before any object write', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-invalid-'));
-		const storeHarness = await defaultStore(root);
+		const storeFixture = await defaultStore(root);
 		const server = await startSensorServer();
 		const client = createSensorClient(server.origin);
 		const response = await client.observe('bench');
@@ -365,7 +365,7 @@ describe('sensor evidence retention', () => {
 		try {
 			await expect(
 				retainSensorObservation(
-					storeHarness.store,
+					storeFixture.store,
 					{ name: 'observer' },
 					metadata,
 					response,
@@ -374,7 +374,7 @@ describe('sensor evidence retention', () => {
 			).rejects.toThrow(/bytes were not received/);
 			await expect(
 				retainSensorObservation(
-					storeHarness.store,
+					storeFixture.store,
 					{ name: 'observer' },
 					{
 						...metadata,
@@ -392,7 +392,7 @@ describe('sensor evidence retention', () => {
 			).rejects.toThrow(/request fails/);
 			await expect(
 				retainSensorObservation(
-					storeHarness.store,
+					storeFixture.store,
 					{ name: 'observer' },
 					metadata,
 					response,
@@ -402,12 +402,12 @@ describe('sensor evidence retention', () => {
 					]),
 				),
 			).rejects.toMatchObject({ name: 'SensorDigestError', expected: frameDigest });
-			const noObjects = await storeHarness.store.shell(owner, (env) =>
+			const noObjects = await storeFixture.store.shell(owner, (env) =>
 				env.exists('/snapshots', BACKGROUND_CONTEXT),
 			);
 			expect(noObjects).toMatchObject({ ok: true, value: false });
 		} finally {
-			await storeHarness.dispose();
+			await storeFixture.dispose();
 			await rm(root, { recursive: true, force: true });
 		}
 	});
@@ -420,7 +420,7 @@ describe('sensor evidence retention', () => {
 		const stored = new Map<string, Uint8Array>();
 		let writes = 0;
 		const failingBackend: ObjectBackend = {
-			store: 'failing',
+			label: 'failing',
 			connect: async () => ({
 				put: async (digest, bytes) => {
 					writes++;

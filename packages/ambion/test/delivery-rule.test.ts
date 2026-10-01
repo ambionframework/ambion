@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
-import type { Body, Entry } from '../src/journal/journal.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
+import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import type { EndReason, Message } from '../src/types.ts';
@@ -105,17 +105,17 @@ describe('message delivery rule', () => {
 
 const retry = { backoff: (attempt: number) => attempt * 1_000 };
 
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		summary: 'assistant',
-		agents: [
+		summaryWriter: 'assistant',
+		seated: [
 			{ name: 'alpha', identity: 'Alpha.', attention: 'broadcast' },
 			{ name: 'beta', identity: 'Beta.', attention: 'broadcast' },
 			{ name: 'assistant', identity: 'Assistant.', attention: 'none' },
 		],
-		available: [],
+		reserve: [],
 		at,
 	},
 };
@@ -124,7 +124,7 @@ const message = (
 	seq: number,
 	from: string | undefined,
 	extra: Partial<Body<Message>> = {},
-): Entry => ({
+): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: {
@@ -136,7 +136,7 @@ const message = (
 	} as Body<Message>,
 });
 
-const presence = (seq: number, kind: 'seated' | 'unseated', subject: string): Entry => ({
+const presence = (seq: number, kind: 'seated' | 'unseated', subject: string): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: (kind === 'seated'
@@ -154,13 +154,13 @@ type LeaseDraft =
 	| Omit<Extract<LeaseChange, { phase: 'running' }>, 'id' | 'at'>
 	| Omit<Extract<LeaseChange, { phase: 'ended' }>, 'id' | 'at'>;
 
-const lease = (seq: number, id: string, change: LeaseDraft): Entry => ({
+const lease = (seq: number, id: string, change: LeaseDraft): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: { ...change, id, at } as LeaseChange,
 });
 
-const entries: Entry[] = [
+const entries: RoomEntry[] = [
 	composition,
 	message(2, 'priya', { kind: 'arrived', subject: 'priya', identity: 'Priya.' }),
 	message(3, 'priya', { wakes: ['alpha', 'beta'] }),
@@ -192,7 +192,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 29,
-		body: { person: 'priya', from: 3, through: 27, at, summary: 'assistant' },
+		body: { person: 'priya', from: 3, through: 27, at, summaryWriter: 'assistant' },
 	},
 	lease(30, 'closed:27:assistant:1', { phase: 'running', expiresAt: 60_000, readThrough: 0 }),
 	{
@@ -205,7 +205,7 @@ const entries: Entry[] = [
 			to: 'priya',
 			text: 'Summary.',
 			covers: { from: 3, through: 27 },
-			activationId: 'closed:27:assistant:1',
+			activation: 'closed:27:assistant:1',
 		},
 	},
 ];
@@ -213,7 +213,7 @@ const entries: Entry[] = [
 type HistoricalLease = { id: string; openedSeq: number; until: number | undefined };
 type OracleDelivery = { recipients: Set<string>; steers: Set<string> };
 
-function historicalLeases(history: readonly Entry[]): Map<string, HistoricalLease> {
+function historicalLeases(history: readonly RoomEntry[]): Map<string, HistoricalLease> {
 	const leases = new Map<string, HistoricalLease>();
 	for (const entry of history) {
 		if (entry.kind !== 'lease') continue;
@@ -227,7 +227,7 @@ function historicalLeases(history: readonly Entry[]): Map<string, HistoricalLeas
 }
 
 function historicalDeliveries(
-	history: readonly Entry[],
+	history: readonly RoomEntry[],
 	roster: ReadonlySet<string>,
 ): Map<number, OracleDelivery> {
 	const leases = historicalLeases(history);
@@ -261,7 +261,7 @@ function pendingState(
 	readThrough: number,
 	removed = false,
 ): ReturnType<typeof replayState> {
-	const history: Entry[] = [
+	const history: RoomEntry[] = [
 		composition,
 		message(40, 'priya', { wakes: ['alpha'] }),
 		lease(41, 'message:40:alpha:1', { phase: 'running', expiresAt: 60_000, readThrough: 0 }),
@@ -274,7 +274,7 @@ function pendingState(
 describe('delivery replay projection', () => {
 	it('matches an independent historical interval oracle after current roster filtering', () => {
 		let state = foldRoom([], retry);
-		const history: Entry[] = [];
+		const history: RoomEntry[] = [];
 		for (const entry of entries) {
 			history.push(entry);
 			state = evolve(state, entry, retry);
@@ -297,7 +297,7 @@ describe('delivery replay projection', () => {
 
 	it('keeps every earlier delivery projection unchanged through evolve', () => {
 		let state = foldRoom([], retry);
-		const history: Entry[] = [];
+		const history: RoomEntry[] = [];
 		const retained: { state: typeof state; snapshot: typeof state }[] = [];
 		for (const entry of entries) {
 			retained.push({ state, snapshot: structuredClone(state) });

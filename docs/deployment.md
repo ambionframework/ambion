@@ -55,7 +55,7 @@ A host must:
 Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to
 receive the steps of each activation. A restart keeps no trace.
 
-**A harness session is not part of the recovery.** A restart on a new
+**A vendor session is not part of the recovery.** A restart on a new
 disk, or on a host with no disk, loses the session, and the next activation
 reads the record again. Pi keeps its sessions under `sessionDir` on the
 local disk. The default is `ambion-pi-sessions-<uid>` in the OS temporary
@@ -166,7 +166,7 @@ const messages = new Map<number, Message>();
 const unsubscribe = room.subscribe((event) => {
   if (event.type === 'message') messages.set(event.message.seq, event.message);
 });
-const snapshot = await room.read({ messages: { since: saved.lastConsumedSeq } });
+const snapshot = await room.read({ messages: { after: saved.lastConsumedSeq } });
 for (const message of snapshot.messages) {
   messages.set(message.seq, message);
 }
@@ -190,7 +190,7 @@ room host until it ends or expires.
 | Room and local runner both died    | Resume the room; the inherited lease expires before the room retries eligible work   |
 | Room died, remote runner survives  | Route its calls to the resumed room; preserve the same activation id and valid lease |
 | A wake had no claim before failure | Let reconciliation deliver the pending wake again                                    |
-| Host deliberately cancels work     | Use `abort()` or `stop()` and accept their cancellation semantics                    |
+| Host deliberately cancels work     | Use `cancel()` or `stop()` and accept their cancellation semantics                   |
 
 A surviving remote runner can renew, commit, and release its activation through
 the new room host. A stale connection to the evicted host cannot do this.
@@ -273,7 +273,7 @@ it does not certify the correctness of each contribution.
 remote runner with a valid lease require different handling. Lease expiry and
 host topology affect recovery time.
 
-**Control and observation belong to the running room.** Await `abort()` and
+**Control and observation belong to the running room.** Await `cancel()` and
 `stop()` before reporting their durable work complete. See the
 [cancellation contract](durability.md#cancellation). Exchange handles do not
 provide independent cancellation.
@@ -288,7 +288,7 @@ contributions were accepted.
 
 Monitor `delivery_error` for failed or uncertain delivery. Unclaimed work stays
 pending and retries while eligible, including after a long shutdown. Execution
-retry limits apply after a claim. Use `abort()` or unseat the affected agent when
+retry limits apply after a claim. Use `cancel()` or unseat the affected agent when
 the application must end pending work. See the
 [call contract](durability.md#executor-calls-and-unclaimed-work).
 

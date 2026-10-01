@@ -15,20 +15,20 @@ import {
 	defineAgent,
 	defineHuman,
 	type Execution,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
 	type StartRoomOptions,
 	startRoom,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 } from '@ambionframework/ambion';
-import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
-import { type CodexExecutorOptions, createCodexExecutor } from '../../src/executor.ts';
+import { type CodexOpenerOptions, createCodexOpener } from '../../src/executor.ts';
 import { type CodexOptions, codex, codexExecution } from '../../src/index.ts';
 import { dumpDirectory, liveDump } from './dump.ts';
 
@@ -67,7 +67,6 @@ export function seat(
 			instructions: 'Answer through one say, in one sentence.',
 			model: MODEL,
 			modelReasoningEffort: 'medium',
-			approvalPolicy: 'never',
 			...rest,
 		}),
 	});
@@ -81,7 +80,7 @@ export async function open(
 	options: RoomOptions & { execution?: Execution | readonly Execution[] } = {},
 ) {
 	const { execution, ...rest } = options;
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		execution: execution ?? codexExecution(),
@@ -111,19 +110,19 @@ export async function untilQuiet(room: Room): Promise<void> {
 	try {
 		await settled(room, { timeout: QUIET_MS });
 	} catch (error) {
-		await room.abort().catch(() => {});
+		await room.cancel().catch(() => {});
 		throw error;
 	}
 }
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((message) => message.from === name);
+	messages.filter(isSaid).filter((message) => message.from === name);
 
 /** The activations that a seat started, in order. */
 export const activationsOf = (events: readonly RoomNotification[], agent: string): string[] =>
 	events.flatMap((event) =>
-		event.type === 'activation_start' && event.agent === agent ? [event.activation] : [],
+		event.type === 'activation_start' && event.seat === agent ? [event.activation] : [],
 	);
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
@@ -149,9 +148,9 @@ function instructionsOf(plan: ExecutorPlan): string {
  * each plan from its instructions. A permanent failure is a key that the
  * provider refuses. A transient failure is a `codex` binary that does not
  * exist. Codex takes no steer, and a real model spends no planned usage, so
- * the harness declares neither.
+ * the fixture declares neither.
  */
-export function codexExecutorHarness(): ExecutorHarness {
+export function codexExecutorFixture(): ExecutorFixture {
 	const dir = dumpDirectory();
 	const dump = dir === undefined ? undefined : liveDump(dir);
 	return {
@@ -161,19 +160,19 @@ export function codexExecutorHarness(): ExecutorHarness {
 				instructions: instructionsOf(plan),
 				model: MODEL,
 				modelReasoningEffort: 'medium',
-				approvalPolicy: 'never',
-				// A binary that does not exist fails before Codex reads the catalog.
-				...(failing === 'transient' ? { nativeTools: 'codex' as const } : {}),
 			});
-			const options: CodexExecutorOptions = {
+			const options: CodexOpenerOptions = {
 				definition: { ...definition, executor },
 				...(failing === 'permanent'
-					? { env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' } }
+					? {
+							env: { ...process.env, [KEY_VAR]: 'sk-invalid-ambion-conformance' },
+							login: false as const,
+						}
 					: {}),
 				...(failing === 'transient' ? { codexPath: '/nonexistent/ambion/codex' } : {}),
 			};
-			if (dump === undefined) return createCodexExecutor(options);
-			return dump.wrap(createCodexExecutor(dump.options(options)));
+			if (dump === undefined) return createCodexOpener(options);
+			return dump.wrap(createCodexOpener(dump.options(options)));
 		},
 		can: { steer: false, usage: false, permanentFailure: true, memory: true },
 		patience: QUIET_MS,

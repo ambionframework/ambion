@@ -94,9 +94,9 @@ it('starts the executable outside the Claude Code session of its host', async ()
 	expect(env.names).toContain('AMBION_KEPT');
 });
 
-/** The options of a seat that runs with `runtime`, over a fixed home. */
+/** The options of a seat that runs with `execution`, over a fixed home. */
 function optionsOf(
-	runtime: QueryInput['runtime'] = {},
+	execution: QueryInput['options'] = {},
 	options: Parameters<typeof seat>[0] = {},
 	names: string[] = [],
 ) {
@@ -105,7 +105,7 @@ function optionsOf(
 		systemPrompt: '',
 		server: {} as QueryInput['server'],
 		names,
-		runtime,
+		options: execution,
 		home: () => ({ config: '/seat/config', work: '/seat/work', home: '/seat/home' }),
 		stderr: () => {},
 	});

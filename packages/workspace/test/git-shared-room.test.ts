@@ -12,11 +12,12 @@ describe('shared git in a room', () => {
 		const workspace = openWorkspace({
 			name: 'shared-room',
 			backend: {
-				bash: memoryBackend(),
-				git: justGitBackend({
-					storage: sqliteGitStorage(':memory:'),
-					secret: 'shared-room-secret',
-					shared: { notes: { source: { 'README.md': 'room notes\n' } } },
+				bash: memoryBackend({
+					git: justGitBackend({
+						storage: sqliteGitStorage(':memory:'),
+						secret: 'shared-room-secret',
+						shared: { notes: { source: { 'README.md': 'room notes\n' } } },
+					}),
 				}),
 			},
 		});
@@ -31,14 +32,14 @@ describe('shared git in a room', () => {
 				agent('reviewer', { bundles: [workspace.tools()] }),
 			],
 			{
-				analyst: async (_context, _who, call) => {
-					if (call === 1)
+				analyst: async (_context, _who, request) => {
+					if (request === 1)
 						return callTool('bash', {
 							command: `git clone ${repo.url} ~/notes && cd ~/notes && echo analyst > contribution.txt && git add contribution.txt && git commit -m analyst && git push origin main`,
 							wait: 15,
 							timeout: 30,
 						});
-					if (call === 2) {
+					if (request === 2) {
 						writerPushed.resolve();
 						await reviewerPushed.promise;
 						return callTool('bash', {
@@ -49,8 +50,8 @@ describe('shared git in a room', () => {
 					}
 					return quiet();
 				},
-				reviewer: async (_context, _who, call) => {
-					if (call === 1) {
+				reviewer: async (_context, _who, request) => {
+					if (request === 1) {
 						await writerPushed.promise;
 						return callTool('bash', {
 							command: `git clone ${repo.url} ~/peer && cat ~/peer/contribution.txt && echo reviewer > ~/peer/reviewer.txt && cd ~/peer && git add reviewer.txt && git commit -m reviewer && git push origin main`,
@@ -58,7 +59,7 @@ describe('shared git in a room', () => {
 							timeout: 30,
 						});
 					}
-					if (call === 2) reviewerPushed.resolve();
+					if (request === 2) reviewerPushed.resolve();
 					return quiet();
 				},
 			},

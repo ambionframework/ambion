@@ -64,5 +64,5 @@ export function activationSpec(id: string, state: RoomState): ActivationSpec | u
 
 /** The closes that owe a summary: each names its writer and its person. */
 function owingSummaries(state: RoomState): CloseFact[] {
-	return state.closes.flatMap((close) => (close.summary === undefined ? [] : [close]));
+	return state.closes.flatMap((close) => (close.summaryWriter === undefined ? [] : [close]));
 }

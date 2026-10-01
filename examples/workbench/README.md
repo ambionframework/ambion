@@ -36,7 +36,7 @@ person. Without either, the first screen asks who you are. Set
 seats. The default is `anthropic/claude-sonnet-5`.
 
 **A seat with no key does not run, and the others do.** At start, the
-Workbench prints one line for each seat whose family has no key. The header
+Workbench prints one line for each seat whose executor kind has no key. The header
 of the terminal marks that seat with `no key`. An activation of that seat
 fails at once with the name of the missing variable, and the room keeps
 running.
@@ -71,7 +71,7 @@ the workspace package setup, validation, process startup, readiness, data
 storage, and rollback. Its `npm test` checks HTTP behavior, schemas, digests,
 launch metadata, and data-directory safety.
 
-The running Workbench uses `directoryBackend`, which has no port transport.
+The running Workbench uses `directoryBackend`, which has no endpoints.
 It does not add `connect` or `observe` to the terminal workspace. The
 workstation flow uses these tools with the same template. The Workbench's
 `test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and
@@ -94,14 +94,14 @@ press Ctrl+R to pick a room.
 | `/ps`                  | Show the background processes of the agents           |
 | `/attach <local path>` | Copy a local file into the workspace, ref it next     |
 | `/try`                 | Fill the composer with the room's suggested prompt    |
-| `/abort`               | Cancel the open exchange                              |
+| `/cancel`              | Cancel the open exchange                              |
 | `/dismiss <n>`         | Dismiss the say n that waits to return                |
 | `/stop`, `/resume`     | Stop the room, or start it again                      |
 | `/steps [n]`           | Show the steps of the newest activation of exchange n |
 | `/expand`, `/collapse` | Open or close every discussion                        |
 | `/help`, `/quit`       | Show the commands and keys, or leave                  |
 
-`/abort` runs at once. Typing the command is the confirmation. Switching
+`/cancel` runs at once. Typing the command is the confirmation. Switching
 person leaves the current room, then enters it as the new person.
 
 **A say that waits to return shows as a note.** An agent calls `schedule`
@@ -231,10 +231,10 @@ the record, so a restart keeps them.
 ## The team
 
 **One assistant coordinates three specialists, and the specialists run on
-three executor families.** The assistant answers ordinary messages, brings
+three executor kinds.** The assistant answers ordinary messages, brings
 in a specialist, and writes the closing summary.
 
-| Agent           | Scope                                                              | Family | Model                              | Key                 |
+| Agent           | Scope                                                              | Kind   | Model                              | Key                 |
 | --------------- | ------------------------------------------------------------------ | ------ | ---------------------------------- | ------------------- |
 | **Assistant**   | Understands the request, seats a specialist, and returns a summary | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
 | **Datasheets**  | Reads `/library` and states exact limits with their source         | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` |
@@ -243,27 +243,27 @@ in a specialist, and writes the closing summary.
 
 The assistant uses `defineAssistant` from `@ambionframework/assistant`. Each
 room seats the specialists it needs. The reserve holds the rest. The header
-of the terminal shows the family beside each agent name.
+of the terminal shows the executor kind beside each agent name.
 
 The workspace, lab, and instrument tools reach every seat as tool bundles.
-`src/rooms.ts` passes a list of three executions, one for the kind of each
-family. It passes them because it checks keys, sets the environment, and
-lets a test script a family. A room with no such
-need takes the default execution of each family.
+`src/rooms.ts` passes a list of three executions, one for each executor
+kind. It passes them because it checks keys, sets the environment, and
+lets a test script an executor. A room with no such
+need takes the default execution of each executor kind.
 
 ### One tool set, one filesystem, no native tool
 
 **Every agent holds the same tools and reaches the same filesystem, and no
 native tool of any harness is on.** One list of bundles serves every seat:
 the workspace, the lab, and the instrument tools, in that order. All three
-families share one workspace instance, so a file that one agent writes is
+executor kinds share one workspace instance, so a file that one agent writes is
 the file that another agent reads.
 
-| Family | How it enforces the guarantee                                        |
-| ------ | -------------------------------------------------------------------- |
-| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
-| Claude | Passes no built-in tool. No Claude definition option names one.      |
-| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+| Kind   | How it enforces the guarantee                                       |
+| ------ | ------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives. |
+| Claude | Passes no built-in tool. No Claude definition option names one.     |
+| Codex  | Has no native tool. The seat holds only the tools that it receives. |
 
 `test/tool-set.test.ts` fails when a definition drifts from this. The live
 test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
@@ -277,9 +277,9 @@ file with one seat and reads it with another, and asks each seat for
 Pi seats a scripted model stream. They give the Claude and Codex seats a
 scripted execution from `@ambionframework/ambion/testing`.
 
-**The live tier runs each scenario on the real families.** Run it with
+**The live tier runs each scenario on the real executors.** Run it with
 `pnpm --filter @ambionframework-examples/workbench test:live`. It costs money.
-A scenario skips when a family that it uses has no key: the `bringup`
+A scenario skips when an executor kind that it uses has no key: the `bringup`
 scenario needs `ANTHROPIC_API_KEY`, and the `sensing` scenario needs
 `ANTHROPIC_API_KEY` and `CODEX_API_KEY`.
 
@@ -368,8 +368,8 @@ workspace resources.
 | `src/database.ts`        | The SQLite preview: tables and their first rows       |
 | `src/refs.ts`            | The refs of a message: parse, resolve, and one chip   |
 | `src/tui.ts`             | The terminal: layout, keys, and the run loop          |
-| `src/families.ts`        | The family, model, and key of each seat               |
-| `src/unavailable.ts`     | The execution of a family that has no key             |
+| `src/kinds.ts`           | The executor kind, model, and key of each seat        |
+| `src/unavailable.ts`     | The execution of a kind that has no key               |
 | `src/main.ts`            | The entry point                                       |
 | `src/brand.ts`           | The product name and the terminal palette             |
 | `library/`               | The datasheets                                        |

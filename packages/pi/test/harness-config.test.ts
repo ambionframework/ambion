@@ -24,12 +24,12 @@ import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { renderActivation } from '../../ambion/src/execution/render.ts';
 import { deferred } from '../../ambion/test/support/room.ts';
-import { createPiExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../src/executor.ts';
 import { openHarness } from '../src/harness.ts';
 import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
 import { streamModels } from '../src/models.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, isClosingContext, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, isClosingContext, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 
 const said = (seq: number, text: string): Message => ({
@@ -75,7 +75,7 @@ const closing = (messages: Message[]): ActivationView => ({
 		seat: 'worker',
 		attempt: 1,
 		purpose: { kind: 'summarize', exchange: 1, person: 'andrei', people: ['andrei'], through: 1 },
-		resume: { harness: 'pi', id: 'message:1:worker:1' },
+		resume: { kind: 'pi', id: 'message:1:worker:1' },
 	},
 	through: 1,
 	context: { name: 'setup', now: 0, participants: [], messages, reserve: [] },
@@ -88,7 +88,7 @@ function recording(script: PiScript) {
 		options: SimpleStreamOptions | undefined;
 		model: string;
 	}[] = [];
-	const base = scripted(script);
+	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
 		requests.push({
 			context: scriptContext(context),
@@ -102,14 +102,14 @@ function recording(script: PiScript) {
 
 function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
 	const definition = workerWith(compaction, thinking);
-	const executor = createPiExecutor({
+	const opener = createPiOpener({
 		definition,
 		model: stubModel,
 		stream,
 		now: () => 0,
 		sessions: memorySessions(),
 	});
-	const open = (id: string): ActivationState => stateOf(executor, definition, { id });
+	const open = (id: string): ActivationState => stateOf(opener, definition, { id });
 	return { definition, open };
 }
 
@@ -130,7 +130,7 @@ describe('the harness of an activation', () => {
 		expect(requests).toHaveLength(1);
 		expect(requests[0]?.options?.maxRetries).toBe(0);
 		// A failed run keeps its session, and the release records it.
-		expect(session.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(session.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('gives the model the room tools and the tools of the definition, and a summary only say', async () => {
@@ -158,11 +158,11 @@ describe('the harness of an activation', () => {
 		]);
 		const rendered = renderActivation(view, definition);
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
-		// The closing activation continues the session with fewer tools and its own prompt.
+		// The summary activation continues the session with fewer tools and its own prompt.
 		expect(names(closed?.context as Context)).toEqual(['say']);
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
-		expect(last.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(last.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('compacts the session when the context passes the threshold, and never reads back', async () => {
@@ -182,9 +182,9 @@ describe('the harness of an activation', () => {
 		}).open('message:1:worker:1');
 		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
 		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
-		await session.pass({ kind: 'delta', since: 1, view: respond(both, 2) });
+		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
 		const both3 = [...both, said(3, 'And the hose?')];
-		await session.pass({ kind: 'delta', since: 2, view: respond(both3, 3) });
+		await session.pass({ kind: 'delta', after: 2, view: respond(both3, 3) });
 
 		expect(requests.some((request) => summarizing(request.context))).toBe(true);
 		const answers = requests.filter((request) => !summarizing(request.context));
@@ -243,7 +243,7 @@ describe('the harness of an activation', () => {
 			session: await repo.create({}, BACKGROUND_CONTEXT),
 			models: streamModels(
 				model,
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 			),
 			model,
 			tools: [],
@@ -277,7 +277,7 @@ describe('the harness of an activation', () => {
 				session: refusing,
 				models: streamModels(
 					model,
-					scripted(() => quiet()),
+					scriptedStream(() => quiet()),
 				),
 				model,
 				tools: [],
@@ -300,7 +300,7 @@ describe('the harness of an activation', () => {
 			"Activation names another seat: 'other'.",
 		],
 		[
-			'an executor of another family',
+			'an executor of another kind',
 			defineAgent({
 				name: 'worker',
 				identity: 'Works.',
@@ -310,14 +310,14 @@ describe('the harness of an activation', () => {
 			"The Pi executor cannot run an executor of kind 'other'.",
 		],
 	])('fails a pass over %s as transient', async (_name, definition, spec, message) => {
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions: memorySessions(),
 		});
-		const session = stateOf(executor, definition);
+		const session = stateOf(opener, definition);
 		const view = { ...respond([said(1, 'Go.')], 1), spec };
 		expect(await session.pass({ kind: 'view', view })).toMatchObject({
 			failed: true,
@@ -335,14 +335,14 @@ describe('the harness of an activation', () => {
 				identity: 'Works.',
 				executor: pi({ instructions: 'Work.', model }),
 			});
-			const executor = createPiExecutor({
+			const opener = createPiOpener({
 				definition,
 				model: stubModel,
 				stream,
 				now: () => 0,
 				sessions,
 			});
-			return stateOf(executor, definition);
+			return stateOf(opener, definition);
 		};
 		const first = on('scripted/first');
 		await first.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
@@ -353,11 +353,11 @@ describe('the harness of an activation', () => {
 			kind: 'view',
 			view: {
 				...view,
-				spec: { ...view.spec, resume: { harness: 'pi', id: 'message:1:worker:1' } },
+				spec: { ...view.spec, resume: { kind: 'pi', id: 'message:1:worker:1' } },
 			},
 		});
 		expect(requests.map((request) => request.model)).toEqual(['scripted/first', 'scripted/second']);
-		expect(second.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(second.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('closes a session that opens after the activation closed, and runs nothing', async () => {
@@ -374,14 +374,14 @@ describe('the harness of an activation', () => {
 			open: (scope, id, context) => store.open(scope, id, context),
 		};
 		const definition = workerWith();
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
 			stream,
 			now: () => 0,
 			sessions,
 		});
-		const session = stateOf(executor, definition);
+		const session = stateOf(opener, definition);
 		const running = session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		await created.promise;
 		session.close?.();
@@ -389,16 +389,16 @@ describe('the harness of an activation', () => {
 		expect(await running).toEqual({ failed: false });
 		expect(requests).toHaveLength(0);
 		// The next activation of the seat waits for the close, then continues the session.
-		const next = stateOf(executor, definition, { id: 'message:2:worker:1' });
+		const next = stateOf(opener, definition, { id: 'message:2:worker:1' });
 		const view = respond([said(1, 'Go.')], 1);
 		await next.pass({
 			kind: 'view',
 			view: {
 				...view,
-				spec: { ...view.spec, resume: { harness: 'pi', id: 'message:1:worker:1' } },
+				spec: { ...view.spec, resume: { kind: 'pi', id: 'message:1:worker:1' } },
 			},
 		});
-		expect(next.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(next.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 		expect(requests).toHaveLength(1);
 	});
 
@@ -454,7 +454,7 @@ describe('the harness of an activation', () => {
 		const events: HarnessEvent[] = [];
 		const next = await openHarness(
 			setup(
-				scripted(() => quiet()),
+				scriptedStream(() => quiet()),
 				(event) => events.push(event),
 			),
 		);

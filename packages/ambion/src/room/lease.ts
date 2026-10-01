@@ -27,10 +27,10 @@
  * room sends it when it is due.
  */
 
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
-import type { LeaseChange } from '../journal/events.ts';
-import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
+import type { LeaseChange } from '../journal/entries.ts';
+import type { Message, Seq, Usage, VendorSession } from '../types.ts';
 import {
 	applyChange,
 	countsAgainst,
@@ -43,8 +43,8 @@ import {
 export type LeaseHold = RuleLease & {
 	/** What the activation spent, from the ended entry its driver wrote. */
 	readonly usage?: Usage;
-	/** The harness session the ended entry recorded. */
-	readonly session?: HarnessSession;
+	/** The vendor session the ended entry recorded. */
+	readonly session?: VendorSession;
 };
 
 /**
@@ -52,7 +52,7 @@ export type LeaseHold = RuleLease & {
  * so a lease's attempt history is reconstructed directly from its changes.
  */
 export function foldLeases(
-	changes: readonly JournalEntry<LeaseChange>[],
+	changes: readonly Entry<LeaseChange>[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
@@ -67,7 +67,7 @@ export function foldLeases(
  */
 export function applyLease(
 	leases: Map<string, LeaseHold>,
-	{ body: change, seq }: JournalEntry<LeaseChange>,
+	{ body: change, seq }: Entry<LeaseChange>,
 ): void {
 	const activation = decodeActivationId(change.id);
 	if (activation === undefined) return;
@@ -87,7 +87,7 @@ export function applyLease(
  * seat and a close that owes a summary cause one. The room schedules both the
  * same way, so both read as this.
  */
-export interface PendingActivation {
+export interface DueActivation {
 	/** The journal fact that gives this activation its identity. */
 	source: ActivationSource;
 	/** The journal position of the source fact. */
@@ -106,14 +106,14 @@ export interface PendingActivation {
 	permanent: boolean;
 }
 
-/** A wake on the journal that no lease has answered. */
-export interface PendingWake extends PendingActivation {
+/** A due activation that a message caused, and no lease has answered. */
+export interface DueWake extends DueActivation {
 	/** When the message was written, ISO. */
 	at: string;
 }
 
 /** What the room needs to schedule an activation it owes. */
-export interface PendingActivationOptions {
+export interface DueActivationOptions {
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }
@@ -129,21 +129,22 @@ export const removedAfter = (messages: readonly Message[], seat: string, seq: nu
 	removalsOf(messages, seat).some((removal) => removal > seq);
 
 /**
- * The wake as pending, or nothing when a lease answered it. A wake at the
- * cap is still pending, and carries the attempts that reached it: the room
- * decides what it does about a wake it gave up on.
+ * The activation that a message makes due for a seat, or nothing when a
+ * lease answered it. An activation at the cap is still due, and carries the
+ * attempts that reached it: the room decides what it does about an
+ * activation it gave up on.
  */
-export function statusOf(
+export function dueOf(
 	message: Pick<Message, 'seq' | 'at'>,
 	seat: string,
 	taken: readonly LeaseHold[],
-	options: PendingActivationOptions,
-): PendingWake | undefined {
+	options: DueActivationOptions,
+): DueWake | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
 	if (wakeAnswered(taken, message.seq)) return undefined;
 	const failed = taken.filter((lease) => countsAgainst(lease, message.seq));
-	return { ...pendingActivation('message', message.seq, seat, failed, options), at: message.at };
+	return { ...dueActivation('message', message.seq, seat, failed, options), at: message.at };
 }
 
 /**
@@ -152,13 +153,13 @@ export function statusOf(
  * causes fold the same way, so both read this, and the id of every
  * activation the room owes is derived here.
  */
-export function pendingActivation(
+export function dueActivation(
 	source: ActivationSource,
 	position: Seq,
 	seat: string,
 	failed: readonly LeaseHold[],
-	options: PendingActivationOptions,
-): PendingActivation {
+	options: DueActivationOptions,
+): DueActivation {
 	const unsuccessfulAttempts = failed.length;
 	// A stamp `Date.parse` cannot read counts as no time, so the backoff still holds.
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)).filter(Number.isFinite));

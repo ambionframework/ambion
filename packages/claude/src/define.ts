@@ -4,10 +4,10 @@
  * `claude()` builds the executor an agent definition takes. The room reads
  * none of the fields Claude adds; the Claude executor does.
  */
-import type { AgentExecutor } from '@ambionframework/ambion';
+import type { Executor } from '@ambionframework/ambion';
 import {
-	type AgentExecutorBaseOptions,
 	describeExecutor,
+	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
 
@@ -22,13 +22,13 @@ export interface ClaudePolicy {
 	readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 }
 
-export interface ClaudeOptions extends AgentExecutorBaseOptions, ClaudePolicy {
+export interface ClaudeOptions extends ExecutorBaseOptions, ClaudePolicy {
 	/** A Claude model identifier, such as `claude-sonnet-4-5`. */
 	model: string;
 }
 
 /** An agent's Claude executor: the Claude Agent SDK loop, model, instructions, tools and policy. */
-export interface ClaudeExecutor extends AgentExecutor, ClaudePolicy {
+export interface ClaudeExecutor extends Executor, ClaudePolicy {
 	readonly kind: 'claude';
 	readonly model: string;
 }

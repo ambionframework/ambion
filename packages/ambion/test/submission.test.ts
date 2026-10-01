@@ -14,7 +14,7 @@ import {
 	createRuntime,
 	defineHuman,
 	isPresence,
-	isSpoken,
+	isSaid,
 	isSummary,
 	resumeRoom,
 	startRoom,
@@ -41,7 +41,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -70,13 +70,13 @@ async function summarisedRoom(
 		await startRoom({
 			name: roomName('doubt'),
 			runtime: createRuntime({ clock, storage }),
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
 			execution: wrap(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							alpha: script,
 							assistant: (context) =>
@@ -150,7 +150,7 @@ describe('a room in doubt', () => {
 		await waitForRoom(session);
 		const record = await messagesOf(session);
 		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
-		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
+		expect(record.filter(isSaid).filter((m) => m.from === alpha.name)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'message' && e.message.key === 'q1')).toHaveLength(1);
 		// and a retry under the same key lands nothing new
 		await visit.send({ text: 'First?', key: 'q1' });
@@ -174,7 +174,7 @@ describe('a room in doubt', () => {
 		// lands and loses its confirmation.
 		let delivered: Promise<unknown> | undefined;
 		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.agent === alpha.name && !delivered) {
+			if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
 				failNextClose = true;
 				delivered = visit.send({ text: 'Second?', key: 'q2' });
 			}
@@ -214,7 +214,7 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 			runtime,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(async () => {
+				stream: scriptedStream(async () => {
 					started.resolve();
 					await held.promise;
 					return quiet();
@@ -226,7 +226,10 @@ async function inheritedLease(storage: Storage, send: { to?: string; text: strin
 	await started.promise;
 	hostingOf(runtime).evict(name);
 	const resume = (
-		execution: Execution = piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: Execution = piExecution({
+			sessions: 'memory',
+			stream: scriptedStream(() => quiet()),
+		}),
 	) => {
 		const next = createRuntime({ storage: opened.storage });
 		return {

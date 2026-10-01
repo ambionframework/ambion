@@ -1,5 +1,5 @@
 /**
- * The cases every `Executor` must pass. The suite plays the driver and the
+ * The cases every `ActivationOpener` must pass. The suite plays the driver and the
  * room for one executor. It runs the executor through the real driver over a
  * scripted room, then checks the room calls and the steps the logger
  * receives. It never checks what an executor says beyond the neutral plans
@@ -18,21 +18,21 @@ import {
 } from './conformance-support.ts';
 import { defineAgent, describeExecutor } from './define.ts';
 import { seatContext } from './execution/connector.ts';
-import type { Executor } from './execution/executor.ts';
+import type { ActivationOpener } from './execution/executor.ts';
 import { AgentRunner } from './execution/runner.ts';
 import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
 import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
 import {
+	type ActivationEvent,
 	type AgentDefinition,
 	addUsage,
-	type ExecutionEvent,
 	type FailureCause,
-	type HarnessSession,
 	type Message,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 	type Usage,
+	type VendorSession,
 } from './types.ts';
 
 /** The neutral behaviours the suite asks an executor to perform. The suite owns this set. */
@@ -52,7 +52,7 @@ export type ExecutorPlan =
 	/** Record `usage` once, then say `text`. */
 	| { kind: 'usage'; text: string; usage: Usage };
 
-/** What one executor family can do. The suite drops a case that a capability gates. */
+/** What one executor kind can do. The suite drops a case that a capability gates. */
 export interface ExecutorCapabilities {
 	/** The executor takes a steer into a live pass. When false, a steer waits for the record. */
 	readonly steer: boolean;
@@ -61,7 +61,7 @@ export interface ExecutorCapabilities {
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
 	/**
-	 * The executor records a harness session with each release, resumes the
+	 * The executor records a vendor session with each release, resumes the
 	 * session that `spec.resume` names, and starts fresh when the view names
 	 * none. Absent means false.
 	 */
@@ -69,13 +69,16 @@ export interface ExecutorCapabilities {
 }
 
 /** What an executor under test gives the suite. */
-export interface ExecutorHarness {
+export interface ExecutorFixture {
 	/**
-	 * Build the executor for one seat, ready to perform `plan`. The scripted
-	 * family maps the plan to a script, and a model family maps it to a fake
+	 * Build the opener for one seat, ready to perform `plan`. The scripted
+	 * kind maps the plan to a script, and a model kind maps it to a fake
 	 * model stream or a fake executable.
 	 */
-	open(plan: ExecutorPlan, definition: AgentDefinition): Executor | Promise<Executor>;
+	open(
+		plan: ExecutorPlan,
+		definition: AgentDefinition,
+	): ActivationOpener | Promise<ActivationOpener>;
 	readonly can: ExecutorCapabilities;
 	/** How long a case waits, in milliseconds. The default is 5_000. */
 	readonly patience?: number;
@@ -89,13 +92,13 @@ export interface ExecutorCaseReport {
 	readonly calls: readonly Call[];
 	/** What would not survive the wire, one line for each request or answer. */
 	readonly violations: readonly string[];
-	readonly records: readonly TraceRecord[];
+	readonly records: readonly TracedStep[];
 }
 
 interface Run {
 	readonly port: AgentPort;
 	readonly room: ScriptedRoom;
-	readonly events: ExecutionEvent[];
+	readonly events: ActivationEvent[];
 	readonly names: { room: string; seat: string };
 	readonly activation: string;
 	readonly patience: number;
@@ -178,10 +181,7 @@ const baseCases: readonly ExecutorCase[] = [
 			check(stepsOf(steps, 'pass')[0]?.input === 'view', 'the first pass does not read the view');
 			check(room.length === 1 && room[0]?.result === 'committed', 'no committed room step');
 			check(stepsOf(steps, 'end')[0]?.stop === 'stopped', 'the activation did not stop');
-			check(
-				!run.events.some((event) => event.type === 'tool_execution_start'),
-				'a say raised a tool event',
-			);
+			check(!run.events.some((event) => event.type === 'tool_call'), 'a say raised a tool event');
 		},
 	},
 	{
@@ -236,7 +236,7 @@ const baseCases: readonly ExecutorCase[] = [
 			check(claims(run.room) === 1, 'the seat claimed again after the cut');
 			check(releaseWith(run).readThrough >= 1, 'the release reads through less than the view');
 			const end = stepsOf(await run.trace(), 'end');
-			check(end.length === 1 && end[0]?.stop === 'aborted', 'the end step is not aborted');
+			check(end.length === 1 && end[0]?.stop === 'cut', 'the end step is not cut');
 		},
 	},
 	{
@@ -338,9 +338,9 @@ const usageCase: ExecutorCase = {
  * the `spec.resume` the second view carried.
  */
 async function twoActivations(run: Run): Promise<{
-	first: HarnessSession | undefined;
-	second: HarnessSession | undefined;
-	resume: HarnessSession | undefined;
+	first: VendorSession | undefined;
+	second: VendorSession | undefined;
+	resume: VendorSession | undefined;
 	line: Message;
 }> {
 	await run.wake();
@@ -354,7 +354,7 @@ async function twoActivations(run: Run): Promise<{
 	const view = operations(run.room, 'view').find(
 		(call) => (call.request as { id?: string }).id === next,
 	);
-	const answer = view?.response as { view?: { spec?: { resume?: HarnessSession } } } | undefined;
+	const answer = view?.response as { view?: { spec?: { resume?: VendorSession } } } | undefined;
 	return { first, second: releasesOf(run)[1]?.session, resume: answer?.view?.spec?.resume, line };
 }
 
@@ -424,10 +424,10 @@ const orderCase: ExecutorCase = {
 };
 
 /** The cases every executor must pass. The order is stable and the names are the contract. */
-export function executorConformance(harness: ExecutorHarness): readonly ConformanceCase[] {
+export function executorConformance(fixture: ExecutorFixture): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
-	const patience = harness.patience ?? 5_000;
-	const { can } = harness;
+	const patience = fixture.patience ?? 5_000;
+	const { can } = fixture;
 	const cases = [
 		...baseCases,
 		can.steer ? liveSteer : heldSteer,
@@ -442,16 +442,16 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		const names = { room: `executor-${suite}-${count}`, seat: 'product' };
 		const room = scriptedRoom(names.room, names.seat, one.room);
 		const activation = `message:1:${names.seat}:1`;
-		const events: ExecutionEvent[] = [];
-		const records: TraceRecord[] = [];
+		const events: ActivationEvent[] = [];
+		const records: TracedStep[] = [];
 		const definition = defineAgent({
 			name: names.seat,
 			identity: 'Says a plan.',
 			executor: describeExecutor({ kind: 'conformance', instructions: '' }),
 		});
 		try {
-			const executor = await harness.open(one.plan, definition);
-			const emit = (event: ExecutionEvent) => void events.push(event);
+			const opener = await fixture.open(one.plan, definition);
+			const emit = (event: ActivationEvent) => void events.push(event);
 			const port = new AgentRunner(
 				room.protocol,
 				seatContext({
@@ -460,7 +460,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 					definition,
 					room: names.room,
 					seat: names.seat,
-					executor,
+					opener,
 					emit,
 					logger: (record) => void records.push(record),
 					limits: DEFAULT_TRACE_LIMITS,
@@ -487,7 +487,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			});
 		} finally {
 			room.release();
-			await harness.close?.({
+			await fixture.close?.({
 				name: one.name,
 				calls: room.calls,
 				violations: room.violations,

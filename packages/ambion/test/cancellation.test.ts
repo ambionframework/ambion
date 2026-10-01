@@ -31,7 +31,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
+import { byAgent, isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 
@@ -41,7 +41,7 @@ const assistant = defineAgent({
 	executor: pi({ instructions: 'summarise the discussion', model: 'scripted/assistant' }),
 });
 
-const deaf = scripted(() => new Promise<never>(() => {}));
+const deaf = scriptedStream(() => new Promise<never>(() => {}));
 
 /** A room with one broadcast worker that never answers, stopped when the test ends. */
 async function workerRoom(runtime?: Runtime, options: Partial<StartRoomOptions> = {}) {
@@ -76,7 +76,7 @@ describe('durable cancellation', () => {
 		expect(await calls.lease({ activation, operation: 'claim' })).toMatchObject({ ok: {} });
 		const opened = await calls.view(activation);
 		if ('stale' in opened) throw new Error('The old activation did not open.');
-		await room.abort();
+		await room.cancel();
 
 		const stale = { stale: expect.any(String) };
 		expect(await calls.view(activation)).toMatchObject(stale);
@@ -104,8 +104,8 @@ describe('durable cancellation', () => {
 		const room = await workerRoom();
 		const events = collect(room);
 		const exchange = await (await room.visit(person)).send({ text: 'cancel me twice' });
-		await room.abort();
-		await room.abort();
+		await room.cancel();
+		await room.cancel();
 		await waitForRoom(room);
 		expect(closedExchange(room, exchange.from)).toMatchObject({
 			cancelled: true,
@@ -125,7 +125,7 @@ describe('durable cancellation', () => {
 			const execution = around(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(() => {
+					stream: scriptedStream(() => {
 						started.resolve();
 						return new Promise<never>(() => {});
 					}),
@@ -146,7 +146,7 @@ describe('durable cancellation', () => {
 			const room = await workerRoom(createRuntime(), { execution });
 			await (await room.visit(person)).send({ text: 'cut the worker' });
 			await started.promise;
-			await room.abort();
+			await room.cancel();
 			await cutStarted.promise;
 			expect(cuts).toBe(1);
 		},
@@ -170,7 +170,7 @@ describe('durable cancellation', () => {
 			runtime,
 			execution: piExecution({ sessions: 'memory', stream: deaf }),
 		});
-		const oldAbort = old.abort();
+		const oldCancel = old.cancel();
 		await cancelStarted.promise;
 		hostingOf(runtime).evict(old.name);
 		const next = stopAtEnd(
@@ -182,7 +182,7 @@ describe('durable cancellation', () => {
 		);
 		const exchange = await (await next.visit(person)).send({ text: 'new run work' });
 		releaseCancel.resolve();
-		await expect(oldAbort).rejects.toThrow(/gone|evicted|stopped|interrupted|record moved/i);
+		await expect(oldCancel).rejects.toThrow(/gone|evicted|stopped|interrupted|record moved/i);
 		expect(stateOf(next).exchange?.from).toBe(exchange.from);
 	});
 
@@ -203,7 +203,7 @@ describe('durable cancellation', () => {
 		);
 		const visit = await room.visit(person);
 		const before = await visit.send({ text: 'before cancellation' });
-		const cancellation = room.abort();
+		const cancellation = room.cancel();
 		await cancelStarted.promise;
 		const after = visit.send({ text: 'ordered after cancellation' });
 		const landed = settledFlag(after);
@@ -220,7 +220,7 @@ describe('durable cancellation', () => {
 
 		expect((await after).from).toBeGreaterThan(before.from);
 		expect(await workerSpoke(room)).toEqual([]);
-		await room.abort();
+		await room.cancel();
 		for (const [id, until] of firstEnds)
 			expect(stateOf(room).leases.get(id)).toMatchObject({ until });
 	});
@@ -228,14 +228,14 @@ describe('durable cancellation', () => {
 	it('fails an already pending summary without assigning one to the cancelled exchange', async () => {
 		const summaryStarted = deferred();
 		const room = await workerRoom(undefined, {
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(
+				stream: scriptedStream(
 					byAgent({
-						worker: (_context, _agent, call) => (call === 1 ? speak('answer') : quiet()),
+						worker: (_context, _agent, request) => (request === 1 ? say('answer') : quiet()),
 						assistant: (context) => {
 							if (!isClosingContext(context)) return quiet();
 							summaryStarted.resolve();
@@ -250,7 +250,7 @@ describe('durable cancellation', () => {
 		await first.waitForClose();
 		await summaryStarted.promise;
 		const second = await visit.send({ text: 'a new question' });
-		await room.abort();
+		await room.cancel();
 		await expect(first.waitForSummary()).rejects.toThrow(/interrupted/i);
 		await expect(second.waitForSummary()).resolves.toBeUndefined();
 		expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
@@ -271,9 +271,9 @@ describe.each(storages)('cancellation storage recovery on $name', (storage) => {
 			const { faulty, room, visit } = await faultyRoom();
 			const exchange = await visit.send({ text: 'cancel me' });
 			faulty.fail(phase, 'cancel');
-			await expect(room.abort()).rejects.toThrow(/disk is full/);
+			await expect(room.cancel()).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
-			await room.abort();
+			await room.cancel();
 			await room.exchange(exchange.from)?.waitForClose();
 			expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
 		},
@@ -283,15 +283,15 @@ describe.each(storages)('cancellation storage recovery on $name', (storage) => {
 		const { opened, faulty, room, visit } = await faultyRoom();
 		const first = await visit.send({ text: 'cancel with an uncertain acknowledgement' });
 		faulty.fail('after', 'cancel');
-		await expect(room.abort()).rejects.toThrow(/disk is full/);
+		await expect(room.cancel()).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await messagesOf(room);
 
 		const second = await visit.send({ text: 'land after the durable cut' });
-		await room.abort();
+		await room.cancel();
 		expect(await cancels(opened.journals, room)).toHaveLength(1);
 		expect(stateOf(room).exchange?.from).toBe(second.from);
-		await room.abort();
+		await room.cancel();
 		expect(await cancels(opened.journals, room)).toHaveLength(2);
 		await first.waitForClose();
 	});
@@ -303,7 +303,7 @@ it('does not retry cancelled work after a restart', async () => {
 	const runtime = createRuntime({ storage: opened.storage, clock: time.clock });
 	let calls = 0;
 	const started = deferred();
-	const stream = scripted(() => {
+	const stream = scriptedStream(() => {
 		calls += 1;
 		started.resolve();
 		return new Promise<never>(() => {});
@@ -316,7 +316,7 @@ it('does not retry cancelled work after a restart', async () => {
 	await visit.send({ text: 'pre-cut steering' });
 	await started.promise;
 	time.advance(hostingOf(runtime).limits.lease.ttl + 1);
-	await room.abort();
+	await room.cancel();
 	await room.exchange(exchange.from)?.waitForClose();
 	expect([...stateOf(room).leases.values()]).toContainEqual(
 		expect.objectContaining({ phase: 'ended', reason: 'revoked' }),

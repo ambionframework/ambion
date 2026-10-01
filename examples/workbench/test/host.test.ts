@@ -1,7 +1,7 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { byAgent, callTool, quiet, speak } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, quiet, say } from '@ambionframework/ambion/testing';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { Workbench } from '../src/workbench.ts';
@@ -9,27 +9,27 @@ import {
 	freshDirectory,
 	idleStream,
 	openHost,
-	scriptedFamilies,
-	scriptedStream,
+	respondingStream,
+	scriptedKinds,
 } from './hosting.ts';
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
-function scriptedResponse(agent: string, call: number, closing: boolean) {
+function scriptedResponse(agent: string, request: number, closing: boolean) {
 	if (closing)
 		return fauxAssistantMessage([fauxToolCall('say', { text: 'Summary: the bench answered.' })], {
 			stopReason: 'toolUse',
 		});
-	if (agent === 'assistant' && call === 1)
+	if (agent === 'assistant' && request === 1)
 		return fauxAssistantMessage(
 			[fauxToolCall('say', { to: 'design', text: 'Please choose the resistor.' })],
 			{ stopReason: 'toolUse' },
 		);
-	if (agent === 'assistant' && call === 2)
+	if (agent === 'assistant' && request === 2)
 		return fauxAssistantMessage([fauxToolCall('read', { path: '/library/led-5mm.md' })], {
 			stopReason: 'toolUse',
 		});
-	if (agent === 'assistant' && call === 3)
+	if (agent === 'assistant' && request === 3)
 		return fauxAssistantMessage(
 			[fauxToolCall('say', { to: 'design', text: 'Thanks, that is clear.' })],
 			{ stopReason: 'toolUse' },
@@ -37,11 +37,11 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 }
 
-/** The design seat runs on the Claude family. A script drives it, with no key. */
+/** The design seat runs on the Claude executor. A script drives it, with no key. */
 const designScript = byAgent({
-	design: (_step, _seat, call) => {
-		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
-		if (call === 2) return speak('Resistor chosen.', 'assistant');
+	design: (_step, _seat, request) => {
+		if (request === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
+		if (request === 2) return say('Resistor chosen.', 'assistant');
 		return quiet();
 	},
 });
@@ -50,8 +50,8 @@ const designScript = byAgent({
 const open = (directory?: string) =>
 	openHost({
 		directory,
-		stream: scriptedStream(scriptedResponse),
-		executions: scriptedFamilies(designScript),
+		stream: respondingStream(scriptedResponse),
+		executions: scriptedKinds(designScript),
 	});
 
 async function messagesOf(workbench: Workbench, room: string) {
@@ -259,23 +259,23 @@ describe('Workbench host', () => {
 		await expect(workbench.approvals('nowhere')).rejects.toThrow(/Unknown room/);
 	});
 
-	it('aborts an open exchange and keeps the room available', async () => {
+	it('cancels an open exchange and keeps the room available', async () => {
 		const workbench = await openHost({ stream: idleStream });
 		await workbench.join('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
 		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();
-		const aborted = await workbench.control('bringup', 'abort');
-		expect(aborted.exchange).toBeUndefined();
-		expect(aborted.status).toBe('running');
-		expect(aborted.exchanges).toContainEqual(
-			expect.objectContaining({ status: 'closed', summary: { status: 'silent' } }),
+		const cancelled = await workbench.control('bringup', 'cancel');
+		expect(cancelled.exchange).toBeUndefined();
+		expect(cancelled.status).toBe('running');
+		expect(cancelled.exchanges).toContainEqual(
+			expect.objectContaining({ status: 'closed', summary: { kind: 'silent' } }),
 		);
 	});
 
 	it('lists a say that waits to return, and dismisses it once', async () => {
 		const workbench = await openHost({
-			stream: scriptedStream((agent, call, closing) => {
-				if (closing || agent !== 'assistant' || call !== 1)
+			stream: respondingStream((agent, request, closing) => {
+				if (closing || agent !== 'assistant' || request !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 				const later = { text: 'Check the bench supply.', after: 600 };
 				return fauxAssistantMessage([fauxToolCall('schedule', later)], { stopReason: 'toolUse' });
@@ -330,14 +330,14 @@ describe('Workbench host', () => {
 
 	it('lists the processes that an agent starts with bash, reads an output, and cancels a running one', async () => {
 		// The assistant starts a short process that ends in its window, then a long one that it leaves running.
-		const stream = scriptedStream((agent, call, closing) => {
+		const stream = respondingStream((agent, request, closing) => {
 			const start = (command: string, name: string, wait: number) =>
 				fauxAssistantMessage([fauxToolCall('bash', { command, name, wait })], {
 					stopReason: 'toolUse',
 				});
 			if (agent !== 'assistant' || closing) return fauxAssistantMessage('quiet');
-			if (call === 1) return start('echo hello from the bench', 'greet', 5);
-			if (call === 2) return start('sleep 60', 'soak', 0);
+			if (request === 1) return start('echo hello from the bench', 'greet', 5);
+			if (request === 2) return start('sleep 60', 'soak', 0);
 			return fauxAssistantMessage('quiet');
 		});
 		const workbench = await openHost({ stream });

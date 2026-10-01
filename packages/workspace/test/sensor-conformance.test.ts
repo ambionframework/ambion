@@ -1,15 +1,15 @@
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { sensorConformance } from '../src/conformance.ts';
 import { sensorFixture, unsupportedSpanFixture } from './support/sensor-fixture.ts';
-import { httpSensorHarness } from './support/sensor-harness.ts';
+import { httpSensorProbeFixture } from './support/sensor-http-fixture.ts';
 import { type SensorDefect, startSensorServer } from './support/sensor-server.ts';
 
 describe('sensorConformance against real HTTP replies', () => {
 	it('passes a server with all four part types and fixed-span support', async () => {
 		const server = await startSensorServer();
 		onTestFinished(() => server.close());
-		const harness = httpSensorHarness('sensor HTTP fixture', server.origin);
-		for (const testCase of sensorConformance(harness, sensorFixture)) {
+		const probeFixture = httpSensorProbeFixture('sensor HTTP fixture', server.origin);
+		for (const testCase of sensorConformance(probeFixture, sensorFixture)) {
 			await testCase.run();
 		}
 	});
@@ -62,8 +62,11 @@ describe('sensorConformance against real HTTP replies', () => {
 		async (defect, fixture, caseName, expectedMessage) => {
 			const server = await startSensorServer(defect as SensorDefect);
 			onTestFinished(() => server.close());
-			const harness = httpSensorHarness(`sensor fixture with ${defect} defect`, server.origin);
-			const testCase = sensorConformance(harness, fixture).find(
+			const probeFixture = httpSensorProbeFixture(
+				`sensor fixture with ${defect} defect`,
+				server.origin,
+			);
+			const testCase = sensorConformance(probeFixture, fixture).find(
 				(candidate) => candidate.name === caseName,
 			);
 			expect(testCase, `No conformance case matched ${String(caseName)}.`).toBeDefined();

@@ -7,7 +7,7 @@
 
 import {
 	isPosted,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Seq,
@@ -38,7 +38,7 @@ function lineBody(message: Message): string {
 		const returns = message.returns === undefined ? '' : `, returns #${message.returns}`;
 		return `[posted → ${message.to ?? 'the room'}${returns}] ${message.text}${refsOf(message)}`;
 	}
-	if (isSpoken(message) || isSummary(message)) return spokenLine(message);
+	if (isSaid(message) || isSummary(message)) return spokenLine(message);
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
 }

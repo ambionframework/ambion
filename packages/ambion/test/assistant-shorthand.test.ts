@@ -9,7 +9,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { isClosingContext, quiet, scripted, speak, toolNames } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream, toolNames } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 
@@ -30,7 +30,7 @@ async function open(options: Partial<StartRoomOptions> = {}) {
 		assistant,
 		agents: [builder, reviewer],
 		seats: { builder: 'named', reviewer: 'none' },
-		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		...options,
 	});
 	return { opened, room: stopAtEnd(room) };
@@ -64,7 +64,7 @@ describe('assistant room shorthand', () => {
 		[
 			'matching explicit settings',
 			{
-				summary: 'assistant',
+				summaryWriter: 'assistant',
 				seats: { assistant: 'broadcast', builder: 'named', reviewer: 'none' },
 			},
 			everySeat,
@@ -87,19 +87,19 @@ describe('assistant room shorthand', () => {
 			const composition = (await storedOf(opened.journals, room.name)).find(
 				(entry) => entry.kind === 'composition',
 			);
-			expect(composition?.body).toMatchObject({ summary: seats[0]?.name });
+			expect(composition?.body).toMatchObject({ summaryWriter: seats[0]?.name });
 		},
 	);
 
 	it('rejects duplicate and conflicting assistant configuration, and reserves no name', async () => {
 		await expect(open({ agents: [assistant] })).rejects.toThrow("Duplicate agent name 'assistant'");
-		await expect(open({ summary: 'builder' })).rejects.toThrow('conflicts with summary');
+		await expect(open({ summaryWriter: 'builder' })).rejects.toThrow('conflicts with summary');
 		await expect(open({ seats: { assistant: 'named' } })).rejects.toThrow("must use 'broadcast'");
 
 		const name = roomName('assistant-conflict-retry');
 		const opened = await openFor(memory);
 		const runtime = createRuntime({ storage: opened.storage });
-		await expect(startRoom({ name, runtime, assistant, summary: 'builder' })).rejects.toThrow(
+		await expect(startRoom({ name, runtime, assistant, summaryWriter: 'builder' })).rejects.toThrow(
 			'conflicts with summary',
 		);
 		expect(await storedOf(opened.journals, name)).toEqual([]);
@@ -113,11 +113,11 @@ describe('assistant room shorthand', () => {
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, agent, call) => {
-					if (agent === 'builder' && call === 1) return speak('The answer.');
+				stream: scriptedStream((context, agent, request) => {
+					if (agent === 'builder' && request === 1) return say('The answer.');
 					if (agent === 'assistant' && isClosingContext(context)) {
 						closingTools.push(toolNames(context));
-						return speak('The answer, summarized.');
+						return say('The answer, summarized.');
 					}
 					return quiet();
 				}),
@@ -139,7 +139,7 @@ describe('assistant room shorthand', () => {
 	});
 
 	it.each(storages)(
-		'preserves changed membership and summary assignment after $name resume',
+		'preserves changed membership and summary writer after $name resume',
 		async (storage) => {
 			const opened = await openFor(storage);
 			const room = stopAtEnd(
@@ -147,7 +147,7 @@ describe('assistant room shorthand', () => {
 					name: roomName('assistant-resume'),
 					runtime: createRuntime({
 						storage: opened.storage,
-						execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+						execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 					}),
 					assistant,
 					agents: [builder, reviewer],
@@ -168,8 +168,8 @@ describe('assistant room shorthand', () => {
 					agents: [assistant, builder, reviewer],
 					execution: piExecution({
 						sessions: 'memory',
-						stream: scripted((context) =>
-							isClosingContext(context) ? speak('Resumed summary.') : quiet(),
+						stream: scriptedStream((context) =>
+							isClosingContext(context) ? say('Resumed summary.') : quiet(),
 						),
 					}),
 				}),

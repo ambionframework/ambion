@@ -1,13 +1,13 @@
 /**
- * The harness switch of the live tier. `AMBION_HARNESS` names one of three
- * executor families, and a bad value fails at import with a clear message.
+ * The harness switch of the live tier. `AMBION_EXECUTOR` names one of three
+ * executor kinds, and a bad value fails at import with a clear message.
  * No key and no network: the test builds definitions and calls no model.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 async function harnessWith(value: string | undefined) {
 	vi.resetModules();
-	vi.stubEnv('AMBION_HARNESS', value ?? '');
+	vi.stubEnv('AMBION_EXECUTOR', value ?? '');
 	return import('./live/support/harness.ts');
 }
 
@@ -27,7 +27,7 @@ describe('the live harness switch', () => {
 		expect(harness.executorFor({ instructions: 'x' }).kind).toBe('claude');
 	});
 
-	it('selects codex with its model, effort, no native tools, and its key', async () => {
+	it('selects codex with its model, effort, and its key', async () => {
 		const harness = await harnessWith('codex');
 		expect(harness.HARNESS).toBe('codex');
 		expect(harness.KEY_VAR).toBe('CODEX_API_KEY');
@@ -37,13 +37,12 @@ describe('the live harness switch', () => {
 			kind: 'codex',
 			model: 'gpt-5.6-luna',
 			modelReasoningEffort: 'medium',
-			nativeTools: 'none',
 		});
 	});
 
 	it('throws on a value that names no harness', async () => {
 		await expect(harnessWith('gemini')).rejects.toThrow(
-			"AMBION_HARNESS is 'gemini'. Use 'pi', 'claude' or 'codex'.",
+			"AMBION_EXECUTOR is 'gemini'. Use 'pi', 'claude' or 'codex'.",
 		);
 	});
 });

@@ -20,7 +20,7 @@ import {
 } from '../src/index.ts';
 import { refusal } from './support/errors.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
-import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
+import { callTool, quiet, scriptedStream, toolNames } from './support/scripted.ts';
 import {
 	faultyJournals,
 	gatedJournals,
@@ -444,8 +444,8 @@ function toolAgent(calls: string[]): Options {
 		seats: {},
 		execution: piExecution({
 			sessions: 'memory',
-			stream: scripted((context, _agent, call) =>
-				call === 1 && toolNames(context).includes('chosen') ? callTool('chosen', {}) : quiet(),
+			stream: scriptedStream((context, _agent, request) =>
+				request === 1 && toolNames(context).includes('chosen') ? callTool('chosen', {}) : quiet(),
 			),
 		}),
 	};

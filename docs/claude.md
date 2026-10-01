@@ -4,7 +4,7 @@
 page holds what is specific to the Claude adapter. [Executors](executors.md)
 holds the shared contract: the activation flow, the room tools, exchange
 continuity, failure classification, the step vocabulary, and the trace. [The
-Pi guide](pi.md) covers a second shipped family, and [the
+Pi guide](pi.md) covers a second shipped executor kind, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -149,7 +149,7 @@ a permission, because a Claude seat has no built-in tool.
 | `model`                | Yes      | None               | A Claude model id. The executor passes it as `--model`.                          |
 | `tools`                | No       | None               | The tools of the agent, from `defineTool`. They run in the host process.         |
 | `bundles`              | No       | None               | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_GUIDANCE` | The speaking policy. It replaces the default.                                    |
+| `speaking`             | No       | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                                    |
 | `activationTokenLimit` | No       | The whole record   | The token limit of the record one activation reads. A positive integer.          |
 | `estimateTokens`       | No       | `'length'`         | The name of the estimator in the runtime that counts tokens. It needs the limit. |
 | `maxBudgetUsd`         | No       | None               | The most one activation may spend, in US dollars.                                |
@@ -430,13 +430,13 @@ activation to its store, and the executor removes none.
 executor sends no delta on resume. The resumed session holds the earlier
 record and the view again. `readThrough` starts at zero in each activation,
 and a say against newer record gets a `missed` answer. The executor resumes
-the session that `pass.resume` names.
+the session that `pass.resumeId` names.
 
 **The first message of a resumed query restates the seat's part.** A
 resumed session keeps the system prompt it began with, and the SDK ignores
 a new `systemPrompt`. The seat's duties and instructions for the
 activation, its agent part, therefore go at the head of the first message.
-A closing activation resumes the session of the exchange it summarizes.
+A summary activation resumes the session of the exchange it summarizes.
 This message gives it the summary duties and the reader's preferences.
 When the resume fails, the fresh session gets the same message, and the
 seat's part then appears twice.
@@ -452,7 +452,7 @@ failure does.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 
@@ -512,8 +512,8 @@ Claude Code login.
 ## Testing
 
 **A fake Claude Code executable tests the executor with no key.**
-`@ambionframework/claude/testing` exports `claudeExecutorHarness` and
-`scenarioOf`. The harness runs the executor suite of
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`scenarioOf`. The fixture runs the executor suite of
 `@ambionframework/ambion/conformance` through the real driver. The SDK
 spawns `test/fake/claude-executable.mjs` through
 `pathToClaudeCodeExecutable`. The fake reads a scenario from `AMBION_FAKE`,
@@ -523,14 +523,14 @@ stream-json protocol of the SDK over stdio.
 
 ```ts
 import { executorConformance } from '@ambionframework/ambion/conformance';
-import { claudeExecutorHarness } from '@ambionframework/claude/testing';
+import { claudeExecutorFixture } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 describe('claude executor', () => {
-  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+  for (const c of executorConformance(claudeExecutorFixture({ executable }))) it(c.name, c.run);
 });
 ```
 
@@ -573,7 +573,7 @@ live tests of the Workbench also run the `design` seat. See
 | Symptom                                                               | Cause                                                                                                                                                                               |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                           | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                                                            |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`      | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                                                           |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`      | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each kind.                                                                             |
 | The model cannot see `Bash` or `Read`                                 | A Claude seat has no built-in tool. Give the seat a workspace bundle. Its `bash`, `read`, `write`, and `edit` tools take the place.                                                 |
 | A project MCP server is missing                                       | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                      |
 | The seat is abandoned after one attempt with an authentication text   | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have set the key to `undefined`. |

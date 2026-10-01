@@ -24,7 +24,7 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
@@ -59,9 +59,9 @@ async function watched(
 	const { limits, ...room } = options;
 	const pages: Page[] = [];
 	const contexts: { seat: string; text: string }[] = [];
-	const stream = scripted((context, name, call) => {
+	const stream = scriptedStream((context, name, request) => {
 		contexts.push({ seat: name, text: contextText(context) });
-		return script(context, name, call);
+		return script(context, name, request);
 	});
 	const execution = around(piExecution({ sessions: 'memory', stream }), {
 		room(protocol, request) {
@@ -99,15 +99,15 @@ async function recorded(room: Room, text: string) {
 /** A worker that answers every question, and a scribe that summarizes when `writes` says so. */
 const scribing =
 	(people: string[], closings: string[], writes: (context: string) => boolean): PiScript =>
-	(context, name, call) => {
-		if (name !== 'scribe') return answersEveryQuestion(people)(context, name, call);
+	(context, name, request) => {
+		if (name !== 'scribe') return answersEveryQuestion(people)(context, name, request);
 		if (!isClosingContext(context) || !writes(context.systemPrompt ?? '')) return quiet();
 		closings.push(contextText(context));
 		return summarise('done');
 	};
 
 const scribeSeats = {
-	summary: 'scribe',
+	summaryWriter: 'scribe',
 	seats: { worker: 'broadcast', scribe: 'broadcast' },
 } as const;
 
@@ -134,8 +134,8 @@ describe('a limit windows the record', () => {
 	it('caps the record at the room for a seat with no token limit, and a token-limited seat stops at the room floor', async () => {
 		const { room, pages, contexts } = await watched(
 			[limited('worker'), limited('reader', 4000)],
-			(context, name, call) =>
-				name === 'worker' ? answersEveryQuestion(['andrei'])(context, name, call) : quiet(),
+			(context, name, request) =>
+				name === 'worker' ? answersEveryQuestion(['andrei'])(context, name, request) : quiet(),
 			{ limits: { context: { messages: 1 } } },
 		);
 		await ask(room, ['alpha marker', 'omega marker']);
@@ -161,7 +161,7 @@ describe('a limit windows the record', () => {
 
 	it('lets a summary writer with a limit read its whole exchange', async () => {
 		const closings: string[] = [];
-		// A limit small enough to trim the exchange if the closing activation windowed.
+		// A limit small enough to trim the exchange if the summary activation windowed.
 		const { room } = await watched(
 			[limited('worker'), limited('scribe', 20)],
 			scribing(['andrei'], closings, () => true),
@@ -169,14 +169,14 @@ describe('a limit windows the record', () => {
 		);
 		await ask(room, ['opening question']);
 
-		// The closing activation reads its fixed exchange whole, so the opener line
+		// The summary activation reads its fixed exchange whole, so the opener line
 		// is present even though it sits past the writer's token limit. The worker
 		// echoes the question text, so the assertion reads the opener's own line.
 		expect(closings.length).toBeGreaterThan(0);
 		expect(closings.every((text) => text.includes('[andrei] opening question'))).toBe(true);
 	});
 
-	it('windows the background before a closing activation, keeping its own exchange whole', async () => {
+	it('windows the background before a summary activation, keeping its own exchange whole', async () => {
 		const closings: string[] = [];
 		// A limit wide enough for priya's own exchange, too tight to also hold sam's.
 		// The scribe writes only for priya, so the earlier exchange closes without a summary.

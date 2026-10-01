@@ -22,13 +22,13 @@ import type {
 } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import type {
+	ActivationEvent,
 	EndReason,
-	ExecutionEvent,
 	FailureCause,
-	HarnessSession,
 	Seq,
 	Step,
 	Usage,
+	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
 import type { PassInput, PassResult } from './executor.ts';
@@ -111,8 +111,8 @@ export class AgentRunner implements AgentPort {
 	}
 
 	/**
-	 * The room ended this activation's lease. The activation is aborted, and
-	 * the actor moves on at once: a run that ignores the abort is left to
+	 * The room ended this activation's lease. The activation is cut, and
+	 * the actor moves on at once: a run that ignores the cut is left to
 	 * finish on its own, and every call it still makes is answered stale.
 	 */
 	async cut(activation: string): Promise<void> {
@@ -130,14 +130,14 @@ export class AgentRunner implements AgentPort {
 	}
 
 	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
-	abort(): void {
+	cutAll(): void {
 		this.cutCurrent();
 	}
 
 	private cutCurrent(): void {
 		const current = this.current;
 		if (current === undefined) return;
-		current.state.cancel();
+		current.state.cut();
 		current.cut();
 	}
 
@@ -149,7 +149,7 @@ export class AgentRunner implements AgentPort {
 			cut = resolve;
 		});
 		const trace = this.context.trace.open(id);
-		const state = new ActivationState(this.context.executor, {
+		const state = new ActivationState(this.context.opener, {
 			id,
 			room: this.boundedRoom(cutOff, trace),
 			definition: this.context.definition,
@@ -187,7 +187,7 @@ export class AgentRunner implements AgentPort {
 		try {
 			if (!current.expired) {
 				// The cut ends the wait, and never the run: a run that ignores the
-				// abort finishes on its own, past a seat that took its next wake.
+				// cut finishes on its own, past a seat that took its next wake.
 				last = await Promise.race([
 					this.runPasses(id, current.state, current.trace, current.cutOff),
 					current.cutOff.then(() => undefined),
@@ -215,9 +215,9 @@ export class AgentRunner implements AgentPort {
 
 	/**
 	 * Pass over the record until the activation stops: an executor failure, a
-	 * closing purpose (which never rebuilds), a cut activation, or nothing
+	 * summarize purpose (which never rebuilds), a cut activation, or nothing
 	 * left the executor or the room needs it to see again. A cut activation
-	 * earns no further room call on its behalf: an abort mid-pass is not a
+	 * earns no further room call on its behalf: a cut mid-pass is not a
 	 * provider failure, but it still ends the loop here, before the freshness
 	 * check would otherwise renew a lease this activation no longer holds. A
 	 * room call this loop cannot recover from (a lost view or renewal) ends
@@ -230,14 +230,14 @@ export class AgentRunner implements AgentPort {
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
-		let since: Seq | undefined;
+		let after: Seq | undefined;
 		try {
 			for (;;) {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await passOver(state, trace, passInput(view, since));
-				since = state.readThrough;
+				last = await passOver(state, trace, passInput(view, after));
+				after = state.readThrough;
 				if (last.failed || state.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, state, cancelled))) return last;
 			}
@@ -333,7 +333,7 @@ export class AgentRunner implements AgentPort {
 		readThrough: Seq,
 		cause: FailureCause | undefined,
 		usage: Usage | undefined,
-		session: HarnessSession | undefined,
+		session: VendorSession | undefined,
 	): Promise<void> {
 		const released = await this.calls(
 			() =>
@@ -443,7 +443,7 @@ export class AgentRunner implements AgentPort {
 			throw renewed.error;
 		}
 		if ('stale' in renewed.value) return false;
-		return state.shouldRefresh(renewed.value.ok.lastSeq);
+		return state.shouldRefresh(renewed.value.ok.through);
 	}
 
 	/** The record a pass reads, as the room windows it for this seat. */
@@ -460,10 +460,10 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
+		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
 	}
 
-	private emit(event: ExecutionEvent): void {
+	private emit(event: ActivationEvent): void {
 		try {
 			this.context.emit?.(event);
 		} catch {
@@ -528,10 +528,10 @@ function roomStep(request: CommitRequest, response: CommitResult): Step {
 	return { ...base, result: 'unknown' };
 }
 
-/** How the activation stopped. A cut or an expired lease is `aborted`. */
+/** How the activation stopped. A cut or an expired lease is `cut`. */
 function endStep(current: Current, last: PassResult | undefined): Step {
-	const aborted = current.expired || current.state.cancelled;
-	const stop = aborted ? 'aborted' : (last?.stop ?? 'stopped');
+	const cut = current.expired || current.state.cancelled;
+	const stop = cut ? 'cut' : (last?.stop ?? 'stopped');
 	if (last?.failed === true) {
 		const failure = {
 			cause: last.cause ?? 'transient',
@@ -545,7 +545,7 @@ function endStep(current: Current, last: PassResult | undefined): Step {
 	return { type: 'end', stop };
 }
 
-/** The first pass reads the whole view. A later pass reads what came after `since`. */
-function passInput(view: ActivationView, since: Seq | undefined): PassInput {
-	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
+/** The first pass reads the whole view. A later pass reads what came after `after`. */
+function passInput(view: ActivationView, after: Seq | undefined): PassInput {
+	return after === undefined ? { kind: 'view', view } : { kind: 'delta', after, view };
 }

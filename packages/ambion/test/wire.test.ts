@@ -14,7 +14,7 @@ import type {
 	Wake,
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
-import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
+import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
@@ -42,11 +42,11 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		readThrough: 0,
 		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1 },
 	},
-	close: { person: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
+	close: { person: 'priya', from: 2, through: 4, seq: 4, at, summaryWriter: 'assistant' },
 	composition: {
 		goal: 'Decide the pour date.',
-		summary: 'assistant',
-		agents: [
+		summaryWriter: 'assistant',
+		seated: [
 			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
 			{
 				name: 'assistant',
@@ -54,7 +54,7 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 				attention: 'none',
 			},
 		],
-		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
+		reserve: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
 		seq: 0,
 		at,
 	},
@@ -155,7 +155,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		},
 	},
 	refused: { refused: "'nobody' is not in the reserve." },
-	ok: { ok: { expiresAt: 1767258060000, lastSeq: 3 } },
+	ok: { ok: { expiresAt: 1767258060000, through: 3 } },
 };
 
 describe('the wire', () => {

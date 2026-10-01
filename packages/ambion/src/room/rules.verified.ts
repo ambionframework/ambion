@@ -222,7 +222,7 @@ export function survivesCancellation(position: number, cancelledAt: number | und
 	return !beforeCancellation(position, cancelledAt);
 }
 
-/** One lease entry, as the journal records it. The same shape as `LeaseChange` in `events.ts`. */
+/** One lease entry, as the journal records it. The same shape as `LeaseChange` in `entries.ts`. */
 export type Change =
 	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: number }
 	| {
@@ -454,7 +454,7 @@ export interface CloseFact {
 	readonly person: string;
 	readonly from: number;
 	readonly through: number;
-	readonly summary?: string;
+	readonly summaryWriter?: string;
 }
 
 /** What an activation is for. The same shape as `ActivationPurpose` in `protocol.ts`. */
@@ -507,8 +507,8 @@ function names(summary: string | undefined, writer: string): boolean {
 
 //@ contract A close answers a closed-source id when its boundary is the id's position and it names the id's seat as writer.
 function closeMatches(close: CloseFact, through: number, writer: string): boolean {
-	//@ ensures \result <==> (close.through == through && names(close.summary, writer))
-	return close.through === through && names(close.summary, writer);
+	//@ ensures \result <==> (close.through == through && names(close.summaryWriter, writer))
+	return close.through === through && names(close.summaryWriter, writer);
 }
 
 //@ contract The close that answers a closed-source id is the first close that matches it. When none matches, there is no close.
@@ -569,81 +569,83 @@ export function activationGrant(
 	};
 }
 
-//@ contract A lease drafts a close when a close caused it, its position is the close's boundary, and its seat is the close's writer. The id of every attempt the room derives for the writer drafts the close. Another seat's lease drafts nothing for it.
-export function draftsClose(id: ActivationFields, through: number, writer: string): boolean {
+//@ contract A lease summarizes a close when a close caused it, its position is the close's boundary, and its seat is the close's writer. The id of every attempt the room derives for the writer summarizes the close. Another seat's lease summarizes nothing for it.
+export function summarizesClose(id: ActivationFields, through: number, writer: string): boolean {
 	//@ requires through >= 1
 	//@ requires writer.length >= 1
 	//@ ensures \result ==> !holdsExchange(id.source)
 	//@ ensures id.seat != writer ==> !\result
-	//@ ensures forall(n, n >= 0 ==> draftsClose(nextActivationId('closed', through, writer, n), through, writer))
+	//@ ensures forall(n, n >= 0 ==> summarizesClose(nextActivationId('closed', through, writer, n), through, writer))
 	return id.source === 'closed' && id.position === through && id.seat === writer;
 }
 
-/** The verdict on one close's summary work. A pending verdict is owed while the room still has to send a draft. */
+/** The verdict on one close's summary work. A pending verdict is owed while the room still has to send a summary. */
 export type Verdict =
-	| { readonly status: 'pending'; readonly owed: boolean }
-	| { readonly status: 'silent' }
-	| { readonly status: 'failed' };
+	| { readonly kind: 'pending'; readonly owed: boolean }
+	| { readonly kind: 'silent' }
+	| { readonly kind: 'failed' };
 
-//@ contract A draft stood down when one ended by release, revocation or abandonment.
-function stoodDown(drafts: readonly RuleLease[]): boolean {
-	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'ended' && (drafts[i].reason == 'released' || drafts[i].reason == 'revoked' || drafts[i].reason == 'abandoned'))
-	//@ ensures \result ==> drafts.length > 0
-	return drafts.some(
-		(draft) =>
-			draft.phase === 'ended' &&
-			(draft.reason === 'released' || draft.reason === 'revoked' || draft.reason === 'abandoned'),
+//@ contract A summary attempt stood down when one ended by release, revocation or abandonment.
+function stoodDown(summaries: readonly RuleLease[]): boolean {
+	//@ ensures \result <==> exists(i, 0 <= i && i < summaries.length && summaries[i].phase == 'ended' && (summaries[i].reason == 'released' || summaries[i].reason == 'revoked' || summaries[i].reason == 'abandoned'))
+	//@ ensures \result ==> summaries.length > 0
+	return summaries.some(
+		(summary) =>
+			summary.phase === 'ended' &&
+			(summary.reason === 'released' ||
+				summary.reason === 'revoked' ||
+				summary.reason === 'abandoned'),
 	);
 }
 
-//@ contract A draft the writer released.
-function draftReleased(drafts: readonly RuleLease[]): boolean {
-	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'ended' && drafts[i].reason == 'released')
-	//@ ensures \result ==> stoodDown(drafts)
-	return drafts.some((draft) => draft.phase === 'ended' && draft.reason === 'released');
+//@ contract A summary attempt the writer released.
+function summaryReleased(summaries: readonly RuleLease[]): boolean {
+	//@ ensures \result <==> exists(i, 0 <= i && i < summaries.length && summaries[i].phase == 'ended' && summaries[i].reason == 'released')
+	//@ ensures \result ==> stoodDown(summaries)
+	return summaries.some((summary) => summary.phase === 'ended' && summary.reason === 'released');
 }
 
-//@ contract A draft still running.
-function draftRunning(drafts: readonly RuleLease[]): boolean {
-	//@ ensures \result <==> exists(i, 0 <= i && i < drafts.length && drafts[i].phase == 'running')
-	return drafts.some((draft) => draft.phase === 'running');
+//@ contract A summary attempt still running.
+function summaryRunning(summaries: readonly RuleLease[]): boolean {
+	//@ ensures \result <==> exists(i, 0 <= i && i < summaries.length && summaries[i].phase == 'running')
+	return summaries.some((summary) => summary.phase === 'running');
 }
 
-//@ contract A draft a cancellation after the close revoked.
-function cancelledDraft(drafts: readonly RuleLease[], cancelledAfterClose: boolean): boolean {
+//@ contract A summary attempt that a cancellation after the close revoked.
+function cancelledSummary(summaries: readonly RuleLease[], cancelledAfterClose: boolean): boolean {
 	//@ ensures \result ==> cancelledAfterClose
-	//@ ensures \result ==> stoodDown(drafts)
-	//@ ensures \result <==> cancelledAfterClose && exists(i, 0 <= i && i < drafts.length && markedCancelled(drafts[i]))
-	return cancelledAfterClose && drafts.some((draft) => markedCancelled(draft));
+	//@ ensures \result ==> stoodDown(summaries)
+	//@ ensures \result <==> cancelledAfterClose && exists(i, 0 <= i && i < summaries.length && markedCancelled(summaries[i]))
+	return cancelledAfterClose && summaries.some((summary) => markedCancelled(summary));
 }
 
-//@ contract The verdict on the summary work of one close that no summary covers: no named writer is silent; a writer removed after the close failed; a close owes a draft only while nothing stood down and no cancellation cut it.
+//@ contract The verdict on the summary work of one close that no summary covers: no named writer is silent; a writer removed after the close failed; a close owes a summary only while nothing stood down and no cancellation cut it.
 export function summaryVerdict(
 	writerNamed: boolean,
 	removedAfterClose: boolean,
-	drafts: readonly RuleLease[],
+	summaries: readonly RuleLease[],
 	cancelledAfterClose: boolean,
 ): Verdict {
-	//@ ensures !writerNamed ==> \result.status == 'silent'
-	//@ ensures writerNamed && removedAfterClose ==> \result.status == 'failed'
-	//@ ensures writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose ==> \result.status == 'pending' && \result.owed
-	//@ ensures writerNamed && !removedAfterClose && !stoodDown(drafts) && cancelledAfterClose ==> \result.status == 'failed'
-	//@ ensures writerNamed && !removedAfterClose && cancelledDraft(drafts, cancelledAfterClose) ==> \result.status == 'failed'
-	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && draftRunning(drafts) ==> \result.status == 'pending' && !\result.owed
-	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && draftReleased(drafts) ==> \result.status == 'silent'
-	//@ ensures writerNamed && !removedAfterClose && stoodDown(drafts) && !cancelledDraft(drafts, cancelledAfterClose) && !draftRunning(drafts) && !draftReleased(drafts) ==> \result.status == 'failed'
-	//@ ensures (\result.status == 'pending' && \result.owed) <==> (writerNamed && !removedAfterClose && !stoodDown(drafts) && !cancelledAfterClose)
-	//@ ensures cancelledAfterClose && \result.status == 'pending' ==> !\result.owed
-	//@ ensures \result.status == 'pending' && !\result.owed ==> drafts.length > 0
-	if (!writerNamed) return { status: 'silent' };
-	if (removedAfterClose) return { status: 'failed' };
-	const down = stoodDown(drafts);
-	if (cancelledDraft(drafts, cancelledAfterClose)) return { status: 'failed' };
-	if (!down && cancelledAfterClose) return { status: 'failed' };
-	if (!down) return { status: 'pending', owed: true };
-	if (draftRunning(drafts)) return { status: 'pending', owed: false };
-	if (draftReleased(drafts)) return { status: 'silent' };
-	return { status: 'failed' };
+	//@ ensures !writerNamed ==> \result.kind == 'silent'
+	//@ ensures writerNamed && removedAfterClose ==> \result.kind == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && !stoodDown(summaries) && !cancelledAfterClose ==> \result.kind == 'pending' && \result.owed
+	//@ ensures writerNamed && !removedAfterClose && !stoodDown(summaries) && cancelledAfterClose ==> \result.kind == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && cancelledSummary(summaries, cancelledAfterClose) ==> \result.kind == 'failed'
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(summaries) && !cancelledSummary(summaries, cancelledAfterClose) && summaryRunning(summaries) ==> \result.kind == 'pending' && !\result.owed
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(summaries) && !cancelledSummary(summaries, cancelledAfterClose) && !summaryRunning(summaries) && summaryReleased(summaries) ==> \result.kind == 'silent'
+	//@ ensures writerNamed && !removedAfterClose && stoodDown(summaries) && !cancelledSummary(summaries, cancelledAfterClose) && !summaryRunning(summaries) && !summaryReleased(summaries) ==> \result.kind == 'failed'
+	//@ ensures (\result.kind == 'pending' && \result.owed) <==> (writerNamed && !removedAfterClose && !stoodDown(summaries) && !cancelledAfterClose)
+	//@ ensures cancelledAfterClose && \result.kind == 'pending' ==> !\result.owed
+	//@ ensures \result.kind == 'pending' && !\result.owed ==> summaries.length > 0
+	if (!writerNamed) return { kind: 'silent' };
+	if (removedAfterClose) return { kind: 'failed' };
+	const down = stoodDown(summaries);
+	if (cancelledSummary(summaries, cancelledAfterClose)) return { kind: 'failed' };
+	if (!down && cancelledAfterClose) return { kind: 'failed' };
+	if (!down) return { kind: 'pending', owed: true };
+	if (summaryRunning(summaries)) return { kind: 'pending', owed: false };
+	if (summaryReleased(summaries)) return { kind: 'silent' };
+	return { kind: 'failed' };
 }
 
 /** The range a close holds: the opening question through the last seq at the close. */

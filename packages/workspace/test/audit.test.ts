@@ -316,9 +316,9 @@ describe('audited', () => {
 		const inner = openAuditLog({ onError: (error) => errors.push(error) });
 		const log = {
 			...inner,
-			record: (...args: Parameters<typeof inner.record>) => {
+			append: (...args: Parameters<typeof inner.append>) => {
 				appended.push(args[1].callId);
-				return inner.record(...args);
+				return inner.append(...args);
 			},
 		};
 		const call = audited(slowWrite, site.use, log).invoke(
@@ -344,18 +344,18 @@ describe('openAuditLog', () => {
 		const oneLine = `${JSON.stringify(entryFor('one'))}\n`;
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', rotateBytes: oneLine.length + 5 });
 
-		await log.record(env, entryFor('one'), ctx);
+		await log.append(env, entryFor('one'), ctx);
 		expect(await readLines(env, log.path)).toHaveLength(1);
 		expect(await listNames(env, '/workspace')).toEqual(['audit.jsonl']);
 
-		await log.record(env, entryFor('two'), ctx);
+		await log.append(env, entryFor('two'), ctx);
 		const afterSecond = await listNames(env, '/workspace');
 		const [rotated, ...more] = afterSecond.filter((entry) => entry.startsWith('audit.jsonl.'));
 		expect(more).toEqual([]);
 		expect(afterSecond).not.toContain('audit.jsonl');
 		expect(await readLines(env, `/workspace/${rotated}`)).toHaveLength(2);
 
-		await log.record(env, entryFor('three'), ctx);
+		await log.append(env, entryFor('three'), ctx);
 		expect(await readLines(env, log.path)).toHaveLength(1);
 	});
 
@@ -364,7 +364,7 @@ describe('openAuditLog', () => {
 		const log = openAuditLog({ path: '/workspace/audit.jsonl' });
 		const circular: Record<string, unknown> = {};
 		circular.self = circular;
-		await log.record(env, { ...entryFor('bad'), arguments: circular }, ctx);
+		await log.append(env, { ...entryFor('bad'), arguments: circular }, ctx);
 		const entries = await readLines(env, log.path);
 		expect(entries[0]).toMatchObject({ callId: 'bad', error: { name: 'SerializationError' } });
 	});
@@ -376,7 +376,7 @@ describe('openAuditLog', () => {
 			path: '/workspace/audit.jsonl',
 			onError: (error) => errors.push(error),
 		});
-		await log.record(env, { ...entryFor('big'), arguments: { content: 'x'.repeat(1000) } }, ctx);
+		await log.append(env, { ...entryFor('big'), arguments: { content: 'x'.repeat(1000) } }, ctx);
 		expect(errors).toHaveLength(0);
 		const [entry] = await readLines(env, log.path);
 		expect(entry).toMatchObject({ callId: 'big', error: { name: 'RecordTooLarge' } });
@@ -388,7 +388,7 @@ describe('openAuditLog', () => {
 		const reporting = await bareEnv(2);
 		const path = '/workspace/audit.jsonl';
 		const log = openAuditLog({ path, onError: (error) => errors.push(error) });
-		await expect(log.record(reporting, entryFor('one'), ctx)).resolves.toBeUndefined();
+		await expect(log.append(reporting, entryFor('one'), ctx)).resolves.toBeUndefined();
 		expect(errors).toHaveLength(1);
 		expect(await reporting.exists(path, ctx)).toEqual({ ok: true, value: false });
 
@@ -398,7 +398,7 @@ describe('openAuditLog', () => {
 				throw new Error('a broken onError callback');
 			},
 		});
-		await expect(throwing.record(await bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
+		await expect(throwing.append(await bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
 	});
 
 	it('reports a directory failure to onError, and never retries it as an entry that is too large', async () => {
@@ -407,7 +407,7 @@ describe('openAuditLog', () => {
 		const env = await bareEnv(0, 1);
 		const errors: Error[] = [];
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', onError: (e) => errors.push(e) });
-		await log.record(env, entryFor('one'), ctx);
+		await log.append(env, entryFor('one'), ctx);
 		expect(errors.map((error) => error.message)).toEqual([expect.stringMatching(/EACCES/)]);
 		expect(await env.exists(log.path, ctx)).toEqual({ ok: true, value: false });
 	});

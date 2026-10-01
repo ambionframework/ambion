@@ -1,6 +1,6 @@
 /**
  * The cast and the scenario the chaos tests drive: two seats that answer
- * every question once, an assistant that writes once per draft, two
+ * every question once, an assistant that writes once per summary activation, two
  * people, and three questions. No test runner is imported here, so a
  * child process runs the same scenario the tests do.
  */
@@ -54,7 +54,7 @@ const assistantScript: PiScript = (context) =>
 		? summarise('The one message.')
 		: quiet();
 
-/** Every seat answers the last question once; the assistant writes once per draft. */
+/** Every seat answers the last question once; the assistant writes once per summary activation. */
 export const script: PiScript = byAgent({
 	product: answersLastQuestion(people),
 	colleague: answersLastQuestion(people),
@@ -104,7 +104,7 @@ export const steady = (): Cast => ({
 export function troubled(): Cast {
 	const seen = new Set<string>();
 	let failed = 0;
-	const productScript: PiScript = (context, name, call) => {
+	const productScript: PiScript = (context, name, request) => {
 		const next = unanswered(context, name, people)[0];
 		const starting = toolResultTexts(context).length === 0;
 		if (starting && next !== undefined && !seen.has(next)) {
@@ -112,7 +112,7 @@ export function troubled(): Cast {
 			failed += 1;
 			throw new Error('the model is down');
 		}
-		return answersEveryQuestion([...people, colleague.name])(context, name, call);
+		return answersEveryQuestion([...people, colleague.name])(context, name, request);
 	};
 	return {
 		script: byAgent({
@@ -135,9 +135,9 @@ export function troubled(): Cast {
 /** The script with a wait before every answer, so a kill from outside lands mid-activation. */
 export const slowly =
 	(ms: number): PiScript =>
-	async (context, agent, call) => {
+	async (context, agent, request) => {
 		await new Promise((resolve) => setTimeout(resolve, ms));
-		return script(context, agent, call);
+		return script(context, agent, request);
 	};
 
 // -- the scenario -------------------------------------------------------------

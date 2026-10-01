@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { RoomTool } from './tools.ts';
+import type { CodexTool } from './tools.ts';
 import { frame, type Reply, type Request, receive } from './wire.ts';
 
 /** A running bridge: where the server connects, and how the executor stops it. */
@@ -28,7 +28,7 @@ function socketAddress(): string {
 /** The reply to one request. A tool that throws gives the server an error. */
 async function answer(
 	request: Request,
-	tools: readonly RoomTool[],
+	tools: readonly CodexTool[],
 	signal: AbortSignal,
 ): Promise<Reply> {
 	if (request.kind === 'manifest') {
@@ -53,7 +53,7 @@ function isRequest(message: unknown): message is Request {
 
 /** Open the socket for one activation. It resolves once the socket listens. A cut activation runs no call. */
 export async function startBridge(
-	tools: readonly RoomTool[],
+	tools: readonly CodexTool[],
 	signal: AbortSignal,
 ): Promise<Bridge> {
 	const sockets = new Set<Socket>();

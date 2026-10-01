@@ -15,7 +15,7 @@ import {
 } from '../../src/index.ts';
 import { fakeClock } from '../../src/testing.ts';
 import { messagesOf } from './room.ts';
-import { quiet, scripted, speak } from './scripted.ts';
+import { quiet, say, scriptedStream } from './scripted.ts';
 import { nodeSql } from './storage.ts';
 
 const [phase, directory] = process.argv.slice(2);
@@ -40,8 +40,8 @@ const runtime = createRuntime({
 	limits: { lease: { ttl: 100, deadline: 1_000 }, activation: { backoff: () => 0 } },
 	execution: piExecution({
 		sessions: 'memory',
-		stream: scripted(async (_context, _agent, call) => {
-			if (phase === 'resume') return call === 1 ? speak('Recovered answer.') : quiet();
+		stream: scriptedStream(async (_context, _agent, request) => {
+			if (phase === 'resume') return request === 1 ? say('Recovered answer.') : quiet();
 			started.resolve();
 			return new Promise<ReturnType<typeof quiet>>(() => {});
 		}),
@@ -97,7 +97,7 @@ async function resume(): Promise<void> {
 			messages.filter((message) => message.kind === 'said' && message.key === request.key).length,
 			1,
 		);
-		const missed = await messagesOf(room, { since: checkpoint.cursor });
+		const missed = await messagesOf(room, { after: checkpoint.cursor });
 		assert.ok(missed.length > 0);
 		assert.ok(missed.every((message) => message.seq > checkpoint.cursor));
 		assert.ok(

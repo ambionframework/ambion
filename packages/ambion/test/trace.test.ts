@@ -8,7 +8,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createPiExecutor } from '../../pi/src/executor.ts';
+import { createPiOpener } from '../../pi/src/executor.ts';
 import { createExecutionServices, pi, piExecution } from '../../pi/src/index.ts';
 import {
 	loggedToolResult,
@@ -17,9 +17,9 @@ import {
 	traceOpener,
 } from '../src/execution/trace.ts';
 import {
+	type ActivationOpener,
 	AgentRunner,
 	type CommitResult,
-	type Executor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
@@ -27,9 +27,9 @@ import {
 	type ViewResponse,
 } from '../src/hosting.ts';
 import type {
+	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
-	ExecutionEvent,
 	TraceLogger,
 	TraceStep,
 } from '../src/index.ts';
@@ -44,7 +44,7 @@ import {
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, scripted, speak } from './support/scripted.ts';
+import { quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 
@@ -80,8 +80,8 @@ async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agen
 
 /** A stream that thinks, then calls `tool`, then stops. */
 const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {}) =>
-	scripted((_context, _agent, call) =>
-		call === 1
+	scriptedStream((_context, _agent, request) =>
+		request === 1
 			? fauxAssistantMessage([fauxThinking(thinking), fauxToolCall(tool, input)], {
 					stopReason: 'toolUse',
 				})
@@ -124,7 +124,7 @@ describe('the trace of a room activation', () => {
 				seat: 'product',
 				attempt: 1,
 				purpose: 'respond',
-				outcome: { status: 'released' },
+				outcome: { kind: 'released' },
 			}),
 		);
 	});
@@ -152,6 +152,19 @@ describe('loggedToolResult', () => {
 			],
 			details: undefined,
 		});
+		// The Claude and Codex executors log the content parts with no record around them.
+		expect(loggedToolResult(result.content)).toEqual([
+			{ type: 'text', text: 'Read image file [image/png]' },
+			{ type: 'image', mimeType: 'image/png', bytes: 3 },
+		]);
+		// The Claude executor logs an image in the shape of the Anthropic API.
+		const anthropic = {
+			type: 'image',
+			source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
+		};
+		expect(loggedToolResult([anthropic])).toEqual([
+			{ type: 'image', source: { type: 'base64', media_type: 'image/png', bytes: 3 } },
+		]);
 	});
 
 	it('leaves a value with no content array unchanged', () => {
@@ -272,6 +285,34 @@ describe('the trace limits and policy', () => {
 		await costless.close();
 	});
 
+	it('logs a notice in order under the strictest policy, with its data as plain JSON', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'notice',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.startPass('view', 1);
+		sink.record({ type: 'notice', level: 'info', text: 'Plain.' });
+		sink.record({
+			type: 'notice',
+			level: 'warning',
+			text: 'Data.',
+			data: { thread: 't1', gone: undefined },
+		});
+		await sink.close();
+		expect(log.records.map((record) => record.step)).toMatchObject([
+			{ type: 'pass' },
+			{ type: 'notice', level: 'info', text: 'Plain.', index: 1 },
+			{ type: 'notice', level: 'warning', data: { thread: 't1' }, index: 2 },
+		]);
+		expect(JSON.stringify(log.records[2]?.step)).not.toContain('gone');
+	});
+
 	it('refuses a policy it does not know', () => {
 		expect(() =>
 			defineAgent({
@@ -331,7 +372,7 @@ class PlayedRoom implements RoomProtocol {
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		this.leases.push(lease);
 		await this.hold(lease);
-		return { ok: { expiresAt: this.now() + 60_000, lastSeq: this.lastSeq } };
+		return { ok: { expiresAt: this.now() + 60_000, through: this.lastSeq } };
 	}
 }
 
@@ -339,23 +380,23 @@ function play(
 	stream: StreamFn,
 	logger: TraceLogger = collectSteps().logger,
 	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
-	stub?: Executor,
+	stub?: ActivationOpener,
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
 	const services = createExecutionServices({ stream, sessions: 'memory' });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());
-	const events: ExecutionEvent[] = [];
-	const executor =
-		stub ?? createPiExecutor({ ...services, definition: product, now: () => clock.now() });
+	const events: ActivationEvent[] = [];
+	const opener =
+		stub ?? createPiOpener({ ...services, definition: product, now: () => clock.now() });
 	const actor = new AgentRunner(room, {
 		clock,
 		call: hosting.limits.call,
 		definition: product,
 		room: 'played',
 		seat: 'product',
-		executor,
+		opener,
 		emit: (event) => events.push(event),
 		trace: wrap(
 			traceOpener({
@@ -382,7 +423,7 @@ describe('the steps the driver owns', () => {
 	] as const)('records a %s commit as a room step', async (result, answer) => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scripted((_c, _a, call) => (call === 1 ? speak('Hi.') : quiet())),
+			scriptedStream((_c, _a, request) => (request === 1 ? say('Hi.') : quiet())),
 			log.logger,
 		);
 		room.answer = answer;
@@ -398,8 +439,8 @@ describe('the steps the driver owns', () => {
 	it('records a delta pass and the steers of a running activation', async () => {
 		const release = deferred();
 		const started = deferred();
-		const stream: StreamFn = scripted(async (_context, _agent, call) => {
-			if (call === 1) {
+		const stream: StreamFn = scriptedStream(async (_context, _agent, request) => {
+			if (request === 1) {
 				started.resolve();
 				await release.promise;
 			}
@@ -444,7 +485,7 @@ describe('the steps the driver owns', () => {
 	it('records the steer of a line that waited for a claim the room refused', async () => {
 		const log = collectSteps();
 		const { room, actor } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			log.logger,
 		);
 		room.lease = async () => ({ stale: 'gone' });
@@ -477,7 +518,7 @@ describe('the steps the driver owns', () => {
 	] as const)('ends %s', async (_name, message, end) => {
 		const log = collectSteps();
 		const { actor } = play(
-			scripted(() => message),
+			scriptedStream(() => message),
 			log.logger,
 		);
 		await actor.run(id);
@@ -488,9 +529,11 @@ describe('the steps the driver owns', () => {
 
 	it('ends a failure that names no message, and raises one error event for it', async () => {
 		const log = collectSteps();
-		const failing: Executor = () => ({ pass: async () => ({ failed: true, cause: 'permanent' }) });
+		const failing: ActivationOpener = () => ({
+			pass: async () => ({ failed: true, cause: 'permanent' }),
+		});
 		const { actor, events } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			log.logger,
 			undefined,
 			failing,
@@ -515,7 +558,7 @@ describe('the steps the driver owns', () => {
 		['rejects', rejecting],
 	])('never fails the activation when the logger %s', async (_name, logger) => {
 		const { room, actor, events } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			logger,
 		);
 		await actor.run(id);
@@ -535,7 +578,7 @@ describe('a sink that closes late', () => {
 		const closing = deferred();
 		const closed = deferred();
 		const { room, actor } = play(
-			scripted(() => quiet()),
+			scriptedStream(() => quiet()),
 			undefined,
 			(opener) => ({
 				open: (activation) => {

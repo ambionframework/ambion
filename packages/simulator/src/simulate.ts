@@ -7,25 +7,32 @@
  *   `waitForClose()`, then `waitForSummary()`. The loop never polls for a
  *   quiet room and never calls `reconcile()`.
  * - **Deadline.** One deadline covers the close and the summary. At the
- *   deadline the loop calls `room.abort()`. The abort closes an open
+ *   deadline the loop calls `room.cancel()`. The cancel closes an open
  *   exchange, or it fails a pending summary, and the loop ends with
- *   `timeout`. An abort that fails, or a close that does not land in a
+ *   `timeout`. A cancel that fails, or a close that does not land in a
  *   second period, ends the loop with `failed`.
  * - **Failure.** A rejected wait, a refused send, and an actor that throws
- *   end the loop with `failed`, and the run keeps the message.
+ *   end the loop with `failed`, and the simulation keeps the message.
  * - **The room.** The test started the room, and the test stops it.
  */
 import {
 	AmbionError,
 	addUsage,
-	type ClosedExchangeView,
+	type Exchange,
 	type Room,
 	type RoomNotification,
 	type Seq,
 	type Usage,
 	type Visit,
 } from '@ambionframework/ambion';
-import type { Ended, Move, Run, RunExchange, Seen, SimulateOptions } from './types.ts';
+import type {
+	Ended,
+	Move,
+	Seen,
+	SimulateOptions,
+	Simulation,
+	SimulationExchange,
+} from './types.ts';
 
 /** The default of `exchangeMs`: real milliseconds for one exchange. */
 export const DEFAULT_EXCHANGE_MS = 150_000;
@@ -36,9 +43,9 @@ const noop = () => {};
 
 /**
  * Run the actor against a room that the test started, one exchange at a
- * time, and return the run. The loop does not stop the room.
+ * time, and return the simulation. The loop does not stop the room.
  */
-export async function simulate(room: Room, options: SimulateOptions): Promise<Run> {
+export async function simulate(room: Room, options: SimulateOptions): Promise<Simulation> {
 	checkOptions(options);
 	const events: RoomNotification[] = [];
 	const off = room.subscribe((event) => events.push(event));
@@ -81,7 +88,7 @@ const isStop = (move: Move): move is Extract<Move, { readonly stop: string }> =>
 /** The state of one simulation while it runs. */
 class Loop {
 	readonly moves: Move[] = [];
-	readonly exchanges: RunExchange[] = [];
+	readonly exchanges: SimulationExchange[] = [];
 	ended: Ended = 'limit';
 	error: string | undefined;
 	private readonly room: Room;
@@ -101,7 +108,7 @@ class Loop {
 			this.ended = 'failed';
 			this.error = error instanceof Error ? error.message : String(error);
 		}
-		// A stopped room refuses the departure. The run keeps the reason it ended.
+		// A stopped room refuses the departure. The simulation keeps the reason it ended.
 		await visit.leave().catch(noop);
 	}
 
@@ -140,14 +147,14 @@ class Loop {
 		try {
 			const discussion = Object.freeze(await deadline.race(handle.waitForClose()));
 			const summary = await deadline.race(handle.waitForSummary()).catch((error: unknown) => {
-				// The abort at the deadline fails a pending summary. That rejection, and no other, is the timeout.
-				if (!deadline.passed || !cutByAbort(error)) throw error;
+				// The cancel at the deadline fails a pending summary. That rejection, and no other, is the timeout.
+				if (!deadline.passed || !cutByCancel(error)) throw error;
 				lost = true;
 				return undefined;
 			});
 			deadline.clear();
-			// An abort in flight lands before the next message, so it cancels no later work.
-			// A cut summary counts as the timeout only when that abort landed.
+			// A cancel in flight lands before the next message, so it cancels no later work.
+			// A cut summary counts as the timeout only when that cancel landed.
 			await deadline.settled();
 			if (deadline.failure !== undefined) throw deadline.failure;
 			const view = await this.closedView(handle.from);
@@ -163,7 +170,7 @@ class Loop {
 		}
 	}
 
-	private async closedView(from: Seq): Promise<ClosedExchangeView> {
+	private async closedView(from: Seq): Promise<Extract<Exchange, { readonly status: 'closed' }>> {
 		const read = await this.room.read({ messages: false });
 		const view = read.exchanges.find((exchange) => exchange.from === from);
 		if (view?.status !== 'closed') throw new Error(`The exchange at ${from} did not close.`);
@@ -172,30 +179,30 @@ class Loop {
 }
 
 /**
- * Whether a summary wait failed because the loop's own abort cut the summary.
+ * Whether a summary wait failed because the loop's own cancel cut the summary.
  * A stopped room and a failed deadline reject with other errors.
  */
-function cutByAbort(error: unknown): boolean {
+function cutByCancel(error: unknown): boolean {
 	return (
 		error instanceof Error && !(error instanceof AmbionError) && !(error instanceof DeadlineFailure)
 	);
 }
 
-/** The deadline could not end the exchange: the abort failed, or no close followed it. */
+/** The deadline could not end the exchange: the cancel failed, or no close followed it. */
 class DeadlineFailure extends Error {
 	override readonly name = 'DeadlineFailure';
 }
 
 /**
- * The deadline of one exchange. When it passes, it aborts the room's work.
- * When the abort rejects, or the close does not land within a second
+ * The deadline of one exchange. When it passes, it cancels the room's work.
+ * When the cancel rejects, or the close does not land within a second
  * period of the same length, `race` rejects, so the loop never waits for
  * ever.
  */
 class Deadline {
 	passed = false;
 	private readonly failed: Promise<never>;
-	private aborting: Promise<void> | undefined;
+	private cancelling: Promise<void> | undefined;
 	/** Why the deadline could not end the exchange, once it failed. */
 	failure: DeadlineFailure | undefined;
 	private fail: (error: DeadlineFailure) => void = noop;
@@ -216,9 +223,9 @@ class Deadline {
 		return Promise.race([promise, this.failed]);
 	}
 
-	/** Wait for the abort of this deadline, when it started one. */
+	/** Wait for the cancel of this deadline, when it started one. */
 	async settled(): Promise<void> {
-		await this.aborting;
+		await this.cancelling;
 	}
 
 	clear(): void {
@@ -228,15 +235,15 @@ class Deadline {
 
 	private pass(room: Room, ms: number): void {
 		this.passed = true;
-		this.aborting = room.abort().then(
+		this.cancelling = room.cancel().then(
 			() => {
 				if (this.cleared) return;
-				const late = new DeadlineFailure(`The exchange did not close ${ms} ms after the abort.`);
+				const late = new DeadlineFailure(`The exchange did not close ${ms} ms after the cancel.`);
 				this.timers.push(setTimeout(() => this.fail(late), ms));
 			},
 			(error: unknown) => {
 				const message = error instanceof Error ? error.message : String(error);
-				this.failure = new DeadlineFailure(`The abort at the deadline failed: ${message}`);
+				this.failure = new DeadlineFailure(`The cancel at the deadline failed: ${message}`);
 				this.fail(this.failure);
 			},
 		);

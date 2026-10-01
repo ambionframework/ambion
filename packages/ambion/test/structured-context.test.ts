@@ -3,7 +3,7 @@ import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { assertWire, type ContextParticipant, roundTrip } from '../src/protocol.ts';
 import { viewOf } from '../src/room/view.ts';
 import type { Message } from '../src/types.ts';
@@ -12,18 +12,18 @@ import { replayState } from './support/fold.ts';
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 
-const entries: Entry[] = [
+const entries: RoomEntry[] = [
 	{
 		kind: 'composition',
 		seq: 1,
 		body: {
 			goal: 'Ship payments v2.',
-			summary: 'worker',
-			agents: [
+			summaryWriter: 'worker',
+			seated: [
 				{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' },
 				{ name: 'product', identity: 'Owns product facts.', attention: 'broadcast' },
 			],
-			available: [{ name: 'surveyor', identity: 'Checks tonnage.', attention: 'broadcast' }],
+			reserve: [{ name: 'surveyor', identity: 'Checks tonnage.', attention: 'broadcast' }],
 			at,
 		},
 	},
@@ -43,7 +43,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 4,
-		body: { person: 'priya', from: 3, through: 3, at, summary: 'worker' },
+		body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'worker' },
 	},
 	{
 		kind: 'message',
@@ -200,14 +200,14 @@ describe('structured activation context', () => {
 	});
 
 	it('tells a closing seat how to read a fold its background now holds', () => {
-		const twoExchanges: Entry[] = [
+		const twoExchanges: RoomEntry[] = [
 			{
 				kind: 'composition',
 				seq: 1,
 				body: {
-					summary: 'worker',
-					agents: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
-					available: [],
+					summaryWriter: 'worker',
+					seated: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
+					reserve: [],
 					at,
 				},
 			},
@@ -216,7 +216,7 @@ describe('structured activation context', () => {
 			{
 				kind: 'close',
 				seq: 4,
-				body: { person: 'sam', from: 3, through: 3, at, summary: 'worker' },
+				body: { person: 'sam', from: 3, through: 3, at, summaryWriter: 'worker' },
 			},
 			{
 				kind: 'message',
@@ -239,7 +239,7 @@ describe('structured activation context', () => {
 			{
 				kind: 'close',
 				seq: 8,
-				body: { person: 'priya', from: 7, through: 7, at, summary: 'worker' },
+				body: { person: 'priya', from: 7, through: 7, at, summaryWriter: 'worker' },
 			},
 		];
 		const priyaClose: ActivationSpec = {
@@ -251,7 +251,7 @@ describe('structured activation context', () => {
 		const view = viewOf(priyaClose, facts(twoExchanges));
 
 		// Sam's already-summarised exchange is background priya's writer now
-		// reads, folded the same way it would be for an ordinary activation —
+		// reads, folded the same way it would be for a respond activation —
 		// so the writer needs the same instruction for reading one.
 		expect(view.context.messages.some((message) => message.kind === 'summary')).toBe(true);
 		const rendered = renderActivation(view, worker);

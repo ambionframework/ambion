@@ -5,7 +5,7 @@
  */
 
 import { expect, it } from 'vitest';
-import { isSpoken } from '../../../ambion/src/index.ts';
+import { isSaid } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -37,7 +37,7 @@ live('exclusivity', () => {
 			const [harness] = stepsOfType(steps, 'harness');
 			expect(new Set(harness?.tools)).toEqual(new Set(ROOM_TOOLS));
 			const said = (await messagesOf(session))
-				.filter(isSpoken)
+				.filter(isSaid)
 				.filter((m) => m.from === 'bare')
 				.map((m) => m.text);
 			expect(said.length).toBeGreaterThan(0);

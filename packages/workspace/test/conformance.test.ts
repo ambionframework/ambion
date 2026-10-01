@@ -14,7 +14,7 @@ import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { backends, tempDir } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
 import {
-	type ConformanceHarness,
+	type ConformanceFixture,
 	type ObjectConformanceStore,
 	objectConformance,
 	workspaceConformance,
@@ -25,11 +25,11 @@ import { retainSensorObservation } from '../src/sensor-retention.ts';
 import { createRestoreTool } from '../src/snapshots.ts';
 import { callAs } from './support/backends.ts';
 
-const memory = backends.find((harness) => harness.name === 'memory');
-if (memory === undefined) throw new Error('The just-bash harnesses have no memory backend.');
+const memory = backends.find((fixture) => fixture.name === 'memory');
+if (memory === undefined) throw new Error('The just-bash fixtures have no memory backend.');
 
-describe.each([memory])('$name', (harness) => {
-	for (const c of workspaceConformance(harness)) it(c.name, c.run);
+describe.each([memory])('$name', (fixture) => {
+	for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });
 
 /** The default file store at /snapshots over a bash backend under its own owner. */
@@ -46,7 +46,7 @@ function fileStore(bash: () => BashBackend) {
 	return open;
 }
 
-const objectStores: ConformanceHarness<ObjectConformanceStore>[] = [
+const objectStores: ConformanceFixture<ObjectConformanceStore>[] = [
 	{
 		name: 'file store on memory',
 		open: async () => {
@@ -72,10 +72,10 @@ const objectStores: ConformanceHarness<ObjectConformanceStore>[] = [
 	},
 ];
 
-describe.each(objectStores)('$name', (harness) => {
-	for (const c of objectConformance(harness)) it(c.name, c.run);
+describe.each(objectStores)('$name', (fixture) => {
+	for (const c of objectConformance(fixture)) it(c.name, c.run);
 	it('retains a sensor manifest and restores its referenced file through the object backend', async () => {
-		const opened = await harness.open();
+		const opened = await fixture.open();
 		const shell = openResource({ name: 'retention-conformance-shell', backend: memoryBackend() });
 		const objects = openResource({
 			name: 'retention-conformance-objects',

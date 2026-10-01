@@ -10,14 +10,14 @@
  * to take the recording room through an option.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import { type PortHarness, portConformance } from '@ambionframework/ambion/conformance';
+import { type PortFixture, portConformance } from '@ambionframework/ambion/conformance';
 import type { RoomProtocol } from '@ambionframework/ambion/hosting';
 import { describe, it } from 'vitest';
 import { seatHost } from '../src/configure.ts';
 import { rpcExecution } from '../src/room-object.ts';
 import { product } from './worker.ts';
 
-const harness: PortHarness = {
+const fixture: PortFixture = {
 	patience: 20_000,
 	async connect(room, names) {
 		const stub = env.ROOM.get(env.ROOM.idFromName(names.room));
@@ -36,5 +36,5 @@ const harness: PortHarness = {
 };
 
 describe('rpcExecution', () => {
-	for (const c of portConformance(harness)) it(c.name, c.run);
+	for (const c of portConformance(fixture)) it(c.name, c.run);
 });

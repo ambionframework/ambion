@@ -1,17 +1,17 @@
 /**
  * The deterministic tools for a room on Pi: a scripted `StreamFn` that
  * `piExecution({ stream })` takes, the helpers that read what the model was
- * shown, and the harness that runs the executor suite of
+ * shown, and the fixture that runs the executor suite of
  * `@ambionframework/ambion/conformance` on the Pi executor. A script answers
- * with the verbs of `@ambionframework/ambion/testing`: `speak`, `callTool`,
- * `later`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
+ * with the verbs of `@ambionframework/ambion/testing`: `say`, `callTool`,
+ * `schedule`, `seat`, `quiet`, and `byAgent`. A test that needs no Pi imports
  * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
  * no model.
  */
 
 import { contentText } from '@ambionframework/ambion';
-import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
-import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
+import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
+import { callTool, quiet, type Reply, say } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
 import {
@@ -20,20 +20,20 @@ import {
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
 import { pi } from './define.ts';
-import { createPiExecutor } from './executor.ts';
+import { createPiOpener } from './executor.ts';
 import { scriptContext } from './script-context.ts';
 import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';
 
 /**
- * One activation's answer, given the context, the seat, and which call this
+ * One activation's answer, given the context, the seat, and which request this
  * is. A `Reply` is the usual answer. A message passes through unchanged, for
  * a test that needs an error, a length stop, or a usage report.
  */
 export type PiScript = (
 	context: Context,
 	seat: string,
-	call: number,
+	request: number,
 ) => Reply | AssistantMessage | Promise<Reply | AssistantMessage>;
 
 /**
@@ -80,17 +80,17 @@ function messageOf(output: Reply | AssistantMessage): AssistantMessage {
 /**
  * A deterministic stream. It routes on the seat that the stub model names
  * (`model.name`), so no script reads the prompt to find out who it is. It
- * counts calls per seat, answers an abort with an aborted message, and turns
+ * counts requests per seat, answers an abort with an aborted message, and turns
  * a script that throws into an error on the stream. It turns a reply into a
  * message: one tool call for each call, or a text that ends the run.
  */
-export function scripted(script: PiScript): StreamFn {
-	const calls = new Map<string, number>();
+export function scriptedStream(script: PiScript): StreamFn {
+	const requests = new Map<string, number>();
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
 		const seat = model.name;
-		const call = (calls.get(seat) ?? 0) + 1;
-		calls.set(seat, call);
+		const request = (requests.get(seat) ?? 0) + 1;
+		requests.set(seat, request);
 		let finished = false;
 		const finish = (message: AssistantMessage) => {
 			if (finished) return;
@@ -111,7 +111,7 @@ export function scripted(script: PiScript): StreamFn {
 		}
 		options?.signal?.addEventListener('abort', aborted, { once: true });
 		void Promise.resolve()
-			.then(async () => messageOf(await script(scriptContext(context), seat, call)))
+			.then(async () => messageOf(await script(scriptContext(context), seat, request)))
 			.catch((error: unknown) =>
 				fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }),
 			)
@@ -171,12 +171,12 @@ const LOOKS = 500;
 
 /**
  * The seat waits for the steered line. Each look calls a tool the model
- * does not hold: the harness answers with an error result, and the run takes
+ * does not hold: the fixture answers with an error result, and the run takes
  * the next request, which holds any line steered since.
  */
 async function awaitSteer(context: Context, text: string): Promise<Reply> {
 	if (sayResults(context).length > 0) return quiet();
-	if (contextText(context).includes('[new] ')) return speak(text);
+	if (contextText(context).includes('[new] ')) return say(text);
 	const looks = context.messages.filter((message) => message.role === 'toolResult').length;
 	if (looks >= LOOKS) return quiet();
 	await new Promise((resolve) => setTimeout(resolve, LOOK));
@@ -193,18 +193,18 @@ const FAILURES = {
 export function scriptOf(plan: ExecutorPlan): PiScript {
 	switch (plan.kind) {
 		case 'sayOnce':
-			return (context) => (sayResults(context).length === 0 ? speak(plan.text) : quiet());
+			return (context) => (sayResults(context).length === 0 ? say(plan.text) : quiet());
 		case 'holdSay':
 		case 'missThenResay':
 			// A `missed` answer is an error result, and it leaves the seat a second say.
 			return (context) => {
 				const results = sayResults(context);
 				return results.length === 0 || (results.length === 1 && results[0] === true)
-					? speak(plan.text)
+					? say(plan.text)
 					: quiet();
 			};
 		case 'sayEachPass':
-			return (context) => (context.messages.at(-1)?.role === 'user' ? speak(plan.text) : quiet());
+			return (context) => (context.messages.at(-1)?.role === 'user' ? say(plan.text) : quiet());
 		case 'awaitSteer':
 			return (context) => awaitSteer(context, plan.text);
 		case 'usage':
@@ -219,7 +219,7 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 					totalTokens: input + output + cacheRead + cacheWrite,
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				};
-				return { ...messageOf(speak(plan.text)), usage };
+				return { ...messageOf(say(plan.text)), usage };
 			};
 		case 'fail':
 			return () => {
@@ -229,22 +229,22 @@ export function scriptOf(plan: ExecutorPlan): PiScript {
 }
 
 /**
- * The harness that runs the executor suite on the Pi executor, over a
+ * The fixture that runs the executor suite on the Pi executor, over a
  * scripted stream and sessions in memory. It declares steering, usage,
- * permanent failure and memory: the harness takes a line during a run,
+ * permanent failure and memory: the fixture takes a line during a run,
  * reports its spend, names a refusal, and reopens a session by id.
  */
-export function piExecutorHarness(): ExecutorHarness {
+export function piExecutorFixture(): ExecutorFixture {
 	return {
 		open: (plan, definition) =>
-			createPiExecutor({
+			createPiOpener({
 				// The suite names a neutral executor. The seat runs on a Pi one.
 				definition: {
 					...definition,
 					executor: pi({ instructions: '', model: `scripted/${definition.name}` }),
 				},
 				model: stubModel,
-				stream: scripted(scriptOf(plan)),
+				stream: scriptedStream(scriptOf(plan)),
 				now: Date.now,
 				sessions: memorySessions(),
 			}),

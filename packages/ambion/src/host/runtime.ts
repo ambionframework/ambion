@@ -23,11 +23,11 @@
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import { AmbionError } from '../errors.ts';
-import type { Executor } from '../execution/executor.ts';
+import type { ActivationOpener } from '../execution/executor.ts';
 import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
-import type { AgentDefinition, Clock, ExecutionEvent, TraceLogger } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
 
 /** Counts the tokens of one text. A host registers one by name in `createRuntime`. */
@@ -92,7 +92,7 @@ export interface Limits {
 	 * counts as an attempt.
 	 */
 	readonly lease: { readonly ttl: number; readonly deadline: number };
-	/** How many attempts the room makes at one wake or one draft, and how long it waits before each retry. */
+	/** How many attempts the room makes at one due activation, and how long it waits before each retry. */
 	readonly activation: { readonly attempts: number; readonly backoff: (attempt: number) => number };
 	/**
 	 * `timeout` bounds each executor call to the room, in milliseconds.
@@ -179,9 +179,9 @@ export interface AgentExecutionContext {
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	/** The executor of the seat: a function that opens one session per activation. */
-	readonly executor: Executor;
-	readonly emit?: (event: ExecutionEvent) => void;
+	/** The opener of the seat: a function that opens one running activation per activation. */
+	readonly opener: ActivationOpener;
+	readonly emit?: (event: ActivationEvent) => void;
 	/** Opens the trace sink of each activation. The driver closes it. */
 	readonly trace: TraceOpener;
 }
@@ -199,7 +199,7 @@ export interface ConnectorRequest {
 	readonly room: string;
 	readonly seat: string;
 	readonly definition: AgentDefinition;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 }
 
 /**

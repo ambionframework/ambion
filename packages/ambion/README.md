@@ -30,7 +30,7 @@ It needs credentials for the chosen provider.
 ## Use
 
 This example uses the current API. Every executable agent belongs in `agents`.
-The optional `summary` field names an ordinary agent that may write a closing
+The optional `summaryWriter` field names an ordinary agent that may write a closing
 summary.
 
 ```ts
@@ -62,7 +62,7 @@ const editor = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   goal: 'Check delivery promises against stock.',
-  summary: 'editor',
+  summaryWriter: 'editor',
   agents: [inventory, editor],
 });
 
@@ -121,7 +121,7 @@ procedures. Workspace data has its own persistence contract.
 
 Tools can act before speech commits. Applications own effect idempotency.
 Room history and model input can grow, and continuing contributions can keep
-an exchange open. `abort()` and `stop()` affect the room. Subscriptions belong
+an exchange open. `cancel()` and `stop()` affect the room. Subscriptions belong
 to a running host.
 
 **Summaries compact later activations.** Once a closed exchange has a summary,

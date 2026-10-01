@@ -1,4 +1,4 @@
-import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
+import type { Entry, JournalOpener } from '@ambionframework/journal';
 import { type PiOptions, pi } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
@@ -6,7 +6,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
-	type ParticipantInfo,
+	type Participant,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -104,12 +104,12 @@ export async function waitForRoom(
 
 export async function messagesOf(
 	room: Pick<Room, 'read'>,
-	options: { since?: number } = {},
+	options: { after?: number } = {},
 ): Promise<Message[]> {
 	return [...(await room.read({ messages: options })).messages];
 }
 
-export async function participantsOf(room: Pick<Room, 'read'>): Promise<ParticipantInfo[]> {
+export async function participantsOf(room: Pick<Room, 'read'>): Promise<Participant[]> {
 	return [...(await room.read({ messages: false })).participants];
 }
 
@@ -133,12 +133,9 @@ export function crash(runtime: Runtime, session: Room): void {
 }
 
 /** Every native entry the room wrote, in its storage order. */
-export async function storedOf(
-	journals: JournalOpener,
-	name: string,
-): Promise<readonly JournalEntry[]> {
+export async function storedOf(journals: JournalOpener, name: string): Promise<readonly Entry[]> {
 	const storage = await journals.open(name);
-	return (await storage.read(0)).entries.map((entry) => entry.entry as JournalEntry);
+	return (await storage.read(0)).entries.map((entry) => entry.entry as Entry);
 }
 
 /**
@@ -149,7 +146,7 @@ export async function storedOf(
 export function assistantEnded(session: Room): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== 'assistant') return;
+			if (event.type !== 'activation_end' || event.seat !== 'assistant') return;
 			off();
 			resolve();
 		});
@@ -159,7 +156,7 @@ export function assistantEnded(session: Room): Promise<void> {
 /**
  * The place of the last message before `seq`: what a summary stands through.
  * One counter gives out every place, so the message before a summary is not
- * at `seq - 1`; the room's own entries about the draft sit between them.
+ * at `seq - 1`; the room's own entries about the summary activation sit between them.
  */
 export const messageBefore = (messages: readonly Message[], seq: number): number | undefined =>
 	messages.filter((message) => message.seq < seq).at(-1)?.seq;

@@ -48,7 +48,7 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	// recipient when the intent omits one, which is safe only because the
 	// activation already matches. Do not loosen this check without tightening
 	// that branch.
-	if (message.activationId !== activation) return false;
+	if (message.activation !== activation) return false;
 	const parsed = decodeActivationId(activation);
 	if (parsed !== undefined && message.from !== parsed.seat) return false;
 
@@ -137,14 +137,14 @@ export async function hold(
 	);
 	// A refusal of a claim or a renewal is the same answer as a lease that ended.
 	return 'entry' in written && written.entry.body.phase === 'running'
-		? { ok: { expiresAt: written.entry.body.expiresAt, lastSeq: host.state().lastSeq } }
+		? { ok: { expiresAt: written.entry.body.expiresAt, through: host.state().lastSeq } }
 		: { stale: 'the lease ended' };
 }
 
 /**
  * End one lease, for whatever reason. Nothing to end is not an error. A
  * revocation may name an activation that never claimed: the change ends it
- * before it starts, and the wake or the draft it stood for is answered.
+ * before it starts, and the due activation it stood for is answered.
  * An abandonment names an activation that never claimed and nothing else:
  * a lease that started ends how it went.
  * An expiry is judged where the change is written: a renewal that landed
@@ -296,7 +296,7 @@ function arm(host: RoomHostState, at: number | undefined): void {
 // -- control ----------------------------------------------------------------
 
 /**
- * The host dismisses one pending say. The write decides again inside the
+ * The host dismisses one scheduled say. The write decides again inside the
  * journal queue, so a say that returned first writes nothing. The room then
  * looks again, so its alarm drops the due time of the say.
  */
@@ -317,23 +317,23 @@ export async function dismissSay(host: RoomHostState, seq: Seq): Promise<boolean
 	return true;
 }
 
-export async function abort(host: RoomHostState): Promise<void> {
+export async function cancel(host: RoomHostState): Promise<void> {
 	host.assertRunning();
-	if (host.abortInFlight !== undefined) return host.abortInFlight;
-	const key = host.abortKey ?? crypto.randomUUID();
-	host.abortKey = key;
-	const operation = cancel(host, key);
-	host.abortInFlight = operation;
+	if (host.cancelInFlight !== undefined) return host.cancelInFlight;
+	const key = host.cancelKey ?? crypto.randomUUID();
+	host.cancelKey = key;
+	const operation = appendCancel(host, key);
+	host.cancelInFlight = operation;
 	try {
 		await operation;
-		host.abortKey = undefined;
+		host.cancelKey = undefined;
 	} finally {
-		if (host.abortInFlight === operation) host.abortInFlight = undefined;
+		if (host.cancelInFlight === operation) host.cancelInFlight = undefined;
 	}
 }
 
 /** Append the cancellation marker after every earlier journal request. */
-async function cancel(host: RoomHostState, key: string): Promise<void> {
+async function appendCancel(host: RoomHostState, key: string): Promise<void> {
 	await host.ready;
 	host.assertRunning();
 	const appended = await decideAndAppend(

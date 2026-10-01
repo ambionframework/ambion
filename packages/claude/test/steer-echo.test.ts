@@ -74,7 +74,7 @@ it('sends a line that lands while a later pass renders its record, and counts it
 			],
 		},
 	};
-	const second = run.session.pass({ kind: 'delta', since: 1, view });
+	const second = run.session.pass({ kind: 'delta', after: 1, view });
 	// The pass has not sent its prompt yet: the executor holds the line, and sends it after the prompt.
 	run.session.steer(2, 3, '[3] priya: One more thing.');
 	expect(await second).toEqual({ failed: false });
@@ -103,7 +103,7 @@ it('ends the pass in flight on abort, commits nothing, and still counts the usag
 	});
 	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
 	await until(() => run.session.readThrough === 1, 'the echo of the view');
-	run.session.cancel();
+	run.session.cut();
 	expect(await pass).toEqual({ failed: false });
 	// The fake ends the interrupted turn with a result, and the stopped session only traces it.
 	await until(() => run.steps.some((step) => step.type === 'usage'), 'the interrupted result');

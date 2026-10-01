@@ -4,7 +4,7 @@
  * the runtime writes. `GOLDEN=write` runs them and saves the result.
  */
 
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { pi, piExecution } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
@@ -22,12 +22,12 @@ import {
 	callTool,
 	contextText,
 	isClosingContext,
-	later,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	schedule,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './scripted.ts';
@@ -56,14 +56,14 @@ type Drive = (room: Room, clock: FakeClock) => Promise<void>;
 
 interface Setup {
 	readonly agents: (typeof worker)[];
-	readonly summary?: string;
+	readonly summaryWriter?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
-	readonly stream: Parameters<typeof scripted>[0];
+	readonly stream: Parameters<typeof scriptedStream>[0];
 	readonly attempts?: number;
 	readonly drive: Drive;
 }
 
-async function record(setup: Setup): Promise<readonly JournalEntry[]> {
+async function record(setup: Setup): Promise<readonly Entry[]> {
 	const opened = await memory.open();
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -75,9 +75,9 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		name: roomName('golden'),
 		runtime,
 		agents: setup.agents,
-		...(setup.summary === undefined ? {} : { summary: setup.summary }),
+		...(setup.summaryWriter === undefined ? {} : { summaryWriter: setup.summaryWriter }),
 		seats: setup.seats,
-		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(setup.stream) }),
 	});
 	try {
 		await setup.drive(room, clock);
@@ -89,10 +89,10 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 	}
 }
 
-const complete = (): Promise<readonly JournalEntry[]> =>
+const complete = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: says(['Thursday works.']),
@@ -110,8 +110,8 @@ const complete = (): Promise<readonly JournalEntry[]> =>
  */
 const asksTheChecker: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[checker → worker]')) return speak('Thursday works.');
-	return speak('Is the crew free on Thursday?', 'checker');
+	if (contextText(context).includes('[checker → worker]')) return say('Thursday works.');
+	return say('Is the crew free on Thursday?', 'checker');
 };
 
 /**
@@ -120,7 +120,7 @@ const asksTheChecker: PiScript = (context) => {
  * continues the worker's session. The second exchange begins a fresh one.
  * Each ended activation records its session.
  */
-function session(): Promise<readonly JournalEntry[]> {
+function session(): Promise<readonly Entry[]> {
 	let ended = () => {};
 	const workerEnded = new Promise<void>((resolve) => {
 		ended = resolve;
@@ -131,15 +131,15 @@ function session(): Promise<readonly JournalEntry[]> {
 		seats: { worker: 'named', checker: 'named' },
 		stream: byAgent({
 			worker: asksTheChecker,
-			checker: async (context, name, call) => {
+			checker: async (context, name, request) => {
 				await workerEnded;
 				await tick();
-				return reply(context, name, call);
+				return reply(context, name, request);
 			},
 		}),
 		async drive(room) {
 			room.subscribe((event) => {
-				if (event.type === 'activation_end' && event.agent === worker.name) ended();
+				if (event.type === 'activation_end' && event.seat === worker.name) ended();
 			});
 			const person = await room.visit(priya);
 			await person.send({ to: worker.name, text: 'Can I tell the client Thursday?' });
@@ -150,7 +150,7 @@ function session(): Promise<readonly JournalEntry[]> {
 	});
 }
 
-const awaiting = (): Promise<readonly JournalEntry[]> =>
+const awaiting = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -162,7 +162,7 @@ const awaiting = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
-const cancelled = (): Promise<readonly JournalEntry[]> =>
+const cancelled = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -171,11 +171,11 @@ const cancelled = (): Promise<readonly JournalEntry[]> =>
 			await (await room.visit(priya)).send({ text: 'Is the slab poured?' });
 			await tick();
 			await tick();
-			await room.abort();
+			await room.cancel();
 		},
 	});
 
-const exhausted = (): Promise<readonly JournalEntry[]> =>
+const exhausted = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'named' },
@@ -195,9 +195,8 @@ const exhausted = (): Promise<readonly JournalEntry[]> =>
  */
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[posted → worker, returns'))
-		return speak('The slab is poured.');
-	return later('Check the pour log.', 600);
+	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
+	return schedule('Check the pour log.', 600);
 };
 
 /**
@@ -205,10 +204,10 @@ const checksLater: PiScript = (context) => {
  * returns it when it is due, and the returned entry opens a second exchange
  * for the same owner. The assistant summarises each exchange for her.
  */
-const scheduled = (): Promise<readonly JournalEntry[]> =>
+const scheduled = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: checksLater,
@@ -230,8 +229,8 @@ const scheduled = (): Promise<readonly JournalEntry[]> =>
 const changesItsMind: PiScript = (context) => {
 	const results = toolResultTexts(context);
 	const [first] = results.flatMap((text) => /^scheduled #(\d+):/.exec(text)?.[1] ?? []);
-	if (results.length === 0) return later('Check the pour log.', 600);
-	if (results.length === 1) return later('Check the crane log.', 1200);
+	if (results.length === 0) return schedule('Check the pour log.', 600);
+	if (results.length === 1) return schedule('Check the crane log.', 1200);
 	if (results.length === 2) return callTool('dismiss', { message: Number(first) });
 	return quiet();
 };
@@ -241,7 +240,7 @@ const changesItsMind: PiScript = (context) => {
  * with the dismiss tool, and the host dismisses the second with
  * `room.dismiss`. The room returns neither.
  */
-const dismissed = (): Promise<readonly JournalEntry[]> =>
+const dismissed = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -257,7 +256,7 @@ const dismissed = (): Promise<readonly JournalEntry[]> =>
 	});
 
 /** A room that stops and resumes: two runs, and the second fences the first. */
-async function resumed(): Promise<readonly JournalEntry[]> {
+async function resumed(): Promise<readonly Entry[]> {
 	const opened = await memory.open();
 	const clock = fakeClock();
 	const runtime = () =>
@@ -268,7 +267,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 		});
 	const execution = piExecution({
 		sessions: 'memory',
-		stream: scripted(byAgent({ worker: says(['Thursday works.']) })),
+		stream: scriptedStream(byAgent({ worker: says(['Thursday works.']) })),
 	});
 	const first = runtime();
 	const room = await startRoom({
@@ -295,7 +294,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 }
 
 /** Every golden scenario, by fixture name. */
-export const goldenScenarios: Readonly<Record<string, () => Promise<readonly JournalEntry[]>>> = {
+export const goldenScenarios: Readonly<Record<string, () => Promise<readonly Entry[]>>> = {
 	complete,
 	awaiting,
 	scheduled,

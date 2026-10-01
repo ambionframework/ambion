@@ -1,41 +1,34 @@
 /**
- * The executor suite on the scripted executor. The harness maps each neutral
+ * The executor suite on the scripted executor. The fixture maps each neutral
  * plan of the suite to a script.
  */
 import { describe, it } from 'vitest';
 import {
-	type ExecutorHarness,
+	type ExecutorFixture,
 	type ExecutorPlan,
 	executorConformance,
 } from '../src/conformance.ts';
-import {
-	quiet,
-	type Script,
-	ScriptedFailure,
-	scriptedExecutor,
-	speak,
-	spend,
-} from '../src/testing.ts';
+import { quiet, type Script, ScriptedFailure, say, scriptedOpener, spend } from '../src/testing.ts';
 
 /** The script that performs one plan. A script runs once for each step of a pass. */
 function scriptOf(plan: ExecutorPlan): Script {
 	switch (plan.kind) {
 		case 'sayOnce':
-			return ({ results }) => (results.length === 0 ? speak(plan.text) : quiet());
+			return ({ results }) => (results.length === 0 ? say(plan.text) : quiet());
 		case 'holdSay':
 		case 'missThenResay':
 			// A `missed` answer leaves the seat a second say.
 			return ({ results }) =>
-				results.length === 0 || results.at(-1)?.text === 'missed' ? speak(plan.text) : quiet();
+				results.length === 0 || results.at(-1)?.text === 'missed' ? say(plan.text) : quiet();
 		case 'sayEachPass':
 			return ({ view, results }) =>
 				results.length === 0 || (results.length === 1 && view.through > 1)
-					? speak(plan.text)
+					? say(plan.text)
 					: quiet();
 		case 'usage':
 			return ({ results }) => {
 				if (results.length === 0) return spend(plan.usage);
-				return results.length === 1 ? speak(plan.text) : quiet();
+				return results.length === 1 ? say(plan.text) : quiet();
 			};
 		case 'fail':
 			return () => {
@@ -46,11 +39,11 @@ function scriptOf(plan: ExecutorPlan): Script {
 	}
 }
 
-const harness: ExecutorHarness = {
-	open: (plan, definition) => scriptedExecutor(scriptOf(plan), definition),
+const fixture: ExecutorFixture = {
+	open: (plan, definition) => scriptedOpener(scriptOf(plan), definition),
 	can: { steer: false, usage: true, permanentFailure: true },
 };
 
-describe('scriptedExecutor', () => {
-	for (const c of executorConformance(harness)) it(c.name, c.run);
+describe('scriptedOpener', () => {
+	for (const c of executorConformance(fixture)) it(c.name, c.run);
 });

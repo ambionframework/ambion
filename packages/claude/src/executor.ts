@@ -1,6 +1,6 @@
 /**
- * The Claude executor: one activation's session, from the pass the driver
- * hands it until the activation stops.
+ * The Claude opener: it opens one running activation, which takes each pass
+ * the driver hands it until the activation stops.
  *
  * The Claude Agent SDK owns the loop. The driver's contract is pass in and
  * result out, so one activation opens one SDK query, kept alive by
@@ -26,14 +26,14 @@
  *   honor starts a fresh session, and the release records the new id.
  */
 import type {
+	ActivationOpener,
 	AgentDefinition,
-	Executor,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
@@ -42,7 +42,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ClaudeSteps } from './claude-trace.ts';
 import { floorRefusal, passResultOf, sessionOf, unresumableResult } from './failure.ts';
 import { type SeatHome, seatHome } from './home.ts';
-import { type ClaudeRuntime, claudeOf, queryOptions } from './options.ts';
+import { type ClaudeExecutionOptions, claudeOf, queryOptions } from './options.ts';
 import { Echoes, Inbox, userMessage } from './steer.ts';
 import { roomServer } from './tools.ts';
 
@@ -77,8 +77,8 @@ class Tail {
 	}
 }
 
-/** What builds a Claude executor for one seat: its definition, and the runtime that runs it. */
-export interface ClaudeExecutorOptions extends ClaudeRuntime {
+/** What builds a Claude opener for one seat: its definition, and the options that run it. */
+export interface ClaudeOpenerOptions extends ClaudeExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** The room of the seat. It names the config directory. Absent, `room`. */
 	readonly room?: string;
@@ -88,15 +88,15 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
-/** The Claude executor. One instance per seat, for as long as the room runs. */
-export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
+/** The Claude opener. One instance per seat, for as long as the room runs. */
+export function createClaudeOpener(options: ClaudeOpenerOptions): ActivationOpener {
 	// Every activation of the seat shares one config home, because a resume reads the session store there.
 	const home = seatHome(
 		options.configRoot,
 		options.room ?? 'room',
 		options.seat ?? options.definition.name,
 	);
-	return (activation: ExecutorActivation): ExecutorSession =>
+	return (activation: ExecutorActivation): RunningActivation =>
 		new Activation(activation, options, home);
 }
 
@@ -108,12 +108,12 @@ interface Held {
 }
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-class Activation implements ExecutorSession {
+class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly runtime: ClaudeRuntime;
+	private readonly options: ClaudeExecutionOptions;
 	private readonly home: SeatHome;
-	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
+	private readonly open: NonNullable<ClaudeOpenerOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
@@ -143,10 +143,10 @@ class Activation implements ExecutorSession {
 	private parked: PassResult | undefined;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions, home: SeatHome) {
+	constructor(activation: ExecutorActivation, options: ClaudeOpenerOptions, home: SeatHome) {
 		this.activation = activation;
 		this.definition = options.definition;
-		this.runtime = options;
+		this.options = options;
 		this.home = home;
 		this.open = options.query ?? query;
 		activation.signal.addEventListener('abort', () => this.abort(), { once: true });
@@ -216,13 +216,13 @@ class Activation implements ExecutorSession {
 	 * The message that starts a pass: the whole view first, then the delta,
 	 * or none when nothing is new. A resumed session keeps the system prompt
 	 * it began with, so the first message of a resumed query restates the
-	 * seat's part for this activation. A closing activation gets its duties
+	 * seat's part for this activation. A summary activation gets its duties
 	 * and the reader's preferences this way.
 	 */
 	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
 		const record = await pass.record();
 		if (record === undefined || pass.kind === 'delta') return record;
-		const resumes = this.stream === undefined && pass.resume !== undefined;
+		const resumes = this.stream === undefined && pass.resumeId !== undefined;
 		return resumes
 			? { ...record, text: `${RESUMED_NOTE}\n\n${pass.agent}\n\n${record.text}` }
 			: record;
@@ -248,7 +248,7 @@ class Activation implements ExecutorSession {
 	private start(pass: Pass): void {
 		if (this.stream !== undefined) return;
 		const executor = claudeOf(this.definition.executor);
-		this.resuming = pass.resume;
+		this.resuming = pass.resumeId;
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));
@@ -262,7 +262,7 @@ class Activation implements ExecutorSession {
 					systemPrompt: `${pass.mechanism}\n\n${pass.agent}`,
 					server,
 					names,
-					runtime: this.runtime,
+					options: this.options,
 					home: this.home,
 					stderr: (data) => tail.add(data),
 					...(this.resuming === undefined ? {} : { resume: this.resuming }),

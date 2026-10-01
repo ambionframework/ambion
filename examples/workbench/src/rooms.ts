@@ -19,22 +19,22 @@ import { BACKGROUND_CONTEXT, openWorkspace, type RoomMirror } from '@ambionframe
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
+import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
-	type Family,
+	type ExecutorKind,
 	hasKey,
 	keyVariable,
 	unavailableSeats,
-} from './families.ts';
-import { openInstrument } from './instrument.ts';
+} from './kinds.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
 
-/** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
-export type RoomAction = 'abort' | 'stop' | 'resume';
+/** What a person can do to a room's work. Cancel ends the open exchange. Stop and resume end and start a run. */
+export type RoomAction = 'cancel' | 'stop' | 'resume';
 
 export function fail(message: string): never {
 	throw new Error(message);
@@ -48,7 +48,7 @@ interface CatalogEntry {
 interface Activity {
 	at: string;
 	type: string;
-	agent?: string;
+	seat?: string;
 	text: string;
 }
 type HostLifecycle =
@@ -75,8 +75,8 @@ export interface RoomsOptions {
 	/** A model stream for the Pi seats. */
 	stream?: PiExecutionOptions['stream'];
 	/**
-	 * Executions that replace the Claude and Codex families. A test passes a
-	 * scripted execution for each. Without them, the real family runs.
+	 * Executions that replace the Claude and Codex executors. A test passes a
+	 * scripted execution for each. Without them, the real executor runs.
 	 */
 	executions?: { claude?: Execution; codex?: Execution };
 	/** The environment that holds the keys. The default is the environment of the process. */
@@ -84,22 +84,22 @@ export interface RoomsOptions {
 }
 
 /**
- * The execution of each family, for the seats of that family alone. A family
- * with a replacement or a stream runs that. A live family with no key gets
+ * The execution of each executor kind, for the seats of that kind alone. A kind
+ * with a replacement or a stream runs that. A live kind with no key gets
  * an execution that fails its seats with the name of the missing variable,
  * so the other seats keep running.
  */
-function familyExecutions(options: RoomsOptions = {}): readonly Execution[] {
+function kindExecutions(options: RoomsOptions = {}): readonly Execution[] {
 	const { stream, executions, env = process.env } = options;
 	const scripted = stream !== undefined || executions !== undefined;
-	const pick = (family: Family, live: () => Execution, replacement?: Execution): Execution => {
-		if (replacement) return { kind: family, connector: (host) => replacement.connector(host) };
+	const pick = (kind: ExecutorKind, live: () => Execution, replacement?: Execution): Execution => {
+		if (replacement) return { kind, connector: (host) => replacement.connector(host) };
 		if (scripted)
-			return unavailable(family, `the test gave the ${family} family no scripted execution.`);
-		if (hasKey(family, env)) return live();
+			return unavailable(kind, `the test gave the ${kind} executor no scripted execution.`);
+		if (hasKey(kind, env)) return live();
 		return unavailable(
-			family,
-			`${keyVariable(family, env)} is not set, and the ${family} family needs it.`,
+			kind,
+			`${keyVariable(kind, env)} is not set, and the ${kind} executor needs it.`,
 		);
 	};
 	return [
@@ -131,7 +131,7 @@ export async function openRooms(
 		},
 		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
 	};
-	// A test that supplies executions runs no live family, so no seat lacks a key.
+	// A test that supplies executions runs no live executor, so no seat lacks a key.
 	const missing =
 		options.stream || options.executions
 			? []
@@ -142,7 +142,7 @@ export async function openRooms(
 	const log = stepLog();
 	const runtime = createRuntime({
 		storage: sqliteJournals(sql),
-		execution: familyExecutions(options),
+		execution: kindExecutions(options),
 		logger: (record) => {
 			log.logger(record);
 			const entry = entries.get(record.room);
@@ -158,14 +158,15 @@ export async function openRooms(
 	const workspace = openWorkspace({
 		name: WORKSPACE,
 		backend: {
-			bash: directoryBackend(workspacePath),
+			bash: directoryBackend(workspacePath, {
+				git: labRepositories(resolve(directory, 'git.db')),
+			}),
 			// The lab records live in their own file, apart from the journal database.
 			sql: sqliteBackend(resolve(directory, 'lab.db'), {
 				schema: labSchema,
 				appendOnly: labAppendOnly,
 				provenance: true,
 			}),
-			git: labRepositories(resolve(directory, 'git.db')),
 		},
 		audit: {},
 	});
@@ -174,7 +175,9 @@ export async function openRooms(
 	try {
 		await seedWorkspace(workspacePath);
 		// The first call opens the lab database, runs its schema, and guards its tables.
-		await lab.use(workspace.host, (env) => env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT));
+		await lab.use(workspace.mirrorAgent, (env) =>
+			env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT),
+		);
 	} catch (error) {
 		await workspace.dispose().catch(() => {});
 		throw error;
@@ -287,8 +290,8 @@ export async function openRooms(
 					entry.enabled = 0;
 					save(entry);
 					break;
-				case 'abort':
-					await liveRoom(entry).abort();
+				case 'cancel':
+					await liveRoom(entry).cancel();
 					break;
 			}
 			return status(entry);
@@ -346,13 +349,13 @@ export async function openRooms(
 		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
-		read: (name: string, since?: number) =>
+		read: (name: string, after?: number) =>
 			withRoom(name, async (entry) =>
 				roomView(
 					entry,
 					await readRoom(entry.name, {
 						runtime,
-						messages: since === undefined ? undefined : { since },
+						messages: after === undefined ? undefined : { after },
 					}),
 					missing,
 				),
@@ -379,7 +382,7 @@ function roomView(
 ) {
 	return {
 		...snapshot,
-		/** The seats that cannot run because their family has no key. */
+		/** The seats that cannot run because their executor kind has no key. */
 		unavailable,
 		goal: snapshot.initialized ? snapshot.goal : entry.goal,
 		status: entry.lifecycle.status,
@@ -424,15 +427,15 @@ function describeEvent(event: RoomNotification): Omit<Activity, 'at'> | undefine
 	switch (event.type) {
 		case 'error':
 		case 'delivery_error':
-			return { type: event.type, agent: event.agent, text: event.error.message };
+			return { type: event.type, seat: event.seat, text: event.error.message };
 		case 'activation_start':
-			return { type: event.type, agent: event.agent, text: 'Reading and working' };
+			return { type: event.type, seat: event.seat, text: 'Reading and working' };
 		case 'activation_end':
-			return { type: event.type, agent: event.agent, text: 'Finished activation' };
-		case 'tool_execution_start':
-			return { type: event.type, agent: event.agent, text: `Using ${event.toolName}` };
+			return { type: event.type, seat: event.seat, text: 'Finished activation' };
+		case 'tool_call':
+			return { type: event.type, seat: event.seat, text: `Using ${event.name}` };
 		case 'abandoned':
-			return { type: event.type, agent: event.agent, text: 'Retry limit reached' };
+			return { type: event.type, seat: event.seat, text: 'Retry limit reached' };
 		default:
 			return undefined;
 	}

@@ -14,7 +14,7 @@ import {
 	type Room,
 	type RoomNotification,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 
@@ -30,7 +30,7 @@ export interface InvariantOptions {
 }
 
 export const errorsIn = (events: RoomNotification[]) =>
-	events.flatMap((e) => (e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : []));
+	events.flatMap((e) => (e.type === 'error' ? [`${e.seat}: ${e.error.message}`] : []));
 
 const count = (events: RoomNotification[], type: RoomNotification['type']) =>
 	events.filter((e) => e.type === type).length;
@@ -75,13 +75,12 @@ export async function invariants(
 	if (options.journals) await leased(session, options.journals);
 }
 
-/** Every execution event names the activation whose seat raised it. */
+/** Every activation event names the activation whose seat raised it. */
 function activationsMatchEvents(events: RoomNotification[]): void {
 	for (const event of events) {
 		if (!('activation' in event)) continue;
 		expect(event.activation.length).toBeGreaterThan(0);
-		const seat = 'agent' in event ? event.agent : event.author;
-		expect(decodeActivationId(event.activation)?.seat).toBe(seat);
+		expect(decodeActivationId(event.activation)?.seat).toBe(event.seat);
 	}
 }
 
@@ -108,7 +107,7 @@ async function summariesMatchCloses(
 		expect(summary.covers.through).toBe(close.through);
 		expect(summary.to).toBe(close.person);
 		const activation =
-			summary.activationId === undefined ? undefined : decodeActivationId(summary.activationId);
+			summary.activation === undefined ? undefined : decodeActivationId(summary.activation);
 		expect(activation?.source).toBe('closed');
 		expect(activation?.position).toBe(close.through);
 		if (close.wakes?.[0] !== undefined) {
@@ -145,10 +144,10 @@ async function leased(session: Room, journals: JournalOpener): Promise<void> {
 			else running.delete(lease.id);
 		}
 		if (entry.kind !== 'message') continue;
-		const message = entry.body as { activationId?: string; from: string };
-		if (message.activationId === undefined) continue;
-		expect(running, `${message.from}'s message under ${message.activationId}`).toContain(
-			message.activationId,
+		const message = entry.body as { activation?: string; from: string };
+		if (message.activation === undefined) continue;
+		expect(running, `${message.from}'s message under ${message.activation}`).toContain(
+			message.activation,
 		);
 	}
 }

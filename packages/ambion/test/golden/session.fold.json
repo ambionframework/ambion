@@ -39,7 +39,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -49,7 +49,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				},
@@ -59,7 +59,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -69,7 +69,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:6:checker:1"
 					}
 				},
@@ -79,7 +79,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -89,13 +89,13 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
@@ -121,7 +121,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -131,13 +131,13 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:18:worker:1"
 					}
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "complete"
@@ -151,5 +151,5 @@
 			}
 		}
 	],
-	"watermark": 24
+	"through": 24
 }

@@ -8,7 +8,7 @@
  * and serves the same activation, so the work in flight is not lost.
  */
 import { runInDurableObject } from 'cloudflare:test';
-import { isSpoken } from '@ambionframework/ambion';
+import { isSaid } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { sqlStorage } from '../src/storage.ts';
@@ -41,9 +41,9 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	const stub = roomOf(NAME);
 	await stub.start({
 		name: NAME,
-		summary: 'assistant',
+		summaryWriter: 'assistant',
 		seats: { slow: 'broadcast', assistant: 'none' },
-		agents: ['slow', 'assistant'],
+		definitions: ['slow', 'assistant'],
 	});
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await stub.send({ from: 'priya', text: 'Anyone on the pour date?', key: 'q1' });
@@ -69,9 +69,9 @@ it('serves a seat that was at work when the object went away, and takes its comm
 			(read) => read.messages,
 			() => [],
 		);
-		return messages.find((message) => isSpoken(message) && message.from === 'slow');
+		return messages.find((message) => isSaid(message) && message.from === 'slow');
 	});
-	expect(isSpoken(said) && said.text).toBe('The slow answer stands.');
+	expect(isSaid(said) && said.text).toBe('The slow answer stands.');
 	const conversation = await again.waitForClose(exchange.from);
 	expect(conversation[0]?.seq).toBe(exchange.from);
 	const resumedNames = (await again.read({ messages: false })).participants.map(
@@ -87,7 +87,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// Two runs took the name, and the seat's message was written by the second:
 	// the commit crossed the restart, and the room that came back took it. A
-	// message the first run wrote would mean the abort landed too late.
+	// message the first run wrote would mean the cancel landed too late.
 	const runs = await writers(again, 'run');
 	expect(runs).toHaveLength(2);
 	expect(new Set(runs).size).toBe(2);
@@ -99,7 +99,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// The lease the first run wrote is the lease the second run released, and
 	// nothing expired. Wait for this activation's own lease to end: the
-	// assistant's draft takes a lease of its own after it, and this test says
+	// assistant's summary activation takes a lease of its own after it, and this test says
 	// nothing about that one.
 	const leases = await until(async () => {
 		const held = await bodies<LeaseObservation>(again, 'lease');

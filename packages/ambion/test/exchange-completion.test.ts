@@ -31,9 +31,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -51,12 +51,12 @@ const summaryRoom = async (runtime: Runtime, script: PiScript, specialists = [al
 			name: roomName('exchange'),
 			runtime,
 			agents: [...specialists, assistant],
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: {
 				...Object.fromEntries(specialists.map((agent) => [agent.name, 'broadcast' as const])),
 				[assistant.name]: 'none',
 			},
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		}),
 	);
 
@@ -65,9 +65,9 @@ type Outcome = (typeof outcomes)[number];
 
 const summaryFor =
 	(outcome: Outcome): PiScript =>
-	(_context, _agent, call) => {
+	(_context, _agent, request) => {
 		if (outcome === 'failed') throw new Error('Summary failed.');
-		return outcome === 'published' && call === 1 ? summarise('Recorded result.') : quiet();
+		return outcome === 'published' && request === 1 ? summarise('Recorded result.') : quiet();
 	};
 
 async function expectOutcome(exchange: ExchangeHandle | undefined, outcome: Outcome) {
@@ -83,7 +83,7 @@ const resumeWith = async (room: Room, runtime: Runtime, script: PiScript) =>
 		await resumeRoom(room.name, {
 			runtime,
 			agents: [alpha, assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		}),
 	);
 
@@ -109,7 +109,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		);
 		const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
 		await waitForRoom(room);
-		expect(closedExchange(room, exchange.from)?.summary).toEqual(assistant.name);
+		expect(closedExchange(room, exchange.from)?.summaryWriter).toEqual(assistant.name);
 		await expectOutcome(exchange, outcome);
 		await room.stop();
 		let calls = 0;
@@ -176,7 +176,7 @@ describe('exchange completion handles', () => {
 			for (const cue of ['ci: build 412', 'Was the build green?']) {
 				if (!contextText(context).includes(cue) || answered.has(cue)) continue;
 				answered.add(cue);
-				return speak(`Seen: ${cue}`);
+				return say(`Seen: ${cue}`);
 			}
 			return quiet();
 		};
@@ -224,7 +224,7 @@ describe('exchange completion handles', () => {
 			await resumeRoom(room.name, {
 				runtime,
 				agents: [alpha, assistant],
-				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			}),
 		);
 		expect(resumed.exchange(posted.from)).toMatchObject({ from: posted.from, opened: false });
@@ -240,7 +240,7 @@ describe('exchange completion handles', () => {
 					clock: fakeClock(),
 					storage: faulty.journals,
 				}),
-				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			}),
 		);
 		const visit = await room.visit(priya);
@@ -282,7 +282,7 @@ describe('exchange completion handles', () => {
 				laterAgentStarted.resolve();
 				await laterAgentRelease.promise;
 			}
-			return speak(`${agent} answer ${count + 1}.`);
+			return say(`${agent} answer ${count + 1}.`);
 		};
 		const { runtime } = await memoryRuntime();
 		const room = await summaryRoom(
@@ -336,7 +336,7 @@ describe('exchange completion handles', () => {
 				const count = answers.get(agent) ?? 0;
 				if (count >= 2) return quiet();
 				answers.set(agent, count + 1);
-				return speak(`${agent} answer ${count + 1}.`);
+				return say(`${agent} answer ${count + 1}.`);
 			},
 			[alpha, beta],
 		);

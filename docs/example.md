@@ -39,7 +39,7 @@ ordinary messages, seats a specialist, and writes the closing summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
 `broadcast`. It writes the closing summary.
 
-| Agent           | Scope                                                      | Family |
+| Agent           | Scope                                                      | Kind   |
 | --------------- | ---------------------------------------------------------- | ------ |
 | **Datasheets**  | Reads `/library` and states exact limits with their source | Pi     |
 | **Design**      | Chooses parts and values, and shows the circuit math       | Claude |
@@ -48,13 +48,13 @@ uses `defineAssistant` from `@ambionframework/assistant`, seated at
 Each room seats the specialists it needs. The reserve holds the rest. The
 specialists collaborate through directed messages and report back once.
 
-**The team runs on three executor families.** The assistant and the
+**The team runs on three executor kinds.** The assistant and the
 datasheets specialist run on Pi. The design specialist runs on
 `@ambionframework/claude`. The experiments specialist runs on
 `@ambionframework/codex`. The workbench passes its own execution for each
-family, because it checks keys and lets a test script a family.
+executor kind, because it checks keys and lets a test script an executor.
 
-| Family | Model                              | Key                 | Seats                 |
+| Kind   | Model                              | Key                 | Seats                 |
 | ------ | ---------------------------------- | ------------------- | --------------------- |
 | Pi     | `anthropic/claude-sonnet-5`        | `ANTHROPIC_API_KEY` | Assistant, datasheets |
 | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` | Design                |
@@ -62,8 +62,8 @@ family, because it checks keys and lets a test script a family.
 
 A seat with no key reports the missing variable and does not run. The other
 seats run. The scripted tests give the Claude and Codex seats a scripted
-execution, so they need no key. The live tests skip a scenario when a family
-that it uses has no key. See the
+execution, so they need no key. The live tests skip a scenario when an
+executor kind that it uses has no key. See the
 [Workbench README](../examples/workbench/README.md) for the commands.
 
 ### One tool set, one filesystem, no native tool
@@ -71,14 +71,14 @@ that it uses has no key. See the
 **Every agent holds the same tools and reaches the same filesystem, and no
 native tool of any harness is on.** One list of bundles serves every seat:
 the workspace, the lab, and the instrument tools, in that order. All three
-families share one workspace instance, so a file that one agent writes is
+executor kinds share one workspace instance, so a file that one agent writes is
 the file that another agent reads.
 
-| Family | How it enforces the guarantee                                        |
-| ------ | -------------------------------------------------------------------- |
-| Pi     | Has no native tool. The seat holds only the tools that it receives.  |
-| Claude | Passes no built-in tool. No Claude definition option names one.      |
-| Codex  | Sets `nativeTools: 'none'` and no policy option that opens the host. |
+| Kind   | How it enforces the guarantee                                       |
+| ------ | ------------------------------------------------------------------- |
+| Pi     | Has no native tool. The seat holds only the tools that it receives. |
+| Claude | Passes no built-in tool. No Claude definition option names one.     |
+| Codex  | Has no native tool. The seat holds only the tools that it receives. |
 
 `test/tool-set.test.ts` fails when a definition drifts from this. The live
 test `test/live/tool-set.test.ts` asks each seat for its tool list, writes a
@@ -118,8 +118,8 @@ same room reads its state with `ps`, `status`, or `wait`, and the reminder
 of each activation names it ([Processes](processes.md)).
 
 **The sensor server uses the workstation backend.** The running Workbench
-uses `directoryBackend`, which has no port transport. Its terminal workspace
-has no `connect` or `observe` tools. A workstation with ports provides those
+uses `directoryBackend`, which has no endpoints. Its terminal workspace
+has no `connect` or `observe` tools. A workstation with endpoints provides those
 tools for the same Git template. See [Sensors](sensors.md) and the
 [workstation acceptance](../packages/workstation/test/sshd/sensor-lifecycle.test.ts).
 
@@ -179,7 +179,7 @@ interface.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
   or room, create a room, search workspace files in a side panel, watch and cancel the agents'
-  background processes with `/ps`, and stop, resume, or abort. It shows
+  background processes with `/ps`, and stop, resume, or cancel. It shows
   the refs of each message. It previews a snapshot, a commit, a file, or a
   lab table, and opens a room or a message from one (see the
   [Workbench README](../examples/workbench/README.md)). `/attach` copies a
@@ -206,7 +206,7 @@ domain instructions, and the terminal.
 | The assistant             | The assistant definition, seated at `broadcast`, with the summary |
 | Bring in a specialist     | Attention `named`, and a directed say                             |
 | Specialists work together | Directed says between seats                                       |
-| One answer for the person | The closing activation writes one summary                         |
+| One answer for the person | The summary activation writes one summary                         |
 | Datasheets and artifacts  | The directory workspace, read and written through its tools       |
 | History                   | The journal for collaboration; the workspace for files            |
 
@@ -284,8 +284,8 @@ examples/workbench/
     draw.ts            the painter: header, conversation, and composer chrome
     keys.ts            the input: mode, browse selection, and key routing
     tui.ts             the terminal: builds the parts and runs the loop
-    families.ts        the family, model, and key of each seat
-    unavailable.ts     the execution of a family that has no key
+    kinds.ts           the executor kind, model, and key of each seat
+    unavailable.ts     the execution of a kind that has no key
     main.ts            the entry point
   library/             the datasheets as text
   templates/           the source of each git template

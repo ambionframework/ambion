@@ -1,6 +1,6 @@
 /**
  * A storage position starts at zero and strictly increases for each stored
- * entry. It orders stored entries, not journal envelopes.
+ * entry. It orders stored entries.
  */
 export type StoragePosition = number;
 

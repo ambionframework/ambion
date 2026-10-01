@@ -100,7 +100,7 @@ export function routes(
 	return [...new Set(woken)];
 }
 
-/** Closing work does not block a new ordinary activation for the same seat. */
+/** Summary work does not block a new respond activation for the same seat. */
 function holdsOrdinary(state: RoomState, ids: readonly string[] | undefined): boolean {
 	return ids?.some((id) => activationSpec(id, state)?.purpose.kind === 'respond') ?? false;
 }

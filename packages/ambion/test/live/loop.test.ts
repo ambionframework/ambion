@@ -1,8 +1,8 @@
 /**
  * The model, the key and the loop. `docs/agent.md` §1: without a `stream`,
  * a model resolves as `provider/model-id` from Pi's catalog, or as a Claude
- * model id under `AMBION_HARNESS=claude`, or `gpt-5.6-luna` under
- * `AMBION_HARNESS=codex`, and the key comes from the
+ * model id under `AMBION_EXECUTOR=claude`, or `gpt-5.6-luna` under
+ * `AMBION_EXECUTOR=codex`, and the key comes from the
  * environment. Nothing scripted touches that path.
  */
 import { Type } from 'typebox';
@@ -53,10 +53,10 @@ live('the model and the loop', () => {
 		const messages = await messagesOf(session);
 		expect(events).toContainEqual(
 			expect.objectContaining({
-				type: 'tool_execution_start',
-				agent: 'clerk',
+				type: 'tool_call',
+				seat: 'clerk',
 				activation: expect.any(String),
-				toolName: 'lookup_order',
+				name: 'lookup_order',
 			}),
 		);
 		const said = saidBy(messages, 'clerk');
@@ -65,9 +65,9 @@ live('the model and the loop', () => {
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				type: 'activation_end',
-				agent: 'clerk',
+				seat: 'clerk',
 				activation: expect.any(String),
-				spoke: true,
+				said: true,
 			}),
 		);
 		await invariants(session, events);
@@ -91,14 +91,14 @@ live('the model and the loop', () => {
 			const visit = await enter(session, person);
 			const ended = new Promise<void>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'activation_end' && e.agent === 'clerk') resolve();
+					if (e.type === 'activation_end' && e.seat === 'clerk') resolve();
 				});
 			});
 			const exchange = await visit.send({ text: 'What is the status of order 7781?' });
 			await within(ended, 60_000, 'the activation ending');
 			// the failed activation is one attempt, and the room would wake the seat
-			// again after the backoff: the abort writes that wake off
-			await session.abort();
+			// again after the backoff: the cancel writes that wake off
+			await session.cancel();
 			await within(exchange.waitForClose(), 60_000, 'the exchange closing');
 
 			const errors = errorsIn(events);
@@ -108,9 +108,9 @@ live('the model and the loop', () => {
 			expect(events).toContainEqual(
 				expect.objectContaining({
 					type: 'activation_end',
-					agent: 'clerk',
+					seat: 'clerk',
 					activation: expect.any(String),
-					spoke: false,
+					said: false,
 				}),
 			);
 		} finally {

@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
-import { isSpoken } from '../../../ambion/src/index.ts';
+import { isSaid } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { segment } from '../../src/home.ts';
 import { claudeExecution } from '../../src/index.ts';
@@ -219,7 +219,7 @@ live('hermetic seat', () => {
 				// The `@` mention of the host file made no `file` attachment.
 				expect(await attachmentTypes(path)).not.toContain('file');
 			}
-			const said = (await messagesOf(session)).filter(isSpoken).map((message) => message.text);
+			const said = (await messagesOf(session)).filter(isSaid).map((message) => message.text);
 			expect(said.join('\n')).not.toContain('POISON-TEXT-HOSTFILE');
 			// The transcript sits in the project key that the test computed, so the memory file was in reach.
 			expect(transcripts.map((path) => dirname(path))).toContain(dirname(memory));

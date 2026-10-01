@@ -80,7 +80,7 @@ export async function untilQuiet(session: Room): Promise<void> {
 			`'${session.name}' going quiet`,
 		);
 	} catch (error) {
-		await session.abort().catch(() => {});
+		await session.cancel().catch(() => {});
 		throw error;
 	}
 }

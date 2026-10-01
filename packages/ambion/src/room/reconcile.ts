@@ -14,7 +14,7 @@
 
 import type { FailureCause, Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
-import { type PendingActivation, removedAfter, seatOf } from './lease.ts';
+import { type DueActivation, removedAfter, seatOf } from './lease.ts';
 import {
 	type ActivationFields,
 	admitsClose,
@@ -30,7 +30,7 @@ export interface ReconcileOptions {
 	now: number;
 	/** How long an unanswered wake waits before the room sends it again. */
 	resend: number;
-	/** How many attempts the room makes at one wake or one draft before it gives up. */
+	/** How many attempts the room makes at one due activation before it gives up. */
 	attempts: number;
 	/** When this room last sent each wake it waits on. A wake it never sent is absent. */
 	sent: ReadonlyMap<string, number>;
@@ -185,7 +185,7 @@ function forgotten(state: RoomState, options: ReconcileOptions): string[] {
 }
 
 /** An activation the room gives up on: a permanent failure, or the attempt cap. */
-const capped = (owed: PendingActivation, options: ReconcileOptions): boolean =>
+const capped = (owed: DueActivation, options: ReconcileOptions): boolean =>
 	owed.permanent || owed.unsuccessfulAttempts >= options.attempts;
 
 /**
@@ -217,7 +217,7 @@ function closing(state: RoomState, work: LiveWork): CloseRef | undefined {
 }
 
 /** The activations the room still tries: what it owes, less what it gave up on. */
-const owing = (state: RoomState, options: ReconcileOptions): PendingActivation[] =>
+const owing = (state: RoomState, options: ReconcileOptions): DueActivation[] =>
 	state.due.filter((owed) => !capped(owed, options));
 
 /**
@@ -229,9 +229,9 @@ const owing = (state: RoomState, options: ReconcileOptions): PendingActivation[]
  * - A **resend window** after a send this room made. It is in memory,
  *   because only this room knows what it sent.
  *
- * A wake a message decided and a draft a close owes wait the same way.
+ * A due activation that a message caused and one that a close caused wait the same way.
  */
-function dueAt(owed: PendingActivation, options: ReconcileOptions): number {
+function dueAt(owed: DueActivation, options: ReconcileOptions): number {
 	const backoff = owed.notBefore ?? options.now;
 	if (backoff > options.now) return backoff;
 	const sent = options.sent.get(owed.id);

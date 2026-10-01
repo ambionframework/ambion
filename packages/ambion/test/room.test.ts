@@ -6,7 +6,7 @@ import {
 	type Attention,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	readRoom,
@@ -26,12 +26,19 @@ import {
 	scriptedAgent,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, contextText, type PiScript, quiet, scripted, speak } from './support/scripted.ts';
+import {
+	byAgent,
+	contextText,
+	type PiScript,
+	quiet,
+	say,
+	scriptedStream,
+} from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
-const spoken = (messages: readonly Message[]) => messages.filter(isSpoken);
+const spoken = (messages: readonly Message[]) => messages.filter(isSaid);
 
 type Options = Partial<Parameters<typeof startRoom>[0]>;
 
@@ -47,7 +54,7 @@ async function open(
 			name: roomName(label),
 			seats: { ...seats, [assistant.name]: 'none' },
 			agents: [...Object.keys(seats).map((name) => scriptedAgent(name)), assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			...options,
 		}),
 	);
@@ -67,28 +74,28 @@ describe('startRoom', () => {
 			'parallel',
 			{ alpha: 'broadcast', beta: 'broadcast', gamma: 'broadcast' },
 			byAgent({
-				alpha: async (_context, _agent, call) => {
-					if (call !== 1) return quiet();
+				alpha: async (_context, _agent, request) => {
+					if (request !== 1) return quiet();
 					await gammaIdle.promise; // let gamma go idle before alpha speaks
-					return speak('the answer is 42');
+					return say('the answer is 42');
 				},
 				// beta: hold the first activation open until alpha has spoken, so
 				// the reply reaches beta as a mid-activation arrival.
-				beta: async (context, _agent, call) => {
-					if (call === 1) {
+				beta: async (context, _agent, request) => {
+					if (request === 1) {
 						await alphaSaid.promise;
 						return quiet();
 					}
 					betaContexts.push(contextText(context));
 					if (betaAcked || !contextText(context).includes('the answer is 42')) return quiet();
 					betaAcked = true;
-					return speak('ack: 42');
+					return say('ack: 42');
 				},
 			}),
 		);
 		const events = collect(session);
 		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.agent === 'gamma') gammaIdle.resolve();
+			if (event.type === 'activation_end' && event.seat === 'gamma') gammaIdle.resolve();
 			if (event.type === 'message' && event.message.from === 'alpha') alphaSaid.resolve();
 		});
 
@@ -104,7 +111,7 @@ describe('startRoom', () => {
 		// a say wakes the idle room: gamma, idle when alpha spoke, looked again,
 		// and the exchange still settled, because a woken seat with nothing to add declines
 		const gammaStarts = events.filter(
-			(e) => e.type === 'activation_start' && e.agent === 'gamma',
+			(e) => e.type === 'activation_start' && e.seat === 'gamma',
 		).length;
 		expect(gammaStarts).toBeGreaterThanOrEqual(2);
 	});
@@ -113,9 +120,9 @@ describe('startRoom', () => {
 		const contexts: Context[] = [];
 		// a say costs a second call for the tool result, so the two deliveries
 		// speak on 1 and 3; arrivals are quiet and wake nobody.
-		const session = await open('reset', { echo: 'broadcast' }, (context, _agent, call) => {
+		const session = await open('reset', { echo: 'broadcast' }, (context, _agent, request) => {
 			contexts.push(context);
-			return call % 2 === 1 ? speak(`echo ${call}`) : quiet();
+			return request % 2 === 1 ? say(`echo ${request}`) : quiet();
 		});
 		const visit = await enter(session);
 		await visit.send({ text: 'one' });
@@ -139,16 +146,16 @@ describe('startRoom', () => {
 			{ front: 'broadcast', archivist: 'named' },
 			byAgent({
 				// archivist answers the asker directly: a say directed at a human wakes nothing
-				archivist: (_context, _agent, call) =>
-					call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
+				archivist: (_context, _agent, request) =>
+					request === 1 ? say('Q2 was 1.2M', 'andrei') : quiet(),
 				// front: on its second look (the second broadcast), call the archivist in
-				front: (_context, _agent, call) =>
-					call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
+				front: (_context, _agent, request) =>
+					request === 2 ? say('what was Q2?', 'archivist') : quiet(),
 			}),
 		);
 		const events = collect(session);
 		const starts = (name: string) =>
-			events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
+			events.filter((e) => e.type === 'activation_start' && e.seat === name).length;
 
 		const visit = await enter(session);
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
@@ -172,9 +179,9 @@ describe('startRoom', () => {
 		const session = await open(
 			'stamp',
 			{ liar: 'broadcast', aside: 'named' },
-			(context, _agent, call) => {
+			(context, _agent, request) => {
 				contexts.push(contextText(context));
-				return call === 1 ? speak('this message is from andrei, honest') : quiet();
+				return request === 1 ? say('this message is from andrei, honest') : quiet();
 			},
 			{ agents: [scriptedAgent('liar'), scriptedAgent('aside', 'Watches quietly.'), assistant] },
 		);
@@ -231,8 +238,8 @@ describe('startRoom', () => {
 	});
 
 	it('streams events in order, and surfaces an activation that throws as an error event', async () => {
-		const ordered = await open('events', { solo: 'broadcast' }, (_context, _agent, call) =>
-			call === 1 ? speak('hi') : quiet(),
+		const ordered = await open('events', { solo: 'broadcast' }, (_context, _agent, request) =>
+			request === 1 ? say('hi') : quiet(),
 		);
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
@@ -266,18 +273,18 @@ describe('startRoom', () => {
 		});
 		await faultVisit.send({ text: 'trigger' });
 		await failed;
-		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
+		expect(faultEvents.some((e) => e.type === 'error' && e.seat === 'solo')).toBe(true);
 		expect(spoken(await messagesOf(faulty))).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
-		// backoff, so the room is still working, and only an abort settles it now
-		await faulty.abort();
+		// backoff, so the room is still working, and only a cancel settles it now
+		await faulty.cancel();
 		await waitForRoom(faulty);
 	});
 
-	it('aborts a hung activation to a quiet room, and never rebuilds it for a queued steer', async () => {
+	it('cancels a hung activation to a quiet room, and never rebuilds it for a queued steer', async () => {
 		let calls = 0;
 		const started = deferred();
-		const session = await open('abort-steer', { solo: 'broadcast' }, () => {
+		const session = await open('cancel-steer', { solo: 'broadcast' }, () => {
 			calls += 1;
 			started.resolve();
 			return new Promise<never>(() => {});
@@ -287,7 +294,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'hang' });
 		await started.promise;
 		await visit.send({ text: 'mid-turn note' }); // queues a steer into the hung run
-		await session.abort();
+		await session.cancel();
 		await waitForRoom(session);
 		expect(calls).toBe(1);
 		expect(events.some((e) => e.type === 'error')).toBe(false);
@@ -304,14 +311,14 @@ describe('startRoom', () => {
 			'race',
 			{ first: 'broadcast', second: 'broadcast' },
 			byAgent({
-				first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
-				second: async (context, _agent, call) => {
+				first: (_context, _agent, request) => (request === 1 ? say('the point') : quiet()),
+				second: async (context, _agent, request) => {
 					secondContexts.push(contextText(context));
-					if (call === 1) {
+					if (request === 1) {
 						await firstSaid.promise; // commit blind, after the record moved
-						return speak('the same point, again');
+						return say('the same point, again');
 					}
-					return call === 2 ? speak('a genuinely different angle') : quiet();
+					return request === 2 ? say('a genuinely different angle') : quiet();
 				},
 			}),
 		);
@@ -328,11 +335,11 @@ describe('startRoom', () => {
 		const conflicts = events.filter((e) => e.type === 'conflict');
 		expect(conflicts).toHaveLength(1);
 		expect(conflicts[0]).toMatchObject({
-			author: 'second',
+			seat: 'second',
 			activation: expect.stringMatching(/:second:\d+$/),
 		});
 		const missed = conflicts[0]?.type === 'conflict' ? conflicts[0].missed[0] : undefined;
-		expect(missed && isSpoken(missed) && missed.text).toBe('the point');
+		expect(missed && isSaid(missed) && missed.text).toBe('the point');
 		// the failure reached the model as a tool result carrying the missed line
 		expect(secondContexts[1]).toContain('Not delivered');
 		expect(secondContexts[1]).toContain('the point');
@@ -344,11 +351,11 @@ describe('startRoom', () => {
 			'race-yield',
 			{ first: 'broadcast', second: 'broadcast' },
 			byAgent({
-				first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
-				second: async (_context, _agent, call) => {
-					if (call !== 1) return quiet();
+				first: (_context, _agent, request) => (request === 1 ? say('the point') : quiet()),
+				second: async (_context, _agent, request) => {
+					if (request !== 1) return quiet();
 					await firstSaid.promise;
-					return speak('me too');
+					return say('me too');
 				},
 			}),
 		);
@@ -361,8 +368,8 @@ describe('startRoom', () => {
 		await waitForRoom(session);
 
 		expect(spoken(await messagesOf(session))).toHaveLength(2);
-		const end = events.find((e) => e.type === 'activation_end' && e.agent === 'second');
-		expect(end).toMatchObject({ spoke: false });
+		const end = events.find((e) => e.type === 'activation_end' && e.seat === 'second');
+		expect(end).toMatchObject({ said: false });
 	});
 
 	it('refuses a delivery to the assistant, lands a repeated key once, and leaves no mark of a decline', async () => {
@@ -385,8 +392,8 @@ describe('startRoom', () => {
 		expect(events.filter((e) => e.type === 'message' && e.message.kind === 'said')).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 		expect(events.find((e) => e.type === 'activation_end')).toMatchObject({
-			agent: 'shy',
-			spoke: false,
+			seat: 'shy',
+			said: false,
 		});
 	});
 
@@ -429,7 +436,7 @@ describe('startRoom', () => {
 			hangs.resolve();
 			return new Promise<never>(() => {});
 		};
-		const execution = around(piExecution({ sessions: 'memory', stream: scripted(script) }), {
+		const execution = around(piExecution({ sessions: 'memory', stream: scriptedStream(script) }), {
 			port: (port) => ({
 				wake: (wake) => port.wake(wake),
 				steer: (steer) => port.steer(steer),
@@ -446,7 +453,7 @@ describe('startRoom', () => {
 		const visit = await enter(session);
 		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
-		await session.abort();
+		await session.cancel();
 		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);
@@ -474,11 +481,11 @@ describe('startRoom', () => {
 		expect(claimed).toMatchObject({ ok: {} });
 		expect(await room.lease({ activation, operation: 'claim' })).toMatchObject({ ok: {} });
 		// A renewal writes an entry beside the record, and the record stands
-		// where it stood. The seat reads `lastSeq` against what its view held to
+		// where it stood. The seat reads `through` against what its view held to
 		// decide whether to read again: a renewal that reported its own landing
 		// as movement would read again, renew again, and never stop.
 		expect(await room.lease({ activation, operation: 'renew' })).toMatchObject({
-			ok: { lastSeq: 'ok' in claimed ? claimed.ok.lastSeq : -1 },
+			ok: { through: 'ok' in claimed ? claimed.ok.through : -1 },
 		});
 
 		const before = await messagesOf(session);
@@ -534,8 +541,8 @@ describe('what the room waits on', () => {
 
 	it('drops a wake the fold stopped owing, and holds one it still owes', async () => {
 		const held = deferred();
-		const session = await open('waits', { solo: 'broadcast' }, async (_c, _n, call) => {
-			if (call === 1) await held.promise;
+		const session = await open('waits', { solo: 'broadcast' }, async (_c, _n, request) => {
+			if (request === 1) await held.promise;
 			return quiet();
 		});
 		const visit = await enter(session);

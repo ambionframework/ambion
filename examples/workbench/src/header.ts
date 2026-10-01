@@ -1,4 +1,4 @@
-import type { ParticipantInfo } from '@ambionframework/ambion';
+import type { Participant } from '@ambionframework/ambion';
 import {
 	BoxRenderable,
 	bold,
@@ -8,8 +8,8 @@ import {
 	TextRenderable,
 } from '@opentui/core';
 import { brand, tui as palette } from './brand.ts';
-import { seatFamilies } from './families.ts';
 import { fitHeader, GAP } from './header-fit.ts';
+import { seatKinds } from './kinds.ts';
 import type { Person, RoomView } from './workbench.ts';
 
 type Chunks = ConstructorParameters<typeof StyledText>[0];
@@ -18,25 +18,25 @@ type Chunks = ConstructorParameters<typeof StyledText>[0];
 const CHROME = 4;
 
 /** True when an agent is at work or a person is present. */
-function lit(participant: ParticipantInfo): boolean {
+function lit(participant: Participant): boolean {
 	return participant.kind === 'agent'
 		? participant.status === 'active'
 		: participant.presence === 'present';
 }
 
 /** A participant's color: coral at work, green present, dim otherwise. */
-function participantColor(participant: ParticipantInfo): string {
+function participantColor(participant: Participant): string {
 	if (!lit(participant)) return palette.dim;
 	return participant.kind === 'agent' ? palette.coral : palette.green;
 }
 
 /** A filled dot marks a lit participant, and an empty dot marks the others. The state then reads without color. */
-const label = (participant: ParticipantInfo, unavailable: readonly string[] = []): string =>
-	`${lit(participant) ? '●' : '○'} ${participant.name}${family(participant, unavailable)}`;
+const label = (participant: Participant, unavailable: readonly string[] = []): string =>
+	`${lit(participant) ? '●' : '○'} ${participant.name}${executorKind(participant, unavailable)}`;
 
-/** The executor family beside an agent, with a mark when the family has no key. */
-function family(participant: ParticipantInfo, unavailable: readonly string[]): string {
-	const name = participant.kind === 'agent' ? seatFamilies[participant.name] : undefined;
+/** The executor kind beside an agent, with a mark when the kind has no key. */
+function executorKind(participant: Participant, unavailable: readonly string[]): string {
+	const name = participant.kind === 'agent' ? seatKinds[participant.name] : undefined;
 	if (!name) return '';
 	return unavailable.includes(participant.name) ? ` (${name}, no key)` : ` (${name})`;
 }

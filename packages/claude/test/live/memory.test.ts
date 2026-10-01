@@ -9,9 +9,9 @@ import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
-import { defineTool, isSpoken, type Step } from '../../../ambion/src/index.ts';
+import { defineTool, isSaid, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { createClaudeExecutor } from '../../src/executor.ts';
+import { createClaudeOpener } from '../../src/executor.ts';
 import { viewOf } from '../support.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -44,7 +44,7 @@ async function twoQuestions() {
 		const visit = await enter(session, person);
 		const ids: string[] = [];
 		session.subscribe((e) => {
-			if (e.type === 'activation_start' && e.agent === 'keeper') ids.push(e.activation);
+			if (e.type === 'activation_start' && e.seat === 'keeper') ids.push(e.activation);
 		});
 		await visit.send({ text: 'Please read the code.' });
 		await untilQuiet(session);
@@ -55,7 +55,7 @@ async function twoQuestions() {
 		expect(first).toBeDefined();
 		expect(second).toBeDefined();
 		const said = (await messagesOf(session))
-			.filter(isSpoken)
+			.filter(isSaid)
 			.filter((m) => m.from === 'keeper')
 			.map((m) => m.text);
 		const exchanges = (await session.read()).exchanges;
@@ -79,7 +79,7 @@ live('memory', () => {
 		expect(reads(run.firstSteps).length).toBeGreaterThanOrEqual(1);
 		expect(reads(run.secondSteps).length).toBeGreaterThanOrEqual(1);
 		expect(run.said.at(-1)).toContain(CODE);
-		const ids = run.sessions.flatMap((s) => (s?.harness === 'claude' ? [s.id] : []));
+		const ids = run.sessions.flatMap((s) => (s?.kind === 'claude' ? [s.id] : []));
 		expect(ids.length).toBeGreaterThanOrEqual(2);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
@@ -113,9 +113,9 @@ live('memory', () => {
 		const definition = seat('sonnet', 'Answers what is asked.', {
 			instructions: 'Answer the question with one say, in one sentence. Guess if you must.',
 		});
-		const executor = createClaudeExecutor({ definition });
+		const opener = createClaudeOpener({ definition });
 		const view = viewOf();
-		const session = new ActivationState(executor, {
+		const session = new ActivationState(opener, {
 			id: view.spec.id,
 			room,
 			definition,
@@ -126,7 +126,7 @@ live('memory', () => {
 			const result = await within(
 				session.pass({
 					kind: 'view',
-					view: { ...view, spec: { ...view.spec, resume: { harness: 'claude', id: bogus } } },
+					view: { ...view, spec: { ...view.spec, resume: { kind: 'claude', id: bogus } } },
 				}),
 				150_000,
 				'the pass',
@@ -134,7 +134,7 @@ live('memory', () => {
 			expect(result).toEqual({ failed: false });
 			expect(commits.some((c) => c.intent.kind === 'said')).toBe(true);
 			// The fresh session has its own id, and the release records it.
-			expect(session.session?.harness).toBe('claude');
+			expect(session.session?.kind).toBe('claude');
 			expect(session.session?.id).not.toBe(bogus);
 		} finally {
 			session.close?.();

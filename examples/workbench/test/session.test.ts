@@ -133,15 +133,15 @@ describe('Session on the real host', () => {
 		expect(session.awaitingGoal).toBeUndefined();
 	});
 
-	it('sends as the person, enters first when not present, aborts, stops, resumes, and leaves', async () => {
+	it('sends as the person, enters first when not present, cancels, stops, resumes, and leaves', async () => {
 		const { workbench, session, calls } = await onHost('mira', { stream: idleStream });
-		await session.submit('/abort');
-		expect(session.notice).toBe('Nothing to abort. bringup has no open exchange.');
+		await session.submit('/cancel');
+		expect(session.notice).toBe('Nothing to cancel. bringup has no open exchange.');
 		await session.submit('Which resistor?');
 		await vi.waitFor(() => expect(session.view?.exchange).toBeDefined());
-		await session.submit('/abort');
-		expect(calls).toContain('control:bringup:abort');
-		expect(session.notice).toBe('Aborted the open exchange in bringup.');
+		await session.submit('/cancel');
+		expect(calls).toContain('control:bringup:cancel');
+		expect(session.notice).toBe('Cancelled the open exchange in bringup.');
 
 		await workbench.leave('bringup', 'mira');
 		await session.submit('Are you there?');
@@ -336,14 +336,14 @@ const closedExchange = (from: number, extra: Record<string, unknown> = {}) => ({
 	person: 'mira',
 	at: AT,
 	outcome: { kind: 'complete' },
-	summary: { status: 'silent' },
+	summary: { kind: 'silent' },
 	activations: [
 		{
 			id: `act-${from}`,
 			seat: 'design',
 			purpose: 'respond',
 			attempt: 1,
-			outcome: { status: 'released' },
+			outcome: { kind: 'released' },
 		},
 	],
 	...extra,
@@ -409,12 +409,12 @@ describe('Session steps', () => {
 
 	it('opens the attempt that ran, and not the attempt the room abandoned after it', async () => {
 		const { host, session } = await started();
-		const attempt = (id: string, status: string, attempt: number) => ({
+		const attempt = (id: string, kind: string, attempt: number) => ({
 			id,
 			seat: 'assistant',
 			purpose: 'respond',
 			attempt,
-			outcome: { status, cause: 'permanent' },
+			outcome: { kind, cause: 'permanent' },
 		});
 		const activations = [attempt('act-4', 'failed', 1), attempt('act-4b', 'abandoned', 2)];
 		host.table.set('bringup', view('bringup', { exchanges: [closedExchange(4, { activations })] }));

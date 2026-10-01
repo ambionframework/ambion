@@ -6,7 +6,7 @@
  */
 
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { TraceRecord } from '@ambionframework/ambion';
+import type { TracedStep } from '@ambionframework/ambion';
 import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it, onTestFinished } from 'vitest';
@@ -24,8 +24,8 @@ async function asked(name: string) {
 	const seat = seatOf(name);
 	await room.start({
 		name,
-		summary: 'assistant',
-		agents: ['product', 'assistant'],
+		summaryWriter: 'assistant',
+		definitions: ['product', 'assistant'],
 		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
@@ -33,12 +33,12 @@ async function asked(name: string) {
 	// At least one wake reached the seat. The room sends a wake nobody has taken
 	// again every 50 ms here, so how many arrive before the alarm runs is the
 	// runner's speed and not the room's behaviour.
-	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
+	expect(await until(() => seat.wakeCount())).toBeGreaterThanOrEqual(1);
 	return { room, seat, exchange };
 }
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	configure({ ...configuration, logger: (record) => void records.push(record) });
 	onTestFinished(() => configure(configuration));
 	const { room, seat } = await asked('seat-test');
@@ -51,7 +51,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		return messages.find((m) => m.kind === 'said' && m.from === 'product');
 	});
 	expect(said).toMatchObject({
-		activationId: 'message:4:product:1',
+		activation: 'message:4:product:1',
 		text: 'The pour is Saturday.',
 	});
 	const leases = await until(async () =>
@@ -77,7 +77,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
-	expect(await until(async () => (await seat.wakes()) >= 3)).toBe(true);
+	expect(await until(async () => (await seat.wakeCount()) >= 3)).toBe(true);
 	expect(
 		(await room.read({ messages: false })).participants.find((s) => s.name === 'product'),
 	).toMatchObject({
@@ -131,7 +131,7 @@ it('runs one activation when a second alarm starts while the first runs', async 
 	const said = (await room.read()).messages.filter(
 		(m) => m.kind === 'said' && m.from === 'product',
 	);
-	expect(said).toMatchObject([{ activationId: 'message:4:product:1' }]);
+	expect(said).toMatchObject([{ activation: 'message:4:product:1' }]);
 	const leases = await runInDurableObject(room, async (_instance, state) => {
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open('alarm-twice');
 		return (await journal.read(0)).entries
@@ -150,7 +150,7 @@ it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	const { room, seat, exchange } = await asked('cut-test');
 
 	// The room records the cancellation and writes off the unclaimed wake.
-	await room.abort();
+	await room.cancel();
 	const cancelled = await room.read({ messages: false });
 	expect(cancelled.exchange).toBeUndefined();
 	expect(cancelled.exchanges).toContainEqual(
@@ -173,7 +173,7 @@ it('keeps the first pending activation when different wakes arrive together', as
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'first' }),
 		seat.wake({ room: 'wake-race', seat: 'product', activation: 'second' }),
 	]);
-	expect(await seat.wakes()).toBe(1);
+	expect(await seat.wakeCount()).toBe(1);
 });
 
 it('forwards steering to the live runner without recording a wake', async () => {
@@ -206,7 +206,7 @@ it('forwards steering to the live runner without recording a wake', async () => 
 	expect(
 		await inside<Holder, Steer | undefined>(seat, async (object) => object.runner?.last),
 	).toEqual(steer);
-	expect(await seat.wakes()).toBe(0);
+	expect(await seat.wakeCount()).toBe(0);
 	expect(
 		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
 	).toBeNull();
@@ -296,7 +296,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 		return late.promise;
 	});
 	expect((await read()).activation).toBe(newer);
-	late.resolve({ ok: { expiresAt: Date.now() + 10_000, lastSeq: 1 } });
+	late.resolve({ ok: { expiresAt: Date.now() + 10_000, through: 1 } });
 	await new Promise((resolve) => setTimeout(resolve, 20));
 	expect((await read()).activation).toBe(newer);
 	timedOut();

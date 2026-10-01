@@ -1,6 +1,6 @@
 /**
  * The helpers the tests in this package share. `sqlBackends` are the two
- * SQLite harnesses that the SQL cases take (`sql-cases.ts`).
+ * SQLite fixtures that the SQL cases take (`sql-cases.ts`).
  *
  * The bash backends are the just-bash backends. This package's tests reach
  * their source and their test support by relative path, the way the core's
@@ -18,13 +18,13 @@ import { DEFAULT_AUDIT_LOG } from '../../src/audit.ts';
 import type { BashBackend } from '../../src/backend.ts';
 import type { Workspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
-import type { SqlHarness } from './sql-cases.ts';
+import type { SqlFixture } from './sql-cases.ts';
 
 /** The note on the file tools and the bash tool, as the guidance of every bundle holds it. */
 export const FILES_NOTE =
 	'read, write, edit and bash work on shared files. Other agents connected to this\nworkspace read and write the same files.';
 
-export const sqlBackends: readonly SqlHarness[] = [
+export const sqlBackends: readonly SqlFixture[] = [
 	{
 		name: 'sqlite in memory',
 		open: async () => ({ backend: sqliteBackend(':memory:'), dispose: async () => {} }),
@@ -39,8 +39,8 @@ export const sqlBackends: readonly SqlHarness[] = [
 ];
 
 /**
- * A bash backend that connects through a fresh memory backend, carries its
- * git transports, and names the just-bash layout. `make` replaces or adds
+ * A bash backend that connects through a fresh memory backend, and names
+ * the just-bash layout. `make` replaces or adds
  * members, and gets the inner backend to connect through.
  */
 export function wrapped(
@@ -48,8 +48,7 @@ export function wrapped(
 ): BashBackend {
 	const inner = memoryBackend();
 	return {
-		connect: (agent, signal, services) => inner.connect(agent, signal, services),
-		gitTransports: inner.gitTransports,
+		connect: (agent, signal) => inner.connect(agent, signal),
 		layout: { audit: DEFAULT_AUDIT_LOG, rooms: '/rooms', snapshots: '/snapshots' },
 		...make(inner),
 	};

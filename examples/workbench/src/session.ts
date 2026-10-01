@@ -1,4 +1,4 @@
-import type { ExchangeView } from '@ambionframework/ambion';
+import type { Exchange } from '@ambionframework/ambion';
 import { attachCommand, type StagedAttachment } from './attachments.ts';
 import { attentionOf, newest, pick } from './attention.ts';
 import { FileBrowser } from './browser.ts';
@@ -214,7 +214,7 @@ export class Session {
 					.map((participant) => participant.name),
 			),
 			working: workingAgents(view),
-			activity: activity ? `${activity.agent ?? 'room'}: ${activity.text}` : undefined,
+			activity: activity ? `${activity.seat ?? 'room'}: ${activity.text}` : undefined,
 			expanded: this.expanded,
 			tail: this.tail(view),
 			failures: view.failures,
@@ -307,7 +307,7 @@ export class Session {
 			case 'try':
 				if (this.view?.prompt) return { type: 'compose', text: this.view.prompt };
 				return void this.say('This room has no suggested question.');
-			case 'abort':
+			case 'cancel':
 			case 'stop':
 			case 'resume':
 				return void (await this.control(name));
@@ -562,7 +562,7 @@ export class Session {
 		if (exchange) await this.showExchange(exchange);
 	}
 
-	private async showExchange(exchange: ExchangeView): Promise<void> {
+	private async showExchange(exchange: Exchange): Promise<void> {
 		const activation = newest(exchange);
 		if (!activation) return this.say('That exchange ran no activation.');
 		try {
