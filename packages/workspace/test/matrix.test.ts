@@ -23,8 +23,8 @@ import {
 	byAgent,
 	callTool,
 	quiet,
-	scriptedStream,
 	say,
+	scriptedStream,
 	toolNames,
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';

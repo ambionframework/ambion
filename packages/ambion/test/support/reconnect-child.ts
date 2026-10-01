@@ -15,7 +15,7 @@ import {
 } from '../../src/index.ts';
 import { fakeClock } from '../../src/testing.ts';
 import { messagesOf } from './room.ts';
-import { quiet, scriptedStream, say } from './scripted.ts';
+import { quiet, say, scriptedStream } from './scripted.ts';
 import { nodeSql } from './storage.ts';
 
 const [phase, directory] = process.argv.slice(2);

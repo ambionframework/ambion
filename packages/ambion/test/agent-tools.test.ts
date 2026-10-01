@@ -35,8 +35,8 @@ import {
 	callTool,
 	type PiScript,
 	quiet,
-	scriptedStream,
 	say,
+	scriptedStream,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';

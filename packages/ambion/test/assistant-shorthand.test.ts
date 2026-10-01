@@ -9,7 +9,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { isClosingContext, quiet, scriptedStream, say, toolNames } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream, toolNames } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 

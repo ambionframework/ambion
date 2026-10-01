@@ -9,7 +9,7 @@ import {
 import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import { around, serializing } from './support/ports.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { callTool, isClosingContext, quiet, scriptedStream, say } from './support/scripted.ts';
+import { callTool, isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 

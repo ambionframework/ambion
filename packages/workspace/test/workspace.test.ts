@@ -26,8 +26,8 @@ import {
 	byAgent,
 	callTool,
 	quiet,
-	scriptedStream,
 	say,
+	scriptedStream,
 } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';

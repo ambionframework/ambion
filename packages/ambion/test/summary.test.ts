@@ -41,6 +41,7 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	scriptedStream,
 	seat,
 	summarise,

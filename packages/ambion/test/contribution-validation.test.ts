@@ -25,7 +25,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { quiet, scriptedStream, say, toolResultTexts } from './support/scripted.ts';
+import { quiet, say, scriptedStream, toolResultTexts } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 

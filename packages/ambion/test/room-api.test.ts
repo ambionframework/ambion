@@ -29,8 +29,8 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scriptedStream,
 	say,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';

@@ -29,6 +29,7 @@ import {
 	contextText,
 	type PiScript,
 	quiet,
+	say,
 	scriptedStream,
 	seat,
 	toolNames,

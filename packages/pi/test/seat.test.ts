@@ -24,7 +24,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
-import { contextText, quiet, scriptedStream, say } from '../../ambion/test/support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 

@@ -28,7 +28,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { isClosingContext, quiet, scriptedStream, say } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	faultyJournals,

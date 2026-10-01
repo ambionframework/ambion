@@ -26,8 +26,8 @@ import {
 	later,
 	type PiScript,
 	quiet,
-	scriptedStream,
 	say,
+	scriptedStream,
 	toolResultTexts,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';

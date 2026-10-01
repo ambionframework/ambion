@@ -31,7 +31,7 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, isClosingContext, quiet, scriptedStream, say } from './support/scripted.ts';
+import { byAgent, isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, gatedJournals, memory, sqlite, storages } from './support/storage.ts';
 

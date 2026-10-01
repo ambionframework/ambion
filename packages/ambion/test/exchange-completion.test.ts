@@ -34,7 +34,6 @@ import {
 	say,
 	says,
 	scriptedStream,
-	say,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';

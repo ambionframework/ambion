@@ -25,7 +25,7 @@ import {
 } from '../src/index.ts';
 import { portExecution } from './support/ports.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
-import { isClosingContext, quiet, scriptedStream, say } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 

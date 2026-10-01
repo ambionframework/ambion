@@ -9,7 +9,7 @@ import { defineExecution } from '@ambionframework/ambion/hosting';
 import { createExecutionServices, piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { quiet, scriptedStream, say } from '../../ambion/test/support/scripted.ts';
+import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { createPiExecutor } from '../../pi/src/executor.ts';
 import { createClaudeExecutor } from '../src/executor.ts';

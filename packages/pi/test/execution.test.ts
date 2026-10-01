@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createRuntime, isSaid, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
-import { quiet, scriptedStream, say } from '../../ambion/test/support/scripted.ts';
+import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { memory } from '../../ambion/test/support/storage.ts';
 import { piExecution } from '../src/index.ts';

@@ -29,7 +29,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scriptedStream, say } from './support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 

@@ -28,7 +28,6 @@ import {
 	say,
 	says,
 	scriptedStream,
-	say,
 	summarise,
 	toolResultTexts,
 } from './scripted.ts';

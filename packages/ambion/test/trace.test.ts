@@ -44,7 +44,7 @@ import {
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, scriptedStream, say } from './support/scripted.ts';
+import { quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 

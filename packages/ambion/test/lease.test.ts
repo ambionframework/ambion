@@ -57,7 +57,6 @@ import {
 	say,
 	says,
 	scriptedStream,
-	say,
 	summarise,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
