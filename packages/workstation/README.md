@@ -160,7 +160,7 @@ The backend reports an explicit error when OpenSSH refuses a forward.
 **The git backend needs one more account and one `Match` block.**
 
 - **One git account, such as `lab-git`,** with a login shell of `bash`, a
-  home of mode `0700`, and no membership in the agents' group. The host's
+  home of mode `0700`, and no place in the agents' group. The host's
   key for it goes in `~/.ssh/authorized_keys`.
 - **A `Match` block, last in `sshd_config`,** that adds the file the
   backend writes:

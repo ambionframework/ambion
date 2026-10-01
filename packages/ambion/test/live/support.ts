@@ -31,13 +31,13 @@ import { collectSteps } from '../support/trace.ts';
 import {
 	executionFor,
 	executorFor,
-	HARNESS,
 	KEY_VAR,
+	LIVE_KIND,
 	MODEL,
 	REPORTS_COST,
-} from './support/harness.ts';
+} from './support/kind.ts';
 
-export { executionFor, executorFor, HARNESS, KEY_VAR, MODEL, REPORTS_COST };
+export { executionFor, executorFor, KEY_VAR, LIVE_KIND, MODEL, REPORTS_COST };
 
 /** `describe` when the key is set; a skipped block when it is not. */
 export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);

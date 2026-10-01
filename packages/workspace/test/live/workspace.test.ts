@@ -11,8 +11,8 @@ import type { TracedStep } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import {
 	agent,
-	HARNESS,
 	invariants,
+	LIVE_KIND,
 	live,
 	open,
 	person,
@@ -163,7 +163,7 @@ live('the workspace', () => {
 		const waits = callsOf(records, 'runner', 'wait');
 		const failed = waits.filter((call) => call.error !== undefined);
 		process.stdout.write(
-			`live · wait on ${HARNESS}: ${waits.length} calls, ${failed.length} failed: ` +
+			`live · wait on ${LIVE_KIND}: ${waits.length} calls, ${failed.length} failed: ` +
 				`${JSON.stringify(waits)}\n`,
 		);
 		expect(waits.length).toBeGreaterThanOrEqual(1);

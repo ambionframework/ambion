@@ -10,8 +10,8 @@ import { enter, messagesOf } from '../support/room.ts';
 import {
 	agent,
 	errorsIn,
-	HARNESS,
 	invariants,
+	LIVE_KIND,
 	live,
 	open,
 	person,
@@ -114,7 +114,7 @@ live('control', () => {
 		expect(answer?.seq ?? 0).toBeGreaterThan(second?.seq ?? Number.POSITIVE_INFINITY);
 		expect(answer?.text).toMatch(/friday/i);
 		// Codex takes no line into a live pass: its next pass reads the record.
-		if (HARNESS !== 'codex') {
+		if (LIVE_KIND !== 'codex') {
 			const steps = records.flatMap((r) => (r.step.activation === activation ? [r.step] : []));
 			expect(steps).toContainEqual(
 				expect.objectContaining({ type: 'steer', seq: second?.seq, consumed: true }),
