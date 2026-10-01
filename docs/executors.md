@@ -310,8 +310,8 @@ every family, and one view is one call over the wire.
 [Definitions and tools](agent.md#tools) states which tools an ordinary
 activation receives and which tools a closing activation receives.
 
-**The core binds the room tools once, in a form that names no harness.**
-Each family adapts them to its own tool shape.
+**The core binds the tools of the activation once, in a form that names no
+harness.** Each family adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
   grants, then the tools of the definition. A closing activation gets the
