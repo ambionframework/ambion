@@ -36,6 +36,19 @@ import {
 	truncateTail,
 } from '@earendil-works/pi-agent-core';
 
+/**
+ * The options of one command on a workspace shell: Pi's options, and the
+ * grace of a stop.
+ */
+export interface WorkspaceExecOptions extends ShellExecOptions {
+	/**
+	 * Seconds from `SIGTERM` to `SIGKILL` when an abort or the timeout stops
+	 * the command. Absent or 0, the stop sends `SIGKILL` at once. A backend
+	 * with no signals, such as just-bash, ends the command at once.
+	 */
+	grace?: number;
+}
+
 /** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
 export const DEFAULT_TIMEOUT_SECONDS = 30;
 
@@ -250,7 +263,7 @@ export interface ScriptRun extends ShellExecResult {
 export async function runScript(
 	env: Pick<ExecutionEnv, 'exec'>,
 	script: string,
-	options: Omit<ShellExecOptions, 'onUpdate'> | undefined,
+	options: Omit<WorkspaceExecOptions, 'onUpdate'> | undefined,
 	context: Context,
 ): Promise<Result<ScriptRun, ExecutionError>> {
 	let view: ShellOutputView | undefined;

@@ -24,6 +24,24 @@ refusal of a moved `main` in `workstationGitBackend` now reads
 after it. The path error of a shared repository now reads
 `The shared repository '<name>' holds the path ...`.
 
+**A stop gives a process time to clean up.** `cancel`, the timeout, a
+cancel by the host, and `dispose()` now send `SIGTERM` to the process
+group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a
+stop sent `SIGKILL` at once. The wrapper of a process installs
+`trap : TERM`, so it writes `exit` when the command ends inside the grace.
+A command that traps `TERM` and exits 0 reads `exited` with code 0 after
+a cancel or a timeout. A command that the `SIGTERM` ends, with code 143,
+reads the cause of the stop. `cancel` waits up to 15 seconds, the grace
+and 5 seconds. On just-bash a stop still ends the command at once.
+`@ambionframework/workspace` exports the type `WorkspaceExecOptions`: the
+exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
+workstation sends the two signals for an abort with a grace, and refuses
+a grace outside 0 to 2,147,483 seconds. `ProcessStatus` gains `stopping`,
+which is `true` while a process that the table stopped still runs. The
+workstation's command script adds `trap : TERM`. A channel that a signal
+ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
+prefix gave 128. No journal body changes.
+
 **One harness type, one `check`, and one case runner serve the conformance
 suites.** `@ambionframework/journal/conformance` exports three new parts:
 `check(condition, what)`, `ConformanceHarness<Subject>`, and

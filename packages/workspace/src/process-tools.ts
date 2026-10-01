@@ -200,10 +200,12 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and its new output. A process that takes over 10 seconds to stop still shows running.',
+				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after 10 seconds. A command can trap TERM, clean up, and exit in that time. A process that has not ended 15 seconds after the SIGTERM still shows running.',
 			parameters: handleSchema,
-			execute: async (params: HandleParams, ctx) =>
-				cancelled(await described(options, await table.cancel(ctx.agent, params.handle), ctx)),
+			execute: async (params: HandleParams, ctx) => {
+				const { status, stopped } = await table.cancel(ctx.agent, params.handle);
+				return cancelled(await described(options, status, ctx), stopped);
+			},
 		}),
 	]);
 }
@@ -390,11 +392,15 @@ function dropLine(ended: readonly ProcessStatus[]): string {
 
 /**
  * The result of `cancel`. A process that had ended before the cancel leads
- * with a line that says so: the cancel stopped nothing.
+ * with a line that says so: the cancel stopped nothing. A process that the
+ * stop ended can read `exited`, when its command ended inside the grace.
  */
-function cancelled(result: AgentToolResult<ProcessDetails>): AgentToolResult<ProcessDetails> {
+function cancelled(
+	result: AgentToolResult<ProcessDetails>,
+	stopped: boolean,
+): AgentToolResult<ProcessDetails> {
 	const { process } = result.details;
-	if (process.state === 'cancelled' || process.state === 'running') return result;
+	if (stopped || process.state === 'running') return result;
 	const lead = `Process ${process.handle} had ended before the cancel, so the cancel stopped nothing.`;
 	return { ...result, content: [{ type: 'text', text: `${lead}\n\n${textOf(result)}` }] };
 }
