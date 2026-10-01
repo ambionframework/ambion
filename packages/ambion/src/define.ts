@@ -27,12 +27,12 @@ export interface DefineAgentOptions {
 	identity: string;
 	/** The executor this agent runs on. Build one with the executor package, such as `pi()`. */
 	executor: Executor;
-	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE`. */
+	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE_POLICY`. */
 	trace?: TracePolicy;
 }
 
 /** The default trace policy: full tool output, and the start of each thinking block. */
-export const DEFAULT_TRACE: TracePolicy = Object.freeze({
+export const DEFAULT_TRACE_POLICY: TracePolicy = Object.freeze({
 	thinking: 'summary',
 	toolOutput: 'full',
 });
@@ -42,7 +42,7 @@ const TOOL_OUTPUT = new Set(['omit', 'full']);
 
 /** A policy checked and copied. Absent gives the default. */
 function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePolicy {
-	if (policy === undefined) return DEFAULT_TRACE;
+	if (policy === undefined) return DEFAULT_TRACE_POLICY;
 	if (!THINKING.has(policy.thinking))
 		throw new Error(`Agent '${agent}' trace.thinking must be omit, summary, or full.`);
 	if (!TOOL_OUTPUT.has(policy.toolOutput))

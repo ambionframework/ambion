@@ -30,7 +30,7 @@ import {
 	type FailureCause,
 	type HarnessSession,
 	type Message,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 	type Usage,
 } from './types.ts';
@@ -92,7 +92,7 @@ export interface ExecutorCaseReport {
 	readonly calls: readonly Call[];
 	/** What would not survive the wire, one line for each request or answer. */
 	readonly violations: readonly string[];
-	readonly records: readonly TraceRecord[];
+	readonly records: readonly TracedStep[];
 }
 
 interface Run {
@@ -443,7 +443,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 		const room = scriptedRoom(names.room, names.seat, one.room);
 		const activation = `message:1:${names.seat}:1`;
 		const events: ActivationEvent[] = [];
-		const records: TraceRecord[] = [];
+		const records: TracedStep[] = [];
 		const definition = defineAgent({
 			name: names.seat,
 			identity: 'Says a plan.',

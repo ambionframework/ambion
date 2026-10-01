@@ -21,7 +21,7 @@ import {
 	type RoomNotification,
 	type StartRoomOptions,
 	startRoom,
-	type TraceRecord,
+	type TracedStep,
 	type TraceStep,
 } from '@ambionframework/ambion';
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
@@ -81,7 +81,7 @@ export async function open(
 	options: RoomOptions & { execution?: Execution | readonly Execution[] } = {},
 ) {
 	const { execution, ...rest } = options;
-	const records: TraceRecord[] = [];
+	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),
 		execution: execution ?? codexExecution(),

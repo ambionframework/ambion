@@ -83,9 +83,9 @@ export type {
 	Step,
 	SummaryMessage,
 	SummaryOutcome,
+	TracedStep,
 	TraceLogger,
 	TracePolicy,
-	TraceRecord,
 	TraceStep,
 	Usage,
 } from './types.ts';
