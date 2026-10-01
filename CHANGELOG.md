@@ -75,6 +75,17 @@ they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
 tools that the definition does not name, and builds the tools of the
 definition from their `AmbionTool`s as before.
 
+**The Codex package tests the real `codex` binary on a scripted model.**
+`codex` accepts a custom model provider through its config. A local endpoint
+in `packages/codex/test/responses.ts` speaks the Responses API and plays a
+script of replies. `test/binary.test.ts` runs the bundled binary against it,
+in a temporary Codex home, with a minimal environment. It proves that a seat
+speaks through `say`, that the activation reports the usage of the endpoint,
+that the model sees the room tools, the tools of the seat, and the three
+MCP resource tools and no native tool, and that a second pass resumes the
+same thread. This tier runs in the unit tier and needs no key. The executor
+does not change.
+
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
 The core already held this function. The Pi executor held a second copy as
