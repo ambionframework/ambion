@@ -243,7 +243,7 @@ of sent to Priya. The ignored run evidence is under
       (LB6)
 - [x] **7.** No cycle of value imports. (LB7)
 - [x] **8.** The workspace owns its port. Needs 4. (LB8)
-- [x] **9.** The tests pass under full parallel load. (LB9, #PR)
+- [x] **9.** The tests pass under full parallel load. (LB9, #472)
 
 **Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
 one layer table and probes every pair of layers. A test fails on any cycle
@@ -569,7 +569,7 @@ reads its manifest and its production closure, and finds no
 workspace conformance, the backend suites, the matrix cases, and the SN35
 lifecycle on OpenSSH pass.
 
-**LB9. The tests pass under full parallel load.** #PR closed it. Five
+**LB9. The tests pass under full parallel load.** #472 closed it. Five
 tests failed in full parallel test runs on 2026-10-01 and passed alone.
 Each fix names its cause:
 
@@ -581,7 +581,7 @@ Each fix names its cause:
 | `examples/workbench/templates/actuator-controller/test/controller.test.mjs` ("the loop reaches the target") | A stop of the process at full power overshot the target. The loop then missed its 3 s deadline, or ended outside the tolerance. A stop with `SIGSTOP` reproduces both. | A stronger integral: the loop settles in 0.8 s. A deadline of 6 s holds a stop of 2 s.                                            |
 | `packages/just-bash/test/just-bash.test.ts` ("ends a change that the host asks for")                        | A shell loop wrote 300 files through the interpreter before the copy. It took three quarters of the test, and a loaded run passed 20 s.                                | The host writes the 300 files. The test takes 0.6 s alone, half of before.                                                        |
 
-**Evidence:** `turbo run test --force` passed four runs with four more
-busy processes, three runs on two cores, and one run on one core, and
-five runs in a row at the default concurrency. The test jobs of
-`.github/workflows/ci.yml` pass.
+**Evidence:** on `main` at #468 with this change, `turbo run test --force`
+passed five runs in a row on Linux at the default concurrency. Runs with
+busy processes, on one or two cores, and with `SIGSTOP` reproduced each
+failure before its fix. The test jobs of `.github/workflows/ci.yml` pass.
