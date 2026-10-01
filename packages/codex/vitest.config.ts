@@ -28,6 +28,9 @@ export const aliases = [
 	{ find: '@ambionframework/journal', replacement: source('../journal/src/index.ts') },
 	// The mixed-room live test is the one place that reads Pi, as a test dependency.
 	{ find: '@ambionframework/pi', replacement: source('../pi/src/index.ts') },
+	// The workspace tests give a Codex seat the workspace tools over the in-memory backend.
+	{ find: '@ambionframework/just-bash', replacement: source('../just-bash/src/index.ts') },
+	{ find: '@ambionframework/workspace', replacement: source('../workspace/src/index.ts') },
 ];
 
 export default defineConfig({

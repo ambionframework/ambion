@@ -80,7 +80,6 @@ function session(inner: ExecutorSession, seen: Seen): ExecutorSession {
 		get session() {
 			return inner.session;
 		},
-		...(inner.roomTools === undefined ? {} : { roomTools: inner.roomTools }),
 		pass: async (pass) => {
 			const { spec, through } = pass.view;
 			const entry: Record<string, unknown> = {

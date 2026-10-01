@@ -254,8 +254,8 @@ export async function scratchFor(
 	const entry = await source(model);
 	if (entry === undefined) {
 		throw new PermanentError(
-			`The model '${model}' has no entry in the Codex catalog, and nativeTools 'none' needs one. ` +
-				`Set nativeTools: 'codex', or use a model that 'codex debug models' lists.`,
+			`The model '${model}' has no entry in the Codex catalog, and a Codex seat needs one. ` +
+				`Use a model that 'codex debug models' lists.`,
 		);
 	}
 	return new Scratch(entry, instructions);

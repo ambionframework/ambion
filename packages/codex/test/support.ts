@@ -32,7 +32,7 @@ import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { createCodexExecutor } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
-import { type CodexTool, citing, servedTools } from '../src/tools.ts';
+import { type CodexTool, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
 
 /** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
@@ -282,8 +282,6 @@ export interface Connected {
 	readonly readThrough: () => number;
 	/** Whether the activation was cut. */
 	readonly aborted: () => boolean;
-	/** Paths the agent changed, as Codex reports them. The next ordinary say cites them. */
-	note(paths: readonly string[]): void;
 	close(): Promise<void>;
 }
 
@@ -296,15 +294,12 @@ const noTrace: StepSink = {
  * Codex executor serves them. The pass reads the view and runs no model.
  */
 async function bindTools(room: RoomProtocol, view: ActivationView, definition: AgentDefinition) {
-	const changed = new Set<string>();
-	const ordinary = view.spec.purpose.kind !== 'summarize';
 	let served: CodexTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
 	const executor: Executor = (activation) => {
 		signal = activation.signal;
 		return {
-			roomTools: citing(changed, () => ordinary),
 			pass: async (pass) => {
 				activation.read({ after: 0, through: pass.view.through });
 				served = servedTools(pass.tools, {
@@ -323,7 +318,7 @@ async function bindTools(room: RoomProtocol, view: ActivationView, definition: A
 		trace: noTrace,
 	});
 	await state.pass({ kind: 'view', view });
-	return { state, served, signal, changed };
+	return { state, served, signal };
 }
 
 /** Start the bridge for one activation, and connect an MCP client to the server it spawns. */
@@ -332,7 +327,7 @@ export async function connect(
 	view: ActivationView = viewOf(),
 	definition: AgentDefinition = seat(),
 ): Promise<Connected> {
-	const { state, served, signal, changed } = await bindTools(room, view, definition);
+	const { state, served, signal } = await bindTools(room, view, definition);
 	const bridge = await startBridge(served, signal);
 	const client = new Client({ name: 'test', version: '0.0.0' });
 	await client.connect(
@@ -347,9 +342,6 @@ export async function connect(
 		bridge,
 		readThrough: () => state.readThrough,
 		aborted: () => state.cancelled,
-		note: (paths) => {
-			for (const path of paths) changed.add(path);
-		},
 		close: async () => {
 			await client.close();
 			bridge.close();

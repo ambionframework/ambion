@@ -268,13 +268,6 @@ owns each form, and a resource makes the thing it names.
 Sensor evidence in 0.5.0 uses existing snapshot refs. **Condition:** an
 agent needs a reference whose meaning an existing snapshot cannot carry.
 
-**D14. A Codex seat cites its changes with snapshots.** The Codex executor
-cites each file that a completed patch changed as a `file:` URI of the
-host path ([Codex](../docs/codex.md)). A seat whose working directory is a
-workspace can snapshot each file, so its refs keep their bytes and match
-the refs of Pi and Claude seats. **Condition:** a Codex seat over a
-workspace directory with native tools on.
-
 **D15. Objects past 5 GiB, and a stream through the ports.** One object is
 one S3 PutObject, 5 GiB, and a snapshot holds the whole file in memory:
 the bash port reads whole buffers. A larger object needs a multipart
@@ -300,10 +293,10 @@ of these.
 
 ### For tools and authors
 
-**D17. An `apply_patch` tool for Codex seats.** A Codex seat under
-`nativeTools: 'none'` edits files through the workspace `edit` tool, a
-block-replace tool built for Pi. The Codex catalog patch removes
-`apply_patch`, the tool that Codex models are trained to call.
+**D17. An `apply_patch` tool for Codex seats.** A Codex seat edits files
+through the workspace `edit` tool, a block-replace tool built for Pi. The
+Codex catalog patch removes `apply_patch`, the tool that Codex models are
+trained to call.
 `@openai/agents-core` exports `applyDiff`, a pure MIT function that applies
 one file section of the patch grammar with no file I/O. The tool adds an
 envelope parser for `Add File`, `Delete File`, `Update File`, and `Move
