@@ -121,10 +121,20 @@ export function loggedToolResult(value: unknown): unknown {
 	return { ...value, content: value.content.map(loggedContentPart) };
 }
 
+/**
+ * An image part with its bytes replaced by their count. A part carries the
+ * bytes in `data`, or in `source.data` in the shape of the Anthropic API that
+ * the Claude executor logs.
+ */
 function loggedContentPart(part: unknown): unknown {
-	if (!isRecord(part) || part.type !== 'image' || typeof part.data !== 'string') return part;
-	const { data, ...rest } = part;
-	return { ...rest, bytes: base64Bytes(data) };
+	if (!isRecord(part) || part.type !== 'image') return part;
+	if (typeof part.data === 'string') {
+		const { data, ...rest } = part;
+		return { ...rest, bytes: base64Bytes(data) };
+	}
+	if (!isRecord(part.source) || typeof part.source.data !== 'string') return part;
+	const { data, ...source } = part.source;
+	return { ...part, source: { ...source, bytes: base64Bytes(data) } };
 }
 
 class Trace implements TraceSink {

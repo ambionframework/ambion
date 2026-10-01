@@ -157,6 +157,14 @@ describe('loggedToolResult', () => {
 			{ type: 'text', text: 'Read image file [image/png]' },
 			{ type: 'image', mimeType: 'image/png', bytes: 3 },
 		]);
+		// The Claude executor logs an image in the shape of the Anthropic API.
+		const anthropic = {
+			type: 'image',
+			source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
+		};
+		expect(loggedToolResult([anthropic])).toEqual([
+			{ type: 'image', source: { type: 'base64', media_type: 'image/png', bytes: 3 } },
+		]);
 	});
 
 	it('leaves a value with no content array unchanged', () => {

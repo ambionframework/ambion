@@ -84,7 +84,8 @@ no image input stays text-only, and Codex shows a placeholder.
 `loggedToolResult` replaced the bytes of an image with their count only in
 the `content` array of a record. The Claude and Codex executors log the
 content parts with no record, so their images went into the log whole. The
-function now takes the array as well.
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
 **`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
 describes one activation. The main entry and the hosting entry export the
 new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
