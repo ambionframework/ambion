@@ -6,12 +6,14 @@
  */
 import { defineAgent, isSpoken, type Room, startRoom } from '@ambionframework/ambion';
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import { createExecutionServices, createPiExecutor, piExecution } from '@ambionframework/pi';
+import { createExecutionServices, piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { claude, claudeExecution, createClaudeExecutor } from '../src/index.ts';
+import { createPiExecutor } from '../../pi/src/executor.ts';
+import { createClaudeExecutor } from '../src/executor.ts';
+import { claude, claudeExecution } from '../src/index.ts';
 import { executable } from './support.ts';
 
 const agents = [

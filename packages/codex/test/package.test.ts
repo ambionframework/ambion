@@ -9,7 +9,7 @@ const manifestOf = (path: string): Manifest =>
 	JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 
 it('exports the executor, its execution and nothing else, and pins the two SDKs to exact versions', () => {
-	expect(Object.keys(entry).sort()).toEqual(['codex', 'codexExecution', 'createCodexExecutor']);
+	expect(Object.keys(entry).sort()).toEqual(['codex', 'codexExecution']);
 	const dependencies = manifestOf('../package.json').dependencies ?? {};
 	expect(dependencies['@openai/codex-sdk']).toMatch(/^\d+\.\d+\.\d+$/);
 	expect(dependencies['@modelcontextprotocol/sdk']).toMatch(/^\d+\.\d+\.\d+$/);

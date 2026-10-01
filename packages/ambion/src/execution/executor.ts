@@ -84,7 +84,7 @@ export type Pass = PassInput & {
 	 * when no message is new, and the core then counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
-	/** The id of the harness session to resume: `spec.resume`, when it names the harness of the executor. */
+	/** The id of the harness session to resume: `spec.resume`, when it names the kind of the executor. */
 	readonly resume?: string;
 	/** The room tools that the purpose grants, bound to the activation. Every pass holds the same values. */
 	readonly tools: readonly RoomTool[];
@@ -113,8 +113,9 @@ export interface PassResult {
 export interface ExecutorSession {
 	/**
 	 * The id of the harness session to record with the release, read after
-	 * the last pass. The room hands it to the seat's next activation in the
-	 * same exchange as `spec.resume`. It never reads the id.
+	 * the last pass. The core records it under the executor kind. The room
+	 * hands it to the seat's next activation in the same exchange as
+	 * `spec.resume`. It never reads the id.
 	 */
 	readonly session?: string;
 	/** What the executor adds to a say and a schedule. The core reads it once, on the first pass. */
@@ -139,12 +140,9 @@ export interface ExecutorSession {
 	close?(): void;
 }
 
-/** Builds sessions for one seat's activations. One executor per seat, for its whole lifetime. */
-export interface Executor {
-	/**
-	 * The harness whose sessions the executor records and resumes, such as
-	 * `pi`. The release records `{ harness, id }`. Absent when it keeps none.
-	 */
-	readonly harness?: string;
-	open(activation: ExecutorActivation): ExecutorSession;
-}
+/**
+ * Opens the session of one activation of one seat. One executor per seat,
+ * for its whole lifetime. The core records and resumes harness sessions
+ * under the seat's executor kind, `definition.executor.kind`.
+ */
+export type Executor = (activation: ExecutorActivation) => ExecutorSession;

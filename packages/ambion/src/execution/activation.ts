@@ -47,7 +47,6 @@ interface Tools {
 export class ActivationState {
 	readonly id: string;
 	private readonly input: ActivationInput;
-	private readonly harness: string | undefined;
 	private readonly freshness = new Freshness();
 	private readonly cut = new AbortController();
 	private readonly executor: ExecutorSession;
@@ -58,12 +57,11 @@ export class ActivationState {
 	constructor(executor: Executor, input: ActivationInput) {
 		this.id = input.id;
 		this.input = input;
-		this.harness = executor.harness;
 		const calls = new ToolCalls(input.id, (type, toolName) =>
 			input.emit({ type, agent: input.definition.name, activation: input.id, toolName }),
 		);
 		const freshness = this.freshness;
-		this.executor = executor.open({
+		this.executor = executor({
 			id: input.id,
 			trace: calls.watching(input.trace),
 			signal: this.cut.signal,
@@ -89,9 +87,7 @@ export class ActivationState {
 	/** The harness session to record with the release, when the executor reported one. */
 	get session(): HarnessSession | undefined {
 		const id = this.executor.session;
-		return this.harness === undefined || id === undefined
-			? undefined
-			: { harness: this.harness, id };
+		return id === undefined ? undefined : { harness: this.input.definition.executor.kind, id };
 	}
 
 	/** Whether the record stands past what the model read. A cut activation answers no. */
@@ -153,7 +149,7 @@ export class ActivationState {
 	private passOf(input: PassInput): Pass {
 		const { view } = input;
 		const tools = this.toolsOf(view);
-		const resume = this.harness === undefined ? undefined : sessionToResume(view, this.harness);
+		const resume = sessionToResume(view, this.input.definition.executor.kind);
 		return {
 			...input,
 			...renderSystem(view, this.input.definition),

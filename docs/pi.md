@@ -24,7 +24,7 @@ Use Pi when the loop runs in the host process and the agent needs:
 - **Steering during a pass.** A line that lands mid-activation reaches the
   model through the steer queue of the harness lane.
 - **A host that runs seats apart from the room.** The Cloudflare adapter
-  builds its seats on `createPiExecutor` and `createExecutionServices`.
+  builds its seats on `piExecution`.
 - **A deterministic test.** A scripted stream replaces the provider.
 
 Use [the Claude executor](claude.md) when the agent needs the built-in tools

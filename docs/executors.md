@@ -99,14 +99,15 @@ fact of it, so no executor keeps a copy.
 | The prompt                       | It renders `mechanism`, `agent`, and the record of each pass.                              |
 | The tool events                  | It raises them from the `tool_call` and `tool_result` steps.                               |
 | The `error` event                | It raises one event for each failed pass.                                                  |
-| The resume token                 | It reads `spec.resume` when it names the harness of the executor.                          |
+| The resume token                 | It reads `spec.resume` when it names the kind of the executor.                             |
 
 **An executor keeps its harness alone.** It maps the harness events to
 steps, resumes a harness session, hosts the tools, and reports the signal
 that the model consumed input.
 
-**`open` receives what serves the whole activation.** `ExecutorActivation`
-holds these members:
+**An executor is a function of the activation.** It takes an
+`ExecutorActivation` and returns an `ExecutorSession`. The activation
+holds what serves the whole activation, in these members:
 
 | Member            | What it is                                                                              |
 | ----------------- | --------------------------------------------------------------------------------------- |
@@ -127,7 +128,7 @@ members:
 | `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
 | `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
 | `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
-| `resume`        | The id of the harness session to resume, when `spec.resume` names the harness.                 |
+| `resume`        | The id of the harness session to resume, when `spec.resume` names the executor kind.           |
 | `tools`         | The room tools that the purpose grants, bound to the activation.                               |
 | `agentTools`    | The tools of the definition in the same form. A closing activation gets none.                  |
 
@@ -141,8 +142,9 @@ members:
 | `steer?(after, seq, line)` | Takes a line into a live pass. Absent when the family cannot.                       |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
-`Executor.harness` names the harness whose sessions the executor records,
-such as `pi`. The release records `{ harness, id }`.
+**The core records the session under the executor kind.** The release
+records `{ harness, id }`, where `harness` is `definition.executor.kind`,
+such as `pi`. A session that reports no `session` records none.
 
 **`pass` returns a `PassResult`.** It has these members:
 
@@ -160,7 +162,7 @@ points.
 - **A pass that the cut ends reports no failure.** The cut aborts `signal`,
   and the pass returns `failed: false`.
 - **The core reads `roomTools` once, before the first pass.** Set it on the
-  session that `open` returns. A later change reaches no tool.
+  session that the executor returns. A later change reaches no tool.
 - **The core reads `session` after the last pass.** Keep the id of the
   harness session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.
@@ -433,8 +435,8 @@ the cap applies. The sum holds when the host passes no logger.
 ## The trace log
 
 **The trace goes to the host's logger.** The driver opens a `TraceSink` for
-each activation, and passes the executor its `record` at `open`, as a
-`StepSink`. The driver keeps the passes, the usage, and the close. The sink
+each activation, and passes the executor its `record` with the
+activation, as a `StepSink`. The driver keeps the passes, the usage, and the close. The sink
 gives each step to the `logger` that the host passes to `createRuntime`, as
 one `TraceRecord`: `room`, `seat`, and the stamped step. With no logger, the
 sink drops the steps. The record and the trace never share an entry.
@@ -484,7 +486,7 @@ exchange it summarizes. The room never reads the id. There is no option:
 every executor works this way.
 
 **An executor resumes only the session that `pass.resume` names.** The core
-sets `pass.resume` only when `spec.resume` names the harness of the
+sets `pass.resume` only when `spec.resume` names the kind of the
 executor. With no `pass.resume` the executor starts a fresh session.
 [Pi](pi.md#exchange-continuity) keeps each session of a seat apart, so the
 open exchange runs beside the summary of the exchange before it.
@@ -583,9 +585,10 @@ An adapter is a package that builds an `Execution` and an executor for one
 family. `@ambionframework/claude` is the worked example, and
 `@ambionframework/pi` is the second family.
 
-1. **Implement `Executor` and `ExecutorSession`.** `open` takes the
-   activation and returns a session. Keep the model loop for one activation
-   inside the session. Name the harness in `Executor.harness`.
+1. **Implement `Executor` and `ExecutorSession`.** The executor is a
+   function that takes the activation and returns a session. Keep the model
+   loop for one activation inside the session. The core records the session
+   under the executor kind of the seat.
 2. **Place the prompt.** Put `pass.mechanism` and `pass.agent` where the
    harness caches them, and send the text of `pass.record()`.
    [The prompt the core renders](#the-prompt-the-core-renders) states the

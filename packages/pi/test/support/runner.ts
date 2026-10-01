@@ -19,7 +19,8 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { scriptedAgent, tick } from '../../../ambion/test/support/room.ts';
 import { quiet, scripted } from '../../../ambion/test/support/scripted.ts';
-import { createExecutionServices, createPiExecutor, type ModelResolver } from '../../src/index.ts';
+import { createPiExecutor } from '../../src/executor.ts';
+import { createExecutionServices, type ModelResolver } from '../../src/index.ts';
 import { noTraces } from './trace.ts';
 
 export const worker = scriptedAgent('worker');

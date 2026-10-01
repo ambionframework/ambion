@@ -244,9 +244,7 @@ class ScriptedSession implements ExecutorSession {
  */
 export function scriptedExecutor(script: Script, definition: AgentDefinition): Executor {
 	const counts = new Map<string, number>();
-	return {
-		open: (activation) => new ScriptedSession(activation, definition, script, counts),
-	};
+	return (activation) => new ScriptedSession(activation, definition, script, counts);
 }
 
 /**
@@ -258,9 +256,11 @@ export function scripted(script: Script): Execution {
 	return {
 		connector(host) {
 			const counts = new Map<string, number>();
-			return localConnector(host, (request) => ({
-				open: (activation) => new ScriptedSession(activation, request.definition, script, counts),
-			}));
+			return localConnector(
+				host,
+				(request) => (activation) =>
+					new ScriptedSession(activation, request.definition, script, counts),
+			);
 		},
 	};
 }

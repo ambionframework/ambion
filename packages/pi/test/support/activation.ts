@@ -64,14 +64,12 @@ export async function boundActivation(
 	view: ActivationView,
 ): Promise<{ state: ActivationState; tools: readonly RoomTool[] }> {
 	let tools: readonly RoomTool[] = [];
-	const executor = {
-		open: () => ({
-			pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
-				tools = pass.tools;
-				return { failed: false };
-			},
-		}),
-	};
+	const executor = () => ({
+		pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
+			tools = pass.tools;
+			return { failed: false };
+		},
+	});
 	const state = new ActivationState(executor, {
 		id,
 		room,

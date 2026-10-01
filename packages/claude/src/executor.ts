@@ -60,12 +60,7 @@ export interface ClaudeExecutorOptions extends ClaudeRuntime {
 
 /** The Claude executor. One instance per seat, for as long as the room runs. */
 export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	return {
-		harness: 'claude',
-		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options);
-		},
-	};
+	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
 }
 
 /** A steered line held until its pass starts. */

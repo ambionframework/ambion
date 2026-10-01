@@ -82,12 +82,8 @@ interface Seat {
 /** The Pi executor. One instance per seat, for as long as the room runs. */
 export function createPiExecutor(options: PiExecutorOptions): Executor {
 	const seat: Seat = { sessions: options.sessions ?? memorySessions(), closing: new Map() };
-	return {
-		harness: 'pi',
-		open(activation: ExecutorActivation): ExecutorSession {
-			return new Activation(activation, options, seat);
-		},
-	};
+	return (activation: ExecutorActivation): ExecutorSession =>
+		new Activation(activation, options, seat);
 }
 
 /** A steered line held until its pass prompts the lane. */

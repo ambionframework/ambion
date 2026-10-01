@@ -13,7 +13,7 @@ import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import type { CommitRequest, RoomProtocol, StepSink } from '../../../ambion/src/hosting.ts';
 import { isSpoken, type Step } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
-import { createClaudeExecutor } from '../../src/index.ts';
+import { createClaudeExecutor } from '../../src/executor.ts';
 import { viewOf } from '../support.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
