@@ -10,7 +10,7 @@
  * is checked by the exit status of `git push`: the text of a refusal
  * differs from one backend to the other.
  *
- * The suite knows no transport. Three cases touch a credential, and each
+ * The suite knows no access type. Three cases touch a credential, and each
  * asks a hook of the harness for the fact it checks. The package that
  * pairs the git backend with its bash backend implements the hooks.
  *

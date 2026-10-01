@@ -2,7 +2,7 @@
  * The integration tier of `workstationGitBackend`: the git account
  * `lab-git` and the agents on OpenSSH. Only a real `sshd` honors the
  * options of a line in `authorized_keys.ambion`, so this tier runs
- * `gitConformance`, with the hooks of the `ssh` transport. The expiry case
+ * `gitConformance`, with the hooks of the `ssh` access. The expiry case
  * of the suite proves that `sshd` refuses a key after its `expiry-time`.
  * The tier also proves that an agent key opens no shell, that `serve`
  * refuses a request outside its pattern, that no agent reads the git

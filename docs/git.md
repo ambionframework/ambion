@@ -88,8 +88,8 @@ that is still in the home, or it clones the fork again
 ## The contract
 
 **`git` is a third backend kind, beside `bash` and `sql`.** The
-`WorkspaceBackends` of [Workspace](workspace.md#query-the-shared-database)
-gets an optional `git` key. A workspace with no git backend has no `repos`
+`BashBackend` of [Workspace](workspace.md#query-the-shared-database) gets an
+optional `git`. A workspace with no git backend has no `repos`
 tool and no `fork` tool, and its shell keeps the local `git` it has today.
 
 **The root entry of `@ambionframework/workspace` holds the contract.** It
@@ -187,7 +187,8 @@ of the same package reads it, so `GitBackend` in the core holds no
 `access`.
 
 **`BashBackend.git` is the git backend of the workspace.** The bash
-backend sets it from its option.
+backend sets it from its option. A bash backend of another package sets
+`git` the same way, and reads the access that its own git backend defines.
 
 ```ts
 interface BashBackend {

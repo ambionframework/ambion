@@ -638,7 +638,9 @@ Only the `workstation` CI job runs this tier
 **The OpenSSH harness starts each case with an empty git account.** Before
 each `open()`, it removes `~lab-git/repos` and
 `~lab-git/.ssh/authorized_keys.ambion`, as the harness of the tier already
-removes the files of each agent's home.
+removes the files of each agent's home. It wipes through a second
+`workstationBackend` with no `git`, so the connect of the git account writes
+no key.
 
 **The scripted tier tests the parts without `sshd`.**
 

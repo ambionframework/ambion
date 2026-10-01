@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty-three reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-four reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                         | Files                                    |
@@ -57,6 +57,7 @@ changelog names each change to an export and to a behavior.
 | One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
 | One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `processes.ts`, `sensor-connections.ts`  |
 | The schema is the one source of a body (K6)  | 18 hand-written body types, the third ended lease in `LeaseRequest`      | `bodies.ts`                              |
+| The bash backend takes its git backend (B2)  | `BashServices`, `gitTransports`, the transport check, `GitAccess`, casts | `workspace/src/backend.ts`               |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -205,7 +206,7 @@ the same promise twice, so each call has a purpose and no work repeats.
 | ID  | Finding                                                           | Evidence                                                           | Removes | Conf.  | Rank |
 | --- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
 | B1  | Repository registration is one state machine written twice (done) | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
-| B2  | A transport pairing guards a mismatch that one factory prevents   | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
+| B2  | A transport pairing guards a mismatch that one factory prevents (done) | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
 | B3  | The file adapter skeleton is written twice (done)                 | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
 | B4  | Git constants repeat (done)                                       | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
 

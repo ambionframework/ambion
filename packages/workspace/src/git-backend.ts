@@ -3,9 +3,9 @@
  * backend.
  *
  * Every workspace has a bash backend. A git backend is optional. The bash
- * backend takes the git backend as an option of its own package, and it
- * reads the access of that git backend, so the `git` of each agent reaches
- * the repositories. A type of the package checks the pair: a git backend of
+ * backend takes the git backend as an option of its own package. It reads
+ * the access of that git backend. The `git` of each agent then reaches the
+ * repositories. A type of the package checks the pair: a git backend of
  * another package is a compile error. When the bash backend has a git
  * backend in `git`, the `repos`, `clone` and `fork` tools use it under an
  * owner of its own. `clone` looks up its source there, then checks it out on

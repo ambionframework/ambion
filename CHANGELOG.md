@@ -5,7 +5,7 @@
 **A bash backend takes its git backend, and the types check the pair.**
 `memoryBackend` takes `git` in its options, and `directoryBackend(root,
 options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
-`WorkstationOptions` gets `git`, a new exported type
+`WorkstationOptions` gets `git`, of the new exported type
 `WorkstationGitBackend`. `BashBackend` gets `readonly git?: GitBackend`, and
 `openWorkspace` opens `bash.git` under its own owner. A git backend of
 another package is now a compile error. Each bash backend reads the access
