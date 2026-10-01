@@ -118,8 +118,9 @@ The workspace tools share these rules:
   process that ended badly gives its output and its state line. A refused
   statement names the database and the fault. An unknown handle names
   `bash`, which returns the handle.
-- **The file tools are Pi's.** `read`, `write`, and `edit` report a bad
-  path as a tool error, as Pi does.
+- **The workspace implements the file tools.** `read`, `write`, and `edit`
+  run over the port of the bash backend. They report a bad path as a tool
+  error.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';

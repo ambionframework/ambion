@@ -4,7 +4,7 @@
  * to a short notice when the full entry will not serialize or will not fit.
  * The entry a call through a running room writes is in `workspace.test.ts`.
  */
-import type { AmbionTool } from '@ambionframework/ambion';
+import { type AmbionTool, defineTool } from '@ambionframework/ambion';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
@@ -13,7 +13,7 @@ import { memoryBackend } from '../../just-bash/src/index.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
 import { openWorkspace, type Workspace } from '../src/index.ts';
-import { audited, bindTools } from '../src/tools.ts';
+import { audited } from '../src/tools.ts';
 import { callAs, invokeText, toolOf } from './support/backends.ts';
 
 const ctx = BACKGROUND_CONTEXT;
@@ -169,40 +169,32 @@ describe('the workspace audit log', () => {
 
 	it('records an error, and still throws it to the caller, for a call that fails and for a call the caller cuts mid-flight', async () => {
 		const started = Promise.withResolvers<void>();
-		const tool = (name: string, execute: (...args: never[]) => Promise<never>) => ({
-			name,
-			label: name,
-			description: `The ${name} tool.`,
-			parameters: Type.Object({}),
-			execute,
-		});
 		const site = auditedSite();
-		const bound = bindTools(
-			[
-				tool('explode', async () => {
-					throw new Error('kaboom');
-				}),
-				tool(
-					'slow',
-					async (
-						_id: string,
-						_params: unknown,
-						_onUpdate: unknown,
-						_toolContext: unknown,
-						_invocation: unknown,
-						context: { abortSignal?: AbortSignal },
-					) => {
+		const bound = [
+			defineTool({
+				name: 'explode',
+				description: 'The explode tool.',
+				parameters: Type.Object({}),
+				execute: () =>
+					site.use(scribe, async () => {
+						throw new Error('kaboom');
+					}),
+			}),
+			defineTool({
+				name: 'slow',
+				description: 'The slow tool.',
+				parameters: Type.Object({}),
+				execute: (_params, call) =>
+					site.use(scribe, async () => {
 						started.resolve();
 						return new Promise<never>((_resolve, reject) => {
 							const cut = () => reject(new Error('cut mid-flight'));
-							if (context.abortSignal?.aborted) cut();
-							context.abortSignal?.addEventListener('abort', cut, { once: true });
+							if (call.signal?.aborted) cut();
+							call.signal?.addEventListener('abort', cut, { once: true });
 						});
-					},
-				),
-			],
-			site.use,
-		).map((bare) => audited(bare, site.use, openAuditLog()));
+					}),
+			}),
+		].map((bare) => audited(bare, site.use, openAuditLog()));
 		const tools = { tools: () => ({ tools: bound }) };
 		await expect(
 			toolOf(tools, 'explode').invoke({}, callAs('scribe', { callId: 'call-2', room: 'lobby' })),
@@ -289,30 +281,23 @@ describe('audited', () => {
 		const appended: string[] = [];
 		let written: unknown;
 		const site = auditedSite();
-		const [slowWrite] = bindTools(
-			[
-				{
-					name: 'slow-write',
-					label: 'slow-write',
-					description: 'Write a file once released.',
-					parameters: Type.Object({}),
-					execute: async (
-						_id: string,
-						_params: unknown,
-						_onUpdate: unknown,
-						toolContext: { env: WorkspaceEnv },
-					) => {
+		const slowWrite = defineTool({
+			name: 'slow-write',
+			description: 'Write a file once released.',
+			parameters: Type.Object({}),
+			execute: (_params, call) =>
+				site.use(
+					scribe,
+					async (env) => {
 						started.resolve();
 						await release.promise;
-						await toolContext.env.writeFile('/home/scribe/late.txt', 'written', ctx);
-						written = await toolContext.env.readTextFile('/home/scribe/late.txt', ctx);
-						return { content: [{ type: 'text' as const, text: 'done' }], details: {} };
+						await env.writeFile('/home/scribe/late.txt', 'written', ctx);
+						written = await env.readTextFile('/home/scribe/late.txt', ctx);
+						return 'done';
 					},
-				},
-			],
-			site.use,
-		);
-		if (slowWrite === undefined) throw new Error('The bound tool is missing.');
+					call.signal,
+				),
+		});
 		const inner = openAuditLog({ onError: (error) => errors.push(error) });
 		const log = {
 			...inner,
@@ -328,7 +313,7 @@ describe('audited', () => {
 		await started.promise;
 		const disposing = site.dispose();
 		release.resolve();
-		expect(await call).toMatchObject({ content: [{ text: 'done' }] });
+		expect(await call).toBe('done');
 		await disposing;
 
 		expect(errors).toHaveLength(1);

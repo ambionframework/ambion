@@ -9,11 +9,7 @@
  * skill works the same on every executor. The design contract is
  * `docs/skills.md`.
  */
-import {
-	type Context,
-	type ExecutionEnv,
-	formatSkillsForSystemPrompt,
-} from '@earendil-works/pi-agent-core';
+import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { parse } from 'yaml';
 import { shellQuote } from './execution-env.ts';
 import { hashesOf, readSource, type SourceFiles, type SourceInput } from './sources.ts';
@@ -178,13 +174,52 @@ export function skillSetOf(skills: unknown): SkillSet {
 	return skills as SkillSet;
 }
 
+/** One skill of the guidance: its name, its description, and the path of its file. */
+interface ListedSkill {
+	readonly name: string;
+	readonly description: string;
+	readonly filePath: string;
+}
+
+function escapeXml(text: string): string {
+	return text
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&apos;');
+}
+
+/**
+ * The list of skills for a system prompt, as XML. It derives from the skill
+ * list of the agent harness of Pi (earendil-works/pi, MIT License, Mario
+ * Zechner). No skills give an empty text.
+ */
+function formatSkills(skills: readonly ListedSkill[]): string {
+	if (skills.length === 0) return '';
+	return [
+		'The following skills provide specialized instructions for specific tasks.',
+		'Read the full skill file when the task matches its description.',
+		'When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
+		'',
+		'<available_skills>',
+		...skills.flatMap((skill) => [
+			'  <skill>',
+			`    <name>${escapeXml(skill.name)}</name>`,
+			`    <description>${escapeXml(skill.description)}</description>`,
+			`    <location>${escapeXml(skill.filePath)}</location>`,
+			'  </skill>',
+		]),
+		'</available_skills>',
+	].join('\n');
+}
+
 /** The guidance that lists the skills of `set` at their place in the agent's home. */
 export function skillGuidance(set: SkillSet): string {
-	const listed = formatSkillsForSystemPrompt(
+	const listed = formatSkills(
 		set.skills.map((skill) => ({
 			name: skill.name,
 			description: skill.description,
-			content: '',
 			filePath: `${SKILLS_HOME}/${skill.name}/SKILL.md`,
 		})),
 	);

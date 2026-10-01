@@ -1,14 +1,14 @@
 /**
  * The resource and its lifecycle: the neutral contract over a backend
- * with no Pi types, the queue that direct use and bound tools share, and
+ * with no Pi types, the queue that direct use and tools share, and
  * disposal that drains active work, revokes queued work, and stays terminal.
  */
+import { defineTool } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace } from '../src/index.ts';
 import { openResource, type ResourceBackend, type ResourceEnv } from '../src/resource.ts';
-import { bindTools } from '../src/tools.ts';
 import { wrapped } from './support/backends.ts';
 
 const alpha = { name: 'alpha' };
@@ -86,32 +86,27 @@ describe('workspace lifecycle', () => {
 		expect(disposes).toBe(1);
 	});
 
-	it('shares queue and revocation between direct use and bound tools', async () => {
+	it('shares queue and revocation between direct use and tools', async () => {
 		const started = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		let toolCalls = 0;
 		const workspace = openWorkspace({ name: 'shared-owner', backend: { bash: wrapped() } });
-		const [bound] = bindTools(
-			[
-				{
-					name: 'inspect',
-					label: 'Inspect',
-					description: 'Inspect the workspace.',
-					parameters: Type.Object({}),
-					execute: async () => {
-						toolCalls += 1;
-						return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
-					},
-				},
-			],
-			workspace.use,
-		);
+		const bound = defineTool({
+			name: 'inspect',
+			label: 'Inspect',
+			description: 'Inspect the workspace.',
+			parameters: Type.Object({}),
+			execute: (_params, ctx) =>
+				workspace.use(ctx.agent, () => {
+					toolCalls += 1;
+					return 'called';
+				}),
+		});
 		const active = workspace.use(alpha, async () => {
 			started.resolve();
 			await release.promise;
 		});
 		await started.promise;
-		if (bound === undefined) throw new Error('The bound tool is missing.');
 		const queued = bound.invoke(
 			{},
 			{ agent: { name: 'beta', identity: 'beta' }, callId: 'queued' },
