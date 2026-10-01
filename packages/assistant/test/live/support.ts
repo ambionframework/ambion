@@ -5,7 +5,8 @@
  *
  * `AMBION_MODEL` names the model of the assistant and of the actor, and
  * `JUDGE_MODEL` names the judge's model, `AMBION_MODEL` by default. A suite
- * that grades one model family names another family for the judge.
+ * that grades one provider's model names a model of another provider
+ * for the judge.
  * `AMBION_THINKING` sets the thinking level of the assistant and the actor,
  * and `JUDGE_THINKING` sets the judge's. Each one is `off` by default.
  */

@@ -33,7 +33,8 @@ import {
 	quiet,
 	say,
 	says,
-	scripted,
+	scriptedStream,
+	say,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -56,7 +57,7 @@ const summaryRoom = async (runtime: Runtime, script: PiScript, specialists = [al
 				...Object.fromEntries(specialists.map((agent) => [agent.name, 'broadcast' as const])),
 				[assistant.name]: 'none',
 			},
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		}),
 	);
 
@@ -83,7 +84,7 @@ const resumeWith = async (room: Room, runtime: Runtime, script: PiScript) =>
 		await resumeRoom(room.name, {
 			runtime,
 			agents: [alpha, assistant],
-			execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		}),
 	);
 
@@ -224,7 +225,7 @@ describe('exchange completion handles', () => {
 			await resumeRoom(room.name, {
 				runtime,
 				agents: [alpha, assistant],
-				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			}),
 		);
 		expect(resumed.exchange(posted.from)).toMatchObject({ from: posted.from, opened: false });
@@ -240,7 +241,7 @@ describe('exchange completion handles', () => {
 					clock: fakeClock(),
 					storage: faulty.journals,
 				}),
-				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			}),
 		);
 		const visit = await room.visit(priya);

@@ -4,7 +4,7 @@
 specific to the Pi adapter. [Executors](executors.md) holds the shared
 contract: the activation flow, the room tools, exchange continuity, failure
 classification, the step vocabulary, and the trace.
-[The Claude guide](claude.md) covers a second shipped family, and [the
+[The Claude guide](claude.md) covers a second shipped executor kind, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -463,7 +463,7 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 ## Testing
 
 **A scripted stream tests the room with no model and no key.**
-`@ambionframework/pi/testing` exports `scripted`, `PiScript`,
+`@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
 `scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
 `@ambionframework/ambion/testing`: `say`, `callTool`, `later`, `seat`,
@@ -475,7 +475,7 @@ and id.
 import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
 import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted } from '@ambionframework/pi/testing';
+import { scriptedStream } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -483,7 +483,7 @@ const inventory = defineAgent({
   executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
 });
 
-const stream = scripted(
+const stream = scriptedStream(
   byAgent({
     inventory: (_context, _agent, call) => (call === 1 ? say('42 units in stock.') : quiet()),
   }),
@@ -507,7 +507,7 @@ try {
 
 **The scripted stream routes on the seat.** The stub model carries the seat
 name in `model.name`, so a script never reads the prompt to learn who it
-serves. `scripted` counts calls for each seat, answers an abort with an
+serves. `scriptedStream` counts calls for each seat, answers an abort with an
 aborted message, and turns a script that throws into an error message. A
 test that needs no Pi imports `scripted` from
 `@ambionframework/ambion/testing`, which runs a script with no model at all.
@@ -553,7 +553,7 @@ Pi seats.
 | `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                   |
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                            |
 | `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries. |
-| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each family.                                                            |
+| `The Pi executor cannot run an executor of kind 'claude'`           | A Claude seat reached a Pi executor through an execution with no kind. Pass the execution of each kind.                                                              |
 | `An agent estimateTokens needs an activationTokenLimit.`            | `estimateTokens` is set with no limit.                                                                                                                               |
 | `Agent '...' names estimator '...', and the runtime holds none ...` | The room start found no estimator by that name. Pass it in `estimators` to `createRuntime`.                                                                          |
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                 |

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createRuntime, isSaid, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
-import { quiet, say, scripted } from '../../ambion/test/support/scripted.ts';
+import { quiet, scriptedStream, say } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { memory } from '../../ambion/test/support/storage.ts';
 import { piExecution } from '../src/index.ts';
@@ -15,7 +15,8 @@ import { tempDir } from './support/temp.ts';
 
 const worker = scriptedAgent('worker');
 
-const answering = () => scripted((_context, _agent, call) => (call === 1 ? say('42') : quiet()));
+const answering = () =>
+	scriptedStream((_context, _agent, call) => (call === 1 ? say('42') : quiet()));
 
 /** Ask the one question and return what was said, once the exchange closes. */
 async function ask(room: Room) {
@@ -63,7 +64,7 @@ describe('piExecution', () => {
 
 	it('lets a room name its own execution over the runtime default', async () => {
 		const runtime = createRuntime({
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		const room = stopAtEnd(
 			await startRoom({

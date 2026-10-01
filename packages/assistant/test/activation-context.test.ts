@@ -6,7 +6,7 @@
 import { defineAgent, defineHuman, type Room, startRoom } from '@ambionframework/ambion';
 import { quiet, say, seat } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted, toolNames } from '@ambionframework/pi/testing';
+import { scriptedStream, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
 import { expect, it, onTestFinished } from 'vitest';
 import { defineAssistant } from '../src/index.ts';
@@ -55,7 +55,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		['writer:0', answer()],
 		['writer:1', answer()],
 	]);
-	const stream = scripted((context, name) => {
+	const stream = scriptedStream((context, name) => {
 		const closing = isClosing(context);
 		captures.push({
 			agent: name,
@@ -170,7 +170,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		await sleep(50);
 		return quiet();
 	};
-	const stream = scripted((context, name) =>
+	const stream = scriptedStream((context, name) =>
 		name === 'inventory' ? inventory() : assistant(context),
 	);
 	room = stopAtEnd(

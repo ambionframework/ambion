@@ -27,7 +27,7 @@
  */
 
 import { type ActivationSource, decodeActivationId } from '../activation-id.ts';
-import type { Close } from '../journal/events.ts';
+import type { Close } from '../journal/entries.ts';
 import {
 	type ActivationOutcome,
 	addUsage,

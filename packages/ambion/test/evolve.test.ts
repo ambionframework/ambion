@@ -3,7 +3,7 @@
  * and each step equals `foldRoom`.
  */
 import { expect, it } from 'vitest';
-import type { Close, Composition } from '../src/journal/events.ts';
+import type { Close, Composition } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { evolve } from './support/evolve.ts';
 import { foldRoom } from './support/fold.ts';

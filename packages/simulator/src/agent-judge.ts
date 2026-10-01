@@ -53,7 +53,7 @@ export interface Verdict {
 export type Judge = (run: Run, criteria: readonly string[]) => Promise<Verdict>;
 
 export interface AgentJudgeOptions {
-	/** A `provider/model-id`. It can name another model family than the model under test. */
+	/** A `provider/model-id`. It can name another provider than the model under test. */
 	readonly model: string;
 	/** How much the model reasons before it grades. Absent, `off`. */
 	readonly thinking?: RunAgentRequest['thinking'];

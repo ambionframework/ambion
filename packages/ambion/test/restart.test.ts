@@ -43,7 +43,7 @@ import {
 	type PiScript,
 	quiet,
 	says,
-	scripted,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
@@ -82,7 +82,7 @@ const wraps = new WeakMap<Runtime, (execution: Execution) => Execution>();
 
 /** The execution of a room on `runtime`: the scripted Pi execution, through the faults of the runtime. */
 function executionOn(runtime: Runtime, script: PiScript): Execution {
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	return wraps.get(runtime)?.(execution) ?? execution;
 }
 

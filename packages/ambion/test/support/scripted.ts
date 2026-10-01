@@ -6,7 +6,7 @@ export {
 	contextText,
 	isClosingContext,
 	type PiScript,
-	scripted,
+	scriptedStream,
 	toolNames,
 	toolResultTexts,
 } from '../../../pi/src/testing.ts';

@@ -1,5 +1,5 @@
 /**
- * One room, two executor families on real models: a seat on Pi and a seat on
+ * One room, two executor kinds on real models: a seat on Pi and a seat on
  * the Claude Agent SDK. Both speak, and the record invariants hold.
  */
 

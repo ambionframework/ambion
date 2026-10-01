@@ -25,10 +25,10 @@ describe('the options of workstationGitBackend', () => {
 		['a root that starts with a dot', { root: '.repos' }, /root/],
 		['a root that leaves the home', { root: '../repos' }, /root/],
 		['an alias with a space', { alias: 'ambion git' }, /alias/],
-		['a key life of 0', { keyTtl: 0 }, /keyTtl/],
-		['a key life that is not whole seconds', { keyTtl: 1.5 }, /keyTtl/],
+		['a key life of 0', { credentialTtl: 0 }, /credentialTtl/],
+		['a key life that is not whole seconds', { credentialTtl: 1.5 }, /credentialTtl/],
 	])('refuses %s', (_name, change, message) => {
-		const options = { host: 'lab.internal', hostKey: FINGERPRINT, account: ACCOUNT, ...change };
+		const options = { server: 'lab.internal', hostKey: FINGERPRINT, account: ACCOUNT, ...change };
 		expect(() => workstationGitBackend(options)).toThrow(message);
 	});
 });

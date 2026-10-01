@@ -475,7 +475,7 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 }
 
 /**
- * One thing an activation did, in a vocabulary every executor family shares.
+ * One thing an activation did, in a vocabulary every executor kind shares.
  * The trace gives each step to the host's logger once. A step is plain JSON.
  */
 export type Step =
@@ -544,12 +544,12 @@ export interface TracePolicy {
 export type RoomNotification = RoomEvent | ExecutionEvent;
 
 /**
- * What an agent runs on: a family name, instructions, and tools. The room
- * reads the fields below and no other. An executor family adds its own
+ * What an agent runs on: an executor kind, instructions, and tools. The room
+ * reads the fields below and no other. An executor kind adds its own
  * fields, such as a model, and reads them itself.
  */
 export interface AgentExecutor {
-	/** The executor family, such as `pi`. The host that composes execution resolves it. */
+	/** The executor kind, such as `pi`. The host that composes execution resolves it. */
 	readonly kind: string;
 	readonly instructions: string;
 	readonly tools: readonly AmbionTool[];

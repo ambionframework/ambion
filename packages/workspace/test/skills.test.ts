@@ -11,7 +11,7 @@ import { createExecutionServices, runAgent } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { callTool, quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { callTool, quiet, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
@@ -305,7 +305,7 @@ describe('the skills of a seat', () => {
 		await runAgent(
 			createExecutionServices({
 				sessions: 'memory',
-				stream: scripted((context, _who, call) => {
+				stream: scriptedStream((context, _who, call) => {
 					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
 					read.push(...toolResults(context).map((result) => result.text));
 					return callTool('finish', {});

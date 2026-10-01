@@ -5,7 +5,7 @@ holds what is specific to the Codex adapter. [Executors](executors.md)
 holds the shared contract: the activation flow, the room tools, exchange
 continuity, failure classification, the step vocabulary, and the trace. [The
 Pi guide](pi.md) and [the Claude guide](claude.md) cover the other two
-shipped families. [The
+shipped executor kinds. [The
 README](../README.md) holds the positioning.
 
 ## What the package is
@@ -150,7 +150,7 @@ that allows it.
 `nativeTools: 'codex'`, so a seat that turns the network off does not get
 it back.
 
-**`codexExecution(options)` takes the runtime of the executable.**
+**`codexExecution(options)` takes the options of the executable.**
 
 | Option      | Default            | What it does                      |
 | ----------- | ------------------ | --------------------------------- |
@@ -231,8 +231,8 @@ moves the position to the last of the messages it carries, and a
 [Executors](executors.md#how-an-activation-runs).
 
 **Codex takes no steer.** [The harness matrix](executors.md#the-harness-matrix)
-states what a family without steering does. The Codex session has no
-`steer` member, and the seat reads a line on the next delta pass. The core
+states what an executor kind without steering does. The Codex session has no
+`steer` method, and the seat reads a line on the next delta pass. The core
 records the `steer` step of that line with `consumed: false`; see
 [Executors](executors.md#how-an-activation-runs).
 
@@ -527,7 +527,7 @@ needs `HOME` or `CODEX_HOME` for the sign-in.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
 Claude seat reached a Codex executor through an execution with no kind.
-Pass the execution of each family.
+Pass the execution of each executor kind.
 
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours. A newer `codex` added a

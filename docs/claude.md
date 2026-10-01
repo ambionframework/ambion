@@ -4,7 +4,7 @@
 page holds what is specific to the Claude adapter. [Executors](executors.md)
 holds the shared contract: the activation flow, the room tools, exchange
 continuity, failure classification, the step vocabulary, and the trace. [The
-Pi guide](pi.md) covers a second shipped family, and [the
+Pi guide](pi.md) covers a second shipped executor kind, and [the
 Codex guide](codex.md) a third. [The
 README](../README.md) holds the positioning.
 
@@ -448,7 +448,7 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 | Symptom                                                             | Cause                                                                                                                                                 |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                              |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                             |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each kind.                                               |
 | The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                     |
 | Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                            |
 | The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                              |
