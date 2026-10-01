@@ -271,7 +271,7 @@ async function createStore(root: string): Promise<{
 	const bash = openResource<WorkspaceEnv>({ name: 'source-retention-bash', backend });
 	const objects = openResource<ObjectEnv>({
 		name: 'source-retention-objects',
-		backend: fileObjectBackend({ bash: bash.use, host, root: '/snapshots' }),
+		backend: fileObjectBackend({ bash: bash.use, mirrorAgent: host, root: '/snapshots' }),
 	});
 	return {
 		store: {

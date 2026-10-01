@@ -18,11 +18,14 @@ Stored bodies change field names. The golden journals hold the new names.
 | `composition`  | `agents`, `available`, `summary` | `seated`, `reserve`, `summaryWriter` |
 | `close`        | `summary`                        | `summaryWriter`                      |
 
-The text that a model reads changes in two places. Live cases on Pi,
+The text that a model reads changes in three places. Live cases on Pi,
 Claude, and Codex pass on the new text.
 
 - The prompts and the tool results of `say` say "activation" where they said
-  "turn". The prompt for ordinary work says "Begin your activation".
+  "turn". The prompt for a respond activation says "Begin your activation".
+- The prompts and the assistant guidance say "respond activation" and
+  "summary assignment" where they said "ordinary work", "ordinary
+  activation", and "closing assignment".
 - The `schedule` tool takes `delaySeconds` where it took `after`, and the two
   process texts that name the tool follow.
 

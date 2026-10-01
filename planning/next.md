@@ -289,7 +289,7 @@ The landed template passes with its three parts and unsupported spans. No
 test needs ffmpeg, instruments, or a model provider.
 
 **SN32. Workstation ports.** Add the optional `BashBackend.ports`
-contract from [Workstation ports](../docs/sensors.md#workstation-ports).
+contract from [Workstation ports](../docs/sensors.md#workstation-endpoints).
 Implement it through the existing workstation SSH session machinery.
 Expose the configured hostname in guidance. Reuse account credentials
 and host-key verification. Keep the destination at remote loopback.

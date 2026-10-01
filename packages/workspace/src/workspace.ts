@@ -304,7 +304,7 @@ function defaultObjects(
 	mirrorAgent: WorkspaceAgent,
 	root: string,
 ): ObjectBackend {
-	return fileObjectBackend({ bash: bash.use, host: mirrorAgent, root });
+	return fileObjectBackend({ bash: bash.use, mirrorAgent, root });
 }
 
 /** Dispose each resource in turn, and report the first failure once every one has run. */
