@@ -8,7 +8,7 @@
  * those again. The rules are the ones `exchange.ts` holds.
  */
 
-import type { Close } from '../journal/events.ts';
+import type { Close } from '../journal/entries.ts';
 import type { Message, Seq } from '../types.ts';
 import { draftsOf, type SummaryClose, summaryCompletion } from './exchange.ts';
 import {

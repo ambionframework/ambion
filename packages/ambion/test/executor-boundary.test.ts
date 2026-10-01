@@ -9,7 +9,7 @@ import {
 import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import { around, serializing } from './support/ports.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { callTool, isClosingContext, quiet, scripted, speak } from './support/scripted.ts';
+import { callTool, isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -26,10 +26,10 @@ function assertRoomCalls(room: RoomProtocol): void {
 }
 
 const reply = (text: string, exerciseTool = false) =>
-	scripted((context, _agent, call) => {
-		if (isClosingContext(context)) return speak(`Summary: ${text}`);
+	scriptedStream((context, _agent, call) => {
+		if (isClosingContext(context)) return say(`Summary: ${text}`);
 		if (exerciseTool && call === 1) return callTool('recall', { refs: ['#1'] });
-		return call === (exerciseTool ? 2 : 1) ? speak(text) : quiet();
+		return call === (exerciseTool ? 2 : 1) ? say(text) : quiet();
 	});
 
 describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (mode) => {
@@ -48,7 +48,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		const runtime = createRuntime({
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(() => {
+				stream: scriptedStream(() => {
 					defaultCalls += 1;
 					return quiet();
 				}),

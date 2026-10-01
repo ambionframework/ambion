@@ -9,7 +9,7 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { isClosingContext, quiet, scripted, speak, toolNames } from './support/scripted.ts';
+import { isClosingContext, quiet, say, scriptedStream, toolNames } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 
@@ -30,7 +30,7 @@ async function open(options: Partial<StartRoomOptions> = {}) {
 		assistant,
 		agents: [builder, reviewer],
 		seats: { builder: 'named', reviewer: 'none' },
-		execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		...options,
 	});
 	return { opened, room: stopAtEnd(room) };
@@ -113,11 +113,11 @@ describe('assistant room shorthand', () => {
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, agent, call) => {
-					if (agent === 'builder' && call === 1) return speak('The answer.');
+				stream: scriptedStream((context, agent, call) => {
+					if (agent === 'builder' && call === 1) return say('The answer.');
 					if (agent === 'assistant' && isClosingContext(context)) {
 						closingTools.push(toolNames(context));
-						return speak('The answer, summarized.');
+						return say('The answer, summarized.');
 					}
 					return quiet();
 				}),
@@ -147,7 +147,7 @@ describe('assistant room shorthand', () => {
 					name: roomName('assistant-resume'),
 					runtime: createRuntime({
 						storage: opened.storage,
-						execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+						execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 					}),
 					assistant,
 					agents: [builder, reviewer],
@@ -168,8 +168,8 @@ describe('assistant room shorthand', () => {
 					agents: [assistant, builder, reviewer],
 					execution: piExecution({
 						sessions: 'memory',
-						stream: scripted((context) =>
-							isClosingContext(context) ? speak('Resumed summary.') : quiet(),
+						stream: scriptedStream((context) =>
+							isClosingContext(context) ? say('Resumed summary.') : quiet(),
 						),
 					}),
 				}),

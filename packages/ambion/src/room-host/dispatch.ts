@@ -5,7 +5,7 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { Close, LeaseChange } from '../journal/events.ts';
+import type { Close, LeaseChange } from '../journal/entries.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
@@ -74,7 +74,7 @@ export function seedHeard(host: RoomHostState): void {
 /**
  * A message on the record: the host hears about it, then what it opened,
  * steers every active ordinary seat, and asks reconciliation to dispatch
- * the pending activations the projection derives. One message, one event,
+ * the pending activations the projection derives. One message, one entry,
  * one order.
  */
 function queueMessage(host: RoomHostState, entry: Extract<Entry, { kind: 'message' }>): void {

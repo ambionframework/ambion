@@ -42,7 +42,7 @@ import {
 	byAgent,
 	isClosingContext,
 	quiet,
-	scripted,
+	scriptedStream,
 	summarise,
 	toolResultTexts,
 } from './support/scripted.ts';
@@ -145,7 +145,7 @@ class Walk {
 	private execution(): Execution {
 		return serializing(
 			faulty(
-				piExecution({ sessions: 'memory', stream: scripted(script) }),
+				piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 				this.faults,
 				this.clock,
 			),

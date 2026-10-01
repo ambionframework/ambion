@@ -1,6 +1,6 @@
 /**
  * The harness switch of the live tier. `AMBION_HARNESS` names one of three
- * executor families, and a bad value fails at import with a clear message.
+ * executor kinds, and a bad value fails at import with a clear message.
  * No key and no network: the test builds definitions and calls no model.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

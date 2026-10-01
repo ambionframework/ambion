@@ -1,5 +1,5 @@
 /**
- * One real activation logs the steps every executor family shares, with
+ * One real activation logs the steps every executor kind shares, with
  * the usage the SDK reported.
  */
 import { expect, it } from 'vitest';

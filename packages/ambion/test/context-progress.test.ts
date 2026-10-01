@@ -4,7 +4,7 @@
  * full journal replay.
  */
 import { describe, expect, it } from 'vitest';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { planReconciliation } from '../src/room/reconcile.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
@@ -47,10 +47,10 @@ const released = (id: string, seq: number, readThrough: number): Entry =>
 		readThrough,
 	});
 
-const event = (decision: RoomDecision<'lease'>, seq: number): Entry => {
-	if (!('event' in decision) || decision.event === undefined)
-		throw new Error('Expected a lease event.');
-	return { ...decision.event, seq };
+const entryAt = (decision: RoomDecision<'lease'>, seq: number): Entry => {
+	if (!('entry' in decision) || decision.entry === undefined)
+		throw new Error('Expected a lease entry.');
+	return { ...decision.entry, seq };
 };
 
 const reconciliation = (attempts: number) => ({
@@ -67,7 +67,7 @@ describe('acknowledged lease context', () => {
 			[composition, wake(2), held(id, 3, 2), wake(4, 'Later.')],
 			retry,
 		);
-		const heartbeat = event(
+		const heartbeat = entryAt(
 			decide(beforeHeartbeat, { type: 'renew', id, expiry: 60_000, deadline: 600_000 }, now),
 			5,
 		);
@@ -98,7 +98,7 @@ describe('acknowledged lease context', () => {
 		expect(pendingOf(state)).toEqual([]);
 	});
 
-	it('refuses invalid lease acknowledgements without proposing an event', () => {
+	it('refuses invalid lease acknowledgements without proposing an entry', () => {
 		const state = replayState([composition, wake(2), held(id, 3, 2)], retry);
 		for (const readThrough of [-1, 1.5, 99]) {
 			expect(
@@ -131,7 +131,7 @@ describe('acknowledged lease context', () => {
 		if (abandoned === undefined) throw new Error('Expected an abandonment.');
 		const ended = decide(releasedUnread, { type: 'end', ...abandoned }, now);
 		expect(ended).toEqual({
-			event: {
+			entry: {
 				kind: 'lease',
 				body: {
 					id: 'message:2:solo:2',
@@ -143,7 +143,7 @@ describe('acknowledged lease context', () => {
 				},
 			},
 		});
-		const stopped = evolve(releasedUnread, event(ended, 5), retry);
+		const stopped = evolve(releasedUnread, entryAt(ended, 5), retry);
 		expect(pendingOf(stopped)).toEqual([]);
 		expect(planReconciliation(stopped, reconciliation(1)).sends).toEqual([]);
 	});

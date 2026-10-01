@@ -1,7 +1,7 @@
-/** Pure commands and committed events for a room. */
+/** Pure commands and committed entries for a room. */
 
 import type { AmbionErrorCode } from '../errors.ts';
-import type { Composition, Seating } from '../journal/events.ts';
+import type { Composition, Seating } from '../journal/entries.ts';
 import type { Bodies, Body, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest, Unchanged } from '../protocol.ts';
 import { refsRefusal } from '../refs.ts';
@@ -42,7 +42,7 @@ import {
 import { dismissal, returning, scheduleRefusal } from './scheduled.ts';
 import { summaryWriter } from './summary.ts';
 
-type ProposedEvent<K extends Kind = Kind> = {
+type ProposedEntry<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
 }[K];
 
@@ -110,7 +110,7 @@ export type Refusal =
 	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: Message[] };
 
 export type RoomDecision<K extends Kind> =
-	{ event: ProposedEvent<K> | undefined } | { refusal: Refusal } | { unchanged: Unchanged };
+	{ entry: ProposedEntry<K> | undefined } | { refusal: Refusal } | { unchanged: Unchanged };
 
 /** A write a pass asks for. `decide` builds its entry where the write lands. */
 export type ReconcileStep = EndCommand | CloseCommand | Extract<MessageCommand, { type: 'return' }>;
@@ -175,9 +175,9 @@ export function decide(
 		case 'close':
 			return closing(state, command, now);
 		case 'run':
-			return { event: { kind: 'run', body: { at: iso(now) } } };
+			return { entry: { kind: 'run', body: { at: iso(now) } } };
 		case 'cancel':
-			return { event: { kind: 'cancel', body: { at: iso(now) } } };
+			return { entry: { kind: 'cancel', body: { at: iso(now) } } };
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}
@@ -191,7 +191,7 @@ export function decide(
 export function stopWork(state: RoomState, now: number): RoomDecision<'lease'> {
 	const running = [...state.leases.values()].find((lease) => lease.phase === 'running');
 	return running === undefined
-		? { event: undefined }
+		? { entry: undefined }
 		: end(state, { id: running.id, reason: 'revoked', readThrough: 0 }, now);
 }
 
@@ -203,7 +203,7 @@ const stale = (reason: string): { refusal: Refusal } => ({
 	refusal: { category: 'stale', reason },
 });
 
-/** Routing is part of the accepted event, so dispatch can recover from the record. */
+/** Routing is part of the accepted entry, so dispatch can recover from the record. */
 function message(
 	state: RoomState,
 	body: Body<Message>,
@@ -217,7 +217,7 @@ function message(
 	if (oversize !== undefined) return oversize;
 	const wakes = route ? routes(body, state, liveWork(state, now).seats) : [];
 	return {
-		event: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },
+		entry: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },
 	};
 }
 
@@ -290,7 +290,7 @@ function presence(
 		(command.change.kind === 'seated' && seat !== undefined) ||
 		(command.change.kind === 'unseated' && seat === undefined)
 	)
-		return { event: undefined };
+		return { entry: undefined };
 	return message(state, { ...command.change, at: iso(now) }, now, command.route);
 }
 
@@ -587,7 +587,7 @@ function runningLease(
 	if (admission === 'held') return stale('another activation already holds this seat');
 	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
 	return {
-		event: {
+		entry: {
 			kind: 'lease',
 			body: {
 				id: command.id,
@@ -623,9 +623,9 @@ function end(state: RoomState, command: LeaseEnding, now: number): RoomDecision<
 	const known = state.leases.get(command.id);
 	const { reason, cause, usage, session } = command;
 	if (!mayEnd(known?.phase, reason, known !== undefined && isExpired(known, now)))
-		return { event: undefined };
+		return { entry: undefined };
 	return {
-		event: {
+		entry: {
 			kind: 'lease',
 			body: {
 				id: command.id,
@@ -664,7 +664,7 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 			`Duplicate agent name '${person.name}': one name names one participant.`,
 			'duplicate_name',
 		);
-	return { event: { kind: 'composition', body: composition } };
+	return { entry: { kind: 'composition', body: composition } };
 }
 
 /**
@@ -675,13 +675,13 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 function closing(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'> {
 	const exchange = state.exchange;
 	if (!admitsClose(exchange, command, state.lastSeq, liveWork(state, now).exchange))
-		return { event: undefined };
+		return { entry: undefined };
 	const { from, through } = command;
 	const person = exchange?.person;
 	const writer = person === undefined ? undefined : summaryWriter(state.composition, state.roster);
 	const owed = person === undefined || writer === undefined ? {} : { person, summary: writer };
 	return {
-		event: {
+		entry: {
 			kind: 'close',
 			body: {
 				...(person === undefined ? {} : { person }),
@@ -715,14 +715,14 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 function dismissing(state: RoomState, seq: Seq, stamp: DismissStamp): RoomDecision<'message'> {
 	const answer = dismissal(state.scheduled, state.messages, stamp.from, seq);
 	const body = { kind: 'dismissed' as const, message: seq, ...stamp };
-	if (answer === 'dismiss') return { event: { kind: 'message', body } };
+	if (answer === 'dismiss') return { entry: { kind: 'message', body } };
 	if (answer !== 'unchanged') return refused(answer);
-	if (stamp.from === undefined) return { event: undefined };
+	if (stamp.from === undefined) return { entry: undefined };
 	return { unchanged: { kind: 'dismissed', message: seq } };
 }
 
 /** The write of one returned say, decided again inside the journal queue. */
 function returnSay(state: RoomState, seq: Seq, now: number): RoomDecision<'message'> {
 	const body = returning(state.scheduled, state.roster, seq, now);
-	return body === undefined ? { event: undefined } : message(state, body, now);
+	return body === undefined ? { entry: undefined } : message(state, body, now);
 }

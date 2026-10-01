@@ -115,6 +115,6 @@ export interface GitEnv extends ResourceEnv {
 /** The git backend of a workspace. */
 export interface GitBackend extends ResourceBackend<GitEnv> {
 	readonly access: GitAccess;
-	/** The server this backend names in the guidance, with no credential. */
-	readonly server: string;
+	/** The label that the guidance uses for the server of this backend, with no credential. */
+	readonly label: string;
 }

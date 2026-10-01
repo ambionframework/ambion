@@ -50,7 +50,7 @@ function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePol
 	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
-/** The neutral half of an executor, as an executor family's own options declare it. */
+/** The neutral half of an executor, as an executor kind's own options declare it. */
 export interface AgentExecutorBaseOptions {
 	/** The private half: the agent's own voice, and the home of all judgment. */
 	readonly instructions: string;
@@ -58,7 +58,7 @@ export interface AgentExecutorBaseOptions {
 	readonly tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	readonly bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_GUIDANCE`. Absent uses the default. */
+	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
@@ -69,13 +69,13 @@ export interface AgentExecutorBaseOptions {
 	readonly estimateTokens?: string;
 }
 
-/** What `describeExecutor` reads: the fields every executor family shares. */
+/** What `describeExecutor` reads: the fields every executor kind shares. */
 export interface ExecutorOptions extends AgentExecutorBaseOptions {
 	readonly kind: string;
 }
 
 /**
- * The executor a definition names, narrowed to one family and its model.
+ * The executor a definition names, narrowed to one kind and its model.
  * Throws when the executor's kind does not match.
  */
 export function executorOfKind<T extends AgentExecutor & { readonly model: string }>(
@@ -105,7 +105,7 @@ export function pickPresent<T extends object, K extends keyof T>(
 
 /**
  * The neutral half of an executor: validated, flattened, and frozen. An
- * executor family adds its own fields to the value this returns.
+ * executor kind adds its own fields to the value this returns.
  */
 export function describeExecutor(options: ExecutorOptions): AgentExecutor {
 	const input = flattenTools(options.tools, options.bundles);
@@ -163,7 +163,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 
 /**
  * Capture one executor at a room boundary. The copy is deep, so a field an
- * executor family adds, such as a model, survives without a name here.
+ * executor kind adds, such as a model, survives without a name here.
  */
 function captureExecutor(executor: AgentExecutor): AgentExecutor {
 	const tools = Object.freeze(

@@ -1,5 +1,5 @@
 /**
- * One classifier names a permanent failure for every executor family. The
+ * One classifier names a permanent failure for every executor kind. The
  * table holds the failure texts that each harness produces, in the words of
  * its provider, and the status that the harness reads beside the text. A
  * harness test covers only where its status comes from.

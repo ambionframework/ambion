@@ -176,13 +176,13 @@ it('loads no backend at the root: no export from the resource or SQLite files', 
 	expect(index).not.toMatch(/ROOM_MIRROR_GUIDANCE|roomMirrorPath|DEFAULT_ROTATE_BYTES/);
 });
 
-it('exports the neutral port transport types from the root', async () => {
-	const ports: main.WorkspacePorts = {
-		hostname: 'lab.internal',
-		open: async () => ({ url: 'http://127.0.0.1:43127', close: async () => {} }),
+it('exports the neutral endpoint types from the root', async () => {
+	const endpoints: main.WorkspaceEndpoints = {
+		machine: 'lab.internal',
+		forward: async () => ({ url: 'http://127.0.0.1:43127', close: async () => {} }),
 	};
-	const port: main.WorkspacePort = await ports.open({ name: 'bench' }, 43127);
-	expect([ports.hostname, port.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
+	const endpoint: main.WorkspaceEndpoint = await endpoints.forward({ name: 'bench' }, 43127);
+	expect([endpoints.machine, endpoint.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
 });
 
 it('keeps the neutral resource contract free of imports, Pi among them', async () => {

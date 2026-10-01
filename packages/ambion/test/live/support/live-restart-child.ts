@@ -9,7 +9,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -98,7 +98,7 @@ async function start(): Promise<void> {
 	const room = await startRoom({ name, agents: [fast, slow], runtime });
 	diagnostics(room);
 	room.subscribe((event) => {
-		if (event.type === 'message' && isSpoken(event.message) && event.message.from === fast.name) {
+		if (event.type === 'message' && isSaid(event.message) && event.message.from === fast.name) {
 			fastSeq.resolve(event.message.seq);
 		}
 		if (event.type === 'activation_end' && event.seat === fast.name) fastReleased.resolve();
@@ -156,11 +156,9 @@ async function resume(): Promise<void> {
 		assert.equal(retry.from, checkpoint.from);
 		const discussion = await exchange.waitForClose();
 		const messages = await messagesOf(room);
-		const questions = messages.filter(
-			(message) => isSpoken(message) && message.key === request.key,
-		);
-		const fastAnswers = discussion.filter(isSpoken).filter((message) => message.from === fast.name);
-		const slowAnswers = discussion.filter(isSpoken).filter((message) => message.from === slow.name);
+		const questions = messages.filter((message) => isSaid(message) && message.key === request.key);
+		const fastAnswers = discussion.filter(isSaid).filter((message) => message.from === fast.name);
+		const slowAnswers = discussion.filter(isSaid).filter((message) => message.from === slow.name);
 		const arrivals = messages.filter((message) => message.kind === 'arrived');
 		assert.equal(questions.length, 1);
 		assert.equal(fastAnswers.length, 1);

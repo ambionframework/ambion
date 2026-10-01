@@ -6,7 +6,7 @@
  * judge's model, `AMBION_MODEL` by default.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
+import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { describe, expect, it, onTestFailed } from 'vitest';
 import {
 	type AgentActorOptions,
@@ -47,7 +47,7 @@ live('an agent actor and an agent judge on a real model', () => {
 		const room = await open(
 			byAgent({
 				desk: (step) =>
-					step.results.length > 0 ? quiet() : speak('The forecast for Thursday is dry.', 'priya'),
+					step.results.length > 0 ? quiet() : say('The forecast for Thursday is dry.', 'priya'),
 			}),
 			['desk'],
 		);
