@@ -21,10 +21,12 @@ export const CORE_LAYERS = [
 			'record.ts',
 			'refs.ts',
 			'scheduling.ts',
+			'session-facts.ts',
 			'types.ts',
 		],
 		imports: [],
-		about: 'the public shapes, the stored bodies, the record lines, and the identity codec',
+		about:
+			'the public shapes, the stored bodies, the record lines, the session facts, and the identity codec',
 	},
 	{
 		name: 'protocol',
