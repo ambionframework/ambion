@@ -292,19 +292,33 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		await pollDetached(agent, spec.handle, STOP_SLACK_MS);
 	};
 
+	/** Name the cause in `stop`, then abort a process of this run. This does not wait for the end. */
+	const abortOwn = async (process: Live, own: Own, cause: StopCause): Promise<void> => {
+		await nameStop(process, own.env, cause).catch(() => undefined);
+		own.controller.abort();
+	};
+
 	/**
 	 * Stop a live process, and wait up to its grace and the slack for its
-	 * end. The first stop names its cause in `stop`. A process of this run
-	 * then gets the abort: its backend sends `SIGTERM`, and `SIGKILL` after
-	 * the grace. Its run gives the end. An adopted process gets the same
-	 * signals through its pid.
+	 * end. A process of this run gets the abort, and its backend sends the
+	 * signals. An adopted process gets them through its pid.
 	 */
 	const stopLive = async (process: Live, cause: StopCause): Promise<void> => {
 		const { own } = process;
 		if (own === undefined) return stopAdopted(process, cause);
-		await nameStop(process, own.env, cause).catch(() => undefined);
-		own.controller.abort();
+		await abortOwn(process, own, cause);
 		await within(own.ended, process.grace * 1000 + STOP_SLACK_MS);
+	};
+
+	/** Run `step` after every earlier stop of the agent. A step never rejects. */
+	const enqueue = (agent: string, handle: string, step: (one: Live) => Promise<void>) => {
+		const run = async () => {
+			const process = live.get(handle);
+			if (process !== undefined) await step(process);
+		};
+		const next = (stops.get(agent) ?? Promise.resolve()).then(run).catch(() => undefined);
+		stops.set(agent, next);
+		return next;
 	};
 
 	/**
@@ -313,15 +327,8 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	 * failed stop does not stop the next one: the files keep the truth, and
 	 * the next read gives what the stop left.
 	 */
-	const stop = (agent: string, handle: string, cause: StopCause): Promise<void> => {
-		const run = async (): Promise<void> => {
-			const process = live.get(handle);
-			if (process !== undefined) await stopLive(process, cause);
-		};
-		const next = (stops.get(agent) ?? Promise.resolve()).then(run).catch(() => undefined);
-		stops.set(agent, next);
-		return next;
-	};
+	const stop = (agent: string, handle: string, cause: StopCause): Promise<void> =>
+		enqueue(agent, handle, (one) => stopLive(one, cause));
 
 	// -- the run of a process ---------------------------------------------------
 
@@ -555,10 +562,21 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		);
 	};
 
+	/**
+	 * Stop one process for `close`. A process of this run takes its abort on
+	 * the chain and waits for its end outside it, so the graces overlap. An
+	 * adopted process takes its full stop on the chain.
+	 */
+	const stopForClose = async (one: Live): Promise<void> => {
+		const { own } = one;
+		if (own === undefined) return stop(one.agent, one.spec.handle, 'cancelled');
+		await enqueue(one.agent, one.spec.handle, (p) => abortOwn(p, own, 'cancelled'));
+		await within(own.ended, one.grace * 1000 + STOP_SLACK_MS);
+	};
+
 	const close = async (): Promise<void> => {
 		closed = true;
-		const running = [...live.values()];
-		await Promise.allSettled(running.map((one) => stop(one.agent, one.spec.handle, 'cancelled')));
+		await Promise.allSettled([...live.values()].map(stopForClose));
 		for (const process of live.values()) clearTimeout(process.timer);
 		released = true;
 	};

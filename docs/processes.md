@@ -321,8 +321,9 @@ the table's stop did not end, with the same grace.
 **The table stops the processes of one agent one at a time.** A stop on
 the workstation opens a short channel of its own for each signal. A stop
 waits for the stops of the same agent before it, so the stops of one
-agent hold at most one signal channel. A cancel, a timeout, a cancel by
-the host, and `dispose()` all stop a process this way
+agent hold at most one signal channel. A cancel, a timeout, and a cancel
+by the host stop a process this way. `dispose()` puts only the abort of
+a process of this run on the chain
 ([The stop](#the-stop)).
 
 ## The stop
@@ -385,9 +386,14 @@ table reads the files every 500 ms until the grace ends. It then sends
 script checks the handle in the command line of the pid before each
 signal ([Recovery](#recovery)).
 
-**`dispose()` gives each process its grace.** The stops of one agent run
-one at a time. An agent with 4 processes that ignore `TERM` takes up to
-60 seconds to stop.
+**`dispose()` gives each process its grace, and the graces run at the
+same time.** For each agent, `dispose()` writes `stop` and aborts the
+processes of this run one after another on the chain of the agent. A step
+of the chain does not wait for an end. `dispose()` then waits for all the
+ends at once, each for the grace and 5 seconds. An agent with 4 processes
+that ignore `TERM` takes about 15 seconds to stop. An adopted process
+keeps its full stop on the chain, so each adopted process adds up to 15
+seconds. The agents stop in parallel.
 
 **On just-bash, a stop ends the command at once.** The simulated shell has
 no signals and no `trap`. No trap of the command runs, the wrapper writes
@@ -711,9 +717,9 @@ it comes when a read sees its end.
 **`dispose()` stops every running process of this run, and every adopted
 one.** The bash owner refuses new work and drains its queue. The table
 then refuses new processes and stops each running process, each one with
-its grace. The stops of one agent run one at a time, and the
-agents run in parallel. The bash backend then
-disposes. The git owner disposes after the bash owner, so a push in a
+its grace. The processes of this run of one agent stop at the same time.
+The adopted processes of one agent stop one at a time. The agents stop in
+parallel. The bash backend then disposes. The git owner disposes after the bash owner, so a push in a
 process still reaches the git backend.
 
 ## Backends
@@ -810,7 +816,7 @@ the three handle tools stay as they are.
 | A command that exits inside the grace reads its exit code      | The code is the command's own answer, and exit 0 says that it cleaned up                             |
 | Code 143 after a stop reads the cause in `stop`                | The `SIGTERM` ended that command, and the command chose no end                                       |
 | The timeout and the backend's deadline stop with the grace too | Every stop takes one path                                                                            |
-| `dispose()` gives each process its grace                       | A shutdown of the host stops a process the same way as a cancel                                      |
+| `dispose()` gives each process its grace, all at the same time | A shutdown of the host waits for about one grace for the processes of this run                       |
 
 **The host owns the cleanup of `~/.processes` past the limit of 64.** A
 start removes the oldest finished processes of the agent that starts it,

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**`dispose()` stops the processes of one agent at the same time.** Before,
+an agent with 4 processes that ignore `SIGTERM` took about 60 seconds to
+stop. Now the processes of this run stop in about one grace and 5 seconds.
+An adopted process keeps its full stop on the chain of its agent. `cancel`
+and the timeout stop one process at a time, as before.
+
 **A stop gives a process time to clean up.** `cancel`, the timeout, a
 cancel by the host, and `dispose()` now send `SIGTERM` to the process
 group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a

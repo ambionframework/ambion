@@ -65,6 +65,37 @@ const invoke = async (workspace: Workspace, tool: string, params: unknown, agent
 	return { text, process: details.process };
 };
 
+/**
+ * A process that an earlier run of the host started for `agent`: its command
+ * logs each TERM and goes on. Give its directory and the pid of its wrapper.
+ */
+async function earlierProcess(started: TestServer, agent: string, handle: string) {
+	const dir = join(started.homes.get(agent) ?? '', '.processes', handle);
+	await mkdir(dir, { recursive: true });
+	const spec = { handle, kind: 'bash', agent, command: 'loop' };
+	await writeFile(
+		join(dir, 'spec'),
+		JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
+	);
+	const earlier = workstationBackend(started.options);
+	const env = await earlier.connect({ name: agent });
+	const script = [
+		'trap : TERM',
+		`echo "$$" > '${dir}/pid'`,
+		'(',
+		"trap 'echo term' TERM",
+		'while :; do sleep 0.2; done',
+		`) < /dev/null > '${dir}/out' 2>&1`,
+		`echo "$? x" > '${dir}/exit'`,
+	].join('\n');
+	void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+	await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
+	const pid = Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
+	await env.cleanup();
+	await earlier.dispose?.();
+	return { dir, pid };
+}
+
 describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 	it('lets a command that traps TERM end inside the grace: a cancel and a timeout read its own exit code', async () => {
 		const started = await server(['ada']);
@@ -89,30 +120,7 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 
 	it('sends SIGKILL after the grace to an owned and an adopted process that ignore TERM, and shows the stop while it waits', async () => {
 		const started = await server(['ada', 'bob']);
-		// An earlier run of the host started a process for bob: its command logs each TERM and goes on.
-		const dir = join(started.homes.get('bob') ?? '', '.processes', 'bash-0000000000b1');
-		await mkdir(dir, { recursive: true });
-		const spec = { handle: 'bash-0000000000b1', kind: 'bash', agent: 'bob', command: 'loop' };
-		await writeFile(
-			join(dir, 'spec'),
-			JSON.stringify({ ...spec, timeout: 600, startedAt: new Date().toISOString() }),
-		);
-		const earlier = workstationBackend(started.options);
-		const env = await earlier.connect({ name: 'bob' });
-		const script = [
-			'trap : TERM',
-			`echo "$$" > '${dir}/pid'`,
-			'(',
-			"trap 'echo term' TERM",
-			'while :; do sleep 0.2; done',
-			`) < /dev/null > '${dir}/out' 2>&1`,
-			`echo "$? x" > '${dir}/exit'`,
-		].join('\n');
-		void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
-		await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
-		const adopted = Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
-		await env.cleanup();
-		await earlier.dispose?.();
+		const { dir, pid: adopted } = await earlierProcess(started, 'bob', 'bash-0000000000b1');
 		const workspace = workspaceOn(started);
 		const owned = await invoke(workspace, 'bash', { command: "trap '' TERM\nsleep 60", wait: 0 });
 		const handle = owned.process?.handle ?? '';
@@ -140,4 +148,35 @@ describe.skipIf(!hasSetsid)('a stop on a real signal path', () => {
 		expect(await readFile(join(dir, 'out'), 'utf8')).toContain('term');
 		await expect(readFile(join(dir, 'exit'), 'utf8')).rejects.toThrow();
 	}, 30_000);
+
+	it('disposes 4 processes of one agent that ignore TERM, and an adopted one, in about one grace, and ends every wrapper', async () => {
+		const started = await server(['ada', 'bob']);
+		const earlier = await earlierProcess(started, 'bob', 'bash-0000000000b1');
+		const workspace = workspaceOn(started);
+		const handles: string[] = [];
+		for (let count = 0; count < 4; count += 1) {
+			const running = await invoke(workspace, 'bash', {
+				command: "trap '' TERM\nsleep 60",
+				wait: 0,
+			});
+			handles.push(running.process?.handle ?? '');
+		}
+		const dirs = handles.map((handle) =>
+			join(started.homes.get('ada') ?? '', '.processes', handle),
+		);
+		await until(() =>
+			dirs.every((dir) => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0),
+		);
+		const pids = await Promise.all(
+			dirs.map(async (dir) => Number((await readFile(join(dir, 'pid'), 'utf8')).trim())),
+		);
+		expect((await invoke(workspace, 'ps', {}, 'bob')).text).toContain('bash-0000000000b1');
+		const began = Date.now();
+		await workspace.dispose();
+		const elapsed = Date.now() - began;
+		// The 4 graces run at the same time: about one grace and the kill.
+		expect(elapsed).toBeGreaterThanOrEqual(10_000);
+		expect(elapsed).toBeLessThan(25_000);
+		expect([...pids, earlier.pid].map(ended)).toEqual([true, true, true, true, true]);
+	}, 40_000);
 });
