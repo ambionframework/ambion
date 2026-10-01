@@ -14,6 +14,12 @@ it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
 and `Result`, so `Step` names the trace step alone. The request counter of a
 script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
 `AMBION_HARNESS`.
+**`@ambionframework/journal` exports its entry type as `Entry`.** The
+package exported the type as `JournalEntry`. The core imported it as
+`Envelope`, and the room named its own entry union `Entry`. The stored shape
+now has one name, `Entry`, in the journal package and in the core. The
+room's union is `RoomEntry`. The `journal` package no longer exports
+`JournalEntry`.
 **A bash backend takes its git backend, and the types check the pair.**
 `memoryBackend` takes `git` in its options, and `directoryBackend(root,
 options)` takes `git` in a second parameter. Both take a `JustGitBackend`.

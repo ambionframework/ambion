@@ -14,9 +14,9 @@
  * entries land in the order in which callers ask for them. What each one
  * means belongs to the caller, which names its kinds in a `Vocabulary`.
  *
- * **The envelope is the journal's, and the body is the caller's.** Storage
- * holds one nested envelope with kind, body, seq, key, and run. One counter
- * gives out every seq. The body stays nested, so its fields do not collide.
+ * **The entry is the journal's, and the body is the caller's.** Storage
+ * holds one entry with kind, body, seq, key, and run. One counter gives
+ * out every seq. The body stays nested, so its fields do not collide.
  *
  * **A key is an idempotency token.** A repeated key returns the entry the
  * first append landed and writes nothing, which lets a caller retry an
@@ -70,7 +70,7 @@ import type { JournalStorage, StoredEntry } from './storage.ts';
 export type Seq = number;
 
 /**
- * One entry on a journal: the one envelope every user shares.
+ * One entry on a journal: the one shape every user shares.
  *
  * `kind` is what the writer called it, and `body` is what the writer wrote.
  * The other three fields are the journal's own, and the storage holds them
@@ -159,7 +159,7 @@ export interface Vocabulary<TKind extends string = string> {
 	accepts(kind: string, body: unknown): kind is TKind;
 }
 
-/** The native envelope that journal storage holds. The body stays nested. */
+/** The native entry that journal storage holds. The body stays nested. */
 
 interface Stored {
 	kind?: unknown;
@@ -170,7 +170,7 @@ interface Stored {
 	[field: string]: unknown;
 }
 
-/** The run that wrote a stored entry: the fence reads it before any envelope. */
+/** The run that wrote a stored entry: the fence reads it before any entry. */
 const writerOf = (entry: unknown): string | undefined => {
 	const run = (entry as Stored).run;
 	return typeof run === 'string' ? run : undefined;
@@ -178,7 +178,7 @@ const writerOf = (entry: unknown): string | undefined => {
 
 /**
  * One body, with the journal's own fields beside it, as the storage holds it.
- * The envelope nests the body, so body fields never collide with journal
+ * The entry nests the body, so body fields never collide with journal
  * fields.
  */
 const beside = (kind: string, body: unknown, seq: Seq, key?: string, run?: string): Stored => ({
@@ -190,16 +190,13 @@ const beside = (kind: string, body: unknown, seq: Seq, key?: string, run?: strin
 });
 
 /**
- * The envelope a stored entry folds to, or nothing when it is not one this
+ * The entry that stored data folds to, or nothing when it is not one this
  * journal takes. An unknown kind is foreign storage and is skipped. A known
  * kind with an invalid body or an invalid seq is malformed storage and
  * throws. This distinction keeps a reader extensible and keeps malformed
  * history visible.
  */
-function envelope<TKind extends string>(
-	words: Vocabulary<TKind>,
-	data: unknown,
-): Entry | undefined {
+function entryOf<TKind extends string>(words: Vocabulary<TKind>, data: unknown): Entry | undefined {
 	if (data === null || typeof data !== 'object') return undefined;
 	const stored = data as Stored;
 	const kind = stored.kind;
@@ -331,7 +328,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 		const entries = found.entries.filter((stored) => stored.position > after);
 		entries.sort((a, b) => a.position - b.position);
 		for (const entry of entries) {
-			const known = envelope(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
+			const known = entryOf(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
 			// Validation must finish before the cursor moves. A malformed known
 			// entry therefore fails every later read at the same position.
 			this.cursor = scanned(this.cursor, entry.position);
@@ -502,9 +499,9 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 			intent.key,
 			this.run,
 		);
-		// Validate before storage sees the envelope. A bad proposal cannot
+		// Validate before storage sees the entry. A bad proposal cannot
 		// poison the journal and cannot consume a storage position.
-		if (envelope(this.words, stored) === undefined) {
+		if (entryOf(this.words, stored) === undefined) {
 			throw new Error(`The vocabulary rejects the proposed '${kind}' entry.`);
 		}
 		const appended = await this.persist(storage, stored);
@@ -513,7 +510,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	}
 
 	/**
-	 * One entry this journal appended, into the cache. The envelope folds
+	 * One entry this journal appended, into the cache. The entry folds
 	 * from the bytes the append took, so the cache holds what the storage
 	 * holds. A vocabulary that turns down what the journal wrote breaks the
 	 * journal's contract: the storage holds the entry, the cache never will,
@@ -521,7 +518,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	 * where it happens.
 	 */
 	private took(stored: StoredEntry): Entries<TKind, TBodies> {
-		const entry = envelope(this.words, stored.entry) as Entries<TKind, TBodies> | undefined;
+		const entry = entryOf(this.words, stored.entry) as Entries<TKind, TBodies> | undefined;
 		if (entry === undefined) {
 			throw new Error(
 				`The vocabulary turns down '${String((stored.entry as Stored).kind)}', which this journal wrote. ` +

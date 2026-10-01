@@ -6,7 +6,7 @@
  */
 
 import type { Close, LeaseChange } from '../journal/entries.ts';
-import { type Entry, placed } from '../journal/journal.ts';
+import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
 import { seatOf } from '../room/lease.ts';
@@ -25,7 +25,7 @@ export interface DeliveryState {
 }
 
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
-export function hearEntry(host: RoomHostState, entry: Entry): void {
+export function hearEntry(host: RoomHostState, entry: RoomEntry): void {
 	if (entry.kind === 'message') queueMessage(host, entry);
 	else if (entry.kind === 'close') queueCloses(host);
 	else if (entry.kind === 'lease') queueLease(host, entry.body, opens(host, entry.body.id));
@@ -77,7 +77,7 @@ export function seedHeard(host: RoomHostState): void {
  * the pending activations the projection derives. One message, one entry,
  * one order.
  */
-function queueMessage(host: RoomHostState, entry: Extract<Entry, { kind: 'message' }>): void {
+function queueMessage(host: RoomHostState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
 	const message = copyMessage(placed(entry));
 	const state = host.state();
 	const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;

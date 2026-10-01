@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
 import { createRuntime, runtimeStateOf, tokenWindowOf } from '../src/host/runtime.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { type RoomFacts, viewOf } from '../src/room/view.ts';
@@ -38,7 +38,7 @@ function summary(seq: Seq, from: Seq, through: Seq): Message {
 	};
 }
 
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -49,9 +49,9 @@ const composition: Entry = {
 };
 
 /** The journal assigns the place, so an entry body carries none. */
-function message(body: Message): Entry {
+function message(body: Message): RoomEntry {
 	const { seq, ...rest } = body;
-	return { kind: 'message', seq, body: rest } as Entry;
+	return { kind: 'message', seq, body: rest } as RoomEntry;
 }
 
 const respond: ActivationSpec = {

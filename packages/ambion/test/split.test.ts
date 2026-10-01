@@ -13,12 +13,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
-import type { Entry as RoomEntry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { fakeClock } from '../src/testing.ts';
 import {
 	agents,
@@ -54,10 +54,10 @@ const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 /**
  * The stored entries as the fold reads them: the ones that stand past every
  * fence. The storage holds the journal's own three beside the body, so this
- * keeps only the room's record kinds. The native envelope already keeps the
+ * keeps only the room's record kinds. The native entry already keeps the
  * body nested beside its seq, key, and run.
  */
-function entriesOf(stored: readonly JournalEntry[]): RoomEntry[] {
+function entriesOf(stored: readonly Entry[]): RoomEntry[] {
 	return standing(stored).flatMap((entry): RoomEntry[] => {
 		if (
 			entry.kind !== 'message' &&

@@ -4,7 +4,7 @@
  * the runtime writes. `GOLDEN=write` runs them and saves the result.
  */
 
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { pi, piExecution } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
@@ -63,7 +63,7 @@ interface Setup {
 	readonly drive: Drive;
 }
 
-async function record(setup: Setup): Promise<readonly JournalEntry[]> {
+async function record(setup: Setup): Promise<readonly Entry[]> {
 	const opened = await memory.open();
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -89,7 +89,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 	}
 }
 
-const complete = (): Promise<readonly JournalEntry[]> =>
+const complete = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
 		summary: assistant.name,
@@ -120,7 +120,7 @@ const asksTheChecker: PiScript = (context) => {
  * continues the worker's session. The second exchange begins a fresh one.
  * Each ended activation records its session.
  */
-function session(): Promise<readonly JournalEntry[]> {
+function session(): Promise<readonly Entry[]> {
 	let ended = () => {};
 	const workerEnded = new Promise<void>((resolve) => {
 		ended = resolve;
@@ -150,7 +150,7 @@ function session(): Promise<readonly JournalEntry[]> {
 	});
 }
 
-const awaiting = (): Promise<readonly JournalEntry[]> =>
+const awaiting = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -162,7 +162,7 @@ const awaiting = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
-const cancelled = (): Promise<readonly JournalEntry[]> =>
+const cancelled = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -175,7 +175,7 @@ const cancelled = (): Promise<readonly JournalEntry[]> =>
 		},
 	});
 
-const exhausted = (): Promise<readonly JournalEntry[]> =>
+const exhausted = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'named' },
@@ -204,7 +204,7 @@ const checksLater: PiScript = (context) => {
  * returns it when it is due, and the returned entry opens a second exchange
  * for the same owner. The assistant summarises each exchange for her.
  */
-const scheduled = (): Promise<readonly JournalEntry[]> =>
+const scheduled = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
 		summary: assistant.name,
@@ -240,7 +240,7 @@ const changesItsMind: PiScript = (context) => {
  * with the dismiss tool, and the host dismisses the second with
  * `room.dismiss`. The room returns neither.
  */
-const dismissed = (): Promise<readonly JournalEntry[]> =>
+const dismissed = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker],
 		seats: { worker: 'broadcast' },
@@ -256,7 +256,7 @@ const dismissed = (): Promise<readonly JournalEntry[]> =>
 	});
 
 /** A room that stops and resumes: two runs, and the second fences the first. */
-async function resumed(): Promise<readonly JournalEntry[]> {
+async function resumed(): Promise<readonly Entry[]> {
 	const opened = await memory.open();
 	const clock = fakeClock();
 	const runtime = () =>
@@ -294,7 +294,7 @@ async function resumed(): Promise<readonly JournalEntry[]> {
 }
 
 /** Every golden scenario, by fixture name. */
-export const goldenScenarios: Readonly<Record<string, () => Promise<readonly JournalEntry[]>>> = {
+export const goldenScenarios: Readonly<Record<string, () => Promise<readonly Entry[]>>> = {
 	complete,
 	awaiting,
 	scheduled,
