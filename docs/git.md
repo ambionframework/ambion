@@ -159,8 +159,8 @@ interface GitEnv extends ResourceEnv {
 
 interface GitBackend extends ResourceBackend<GitEnv> {
   readonly access: GitAccess;
-  /** The server this backend names in the guidance, with no credential. */
-  readonly server: string;
+  /** The label that the guidance uses for the server of this backend, with no credential. */
+  readonly label: string;
 }
 ```
 
@@ -179,7 +179,7 @@ It resolves when that fork can be cloned, the same as a new fork.
 one registration. A failed registration rejects
 that operation with an error that names the template. The next operation
 tries again. Host code that wants the error at start calls
-`lab.git.use(lab.host, (env) => env.list())`.
+`lab.git.use(lab.mirrorAgent, (env) => env.list())`.
 
 **A bash backend receives `GitAccess` when it connects.**
 `BashBackend.connect` gets a third, optional argument, `BashServices`,
@@ -202,7 +202,7 @@ interface BashBackend {
 **`openWorkspace` refuses a pair that does not match.** When
 `backend.git` is set and `backend.bash.gitTransports` does not hold its
 `transport`, `openWorkspace` throws. Neither backend has a name, so the
-error names the `transport` and the `server` of the git backend, and the
+error names the `transport` and the `label` of the git backend, and the
 transports that the bash backend carries. A bash backend with no
 `gitTransports` carries none. This check is the only check: a bash
 backend reads the access at `connect` with no check of its own.
@@ -590,7 +590,7 @@ holds the bundle, so the git note stays at ten lines.
 8. The rooms note.
 
 **The git note states the namespaces and the rule that persists an
-edit.** The workspace writes the backend's `server` into the first line, and
+edit.** The workspace writes the backend's `label` into the first line, and
 its own name into the form of a commit ref.
 
 ```text
@@ -645,7 +645,7 @@ templates and other agents' forks. The server checks the credential and
 protects the default branch of shared repositories in its pre-receive
 hook.
 
-**A credential lives for `tokenTtl`, 1 hour by default.** A client asks
+**A credential lives for `credentialTtl`, 1 hour by default.** A client asks
 again before it expires. A new fork adds a write credential at once.
 
 **`justGitBackend` signs a new credential at each call.** The just-bash
@@ -737,13 +737,13 @@ const lab = openWorkspace({
 });
 ```
 
-| Option      | Meaning                                                                |
-| ----------- | ---------------------------------------------------------------------- |
-| `storage`   | `sqliteGitStorage(path)`, or `':memory:'` for tests                    |
-| `secret`    | The key of every token. A new secret revokes every token               |
-| `templates` | The registrations, by template name                                    |
-| `tokenTtl`  | Seconds a token lives. The default is 3600                             |
-| `onError`   | Called with a fault of the server. Absent, the backend reports nothing |
+| Option          | Meaning                                                                |
+| --------------- | ---------------------------------------------------------------------- |
+| `storage`       | `sqliteGitStorage(path)`, or `':memory:'` for tests                    |
+| `secret`        | The key of every token. A new secret revokes every token               |
+| `templates`     | The registrations, by template name                                    |
+| `credentialTtl` | Seconds a token lives. The default is 3600                             |
+| `onError`       | Called with a fault of the server. Absent, the backend reports nothing |
 
 **A clone URL is `http://git.ambion.invalid/<namespace>/<name>`.** The
 server and the token check resolve a request path with one function: they
@@ -958,7 +958,7 @@ and each hook takes the backend and the workspace that the case opened.
 **`packages/just-bash` runs the cases on the memory and the directory
 backends.** Its own tests add:
 
-- the tokens, and a `tokenTtl` that is not finite;
+- the tokens, and a `credentialTtl` that is not finite;
 - `template-sources`: no agent lists, gets, resolves, shows, or forks a
   repository in it, no agent holds a credential for it, and an agent with
   that name is refused;

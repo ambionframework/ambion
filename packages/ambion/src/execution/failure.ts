@@ -1,7 +1,7 @@
 /**
  * Whether an executor failure is permanent or transient, from its text and
  * an HTTP status when the provider gave one, and the provider's own words
- * for the failure. One classifier serves every executor family.
+ * for the failure. One classifier serves every executor kind.
  */
 
 import type { FailureCause } from '../types.ts';

@@ -4,10 +4,10 @@
  */
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createRuntime, isSpoken, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
+import { createRuntime, isSaid, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
-import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { memory } from '../../ambion/test/support/storage.ts';
 import { piExecution } from '../src/index.ts';
@@ -16,13 +16,13 @@ import { tempDir } from './support/temp.ts';
 const worker = scriptedAgent('worker');
 
 const answering = () =>
-	scripted((_context, _agent, request) => (request === 1 ? speak('42') : quiet()));
+	scriptedStream((_context, _agent, request) => (request === 1 ? say('42') : quiet()));
 
 /** Ask the one question and return what was said, once the exchange closes. */
 async function ask(room: Room) {
 	const visit = await room.visit(andrei);
 	const exchange = await visit.send({ text: 'What is the answer?' });
-	return (await exchange.waitForClose()).filter(isSpoken);
+	return (await exchange.waitForClose()).filter(isSaid);
 }
 
 describe('piExecution', () => {
@@ -57,14 +57,14 @@ describe('piExecution', () => {
 		// The runtime's default serves a resumed room too.
 		const again = await resumeRoom(name, { agents: [worker], runtime });
 		await waitForRoom(again);
-		const spoken = (await again.read()).messages.filter(isSpoken);
+		const spoken = (await again.read()).messages.filter(isSaid);
 		await again.stop();
 		expect(spoken.map((message) => message.text)).toContain('42');
 	});
 
 	it('lets a room name its own execution over the runtime default', async () => {
 		const runtime = createRuntime({
-			execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		const room = stopAtEnd(
 			await startRoom({

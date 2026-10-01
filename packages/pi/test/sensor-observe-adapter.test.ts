@@ -2,7 +2,7 @@
 import { defineAgent, startRoom } from '@ambionframework/ambion';
 import { expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, waitForRoom } from '../../ambion/test/support/room.ts';
-import { callTool, quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { callTool, quiet, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { frameBytes } from '../../workspace/test/support/sensor-blobs.ts';
 import { openSensorObserveRoom } from '../../workspace/test/support/sensor-observe-room.ts';
@@ -30,7 +30,7 @@ it.each([
 			agents: [worker],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, _agent, request) => {
+				stream: scriptedStream((context, _agent, request) => {
 					if (request === 1) return callTool('observe', { sensor: 'bench-one/bench' });
 					for (const message of context.messages)
 						if (message.role === 'toolResult') providerToolResults.push(message);

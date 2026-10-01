@@ -15,7 +15,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Execution,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -118,7 +118,7 @@ export async function untilQuiet(room: Room): Promise<void> {
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((message) => message.from === name);
+	messages.filter(isSaid).filter((message) => message.from === name);
 
 /** The activations that a seat started, in order. */
 export const activationsOf = (events: readonly RoomNotification[], agent: string): string[] =>

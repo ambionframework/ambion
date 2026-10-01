@@ -3,7 +3,7 @@
  * a deadline on the room going quiet, and the invariants the record holds
  * whatever the model said, and what a run cost.
  *
- * `AMBION_EXECUTOR` picks the executor family: `pi` (the default), `claude` or
+ * `AMBION_EXECUTOR` picks the executor kind: `pi` (the default), `claude` or
  * `codex`. Every test runs under each with the same claims.
  *
  * A live test proves what a scripted stream cannot: that a model id resolves
@@ -19,7 +19,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	type Message,
 	type Room,
 	type RoomNotification,
@@ -127,11 +127,11 @@ export async function untilQuiet(session: Room): Promise<void> {
 
 /** What one participant said, in record order. */
 export const saidBy = (messages: readonly Message[], name: string) =>
-	messages.filter(isSpoken).filter((m) => m.from === name);
+	messages.filter(isSaid).filter((m) => m.from === name);
 
 /** What agents contributed through ordinary speech. */
 export const saidByAgents = (messages: readonly Message[], people: string[]) =>
-	messages.filter(isSpoken).filter((m) => !people.includes(m.from));
+	messages.filter(isSaid).filter((m) => !people.includes(m.from));
 
 /** What happened to one seat's activations, for an assertion message: starts, ends, errors, and abandons. */
 export const trailOf = (events: RoomNotification[], name: string): string =>

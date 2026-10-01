@@ -25,10 +25,10 @@ import {
 	later,
 	quiet,
 	type Script,
+	say,
 	scripted,
 	scriptedExecutor,
 	settled,
-	speak,
 } from '../src/testing.ts';
 import type { AgentExecutor, ExecutionEvent, Step } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
@@ -69,7 +69,7 @@ describe('scripted', () => {
 			execution: scripted(
 				byAgent({
 					a: record('a', (_step, _seat, request) =>
-						request === 1 ? callTool('echo') : request === 2 ? speak('an answer') : quiet(),
+						request === 1 ? callTool('echo') : request === 2 ? say('an answer') : quiet(),
 					),
 					b: record('b'),
 				}),
@@ -126,7 +126,7 @@ describe('isClosing', () => {
 			runtime: createRuntime(),
 			execution: scripted((step, seat, request) => {
 				flags.push(isClosing(step.view));
-				return request === 1 ? speak(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
+				return request === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
 		});
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -144,9 +144,7 @@ describe('settled', () => {
 			name: roomName('testing-settled'),
 			agents: [agent('a')],
 			runtime: createRuntime(),
-			execution: scripted((_step, _seat, request) =>
-				request === 1 ? speak('an answer') : quiet(),
-			),
+			execution: scripted((_step, _seat, request) => (request === 1 ? say('an answer') : quiet())),
 		});
 		let reads = 0;
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -255,7 +253,7 @@ describe('scriptedExecutor', () => {
 		const session = open(
 			scriptedExecutor(
 				(_step, _seat, request) =>
-					request === 1 ? speak('hi') : request === 2 ? later('Check the build.', 600) : quiet(),
+					request === 1 ? say('hi') : request === 2 ? later('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);
@@ -282,7 +280,7 @@ describe('scriptedExecutor', () => {
 		const session = open(
 			scriptedExecutor((step) => {
 				seen.push(step.results.map((result) => result.text).join(','));
-				return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
+				return step.results.some((r) => r.text === 'delivered') ? quiet() : say('again');
 			}, agent('a')),
 		);
 		await session.pass(input(respond));
@@ -294,7 +292,7 @@ describe('scriptedExecutor', () => {
 
 	it('stops when the room answers stale, and never asks again', async () => {
 		const { open, commits } = harness(() => ({ stale: 'lease ended' }));
-		const session = open(scriptedExecutor(() => speak('hi'), agent('a')));
+		const session = open(scriptedExecutor(() => say('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
@@ -328,7 +326,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => speak('summary'), agent('a')));
+		const session = open(scriptedExecutor(() => say('summary'), agent('a')));
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');

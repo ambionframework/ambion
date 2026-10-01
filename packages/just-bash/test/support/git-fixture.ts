@@ -32,7 +32,7 @@ export function backendOver(file: string, options: GitConformanceOptions) {
 	return justGitBackend({
 		storage: sqliteGitStorage(file),
 		secret: SECRET,
-		...(options.credentialTtl === undefined ? {} : { tokenTtl: options.credentialTtl }),
+		...(options.credentialTtl === undefined ? {} : { credentialTtl: options.credentialTtl }),
 		templates: Object.fromEntries(
 			Object.entries(options.templates).map(([name, template]) => [
 				name,

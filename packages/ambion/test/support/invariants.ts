@@ -14,7 +14,7 @@ import {
 	type Room,
 	type RoomNotification,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 

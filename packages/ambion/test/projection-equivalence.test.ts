@@ -14,7 +14,7 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
-import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
+import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { readView } from '../src/room/read.ts';

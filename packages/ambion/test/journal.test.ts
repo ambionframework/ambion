@@ -5,7 +5,7 @@
 
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import type { SpokenMessage } from '../src/index.ts';
+import type { SaidMessage } from '../src/index.ts';
 import { placed, roomJournal, spaced } from '../src/journal/journal.ts';
 import { replayState } from './support/fold.ts';
 import { deferred, roomName } from './support/room.ts';
@@ -13,7 +13,7 @@ import { faultyJournals, gatedJournals, memory } from './support/storage.ts';
 
 const options = { backoff: () => 0 };
 
-const say = (text: string): Omit<SpokenMessage, 'seq' | 'key'> => ({
+const say = (text: string): Omit<SaidMessage, 'seq' | 'key'> => ({
 	kind: 'said',
 	at: '2026-01-01T09:00:00.000Z',
 	from: 'andrei',

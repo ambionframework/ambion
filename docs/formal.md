@@ -13,7 +13,7 @@ stale. Two files hold every rule:
 | [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 39 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
-suites.** Routing, presence, the roster, addressing, membership changes,
+suites.** Routing, presence, the roster, addressing, seating changes,
 the keyed retry, the reads, the pass's scheduling, the storage adapters,
 and the validator's shape checks decide in their own files with no
 contract. The line is deliberate: a proof pays for itself on a state

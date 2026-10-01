@@ -52,7 +52,7 @@ export type ExecutorPlan =
 	/** Record `usage` once, then say `text`. */
 	| { kind: 'usage'; text: string; usage: Usage };
 
-/** What one executor family can do. The suite drops a case that a capability gates. */
+/** What one executor kind can do. The suite drops a case that a capability gates. */
 export interface ExecutorCapabilities {
 	/** The executor takes a steer into a live pass. When false, a steer waits for the record. */
 	readonly steer: boolean;
@@ -72,7 +72,7 @@ export interface ExecutorCapabilities {
 export interface ExecutorFixture {
 	/**
 	 * Build the executor for one seat, ready to perform `plan`. The scripted
-	 * family maps the plan to a script, and a model family maps it to a fake
+	 * executor maps the plan to a script, and a model executor maps it to a fake
 	 * model stream or a fake executable.
 	 */
 	open(plan: ExecutorPlan, definition: AgentDefinition): Executor | Promise<Executor>;

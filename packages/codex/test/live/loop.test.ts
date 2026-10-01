@@ -3,7 +3,7 @@
  * run without an approval error, and the activation reports its usage and
  * its steps.
  */
-import { isSpoken } from '@ambionframework/ambion';
+import { isSaid } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { errorsIn, live, open, person, saidBy, seat, untilQuiet } from './support.ts';
 
@@ -43,7 +43,7 @@ live('the loop', () => {
 			const usage = ended.find((event) => event.agent === 'clerk')?.usage;
 			expect((usage?.input ?? 0) + (usage?.output ?? 0)).toBeGreaterThan(0);
 			expect(steps.length).toBeGreaterThan(0);
-			expect(messages.some(isSpoken)).toBe(true);
+			expect(messages.some(isSaid)).toBe(true);
 		} finally {
 			await room.stop();
 		}

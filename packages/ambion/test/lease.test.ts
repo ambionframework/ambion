@@ -22,14 +22,14 @@ import {
 	type CreateRuntimeOptions,
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
+import type { LeaseChange } from '../src/journal/entries.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
@@ -54,9 +54,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
+	say,
 	says,
-	scripted,
-	speak,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
@@ -80,7 +80,7 @@ async function open(
 	const clock = fakeClock();
 	const runtime =
 		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
-	const execution = piExecution({ sessions: 'memory', stream: scripted(script) });
+	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),
@@ -94,7 +94,7 @@ async function open(
 	return { session, clock, runtime };
 }
 
-const speaksOnce: PiScript = (_c, _a, request) => (request === 1 ? speak('hi') : quiet());
+const speaksOnce: PiScript = (_c, _a, request) => (request === 1 ? say('hi') : quiet());
 const starts = (events: ReturnType<typeof collect>) =>
 	events.filter((e) => e.type === 'activation_start').length;
 const ends = (events: ReturnType<typeof collect>) =>
@@ -102,7 +102,7 @@ const ends = (events: ReturnType<typeof collect>) =>
 const expired = (events: ReturnType<typeof collect>) =>
 	events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message));
 const speakers = async (session: Room) =>
-	(await messagesOf(session)).filter(isSpoken).map((m) => m.from);
+	(await messagesOf(session)).filter(isSaid).map((m) => m.from);
 const leaseChanges = async (runtime: Runtime, session: Room) =>
 	(await storedOf(hostingOf(runtime).journals, session.name)).flatMap((entry) =>
 		entry.kind === 'lease' ? [entry.body as LeaseChange] : [],
@@ -298,7 +298,7 @@ describe('a lease', () => {
 			async (_c, _a, request) => {
 				if (request !== 1) return quiet();
 				await held.promise;
-				return speak('too late');
+				return say('too late');
 			},
 			{ faults: [{ on: 'lease', kind: 'drop', match: operation('renew') }] },
 		);
@@ -348,7 +348,7 @@ describe('a lease', () => {
 		visit = await enter(session);
 		await visit.send({ text: 'First?' });
 		await waitForRoom(session);
-		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.text)).toEqual([
+		expect((await messagesOf(session)).filter(isSaid).map((m) => m.text)).toEqual([
 			'First?',
 			'solo on First?',
 			'Second?',
@@ -455,9 +455,9 @@ describe('a lease judged where its change is written', () => {
 			async (_c, _a, request) => {
 				if (request === 1) {
 					await held.promise;
-					return speak('late but alive');
+					return say('late but alive');
 				}
-				return request === 2 ? speak('recovered after expiry') : quiet();
+				return request === 2 ? say('recovered after expiry') : quiet();
 			},
 			{ runtime: (clock) => createRuntime({ clock, storage: journals }) },
 		);
@@ -548,7 +548,7 @@ describe('a lease judged where its change is written', () => {
 		await waitForRoom(session);
 
 		const record = await messagesOf(session);
-		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
+		const questions = record.filter((m) => isSaid(m) && m.from === 'priya');
 		const summaries = record.filter(isSummary);
 		expect(summaries).toHaveLength(2);
 		expect(summaries.map((summary) => summary.covers.from)).toEqual(

@@ -27,7 +27,7 @@ import { liveLeases, outcome } from './support/chaos.ts';
 import { childWrites, countWrites, crashOnce, quietNow } from './support/core-failure.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, currentExchange, messagesOf, participantsOf } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { childJournals, childStorage, memory, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
@@ -122,7 +122,7 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 				const session = await resumeRoom(name, {
 					runtime,
 					agents,
-					execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+					execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 				});
 				const events = collect(session);
 				const inheritedExchange = (await currentExchange(session)) !== undefined;

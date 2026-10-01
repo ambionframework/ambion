@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	defineTool,
-	isSpoken,
+	isSaid,
 	snapshotUri,
 	startRoom,
 	type ToolContext,
@@ -22,7 +22,13 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { enter, roomName as name } from '../../ambion/test/support/room.ts';
-import { byAgent, callTool, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import {
+	byAgent,
+	callTool,
+	quiet,
+	say,
+	scriptedStream,
+} from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace } from '../src/index.ts';
@@ -78,7 +84,7 @@ describe('the built-in tools', () => {
 					if (request === 2) return callTool('bash', { command: 'pwd; cat ~/notes.txt; ls /home' });
 					if (request > 3) return quiet();
 					writerDone.resolve();
-					return speak('written');
+					return say('written');
 				},
 				reader: async (context, who, request) => {
 					results[who] = toolResults(context);
@@ -101,9 +107,7 @@ describe('the built-in tools', () => {
 		);
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
-		expect((await session.read()).messages.filter(isSpoken).map((m) => m.text)).toContain(
-			'written',
-		);
+		expect((await session.read()).messages.filter(isSaid).map((m) => m.text)).toContain('written');
 		await session.stop();
 		await site.dispose();
 		expect(await readFile(join(root, 'home', 'writer', 'notes.txt'), 'utf8')).toBe(
@@ -157,7 +161,7 @@ describe('the built-in tools', () => {
 				if (request > 4) return quiet();
 				after = toolResults(context);
 				custom = after.at(-1)?.text;
-				return speak('still here');
+				return say('still here');
 			},
 		});
 		expect(after[0]).toMatchObject({ tool: 'write', failed: false });
@@ -279,13 +283,13 @@ describe('a workspace beside a running room', () => {
 			agents: [agent('worker', { bundles: [site.tools()] })],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(
+				stream: scriptedStream(
 					byAgent({
 						worker: (_context, _who, request) => {
 							if (request === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
 							if (request === 2) return callTool('snapshot', { paths: ['notes.txt'] });
 							if (request === 3) return callTool('say', { text: 'first', refs: [ref] });
-							return request === 4 ? speak('second') : quiet();
+							return request === 4 ? say('second') : quiet();
 						},
 					}),
 				),
@@ -311,7 +315,7 @@ describe('a workspace beside a running room', () => {
 		expect(spoken[0]?.refs).toEqual([ref]);
 		expect(new TextDecoder().decode(await site.readSnapshot(ref))).toBe('done\n');
 		expect(
-			await site.use(site.host, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
+			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
 		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 		expect(lines).toHaveLength((await session.read()).messages.length);
