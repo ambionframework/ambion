@@ -47,6 +47,8 @@ jobs:
       - run: pnpm run check:format
       - run: pnpm run check:types
       - run: pnpm run check:lint
+      - run: pnpm run check:knip
+      - run: pnpm run check:lemmascript:gen
       - run: pnpm run build
 
       # Every publishable package pins the same engines.node, and its pack
