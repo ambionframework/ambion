@@ -41,8 +41,8 @@ export interface Env {
 
 export interface StartOptions {
 	name: string;
-	summary?: string;
-	agents?: readonly string[];
+	summaryWriter?: string;
+	definitions?: readonly string[];
 	seats?: Record<string, Attention>;
 	goal?: string;
 }
@@ -109,15 +109,15 @@ export class RoomObject extends DurableObject<Env> {
 		});
 		this.metadata = roomMetadata(ctx);
 		ctx.blockConcurrencyWhile(async () => {
-			const { name, agents, stopped } = this.metadata.read();
+			const { name, definitions, stopped } = this.metadata.read();
 			if (name === undefined || stopped === true) return;
-			if (agents === undefined)
+			if (definitions === undefined)
 				throw new Error(`Room '${name}' has no definitions in its metadata.`);
 			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
 			if (!recorded.initialized) return;
 			this.room = await resumeRoom(name, {
 				runtime: this.runtime,
-				agents: agents.map(definitionOf),
+				agents: definitions.map(definitionOf),
 			});
 		});
 	}
@@ -128,15 +128,15 @@ export class RoomObject extends DurableObject<Env> {
 		this.metadata.change(() => ({
 			patch: {
 				name: options.name,
-				agents: [...(options.agents ?? [])],
+				definitions: [...(options.definitions ?? [])],
 				stopped: false,
 			},
 		}));
 		this.room = await startRoom({
 			name: options.name,
 			runtime: this.runtime,
-			agents: (options.agents ?? []).map(definitionOf),
-			...(options.summary === undefined ? {} : { summary: options.summary }),
+			agents: (options.definitions ?? []).map(definitionOf),
+			...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
 			...(options.seats === undefined ? {} : { seats: options.seats }),
 			...(options.goal === undefined ? {} : { goal: options.goal }),
 		});

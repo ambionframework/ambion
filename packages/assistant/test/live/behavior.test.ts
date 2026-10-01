@@ -556,7 +556,7 @@ live('the default assistant, driven by the simulator', () => {
 			// A post gives no direction, so silence is a valid answer. A say speaks to the event.
 			const spoken = discussion.filter(
 				(message): message is SaidMessage =>
-					isSaid(message) && message.from === 'assistant' && message.activationId === id,
+					isSaid(message) && message.from === 'assistant' && message.activation === id,
 			);
 			for (const message of spoken)
 				expect(message.text, JSON.stringify(discussion)).toMatch(/stale|sync|stock|SKU/i);

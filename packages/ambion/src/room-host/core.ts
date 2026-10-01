@@ -198,8 +198,8 @@ export function notificationFor(event: RoomNotification): RoomNotification {
 export function compositionOf(cast: CompositionDraft, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
-		...(cast.summary === undefined ? {} : { summary: cast.summary }),
-		agents: cast.definitions
+		...(cast.summaryWriter === undefined ? {} : { summaryWriter: cast.summaryWriter }),
+		seated: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))
 			.map((agent) => {
 				const seat = cast.seats.get(agent.name);
@@ -210,7 +210,7 @@ export function compositionOf(cast: CompositionDraft, at: string): Without<Compo
 					...(seat?.fixed === undefined ? {} : { fixed: seat.fixed }),
 				};
 			}),
-		available: cast.definitions
+		reserve: cast.definitions
 			.filter((agent) => !cast.seats.has(agent.name))
 			.map((agent) => ({
 				name: agent.name,

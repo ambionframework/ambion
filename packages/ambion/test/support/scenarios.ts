@@ -111,7 +111,7 @@ export const oneExchange: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
 			execution: wire(
@@ -141,7 +141,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: {
 				[product.name]: 'broadcast',
 				[colleague.name]: 'broadcast',
@@ -196,7 +196,7 @@ export const seatFromReserve: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
 			execution: wire(

@@ -67,7 +67,7 @@ async function open(options: {
 		goal: 'Decide the pour date.',
 		agents: definitions,
 		seats,
-		...(options.summary ? { summary: writer.name } : {}),
+		...(options.summary ? { summaryWriter: writer.name } : {}),
 		runtime,
 		execution: piExecution({ sessions: 'memory', stream: scriptedStream(options.script) }),
 	});

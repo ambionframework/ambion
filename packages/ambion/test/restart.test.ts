@@ -111,7 +111,7 @@ function open(
 ): Promise<Room> {
 	return startRoom({
 		name,
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: {
 			...Object.fromEntries(seated.map((agent) => [agent.name, 'broadcast'] as const)),
 			[assistant.name]: 'none',

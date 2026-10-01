@@ -322,7 +322,7 @@ activation to its store, and the executor removes none.
 executor sends no delta on resume. The resumed session holds the earlier
 record and the view again. `readThrough` starts at zero in each activation,
 and a say against newer record gets a `missed` answer. The executor resumes
-the session that `pass.resume` names.
+the session that `pass.resumeId` names.
 
 **The first message of a resumed query restates the seat's part.** A
 resumed session keeps the system prompt it began with, and the SDK ignores

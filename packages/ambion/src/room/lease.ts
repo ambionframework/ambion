@@ -30,7 +30,7 @@
 import type { Entry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { LeaseChange } from '../journal/entries.ts';
-import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
+import type { Message, Seq, Usage, VendorSession } from '../types.ts';
 import {
 	applyChange,
 	countsAgainst,
@@ -43,8 +43,8 @@ import {
 export type LeaseHold = RuleLease & {
 	/** What the activation spent, from the ended entry its driver wrote. */
 	readonly usage?: Usage;
-	/** The harness session the ended entry recorded. */
-	readonly session?: HarnessSession;
+	/** The vendor session the ended entry recorded. */
+	readonly session?: VendorSession;
 };
 
 /**

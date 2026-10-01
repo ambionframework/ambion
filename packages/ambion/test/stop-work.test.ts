@@ -236,7 +236,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 			executor: pi({ instructions: 'summarise the exchange', model: 'scripted/summary' }),
 		});
 		const room = await workerRoom(runtime, stream, {
-			summary: summary.name,
+			summaryWriter: summary.name,
 			agents: [worker, summary],
 			seats: { [worker.name]: 'named', [summary.name]: 'none' },
 		});

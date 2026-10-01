@@ -37,7 +37,6 @@ import {
 	type ExchangeOutcome,
 	type ExchangeRange,
 	type ExchangeRef,
-	type HarnessSession,
 	isSaid,
 	isSummary,
 	type Message,
@@ -45,6 +44,7 @@ import {
 	type SummaryMessage,
 	type SummaryOutcome,
 	type Usage,
+	type VendorSession,
 } from '../types.ts';
 import { type LeaseHold, removedAfter } from './lease.ts';
 import {
@@ -86,7 +86,7 @@ export function coveringSummary(
  * it writes for. It holds no `at`, so the room can rebuild it from an `Owed`.
  */
 export type SummaryClose = Pick<Close, 'from' | 'through'> &
-	({ summary: string; person: string } | { summary?: undefined });
+	({ summaryWriter: string; person: string } | { summaryWriter?: undefined });
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -95,12 +95,12 @@ export function summaryCompletion(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): SummaryOutcome {
-	const writer = close.summary;
+	const writer = close.summaryWriter;
 	// A close with no writer has no summary to publish.
 	const summary =
-		close.summary === undefined
+		close.summaryWriter === undefined
 			? undefined
-			: coveringSummary(messages, close.person, close, close.summary);
+			: coveringSummary(messages, close.person, close, close.summaryWriter);
 	if (summary !== undefined) return { kind: 'published', summary };
 	const verdict = summaryVerdict(
 		writer !== undefined,
@@ -379,9 +379,9 @@ function servedExchange(
 }
 
 /**
- * The harness session an activation resumes: the one that the latest ended
+ * The vendor session an activation resumes: the one that the latest ended
  * activation of the same seat in the same exchange recorded. The latest is
- * the one whose end entry stands highest on the journal. A harness session
+ * the one whose end entry stands highest on the journal. A vendor session
  * never crosses an exchange, so the first activation of a seat in each
  * exchange starts fresh.
  */
@@ -390,10 +390,10 @@ export function exchangeSession(
 	closes: readonly Close[],
 	open: ExchangeRef | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
-): HarnessSession | undefined {
+): VendorSession | undefined {
 	const activation = seatAndExchange(id, closes, open);
 	if (activation?.exchange === undefined) return undefined;
-	let latest: { until: Seq; session: HarnessSession } | undefined;
+	let latest: { until: Seq; session: VendorSession } | undefined;
 	for (const lease of withSession(leases)) {
 		if (latest !== undefined && lease.until <= latest.until) continue;
 		const ended = seatAndExchange(lease.id, closes, open);
@@ -402,10 +402,10 @@ export function exchangeSession(
 	return latest?.session;
 }
 
-/** The ended leases that recorded a harness session. */
+/** The ended leases that recorded a vendor session. */
 function withSession(
 	leases: ReadonlyMap<string, LeaseHold>,
-): { id: string; until: Seq; session: HarnessSession }[] {
+): { id: string; until: Seq; session: VendorSession }[] {
 	return [...leases.values()].flatMap((lease) =>
 		lease.phase === 'ended' && lease.session !== undefined
 			? [{ id: lease.id, until: lease.until, session: lease.session }]

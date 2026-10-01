@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Four stored bodies change field names, and Ambion does not read a
+journal of an earlier release.** A message body holds `activation` for
+`activationId`. An ended `lease` body holds `session: { kind, id }` for
+`session: { harness, id }`. A `composition` body holds `seated`, `reserve`,
+and `summaryWriter` for `agents`, `available`, and `summary`, and a `close`
+body holds `summaryWriter` for `summary`. The Cloudflare room metadata holds
+`definitions` for `agents`. The types follow: `Landed.activationId` is
+`activation`, `HarnessSession` is `VendorSession`, `Pass.resume` is
+`resumeId`, `Composition.agents` and `Composition.available` are `seated` and
+`reserve`, and `summary` is `summaryWriter` on `StartRoomOptions`,
+`Composition`, `Close`, and the Cloudflare `StartOptions`. `StartOptions.agents`
+is `definitions`, and `TracePolicy.thinking` takes `'start'` for `'summary'`.
+The golden journals hold the new names.
 **A conformance fixture is a fixture, and the testing entry names its own
 script types.** `@ambionframework/ambion/conformance` exports
 `ExecutorFixture` and `PortFixture` in place of `ExecutorHarness` and
@@ -72,7 +85,7 @@ activation ids do not change.
 Before, a type and a schema each stated the body, and the two drifted.
 `SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
 `DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
-`FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`, `Close`,
+`FailureCause`, `Usage`, `VendorSession`, `LeaseChange`, `Close`,
 `Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
 schemas with `Static`.
 

@@ -8,8 +8,8 @@ import type { Message } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
 	CommitResult,
-	HarnessSession,
 	PassInput,
+	VendorSession,
 } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
@@ -21,13 +21,13 @@ const ID = '01a0c21c-ffca-7082-9772-3bac91d64bc7';
 const plain = recorded('plain-answer');
 
 /** The first view of an activation, with the session the room recorded. */
-function input(resume?: HarnessSession): PassInput {
+function input(resume?: VendorSession): PassInput {
 	const view = viewOf();
 	return { kind: 'view', view: resume ? { ...view, spec: { ...view.spec, resume } } : view };
 }
 
 /** Run one pass of a session and read the session it reports. */
-async function run(session: ActivationState, resume?: HarnessSession) {
+async function run(session: ActivationState, resume?: VendorSession) {
 	const result = await session.pass(input(resume));
 	session.close?.();
 	return { result, session: session.session };
@@ -38,7 +38,7 @@ describe('exchange continuity', () => {
 		const room = open([plain, plain, plain]);
 		const first = await run(room.activate('a1'));
 		expect(first.result).toEqual({ failed: false });
-		expect(first.session).toEqual({ harness: 'codex', id: ID });
+		expect(first.session).toEqual({ kind: 'codex', id: ID });
 		await run(room.activate('a2'), first.session);
 		await run(room.activate('a3'));
 		expect(room.seen.opened).toEqual([
@@ -54,17 +54,17 @@ describe('exchange continuity', () => {
 	it.each([
 		{
 			what: 'resumes the thread the room recorded, after a restart',
-			harness: 'codex',
+			kind: 'codex',
 			resume: 'saved',
 		},
 		{
 			what: 'ignores a session that another harness recorded',
-			harness: 'claude',
+			kind: 'claude',
 			resume: undefined,
 		},
-	])('$what', async ({ harness, resume }) => {
+	])('$what', async ({ kind, resume }) => {
 		const room = open([plain]);
-		await run(room.activate(), { harness, id: 'saved' });
+		await run(room.activate(), { kind, id: 'saved' });
 		expect(room.seen.opened).toEqual([{ resume }]);
 		// The seat text stays in the instructions file, also for a thread that resumes.
 		expect(room.seen.prompts[0]).not.toContain(RESUMED_NOTE);
@@ -73,13 +73,13 @@ describe('exchange continuity', () => {
 	it('starts a fresh thread when the resume fails before the thread starts', async () => {
 		const room = open([new Error('Codex Exec exited with code 1: no session'), plain]);
 		const session = room.activate();
-		const result = await session.pass(input({ harness: 'codex', id: 'bogus' }));
+		const result = await session.pass(input({ kind: 'codex', id: 'bogus' }));
 		session.close?.();
 		expect(result).toEqual({ failed: false });
 		expect(room.seen.opened).toEqual([{ resume: 'bogus' }, { resume: undefined }]);
 		expect(room.seen.prompts).toHaveLength(2);
 		expect(room.seen.prompts[1]).toBe(room.seen.prompts[0]);
-		expect(session.session).toEqual({ harness: 'codex', id: ID });
+		expect(session.session).toEqual({ kind: 'codex', id: ID });
 		expect(room.events.filter((event) => event.type === 'error')).toEqual([]);
 	});
 
@@ -105,7 +105,7 @@ function keyedRoom() {
 			kind: 'said',
 			seq: byKey.size + 2,
 			key: request.key,
-			activationId: request.activation,
+			activation: request.activation,
 			at: new Date(0).toISOString(),
 			from: 'gpt',
 			text: request.intent.text,

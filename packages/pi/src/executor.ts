@@ -258,7 +258,7 @@ class Activation implements RunningActivation {
 	 * harness cannot attach to, closes, and a fresh session takes its place.
 	 */
 	private async openSession(pass: Pass, model: Model<Api>): Promise<Opened> {
-		const resumed = await this.resumed(scopeOf(pass.view, this.definition), pass.resume);
+		const resumed = await this.resumed(scopeOf(pass.view, this.definition), pass.resumeId);
 		if (resumed !== undefined) {
 			const opened = await this.attach(resumed, pass, model).catch(() => undefined);
 			if (opened !== undefined) return opened;
@@ -310,7 +310,7 @@ class Activation implements RunningActivation {
 	 * to the root, and the activation reads the whole view once.
 	 */
 	private async readBase(opened: Opened, pass: Pass): Promise<void> {
-		if (pass.resume === undefined) return;
+		if (pass.resumeId === undefined) return;
 		const entry = await opened.lane.findEntry(
 			{ type: 'custom', customType: READ, order: 'newestFirst' },
 			CONTEXT,

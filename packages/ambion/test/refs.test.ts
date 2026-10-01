@@ -234,7 +234,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 				goal: 'Cite what is said.',
 				agents: [product, assistant],
 				seats: { product: 'broadcast', assistant: 'none' },
-				summary: assistant.name,
+				summaryWriter: assistant.name,
 				runtime: createRuntime({ storage: opened.storage }),
 				execution: piExecution({ sessions: 'memory', stream }),
 			}),

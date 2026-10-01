@@ -150,7 +150,7 @@ included, and the executor deletes none of them.
 
 ## Exchange continuity
 
-**The release records `{ harness: 'pi', id }`,** where the id names the
+**The release records `{ kind: 'pi', id }`,** where the id names the
 activation that began the session. The next activation of the seat in the
 same exchange reopens the session and prompts it with the delta. The first
 activation in a new exchange begins a fresh session. A session the store

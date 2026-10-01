@@ -76,7 +76,7 @@ describe('verified rules', () => {
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<DistributiveOmit<ActivationPurpose, 'people'>>();
 		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		// A close that owes a summary names its person, so the closing grant reads it.
-		expectTypeOf<Extract<Close, { summary: string }>>().toMatchTypeOf<CloseFact>();
+		expectTypeOf<Extract<Close, { summaryWriter: string }>>().toMatchTypeOf<CloseFact>();
 		// The room's lease is the rule's lease plus the usage and the session of its end.
 		expectTypeOf<RuleLease>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage' | 'session'>>();
 	});

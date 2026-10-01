@@ -150,7 +150,7 @@ class Cluster {
 		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: {
 				[product.name]: 'broadcast',
 				[colleague.name]: 'broadcast',

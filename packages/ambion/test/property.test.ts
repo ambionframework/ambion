@@ -157,7 +157,7 @@ class Walk {
 		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [alpha, beta, gamma, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			execution: this.execution(),

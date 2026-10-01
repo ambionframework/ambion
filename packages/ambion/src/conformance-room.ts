@@ -19,7 +19,7 @@ import {
 	roundTrip,
 	type ViewResponse,
 } from './protocol.ts';
-import type { HarnessSession, Message, Seq } from './types.ts';
+import type { Message, Seq, VendorSession } from './types.ts';
 
 export interface RoomScript {
 	/** The first view or the first commit waits until the case calls `release`. */
@@ -112,7 +112,7 @@ export function scriptedRoom(name: string, seat: string, script: RoomScript): Sc
 	/** The activations the room ended. A later activation has its own lease. */
 	const ended = new Set<string>();
 	/** The session the latest release recorded. The room hands it to the next activation. */
-	let recorded: HarnessSession | undefined;
+	let recorded: VendorSession | undefined;
 	const isActivation = (id: string) => id.startsWith('message:') && id.endsWith(`:${seat}:1`);
 	const live = (id: string) => isActivation(id) && !ended.has(id);
 	let open = () => {};
@@ -167,7 +167,7 @@ export function scriptedRoom(name: string, seat: string, script: RoomScript): Sc
 			kind: 'said',
 			seq: lastSeq() + 1,
 			key: request.key,
-			activationId: request.activation,
+			activation: request.activation,
 			at: new Date().toISOString(),
 			from: seat,
 			text,

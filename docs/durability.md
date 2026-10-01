@@ -256,9 +256,9 @@ one.
   cancel key carry no prefix. The room reads each key back without its
   prefix.
 
-**A `session` on an ended lease entry names a harness session.** An
-executor hands the driver a harness session at release. The room writes it
-as `session: { harness, id }` on the `ended` entry. It hands the latest one
+**A `session` on an ended lease entry names a vendor session.** An
+executor hands the driver a vendor session at release. The room writes it
+as `session: { kind, id }` on the `ended` entry. It hands the latest one
 of the seat in the same exchange to the next activation as `spec.resume`.
 The room never reads the id.
 

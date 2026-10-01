@@ -29,14 +29,14 @@ let unique = 0;
 export async function open(
 	script: Script,
 	names: readonly string[],
-	options: { summary?: string } = {},
+	options: { summaryWriter?: string } = {},
 ): Promise<Room> {
 	unique += 1;
 	const room = await startRoom({
 		name: `simulate-${unique}-${crypto.randomUUID()}`,
 		agents: names.map(agent),
 		execution: scripted(script),
-		...(options.summary === undefined ? {} : { summary: options.summary }),
+		...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
 	});
 	onTestFinished(() => room.stop());
 	return room;

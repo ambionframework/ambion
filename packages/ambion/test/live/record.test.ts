@@ -36,7 +36,7 @@ live('the record', () => {
 
 		const first = await startRoom({
 			name,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [memo.name]: 'broadcast', [assistant.name]: 'none' },
 			runtime,
 			agents: [memo, assistant],
@@ -50,7 +50,7 @@ live('the record', () => {
 
 		const second = await startRoom({
 			name,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [memo.name]: 'broadcast', [assistant.name]: 'none' },
 			runtime,
 			agents: [memo, assistant],

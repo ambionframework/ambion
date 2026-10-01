@@ -39,14 +39,14 @@ it('keeps each object record in one row, and applies each change whole', async (
 		const room = roomMetadata(state);
 		expect(room.read()).toEqual({});
 		expect(room.change(() => undefined)).toEqual({});
-		room.change(() => ({ patch: { name: 'room', agents: ['assistant'], stopped: false } }));
+		room.change(() => ({ patch: { name: 'room', definitions: ['assistant'], stopped: false } }));
 		expect(room.change(() => ({ remove: ['stopped'] }))).toEqual({
 			name: 'room',
-			agents: ['assistant'],
+			definitions: ['assistant'],
 		});
 		// A copy leaves the stored record as it was.
-		room.read().agents?.push('extra');
-		expect(roomMetadata(state).read()).toEqual({ name: 'room', agents: ['assistant'] });
+		room.read().definitions?.push('extra');
+		expect(roomMetadata(state).read()).toEqual({ name: 'room', definitions: ['assistant'] });
 
 		// A second store over the same object reads what the first wrote, and
 		// the seat record keeps a row apart from the room record.
@@ -60,7 +60,7 @@ it('keeps each object record in one row, and applies each change whole', async (
 			),
 		);
 		expect(seat.read()).toEqual({ wakeCount: 8 });
-		expect(room.read()).toEqual({ name: 'room', agents: ['assistant'] });
+		expect(room.read()).toEqual({ name: 'room', definitions: ['assistant'] });
 		const rows = state.storage.sql.exec('SELECT name FROM ambion_metadata ORDER BY name').toArray();
 		expect(rows.map((row) => row.name)).toEqual(['room', 'seat']);
 	});

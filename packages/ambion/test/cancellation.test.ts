@@ -228,7 +228,7 @@ describe('durable cancellation', () => {
 	it('fails an already pending summary without assigning one to the cancelled exchange', async () => {
 		const summaryStarted = deferred();
 		const room = await workerRoom(undefined, {
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
 			execution: piExecution({

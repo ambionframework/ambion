@@ -35,13 +35,13 @@ interface Cancelled {
 
 /** A close that owes a summary names its writer and the person it goes to. */
 interface OwedSummary {
-	summary: string;
+	summaryWriter: string;
 	person: string;
 }
 
 /** A close that owes no summary. It names a person when one spoke in the range. */
 interface NoSummary {
-	summary?: undefined;
+	summaryWriter?: undefined;
 }
 
 /** A room-wide cancellation marker. It closes the open exchange, when there is one. */
@@ -52,8 +52,8 @@ export interface Seating extends Static<typeof seatingSchema> {}
 
 /** What a run started with. The roster folds from the latest one. */
 export interface Composition extends Static<typeof compositionSchema> {
-	agents: Seating[];
-	available: Seating[];
+	seated: Seating[];
+	reserve: Seating[];
 	/** Where the composition sits on the record. */
 	seq: Seq;
 }

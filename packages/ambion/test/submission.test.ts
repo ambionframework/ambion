@@ -70,7 +70,7 @@ async function summarisedRoom(
 		await startRoom({
 			name: roomName('doubt'),
 			runtime: createRuntime({ clock, storage }),
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
 			execution: wrap(

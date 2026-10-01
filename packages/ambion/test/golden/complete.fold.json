@@ -49,7 +49,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				},
@@ -69,7 +69,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "closed:6:assistant:1"
 					}
 				}
@@ -85,7 +85,7 @@
 						"through": 6
 					},
 					"at": "2026-01-01T09:00:00.000Z",
-					"activationId": "closed:6:assistant:1",
+					"activation": "closed:6:assistant:1",
 					"from": "assistant",
 					"seq": 11,
 					"key": "key-4"
@@ -104,7 +104,7 @@
 						"through": 6
 					},
 					"at": "2026-01-01T09:00:00.000Z",
-					"activationId": "closed:6:assistant:1",
+					"activation": "closed:6:assistant:1",
 					"from": "assistant",
 					"seq": 11,
 					"key": "key-4"

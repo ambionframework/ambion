@@ -107,7 +107,7 @@ async function summariesMatchCloses(
 		expect(summary.covers.through).toBe(close.through);
 		expect(summary.to).toBe(close.person);
 		const activation =
-			summary.activationId === undefined ? undefined : decodeActivationId(summary.activationId);
+			summary.activation === undefined ? undefined : decodeActivationId(summary.activation);
 		expect(activation?.source).toBe('closed');
 		expect(activation?.position).toBe(close.through);
 		if (close.wakes?.[0] !== undefined) {
@@ -144,10 +144,10 @@ async function leased(session: Room, journals: JournalOpener): Promise<void> {
 			else running.delete(lease.id);
 		}
 		if (entry.kind !== 'message') continue;
-		const message = entry.body as { activationId?: string; from: string };
-		if (message.activationId === undefined) continue;
-		expect(running, `${message.from}'s message under ${message.activationId}`).toContain(
-			message.activationId,
+		const message = entry.body as { activation?: string; from: string };
+		if (message.activation === undefined) continue;
+		expect(running, `${message.from}'s message under ${message.activation}`).toContain(
+			message.activation,
 		);
 	}
 }

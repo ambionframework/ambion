@@ -95,7 +95,7 @@ const room = await startRoom({
     builder: 'named',
     reviewer: 'named',
   },
-  summary: assistant.name,
+  summaryWriter: assistant.name,
 });
 ```
 

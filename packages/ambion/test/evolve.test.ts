@@ -14,8 +14,8 @@ const retry = { backoff: (attempt: number) => attempt * 30_000 };
 const composition: Composition = {
 	seq: 2,
 	at,
-	agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
-	available: [{ name: 'surveyor', identity: 'Surveyor.', attention: 'named' }],
+	seated: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
+	reserve: [{ name: 'surveyor', identity: 'Surveyor.', attention: 'named' }],
 };
 const close: Close = { person: 'priya', from: 4, through: 7, at };
 const id = 'message:4:product:1';
@@ -54,7 +54,7 @@ const entries: RoomEntry[] = [
 		kind: 'message',
 		seq: 7,
 		key: 'answer',
-		body: { kind: 'said', at, from: 'product', text: 'Ready.', activationId: id },
+		body: { kind: 'said', at, from: 'product', text: 'Ready.', activation: id },
 	},
 	{ kind: 'lease', seq: 8, body: { id, phase: 'ended', reason: 'released', at, readThrough: 0 } },
 	{ kind: 'close', seq: 9, body: close },

@@ -87,9 +87,9 @@ function validateSchedule(kind: string, body: Record<string, unknown> | undefine
 
 /** A close that owes a summary names the person it goes to. */
 function validateSummaryPerson(kind: string, body: Record<string, unknown> | undefined): void {
-	if (kind !== 'close' || body?.summary === undefined || body.person !== undefined) return;
+	if (kind !== 'close' || body?.summaryWriter === undefined || body.person !== undefined) return;
 	throw new Error(
-		`Invalid room journal body for kind '${kind}' at body.person: expected a person with summary.`,
+		`Invalid room journal body for kind '${kind}' at body.person: expected a person with summaryWriter.`,
 	);
 }
 
@@ -97,10 +97,10 @@ function validateSummaryPerson(kind: string, body: Record<string, unknown> | und
 function validateDismissal(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body?.kind !== 'dismissed') return;
 	const seat = body.from !== undefined;
-	if (seat === (body.activationId !== undefined)) return;
-	const path = seat ? 'body.activationId' : 'body.from';
+	if (seat === (body.activation !== undefined)) return;
+	const path = seat ? 'body.activation' : 'body.from';
 	throw new Error(
-		`Invalid room journal body for kind '${kind}' at ${path}: expected from and activationId together.`,
+		`Invalid room journal body for kind '${kind}' at ${path}: expected from and activation together.`,
 	);
 }
 
@@ -134,7 +134,7 @@ function validateRange(kind: string, range: Record<string, unknown>, path: strin
 }
 
 function validateActivationId(kind: string, body: Record<string, unknown> | undefined): void {
-	const path = kind === 'lease' ? 'body.id' : kind === 'message' ? 'body.activationId' : undefined;
+	const path = kind === 'lease' ? 'body.id' : kind === 'message' ? 'body.activation' : undefined;
 	if (path === undefined || body === undefined) return;
 	const id = body[path.slice('body.'.length)];
 	if (id === undefined || decodeActivationId(id) !== undefined) return;

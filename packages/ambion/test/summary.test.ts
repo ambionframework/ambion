@@ -122,7 +122,7 @@ async function open(options: {
 	const session = await startRoom({
 		name: roomName(),
 		goal: 'Decide the pour date and keep the plan honest.',
-		summary: (options.assistant ?? assistant).name,
+		summaryWriter: (options.assistant ?? assistant).name,
 		agents: [...(options.agents ?? [product]), options.assistant ?? assistant],
 		seats: {
 			...(options.seats ??

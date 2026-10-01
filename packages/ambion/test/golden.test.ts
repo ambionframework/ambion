@@ -124,7 +124,7 @@ if (process.env.GOLDEN === 'write') {
 			const ended = entries.flatMap((entry) =>
 				entry.kind === 'lease' && entry.body.phase === 'ended' ? [entry.body] : [],
 			);
-			for (const change of ended) expect(change.session?.harness).toBe('pi');
+			for (const change of ended) expect(change.session?.kind).toBe('pi');
 			const [first = [], second = []] = foldOf(entries).exchanges.map((exchange) =>
 				exchange.activations.flatMap((activation) =>
 					activation.seat === 'worker' ? [activation.session?.id] : [],
