@@ -15,7 +15,7 @@ import {
 	SensorIndexSchema,
 	type SensorObservation,
 	type SensorSpan,
-} from './sensors.ts';
+} from './sensor-api.ts';
 
 /** A raw reply from one server request. JSON replies use `body`; file replies use `bytes`. */
 export interface SensorConformanceReply {

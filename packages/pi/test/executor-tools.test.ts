@@ -74,7 +74,7 @@ const summarize: Purpose = {
 };
 
 const at = '2026-01-01T00:00:00.000Z';
-const blank = 'The message is empty. Say something, or end your turn instead.';
+const blank = 'The message is empty. Say something, or end your activation instead.';
 const said = (seq: number, text: string): CommitResult => ({
 	committed: { kind: 'said', seq, at, from: 'worker', text },
 });
@@ -206,10 +206,13 @@ describe('executor tool authority', () => {
 			from: 'worker',
 			to: 'worker',
 			text: 'Check the build.',
-			after: 600,
+			delaySeconds: 600,
 		});
 		const clean = await bound('message:4:worker:1', respond, { committed: scheduled(5) });
-		const result = await call(clean.tool(1), 'clean', { text: ' Check the build. ', after: 600 });
+		const result = await call(clean.tool(1), 'clean', {
+			text: ' Check the build. ',
+			delaySeconds: 600,
+		});
 		expect(result.content).toEqual([
 			{
 				type: 'text',
@@ -221,7 +224,7 @@ describe('executor tool authority', () => {
 				activation: 'message:4:worker:1',
 				key: 'clean',
 				readThrough: 0,
-				intent: { kind: 'said', to: 'worker', text: 'Check the build.', after: 600 },
+				intent: { kind: 'said', to: 'worker', text: 'Check the build.', delaySeconds: 600 },
 			},
 		]);
 		expect(clean.activation.readThrough).toBe(5);
@@ -231,7 +234,10 @@ describe('executor tool authority', () => {
 			committed: scheduled(6),
 			unread: [unread],
 		});
-		const late = await call(behind.tool(1), 'behind', { text: 'Check the build.', after: 600 });
+		const late = await call(behind.tool(1), 'behind', {
+			text: 'Check the build.',
+			delaySeconds: 600,
+		});
 		expect(late.content).toEqual([
 			{
 				type: 'text',

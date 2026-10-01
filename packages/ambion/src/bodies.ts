@@ -87,7 +87,7 @@ export const saidSchema = Type.Object(
 		 * Seconds after `at` when the room returns the say to its author. Present
 		 * only on a say that an agent addressed to itself: a scheduled say.
 		 */
-		after: Type.Optional(Type.Integer({ minimum: 1 })),
+		delaySeconds: Type.Optional(Type.Integer({ minimum: 1 })),
 	},
 	extra,
 );

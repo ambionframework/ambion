@@ -37,7 +37,7 @@ const sonnetOptions = () => ({
 	env: {
 		...process.env,
 		AMBION_FAKE: JSON.stringify({
-			turns: [[{ sayUntilLanded: 'The pour is Saturday, says Claude.' }]],
+			passes: [[{ sayUntilLanded: 'The pour is Saturday, says Claude.' }]],
 		}),
 	},
 });

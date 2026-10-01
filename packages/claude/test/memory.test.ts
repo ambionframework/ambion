@@ -10,7 +10,7 @@ import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { RESUMED_NOTE } from '../src/executor.ts';
 import { fakeRoom, viewOf } from './support.ts';
 
-const SAY = { turns: [[{ say: 'Saturday.' }]] };
+const SAY = { passes: [[{ say: 'Saturday.' }]] };
 
 const resumeOf = (argv: string[] = []) =>
 	argv.find((arg) => arg.startsWith('--resume='))?.slice('--resume='.length);
@@ -51,6 +51,11 @@ describe('exchange continuity', () => {
 			context: { ...closing.context, preferences: 'Start with VERDICT.' },
 		});
 		const [one, two, three, four] = room.argvs();
+		// The session store is the config home, so every activation of the seat reads the same one.
+		const homes = room.envs().map((env) => env.values.CLAUDE_CONFIG_DIR);
+		expect(homes).toHaveLength(4);
+		expect(new Set(homes).size).toBe(1);
+		expect(homes[0]).toContain('ambion-claude-');
 		for (const argv of room.argvs()) expect(argv).not.toContain('--no-session-persistence');
 		expect(resumeOf(one)).toBeUndefined();
 		expect(resumeOf(two)).toBe('sess-1');
@@ -121,7 +126,7 @@ describe('exchange continuity', () => {
 			starts: 1,
 		},
 	])('$what', async ({ fail, rejectResumeResult, result, starts }) => {
-		const room = fakeRoom({ turns: [[{ fail }]], rejectResumeResult });
+		const room = fakeRoom({ passes: [[{ fail }]], rejectResumeResult });
 		const activation = room.activate('message:3:sonnet:1');
 		const answer = await activation.pass({
 			kind: 'view',

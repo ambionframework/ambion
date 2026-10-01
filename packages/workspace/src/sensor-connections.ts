@@ -4,8 +4,8 @@ import type { WorkspaceEndpoint, WorkspaceEndpoints } from './backend.ts';
 import type { ProcessRecord } from './process-files.ts';
 import type { ProcessEvent, ProcessTable } from './process-table.ts';
 import type { WorkspaceAgent } from './resource.ts';
+import type { SensorIndex, SensorSource } from './sensor-api.ts';
 import { createSensorClient, type SensorClient } from './sensor-client.ts';
-import type { SensorIndex, SensorSource } from './sensors.ts';
 
 /** The validated connection facts available to workspace sensor readers. */
 export interface RegisteredSensorConnection {

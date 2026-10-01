@@ -73,16 +73,20 @@ describe('createRuntime', () => {
 			/limits.context.messages/,
 		],
 		['a message of no bytes', { message: { bytes: 0 } }, /limits.message.bytes/],
-		['a scheduled say of no seconds', { schedule: { minAfter: 0 } }, /limits.schedule.minAfter/],
 		[
-			'a least after with no bound',
-			{ schedule: { minAfter: Number.POSITIVE_INFINITY } },
-			/limits.schedule.minAfter/,
+			'a scheduled say of no seconds',
+			{ schedule: { minDelaySeconds: 0 } },
+			/limits.schedule.minDelaySeconds/,
 		],
 		[
-			'a most after below the least',
-			{ schedule: { minAfter: 600, maxAfter: 60 } },
-			/limits.schedule.maxAfter/,
+			'a least delay with no bound',
+			{ schedule: { minDelaySeconds: Number.POSITIVE_INFINITY } },
+			/limits.schedule.minDelaySeconds/,
+		],
+		[
+			'a most delay below the least',
+			{ schedule: { minDelaySeconds: 600, maxDelaySeconds: 60 } },
+			/limits.schedule.maxDelaySeconds/,
 		],
 		['no scheduled says', { schedule: { pending: 0 } }, /limits.schedule.pending/],
 	])('refuses %s', (_, limits, error) => {
@@ -99,7 +103,7 @@ describe('createRuntime', () => {
 		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
 		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
-		expect(limits.schedule).toEqual({ minAfter: 60, maxAfter: 604_800, pending: 4 });
+		expect(limits.schedule).toEqual({ minDelaySeconds: 60, maxDelaySeconds: 604_800, pending: 4 });
 
 		const overridden = hostingOf(
 			createRuntime({

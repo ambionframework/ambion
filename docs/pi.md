@@ -302,7 +302,7 @@ continues. A continued session takes the tools of the activation that
 continues it: a summary activation holds `say` alone.
 
 **An `unknown` or `stale` answer ends the pass.** The executor cuts the activation
-and stands the seat down. The tool result names why the turn ended, and no
+and stands the seat down. The tool result names why the pass ended, and no
 further pass follows.
 
 ## Tools and bundles an agent can add
@@ -325,7 +325,7 @@ tool result to its store, and the disk store writes JSON.
 ## Policy and the trust boundary
 
 **Pi runs every tool on the host.** A tool has the privileges of the host
-process. Pi has no permission layer, no approval step, and no sandbox. The
+process. Pi has no permission layer and no sandbox. The
 definition is the whole policy: a tool that the definition omits does not
 exist for the model.
 
@@ -425,7 +425,6 @@ driver writes `pass`, `room`, and `end`.
 | `tool_result` | `tool_end`, with the result. A failed call adds `error` with the text of the result.          |
 | `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line. |
 | `usage`       | The harness `usage` event, one for each provider request.                                     |
-| `approval`    | Never. Pi has no approval step.                                                               |
 
 A redacted thinking block adds no step. The trace policy of the definition
 sets how much of `thinking` and tool output the journal keeps.

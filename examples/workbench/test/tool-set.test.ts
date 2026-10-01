@@ -60,8 +60,15 @@ describe('the Workbench tool set', () => {
 		);
 		expect(executors.datasheets).toMatchObject({ kind: 'pi' });
 		expect(executors.design).toMatchObject({ kind: 'claude', model: 'claude-sonnet-5' });
-		expect(executors.design).not.toHaveProperty('allowedTools');
-		expect(executors.design).not.toHaveProperty('disallowedTools');
+		for (const option of [
+			'allowedTools',
+			'disallowedTools',
+			'permissionMode',
+			'canUseTool',
+			'cwd',
+			'additionalDirectories',
+		])
+			expect(executors.design, option).not.toHaveProperty(option);
 		expect(executors.experiments).toMatchObject({
 			kind: 'codex',
 			model: 'gpt-5.6-luna',

@@ -73,7 +73,7 @@ interface SayArgs {
 }
 
 interface ScheduleArgs {
-	after: number;
+	delaySeconds: number;
 	text: string;
 	refs?: string[];
 }
@@ -191,7 +191,7 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 		return ended('The room did not confirm your message, and it may already hold it.');
 	}
 	const why = 'stale' in response ? response.stale : 'the room moved';
-	return ended(`Your turn ended: ${why}.`);
+	return ended(`Your activation ended: ${why}.`);
 }
 
 /**
@@ -216,14 +216,14 @@ function landedLine(response: { committed: Message } | { unchanged: Unchanged })
 
 /** The line of a say the room scheduled: its seq, and when it returns. */
 function scheduledLine(message: Message): string {
-	const after = message.kind === 'said' ? (message.after ?? 0) : 0;
-	const due = new Date(Date.parse(message.at) + after * 1000).toISOString();
+	const delaySeconds = message.kind === 'said' ? (message.delaySeconds ?? 0) : 0;
+	const due = new Date(Date.parse(message.at) + delaySeconds * 1000).toISOString();
 	return `scheduled #${message.seq}: the room wakes you with this message at ${due}`;
 }
 
 /** The result that tells the model its activation has ended. */
 function ended(why: string): RoomToolResult {
-	return { ...text(`${why} This turn is over.`, true), terminate: true };
+	return { ...text(`${why} This activation is over.`, true), terminate: true };
 }
 
 /** The refs a say cites: each trimmed, none empty. */
@@ -243,14 +243,14 @@ function saidBy(args: SayArgs): Intent {
 	};
 }
 
-/** The intent a schedule stands for: a say to the seat itself, with `after`. */
+/** The intent a schedule stands for: a say to the seat itself, with `delaySeconds`. */
 function scheduledBy(seat: string, args: ScheduleArgs): Intent {
 	return {
 		kind: 'said',
 		to: seat,
 		text: args.text.trim(),
 		...refsOf(args.refs),
-		after: args.after,
+		delaySeconds: args.delaySeconds,
 	};
 }
 
@@ -365,7 +365,7 @@ function missedSay(
 		refusal(
 			'Not delivered — the room moved while you were speaking. New on the record:',
 			[...missed],
-			'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+			'Speak again only if your reply still adds something the room has not heard; otherwise end your activation.',
 		),
 		true,
 	);

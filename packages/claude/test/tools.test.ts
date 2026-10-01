@@ -31,7 +31,7 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 	});
 	const run = open(
 		{
-			turns: [
+			passes: [
 				[{ call: { tool: 'lookup', args: { id: 'r1' } } }, { call: { tool: 'broken', args: {} } }],
 			],
 		},
@@ -61,11 +61,11 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 	expect(say?.inputSchema.required).toEqual(['text']);
 	const schedule = listed.find((tool) => tool.name === 'schedule');
 	expect(Object.keys(schedule?.inputSchema.properties ?? {}).sort()).toEqual([
-		'after',
+		'delaySeconds',
 		'refs',
 		'text',
 	]);
-	expect(schedule?.inputSchema.required).toEqual(['after', 'text']);
+	expect(schedule?.inputSchema.required).toEqual(['delaySeconds', 'text']);
 	const found = listed.find((tool) => tool.name === 'lookup');
 	expect(found?.inputSchema.properties.id?.description).toBe('The record id.');
 	expect(found?.inputSchema.required).toEqual(['id']);

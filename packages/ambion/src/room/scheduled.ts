@@ -2,7 +2,7 @@
  * The scheduled says that wait to return, as a fold over the record.
  *
  * An agent schedules a say with the `schedule` tool: a say to itself with
- * `after`. The say waits until the room posts it back with `returns`. An
+ * `delaySeconds`. The say waits until the room posts it back with `returns`. An
  * unseating of its author drops it, and a cancellation drops every say
  * before it. The projection runs one step for each entry, so a replay holds
  * the same list in the same order.
@@ -21,7 +21,7 @@ function returnsSay(
 
 /** Whether a message is a scheduled say. */
 function isScheduled(message: Message): message is Extract<Message, { kind: 'said' }> {
-	return message.kind === 'said' && message.after !== undefined;
+	return message.kind === 'said' && message.delaySeconds !== undefined;
 }
 
 /** Whether a message changes the list: a scheduled say, a returned or dismissed say, or an unseating. */
@@ -35,13 +35,13 @@ export function scheduleStep(list: readonly ScheduledSay[], message: Message): S
 	if (returnsSay(message)) return list.filter((say) => say.seq !== message.returns);
 	if (message.kind === 'dismissed') return list.filter((say) => say.seq !== message.message);
 	if (message.kind === 'unseated') return list.filter((say) => say.seat !== message.subject);
-	if (!isScheduled(message) || message.after === undefined) return [...list];
+	if (!isScheduled(message) || message.delaySeconds === undefined) return [...list];
 	return [
 		...list,
 		{
 			seq: message.seq,
 			seat: message.from,
-			due: new Date(Date.parse(message.at) + message.after * 1000).toISOString(),
+			due: new Date(Date.parse(message.at) + message.delaySeconds * 1000).toISOString(),
 			text: message.text,
 			...(message.refs === undefined ? {} : { refs: message.refs }),
 		},
@@ -53,27 +53,27 @@ export const returnsAt = (say: ScheduledSay): number => Date.parse(say.due);
 
 /** No bound: a room that passes no limits takes any whole number of seconds and any count. */
 const UNBOUNDED: ScheduleLimits = {
-	minAfter: 1,
-	maxAfter: Number.POSITIVE_INFINITY,
+	minDelaySeconds: 1,
+	maxDelaySeconds: Number.POSITIVE_INFINITY,
 	pending: Number.POSITIVE_INFINITY,
 };
 
 /**
- * Why the room refuses a say with `after`, or nothing. The say goes to its
+ * Why the room refuses a say with `delaySeconds`, or nothing. The say goes to its
  * author, within the bounds.
  */
 export function scheduleRefusal(
 	list: readonly ScheduledSay[],
 	seat: string,
-	intent: { to?: string; after?: number },
+	intent: { to?: string; delaySeconds?: number },
 	schedule: ScheduleLimits = UNBOUNDED,
 ): string | undefined {
-	const { after } = intent;
+	const { delaySeconds } = intent;
 	if (intent.to !== seat) return `A scheduled say goes to its author. Set \`to\` to '${seat}'.`;
-	if (after === undefined || !Number.isSafeInteger(after))
-		return '`after` is a whole number of seconds.';
-	if (after < schedule.minAfter || after > schedule.maxAfter)
-		return `\`after\` is ${after} seconds. This room takes from ${schedule.minAfter} to ${schedule.maxAfter} seconds.`;
+	if (delaySeconds === undefined || !Number.isSafeInteger(delaySeconds))
+		return '`delaySeconds` is a whole number of seconds.';
+	if (delaySeconds < schedule.minDelaySeconds || delaySeconds > schedule.maxDelaySeconds)
+		return `\`delaySeconds\` is ${delaySeconds} seconds. This room takes from ${schedule.minDelaySeconds} to ${schedule.maxDelaySeconds} seconds.`;
 	const waiting = list.filter((say) => say.seat === seat).length;
 	if (waiting >= schedule.pending)
 		return `${waiting} of your says wait to return. This room holds at most ${schedule.pending} for one seat.`;

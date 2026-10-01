@@ -7,7 +7,7 @@
  * closes its input or the host closes the socket.
  *
  * A host that dies leaves `codex exec` running. The SDK closes its input
- * at once, so the process runs the turn to the end and spends on the model.
+ * at once, so the process runs the pass to the end and spends on the model.
  * When the socket closes while Codex is still the parent, the server stops
  * Codex before it exits.
  *

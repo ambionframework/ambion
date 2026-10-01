@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 import { open, until, viewOf } from './support.ts';
 
 it('advances readThrough on the echo of a steered line, and a say after it commits fresh', async () => {
-	const run = open({ turns: [[{ awaitUser: 2 }, { say: 'Saturday.' }]] });
+	const run = open({ passes: [[{ awaitUser: 2 }, { say: 'Saturday.' }]] });
 	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
 	// The model has read nothing until the SDK echoes the view.
 	expect(run.session.readThrough).toBe(0);
@@ -24,7 +24,7 @@ it('advances readThrough on the echo of a steered line, and a say after it commi
 });
 
 it('holds a steered line whose echo arrives before the gap before it closes, and counts it once the gap closes', async () => {
-	const run = open({ turns: [[{ awaitUser: 3 }, { say: 'Saturday.' }]] });
+	const run = open({ passes: [[{ awaitUser: 3 }, { say: 'Saturday.' }]] });
 	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
 	await until(() => run.session.readThrough === 1, 'the echo of the view');
 	// The line at 4 lands first: the model has not read 2 and 3 yet.
@@ -43,7 +43,7 @@ it('holds a steered line whose echo arrives before the gap before it closes, and
 });
 
 it('sends a steer that arrives before the first pass with the view', async () => {
-	const run = open({ turns: [[{ awaitUser: 2 }, { say: 'Saturday.' }]] });
+	const run = open({ passes: [[{ awaitUser: 2 }, { say: 'Saturday.' }]] });
 	run.session.steer?.(1, 2, '[2] priya: Also bring the forms.');
 	await run.session.pass({ kind: 'view', view: viewOf(1) });
 	expect(run.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
@@ -53,7 +53,7 @@ it('sends a steer that arrives before the first pass with the view', async () =>
 
 it('sends a line that lands while a later pass renders its record, and counts it on its echo', async () => {
 	const run = open({
-		turns: [[{ text: 'First.' }], [{ awaitUser: 3 }, { text: 'Second.' }]],
+		passes: [[{ text: 'First.' }], [{ awaitUser: 3 }, { text: 'Second.' }]],
 	});
 	await run.session.pass({ kind: 'view', view: viewOf(1) });
 	const first = viewOf(1);
@@ -80,11 +80,15 @@ it('sends a line that lands while a later pass renders its record, and counts it
 	expect(await second).toEqual({ failed: false });
 	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: true });
 	expect(run.session.readThrough).toBe(3);
+	// The first view, the delta, and the steer reach the executable as written: no file mention, no slash command.
+	const users = run.log().filter((line) => 'user' in line);
+	expect(users).toHaveLength(3);
+	expect(users.every((line) => line.composed === true)).toBe(true);
 	run.session.close?.();
 });
 
 it('takes no line that lands outside a pass', async () => {
-	const run = open({ turns: [[{ say: 'Saturday.' }]] });
+	const run = open({ passes: [[{ say: 'Saturday.' }]] });
 	await run.session.pass({ kind: 'view', view: viewOf(1) });
 	// The core never steers outside a pass. The executor still sends nothing then.
 	run.sessions[0]?.steer?.(1, 2, '[2] priya: Late.');
@@ -93,15 +97,15 @@ it('takes no line that lands outside a pass', async () => {
 	run.session.close?.();
 });
 
-it('ends the pass in flight on abort, commits nothing, and still counts the usage of the interrupted turn', async () => {
+it('ends the pass in flight on abort, commits nothing, and still counts the usage of the interrupted pass', async () => {
 	const run = open({
-		turns: [[{ usage: { input: 5, output: 1 } }, { awaitUser: 2 }, { say: 'Saturday.' }]],
+		passes: [[{ usage: { input: 5, output: 1 } }, { awaitUser: 2 }, { say: 'Saturday.' }]],
 	});
 	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
 	await until(() => run.session.readThrough === 1, 'the echo of the view');
 	run.session.cut();
 	expect(await pass).toEqual({ failed: false });
-	// The fake ends the interrupted turn with a result, and the stopped session only traces it.
+	// The fake ends the interrupted pass with a result, and the stopped session only traces it.
 	await until(() => run.steps.some((step) => step.type === 'usage'), 'the interrupted result');
 	expect(run.steps).toContainEqual(expect.objectContaining({ type: 'usage', input: 5, output: 1 }));
 	expect(run.commits).toEqual([]);
