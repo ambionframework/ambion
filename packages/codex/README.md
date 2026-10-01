@@ -72,12 +72,13 @@ one. A resume that Codex cannot honor starts a fresh thread.
 workspace tools, behind the workspace port, so it makes no difference whether
 the workspace is in memory, a directory, or a remote workstation. Pass the
 tools of a workspace in `bundles`, and the tools that you write in `tools`.
-Codex 0.155.1 has a JavaScript runtime, Code Mode, that reads host files
-under a read-only sandbox. The model catalog turns it on, so no feature flag
-can turn it off. The executor patches the catalog entry of the model, turns
-off every feature and tool that the config controls, and runs the thread on
-a read-only sandbox in an empty directory with no network. A model with no
-catalog entry fails as permanent.
+Codex has a JavaScript runtime, Code Mode, that read host files under a
+read-only sandbox on 0.155.1. The model catalog turns it on, so no feature
+flag can turn it off. The executor patches the catalog entry of the model,
+turns off every feature and tool that the config controls, and removes the
+skills block. It runs the thread on a read-only sandbox in an empty
+directory with no network. A model with no catalog entry fails as
+permanent. A default seat produces no config warning on 0.158.0.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` when an MCP server is
@@ -85,8 +86,9 @@ on. They reach only the room tools server, which offers no resource and
 answers `Method not found`, so they read nothing. A unit test proves it.
 
 **Pin the version, and run the exclusivity test on an upgrade.** The recipe
-belongs to `codex` 0.155.1. Trust a newer version only when
-`test/live/exclusive.test.ts` passes on it.
+belongs to `codex` 0.158.0. The binary tier fails when a default seat
+gets a native tool, a skills block, or a config warning. Trust a newer
+version only when that tier and `test/live/exclusive.test.ts` pass on it.
 
 **Test on recorded events and a scripted model, and run the executor suite
 live.** The unit tests read event streams that a real `codex` recorded. They

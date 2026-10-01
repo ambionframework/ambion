@@ -63,7 +63,6 @@ export const hasBinary = bundledBinary() !== undefined;
 export function homeConfig(url: string, signIn = false, extra = ''): string {
 	return [
 		'model_provider = "scripted"',
-		'check_for_update_on_startup = false',
 		'',
 		'[model_providers.scripted]',
 		'name = "scripted"',

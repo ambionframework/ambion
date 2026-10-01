@@ -27,7 +27,7 @@ another binary, environment, Codex home, or login.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
-is on, and no setting turns them off on codex 0.155.1. They reach only the
+is on, and no setting turns them off on codex 0.158.0. They reach only the
 MCP servers of the seat. The room tools server offers no resource, and it
 answers each call with `Method not found`, so they read nothing. A unit
 test of the server proves it with a `file:///etc/hosts` request.
@@ -514,9 +514,13 @@ Code Mode is a JavaScript runtime that the model calls through `exec` and
 `wait`. On a read-only sandbox, with no network and a deny permission
 profile, its JavaScript still read `/etc/hosts` and listed `/Users` through
 `fs`. It could not start a process or reach the network. `sandboxMode` and
-permission profiles do not confine it. A feature flag cannot turn it off,
-because the model catalog turns it on: `gpt-5.6-luna` has
-`tool_mode: 'code_mode_only'`. `gpt-5.5` has no tool mode.
+permission profiles do not confine it. The run on 0.155.1 is the only
+evidence of the file reads. A run of the 0.158.0 binary shows that a feature
+flag still cannot turn Code Mode off. With the unpatched entry of
+`gpt-5.6-luna` and every listed feature off, the model gets `exec` and `wait`
+and no room tool, and Codex warns that Code Mode fails closed. The model
+catalog turns it on: `gpt-5.6-luna` has `tool_mode: 'code_mode_only'`.
+`gpt-5.5` has no tool mode.
 
 **An image from a tool of the seat reaches the model.** A tool that returns
 an image part, such as the workspace `read` of a picture, sends the image to
@@ -538,19 +542,43 @@ path as `model_catalog_json`. The recipe has five parts:
    `true`. `experimental_supported_tools` is empty. This removes Code Mode,
    the patch tool, and the search tool. The patch leaves `input_modalities`
    and `supports_image_detail_original` as the entry has them.
-2. **The features.** The config sets 31 features to `false`, among them
+2. **The features.** The config sets 37 features to `false`, among them
    `shell_tool`, `unified_exec`, `code_mode`, `code_mode_only`, `apps`,
-   `plugins`, `computer_use`, `multi_agent`, and `hooks`. This removes the
-   shell and the tools that a feature adds.
-3. **The tool switches.** `web_search` is `'disabled'`. `tools.view_image`
-   is `false`. `update_plan` and `experimental_request_user_input` are
-   disabled.
+   `plugins`, `computer_use`, `multi_agent`, `hooks`, and `view_image`. This
+   removes the shell and the tools that a feature adds. Five of them give
+   no tool: `shell_snapshot`, `daemon_auto_start`, `workspace_dependencies`,
+   `worktrees`, and `realtime_conversation`. Each acts on the host or the
+   network. `shell_snapshot` runs the shell of the host user and writes its
+   environment to a file in the seat home. `memories` is off by default, and
+   the entry keeps the `config.toml` of the seat home from turning it on.
+   Codex 0.158.0 turns `unified_exec` on again unless a managed requirement
+   pins it. With `shell_tool` off, `unified_exec` adds no tool, and the
+   tool-list test shows it.
+3. **The tool switches and the skills.** `web_search` is `'disabled'`.
+   `update_plan` and `experimental_request_user_input` are disabled.
+   `skills.include_instructions` and `skills.bundled.enabled` are `false`,
+   so no `skills_instructions` message reaches the model and Codex installs
+   no system skill in the seat home. The catalog flag
+   `include_skills_usage_instructions` does not remove that message on
+   0.158.0.
 4. **The bundled REPL.** Codex adds a `node_repl` MCP server. The config
    declares `mcp_servers.node_repl` as disabled, by name, beside the room
    server. Without it the tool list holds `mcp__node_repl.js`.
 5. **Defense in depth.** The thread runs on a read-only sandbox, with no
    network, no approval, and an empty temporary directory as its working
    directory. No repository and no host file is the default context.
+
+**The recipe turns off the traffic and the state that a seat does not
+need.** `check_for_update_on_startup`, `analytics.enabled`, and
+`feedback.enabled` are `false`. Only the terminal interface of Codex reads
+`check_for_update_on_startup`, and `codex exec` starts no update check. The
+config sets the key so that a later version keeps the same behavior. `memories.generate_memories` and
+`memories.use_memories` are `false`, and so is the `memories` feature. Codex
+0.158.0 recognizes each key and reports no warning for it. With a dummy API
+key, a run makes no request except the model requests and opens no outbound
+connection, with these keys. The binary tier asserts it.
+A seat on a ChatGPT sign-in is the case that the keys protect, and the
+binary tier does not run it.
 
 The temporary directory of each activation holds the patched catalog, the
 file with the seat text, and the empty working directory. The executor removes it when the activation closes,
@@ -561,12 +589,24 @@ permanent. The message names the model. The executor never leaves native
 tools on by accident. Use a model that `codex debug models` lists.
 
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
-0.155.1, which brings `codex` 0.155.1. The feature names and the catalog
-fields belong to that version. A newer `codex` can add a native tool that
-the recipe does not turn off. Run the live exclusivity test
-(`test/live/exclusive.test.ts`) against a new version, and trust the version
-only when it passes. A native item that Codex reports shows in the trace as
-a warning `notice`.
+0.158.0, which brings `codex` 0.158.0. The feature names, the config keys,
+and the catalog fields belong to that version. A newer `codex` can add a
+native tool that the recipe does not turn off, and it can drop a key that
+the recipe sets. Codex then warns about the key. The binary tier asserts
+that a default seat produces no warning `notice` and no skills block, so
+such a change fails a test. Run that tier and the live exclusivity test
+(`test/live/exclusive.test.ts`) against a new version, and trust the
+version only when both pass. A native item that Codex reports shows in the
+trace as a warning `notice`.
+
+**Features that stay on by default give no tool.** `codex features list`
+on 0.158.0 shows 15 more features that are on and not in the recipe. They
+are the app features, the approval features, `auth_elicitation`,
+`fast_mode`, and a few wire features. None adds a tool or reaches the host.
+The comment on `EXCLUSIVE_FEATURES` names each one. The list also prints
+nine removed flags as on, such as `steer` and `sqlite`. A removed flag has
+no effect. A new default feature
+needs the same check on each upgrade.
 
 **The environment includes the key by default.** With no `env` on
 `codexExecution()`, the binary runs with a copy of `process.env`. No tool of
@@ -581,6 +621,14 @@ host user changes no seat: its `model_provider` reroutes no request, its
 `mcp_servers` start no process, and its `AGENTS.md` joins no prompt. The
 binary tier proves each of the three. Put a `config.toml` in `home` to
 configure every seat on purpose.
+
+**The `config.toml` of the seat home is the responsibility of the host.**
+The executor overrides each config key that the recipe names. Any other key
+in that file survives by a deep merge. An extra `[mcp_servers.<name>]`
+table starts a server whose tools reach the host, and a
+`features.<name> = true` entry turns on a feature that the recipe does not
+list. The default home `~/.ambion/codex` holds no `config.toml` until a
+person writes one. Write only keys that you trust.
 
 **A linked login is shared with the host.** The seat home holds a link to the
 login file of the host. A seat has no native tool, so no tool of the seat
@@ -606,7 +654,8 @@ scripted.
 
 **The binary tier runs in a seat home of its own.** `test/binary.ts` writes
 a temporary home with a `config.toml` that sends the provider to the
-endpoint, and passes it as `home`. The environment of the binary holds
+endpoint, and passes it as `home`. The file leaves every other key to the
+recipe, including the update check. The environment of the binary holds
 `PATH`, a host home as `HOME`, a dummy key variable, and a proxy that
 records and refuses every outbound connection. The catalog lookup
 (`codex debug models`) runs in the same environment. No real sign-in reaches
@@ -649,10 +698,18 @@ pass reports a transient failure, and the test asserts the message.
 bodies show the tool list, the prompts, and the items of an earlier pass.
 A default seat receives the seat text as the first developer message, and no
 developer message starts with "You are Codex". The last user message holds
-the view alone. Today Codex still adds the skills of its home as a developer
-message, and it lists the tools in an `additional_tools` input item. The
+the view alone. No request holds a `skills_instructions` message or the name
+of a system skill. Today Codex lists the tools in an `additional_tools`
+input item. The
 top-level `instructions` field of the request stays empty. A test states each
 of these facts, so a change to one shows in a failing assertion.
+
+**The binary tier asserts that a default seat gets no warning.** Two tests
+run a default seat and assert that the trace holds no `notice` at level
+`warning`. Codex reports an unrecognized config key as an `error` item, and
+the executor maps it to such a notice. A key that a newer `codex` drops
+shows as a failing test. Another test adds an unknown key to the home and
+asserts that the warning names it, so the check cannot pass by silence.
 
 **The binary tier sends the seat text unchanged.** One test sends a seat
 text with quotes, backslashes, a newline, and non-ASCII characters. It
@@ -685,7 +742,9 @@ variable, the suite writes nothing.
 
 **The unit tests run on recorded events.** `test/fixtures/` holds event
 streams that a real `codex` 0.155.1 produced through the SDK 0.155.1, on the
-model `gpt-5.6-luna`. The tests map them to steps and count usage. Pure parts have their own tests: the wire framing, the
+model `gpt-5.6-luna`. Nobody has recorded them again on 0.158.0. The catalog
+fixture `catalog-0.158.0.json` comes from the bundled 0.158.0 binary. The
+tests map the events to steps and count usage. Pure parts have their own tests: the wire framing, the
 room tools, the options, and the failure classification. A replay client
 runs the executor on the recorded events to test exchange continuity. A
 turn of the replay client can also call `say` through the socket of the
@@ -771,7 +830,11 @@ Pass the execution of each executor kind.
 **A native tool shows up after a Codex upgrade.** The seat lists or calls a
 tool that is not a room tool and not one of yours, and the trace holds a
 warning `notice` that names an item type. A newer `codex` added a
-feature or a catalog field that the recipe does not cover. Run
-`test/live/exclusive.test.ts` to see the name. Compare `codex debug models`
-and the feature list of the new version with `src/catalog.ts`. Add the
-feature or the field, and keep the version pinned until the test passes.
+feature or a catalog field that the recipe does not cover. Run the binary
+tier (`test/binary.test.ts`), which asserts the exact tool list and no
+warning `notice` for a default seat, and run `test/live/exclusive.test.ts`
+to see the name. Compare `codex debug models` and `codex features list` of
+the new version with `src/catalog.ts`. Add the feature or the field, and keep
+the version pinned until both tests pass. A warning that names a config key
+means that the new version dropped the key: remove it from
+`exclusiveConfig`.

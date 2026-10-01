@@ -45,6 +45,13 @@ const THOUGHT = 'Check the pour schedule against the weather before the answer. 
 /** A key that Codex does not know. It warns, and the warning names the key. */
 const UNKNOWN_KEY = 'ambion_unknown_setting';
 
+/** The names of the system skills that Codex 0.158.0 lists in its skills block. */
+const SKILL_NAMES = /imagegen|skill-creator|plugin-creator|openai-docs/;
+
+/** The warning notices of a trace. A default seat produces none. */
+const warningsOf = (steps: readonly TraceStep[]) =>
+	steps.flatMap((step) => (step.type === 'notice' && step.level === 'warning' ? [step] : []));
+
 /** A sentence of the mechanism text of the room. It marks the seat text. */
 const MECHANISM = 'You are an agent seated in a room';
 
@@ -240,8 +247,9 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(developer[0]).toContain(MECHANISM);
 					expect(developer[0]).toContain('Answer in one sentence.');
 					expect(developer.filter((text) => text.startsWith('You are Codex'))).toEqual([]);
-					// Today Codex adds the skills of its home as a developer message.
-					expect(developer.join('\n')).toContain('<skills_instructions>');
+					// The config removes the skills block, and with it every system skill name.
+					expect(JSON.stringify(on.responses.requests)).not.toContain('skills_instructions');
+					expect(JSON.stringify(on.responses.requests)).not.toMatch(SKILL_NAMES);
 					// The last user message holds the view alone.
 					const prompt = textsOf(first, 'user').at(-1);
 					expect(prompt).toContain('Is the plan ready?');
@@ -334,6 +342,33 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					});
 					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
 					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
+					expect(on.responses.others).toEqual([]);
+					expect(on.outbound).toEqual([]);
+					// Codex 0.158.0 knows every key of the recipe, so a default seat gets no warning.
+					expect(warningsOf(steps)).toEqual([]);
+				} finally {
+					await on.close();
+				}
+			},
+			TEST_MS,
+		);
+
+		it(
+			'answers a call to view_image with unsupported call, because the feature is off, and warns of nothing',
+			async () => {
+				const on = await codexOn([
+					{ call: 'view_image', args: { path: '/etc/hostname' } },
+					say('no image'),
+					{ text: 'done' },
+				]);
+				try {
+					const { visit, steps } = await roomOn(on.execution);
+					await (await visit.send({ text: 'Show the file.' })).waitForClose();
+
+					const second = on.responses.requests[1] as ResponsesRequest;
+					const output = second.input.find((item) => item.type === 'function_call_output');
+					expect(output?.output).toBe('unsupported call: view_image');
+					expect(warningsOf(steps)).toEqual([]);
 					expect(on.responses.others).toEqual([]);
 					expect(on.outbound).toEqual([]);
 				} finally {
