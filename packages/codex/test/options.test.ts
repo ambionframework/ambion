@@ -220,21 +220,31 @@ describe('exclusiveEntry', () => {
 			slug: 'gpt-5.6-luna',
 			tool_mode: null,
 			apply_patch_tool_type: null,
-			input_modalities: ['text'],
 			supports_search_tool: false,
 			experimental_supported_tools: [],
 			node_repl_disabled: true,
 			multi_agent_version: null,
-			supports_image_detail_original: false,
 			include_apps_usage_instructions: false,
 			include_plugin_usage_instructions: false,
 			include_skills_usage_instructions: false,
 		});
+		// The model keeps its own image input, so an image from a tool of the seat reaches it.
+		expect(luna.input_modalities).toEqual(['text', 'image']);
+		expect(patched.input_modalities).toEqual(luna.input_modalities);
+		expect(patched.supports_image_detail_original).toBe(luna.supports_image_detail_original);
 		expect(patched.base_instructions).toBe(luna.base_instructions);
 		expect(patched.context_window).toBe(luna.context_window);
 		expect(luna).toEqual(before);
 		expect(luna.tool_mode).toBe('code_mode_only');
 		expect(patched).not.toBe(luna);
+	});
+
+	it('keeps the modalities of a model with no image input', () => {
+		const textOnly = { ...luna, input_modalities: ['text'], supports_image_detail_original: false };
+		expect(exclusiveEntry(textOnly)).toMatchObject({
+			input_modalities: ['text'],
+			supports_image_detail_original: false,
+		});
 	});
 
 	it('patches the entry of a model that has no tool mode', () => {

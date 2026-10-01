@@ -72,6 +72,20 @@ activation, after `RoomState.due`. In the core, `PendingActivation` becomes
 `draftsClose` becomes `summarizesClose`. In the Cloudflare package,
 `SeatMetadata.wakes` and `SeatObject.wakes()` become `wakeCount`. No journal
 body changes.
+
+**An image from a tool reaches a default Codex seat.** The catalog patch of
+`nativeTools: 'none'` no longer sets `input_modalities` and
+`supports_image_detail_original`. The model keeps its own modalities, so a
+workspace `read` of a picture and the frames of `observe` reach it as images.
+The tool list does not change, because `view_image` stays off. A model with
+no image input stays text-only, and Codex shows a placeholder.
+
+**The trace logs the size of an image in a tool result of every executor.**
+`loggedToolResult` replaced the bytes of an image with their count only in
+the `content` array of a record. The Claude and Codex executors log the
+content parts with no record, so their images went into the log whole. The
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
 **`ExecutionEvent` is now `ActivationEvent`.** Every member of the type
 describes one activation. The main entry and the hosting entry export the
 new name, and `RoomNotification` is `RoomEvent | ActivationEvent`. Each
