@@ -28,8 +28,8 @@ const record: readonly Written[] = [
 		'composition',
 		{
 			goal: 'Keep the record coherent.',
-			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
-			available: [],
+			seated: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
+			reserve: [],
 			at,
 		},
 		2,
@@ -42,7 +42,7 @@ const record: readonly Written[] = [
 	),
 	entry(
 		'close',
-		{ person: 'priya', from: firstFrom, through: firstFrom, at, summary: 'assistant' },
+		{ person: 'priya', from: firstFrom, through: firstFrom, at, summaryWriter: 'assistant' },
 		5,
 	),
 	entry('message', { kind: 'said', at, from: 'priya', text: 'Second question?' }, 6),

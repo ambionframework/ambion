@@ -188,7 +188,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 describe('the room API', () => {
 	it('opens ready, returns an exchange handle, and reads a durable snapshot', async () => {
 		const { runtime, room } = await world(withSummary(), {
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, beta, assistant],
 		});
@@ -224,7 +224,7 @@ describe('the room API', () => {
 		['the room has no assistant', {}],
 		[
 			'the assistant claims no summary',
-			{ summary: assistant.name, seats: { [assistant.name]: 'none' }, agents: [assistant] },
+			{ summaryWriter: assistant.name, seats: { [assistant.name]: 'none' }, agents: [assistant] },
 		],
 	] as const)('resolves the response as undefined when %s', async (_case, options) => {
 		const { room } = await world(answer, options);

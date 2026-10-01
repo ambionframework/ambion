@@ -10,14 +10,14 @@
 	{
 		"kind": "composition",
 		"body": {
-			"agents": [
+			"seated": [
 				{
 					"name": "worker",
 					"identity": "Answers the question.",
 					"attention": "named"
 				}
 			],
-			"available": [],
+			"reserve": [],
 			"at": "2026-01-01T09:00:00.000Z"
 		},
 		"seq": 2,
@@ -79,7 +79,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:4:worker:1"
 			}
 		},

@@ -170,7 +170,7 @@ becomes an `approval` step with the answer. The executor denies a request when
 ## Exchange continuity
 
 **Every query persists its SDK session on the local disk.** The release
-records `{ harness: 'claude', id }`. The next activation of the seat in the
+records `{ kind: 'claude', id }`. The next activation of the seat in the
 same exchange resumes that session, and the first activation in a new
 exchange starts a fresh one. A host that loses the SDK session store starts
 a fresh session, and the next release records the new id. Each resumed

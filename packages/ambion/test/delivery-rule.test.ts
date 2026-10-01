@@ -109,13 +109,13 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		summary: 'assistant',
-		agents: [
+		summaryWriter: 'assistant',
+		seated: [
 			{ name: 'alpha', identity: 'Alpha.', attention: 'broadcast' },
 			{ name: 'beta', identity: 'Beta.', attention: 'broadcast' },
 			{ name: 'assistant', identity: 'Assistant.', attention: 'none' },
 		],
-		available: [],
+		reserve: [],
 		at,
 	},
 };
@@ -192,7 +192,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 29,
-		body: { person: 'priya', from: 3, through: 27, at, summary: 'assistant' },
+		body: { person: 'priya', from: 3, through: 27, at, summaryWriter: 'assistant' },
 	},
 	lease(30, 'closed:27:assistant:1', { phase: 'running', expiresAt: 60_000, readThrough: 0 }),
 	{
@@ -205,7 +205,7 @@ const entries: Entry[] = [
 			to: 'priya',
 			text: 'Summary.',
 			covers: { from: 3, through: 27 },
-			activationId: 'closed:27:assistant:1',
+			activation: 'closed:27:assistant:1',
 		},
 	},
 ];

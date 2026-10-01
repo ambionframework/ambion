@@ -13,17 +13,17 @@ attention.
 const room = await startRoom({
   name: 'site',
   agents: [inspector, surveyor, editor],
-  summary: 'editor',
+  summaryWriter: 'editor',
   seats: { inspector: 'broadcast' },
 });
 ```
 
 **The default seating puts every defined agent at `broadcast`.** If `seats`
 is omitted, every defined agent starts as a member at `broadcast`.
-An empty map starts every defined agent in the reserve. `summary` names one
+An empty map starts every defined agent in the reserve. `summaryWriter` names one
 defined agent that may receive closing work. It does not create a separate
-membership type. `summary` must name an agent in `seats`. A room start
-rejects a `summary` name that is not seated.
+membership type. `summaryWriter` must name an agent in `seats`. A room start
+rejects a `summaryWriter` name that is not seated.
 
 A `seats` entry takes an attention value, or a `SeatOptions` object with
 `attention` and `fixed`. Use the object form to set `fixed` at start:

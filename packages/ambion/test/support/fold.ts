@@ -105,7 +105,7 @@ function foldPeople(messages: readonly Message[]): Map<string, PersonState> {
 /** The latest composition, then every seating and unseating after it, in order. */
 function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {
 	if (composition === undefined) return [];
-	const roster: Seating[] = composition.agents.map((seat) => ({ ...seat }));
+	const roster: Seating[] = composition.seated.map((seat) => ({ ...seat }));
 	for (const message of messages) {
 		if (message.seq > composition.seq) reseat(roster, message);
 	}
@@ -195,7 +195,7 @@ function foldOwed(
 	cancelledAt: Seq | undefined,
 ): Owed[] {
 	return closes.flatMap((close) => {
-		if (close.summary === undefined) return [];
+		if (close.summaryWriter === undefined) return [];
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
 		if (completion.status !== 'pending' || completion.writer === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];

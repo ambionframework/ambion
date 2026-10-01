@@ -15,13 +15,13 @@ const options = { backoff: () => 0 };
 
 const product = { name: 'product', identity: 'Product.', attention: 'broadcast' } as const;
 const writer = { name: 'writer', identity: 'Writer.', attention: 'broadcast' } as const;
-const composition = (summary?: string, agents: Seating[] = [product, writer]): Entry => ({
+const composition = (summaryWriter?: string, agents: Seating[] = [product, writer]): Entry => ({
 	kind: 'composition',
 	seq: 1,
 	body: {
-		...(summary === undefined ? {} : { summary }),
-		agents,
-		available: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
+		...(summaryWriter === undefined ? {} : { summaryWriter }),
+		seated: agents,
+		reserve: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
 		at,
 	},
 });
@@ -38,7 +38,7 @@ const seated = (seq: number) =>
 const closed = (seq = 4, through = 3): Entry => ({
 	kind: 'close',
 	seq,
-	body: { person: 'priya', from: 3, through, at, summary: 'writer' },
+	body: { person: 'priya', from: 3, through, at, summaryWriter: 'writer' },
 });
 const lease = (id: string, seq: number): Entry => ({
 	kind: 'lease',
@@ -130,7 +130,7 @@ describe('room transition', () => {
 					to: 'priya',
 					text: 'Done.',
 					covers: { from: 3, through: 3 },
-					activationId: 'closed:3:writer:1',
+					activation: 'closed:3:writer:1',
 				},
 			},
 		});
@@ -363,7 +363,7 @@ describe('a scheduled say', () => {
 			text: 'Check the build.',
 			refs: ['file:///out.log'],
 			after,
-			activationId: 'message:3:product:1',
+			activation: 'message:3:product:1',
 		});
 	/** A question, the say that the answering seat scheduled, and the close of the exchange. */
 	/** A seat at `presence` hears every arrival, and still no returned say of another seat. */
@@ -409,7 +409,7 @@ describe('a scheduled say', () => {
 					text: 'Check the build.',
 					after: 600,
 					at,
-					activationId: 'message:3:product:1',
+					activation: 'message:3:product:1',
 					from: 'product',
 				},
 			},
@@ -562,7 +562,7 @@ describe('a scheduled say', () => {
 					kind: 'dismissed',
 					message: 5,
 					at,
-					activationId: 'message:3:product:1',
+					activation: 'message:3:product:1',
 					from: 'product',
 				},
 			},

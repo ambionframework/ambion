@@ -143,7 +143,7 @@ positioning and the current capabilities.
 - The just-bash backends provide no operating-system isolation between
   agents. The workstation runs each agent as its own Unix account on one
   server ([Trust](trust.md)). One host owns each resource.
-- A seat keeps its harness session for one exchange. The session holds
+- A seat keeps its vendor session for one exchange. The session holds
   state the record does not show.
 - A room remains available between interactions. An agent schedules a say
   for itself, and the room returns it when it is due. A host that wants a

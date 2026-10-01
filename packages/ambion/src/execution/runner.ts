@@ -25,10 +25,10 @@ import type {
 	EndReason,
 	ExecutionEvent,
 	FailureCause,
-	HarnessSession,
 	Seq,
 	Step,
 	Usage,
+	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
 import type { PassInput, PassResult } from './executor.ts';
@@ -333,7 +333,7 @@ export class AgentRunner implements AgentPort {
 		readThrough: Seq,
 		cause: FailureCause | undefined,
 		usage: Usage | undefined,
-		session: HarnessSession | undefined,
+		session: VendorSession | undefined,
 	): Promise<void> {
 		const released = await this.calls(
 			() =>

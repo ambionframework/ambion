@@ -27,7 +27,7 @@ live('exchange continuity', () => {
 			expect(saidBy((await room.read()).messages, 'clerk')).toHaveLength(2);
 			const ids = (await room.read()).exchanges.flatMap((exchange) =>
 				exchange.activations.flatMap((activation) =>
-					activation.session?.harness === 'codex' ? [activation.session.id] : [],
+					activation.session?.kind === 'codex' ? [activation.session.id] : [],
 				),
 			);
 			expect(ids).toHaveLength(2);
@@ -46,7 +46,7 @@ live('exchange continuity', () => {
 			...view,
 			spec: {
 				...view.spec,
-				resume: { harness: 'codex', id: '00000000-0000-0000-0000-000000000000' },
+				resume: { kind: 'codex', id: '00000000-0000-0000-0000-000000000000' },
 			},
 		};
 		const session = new ActivationState(createCodexExecutor({ definition }), {
@@ -62,7 +62,7 @@ live('exchange continuity', () => {
 			const result = await session.pass({ kind: 'view', view: bogus } as PassInput);
 			expect(result).toEqual({ failed: false });
 			expect(commits.some((request) => request.intent.kind === 'said')).toBe(true);
-			expect(session.session?.harness).toBe('codex');
+			expect(session.session?.kind).toBe('codex');
 			expect(session.session?.id).not.toBe('00000000-0000-0000-0000-000000000000');
 		} finally {
 			session.close?.();

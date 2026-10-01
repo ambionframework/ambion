@@ -174,7 +174,7 @@ class Activation implements ExecutorSession {
 	private async promptFor(pass: Pass): Promise<PassRecord | undefined> {
 		const record = await pass.record();
 		if (record === undefined || pass.kind === 'delta') return record;
-		const resumes = this.stream === undefined && pass.resume !== undefined;
+		const resumes = this.stream === undefined && pass.resumeId !== undefined;
 		return resumes
 			? { ...record, text: `${RESUMED_NOTE}\n\n${pass.agent}\n\n${record.text}` }
 			: record;
@@ -200,7 +200,7 @@ class Activation implements ExecutorSession {
 	private start(pass: Pass): void {
 		if (this.stream !== undefined) return;
 		const executor = claudeOf(this.definition.executor);
-		this.resuming = pass.resume;
+		this.resuming = pass.resumeId;
 		this.begin = () => {
 			// Each query takes its own room server. A server serves one connection.
 			const { server, names } = roomServer(pass.tools, (tool) => this.activation.callId(tool));

@@ -30,12 +30,12 @@ function exchange(first) {
 	add('lease', { id: wake, phase: 'running', expiresAt: start + 1e9, at: at(), readThrough: 0 });
 	add(
 		'message',
-		{ kind: 'said', at: at(), from: 'product', text: 'Answer.', activationId: wake },
+		{ kind: 'said', at: at(), from: 'product', text: 'Answer.', activation: wake },
 		`a${question}`,
 	);
 	add('lease', { id: wake, phase: 'ended', reason: 'released', at: at(), readThrough: seq - 1 });
 	const through = seq - 1;
-	add('close', { owner: 'priya', from: question, through, at: at(), summary: 'writer' });
+	add('close', { owner: 'priya', from: question, through, at: at(), summaryWriter: 'writer' });
 	const draft = `closed:${through}:writer:1`;
 	add('lease', { id: draft, phase: 'running', expiresAt: start + 1e9, at: at(), readThrough: 0 });
 	add(
@@ -47,7 +47,7 @@ function exchange(first) {
 			to: 'priya',
 			text: 'Summary.',
 			covers: { from: question, through },
-			activationId: draft,
+			activation: draft,
 		},
 		`s${question}`,
 	);
@@ -60,12 +60,12 @@ function history(count) {
 		version: 2,
 		seq: 0,
 		at: stamp(2),
-		agents: [
+		seated: [
 			{ name: 'product', identity: 'Product.', attention: 'broadcast' },
 			{ name: 'writer', identity: 'Writer.', attention: 'named' },
 		],
-		available: [],
-		summary: 'writer',
+		reserve: [],
+		summaryWriter: 'writer',
 	};
 	const entries = [
 		{ kind: 'composition', seq: 1, body: composition },

@@ -231,7 +231,7 @@ class Activation implements ExecutorSession {
 		}
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		this.client = make(clientOptions(this.options, bridge.socketPath, scratch));
-		this.resuming = pass.resume;
+		this.resuming = pass.resumeId;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}

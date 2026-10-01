@@ -94,9 +94,9 @@ class Walk {
 		const body: Composition = {
 			seq: 0,
 			at: this.at(),
-			agents: seated.map(seat),
-			available: SEATS.filter((name) => !seated.includes(name)).map(seat),
-			...(this.chance(0.7) ? { summary: this.pick(SEATS) } : {}),
+			seated: seated.map(seat),
+			reserve: SEATS.filter((name) => !seated.includes(name)).map(seat),
+			...(this.chance(0.7) ? { summaryWriter: this.pick(SEATS) } : {}),
 		};
 		return { kind: 'composition', seq: this.seq, body };
 	}
@@ -144,7 +144,7 @@ class Walk {
 			return this.message({
 				kind: 'dismissed',
 				message: say.seq,
-				...(this.chance(0.5) ? { from: say.seat, activationId: `message:1:${say.seat}:1` } : {}),
+				...(this.chance(0.5) ? { from: say.seat, activation: `message:1:${say.seat}:1` } : {}),
 			});
 		return this.message({
 			kind: 'posted',
@@ -205,7 +205,7 @@ class Walk {
 	private close(): Entry | undefined {
 		const range = this.range();
 		if (range === undefined) return undefined;
-		const body: Close = this.chance(0.8) ? { ...range, summary: this.pick(SEATS) } : range;
+		const body: Close = this.chance(0.8) ? { ...range, summaryWriter: this.pick(SEATS) } : range;
 		this.lastThrough = body.through;
 		this.closes.push(body);
 		return { kind: 'close', seq: this.seq, body };
@@ -223,7 +223,7 @@ class Walk {
 		const covers = { from: close.from, through: close.through };
 		return this.message({
 			kind: 'summary',
-			from: close.summary ?? this.pick(SEATS),
+			from: close.summaryWriter ?? this.pick(SEATS),
 			to: this.chance(0.9) ? close.person : this.pick(PEOPLE),
 			text: 'Summary.',
 			covers: this.chance(0.9) ? covers : { from: covers.from, through: covers.through + 1 },

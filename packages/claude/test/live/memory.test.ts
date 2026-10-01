@@ -82,7 +82,7 @@ live('memory', () => {
 		expect(reads(run.firstSteps).length).toBeGreaterThanOrEqual(1);
 		expect(reads(run.secondSteps).length).toBeGreaterThanOrEqual(1);
 		expect(run.said.at(-1)).toContain(CODE);
-		const ids = run.sessions.flatMap((s) => (s?.harness === 'claude' ? [s.id] : []));
+		const ids = run.sessions.flatMap((s) => (s?.kind === 'claude' ? [s.id] : []));
 		expect(ids.length).toBeGreaterThanOrEqual(2);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
@@ -129,7 +129,7 @@ live('memory', () => {
 			const result = await within(
 				session.pass({
 					kind: 'view',
-					view: { ...view, spec: { ...view.spec, resume: { harness: 'claude', id: bogus } } },
+					view: { ...view, spec: { ...view.spec, resume: { kind: 'claude', id: bogus } } },
 				}),
 				150_000,
 				'the pass',
@@ -137,7 +137,7 @@ live('memory', () => {
 			expect(result).toEqual({ failed: false });
 			expect(commits.some((c) => c.intent.kind === 'said')).toBe(true);
 			// The fresh session has its own id, and the release records it.
-			expect(session.session?.harness).toBe('claude');
+			expect(session.session?.kind).toBe('claude');
 			expect(session.session?.id).not.toBe(bogus);
 		} finally {
 			session.close?.();

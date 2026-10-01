@@ -42,11 +42,11 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		readThrough: 0,
 		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1 },
 	},
-	close: { person: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
+	close: { person: 'priya', from: 2, through: 4, seq: 4, at, summaryWriter: 'assistant' },
 	composition: {
 		goal: 'Decide the pour date.',
-		summary: 'assistant',
-		agents: [
+		summaryWriter: 'assistant',
+		seated: [
 			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
 			{
 				name: 'assistant',
@@ -54,7 +54,7 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 				attention: 'none',
 			},
 		],
-		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
+		reserve: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
 		seq: 0,
 		at,
 	},

@@ -101,7 +101,7 @@ type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 export interface CompositionDraft {
 	goal: string | undefined;
-	summary: string | undefined;
+	summaryWriter: string | undefined;
 	definitions: AgentDefinition[];
 	seats: ReadonlyMap<string, SeatOptions>;
 }
@@ -282,7 +282,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 				if (priorComposition === undefined) return { entry: undefined };
 				const roster = new Set(current.roster.map((seat) => seat.name));
 				const definitions = new Map(
-					[...priorComposition.agents, ...priorComposition.available, ...current.roster].map(
+					[...priorComposition.seated, ...priorComposition.reserve, ...current.roster].map(
 						(seat) => [seat.name, seat],
 					),
 				);
@@ -293,9 +293,9 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 							identity: agent.identity,
 							attention: 'broadcast',
 						});
-				const available = [...definitions.values()].filter((seat) => !roster.has(seat.name));
+				const reserve = [...definitions.values()].filter((seat) => !roster.has(seat.name));
 				const { seq: _seq, at: _at, ...prior } = priorComposition;
-				const body = { ...prior, agents: current.roster, available, at: this.iso() };
+				const body = { ...prior, seated: current.roster, reserve, at: this.iso() };
 				return decide(current, { type: 'compose', composition: body }, this.now());
 			}),
 		);
@@ -309,8 +309,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 				`Room '${this.name}' has no composition on its record: start it instead.`,
 			);
 		const names = new Set([
-			...state.composition.agents.map((seat) => seat.name),
-			...state.composition.available.map((seat) => seat.name),
+			...state.composition.seated.map((seat) => seat.name),
+			...state.composition.reserve.map((seat) => seat.name),
 			...state.roster.map((seat) => seat.name),
 		]);
 		for (const name of names)

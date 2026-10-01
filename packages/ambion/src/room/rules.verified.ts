@@ -454,7 +454,7 @@ export interface CloseFact {
 	readonly person: string;
 	readonly from: number;
 	readonly through: number;
-	readonly summary?: string;
+	readonly summaryWriter?: string;
 }
 
 /** What an activation is for. The same shape as `ActivationPurpose` in `protocol.ts`. */
@@ -507,8 +507,8 @@ function names(summary: string | undefined, writer: string): boolean {
 
 //@ contract A close answers a closed-source id when its boundary is the id's position and it names the id's seat as writer.
 function closeMatches(close: CloseFact, through: number, writer: string): boolean {
-	//@ ensures \result <==> (close.through == through && names(close.summary, writer))
-	return close.through === through && names(close.summary, writer);
+	//@ ensures \result <==> (close.through == through && names(close.summaryWriter, writer))
+	return close.through === through && names(close.summaryWriter, writer);
 }
 
 //@ contract The close that answers a closed-source id is the first close that matches it. When none matches, there is no close.

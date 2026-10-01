@@ -30,7 +30,7 @@ const runtime = createRuntime({
 const session = await startRoom({
 	name,
 	runtime,
-	summary: assistant.name,
+	summaryWriter: assistant.name,
 	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
 	agents: [product, colleague, assistant],
 	execution: piExecution({ sessions: 'memory', stream: scripted(slowly(Number(delay ?? 40))) }),

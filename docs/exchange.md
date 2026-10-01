@@ -167,7 +167,7 @@ frees its place under `pending`.
 - A dismissal and the due time race through the journal. The entry that
   lands first decides, and the other changes nothing.
 
-**A returned say starts a fresh harness session.** A harness session never
+**A returned say starts a fresh vendor session.** A vendor session never
 crosses an exchange, so the agent reads the record, the summary of the first
 exchange, and its reminders. The process reminder carries the state of a
 process that the say checks on.
@@ -312,8 +312,8 @@ activation `id`, the `seat`, the `attempt`, the `purpose` (`respond` or
 with `cancelled` and `cause` when they apply. An entry carries `usage` when
 the activation recorded it. Every attempt has an entry, in journal order. An
 open exchange lists the activations since its question. The `session` field
-holds the harness session that the activation recorded at its release. It
-is absent when the harness recorded none.
+holds the vendor session that the activation recorded at its release. It
+is absent when the executor recorded none.
 
 **The steps of an activation go to the host's logger.** See
 [Executors](executors.md#the-trace-log).

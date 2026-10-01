@@ -16,12 +16,12 @@ const composition = (): Entry => ({
 	kind: 'composition',
 	seq: 1,
 	body: {
-		summary: 'writer',
-		agents: [
+		summaryWriter: 'writer',
+		seated: [
 			{ name: 'product', identity: 'Product.', attention: 'broadcast' },
 			{ name: 'writer', identity: 'Writer.', attention: 'broadcast' },
 		],
-		available: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
+		reserve: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
 		at,
 	},
 });
@@ -64,7 +64,7 @@ const answered = () => [
 	arrived(),
 	said(),
 	released('message:3:product:1'),
-	close({ person: 'priya', from: 3, through: 3, summary: 'writer' }),
+	close({ person: 'priya', from: 3, through: 3, summaryWriter: 'writer' }),
 ];
 const fold = (entries: Entry[]): RoomState => replayState(entries, retry);
 const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
@@ -99,7 +99,7 @@ describe('room reconciliation', () => {
 		expect(closed(fold(quiet))).toEqual({
 			entry: {
 				kind: 'close',
-				body: { person: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'writer' },
 			},
 		});
 

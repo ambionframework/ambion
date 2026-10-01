@@ -259,7 +259,7 @@ describe.each(storages)('steering on $name', (storage) => {
 		const room = stopAtEnd(
 			await startRoom({
 				name: roomName('steering-summary-boundary'),
-				summary: assistant.name,
+				summaryWriter: assistant.name,
 				agents: [alpha, beta, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage }),

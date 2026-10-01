@@ -51,7 +51,7 @@ const summaryRoom = async (runtime: Runtime, script: PiScript, specialists = [al
 			name: roomName('exchange'),
 			runtime,
 			agents: [...specialists, assistant],
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: {
 				...Object.fromEntries(specialists.map((agent) => [agent.name, 'broadcast' as const])),
 				[assistant.name]: 'none',
@@ -109,7 +109,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		);
 		const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
 		await waitForRoom(room);
-		expect(closedExchange(room, exchange.from)?.summary).toEqual(assistant.name);
+		expect(closedExchange(room, exchange.from)?.summaryWriter).toEqual(assistant.name);
 		await expectOutcome(exchange, outcome);
 		await room.stop();
 		let calls = 0;

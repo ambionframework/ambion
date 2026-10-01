@@ -107,9 +107,9 @@ describe('participant views', () => {
 				kind: 'composition',
 				seq: 1,
 				body: {
-					summary: 'worker',
-					agents: [{ name: 'worker', identity: 'W.', attention: 'broadcast' }],
-					available: [],
+					summaryWriter: 'worker',
+					seated: [{ name: 'worker', identity: 'W.', attention: 'broadcast' }],
+					reserve: [],
 					at,
 				},
 			},

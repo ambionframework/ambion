@@ -95,7 +95,7 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOptions = {}) {
 	const world = await openWorld(
 		storage,
-		{ agents: [writer], summary: writer.name, seats: { [writer.name]: 'none' } },
+		{ agents: [writer], summaryWriter: writer.name, seats: { [writer.name]: 'none' } },
 		runtimeOptions,
 	);
 	const exchange = await (await world.room.visit(person)).send({ text: 'Question?' });

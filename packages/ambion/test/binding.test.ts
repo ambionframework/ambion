@@ -37,8 +37,8 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
-		available: [],
+		seated: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
+		reserve: [],
 		at,
 	},
 };
@@ -67,11 +67,14 @@ const reconcile = (state: ReturnType<typeof asked>, sent: Map<string, number> = 
 		now,
 	);
 /** The composition names a summary writer, and one exchange closed at the question. */
-const writerNamed: Entry = { ...composition, body: { ...composition.body, summary: 'product' } };
+const writerNamed: Entry = {
+	...composition,
+	body: { ...composition.body, summaryWriter: 'product' },
+};
 const closed3: Entry = {
 	kind: 'close',
 	seq: 4,
-	body: { person: 'priya', from: 3, through: 3, at, summary: 'product' },
+	body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'product' },
 };
 const quietQuestion: Entry = { ...question, body: { ...question.body, wakes: [] } };
 const claimed = () => replayState([composition, person, question, running], options);
@@ -347,7 +350,7 @@ describe('the room runs the verified rules', () => {
 				to: 'priya',
 				text: 'What happened.',
 				covers: { from: 3, through: 3 },
-				activationId: 'closed:3:product:1',
+				activation: 'closed:3:product:1',
 			},
 		};
 		const entries = [writerNamed, person, question, closed3, published];

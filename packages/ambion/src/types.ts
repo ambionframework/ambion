@@ -83,7 +83,7 @@ export interface ExchangeActivation {
 	readonly outcome: ActivationOutcome;
 	/** What the activation spent, once it ended and recorded usage. */
 	readonly usage?: Usage;
-	readonly session?: HarnessSession;
+	readonly session?: VendorSession;
 }
 
 /**
@@ -171,7 +171,7 @@ interface Landed {
 	 */
 	key?: string;
 	/** The activation that wrote it. Absent when a person or the host wrote it. */
-	activationId?: string;
+	activation?: string;
 	/** The seats the room decided to wake for it, written with the message. */
 	wakes?: string[];
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
@@ -456,8 +456,8 @@ export interface Usage {
 	readonly cost?: number;
 }
 
-/** A harness session that an ended activation recorded. The room never reads the id. */
-export type HarnessSession = { readonly harness: string; readonly id: string };
+/** A vendor session that an ended activation recorded. The room never reads the id. */
+export type VendorSession = { readonly kind: string; readonly id: string };
 
 /** Two totals added. `cost` stays absent until a step carries it. */
 export function addUsage(total: Usage | undefined, step: Usage): Usage {
@@ -535,8 +535,8 @@ export type TraceLogger = (record: TraceRecord) => void;
 
 /** What the trace keeps of an agent's work. */
 export interface TracePolicy {
-	/** `summary` keeps the start of each block. */
-	readonly thinking: 'omit' | 'summary' | 'full';
+	/** `start` keeps the start of each block. */
+	readonly thinking: 'omit' | 'start' | 'full';
 	readonly toolOutput: 'omit' | 'full';
 }
 

@@ -61,7 +61,7 @@ describe('provider loading', () => {
 			const room = await startRoom({
 				name: 'lazy-scripted-check',
 				agents: [agent('worker'), agent('assistant')],
-				summary: 'assistant',
+				summaryWriter: 'assistant',
 				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));

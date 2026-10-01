@@ -286,7 +286,7 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, 
 	const room = stopAtEnd(
 		await startRoom({
 			name: roomName('ordinary-tools'),
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },
 			agents: [worker({ tools: [probe], bundles: [bundle] }), assistant],
 			execution: piExecution({ sessions: 'memory', stream: scripted(byAgent({ worker: script })) }),
@@ -317,7 +317,7 @@ describe('a running tool', () => {
 		const messages = await messagesOf(room);
 		const question = messages.find((message) => message.kind === 'said' && message.text === 'go');
 		const said = messages.find((message) => message.kind === 'said' && message.from === 'worker');
-		const activation = said?.kind === 'said' ? said.activationId : undefined;
+		const activation = said?.kind === 'said' ? said.activation : undefined;
 		expect(activation).toBeDefined();
 		expect(seen).toHaveLength(2);
 		for (const ctx of seen) {

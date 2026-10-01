@@ -28,11 +28,11 @@ import {
 	addUsage,
 	type ExecutionEvent,
 	type FailureCause,
-	type HarnessSession,
 	type Message,
 	type TraceRecord,
 	type TraceStep,
 	type Usage,
+	type VendorSession,
 } from './types.ts';
 
 /** The neutral behaviours the suite asks an executor to perform. The suite owns this set. */
@@ -61,7 +61,7 @@ export interface ExecutorCapabilities {
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
 	/**
-	 * The executor records a harness session with each release, resumes the
+	 * The executor records a vendor session with each release, resumes the
 	 * session that `spec.resume` names, and starts fresh when the view names
 	 * none. Absent means false.
 	 */
@@ -338,9 +338,9 @@ const usageCase: ExecutorCase = {
  * the `spec.resume` the second view carried.
  */
 async function twoActivations(run: Run): Promise<{
-	first: HarnessSession | undefined;
-	second: HarnessSession | undefined;
-	resume: HarnessSession | undefined;
+	first: VendorSession | undefined;
+	second: VendorSession | undefined;
+	resume: VendorSession | undefined;
 	line: Message;
 }> {
 	await run.wake();
@@ -354,7 +354,7 @@ async function twoActivations(run: Run): Promise<{
 	const view = operations(run.room, 'view').find(
 		(call) => (call.request as { id?: string }).id === next,
 	);
-	const answer = view?.response as { view?: { spec?: { resume?: HarnessSession } } } | undefined;
+	const answer = view?.response as { view?: { spec?: { resume?: VendorSession } } } | undefined;
 	return { first, second: releasesOf(run)[1]?.session, resume: answer?.view?.spec?.resume, line };
 }
 

@@ -121,7 +121,7 @@ describe('isClosing', () => {
 		const room = await open({
 			name: roomName('testing-closing'),
 			agents: [agent('product'), agent('writer')],
-			summary: 'writer',
+			summaryWriter: 'writer',
 			seats: { product: 'broadcast', writer: 'none' },
 			runtime: createRuntime(),
 			execution: scripted((step, seat, call) => {

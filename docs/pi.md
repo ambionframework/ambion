@@ -362,8 +362,8 @@ stay in memory.
 session, and the fresh start.
 
 **A session carries the id of the activation that began it.** The release
-records `{ harness: 'pi', id }`. An activation reopens the session only
-when `pass.resume` names that id. Its first prompt is `pass.record(after)`,
+records `{ kind: 'pi', id }`. An activation reopens the session only
+when `pass.resumeId` names that id. Its first prompt is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
 delta with no message starts no run. A closing activation reads the whole

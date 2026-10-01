@@ -16,7 +16,7 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
-import type { AgentDefinition, ExecutionEvent, HarnessSession, Seq } from '../types.ts';
+import type { AgentDefinition, ExecutionEvent, Seq, VendorSession } from '../types.ts';
 import type {
 	Executor,
 	ExecutorSession,
@@ -98,10 +98,10 @@ export class ActivationState {
 		return this.cut.signal.aborted;
 	}
 
-	/** The harness session to record with the release, when the executor reported one. */
-	get session(): HarnessSession | undefined {
+	/** The vendor session to record with the release, when the executor reported one. */
+	get session(): VendorSession | undefined {
 		const id = this.executor.session;
-		return id === undefined ? undefined : { harness: this.input.definition.executor.kind, id };
+		return id === undefined ? undefined : { kind: this.input.definition.executor.kind, id };
 	}
 
 	/** Whether the record stands past what the model read. A cut activation answers no. */
@@ -241,12 +241,12 @@ export class ActivationState {
 
 	private passOf(input: PassInput): Pass {
 		const { view } = input;
-		const resume = sessionToResume(view, this.input.definition.executor.kind);
+		const resumeId = sessionToResume(view, this.input.definition.executor.kind);
 		return {
 			...input,
 			...renderSystem(view, this.input.definition),
 			record: (after) => this.record(input, after),
-			...(resume === undefined ? {} : { resume }),
+			...(resumeId === undefined ? {} : { resumeId }),
 			tools: this.toolsOf(view),
 		};
 	}

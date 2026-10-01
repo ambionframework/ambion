@@ -88,7 +88,7 @@ describe('simulate', () => {
 			editor: (step) =>
 				isClosing(step.view) && step.results.length === 0 ? speak('Summary.') : quiet(),
 		});
-		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
+		const room = await open(script, ['desk', 'editor'], { summaryWriter: 'editor' });
 		const seen: Seen[] = [];
 		const actor: Actor = (view) => {
 			seen.push(view);
@@ -130,7 +130,7 @@ describe('simulate', () => {
 			},
 			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
 		});
-		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
+		const room = await open(script, ['desk', 'editor'], { summaryWriter: 'editor' });
 		const run = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?', 'And Friday?']),
@@ -194,7 +194,7 @@ describe('simulate', () => {
 			desk: (step) => (step.results.length > 0 ? quiet() : speak('Thursday is dry.')),
 			editor: (step) => (isClosing(step.view) ? forever() : quiet()),
 		});
-		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
+		const room = await open(script, ['desk', 'editor'], { summaryWriter: 'editor' });
 		// The room itself, stopped before its abort runs: the abort then rejects.
 		const stopping = new Proxy(room, {
 			get(target, key) {
@@ -259,7 +259,7 @@ describe('simulate', () => {
 				throw new ScriptedFailure('permanent', 'The editor cannot write.');
 			},
 		});
-		const room = await open(script, ['desk', 'editor'], { summary: 'editor' });
+		const room = await open(script, ['desk', 'editor'], { summaryWriter: 'editor' });
 		const run = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),

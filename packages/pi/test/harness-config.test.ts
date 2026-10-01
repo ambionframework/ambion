@@ -75,7 +75,7 @@ const closing = (messages: Message[]): ActivationView => ({
 		seat: 'worker',
 		attempt: 1,
 		purpose: { kind: 'summarize', exchange: 1, person: 'andrei', people: ['andrei'], through: 1 },
-		resume: { harness: 'pi', id: 'message:1:worker:1' },
+		resume: { kind: 'pi', id: 'message:1:worker:1' },
 	},
 	through: 1,
 	context: { name: 'setup', now: 0, participants: [], messages, reserve: [] },
@@ -130,7 +130,7 @@ describe('the harness of an activation', () => {
 		expect(requests).toHaveLength(1);
 		expect(requests[0]?.options?.maxRetries).toBe(0);
 		// A failed run keeps its session, and the release records it.
-		expect(session.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(session.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('gives the model the room tools and the tools of the definition, and a summary only say', async () => {
@@ -162,7 +162,7 @@ describe('the harness of an activation', () => {
 		expect(names(closed?.context as Context)).toEqual(['say']);
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
-		expect(last.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(last.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('compacts the session when the context passes the threshold, and never reads back', async () => {
@@ -353,11 +353,11 @@ describe('the harness of an activation', () => {
 			kind: 'view',
 			view: {
 				...view,
-				spec: { ...view.spec, resume: { harness: 'pi', id: 'message:1:worker:1' } },
+				spec: { ...view.spec, resume: { kind: 'pi', id: 'message:1:worker:1' } },
 			},
 		});
 		expect(requests.map((request) => request.model)).toEqual(['scripted/first', 'scripted/second']);
-		expect(second.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(second.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('closes a session that opens after the activation closed, and runs nothing', async () => {
@@ -395,10 +395,10 @@ describe('the harness of an activation', () => {
 			kind: 'view',
 			view: {
 				...view,
-				spec: { ...view.spec, resume: { harness: 'pi', id: 'message:1:worker:1' } },
+				spec: { ...view.spec, resume: { kind: 'pi', id: 'message:1:worker:1' } },
 			},
 		});
-		expect(next.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(next.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 		expect(requests).toHaveLength(1);
 	});
 

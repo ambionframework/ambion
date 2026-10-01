@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+**Four stored bodies change field names, and Ambion does not read a
+journal of an earlier release.** A message body holds `activation` for
+`activationId`. An ended `lease` body holds `session: { kind, id }` for
+`session: { harness, id }`. A `composition` body holds `seated`, `reserve`,
+and `summaryWriter` for `agents`, `available`, and `summary`, and a `close`
+body holds `summaryWriter` for `summary`. The Cloudflare room metadata holds
+`definitions` for `agents`. The types follow: `Landed.activationId` is
+`activation`, `HarnessSession` is `VendorSession`, `Pass.resume` is
+`resumeId`, `Composition.agents` and `Composition.available` are `seated` and
+`reserve`, and `summary` is `summaryWriter` on `StartRoomOptions`,
+`Composition`, `Close`, and the Cloudflare `StartOptions`. `StartOptions.agents`
+is `definitions`, and `TracePolicy.thinking` takes `'start'` for `'summary'`.
+The golden journals hold the new names.
+
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets
 the room tools alone. Claude and Codex joined the two lists at once, and

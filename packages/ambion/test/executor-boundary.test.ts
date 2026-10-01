@@ -58,7 +58,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			await startRoom({
 				name: roomName('executor-boundary'),
 				agents: [writer],
-				summary: writer.name,
+				summaryWriter: writer.name,
 				runtime,
 				execution: mode === 'json' ? serializing(observed) : observed,
 			}),

@@ -18,10 +18,10 @@ import type {
 	ActivationView,
 	CommitRequest,
 	CommitResult,
-	HarnessSession,
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
+	VendorSession,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { quiet, speak } from '@ambionframework/ambion/testing';
@@ -113,7 +113,7 @@ const withCompaction = (compaction: CompactionSettings): AgentDefinition => {
 };
 
 /** The session that the activation `message:<seq>:product:1` began. */
-const began = (seq: number): HarnessSession => ({ harness: 'pi', id: `message:${seq}:product:1` });
+const began = (seq: number): VendorSession => ({ kind: 'pi', id: `message:${seq}:product:1` });
 
 const texts = (context: Context) =>
 	context.messages.map((message) => contextText({ ...context, messages: [message] }));

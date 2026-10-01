@@ -18,12 +18,12 @@ const opening: Message = {
 	text: 'Question?',
 };
 
-const close = (summary?: string): Close => ({
+const close = (summaryWriter?: string): Close => ({
 	person: 'priya',
 	from: 2,
 	through: 3,
 	at: '2026-01-01T00:00:02.000Z',
-	...(summary === undefined ? {} : { summary }),
+	...(summaryWriter === undefined ? {} : { summaryWriter }),
 });
 
 const abandoned: LeaseHold = {
@@ -47,8 +47,8 @@ function state(
 	return {
 		composition: {
 			goal: 'Keep the record coherent.',
-			agents: [],
-			available: [],
+			seated: [],
+			reserve: [],
 			seq: 1,
 			at: '2026-01-01T00:00:00.000Z',
 		},
@@ -89,8 +89,8 @@ const record = (said: object, ...after: { kind: string; body: unknown }[]) => [
 	{
 		kind: 'composition',
 		body: {
-			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
-			available: [],
+			seated: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
+			reserve: [],
 			at,
 		},
 	},
@@ -203,7 +203,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 					{},
 					{
 						kind: 'close',
-						body: { person: 'priya', from: 4, through: 4, at, summary: 'assistant' },
+						body: { person: 'priya', from: 4, through: 4, at, summaryWriter: 'assistant' },
 					},
 					lease({ id: 'closed:4:assistant:1', phase: 'running', expiresAt: 60_000 }),
 				),

@@ -1,6 +1,6 @@
 /** The room journal entry vocabulary. */
 
-import type { Attention, EndReason, FailureCause, HarnessSession, Seq, Usage } from '../types.ts';
+import type { Attention, EndReason, FailureCause, Seq, Usage, VendorSession } from '../types.ts';
 
 /**
  * One entry about an activation: it holds a lease, or its lease ended. A
@@ -18,8 +18,8 @@ export type LeaseChange =
 			cause?: FailureCause;
 			/** What the activation spent, on an end its driver wrote. */
 			usage?: Usage;
-			/** The harness session the activation ended with, when the harness reports one. */
-			session?: HarnessSession;
+			/** The vendor session the activation ended with, when the executor reports one. */
+			session?: VendorSession;
 	  };
 
 /** A run took the name and fenced earlier runs. */
@@ -45,14 +45,14 @@ interface CloseRange {
 /** A close that owes a summary names its writer and the person it goes to. */
 interface OwedSummary {
 	/** The configured seated agent that writes the summary. */
-	summary: string;
+	summaryWriter: string;
 	/** The first person who spoke in the range. */
 	person: string;
 }
 
 /** A close that owes no summary. It names a person when one spoke in the range. */
 interface NoSummary {
-	summary?: undefined;
+	summaryWriter?: undefined;
 	person?: string;
 }
 
@@ -74,9 +74,9 @@ export interface Seating {
 export interface Composition {
 	goal?: string;
 	/** The configured agent that writes summaries for human owners. */
-	summary?: string;
-	agents: Seating[];
-	available: Seating[];
+	summaryWriter?: string;
+	seated: Seating[];
+	reserve: Seating[];
 	/** Where the composition sits on the record. */
 	seq: Seq;
 	at: string;

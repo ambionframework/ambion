@@ -131,7 +131,7 @@ export function reserveOf(
 	if (composition === undefined) return [];
 	const seated = new Set(roster.map((seat) => seat.name));
 	const definitions = new Map(
-		[...composition.agents, ...composition.available].map((seat) => [seat.name, seat]),
+		[...composition.seated, ...composition.reserve].map((seat) => [seat.name, seat]),
 	);
 	return [...definitions.values()]
 		.filter((seat) => !seated.has(seat.name))
@@ -163,4 +163,4 @@ export function reseat(roster: Seating[], message: Message): void {
 
 /** A seat an agent cannot unseat. The summary writer's is fixed unless its seating said `fixed: false`. */
 export const isFixed = (seat: Seating, composition: Composition | undefined): boolean =>
-	seat.fixed ?? seat.name === composition?.summary;
+	seat.fixed ?? seat.name === composition?.summaryWriter;

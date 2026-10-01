@@ -7,6 +7,6 @@ export function summaryWriter(
 	composition: Composition | undefined,
 	roster: readonly Seating[],
 ): string | undefined {
-	const writer = composition?.summary;
+	const writer = composition?.summaryWriter;
 	return writer !== undefined && roster.some((seat) => seat.name === writer) ? writer : undefined;
 }

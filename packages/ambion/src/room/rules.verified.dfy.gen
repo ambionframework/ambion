@@ -48,7 +48,7 @@ datatype OutcomeKind = complete | cancelled | exhausted | awaiting
 
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
 
-datatype CloseFact = CloseFact(person: string, from: int, through: int, summary: Option<string>)
+datatype CloseFact = CloseFact(person: string, from: int, through: int, summaryWriter: Option<string>)
 
 datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person: string, through: int)
 
@@ -565,11 +565,11 @@ lemma names_ensures(summary: Option<string>, writer: string)
 
 function closeMatches(close: CloseFact, through: int, writer: string): bool
 {
-  ((close.through == through) && names(close.summary, writer))
+  ((close.through == through) && names(close.summaryWriter, writer))
 }
 
 lemma closeMatches_ensures(close: CloseFact, through: int, writer: string)
-  ensures (closeMatches(close, through, writer) <==> ((close.through == through) && names(close.summary, writer)))
+  ensures (closeMatches(close, through, writer) <==> ((close.through == through) && names(close.summaryWriter, writer)))
 {
 }
 

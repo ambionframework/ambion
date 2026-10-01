@@ -41,9 +41,9 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	const stub = roomOf(NAME);
 	await stub.start({
 		name: NAME,
-		summary: 'assistant',
+		summaryWriter: 'assistant',
 		seats: { slow: 'broadcast', assistant: 'none' },
-		agents: ['slow', 'assistant'],
+		definitions: ['slow', 'assistant'],
 	});
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await stub.send({ from: 'priya', text: 'Anyone on the pour date?', key: 'q1' });

@@ -107,7 +107,7 @@ const scribing =
 	};
 
 const scribeSeats = {
-	summary: 'scribe',
+	summaryWriter: 'scribe',
 	seats: { worker: 'broadcast', scribe: 'broadcast' },
 } as const;
 

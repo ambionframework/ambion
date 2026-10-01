@@ -81,7 +81,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 			await startRoom({
 				name: roomName('removed-summary'),
 				agents: [alpha, beta],
-				summary: 'alpha',
+				summaryWriter: 'alpha',
 				seats: { alpha: 'none', beta: 'broadcast' },
 				runtime,
 			}),

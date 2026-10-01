@@ -56,7 +56,7 @@ type Drive = (room: Room, clock: FakeClock) => Promise<void>;
 
 interface Setup {
 	readonly agents: (typeof worker)[];
-	readonly summary?: string;
+	readonly summaryWriter?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
 	readonly stream: Parameters<typeof scripted>[0];
 	readonly attempts?: number;
@@ -75,7 +75,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 		name: roomName('golden'),
 		runtime,
 		agents: setup.agents,
-		...(setup.summary === undefined ? {} : { summary: setup.summary }),
+		...(setup.summaryWriter === undefined ? {} : { summaryWriter: setup.summaryWriter }),
 		seats: setup.seats,
 		execution: piExecution({ sessions: 'memory', stream: scripted(setup.stream) }),
 	});
@@ -92,7 +92,7 @@ async function record(setup: Setup): Promise<readonly JournalEntry[]> {
 const complete = (): Promise<readonly JournalEntry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: says(['Thursday works.']),
@@ -208,7 +208,7 @@ const checksLater: PiScript = (context) => {
 const scheduled = (): Promise<readonly JournalEntry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: checksLater,

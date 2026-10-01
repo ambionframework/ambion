@@ -84,7 +84,7 @@ async function open(
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),
-			...(summary ? { summary: assistant.name } : {}),
+			...(summary ? { summaryWriter: assistant.name } : {}),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,

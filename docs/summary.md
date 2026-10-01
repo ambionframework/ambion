@@ -25,7 +25,7 @@ Revisit this decision when demonstrated application needs justify a change.
 
 ## Configuration
 
-Define every executable agent once in `agents`. Set `summary` to the name of
+Define every executable agent once in `agents`. Set `summaryWriter` to the name of
 the agent that may write summaries.
 
 ```ts
@@ -41,14 +41,14 @@ const editor = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [inventory, scheduling, editor],
-  summary: 'editor',
+  summaryWriter: 'editor',
   seats: { inventory: 'broadcast', scheduling: 'broadcast', editor: 'broadcast' },
 });
 ```
 
 If `seats` is omitted, every defined agent starts as a member with
-`broadcast` attention. `summary` must name a seated agent: `startRoom`
-rejects a `summary` name outside `seats`. The host can still unseat the
+`broadcast` attention. `summaryWriter` must name a seated agent: `startRoom`
+rejects a `summaryWriter` name outside `seats`. The host can still unseat the
 writer later; the exchange closing at that time then has no summary
 assignment.
 
@@ -67,7 +67,7 @@ their source messages.
 ## Closing activation
 
 When the room records a close, it assigns a dedicated activation only when
-`summary` names a seated agent and the close names a `person`. The
+`summaryWriter` names a seated agent and the close names a `person`. The
 activation fixes the exchange range and that person. It receives that
 person's current preferences.
 Later messages do not change the source range or recipient.

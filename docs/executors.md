@@ -102,7 +102,7 @@ fact of it, so no executor keeps a copy.
 | The resume token                 | It reads `spec.resume` when it names the kind of the executor.                             |
 
 **An executor keeps its harness alone.** It maps the harness events to
-steps, resumes a harness session, hosts the tools, and reports the signal
+steps, resumes a vendor session, hosts the tools, and reports the signal
 that the model consumed input.
 
 **An executor is a function of the activation.** It takes an
@@ -128,7 +128,7 @@ members:
 | `mechanism`     | How a room works. It depends on the kernel version alone.                                      |
 | `agent`         | The seat's part: the name, the speaking policy, the identity, and the instructions.            |
 | `record(after)` | The record the pass reads, rendered, with the range it holds. `undefined` when nothing is new. |
-| `resume`        | The id of the harness session to resume, when `spec.resume` names the executor kind.           |
+| `resumeId`      | The id of the vendor session to resume, when `spec.resume` names the executor kind.            |
 | `tools`         | The room tools that the purpose grants, then the tools of the definition.                      |
 
 **The session reports back.** `ExecutorSession` has these members:
@@ -136,13 +136,13 @@ members:
 | Member                     | What it does                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------- |
 | `pass(pass)`               | Runs one pass, and returns a `PassResult`.                                          |
-| `session`                  | The id of the harness session, for the release. Absent when the harness keeps none. |
+| `session`                  | The id of the vendor session, for the release. Absent when the executor keeps none. |
 | `roomTools`                | What the executor adds to a say and a schedule, as `RoomToolOptions`.               |
 | `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the family cannot.                      |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
 **The core records the session under the executor kind.** The release
-records `{ harness, id }`, where `harness` is `definition.executor.kind`,
+records `{ kind, id }`, where `kind` is `definition.executor.kind`,
 such as `pi`. An executor session with no `session` id records none.
 
 **`pass` returns a `PassResult`.** It has these members:
@@ -163,7 +163,7 @@ points.
 - **The core reads `roomTools` once, before the first pass.** Set it on the
   session that the executor returns. A later change reaches no tool.
 - **The core reads `session` after the last pass.** Keep the id of the
-  harness session there until the driver calls `close`. The room hands it
+  vendor session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.
 - **Every pass holds the same tool values.** The core binds the tools on the
   first pass, so an adapter can host them once for the activation.
@@ -230,7 +230,7 @@ The core then counts the view read. The core renders each steered line and
 each room refusal for the model.
 
 **A resumed session reads the delta on its first pass.** `record(after)`
-takes the position that the harness session read through. The first pass
+takes the position that the vendor session read through. The first pass
 of a respond activation then reads the reminders, the pending says, and
 the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
@@ -474,9 +474,9 @@ step keeps the start of it with a note of the size. Every execution that
 `localExecution` or `defineExecution` builds applies the limits of the host.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
-`thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
-`full`). The default is `{ thinking: 'summary', toolOutput: 'full' }`.
-`summary` keeps the first 280 characters of each thinking block.
+`thinking` (`omit`, `start`, or `full`) and `toolOutput` (`omit` or
+`full`). The default is `{ thinking: 'start', toolOutput: 'full' }`.
+`start` keeps the first 280 characters of each thinking block.
 
 **The logger receives the steps in order.** The sink calls the logger once
 for each step, in the order of `pass` and `index`, before the release. The
@@ -486,7 +486,7 @@ takes it in `configure`.
 
 ## Exchange continuity
 
-**A seat keeps its harness session for the length of one exchange.** A
+**A seat keeps its vendor session for the length of one exchange.** A
 seat often works in more than one activation of an exchange: it speaks,
 its lease ends, another participant answers, and the room wakes it again.
 The second activation continues the session of the first. It keeps the
@@ -494,15 +494,15 @@ reasoning, the tool calls and the tool results that the record does not
 hold. The first activation of a seat in each exchange starts fresh.
 
 **The release records the session, and the room hands it back.** The
-release records `{ harness, id }` on the `ended` entry. The room gives
+release records `{ kind, id }` on the `ended` entry. The room gives
 the next activation of the same seat in the same exchange the latest such
 session as `spec.resume`. A closing activation gets the session of the
 exchange it summarizes. The room never reads the id. There is no option:
 every executor works this way.
 
-**An executor resumes only the session that `pass.resume` names.** The core
-sets `pass.resume` only when `spec.resume` names the kind of the
-executor. With no `pass.resume` the executor starts a fresh session.
+**An executor resumes only the session that `pass.resumeId` names.** The core
+sets `pass.resumeId` only when `spec.resume` names the kind of the
+executor. With no `pass.resumeId` the executor starts a fresh session.
 [Pi](pi.md#exchange-continuity) keeps each session of a seat apart, so the
 open exchange runs beside the summary of the exchange before it.
 

@@ -190,7 +190,7 @@ three harnesses. See [Skills](docs/skills.md).
 </picture>
 
 **An exchange runs from `visit.send()` to `waitForClose()`.** A room started
-with `summary` adds a closing summary, and `waitForSummary()` returns it.
+with `summaryWriter` adds a closing summary, and `waitForSummary()` returns it.
 
 **The record is durable, and every activation reads it.** It holds every
 message, close, summary and lease entry. A restart replays it. A summary

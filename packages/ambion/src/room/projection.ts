@@ -339,6 +339,6 @@ function onComposition(
 	return {
 		...prev,
 		base: { ...prev.base, composition },
-		roster: composition.agents.map((seat) => ({ ...seat })),
+		roster: composition.seated.map((seat) => ({ ...seat })),
 	};
 }

@@ -56,8 +56,8 @@ What is built:
   with `activationTokenLimit` names one of them, or `length`, in
   `estimateTokens`.
 
-`RoomObject.start` receives the complete agent definitions in `agents`, an optional
-`summary` name, and an optional `seats` map. The map sets initial members and
+`RoomObject.start` receives the names of the definitions in `definitions`, an optional
+`summaryWriter` name, and an optional `seats` map. The map sets initial members and
 attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
 install a new definition. The room metadata retains the definition names, so

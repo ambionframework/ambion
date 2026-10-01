@@ -21,8 +21,8 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		agents: [{ name: 'worker', identity: 'Worker.', attention: 'broadcast' }],
-		available: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
+		seated: [{ name: 'worker', identity: 'Worker.', attention: 'broadcast' }],
+		reserve: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
 		at,
 	},
 };
@@ -46,7 +46,7 @@ const closeBody = (from: number, through: number, writer?: string): Close => ({
 	from,
 	through,
 	at,
-	...(writer === undefined ? {} : { summary: writer }),
+	...(writer === undefined ? {} : { summaryWriter: writer }),
 });
 const close = (seq: number, from: number, through: number, writer?: string): Entry => ({
 	kind: 'close',
@@ -440,9 +440,9 @@ describe('exchange session', () => {
 		readThrough: until - 1,
 		reason: 'released',
 		until,
-		session: { harness: 'pi', id },
+		session: { kind: 'pi', id },
 	});
-	const closes: Close[] = [{ person: 'priya', from: 4, through: 9, at, summary: 'writer' }];
+	const closes: Close[] = [{ person: 'priya', from: 4, through: 9, at, summaryWriter: 'writer' }];
 	const open = { person: 'priya', from: 12, at };
 	const leases = new Map(
 		[

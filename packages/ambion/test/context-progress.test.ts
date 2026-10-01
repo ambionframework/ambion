@@ -19,8 +19,8 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
-		available: [],
+		seated: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
+		reserve: [],
 		at,
 	},
 };

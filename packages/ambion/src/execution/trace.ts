@@ -23,8 +23,8 @@ import {
 	type Usage,
 } from '../types.ts';
 
-/** How many characters of a thinking block the `summary` policy keeps. */
-const THINKING_SUMMARY_CHARS = 280;
+/** How many characters of a thinking block the `start` policy keeps. */
+const THINKING_START_CHARS = 280;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null;
@@ -178,8 +178,8 @@ class Trace implements TraceSink {
 		const block = this.pending;
 		this.pending = undefined;
 		if (block === undefined || block.text === '') return;
-		const summary = block.type === 'thinking' && this.options.policy.thinking === 'summary';
-		const text = summary ? block.text.slice(0, THINKING_SUMMARY_CHARS) : block.text;
+		const starts = block.type === 'thinking' && this.options.policy.thinking === 'start';
+		const text = starts ? block.text.slice(0, THINKING_START_CHARS) : block.text;
 		this.stamp({ type: block.type, text, final: true });
 	}
 

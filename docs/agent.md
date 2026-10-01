@@ -26,7 +26,7 @@ const researcher = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [researcher, editor],
-  summary: 'editor',
+  summaryWriter: 'editor',
 });
 ```
 
@@ -53,7 +53,7 @@ registry does not hold fails `startRoom` and `resumeRoom`. The start is the
 first point where the definition and the registry meet, and a failure there
 reaches the host before any activation reads a view.
 
-`summary` is an optional name from `agents`. It assigns closing work to that
+`summaryWriter` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
 its registration, broadcast seat, and summary assignment. The optional
 `@ambionframework/assistant` package supplies a default definition factory.

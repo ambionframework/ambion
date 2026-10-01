@@ -88,7 +88,7 @@ function session(inner: ExecutorSession, seen: Seen): ExecutorSession {
 				...(pass.kind === 'delta' ? { since: pass.since } : {}),
 				spec,
 				through,
-				resume: pass.resume,
+				resume: pass.resumeId,
 				tools: pass.tools.map((tool) => tool.name),
 			};
 			seen.passes.push(entry);
