@@ -111,7 +111,7 @@ describe('the tools and the guidance', () => {
 			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 			A wait stops before your activation ends.
 			A process that outlives your activation shows in the reminder at the start of your next activation.
-			To check a long process later, call schedule with after, in seconds. The room wakes you with it then.
+			To check a long process later, call schedule with delaySeconds. The room wakes you with it then.
 
 			To cite a file, call snapshot with its path, and put the ref it gives in the refs of a
 			say. The ref has the form ambion://workspace/lab/snapshot/<digest>/<path>. It

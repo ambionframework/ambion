@@ -161,14 +161,14 @@ export const sameRefs = (
 	return left.length === right.length && left.every((ref, index) => ref === right[index]);
 };
 
-/** A recorded `said` carries the recipient, the text, the refs, and the `after` that a same-key retry sent. */
+/** A recorded `said` carries the recipient, the text, the refs, and the `delaySeconds` that a same-key retry sent. */
 export const saidContentMatches = (
-	message: Pick<SaidMessage, 'to' | 'text' | 'refs' | 'after'>,
-	said: { to?: string; text: string; refs?: readonly string[]; after?: number },
+	message: Pick<SaidMessage, 'to' | 'text' | 'refs' | 'delaySeconds'>,
+	said: { to?: string; text: string; refs?: readonly string[]; delaySeconds?: number },
 ): boolean =>
 	message.to === said.to &&
 	message.text === said.text &&
-	message.after === said.after &&
+	message.delaySeconds === said.delaySeconds &&
 	sameRefs(message.refs, said.refs);
 
 export function messageKeyConflict(key: string, message: Message): string {

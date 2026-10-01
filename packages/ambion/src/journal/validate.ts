@@ -81,7 +81,7 @@ function validateSchedule(kind: string, body: Record<string, unknown> | undefine
 	if (body.kind === 'posted' && body.from !== undefined) fail('body.from', 'expected no author');
 	if (body.kind === 'posted' && body.returns !== undefined && body.to === undefined)
 		fail('body.to', 'expected the seat of the returned say');
-	if (body.kind === 'said' && body.after !== undefined && body.to !== body.from)
+	if (body.kind === 'said' && body.delaySeconds !== undefined && body.to !== body.from)
 		fail('body.to', 'expected the author');
 }
 

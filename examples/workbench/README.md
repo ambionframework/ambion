@@ -105,7 +105,7 @@ press Ctrl+R to pick a room.
 person leaves the current room, then enters it as the new person.
 
 **A say that waits to return shows as a note.** An agent calls `schedule`
-with `after`. The conversation notes the say with its seat, its due time,
+with `delaySeconds`. The conversation notes the say with its seat, its due time,
 its owner, its text, and its seq, as in `(/dismiss 41)`. `/dismiss `
 lists the says that wait. `/dismiss 41` calls `room.dismiss`, and the
 agent does not come back to the say. The say in its discussion then reads
@@ -262,7 +262,7 @@ the file that another agent reads.
 | Kind   | How it enforces the guarantee                                       |
 | ------ | ------------------------------------------------------------------- |
 | Pi     | Has no native tool. The seat holds only the tools that it receives. |
-| Claude | Passes no built-in tool. The definition sets no `allowedTools`.     |
+| Claude | Passes no built-in tool. No Claude definition option names one.     |
 | Codex  | Has no native tool. The seat holds only the tools that it receives. |
 
 `test/tool-set.test.ts` fails when a definition drifts from this. The live
