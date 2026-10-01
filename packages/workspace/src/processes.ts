@@ -4,9 +4,10 @@
  * The files in each agent's home are the source of truth
  * (`./process-files.ts`). The table reads them for every answer, so a new
  * run of the host reads the same table. Memory holds only what no file can:
- * one record for each live process, with its timer. The record of a
- * process that this run started also holds its environment and its abort
- * controller. The table adopts a live process of an earlier run when a
+ * one record for each live process, with its timer, and the key of each
+ * process that this run saw end. `ended` answers from those keys. The
+ * record of a process that this run started also holds its environment and
+ * its abort controller. The table adopts a live process of an earlier run when a
  * read finds it, and stops it through its pid.
  *
  * A process runs on an environment of its own, which the table connects

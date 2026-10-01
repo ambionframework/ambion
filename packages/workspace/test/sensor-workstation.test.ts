@@ -143,11 +143,12 @@ async function verifyRetryAndProcessEnd(
 		source: { ...index.source, commit: 'c'.repeat(40), dirty: false },
 	};
 	await writeFile(indexPath, JSON.stringify(changedSource));
+	const before = new Set(ssh.forwards);
 	await expect(
 		toolOf(workspace, 'connect').invoke({ name: 'bench', process: handle, port }, context('owner')),
 	).rejects.toThrow(/launch source changed/i);
 	expect(retry.details).toMatchObject({ source: index.source, sensors: ['bench/pressure'] });
-	await waitForForwards(1, ssh);
+	await waitForNoNewForwards(before, ssh);
 	await writeFile(indexPath, JSON.stringify(updatedIndex));
 	const restored = await toolOf(workspace, 'connect').invoke(
 		{ name: 'bench', process: handle, port },
@@ -166,7 +167,7 @@ async function verifyRetryAndProcessEnd(
 	await waitForForwards(0, ssh);
 	await expect(
 		toolOf(workspace, 'connect').invoke({ name: 'bench', process: handle, port }, context('owner')),
-	).rejects.toThrow(/running|ended|cancelled/i);
+	).rejects.toThrow(/has ended/);
 }
 
 async function failReadinessAndEnd(
@@ -192,10 +193,11 @@ async function failReadinessAndEnd(
 	);
 	if (typeof started === 'string') throw new Error('bash returned no bad process details.');
 	const handle = (started.details as { process: { handle: string } }).process.handle;
+	const before = new Set(ssh.forwards);
 	await expect(
 		toolOf(workspace, 'connect').invoke({ name: 'bad', process: handle, port }, context('owner')),
 	).rejects.toThrow(/sensor index/i);
-	await waitForForwards(1, ssh);
+	await waitForNoNewForwards(before, ssh);
 	await toolOf(workspace, 'cancel').invoke({ handle }, context('owner'));
 }
 
@@ -293,4 +295,21 @@ async function waitForForwards(
 	while (ssh.forwards.size > atMost && Date.now() < deadline)
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	expect(ssh.forwards.size).toBeLessThanOrEqual(atMost);
+}
+
+/**
+ * Wait until every forwarded channel of the SSH server is one of `known`. A
+ * failed connect closes the channel of its temporary transport. A channel
+ * that stays open after the wait is a leak, whether or not the idle channel
+ * of the registered connection has closed.
+ */
+async function waitForNoNewForwards(
+	known: ReadonlySet<unknown>,
+	ssh: Awaited<ReturnType<typeof startSshServer>>,
+): Promise<void> {
+	const leaked = () => [...ssh.forwards].filter((channel) => !known.has(channel));
+	const deadline = Date.now() + 1_000;
+	while (leaked().length > 0 && Date.now() < deadline)
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	expect(leaked()).toHaveLength(0);
 }

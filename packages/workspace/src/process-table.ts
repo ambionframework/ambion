@@ -87,7 +87,7 @@ export interface ProcessTable {
 	/**
 	 * Whether this table saw the process `handle` of `agent` end. It answers
 	 * at once and stays true for the run. A process that ended before this
-	 * run, or that no read of this table settled, answers false: `find` gives
+	 * run, or that this table did not settle, answers false: `find` gives
 	 * its state.
 	 */
 	ended(agent: string, handle: string): boolean;

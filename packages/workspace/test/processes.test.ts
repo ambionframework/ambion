@@ -16,7 +16,12 @@ import {
 } from '../src/process-files.ts';
 import { FINISHED_IN_REMINDER, LATER_LINE, stateLine } from '../src/process-text.ts';
 import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
-import { MAX_FINISHED_PROCESSES, MAX_RUNNING_PROCESSES } from '../src/processes.ts';
+import {
+	MAX_FINISHED_PROCESSES,
+	MAX_RUNNING_PROCESSES,
+	openProcessTable,
+} from '../src/processes.ts';
+import { openResource } from '../src/resource.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
 
@@ -330,6 +335,43 @@ describe('the process table', () => {
 			'You have no process',
 		);
 		await expect(fileOf(workspace, 'alpha', first.output)).rejects.toThrow();
+	});
+
+	it('answers ended for a process that this table saw end, and for no other', async () => {
+		const backend = memoryBackend();
+		const owner = openResource({ name: 'ended', backend });
+		const table = openProcessTable({
+			connect: (agent) => backend.connect(agent),
+			shell: owner.use,
+		});
+		onTestFinished(async () => {
+			await table.close();
+			await owner.dispose();
+		});
+		const alpha = { name: 'alpha' };
+		// The files of an earlier run: the table did not start this process, and it never saw it end.
+		const earlier = 'bash-000000000001';
+		await owner.use(alpha, async (env) => {
+			const spec = { handle: earlier, kind: 'bash' as const, agent: 'alpha', command: 'true' };
+			const startedAt = new Date().toISOString();
+			const dir = await writeSpec(env, await processesDir(env), {
+				...spec,
+				timeout: 600,
+				grace: 10,
+				startedAt,
+			});
+			await writeExit(env, dir, 0);
+		});
+		const { handle } = await owner.use(alpha, (env) =>
+			table.start(alpha, env, { command: 'sleep 30', timeout: 600, grace: 1 }),
+		);
+		expect(table.ended('alpha', handle)).toBe(false);
+		expect((await table.find(alpha, earlier)).state).toBe('exited');
+		expect(table.ended('alpha', earlier)).toBe(false);
+		expect((await table.cancel(alpha, handle)).stopped).toBe(true);
+		expect(table.ended('alpha', handle)).toBe(true);
+		expect(table.ended('beta', handle)).toBe(false);
+		expect(table.ended('alpha', earlier)).toBe(false);
 	});
 
 	it(`refuses a process past ${MAX_RUNNING_PROCESSES} running processes of one agent, and dispose stops each running process`, async () => {
