@@ -9,7 +9,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { viewOf } from '../src/room/view.ts';
 import { replayState } from './support/fold.ts';
 import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
@@ -97,12 +97,12 @@ describe('participant views', () => {
 
 	it('carries the departure and the unread count in the context view of a person', () => {
 		const at = '2026-01-01T00:00:00.000Z';
-		const said = (seq: number, from: string): Entry => ({
+		const said = (seq: number, from: string): RoomEntry => ({
 			kind: 'message',
 			seq,
 			body: { kind: 'said', at, from, text: `Message ${seq}.` },
 		});
-		const entries: Entry[] = [
+		const entries: RoomEntry[] = [
 			{
 				kind: 'composition',
 				seq: 1,

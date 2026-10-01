@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**`@ambionframework/journal` exports its entry type as `Entry`.** The
+package exported the type as `JournalEntry`. The core imported it as
+`Envelope`, and the room named its own entry union `Entry`. The stored shape
+now has one name, `Entry`, in the journal package and in the core. The
+room's union is `RoomEntry`. The `journal` package no longer exports
+`JournalEntry`.
+
 **`addUsage` joins the main entry.** `@ambionframework/ambion` exports
 `addUsage(total, step)`, which adds a step to a total, which may be absent.
 The core already held this function. The Pi executor held a second copy as

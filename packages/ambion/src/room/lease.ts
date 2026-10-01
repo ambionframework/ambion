@@ -27,7 +27,7 @@
  * room sends it when it is due.
  */
 
-import type { JournalEntry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { LeaseChange } from '../journal/entries.ts';
 import type { HarnessSession, Message, Seq, Usage } from '../types.ts';
@@ -52,7 +52,7 @@ export type LeaseHold = RuleLease & {
  * so a lease's attempt history is reconstructed directly from its changes.
  */
 export function foldLeases(
-	changes: readonly JournalEntry<LeaseChange>[],
+	changes: readonly Entry<LeaseChange>[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
@@ -67,7 +67,7 @@ export function foldLeases(
  */
 export function applyLease(
 	leases: Map<string, LeaseHold>,
-	{ body: change, seq }: JournalEntry<LeaseChange>,
+	{ body: change, seq }: Entry<LeaseChange>,
 ): void {
 	const activation = decodeActivationId(change.id);
 	if (activation === undefined) return;

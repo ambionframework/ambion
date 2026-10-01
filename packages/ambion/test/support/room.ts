@@ -1,4 +1,4 @@
-import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
+import type { Entry, JournalOpener } from '@ambionframework/journal';
 import { type PiOptions, pi } from '../../../pi/src/index.ts';
 import { hostingOf } from '../../src/hosting.ts';
 import {
@@ -133,12 +133,9 @@ export function crash(runtime: Runtime, session: Room): void {
 }
 
 /** Every native entry the room wrote, in its storage order. */
-export async function storedOf(
-	journals: JournalOpener,
-	name: string,
-): Promise<readonly JournalEntry[]> {
+export async function storedOf(journals: JournalOpener, name: string): Promise<readonly Entry[]> {
 	const storage = await journals.open(name);
-	return (await storage.read(0)).entries.map((entry) => entry.entry as JournalEntry);
+	return (await storage.read(0)).entries.map((entry) => entry.entry as Entry);
 }
 
 /**

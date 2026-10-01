@@ -15,7 +15,7 @@ import type {
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { Entry } from '../../ambion/src/journal/journal.ts';
+import type { RoomEntry } from '../../ambion/src/journal/journal.ts';
 import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { projectState, replay } from '../../ambion/src/room/projection.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
@@ -307,7 +307,7 @@ describe('executor tool authority', () => {
 
 	it('acknowledges a live response boundary but fixes a summary at its close', () => {
 		const at = '2026-01-01T00:00:00.000Z';
-		const entries: Entry[] = [
+		const entries: RoomEntry[] = [
 			{
 				kind: 'composition',
 				seq: 1,

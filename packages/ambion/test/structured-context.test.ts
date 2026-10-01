@@ -3,7 +3,7 @@ import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { assertWire, type ContextParticipant, roundTrip } from '../src/protocol.ts';
 import { viewOf } from '../src/room/view.ts';
 import type { Message } from '../src/types.ts';
@@ -12,7 +12,7 @@ import { replayState } from './support/fold.ts';
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 
-const entries: Entry[] = [
+const entries: RoomEntry[] = [
 	{
 		kind: 'composition',
 		seq: 1,
@@ -200,7 +200,7 @@ describe('structured activation context', () => {
 	});
 
 	it('tells a closing seat how to read a fold its background now holds', () => {
-		const twoExchanges: Entry[] = [
+		const twoExchanges: RoomEntry[] = [
 			{
 				kind: 'composition',
 				seq: 1,

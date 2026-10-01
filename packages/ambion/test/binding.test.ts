@@ -9,7 +9,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { readView } from '../src/room/read.ts';
 import * as rules from '../src/room/rules.verified.ts';
@@ -33,7 +33,7 @@ const now = Date.parse(at);
 const options = { backoff: () => 0 };
 const id = 'message:3:product:1';
 
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
@@ -42,22 +42,22 @@ const composition: Entry = {
 		at,
 	},
 };
-const person: Entry = {
+const person: RoomEntry = {
 	kind: 'message',
 	seq: 2,
 	body: { kind: 'arrived', at, from: 'priya', subject: 'priya', identity: 'Person.' },
 };
-const question: Entry = {
+const question: RoomEntry = {
 	kind: 'message',
 	seq: 3,
 	body: { kind: 'said', at, from: 'priya', text: 'Question.', wakes: ['product'] },
 };
-const running: Entry = {
+const running: RoomEntry = {
 	kind: 'lease',
 	seq: 4,
 	body: { id, phase: 'running', expiresAt: now + 60_000, at, readThrough: 3 },
 };
-const cancel: Entry = { kind: 'cancel', seq: 4, body: { at } };
+const cancel: RoomEntry = { kind: 'cancel', seq: 4, body: { at } };
 
 const asked = () => replayState([composition, person, question], options);
 const reconcile = (state: ReturnType<typeof asked>, sent: Map<string, number> = new Map()) =>
@@ -67,13 +67,16 @@ const reconcile = (state: ReturnType<typeof asked>, sent: Map<string, number> = 
 		now,
 	);
 /** The composition names a summary writer, and one exchange closed at the question. */
-const writerNamed: Entry = { ...composition, body: { ...composition.body, summary: 'product' } };
-const closed3: Entry = {
+const writerNamed: RoomEntry = {
+	...composition,
+	body: { ...composition.body, summary: 'product' },
+};
+const closed3: RoomEntry = {
 	kind: 'close',
 	seq: 4,
 	body: { person: 'priya', from: 3, through: 3, at, summary: 'product' },
 };
-const quietQuestion: Entry = { ...question, body: { ...question.body, wakes: [] } };
+const quietQuestion: RoomEntry = { ...question, body: { ...question.body, wakes: [] } };
 const claimed = () => replayState([composition, person, question, running], options);
 
 describe('the room runs the verified rules', () => {
@@ -275,7 +278,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('stamps a closing commit as the rules answer', () => {
-		const drafting: Entry = {
+		const drafting: RoomEntry = {
 			kind: 'lease',
 			seq: 5,
 			body: {
@@ -306,7 +309,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('covers and counts a retry as the lease rules answer', () => {
-		const failed: Entry = {
+		const failed: RoomEntry = {
 			kind: 'lease',
 			seq: 5,
 			body: { id, phase: 'ended', reason: 'failed', at, readThrough: 0 },
@@ -337,7 +340,7 @@ describe('the room runs the verified rules', () => {
 	});
 
 	it('publishes a summary only when coversExchange says it covers', () => {
-		const published: Entry = {
+		const published: RoomEntry = {
 			kind: 'message',
 			seq: 5,
 			body: {
