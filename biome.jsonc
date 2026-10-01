@@ -57,7 +57,12 @@
 		{
 			// The library must not write to stdout on its owner's behalf; hosts
 			// pass a logger in instead. It also runs on any host: nothing in it
-			// reaches a platform's own modules.
+			// reaches a Node built-in, a platform's own modules, or a model library.
+			// A Biome override replaces the options of an earlier one for the same
+			// rule, and does not merge them. Each layer override below repeats
+			// these two groups beside its own, so a layer file keeps the ban. A
+			// group reads as a gitignore pattern, and `*` does not cross `/`, so
+			// each group also names its subpaths.
 			"includes": ["packages/ambion/src/**"],
 			"linter": {
 				"rules": {
@@ -68,11 +73,15 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["cloudflare:*", "node:sqlite"],
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
 										"message": "The core runs on any host. A platform's own modules belong to its package."
 									},
 									{
-										"group": ["@earendil-works/*", "@ambionframework/pi"],
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
 										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
@@ -129,6 +138,18 @@
 											"./hosting.ts"
 										],
 										"message": "The vocabulary imports nothing that does anything."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -157,6 +178,18 @@
 											"../hosting.ts"
 										],
 										"message": "A host owns values; it reads no log, folds nothing, and runs no seat."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -186,6 +219,18 @@
 											"../hosting.ts"
 										],
 										"message": "The journal names the room's kinds, and nothing that reads them."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -210,10 +255,21 @@
 											"../room.ts",
 											"../room-host/*",
 											"../index.ts",
-											"../hosting.ts",
-											"@earendil-works/pi-*"
+											"../hosting.ts"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -238,10 +294,21 @@
 											"./room.ts",
 											"./room-host/*",
 											"./index.ts",
-											"./hosting.ts",
-											"@earendil-works/pi-*"
+											"./hosting.ts"
 										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -269,6 +336,18 @@
 											"../hosting.ts"
 										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -296,10 +375,21 @@
 											"./room.ts",
 											"./room-host/*",
 											"./index.ts",
-											"./hosting.ts",
-											"@earendil-works/pi-*"
+											"./hosting.ts"
 										],
 										"message": "A conformance suite drives the wire from outside: no log, no fold, no room, no model."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -326,11 +416,21 @@
 											"../room.ts",
 											"../room-host/*",
 											"../index.ts",
-											"../hosting.ts",
-											"@earendil-works/*",
-											"@ambionframework/pi"
+											"../hosting.ts"
 										],
 										"message": "The test tools read the vocabulary and the execution contract, run no room, and name no model library."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}
@@ -351,14 +451,20 @@
 							"options": {
 								"patterns": [
 									{
-										"group": [
-											"../execution/*",
-											"../room.ts",
-											"../index.ts",
-											"../hosting.ts",
-											"@earendil-works/pi-*"
-										],
+										"group": ["../execution/*", "../room.ts", "../index.ts", "../hosting.ts"],
 										"message": "The room host owns collaboration state; execution services belong to the facade."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
 									}
 								]
 							}

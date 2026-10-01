@@ -72,8 +72,10 @@ The core has four published entries:
   `@ambionframework/pi/testing` holds the scripted Pi stream, which reads the
   same verbs.
 
-The core imports no platform modules. Workspace filesystem code owns Node
-dependencies; Cloudflare code owns Durable Object integration.
+The core imports no platform modules. Biome refuses `node:*`,
+`cloudflare:*`, and the model libraries in every core file. Workspace
+filesystem code owns Node dependencies; Cloudflare code owns Durable Object
+integration.
 
 The core separates collaboration from execution. `room-host/` coordinates
 the journal and pure decisions under `room/`. Its `room.ts` holds the state
