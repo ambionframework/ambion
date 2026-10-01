@@ -56,9 +56,10 @@ it('passes the policy options to the SDK, reads no settings source, and names th
 		expect(argv).toContain(flag);
 });
 
-it('gives the model no built-in tool when the policy names none, and sets the system prompt from the room', async () => {
+it('gives the model no built-in tool and the default permission mode when the policy names none, and sets the system prompt from the room', async () => {
 	const { argv, initialize } = await argvOf();
 	expect(flagValue(argv, '--tools')).toBe('');
+	expect(flagValue(argv, '--permission-mode')).toBe('default');
 	expect(argv).not.toContain('--allowedTools');
 	expect(JSON.stringify(initialize.systemPrompt)).toContain('Answer once.');
 });

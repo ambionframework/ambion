@@ -149,11 +149,12 @@ export function queryOptions(input: QueryInput): Options {
 		tools: builtinNames(executor.allowedTools ?? []),
 		allowedTools: allowed,
 		canUseTool: input.canUseTool,
+		// An absent mode lets the SDK pick `auto`, where a classifier answers in place of the approver.
+		permissionMode: executor.permissionMode ?? 'default',
 		...present({
 			resume,
 			forkSession: resume === undefined ? undefined : false,
 			disallowedTools: executor.disallowedTools && [...executor.disallowedTools],
-			permissionMode: executor.permissionMode,
 			maxBudgetUsd: executor.maxBudgetUsd,
 			effort: executor.effort,
 			cwd: executor.cwd,
