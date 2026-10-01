@@ -199,12 +199,13 @@ describe('exclusiveEntry', () => {
 	});
 });
 
-it('exclusiveConfig names the patched catalog, turns every listed feature off and only those, and disables web search and three tools', () => {
+it('exclusiveConfig names the patched catalog, turns every listed feature off and only those, and disables web search, two tools, the skills, the update check, the analytics, the feedback upload, and the memories', () => {
 	const config = exclusiveConfig('/tmp/models.json') as {
 		model_catalog_json: string;
 		features: Record<string, boolean>;
 		web_search: string;
 		tools: Record<string, unknown>;
+		skills: Record<string, unknown>;
 	};
 	expect(config.model_catalog_json).toBe('/tmp/models.json');
 	expect(Object.keys(config.features)).toEqual([...EXCLUSIVE_FEATURES]);
@@ -213,8 +214,14 @@ it('exclusiveConfig names the patched catalog, turns every listed feature off an
 		expect(config.features[name]).toBe(false);
 	}
 	expect(config.web_search).toBe('disabled');
+	expect(config).toMatchObject({
+		check_for_update_on_startup: false,
+		analytics: { enabled: false },
+		feedback: { enabled: false },
+		memories: { generate_memories: false, use_memories: false },
+	});
+	expect(config.skills).toEqual({ include_instructions: false, bundled: { enabled: false } });
 	expect(config.tools).toEqual({
-		view_image: false,
 		update_plan: { enabled: false },
 		experimental_request_user_input: { enabled: false },
 	});

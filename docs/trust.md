@@ -85,9 +85,17 @@ It also shows that a seat cannot read `/etc/hosts`.
 Both tiers skip an executor kind with no key, and they run only on request.
 
 **A Codex seat has no native tools, ever.** The Code Mode runtime of Codex
-reads the host filesystem outside the sandbox on Codex 0.155.1, so the
-executor patches it out of every seat. See
-[Codex](codex.md#the-trust-boundary).
+read the host filesystem outside the sandbox on Codex 0.155.1, and the
+catalog of 0.158.0 still lists its tools. The executor patches it out of
+every seat. See [Codex](codex.md#the-trust-boundary).
+
+**The `config.toml` of the seat home is the responsibility of the host.**
+The executor overrides each config key that the recipe names. A key that the
+recipe does not name survives from that file by a deep merge. An extra
+`[mcp_servers.<name>]` table starts a server with tools that reach the
+host. A `features.<name> = true` entry turns on a feature that the recipe
+does not list. The default home `~/.ambion/codex` holds no `config.toml`
+until a person writes one. Write only keys that you trust into that file.
 
 Each executor kind has a guide with its options and its tests. Read the
 [Pi](../packages/pi/README.md), [Claude](../packages/claude/README.md), and
