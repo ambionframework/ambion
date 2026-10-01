@@ -28,6 +28,7 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	type Deadline,
 	deliverView,
+	MAX_TIMER_SECONDS,
 	type WorkspaceExecOptions,
 	withDeadline,
 } from '@ambionframework/workspace';
@@ -42,9 +43,6 @@ import {
 import type { ClientChannel } from 'ssh2';
 import { Capture } from './capture.ts';
 import { commandScript, invalidNames, PGID_PREFIX } from './script.ts';
-
-/** The longest timeout a timer holds, in seconds. */
-const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 /** How long an aborted command's channel may stay open after the `SIGKILL`. */
 const CLOSE_WAIT_MS = 2_000;
@@ -298,10 +296,10 @@ function stopWhenAborted(
 /** A grace that no timer can hold. */
 function invalidGrace(grace: number | undefined): ExecutionError | undefined {
 	if (grace === undefined) return undefined;
-	if (!Number.isFinite(grace) || grace < 0 || grace > MAX_TIMEOUT_SECONDS) {
+	if (!Number.isFinite(grace) || grace < 0 || grace > MAX_TIMER_SECONDS) {
 		return new ExecutionError(
 			'spawn_error',
-			`Invalid grace: must be 0 to ${MAX_TIMEOUT_SECONDS} seconds`,
+			`Invalid grace: must be 0 to ${MAX_TIMER_SECONDS} seconds`,
 		);
 	}
 	return undefined;
@@ -313,10 +311,10 @@ function invalidTimeout(timeout: number | undefined): ExecutionError | undefined
 	if (!Number.isFinite(timeout) || timeout <= 0) {
 		return new ExecutionError('timeout', 'Invalid timeout: must be a finite number of seconds');
 	}
-	if (timeout > MAX_TIMEOUT_SECONDS) {
+	if (timeout > MAX_TIMER_SECONDS) {
 		return new ExecutionError(
 			'timeout',
-			`Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds`,
+			`Invalid timeout: maximum is ${MAX_TIMER_SECONDS} seconds`,
 		);
 	}
 	return undefined;

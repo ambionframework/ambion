@@ -250,8 +250,8 @@ const drive = openWorkspace({
 
 **The log is an ordinary file an agent reads.** The default path is the
 backend's `layout.audit`. Set `path` to open it somewhere else, and
-`maxBytes` to change the 5 MiB rotation threshold. `maxBytes` must be a
-positive, finite number. An agent reads the log
+`rotateBytes` to change the 5 MiB rotation threshold. `rotateBytes` must
+be a positive, finite number. An agent reads the log
 with `read` or `bash cat`, the same as any file a peer wrote, and sees every
 call any agent in any room made, including its own past calls. `jq` filters
 one entry out of many, by `room`, `tool`, `agent`, or `activation`.

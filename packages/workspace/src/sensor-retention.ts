@@ -1,11 +1,11 @@
 /** Internal automatic retention for already validated sensor observations. */
 
-import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { Check } from 'typebox/value';
 import { randomName } from './execution-env.ts';
 import { contextOf, unwrap } from './object-files.ts';
+import { sha256Hex } from './object-rules.ts';
 import { isHandle } from './process-files.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import { SensorDigestError } from './sensor-client.ts';
@@ -65,8 +65,6 @@ interface CapturedInput {
 	readonly response: ObserveResponse;
 	readonly files: readonly ReceivedFile[];
 }
-
-const digestOf = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 function validateMetadata(metadata: SensorRetentionMetadata): void {
 	if (!/^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/.test(metadata.sensor))
@@ -145,7 +143,7 @@ function verifyReceived(response: ObserveResponse, files: readonly ReceivedFile[
 			throw new Error(
 				`The observation references file ${digest}, but its bytes were not received.`,
 			);
-		const actual = digestOf(file.bytes);
+		const actual = sha256Hex(file.bytes);
 		if (actual !== digest) throw new SensorDigestError(digest, actual);
 	}
 	for (const file of files) {

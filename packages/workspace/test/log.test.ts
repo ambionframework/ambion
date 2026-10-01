@@ -111,11 +111,11 @@ describe('a log path', () => {
 	);
 
 	it.each([
-		['rotateBytes', (bytes: number) => openLog({ path: '/logs/j.jsonl', rotateBytes: bytes })],
-		['maxBytes', (bytes: number) => openAuditLog({ maxBytes: bytes })],
-	])('refuses a non-positive or infinite %s', (option, open) => {
+		['openLog', (bytes: number) => openLog({ path: '/logs/j.jsonl', rotateBytes: bytes })],
+		['openAuditLog', (bytes: number) => openAuditLog({ rotateBytes: bytes })],
+	])('%s refuses a non-positive or infinite rotateBytes', (_name, open) => {
 		for (const bytes of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
-			expect(() => open(bytes)).toThrow(option);
+			expect(() => open(bytes)).toThrow('rotateBytes');
 	});
 
 	it.each([

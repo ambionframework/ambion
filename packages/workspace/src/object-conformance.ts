@@ -13,7 +13,6 @@
  * ```
  */
 
-import { createHash } from 'node:crypto';
 import {
 	type ConformanceCase,
 	type ConformanceHarness,
@@ -21,6 +20,7 @@ import {
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
 import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
+import { sha256Hex } from './object-rules.ts';
 
 /** One store under test. `reopen` opens a second backend over the same store. */
 export interface ObjectConformanceStore {
@@ -28,8 +28,6 @@ export interface ObjectConformanceStore {
 	reopen?(): Promise<ObjectBackend>;
 	dispose(): Promise<void>;
 }
-
-const digestOf = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 const same = (a: Uint8Array | undefined, b: Uint8Array): boolean =>
 	a !== undefined && Buffer.from(a).equals(Buffer.from(b));
@@ -50,7 +48,7 @@ async function withEnv<T>(
 
 /** Put `bytes` as the host and give its digest. */
 async function put(backend: ObjectBackend, bytes: Uint8Array): Promise<string> {
-	const digest = digestOf(bytes);
+	const digest = sha256Hex(bytes);
 	await withEnv(backend, 'host', (env) => env.put(digest, bytes));
 	return digest;
 }
@@ -72,7 +70,7 @@ const roundTrips: Body = async ({ backend }) => {
 };
 
 const unknownIsUndefined: Body = async ({ backend }) => {
-	const got = await withEnv(backend, 'host', (env) => env.get(digestOf(new Uint8Array([1, 2]))));
+	const got = await withEnv(backend, 'host', (env) => env.get(sha256Hex(new Uint8Array([1, 2]))));
 	check(got === undefined, 'get of an unknown digest gave bytes');
 };
 
@@ -83,7 +81,7 @@ const secondPutKeepsBytes: Body = async ({ backend }) => {
 	// Two puts of a new digest at once: both succeed, whichever lands first.
 	const twin = new TextEncoder().encode('twin\n');
 	await Promise.all([put(backend, twin), put(backend, twin)]);
-	const both = await withEnv(backend, 'host', (env) => env.get(digestOf(twin)));
+	const both = await withEnv(backend, 'host', (env) => env.get(sha256Hex(twin)));
 	check(same(both, twin), 'two puts at once lost the bytes');
 	const got = await withEnv(backend, 'host', (env) => env.get(digest));
 	check(same(got, bytes), 'a second put lost the bytes');
@@ -110,7 +108,7 @@ const badDigestIsRefused: Body = async ({ backend }) => {
 
 const abortedPutStoresNothing: Body = async ({ backend }) => {
 	const bytes = new TextEncoder().encode('never\n');
-	const digest = digestOf(bytes);
+	const digest = sha256Hex(bytes);
 	const controller = new AbortController();
 	controller.abort();
 	const rejected = await withEnv(backend, 'host', (env) =>

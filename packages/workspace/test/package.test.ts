@@ -82,6 +82,7 @@ it('exports one resource, its two logs, the environment helpers, runScript, shel
 		'DEFAULT_TIMEOUT_SECONDS',
 		'Deadline',
 		'HomeEnv',
+		'MAX_TIMER_SECONDS',
 		'PACKAGE_NAME',
 		'SNAPSHOT_LIMITS',
 		'TMP',

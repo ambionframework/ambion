@@ -29,6 +29,7 @@ import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
 import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
 import { readOutput } from './process-output.ts';
+import { MAX_TIMER_SECONDS } from './process-run.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
@@ -57,9 +58,6 @@ const SAY_NOTE_SECONDS = 120;
 
 /** A call that did not wait, or whose wait the deadline did not cut. */
 const NOT_CUT = { cut: false } as const;
-
-/** The largest timeout a Node timer holds, in seconds. */
-const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 /** The least and the most seconds of the grace of a process. */
 const MIN_GRACE_SECONDS = 1;
@@ -293,7 +291,7 @@ async function started(
 	params: BashParams,
 	ctx: ToolContext,
 ): Promise<AgentToolResult<ProcessDetails>> {
-	const timeout = checkedSeconds(params.timeout, DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS);
+	const timeout = checkedSeconds(params.timeout, DEFAULT_TIMEOUT_SECONDS, MAX_TIMER_SECONDS);
 	if (timeout === 0) throw new Error('Invalid timeout: give a number of seconds above 0.');
 	const asked = checkedSeconds(params.wait, DEFAULT_BASH_WAIT_SECONDS, MAX_WAIT_SECONDS);
 	const spec = {

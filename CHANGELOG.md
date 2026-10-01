@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+**The audit log names its threshold `rotateBytes`.**
+`AuditLogOptions.maxBytes` and `AuditLog.maxBytes` of
+`@ambionframework/workspace` are now `rotateBytes`, the name that
+`openLog` and the room mirror use. The default stays 5 MiB. The refusal of
+a threshold that is not positive and finite now starts with `rotateBytes`.
+Before, it started with `maxBytes`. A host that sets `audit: { maxBytes }`
+sets `audit: { rotateBytes }`.
+
+**One formatter writes the sizes in refusals.**
+A size prints whole when its unit divides it evenly, and with one decimal
+otherwise. The units are GiB, MiB, and KiB, and a size below 1 KiB prints
+in bytes. The import refusal of a file now reads `40 MiB`, where it read
+`40.0 MiB`, and it names a size from 1 KiB to 1 MiB in KiB, where it named
+bytes. The object-size refusal reads `5.0 GiB` for a value just over the
+limit and `5 GiB` for the limit, where it read `5.0 GiB` for both. The
+audit guidance names a threshold that is not a whole KiB in KiB with one
+decimal, where it named bytes. The guidance for the default 5 MiB and the
+SQL guidance of 32 MiB do not change.
+
+**`@ambionframework/workspace` exports `MAX_TIMER_SECONDS`.**
+The constant is 2,147,483, the most seconds that a Node timer holds. The
+bash timeout, the SQLite timeout, the process table, and the workstation
+checks of `idleTimeout`, `timeout`, and `grace` read this one value. No
+limit changes, and no message changes.
+
 **One scripted test language serves the core and Pi.**
 `@ambionframework/ambion/testing` renames the type `Turn` to `Reply`,
 because `turn` means one request to a provider in Pi. `seat(name)` joins the verbs `callTool`,

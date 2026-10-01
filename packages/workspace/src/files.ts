@@ -27,6 +27,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
+import { formatBytes } from './format-bytes.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 import type { WorkspaceFiles, WorkspaceRead } from './sql-backend.ts';
 
@@ -74,17 +75,11 @@ async function writeThrough(
 	return target;
 }
 
-/** `bytes` as a size that a person reads. */
-function sizeOf(bytes: number): string {
-	const mib = 1024 * 1024;
-	return bytes >= mib ? `${(bytes / mib).toFixed(1)} MiB` : `${bytes} bytes`;
-}
-
 /** The refusal of a file that holds more than `maxBytes`. */
 function tooLarge(path: string, bytes: number, maxBytes: number): WorkspaceRead {
 	return {
 		ok: false,
-		message: `${path} holds ${sizeOf(bytes)}, and an import reads at most ${sizeOf(maxBytes)}.`,
+		message: `${path} holds ${formatBytes(bytes)}, and an import reads at most ${formatBytes(maxBytes)}.`,
 	};
 }
 

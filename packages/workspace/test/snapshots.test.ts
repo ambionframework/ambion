@@ -191,7 +191,7 @@ describe('the object limits', () => {
 		expect(SNAPSHOT_LIMITS.bytes).toBe(5 * 1024 ** 3);
 		expect(() => assertObjectSize('/big', SNAPSHOT_LIMITS.bytes)).not.toThrow();
 		expect(() => assertObjectSize('/big', SNAPSHOT_LIMITS.bytes + 1)).toThrow(
-			'/big holds 5.0 GiB, and an object holds at most 5.0 GiB.',
+			'/big holds 5.0 GiB, and an object holds at most 5 GiB.',
 		);
 		const options = {
 			endpoint: 'http://127.0.0.1:9000',

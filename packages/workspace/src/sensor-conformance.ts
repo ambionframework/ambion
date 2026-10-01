@@ -1,5 +1,4 @@
 /** The cases every sensor server must pass. The harness supplies raw replies. */
-import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
 	type ConformanceCase,
@@ -8,6 +7,7 @@ import {
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
 import { Check } from 'typebox/value';
+import { sha256Hex } from './object-rules.ts';
 import {
 	isValidObserveRequest,
 	ObserveResponseSchema,
@@ -287,7 +287,7 @@ async function filesCase(probe: SensorConformanceProbe, fixture: SensorConforman
 			);
 		}
 		if (!reply.bytes) continue;
-		const digest = createHash('sha256').update(reply.bytes).digest('hex');
+		const digest = sha256Hex(reply.bytes);
 		check(digest === file.digest, `File ${file.digest} returned bytes with digest ${digest}.`);
 		check(
 			Buffer.from(reply.bytes).equals(Buffer.from(file.bytes)),
