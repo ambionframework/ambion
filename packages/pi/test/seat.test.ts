@@ -24,7 +24,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
-import { contextText, quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 
@@ -78,7 +78,7 @@ describe('a seat actor', () => {
 		const release = deferred();
 		const contexts: string[] = [];
 		const { room, actor } = playSeat({
-			stream: scripted(async (context, _agent, call) => {
+			stream: scriptedStream(async (context, _agent, call) => {
 				contexts.push(contextText(context));
 				if (call === 2) {
 					started.resolve();
@@ -151,7 +151,7 @@ describe('a seat actor', () => {
 	it('steers a recorded message into its running activation without starting work', async () => {
 		const gate = deferred();
 		const { room, actor } = playSeat({
-			stream: scripted(async () => {
+			stream: scriptedStream(async () => {
 				await gate.promise;
 				return quiet();
 			}),
@@ -209,7 +209,7 @@ describe('runner liveness', () => {
 	it('does not start an activation from an already-expired claim', async () => {
 		let providerCalls = 0;
 		const { actor, clock, room } = playSeat({
-			stream: scripted(() => {
+			stream: scriptedStream(() => {
 				providerCalls += 1;
 				return quiet();
 			}),
@@ -440,8 +440,8 @@ describe('runner liveness', () => {
 		let commits = 0;
 		const events: string[] = [];
 		const { actor, clock, room } = playSeat({
-			stream: scripted((_context, _agent, call) =>
-				call === 1 ? speak('recorded before the reply is lost') : quiet(),
+			stream: scriptedStream((_context, _agent, call) =>
+				call === 1 ? say('recorded before the reply is lost') : quiet(),
 			),
 			call: { attempts: 1, timeout: 100 },
 			commit: () => {
@@ -493,7 +493,7 @@ describe('async seat model resolution', () => {
 		const resolved = deferred();
 		let providerCalls = 0;
 		const { room, actor } = playSeat({
-			stream: scripted(() => {
+			stream: scriptedStream(() => {
 				providerCalls += 1;
 				return quiet();
 			}),
@@ -537,7 +537,7 @@ describe('async seat model resolution', () => {
 		const started = deferred();
 		const contexts: Context[] = [];
 		let lastSeq = 1;
-		const base = scripted(() => quiet());
+		const base = scriptedStream(() => quiet());
 		const stream: StreamFn = (resolved, context, options) => {
 			contexts.push({ ...context, messages: [...context.messages] });
 			return base(resolved, context, options);

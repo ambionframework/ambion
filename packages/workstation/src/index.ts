@@ -9,7 +9,7 @@
  *
  * const lab = openWorkspace({
  * 	name: 'lab',
- * 	backend: { bash: workstationBackend({ host, hostKey, layout, credentialFor }) },
+ * 	backend: { bash: workstationBackend({ server, hostKey, layout, credentialFor }) },
  * });
  * ```
  *

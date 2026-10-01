@@ -49,7 +49,7 @@ live('control', () => {
 		const visit = await enter(session, person);
 		const started = new Promise<void>((resolve) => {
 			session.subscribe((e) => {
-				if (e.type === 'activation_start' && e.agent === 'essayist') resolve();
+				if (e.type === 'activation_start' && e.seat === 'essayist') resolve();
 			});
 		});
 		const exchange = await visit.send({ text: 'Write me an essay on the history of concrete.' });
@@ -64,9 +64,9 @@ live('control', () => {
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				type: 'activation_end',
-				agent: 'essayist',
+				seat: 'essayist',
 				activation: expect.any(String),
-				spoke: false,
+				said: false,
 			}),
 		);
 
@@ -100,8 +100,7 @@ live('control', () => {
 		const visit = await enter(session, person);
 		const started = new Promise<string>((resolve) => {
 			session.subscribe((e) => {
-				if (e.type === 'tool_execution_start' && e.toolName === 'check_calendar')
-					resolve(e.activation);
+				if (e.type === 'tool_call' && e.name === 'check_calendar') resolve(e.activation);
 			});
 		});
 		await visit.send({ text: 'When can we pour the slab?' });

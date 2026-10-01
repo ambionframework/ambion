@@ -629,67 +629,67 @@ lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, se
 {
 }
 
-function draftsClose(id: ActivationFields, through: int, writer: string): bool
+function summarizesClose(id: ActivationFields, through: int, writer: string): bool
   requires (through >= 1)
   requires (|writer| >= 1)
 {
   ((id.source.closed? && (id.position == through)) && (id.seat == writer))
 }
 
-lemma draftsClose_ensures(id: ActivationFields, through: int, writer: string)
+lemma summarizesClose_ensures(id: ActivationFields, through: int, writer: string)
   requires (through >= 1)
   requires (|writer| >= 1)
-  ensures (draftsClose(id, through, writer) ==> !(holdsExchange(id.source)))
-  ensures ((id.seat != writer) ==> !(draftsClose(id, through, writer)))
-  ensures forall n: int :: ((n >= 0) ==> draftsClose(nextActivationId(Source.closed, through, writer, n), through, writer))
+  ensures (summarizesClose(id, through, writer) ==> !(holdsExchange(id.source)))
+  ensures ((id.seat != writer) ==> !(summarizesClose(id, through, writer)))
+  ensures forall n: int :: ((n >= 0) ==> summarizesClose(nextActivationId(Source.closed, through, writer, n), through, writer))
 {
 }
 
-function stoodDown(drafts: seq<RuleLease>): bool
+function stoodDown(summaries: seq<RuleLease>): bool
 {
-  (exists draft :: draft in drafts && (draft.ended? && ((draft.reason.released? || draft.reason.revoked?) || draft.reason.abandoned?)))
+  (exists summary :: summary in summaries && (summary.ended? && ((summary.reason.released? || summary.reason.revoked?) || summary.reason.abandoned?)))
 }
 
-lemma stoodDown_ensures(drafts: seq<RuleLease>)
-  ensures (stoodDown(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && ((drafts[i].reason.released? || drafts[i].reason.revoked?) || drafts[i].reason.abandoned?)))
-  ensures (stoodDown(drafts) ==> (|drafts| > 0))
-{
-}
-
-function draftReleased(drafts: seq<RuleLease>): bool
-{
-  (exists draft :: draft in drafts && (draft.ended? && draft.reason.released?))
-}
-
-lemma draftReleased_ensures(drafts: seq<RuleLease>)
-  ensures (draftReleased(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && drafts[i].reason.released?))
-  ensures (draftReleased(drafts) ==> stoodDown(drafts))
+lemma stoodDown_ensures(summaries: seq<RuleLease>)
+  ensures (stoodDown(summaries) <==> exists i: int :: ((((0 <= i) && (i < |summaries|)) && summaries[i].ended?) && ((summaries[i].reason.released? || summaries[i].reason.revoked?) || summaries[i].reason.abandoned?)))
+  ensures (stoodDown(summaries) ==> (|summaries| > 0))
 {
 }
 
-function draftRunning(drafts: seq<RuleLease>): bool
+function summaryReleased(summaries: seq<RuleLease>): bool
 {
-  (exists draft :: draft in drafts && draft.running?)
+  (exists summary :: summary in summaries && (summary.ended? && summary.reason.released?))
 }
 
-lemma draftRunning_ensures(drafts: seq<RuleLease>)
-  ensures (draftRunning(drafts) <==> exists i: int :: (((0 <= i) && (i < |drafts|)) && drafts[i].running?))
-{
-}
-
-function cancelledDraft(drafts: seq<RuleLease>, cancelledAfterClose: bool): bool
-{
-  (cancelledAfterClose && (exists draft :: draft in drafts && markedCancelled(draft)))
-}
-
-lemma cancelledDraft_ensures(drafts: seq<RuleLease>, cancelledAfterClose: bool)
-  ensures (cancelledDraft(drafts, cancelledAfterClose) ==> cancelledAfterClose)
-  ensures (cancelledDraft(drafts, cancelledAfterClose) ==> stoodDown(drafts))
-  ensures (cancelledDraft(drafts, cancelledAfterClose) <==> (cancelledAfterClose && exists i: int :: (((0 <= i) && (i < |drafts|)) && markedCancelled(drafts[i]))))
+lemma summaryReleased_ensures(summaries: seq<RuleLease>)
+  ensures (summaryReleased(summaries) <==> exists i: int :: ((((0 <= i) && (i < |summaries|)) && summaries[i].ended?) && summaries[i].reason.released?))
+  ensures (summaryReleased(summaries) ==> stoodDown(summaries))
 {
 }
 
-function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<RuleLease>, cancelledAfterClose: bool): Verdict
+function summaryRunning(summaries: seq<RuleLease>): bool
+{
+  (exists summary :: summary in summaries && summary.running?)
+}
+
+lemma summaryRunning_ensures(summaries: seq<RuleLease>)
+  ensures (summaryRunning(summaries) <==> exists i: int :: (((0 <= i) && (i < |summaries|)) && summaries[i].running?))
+{
+}
+
+function cancelledSummary(summaries: seq<RuleLease>, cancelledAfterClose: bool): bool
+{
+  (cancelledAfterClose && (exists summary :: summary in summaries && markedCancelled(summary)))
+}
+
+lemma cancelledSummary_ensures(summaries: seq<RuleLease>, cancelledAfterClose: bool)
+  ensures (cancelledSummary(summaries, cancelledAfterClose) ==> cancelledAfterClose)
+  ensures (cancelledSummary(summaries, cancelledAfterClose) ==> stoodDown(summaries))
+  ensures (cancelledSummary(summaries, cancelledAfterClose) <==> (cancelledAfterClose && exists i: int :: (((0 <= i) && (i < |summaries|)) && markedCancelled(summaries[i]))))
+{
+}
+
+function summaryVerdict(writerNamed: bool, removedAfterClose: bool, summaries: seq<RuleLease>, cancelledAfterClose: bool): Verdict
 {
   if !(writerNamed) then
     Verdict.silent
@@ -697,8 +697,8 @@ function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<
     if removedAfterClose then
       Verdict.failed
     else
-      var down := stoodDown(drafts);
-      if cancelledDraft(drafts, cancelledAfterClose) then
+      var down := stoodDown(summaries);
+      if cancelledSummary(summaries, cancelledAfterClose) then
         Verdict.failed
       else
         if (!(down) && cancelledAfterClose) then
@@ -707,27 +707,27 @@ function summaryVerdict(writerNamed: bool, removedAfterClose: bool, drafts: seq<
           if !(down) then
             pending(true)
           else
-            if draftRunning(drafts) then
+            if summaryRunning(summaries) then
               pending(false)
             else
-              if draftReleased(drafts) then
+              if summaryReleased(summaries) then
                 Verdict.silent
               else
                 Verdict.failed
 }
 
-lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, drafts: seq<RuleLease>, cancelledAfterClose: bool)
-  ensures (!(writerNamed) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
-  ensures (writerNamed ==> removedAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> !(cancelledAfterClose) ==> (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
-  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (writerNamed ==> !(removedAfterClose) ==> cancelledDraft(drafts, cancelledAfterClose) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> draftRunning(drafts) ==> (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed)))
-  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> draftReleased(drafts) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
-  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> !(draftReleased(drafts)) ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
-  ensures ((summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) <==> (((writerNamed && !(removedAfterClose)) && !(stoodDown(drafts))) && !(cancelledAfterClose)))
-  ensures (cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
-  ensures (summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) ==> (|drafts| > 0))
+lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, summaries: seq<RuleLease>, cancelledAfterClose: bool)
+  ensures (!(writerNamed) ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).silent?)
+  ensures (writerNamed ==> removedAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(summaries)) ==> !(cancelledAfterClose) ==> (summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).owed))
+  ensures (writerNamed ==> !(removedAfterClose) ==> !(stoodDown(summaries)) ==> cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> cancelledSummary(summaries, cancelledAfterClose) ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).failed?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(summaries) ==> !(cancelledSummary(summaries, cancelledAfterClose)) ==> summaryRunning(summaries) ==> (summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).pending? && !(summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).owed)))
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(summaries) ==> !(cancelledSummary(summaries, cancelledAfterClose)) ==> !(summaryRunning(summaries)) ==> summaryReleased(summaries) ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).silent?)
+  ensures (writerNamed ==> !(removedAfterClose) ==> stoodDown(summaries) ==> !(cancelledSummary(summaries, cancelledAfterClose)) ==> !(summaryRunning(summaries)) ==> !(summaryReleased(summaries)) ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).failed?)
+  ensures ((summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).pending? && summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).owed) <==> (((writerNamed && !(removedAfterClose)) && !(stoodDown(summaries))) && !(cancelledAfterClose)))
+  ensures (cancelledAfterClose ==> summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).owed))
+  ensures (summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).pending? ==> !(summaryVerdict(writerNamed, removedAfterClose, summaries, cancelledAfterClose).owed) ==> (|summaries| > 0))
 {
 }
 

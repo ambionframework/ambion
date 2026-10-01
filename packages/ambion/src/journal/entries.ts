@@ -1,4 +1,4 @@
-/** The room journal event vocabulary. */
+/** The room journal entry vocabulary. */
 
 import type { Attention, EndReason, FailureCause, HarnessSession, Seq, Usage } from '../types.ts';
 

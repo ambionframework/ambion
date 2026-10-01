@@ -16,7 +16,7 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
-import type { AgentDefinition, ExecutionEvent, HarnessSession, Seq } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, HarnessSession, Seq } from '../types.ts';
 import type {
 	Executor,
 	ExecutorSession,
@@ -40,7 +40,7 @@ export interface ActivationInput {
 	/** The room calls of the activation. The room tools commit and read through it. */
 	readonly room: RoomToolBinding['room'];
 	readonly definition: AgentDefinition;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 	/** The sink of the activation. The driver owns it and closes it. */
 	readonly trace: StepSink;
 }
@@ -71,8 +71,8 @@ export class ActivationState {
 	constructor(executor: Executor, input: ActivationInput) {
 		this.id = input.id;
 		this.input = input;
-		const calls = new ToolCalls(input.id, (type, toolName) =>
-			input.emit({ type, agent: input.definition.name, activation: input.id, toolName }),
+		const calls = new ToolCalls(input.id, (type, name) =>
+			input.emit({ type, seat: input.definition.name, activation: input.id, name }),
 		);
 		const freshness = this.freshness;
 		this.executor = executor({
@@ -167,7 +167,7 @@ export class ActivationState {
 		if (result.failed) {
 			this.input.emit({
 				type: 'error',
-				agent: this.input.definition.name,
+				seat: this.input.definition.name,
 				activation: this.id,
 				error: result.error ?? new Error(result.message ?? 'The activation failed.'),
 				...(result.cause === undefined ? {} : { cause: result.cause }),

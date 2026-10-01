@@ -14,7 +14,7 @@ import type {
 	Wake,
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
-import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
+import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';

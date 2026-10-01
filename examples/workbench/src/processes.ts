@@ -1,7 +1,7 @@
-import { BACKGROUND_CONTEXT, type ProcessStatus, type Workspace } from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, type ProcessRecord, type Workspace } from '@ambionframework/workspace';
 
 /** One background process, as the workspace reports it. */
-export type ProcessView = ProcessStatus;
+export type ProcessView = ProcessRecord;
 
 /** The end of one output file, as the processes panel shows it. */
 export interface ProcessOutput {

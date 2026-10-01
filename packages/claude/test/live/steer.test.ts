@@ -5,7 +5,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, isSpoken } from '../../../ambion/src/index.ts';
+import { defineTool, isSaid } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -37,8 +37,7 @@ live('steer', () => {
 			const visit = await enter(session, person);
 			const started = new Promise<string>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'tool_execution_start' && e.toolName === 'check_calendar')
-						resolve(e.activation);
+					if (e.type === 'tool_call' && e.name === 'check_calendar') resolve(e.activation);
 				});
 			});
 			await visit.send({ text: 'When can we pour the slab?' });
@@ -47,7 +46,7 @@ live('steer', () => {
 			await untilQuiet(session);
 
 			const messages = await messagesOf(session);
-			const second = messages.filter(isSpoken).filter((m) => m.from === person.name)[1];
+			const second = messages.filter(isSaid).filter((m) => m.from === person.name)[1];
 			expect(second).toBeDefined();
 			const steps = stepsOf(activation);
 			expect(stepsOfType(steps, 'steer')).toContainEqual(

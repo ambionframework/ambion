@@ -10,7 +10,7 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createExecutionServices, type RunAgentRequest, runAgent } from '../src/index.ts';
-import { type PiScript, scripted } from '../src/testing.ts';
+import { type PiScript, scriptedStream } from '../src/testing.ts';
 
 /** What each tool call received, in order. */
 const seen: { tool: string; context: ToolContext }[] = [];
@@ -37,7 +37,7 @@ const finish = defineTool({
 });
 
 const services = (script: PiScript) =>
-	createExecutionServices({ stream: scripted(script), sessions: 'memory' });
+	createExecutionServices({ stream: scriptedStream(script), sessions: 'memory' });
 
 const request = (overrides: Partial<RunAgentRequest> = {}): RunAgentRequest => ({
 	model: 'scripted/actor',
@@ -160,7 +160,7 @@ describe('runAgent', () => {
 			judge: () => callTool('finish', { answer: 'from the judge' }),
 		});
 		const reasoning: unknown[] = [];
-		const base = scripted(script);
+		const base = scriptedStream(script);
 		const shared = createExecutionServices({
 			stream: (model, context, options) => {
 				reasoning.push(options?.reasoning);

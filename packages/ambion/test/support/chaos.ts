@@ -22,7 +22,7 @@ import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	type HumanDefinition,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Room,
@@ -32,7 +32,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/events.ts';
+import type { LeaseChange } from '../../src/journal/entries.ts';
 import { foldLeases } from '../../src/room/lease.ts';
 import { isLive } from '../../src/room/rules.verified.ts';
 import { type FakeClock, fakeClock } from '../../src/testing.ts';
@@ -51,7 +51,7 @@ import {
 import { invariants } from './invariants.ts';
 import { serializing } from './ports.ts';
 import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
-import { scripted } from './scripted.ts';
+import { scriptedStream } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 
 /**
@@ -72,7 +72,7 @@ export async function outcome(
 		expect(landed[0]).toMatchObject({ kind: 'said', from: question.person.name });
 		for (const answer of cast.answers(question)) {
 			const answers = record
-				.filter(isSpoken)
+				.filter(isSaid)
 				.filter((m) => m.from === answer.seat && m.text === answer.text);
 			expect(answers, `${answer.seat} on ${question.key}: ${answer.text}`).toHaveLength(1);
 		}
@@ -187,7 +187,9 @@ export class World {
 
 	/** The execution of each run: every request and response crosses as JSON. */
 	private execution(): Execution {
-		return serializing(piExecution({ sessions: 'memory', stream: scripted(this.cast.script) }));
+		return serializing(
+			piExecution({ sessions: 'memory', stream: scriptedStream(this.cast.script) }),
+		);
 	}
 
 	private watch(): void {
@@ -295,7 +297,7 @@ export class World {
 
 	/**
 	 * Time moves until the room is quiet with nothing owed: every lease the
-	 * dead run held expires, every retry's backoff passes, and every draft is
+	 * dead run held expires, every retry's backoff passes, and every summary is
 	 * written. A crash on the way is resumed like any other.
 	 */
 	async quiet(): Promise<void> {

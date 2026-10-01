@@ -27,7 +27,7 @@
  */
 
 import { type ActivationSource, decodeActivationId } from '../activation-id.ts';
-import type { Close } from '../journal/events.ts';
+import type { Close } from '../journal/entries.ts';
 import {
 	type ActivationOutcome,
 	addUsage,
@@ -38,7 +38,7 @@ import {
 	type ExchangeRange,
 	type ExchangeRef,
 	type HarnessSession,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Seq,
@@ -49,9 +49,9 @@ import {
 import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
-	draftsClose,
 	exchangeOutcome,
 	openingQuestion,
+	summarizesClose,
 	summaryVerdict,
 	survivesCancellation,
 } from './rules.verified.ts';
@@ -101,33 +101,33 @@ export function summaryCompletion(
 		close.summary === undefined
 			? undefined
 			: coveringSummary(messages, close.person, close, close.summary);
-	if (summary !== undefined) return { status: 'published', summary };
+	if (summary !== undefined) return { kind: 'published', summary };
 	const verdict = summaryVerdict(
 		writer !== undefined,
 		writer !== undefined && removedAfter(messages, writer, close.through),
-		draftsOf(leases, close.through, writer),
+		summaryLeasesOf(leases, close.through, writer),
 		!survivesCancellation(close.through, cancelledAt),
 	);
 	// The rule decides. The re-test narrows the TypeScript type only.
-	if (verdict.status === 'pending' && verdict.owed && writer !== undefined)
-		return { status: 'pending', writer };
-	if (verdict.status === 'pending') return { status: 'pending' };
-	return { status: verdict.status === 'silent' ? 'silent' : 'failed' };
+	if (verdict.kind === 'pending' && verdict.owed && writer !== undefined)
+		return { kind: 'pending', writer };
+	if (verdict.kind === 'pending') return { kind: 'pending' };
+	return { kind: verdict.kind === 'silent' ? 'silent' : 'failed' };
 }
 
 /**
- * The drafts of one close's summary: every lease of the writer's closing
- * activations at the close. A lease from another seat is no draft of this
- * close. The validator holds `through >= 1`. A close with no writer has no
- * drafts, and every activation id names a seat.
+ * The leases of one close's summary: every lease of the writer's closing
+ * activations at the close. A lease from another seat is no summary lease
+ * of this close. The validator holds `through >= 1`. A close with no writer
+ * has no summary leases, and every activation id names a seat.
  */
-export function draftsOf(
+export function summaryLeasesOf(
 	leases: ReadonlyMap<string, LeaseHold>,
 	through: Seq,
 	writer: string | undefined,
 ): LeaseHold[] {
 	if (writer === undefined) return [];
-	return [...leases.values()].filter((lease) => draftsClose(lease.activation, through, writer));
+	return [...leases.values()].filter((lease) => summarizesClose(lease.activation, through, writer));
 }
 
 /** What one pass over the room shares among its closed exchanges. */
@@ -190,7 +190,7 @@ function awaitedPerson(
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
 	const asker = range[0]?.from;
-	const last = range.findLast(isSpoken);
+	const last = range.findLast(isSaid);
 	const person = last?.to;
 	if (last === undefined || person === undefined || person === asker) return undefined;
 	if (!people.has(person)) return undefined;
@@ -233,8 +233,8 @@ function closedExchangeView(close: Close, pass: Pass): Extract<Exchange, { statu
 		// The view copies a published summary, as it copies `summaries`, so it
 		// shares nothing with the fold.
 		summary:
-			summary.status === 'published'
-				? { status: 'published', summary: copyMessage(summary.summary) }
+			summary.kind === 'published'
+				? { kind: 'published', summary: copyMessage(summary.summary) }
 				: summary,
 		outcome: exchangeOutcomeOf(close, range, pass, exhausted),
 		...(summaries.length === 0 ? {} : { summaries }),
@@ -260,9 +260,9 @@ function activationsInRange(
 
 /** What a lease says about how its activation stands. */
 function outcomeOf(lease: LeaseHold): ActivationOutcome {
-	if (lease.phase === 'running') return { status: 'running' };
+	if (lease.phase === 'running') return { kind: 'running' };
 	return {
-		status: lease.reason,
+		kind: lease.reason,
 		...(lease.cancelled === true ? { cancelled: true as const } : {}),
 		...(lease.cause === undefined ? {} : { cause: lease.cause }),
 	};
@@ -442,7 +442,7 @@ export function exchangeAfter(
 	const question = openingQuestion(messages, people, closedThrough);
 	if (question === undefined) return undefined;
 	const person = messages.find(
-		(message) => message.seq >= question.seq && isSpoken(message) && people.includes(message.from),
+		(message) => message.seq >= question.seq && isSaid(message) && people.includes(message.from),
 	)?.from;
 	return { ...(person === undefined ? {} : { person }), from: question.seq, at: question.at };
 }

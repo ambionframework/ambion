@@ -3,7 +3,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
@@ -29,8 +29,8 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
-	speak,
+	say,
+	scriptedStream,
 	summarise,
 } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
@@ -41,7 +41,7 @@ const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-const answer: PiScript = (_context, _agent, call) => (call === 2 ? speak('The answer.') : quiet());
+const answer: PiScript = (_context, _agent, call) => (call === 2 ? say('The answer.') : quiet());
 /** A seat script that holds its second model call until the test opens the gate. */
 const heldBy =
 	(gate: Promise<void>): PiScript =>
@@ -61,7 +61,7 @@ const withSummary = (): PiScript => {
 		const count = answers.get(agent) ?? 0;
 		if (!contextText(context).includes('Can we ship?') || count >= 2) return quiet();
 		answers.set(agent, count + 1);
-		return speak('The answer.');
+		return say('The answer.');
 	};
 };
 
@@ -87,7 +87,7 @@ async function world(
 		name: roomName('room-api'),
 		runtime,
 		agents: [alpha],
-		execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+		execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 		...options,
 	});
 	return { runtime, room: stopAtEnd(room) };
@@ -128,7 +128,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		await messagesOf(room);
 		const complete = await readRoom(name, { runtime });
 		const closed = complete.exchanges.find((exchange) => exchange.from === sent.from);
-		expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+		expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
 		expect(complete.exchange).toBeUndefined();
 		expect(complete.through).toBeGreaterThan(complete.messages.at(-1)?.seq ?? 0);
 
@@ -151,7 +151,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		const detached = await readRoom(name, { runtime });
 		const detachedMessage = detached.messages.find((item) => item.seq === sent.from);
 		expect(
-			detachedMessage !== undefined && isSpoken(detachedMessage) ? detachedMessage.text : undefined,
+			detachedMessage !== undefined && isSaid(detachedMessage) ? detachedMessage.text : undefined,
 		).toBe('A question?');
 		expect(detached.participants.some((item) => item.name === priya.name)).toBe(true);
 	});
@@ -176,7 +176,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			await resumeRoom(first.name, {
 				runtime,
 				agents: [alpha],
-				execution: piExecution({ sessions: 'memory', stream: scripted(() => quiet()) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			}),
 		);
 		const recovered = resumed.exchange(sent.from);
@@ -199,7 +199,7 @@ describe('the room API', () => {
 		expect(exchange.person).toBe(priya.name);
 		const conversation = await exchange.waitForClose();
 		const close = closedExchange(room, exchange.from);
-		expect(conversation.filter(isSpoken).length).toBeGreaterThanOrEqual(3);
+		expect(conversation.filter(isSaid).length).toBeGreaterThanOrEqual(3);
 		expect(close).toMatchObject({ person: priya.name, from: exchange.from });
 		const response = await exchange.waitForSummary();
 		expect(response).toMatchObject({ kind: 'summary', to: priya.name });
@@ -216,7 +216,7 @@ describe('the room API', () => {
 		const snapshot = await readRoom(room.name, { runtime });
 		expect(snapshot.name).toBe(room.name);
 		expect(snapshot.exchange).toBeUndefined();
-		expect(snapshot.messages.filter(isSpoken).map((message) => message.key)).toContain('ship-1');
+		expect(snapshot.messages.filter(isSaid).map((message) => message.key)).toContain('ship-1');
 		expect(snapshot.messages.some(isSummary)).toBe(true);
 	});
 

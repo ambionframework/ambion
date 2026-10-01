@@ -7,7 +7,7 @@
  * event. An executor owns one harness: the mapping of its events to steps,
  * the resume of a harness session, the place where it hosts the tools, and
  * the signal that the model consumed input. A session's `steer` is optional
- * because an executor family may only take context between passes. The core
+ * because an executor kind may only take context between passes. The core
  * records the `steer` step of every steered line.
  */
 import type { ActivationView } from '../protocol.ts';
@@ -142,8 +142,8 @@ export interface ExecutorSession {
 	 * `steer` step, and the executor records none. The executor reads
 	 * `{ after, through: seq }` when the model consumes the line. A line that
 	 * the pass does not read waits for the next delta, and the step says so. A
-	 * `steer` that throws counts as a line the pass does not read. A family
-	 * that cannot steer mid-run leaves `steer` out. The record already holds
+	 * `steer` that throws counts as a line the pass does not read. An executor
+	 * kind that cannot steer mid-run leaves `steer` out. The record already holds
 	 * the line, and the next pass reads it.
 	 */
 	steer?(after: Seq, seq: Seq, line: string): void;

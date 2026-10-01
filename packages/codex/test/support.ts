@@ -8,11 +8,11 @@ import { connect as connectSocket } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { defineAgent, type Step } from '@ambionframework/ambion';
 import {
+	type ActivationEvent,
 	type ActivationView,
 	type AgentDefinition,
 	type CommitRequest,
 	type CommitResult,
-	type ExecutionEvent,
 	type Executor,
 	ROOM_SERVER,
 	type RoomProtocol,
@@ -30,7 +30,7 @@ import { type Bridge, startBridge } from '../src/bridge.ts';
 import type { CatalogEntry, CatalogSource } from '../src/catalog.ts';
 import { createCodexExecutor } from '../src/executor.ts';
 import { type CodexOptions, codex } from '../src/index.ts';
-import { citing, type RoomTool, servedTools } from '../src/tools.ts';
+import { type CodexTool, citing, servedTools } from '../src/tools.ts';
 import { frame, type Reply, receive } from '../src/wire.ts';
 
 /** The catalog entries that a real `codex` 0.155.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
@@ -243,7 +243,7 @@ export function open(
 	catalog: CatalogSource = recordedCatalog,
 ) {
 	const steps: Step[] = [];
-	const events: ExecutionEvent[] = [];
+	const events: ActivationEvent[] = [];
 	const { room, commits } = roomOf(answer);
 	const { client, seen } = replay(turns);
 	const trace: StepSink = {
@@ -286,7 +286,7 @@ const noTrace: StepSink = {
 async function bindTools(room: RoomProtocol, view: ActivationView, definition: AgentDefinition) {
 	const changed = new Set<string>();
 	const ordinary = view.spec.purpose.kind !== 'summarize';
-	let served: RoomTool[] = [];
+	let served: CodexTool[] = [];
 	let signal = new AbortController().signal;
 	let serial = 0;
 	const executor: Executor = (activation) => {

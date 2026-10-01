@@ -26,6 +26,6 @@ export interface ObjectEnv extends ResourceEnv {
 
 /** The object backend of a workspace. */
 export interface ObjectBackend extends ResourceBackend<ObjectEnv> {
-	/** The store that errors and the guidance name, with no credential: a folder or a bucket URL. */
-	readonly store: string;
+	/** The label that errors and the guidance use for the store, with no credential: a folder or a bucket URL. */
+	readonly label: string;
 }

@@ -22,8 +22,8 @@ import type {
 } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import type {
+	ActivationEvent,
 	EndReason,
-	ExecutionEvent,
 	FailureCause,
 	HarnessSession,
 	Seq,
@@ -460,10 +460,10 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
+		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
 	}
 
-	private emit(event: ExecutionEvent): void {
+	private emit(event: ActivationEvent): void {
 		try {
 			this.context.emit?.(event);
 		} catch {

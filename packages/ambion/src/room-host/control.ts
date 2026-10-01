@@ -144,7 +144,7 @@ export async function hold(
 /**
  * End one lease, for whatever reason. Nothing to end is not an error. A
  * revocation may name an activation that never claimed: the change ends it
- * before it starts, and the wake or the draft it stood for is answered.
+ * before it starts, and the due activation it stood for is answered.
  * An abandonment names an activation that never claimed and nothing else:
  * a lease that started ends how it went.
  * An expiry is judged where the change is written: a renewal that landed

@@ -134,7 +134,7 @@ function responseResult(
 		state.leases,
 		state.cancelledAt,
 	);
-	return completion.status === 'published' ? completion.summary : completion.status;
+	return completion.kind === 'published' ? completion.summary : completion.kind;
 }
 
 /** Wake every caller that waits. Each looks at the state again. */

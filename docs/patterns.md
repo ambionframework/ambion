@@ -11,7 +11,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 | Ask and get an answer               | [Exchange](exchange.md), close, optional [summary](summary.md)         | A question opens an exchange. Quiescence closes it. The closed `Exchange` carries the outcome.       |
 | Ongoing room over days              | [Visits](presence.md), presence, catch-up, resume                      | `lastDeparture` and `room.read({ messages: { after } })` catch a returning person up.                |
 | Broadcast, no reply owed            | A said message                                                         | Seats may stay silent. No reply is owed.                                                             |
-| Bring in a specialist               | [Reserve](roster.md), `seat`, `say({ to })`                            | An agent seats a reserve member and addresses it by name.                                            |
+| Bring in a specialist               | [Reserve](roster.md), `seat`, `say({ to })`                            | An agent seats a reserve agent and addresses it by name.                                             |
 | Steer work in progress              | [Steer](exchange.md#3-three-rules) between provider requests           | A message that lands in an open exchange steers each eligible active seat.                           |
 | Two people in one discussion        | The open exchange, `summaries`, `purpose.people`                       | A second question joins the open exchange. The room assigns one summary to each person who spoke.    |
 | Waiting on a person                 | The `awaiting` outcome, `pendingFor`                                   | The closed exchange reads `awaiting` with the `person`. `pendingFor` lists what waits on one person. |
@@ -64,4 +64,4 @@ recorded lease rules, and the room continues with the other seats.
 
 **A fixed seat resists the tool.** An agent cannot unseat a fixed seat. The
 host always can. The definition stays in the reserve, so a later `seat`
-brings the agent back. See [membership](roster.md#membership-operations).
+brings the agent back. See [seating](roster.md#seating-operations).

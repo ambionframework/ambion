@@ -36,7 +36,7 @@ import { replayState } from './support/fold.ts';
 import { History, standing, violations } from './support/history.ts';
 import { serializing } from './support/ports.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
-import { scripted } from './support/scripted.ts';
+import { scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import {
 	childJournals,
@@ -78,7 +78,7 @@ async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefine
 	const host = (journals = opened.storage) => createRuntime({ storage: journals, clock });
 	// Every request and response between a seat and the room crosses as JSON.
 	const execution = () =>
-		serializing(piExecution({ sessions: 'memory', stream: scripted(script) }));
+		serializing(piExecution({ sessions: 'memory', stream: scriptedStream(script) }));
 	const first = host(gate === undefined ? undefined : gatedJournals(opened.storage, gate));
 	const name = roomName('split');
 	const room = await startRoom({
@@ -223,7 +223,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const session = await resumeRoom(name, {
 				runtime,
 				agents,
-				execution: piExecution({ sessions: 'memory', stream: scripted(script) }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
 			});
 			await quietNow(session, clock);
 			const [, second] = questions;
