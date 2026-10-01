@@ -8,7 +8,7 @@
 
 import { AmbionError } from '../errors.ts';
 import type { ExecutionConnector, RuntimeState } from '../host/runtime.ts';
-import type { Composition } from '../journal/events.ts';
+import type { Composition } from '../journal/entries.ts';
 import type { Kind, RoomJournal } from '../journal/journal.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { RoomState } from '../room/fold.ts';
@@ -95,7 +95,7 @@ export interface RoomHostState {
 }
 
 export type SubmissionResult<K extends Kind> =
-	Exclude<RoomDecision<K>, { event: unknown }> | undefined;
+	Exclude<RoomDecision<K>, { entry: unknown }> | undefined;
 
 /** The refusal a decision made, as the error the host catches. */
 export const refusalError = (refusal: Refusal): AmbionError =>
@@ -114,8 +114,8 @@ export function submit<K extends Kind>(
 		...(key === undefined ? {} : { key }),
 		decide: () => {
 			const result = decision();
-			if ('event' in result)
-				return result.event === undefined ? { result: undefined } : { body: result.event.body };
+			if ('entry' in result)
+				return result.entry === undefined ? { result: undefined } : { body: result.entry.body };
 			return { result };
 		},
 	});
@@ -138,7 +138,7 @@ export function decideAndAppend<K extends DecidedKind>(
 		kind,
 		() =>
 			options.whileRunning === true && host.gone()
-				? { event: undefined }
+				? { entry: undefined }
 				: decide<K>(host.state(), command, host.now()),
 		options.key,
 	);
@@ -152,9 +152,9 @@ export function requireSubmission<K extends Kind>(
 		throw refusalError(result.result.refusal);
 }
 
-export function acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
+export function acceptedEntry<K extends Kind>(decision: RoomDecision<K>) {
 	if ('refusal' in decision) throw refusalError(decision.refusal);
-	return 'event' in decision ? decision.event : undefined;
+	return 'entry' in decision ? decision.entry : undefined;
 }
 
 /** Refs match in order. An absent list and an empty list are the same. */
