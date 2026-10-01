@@ -1,19 +1,19 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { contextText, type PiScript } from '../../../pi/src/testing.ts';
-import { quiet, speak } from '../../src/testing.ts';
+import { quiet, say } from '../../src/testing.ts';
 
 export {
 	contextText,
 	isClosingContext,
 	type PiScript,
-	scripted,
+	scriptedStream,
 	toolNames,
 	toolResultTexts,
 } from '../../../pi/src/testing.ts';
-export { byAgent, callTool, quiet, schedule, seat, speak } from '../../src/testing.ts';
+export { byAgent, callTool, quiet, say, schedule, seat } from '../../src/testing.ts';
 
 // Closing publications use the same model tool as ordinary speech.
-export const summarise = (text: string) => speak(text);
+export const summarise = (text: string) => say(text);
 
 /**
  * The texts the seat's say calls delivered, oldest first. A transcript that
@@ -62,7 +62,7 @@ export const answersLastQuestion =
 		if (text.includes(`[${name}] ${answer}`) || delivered(context).includes(answer)) {
 			return quiet();
 		}
-		return speak(answer);
+		return say(answer);
 	};
 
 /**
@@ -94,7 +94,7 @@ export const answersEveryQuestion =
 	(people: string[]): PiScript =>
 	(context, name) => {
 		const next = unanswered(context, name, people)[0];
-		return next === undefined ? quiet() : speak(`${name} on ${next}`);
+		return next === undefined ? quiet() : say(`${name} on ${next}`);
 	};
 
 /**
@@ -117,5 +117,5 @@ export const says =
 			(text) =>
 				!record.includes(`[${name}${to ? ` → ${to}` : ''}] ${text}`) && !said.includes(text),
 		);
-		return next === undefined ? quiet() : speak(next, to);
+		return next === undefined ? quiet() : say(next, to);
 	};

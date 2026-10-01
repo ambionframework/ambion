@@ -13,17 +13,16 @@
  * lease the room ended.
  */
 
+import type { Static } from 'typebox';
+import type { leaseEndedSchema } from './bodies.ts';
 import type { ScheduledSay } from './scheduling.ts';
 import type {
-	AgentParticipantInfo,
-	EndReason,
-	FailureCause,
-	HarnessSession,
-	HumanParticipantInfo,
+	AgentParticipant,
+	HumanParticipant,
 	Intent,
 	Message,
 	Seq,
-	Usage,
+	VendorSession,
 	Without,
 } from './types.ts';
 
@@ -35,7 +34,7 @@ export type ActivationPurpose =
 			readonly exchange: Seq;
 			/** The person of the exchange, whose summary completes the close. */
 			readonly person: string;
-			/** Every person the closing activation addresses, `person` first. */
+			/** Every person the summary activation addresses, `person` first. */
 			readonly people: readonly string[];
 			readonly through: Seq;
 	  };
@@ -51,7 +50,7 @@ export interface ActivationSpec {
 	 * recorded. The harness resumes it, and starts fresh when it is absent.
 	 * The room only carries it.
 	 */
-	readonly resume?: HarnessSession;
+	readonly resume?: VendorSession;
 }
 
 // -- the room reaching a seat -------------------------------------------------
@@ -84,8 +83,8 @@ export interface AgentPort {
 
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
-	| AgentParticipantInfo
-	| (HumanParticipantInfo & {
+	| AgentParticipant
+	| (HumanParticipant & {
 			readonly changedAt?: string;
 			readonly lastDeparture?: Seq;
 			readonly messagesSinceDeparture: number;
@@ -140,10 +139,10 @@ export interface Stale {
 
 export type ViewResponse = { view: ActivationView } | Stale;
 
-/** The session the room recorded for this seat, when `harness` wrote it. */
-export function sessionToResume(view: ActivationView, harness: string): string | undefined {
+/** The session the room recorded for this seat, when an executor of `kind` wrote it. */
+export function sessionToResume(view: ActivationView, kind: string): string | undefined {
 	const { resume } = view.spec;
-	return resume?.harness === harness ? resume.id : undefined;
+	return resume?.kind === kind ? resume.id : undefined;
 }
 
 export type { Intent };
@@ -184,15 +183,10 @@ export type CommitResult =
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
 	| { activation: string; operation: 'renew'; readThrough?: Seq }
-	| {
-			activation: string;
-			operation: 'release';
-			reason: EndReason;
-			readThrough: Seq;
-			cause?: FailureCause;
-			usage?: Usage;
-			session?: HarnessSession;
-	  };
+	| ({ activation: string; operation: 'release' } & Pick<
+			Static<typeof leaseEndedSchema>,
+			'reason' | 'readThrough' | 'cause' | 'usage' | 'session'
+	  >);
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat

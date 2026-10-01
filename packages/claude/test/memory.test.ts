@@ -4,7 +4,7 @@
  * starts fresh when the view names none. The fake executable reports a
  * `session` and honors or refuses a `--resume`.
  */
-import type { ActivationView, HarnessSession } from '@ambionframework/ambion/hosting';
+import type { ActivationView, VendorSession } from '@ambionframework/ambion/hosting';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { RESUMED_NOTE } from '../src/executor.ts';
@@ -18,7 +18,7 @@ const resumeOf = (argv: string[] = []) =>
 async function run(
 	session: ActivationState,
 	view: ActivationView,
-): Promise<HarnessSession | undefined> {
+): Promise<VendorSession | undefined> {
 	const result = await session.pass({ kind: 'view', view });
 	expect(result).toMatchObject({ failed: false });
 	const recorded = session.session;
@@ -26,7 +26,7 @@ async function run(
 	return recorded;
 }
 
-const viewWith = (through: number, resume?: HarnessSession): ActivationView => {
+const viewWith = (through: number, resume?: VendorSession): ActivationView => {
 	const view = viewOf(through);
 	return resume === undefined ? view : { ...view, spec: { ...view.spec, resume } };
 };
@@ -35,11 +35,11 @@ describe('exchange continuity', () => {
 	it('persists the session, records its id, and resumes only the session the view names', async () => {
 		const room = fakeRoom({ ...SAY, session: 'sess-1' });
 		const first = await run(room.activate('message:1:sonnet:1'), viewWith(1));
-		expect(first).toEqual({ harness: 'claude', id: 'sess-1' });
+		expect(first).toEqual({ kind: 'claude', id: 'sess-1' });
 		const second = await run(room.activate('message:2:sonnet:1'), viewWith(1, first));
 		expect(second).toEqual(first);
 		await run(room.activate('message:3:sonnet:1'), viewWith(1));
-		// A closing activation resumes the session of the exchange it summarizes.
+		// A summary activation resumes the session of the exchange it summarizes.
 		const closing = viewWith(1, first);
 		await run(room.activate('closed:1:sonnet:1'), {
 			...closing,
@@ -77,11 +77,11 @@ describe('exchange continuity', () => {
 		const room = fakeRoom(SAY);
 		const recorded = await run(
 			room.activate('message:3:sonnet:1'),
-			viewWith(1, { harness: 'claude', id: 'from-journal' }),
+			viewWith(1, { kind: 'claude', id: 'from-journal' }),
 		);
-		expect(recorded).toEqual({ harness: 'claude', id: 'from-journal' });
+		expect(recorded).toEqual({ kind: 'claude', id: 'from-journal' });
 		const other = fakeRoom(SAY);
-		await run(other.activate('message:3:sonnet:1'), viewWith(1, { harness: 'pi', id: 'other' }));
+		await run(other.activate('message:3:sonnet:1'), viewWith(1, { kind: 'pi', id: 'other' }));
 		expect(resumeOf(room.argvs()[0])).toBe('from-journal');
 		expect(resumeOf(other.argvs()[0])).toBeUndefined();
 	});
@@ -92,9 +92,9 @@ describe('exchange continuity', () => {
 			const room = fakeRoom({ ...SAY, [refusal]: true, session: 'fresh' });
 			const recorded = await run(
 				room.activate('message:3:sonnet:1'),
-				viewWith(1, { harness: 'claude', id: 'lost' }),
+				viewWith(1, { kind: 'claude', id: 'lost' }),
 			);
-			expect(recorded).toEqual({ harness: 'claude', id: 'fresh' });
+			expect(recorded).toEqual({ kind: 'claude', id: 'fresh' });
 			expect(room.commits).toHaveLength(1);
 			const [first, second] = room.argvs();
 			expect(resumeOf(first)).toBe('lost');
@@ -125,7 +125,7 @@ describe('exchange continuity', () => {
 		const activation = room.activate('message:3:sonnet:1');
 		const answer = await activation.pass({
 			kind: 'view',
-			view: viewWith(1, { harness: 'claude', id: 'lost' }),
+			view: viewWith(1, { kind: 'claude', id: 'lost' }),
 		});
 		activation.close?.();
 		expect(answer).toMatchObject(result);
@@ -136,10 +136,7 @@ describe('exchange continuity', () => {
 		const room = fakeRoom({ ...SAY, session: 'sess-1' });
 		await run(room.activate('message:1:sonnet:1'), viewWith(1));
 		room.moveRecordTo(3);
-		await run(
-			room.activate('message:2:sonnet:1'),
-			viewWith(2, { harness: 'claude', id: 'sess-1' }),
-		);
+		await run(room.activate('message:2:sonnet:1'), viewWith(2, { kind: 'claude', id: 'sess-1' }));
 		expect(room.commits.at(-1)?.readThrough).toBe(2);
 		expect(room.answers.at(-1)).toBe('missed');
 	});

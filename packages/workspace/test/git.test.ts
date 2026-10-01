@@ -1,9 +1,8 @@
 /**
- * A workspace with a git backend: the `repos`, `clone` and `fork` tools and their
- * texts, the host's `commitRef`, the tool line and the order of the notes, the refusal of a bash
- * backend that does not carry the transport, the audit entry of a call,
- * and a room in which a seat forks a template, clones it, edits,
- * commits, and pushes. The backend is `justGitBackend`, reached by
+ * A workspace with a git backend: the `repos`, `clone` and `fork` tools and
+ * their texts, the host's `commitRef`, the tool line and the order of the
+ * notes, the audit entry of a call, and a room in which a seat forks a
+ * template, clones it, edits, commits, and pushes. The backend is `justGitBackend`, reached by
  * relative path the same way as the just-bash source; its own package runs
  * the conformance cases.
  */
@@ -21,7 +20,7 @@ import { gitToolGuidance } from '../src/git-tools.ts';
 import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
-import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
+import { callAs, invokeText, toolOf } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const SERVER = 'http://git.ambion.invalid';
@@ -44,10 +43,10 @@ async function lab(options: { sql?: boolean; audit?: boolean; templates?: typeof
 		secret: 'test-secret',
 		templates: options.templates ?? TEMPLATES,
 	});
-	const bash = memoryBackend();
+	const bash = memoryBackend({ git });
 	const workspace = openWorkspace({
 		name: 'lab',
-		backend: { bash, git, ...(options.sql ? { sql: sqliteBackend(':memory:') } : {}) },
+		backend: { bash, ...(options.sql ? { sql: sqliteBackend(':memory:') } : {}) },
 		...(options.audit ? { audit: {} } : {}),
 	});
 	onTestFinished(() => workspace.dispose());
@@ -219,23 +218,6 @@ describe('the audit log', () => {
 			.map((line) => JSON.parse(line) as { tool: string });
 		expect(entries.map((entry) => entry.tool)).toEqual(names);
 	});
-});
-
-describe('the pair', () => {
-	it.each<[string, readonly string[] | undefined, string]>([
-		["['ssh']", ['ssh'], 'ssh'],
-		['[]', [], 'no git transport'],
-		['absent', undefined, 'no git transport'],
-	])(
-		'refuses justGitBackend beside a bash backend whose gitTransports is %s',
-		(_name, gitTransports, carried) => {
-			const git = justGitBackend({ storage: sqliteGitStorage(':memory:'), secret: 'test-secret' });
-			const bash = wrapped(() => ({ gitTransports }));
-			expect(() => openWorkspace({ name: 'lab', backend: { bash, git } })).toThrow(
-				`The bash backend cannot reach the git backend at ${SERVER}: the git backend uses the transport in-process, and the bash backend carries ${carried}.`,
-			);
-		},
-	);
 });
 
 describe('repos', () => {
@@ -558,7 +540,7 @@ describe('a seat in a room', () => {
 		const { workspace } = await lab();
 		const results: { tool: string; text: string; failed: boolean }[][] = [];
 		const room = await run([agent('analyst', { bundles: [workspace.tools()] })], {
-			analyst: (context, _who, call) => {
+			analyst: (context, _who, request) => {
 				results.push(toolResults(context));
 				const steps = [
 					callTool('fork', {
@@ -576,11 +558,11 @@ describe('a seat in a room', () => {
 					callTool('bash', { command: 'cd ~/report && git push origin week-39' }),
 					callTool('bash', { command: 'cd ~/report && git rev-parse HEAD' }),
 				];
-				if (call <= steps.length) return steps[call - 1] ?? quiet();
+				if (request <= steps.length) return steps[request - 1] ?? quiet();
 				// The agent writes the ref from the form that the git note states.
 				const hash = /[0-9a-f]{40}/.exec(toolResults(context).at(-1)?.text ?? '')?.[0] ?? '';
 				const ref = `ambion://workspace/lab/repo/analyst/report/branch/week-39/commit/${hash}`;
-				if (call === steps.length + 1)
+				if (request === steps.length + 1)
 					return callTool('say', { text: 'Pushed week-39.', refs: [ref] });
 				return quiet();
 			},

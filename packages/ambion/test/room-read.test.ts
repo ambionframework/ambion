@@ -1,7 +1,7 @@
 import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, readRoom } from '../src/index.ts';
-import type { Close } from '../src/journal/events.ts';
+import type { Close } from '../src/journal/entries.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { toRoomRead } from '../src/room/read.ts';
@@ -18,12 +18,12 @@ const opening: Message = {
 	text: 'Question?',
 };
 
-const close = (summary?: string): Close => ({
+const close = (summaryWriter?: string): Close => ({
 	person: 'priya',
 	from: 2,
 	through: 3,
 	at: '2026-01-01T00:00:02.000Z',
-	...(summary === undefined ? {} : { summary }),
+	...(summaryWriter === undefined ? {} : { summaryWriter }),
 });
 
 const abandoned: LeaseHold = {
@@ -47,8 +47,8 @@ function state(
 	return {
 		composition: {
 			goal: 'Keep the record coherent.',
-			agents: [],
-			available: [],
+			seated: [],
+			reserve: [],
 			seq: 1,
 			at: '2026-01-01T00:00:00.000Z',
 		},
@@ -89,8 +89,8 @@ const record = (said: object, ...after: { kind: string; body: unknown }[]) => [
 	{
 		kind: 'composition',
 		body: {
-			agents: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
-			available: [],
+			seated: [{ name: 'assistant', identity: 'Assistant.', attention: 'none' }],
+			reserve: [],
 			at,
 		},
 	},
@@ -143,12 +143,12 @@ describe('coherent room reads', () => {
 				status: 'closed',
 				at: opening.at,
 				through: 3,
-				summary: { status: 'published', summary: published },
+				summary: { kind: 'published', summary: published },
 			}),
 			{ status: 'open', ...open, activations: [] },
 		]);
 		const closed = snapshot.exchanges[0];
-		if (closed?.status !== 'closed' || closed.summary.status !== 'published')
+		if (closed?.status !== 'closed' || closed.summary.kind !== 'published')
 			throw new Error('Expected a published summary.');
 		Reflect.set(closed.summary.summary, 'text', 'mutated');
 		expect(read().exchanges[0]).toMatchObject({ summary: { summary: { text: 'Done.' } } });
@@ -170,9 +170,9 @@ describe('coherent room reads', () => {
 			if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');
 			return exchange.summary;
 		};
-		expect(outcome(pending)).toEqual({ status: 'pending', writer: 'assistant' });
-		expect(outcome(silent)).toEqual({ status: 'silent' });
-		expect(outcome(failed)).toEqual({ status: 'failed' });
+		expect(outcome(pending)).toEqual({ kind: 'pending', writer: 'assistant' });
+		expect(outcome(silent)).toEqual({ kind: 'silent' });
+		expect(outcome(failed)).toEqual({ kind: 'failed' });
 		expect(pending.through).toBe(4);
 	});
 
@@ -203,7 +203,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 					{},
 					{
 						kind: 'close',
-						body: { person: 'priya', from: 4, through: 4, at, summary: 'assistant' },
+						body: { person: 'priya', from: 4, through: 4, at, summaryWriter: 'assistant' },
 					},
 					lease({ id: 'closed:4:assistant:1', phase: 'running', expiresAt: 60_000 }),
 				),
@@ -211,7 +211,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			const pending = await readRoom(name, { runtime });
 			const first = pending.exchanges[0];
 			expect(first?.status === 'closed' && first.summary).toEqual({
-				status: 'pending',
+				kind: 'pending',
 				writer: 'assistant',
 			});
 			await appendRecord(opened.journals, name, [
@@ -220,7 +220,7 @@ describe.each(storages)('stored room reads on $name storage', (storage) => {
 			const complete = await readRoom(name, { runtime });
 			expect(complete.messages).toHaveLength(pending.messages.length);
 			expect(complete.through).toBeGreaterThan(pending.through);
-			expect(complete.exchanges[0]).toMatchObject({ summary: { status: expected } });
+			expect(complete.exchanges[0]).toMatchObject({ summary: { kind: expected } });
 		},
 	);
 

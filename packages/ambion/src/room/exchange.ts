@@ -27,7 +27,7 @@
  */
 
 import { type ActivationSource, decodeActivationId } from '../activation-id.ts';
-import type { Close } from '../journal/events.ts';
+import type { Close } from '../journal/entries.ts';
 import {
 	type ActivationOutcome,
 	addUsage,
@@ -37,21 +37,21 @@ import {
 	type ExchangeOutcome,
 	type ExchangeRange,
 	type ExchangeRef,
-	type HarnessSession,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Message,
 	type Seq,
 	type SummaryMessage,
 	type SummaryOutcome,
 	type Usage,
+	type VendorSession,
 } from '../types.ts';
 import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
-	draftsClose,
 	exchangeOutcome,
 	openingQuestion,
+	summarizesClose,
 	summaryVerdict,
 	survivesCancellation,
 } from './rules.verified.ts';
@@ -86,7 +86,7 @@ export function coveringSummary(
  * it writes for. It holds no `at`, so the room can rebuild it from an `Owed`.
  */
 export type SummaryClose = Pick<Close, 'from' | 'through'> &
-	({ summary: string; person: string } | { summary?: undefined });
+	({ summaryWriter: string; person: string } | { summaryWriter?: undefined });
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -95,39 +95,39 @@ export function summaryCompletion(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): SummaryOutcome {
-	const writer = close.summary;
+	const writer = close.summaryWriter;
 	// A close with no writer has no summary to publish.
 	const summary =
-		close.summary === undefined
+		close.summaryWriter === undefined
 			? undefined
-			: coveringSummary(messages, close.person, close, close.summary);
-	if (summary !== undefined) return { status: 'published', summary };
+			: coveringSummary(messages, close.person, close, close.summaryWriter);
+	if (summary !== undefined) return { kind: 'published', summary };
 	const verdict = summaryVerdict(
 		writer !== undefined,
 		writer !== undefined && removedAfter(messages, writer, close.through),
-		draftsOf(leases, close.through, writer),
+		summaryLeasesOf(leases, close.through, writer),
 		!survivesCancellation(close.through, cancelledAt),
 	);
 	// The rule decides. The re-test narrows the TypeScript type only.
-	if (verdict.status === 'pending' && verdict.owed && writer !== undefined)
-		return { status: 'pending', writer };
-	if (verdict.status === 'pending') return { status: 'pending' };
-	return { status: verdict.status === 'silent' ? 'silent' : 'failed' };
+	if (verdict.kind === 'pending' && verdict.owed && writer !== undefined)
+		return { kind: 'pending', writer };
+	if (verdict.kind === 'pending') return { kind: 'pending' };
+	return { kind: verdict.kind === 'silent' ? 'silent' : 'failed' };
 }
 
 /**
- * The drafts of one close's summary: every lease of the writer's closing
- * activations at the close. A lease from another seat is no draft of this
- * close. The validator holds `through >= 1`. A close with no writer has no
- * drafts, and every activation id names a seat.
+ * The leases of one close's summary: every lease of the writer's summary
+ * activations at the close. A lease from another seat is no summary lease
+ * of this close. The validator holds `through >= 1`. A close with no writer
+ * has no summary leases, and every activation id names a seat.
  */
-export function draftsOf(
+export function summaryLeasesOf(
 	leases: ReadonlyMap<string, LeaseHold>,
 	through: Seq,
 	writer: string | undefined,
 ): LeaseHold[] {
 	if (writer === undefined) return [];
-	return [...leases.values()].filter((lease) => draftsClose(lease.activation, through, writer));
+	return [...leases.values()].filter((lease) => summarizesClose(lease.activation, through, writer));
 }
 
 /** What one pass over the room shares among its closed exchanges. */
@@ -160,7 +160,7 @@ function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message
 }
 
 /**
- * The people a closing activation addresses: every person who spoke in the
+ * The people a summary activation addresses: every person who spoke in the
  * range, in the order they first spoke. The first is the `person` of the
  * exchange.
  */
@@ -190,7 +190,7 @@ function awaitedPerson(
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
 	const asker = range[0]?.from;
-	const last = range.findLast(isSpoken);
+	const last = range.findLast(isSaid);
 	const person = last?.to;
 	if (last === undefined || person === undefined || person === asker) return undefined;
 	if (!people.has(person)) return undefined;
@@ -233,8 +233,8 @@ function closedExchangeView(close: Close, pass: Pass): Extract<Exchange, { statu
 		// The view copies a published summary, as it copies `summaries`, so it
 		// shares nothing with the fold.
 		summary:
-			summary.status === 'published'
-				? { status: 'published', summary: copyMessage(summary.summary) }
+			summary.kind === 'published'
+				? { kind: 'published', summary: copyMessage(summary.summary) }
 				: summary,
 		outcome: exchangeOutcomeOf(close, range, pass, exhausted),
 		...(summaries.length === 0 ? {} : { summaries }),
@@ -260,9 +260,9 @@ function activationsInRange(
 
 /** What a lease says about how its activation stands. */
 function outcomeOf(lease: LeaseHold): ActivationOutcome {
-	if (lease.phase === 'running') return { status: 'running' };
+	if (lease.phase === 'running') return { kind: 'running' };
 	return {
-		status: lease.reason,
+		kind: lease.reason,
 		...(lease.cancelled === true ? { cancelled: true as const } : {}),
 		...(lease.cause === undefined ? {} : { cause: lease.cause }),
 	};
@@ -275,7 +275,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 		id: lease.id,
 		seat,
 		attempt,
-		purpose: source === 'closed' ? 'summary' : 'respond',
+		purpose: source === 'closed' ? 'summarize' : 'respond',
 		outcome: outcomeOf(lease),
 		...(lease.usage === undefined ? {} : { usage: { ...lease.usage } }),
 		...(lease.session === undefined ? {} : { session: { ...lease.session } }),
@@ -284,7 +284,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 
 /**
  * What the activations in the range spent, or nothing when none recorded
- * usage, and whether the room gave up on a response activation.
+ * usage, and whether the room gave up on a respond activation.
  */
 function workOf(
 	from: Seq,
@@ -361,8 +361,8 @@ export function exchangeViews(
 }
 
 /**
- * The `from` of the exchange an activation serves, or nothing. A closing
- * activation serves the exchange its close ended. A response activation
+ * The `from` of the exchange an activation serves, or nothing. A summary
+ * activation serves the exchange its close ended. A respond activation
  * serves the exchange whose range holds the message that caused it. A
  * message outside every exchange, such as agent speech in a quiet room,
  * serves none.
@@ -379,9 +379,9 @@ function servedExchange(
 }
 
 /**
- * The harness session an activation resumes: the one that the latest ended
+ * The vendor session an activation resumes: the one that the latest ended
  * activation of the same seat in the same exchange recorded. The latest is
- * the one whose end entry stands highest on the journal. A harness session
+ * the one whose end entry stands highest on the journal. A vendor session
  * never crosses an exchange, so the first activation of a seat in each
  * exchange starts fresh.
  */
@@ -390,10 +390,10 @@ export function exchangeSession(
 	closes: readonly Close[],
 	open: ExchangeRef | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
-): HarnessSession | undefined {
+): VendorSession | undefined {
 	const activation = seatAndExchange(id, closes, open);
 	if (activation?.exchange === undefined) return undefined;
-	let latest: { until: Seq; session: HarnessSession } | undefined;
+	let latest: { until: Seq; session: VendorSession } | undefined;
 	for (const lease of withSession(leases)) {
 		if (latest !== undefined && lease.until <= latest.until) continue;
 		const ended = seatAndExchange(lease.id, closes, open);
@@ -402,10 +402,10 @@ export function exchangeSession(
 	return latest?.session;
 }
 
-/** The ended leases that recorded a harness session. */
+/** The ended leases that recorded a vendor session. */
 function withSession(
 	leases: ReadonlyMap<string, LeaseHold>,
-): { id: string; until: Seq; session: HarnessSession }[] {
+): { id: string; until: Seq; session: VendorSession }[] {
 	return [...leases.values()].flatMap((lease) =>
 		lease.phase === 'ended' && lease.session !== undefined
 			? [{ id: lease.id, until: lease.until, session: lease.session }]
@@ -442,7 +442,7 @@ export function exchangeAfter(
 	const question = openingQuestion(messages, people, closedThrough);
 	if (question === undefined) return undefined;
 	const person = messages.find(
-		(message) => message.seq >= question.seq && isSpoken(message) && people.includes(message.from),
+		(message) => message.seq >= question.seq && isSaid(message) && people.includes(message.from),
 	)?.from;
 	return { ...(person === undefined ? {} : { person }), from: question.seq, at: question.at };
 }

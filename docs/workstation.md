@@ -1,6 +1,6 @@
 # The workstation
 
-**The workstation forwards ports through SSH.** See
+**The workstation forwards endpoints through SSH.** See
 [Workstation ports](sensors.md#workstation-ports) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
@@ -31,7 +31,7 @@ const lab = openWorkspace({
   name: 'lab',
   backend: {
     bash: workstationBackend({
-      host: 'lab.internal',
+      server: 'lab.internal',
       hostKey: 'SHA256:<the fingerprint that ssh-keygen -lf prints>',
       layout: {
         audit: '/srv/ambion/lab/audit/audit.jsonl',
@@ -49,7 +49,7 @@ const lab = openWorkspace({
 ```
 
 **The example names each account after its agent.** It reads each
-private key from a file on the Ambion host. `lab.host.name` is `lab-host`, so
+private key from a file on the Ambion host. `lab.mirrorAgent.name` is `lab-host`, so
 the server has an account and a key of that name too.
 
 **The package reaches the workspace through its root entry.** That entry
@@ -64,19 +64,19 @@ and no `node:sqlite`. The workstation does not depend on
 workspace supplies everything that holds on every backend
 ([The resource contract](workspace.md#the-resource-contract)).
 
-| Part                                      | Owner                                                           |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `connect()` and `dispose()`               | The workstation                                                 |
-| `SshEnv`, the transport of each call      | The workstation                                                 |
-| `layout`: the audit log, rooms, snapshots | The workstation, from its options                               |
-| `guidance` about the shell and hostname   | The workstation                                                 |
-| `ports.open()` for loopback services      | The workstation                                                 |
-| `read`, `write`, `edit`                   | The workspace: the three file tools                             |
-| `bash`, `ps`, `status`, `wait`, `cancel`  | The workspace: the process tools ([Processes](processes.md))    |
-| `snapshot`, `restore`                     | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
-| `sql`                                     | The workspace, when `backend.sql` is set                        |
-| Path rule, deadline, output view          | The workspace: the environment helpers                          |
-| Audit log, room mirror, snapshot copies   | The workspace, at the paths that `layout` names                 |
+| Part                                        | Owner                                                           |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| `connect()` and `dispose()`                 | The workstation                                                 |
+| `SshEnv`, the transport of each call        | The workstation                                                 |
+| `layout`: the audit log, rooms, snapshots   | The workstation, from its options                               |
+| `guidance` about the shell and hostname     | The workstation                                                 |
+| `endpoints.forward()` for loopback services | The workstation                                                 |
+| `read`, `write`, `edit`                     | The workspace: the three file tools                             |
+| `bash`, `ps`, `status`, `wait`, `cancel`    | The workspace: the process tools ([Processes](processes.md))    |
+| `snapshot`, `restore`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
+| `sql`                                       | The workspace, when `backend.sql` is set                        |
+| Path rule, deadline, output view            | The workspace: the environment helpers                          |
+| Audit log, room mirror, snapshot copies     | The workspace, at the paths that `layout` names                 |
 
 **The workstation adds no tools.** The file tools and the process tools cover
 every file and shell operation on a server.
@@ -131,7 +131,7 @@ interface WorkstationCredential {
 }
 
 interface WorkstationOptions {
-  readonly host: string;
+  readonly server: string;
   readonly port?: number;
   /** The server's host key fingerprint, as `ssh-keygen -lf` prints it. */
   readonly hostKey: string;
@@ -142,7 +142,7 @@ interface WorkstationOptions {
 }
 ```
 
-**The resolver answers for every agent and for `workspace.host`.** A
+**The resolver answers for every agent and for `workspace.mirrorAgent`.** A
 `WorkspaceAgent` holds `name` alone. `openWorkspace` builds the host
 agent `<name>-host`, and `mirror()` writes as it
 ([The layout and the host identity](workspace.md#the-layout-and-the-host-identity)).
@@ -226,7 +226,7 @@ mode `0600`, and a temporary directory with mode `0700`.
 goes over SFTP. Each `exec` opens one channel on the SSH client. The root
 entry's helpers supply the rest:
 
-- `HomeEnv` for the file members: `SshEnv` supplies the SFTP operations and
+- `HomeEnv` for the file methods: `SshEnv` supplies the SFTP operations and
   the error classifier, and overrides `renameFile` to classify an `invalid`
   error against the destination
 - `resolvePath` for `~` and a relative path
@@ -430,10 +430,10 @@ call adds network round trips to every tool call.
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client with no open
-  environment or port transport for `idleTimeout` seconds closes. The
+  environment or endpoint for `idleTimeout` seconds closes. The
   default is 300. A background process holds an environment of its own for
-  its whole run ([Processes](processes.md#backends)). An open port transport
-  holds a client until its caller closes the transport. The timer starts
+  its whole run ([Processes](processes.md#backends)). An open endpoint
+  holds a client until its caller closes the endpoint. The timer starts
   when the last lease ends. The next `connect()` for that agent builds a
   new client. A long workspace run holds a client only for an agent that works.
 - **`dispose()` closes every client and port listener.** The backend deletes
@@ -460,8 +460,8 @@ owner, so it covers `dispose()` and a live cancel or timeout alike.
 | The SFTP channel                                                                                                                   | 1        |
 | The bash owner: one operation, one `exec`                                                                                          | 1        |
 | The processes: a command channel for each process of this run, and one poll read for each adopted process, with 4 processes in all | up to 4  |
-| One signal channel, for every abort and every stop of the client                                                                   | 1        |
-| One `exec` of the table on a stop step: `writeStop`, or the signal script of an adopted stop                                       | 1        |
+| One signal channel, for every abort and every cancel of the client                                                                 | 1        |
+| One `exec` of the table on a cancel step: `writeStop`, or the signal script of an adopted cancel                                   | 1        |
 | The total                                                                                                                          | 8        |
 
 **The process table allows 4 running processes.** A process of this run
@@ -471,8 +471,8 @@ channel at a time for it. A process of this run or an adopted one counts
 as one of the 4, so the commands and the polls together stay at 4. The
 final read of a process of this run (`settleOwned`, `finalStatus`,
 `readFiles`: one listing `exec`) runs after its command channel closed,
-and takes the place of that channel. The stops of one agent take their
-steps one at a time, so the table holds one `exec` on a stop step. The
+and takes the place of that channel. The cancels of one agent take their
+steps one at a time, so the table holds one `exec` on a cancel step. The
 owner's own abort signal uses the one signal channel. The worst case is
 8 channels, 2 below the limit of 10. The count of one signal channel
 assumes that a kill channel closes within 5 seconds, the time after which
@@ -518,9 +518,9 @@ server.** One more account, such as `lab-git`, owns every repository, and
 the host reaches it with its own key. [Workstation git](workstation-git.md)
 describes the backend.
 
-**The bash backend carries the git transport `ssh`.** Its
-`gitTransports` is `['ssh']`. At each `connect` with the git backend, it
-asks `identityFor` for the agent's key. It writes the key, a
+**The bash backend takes the git backend in its `git` option.** The option
+has the type `WorkstationGitBackend`. At each `connect`, the bash backend
+asks `identityFor` of its access for the agent's key. It writes the key, a
 `known_hosts` file, and an ssh configuration for the alias into the
 agent's `~/.ssh` with mode `0600`, and it makes `Include ambion-git.conf`
 the first line of `~/.ssh/config`. A failure of either step fails the
@@ -570,15 +570,15 @@ has mode `0600`, and each temporary directory has mode `0700`.
 ## Tests
 
 **Both tiers run `workspaceConformance`.** A
-`ConformanceHarness<WorkspaceConformanceStore>` opens a fresh
+`ConformanceFixture<WorkspaceConformanceStore>` opens a fresh
 `workstationBackend` and disposes of it. The cases check the `ExecutionEnv`
-rules that the file tools and the process tools need. The scripted harness
+rules that the file tools and the process tools need. The scripted fixture
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
 
 ```ts
 import type {
-  ConformanceHarness,
+  ConformanceFixture,
   WorkspaceConformanceStore,
 } from '@ambionframework/workspace/conformance';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
@@ -586,7 +586,7 @@ import { workstationBackend } from '@ambionframework/workstation';
 import { describe, it } from 'vitest';
 import { startSshServer } from './support/server.ts';
 
-const harness: ConformanceHarness<WorkspaceConformanceStore> = {
+const fixture: ConformanceFixture<WorkspaceConformanceStore> = {
   name: 'workstation',
   async open() {
     const server = await startSshServer(['conformance']);
@@ -601,8 +601,8 @@ const harness: ConformanceHarness<WorkspaceConformanceStore> = {
   },
 };
 
-describe(harness.name, () => {
-  for (const c of workspaceConformance(harness)) it(c.name, c.run);
+describe(fixture.name, () => {
+  for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });
 ```
 

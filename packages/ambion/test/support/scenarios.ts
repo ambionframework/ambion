@@ -12,7 +12,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	isSaid,
 	isSummary,
 	type Room,
 	type Runtime,
@@ -30,9 +30,9 @@ import {
 	isClosingContext,
 	type PiScript,
 	quiet,
-	scripted,
+	say,
+	scriptedStream,
 	seat,
-	speak,
 	summarise,
 	toolNames,
 	toolResultTexts,
@@ -93,8 +93,8 @@ function composes(names: string[], summary: string): PiScript {
 }
 
 /** Two answers to every question, then silence until the next. */
-const twoAnswersEach: PiScript = (_context, _name, call) =>
-	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
+const twoAnswersEach: PiScript = (_context, _name, request) =>
+	request % 3 === 0 ? quiet() : say(`answer ${request}`);
 
 export async function finish(
 	session: Room,
@@ -111,13 +111,13 @@ export const oneExchange: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [product, assistant],
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
 					),
 				}),
@@ -128,7 +128,7 @@ export const oneExchange: Scenario = {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await waitForRoom(session);
 		const record = await messagesOf(session);
-		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
+		expect(record.filter(isSaid).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
 		expect(summary).toMatchObject({ to: 'priya', text: 'The one message.' });
 		await finish(session, events, runtime);
@@ -141,7 +141,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: {
 				[product.name]: 'broadcast',
 				[colleague.name]: 'broadcast',
@@ -151,7 +151,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							product: answersLastQuestion(['priya', 'sam']),
 							colleague: answersLastQuestion(['priya', 'sam']),
@@ -196,17 +196,17 @@ export const seatFromReserve: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [product, surveyor, assistant],
 			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
 			execution: wire(
 				piExecution({
 					sessions: 'memory',
-					stream: scripted(
+					stream: scriptedStream(
 						byAgent({
 							assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
-							product: (_context, _name, call) =>
-								call <= 3 ? speak('The pour is Saturday.') : quiet(),
+							product: (_context, _name, request) =>
+								request <= 3 ? say('The pour is Saturday.') : quiet(),
 							surveyor: insists('11.7 tonnes on site.'),
 						}),
 					),
@@ -222,7 +222,7 @@ export const seatFromReserve: Scenario = {
 			from: 'assistant',
 			subject: 'surveyor',
 		});
-		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
+		expect(record.filter(isSaid).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
 		expect((await participantsOf(session)).map((s) => s.name)).toContain('surveyor');
 		await finish(session, events, runtime);

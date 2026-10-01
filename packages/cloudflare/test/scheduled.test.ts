@@ -12,7 +12,7 @@ const NAME = 'room-scheduled';
 
 it("returns a scheduled say through the room object's alarm, into an exchange with no person", async () => {
 	const stub = roomOf(NAME);
-	await stub.start({ name: NAME, seats: { checker: 'broadcast' }, agents: ['checker'] });
+	await stub.start({ name: NAME, seats: { checker: 'broadcast' }, definitions: ['checker'] });
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged?', key: 'q1' });
 	await stub.waitForClose(first.from);
@@ -36,7 +36,7 @@ it("returns a scheduled say through the room object's alarm, into an exchange wi
 it('lists the says that wait, and dismisses one through the room object', async () => {
 	const name = `${NAME}-dismissed`;
 	const stub = roomOf(name);
-	await stub.start({ name, seats: { checker: 'broadcast' }, agents: ['checker'] });
+	await stub.start({ name, seats: { checker: 'broadcast' }, definitions: ['checker'] });
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const first = await stub.send({ from: 'priya', text: 'Is the pour logged tomorrow?', key: 'q1' });
 	await stub.waitForClose(first.from);
@@ -54,7 +54,7 @@ it('lists the says that wait, and dismisses one through the room object', async 
 it('posts through the room object into an exchange with no person, once for each key', async () => {
 	const name = `${NAME}-posted`;
 	const stub = roomOf(name);
-	await stub.start({ name, seats: { product: 'broadcast' }, agents: ['product'] });
+	await stub.start({ name, seats: { product: 'broadcast' }, definitions: ['product'] });
 	const post = { to: 'product', text: 'lab: pour 7 is set.', key: 'pour-7' };
 	const posted = await stub.post(post);
 	expect(posted).not.toHaveProperty('person');

@@ -4,8 +4,8 @@
  * does to leases and summaries.
  */
 import { describe, expect, it } from 'vitest';
-import type { Close } from '../src/journal/events.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { Close } from '../src/journal/entries.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { exchangeSession, summaryCompletion } from '../src/room/exchange.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { awaitingFor, toRoomRead } from '../src/room/read.ts';
@@ -17,26 +17,26 @@ const at = '2026-01-01T09:00:00.000Z';
 const cancelledAt = '2026-01-01T09:01:00.000Z';
 const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-const composition: Entry = {
+const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		agents: [{ name: 'worker', identity: 'Worker.', attention: 'broadcast' }],
-		available: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
+		seated: [{ name: 'worker', identity: 'Worker.', attention: 'broadcast' }],
+		reserve: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
 		at,
 	},
 };
-const arrival = (seq: number, name: string): Entry => ({
+const arrival = (seq: number, name: string): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'arrived', at, from: name, subject: name, identity: 'Person.' },
 });
-const said = (seq: number, from: string, to?: string): Entry => ({
+const said = (seq: number, from: string, to?: string): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'said', at, from, text: `Message ${seq}.`, ...(to === undefined ? {} : { to }) },
 });
-const summary = (seq: number, to: string, from: number, through: number): Entry => ({
+const summary = (seq: number, to: string, from: number, through: number): RoomEntry => ({
 	kind: 'message',
 	seq,
 	body: { kind: 'summary', at, from: 'worker', to, text: `For ${to}.`, covers: { from, through } },
@@ -46,14 +46,18 @@ const closeBody = (from: number, through: number, writer?: string): Close => ({
 	from,
 	through,
 	at,
-	...(writer === undefined ? {} : { summary: writer }),
+	...(writer === undefined ? {} : { summaryWriter: writer }),
 });
-const close = (seq: number, from: number, through: number, writer?: string): Entry => ({
+const close = (seq: number, from: number, through: number, writer?: string): RoomEntry => ({
 	kind: 'close',
 	seq,
 	body: closeBody(from, through, writer),
 });
-const ended = (seq: number, id: string, reason: 'abandoned' | 'released' | 'revoked'): Entry => ({
+const ended = (
+	seq: number,
+	id: string,
+	reason: 'abandoned' | 'released' | 'revoked',
+): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: {
@@ -65,23 +69,23 @@ const ended = (seq: number, id: string, reason: 'abandoned' | 'released' | 'revo
 		...(reason === 'abandoned' ? { cause: 'permanent' } : {}),
 	},
 });
-const running = (seq: number, id: string): Entry => ({
+const running = (seq: number, id: string): RoomEntry => ({
 	kind: 'lease',
 	seq,
 	body: { id, phase: 'running', expiresAt: Date.parse(cancelledAt) - 1, at, readThrough: 2 },
 });
-const cancel = (seq: number): Entry => ({ kind: 'cancel', seq, body: { at: cancelledAt } });
+const cancel = (seq: number): RoomEntry => ({ kind: 'cancel', seq, body: { at: cancelledAt } });
 
 describe('exchange outcomes', () => {
 	const room = [composition, arrival(2, 'priya'), arrival(3, 'sam')];
-	const readOf = (entries: readonly Entry[]): RoomRead =>
+	const readOf = (entries: readonly RoomEntry[]): RoomRead =>
 		toRoomRead('room', replayState(entries, retry), 0, entries.length, false);
 	const closed = (read: RoomRead) =>
 		read.exchanges.filter(
 			(exchange): exchange is Extract<Exchange, { status: 'closed' }> =>
 				exchange.status === 'closed',
 		);
-	const outcomes = (entries: readonly Entry[]) =>
+	const outcomes = (entries: readonly RoomEntry[]) =>
 		closed(readOf(entries)).map((exchange) => exchange.outcome);
 	const asked = [...room, said(4, 'priya')];
 
@@ -105,7 +109,7 @@ describe('exchange outcomes', () => {
 		],
 		[
 			'exhausted',
-			'an abandoned response activation',
+			'an abandoned respond activation',
 			[ended(5, 'message:4:worker:1', 'abandoned'), close(6, 4, 4)],
 		],
 		[
@@ -131,12 +135,12 @@ describe('exchange outcomes', () => {
 	});
 
 	it('reads awaiting in the exchange of a returned say, also for an approver who asks back', () => {
-		const returned: Entry = {
+		const returned: RoomEntry = {
 			kind: 'message',
 			seq: 4,
 			body: { kind: 'posted', at, to: 'worker', returns: 3, text: 'Check the build.' },
 		};
-		const closeOf = (through: number, person?: string): Entry => ({
+		const closeOf = (through: number, person?: string): RoomEntry => ({
 			kind: 'close',
 			seq: through + 1,
 			body: { ...(person === undefined ? {} : { person }), from: 4, through, at },
@@ -231,7 +235,7 @@ describe('summary completion query', () => {
 					until: 7,
 					readThrough: 0,
 				};
-	const pending = { status: 'pending', writer: 'assistant' };
+	const pending = { kind: 'pending', writer: 'assistant' };
 	const covering = (covers: { from: number; through: number }) => ({ ...written, covers });
 
 	it.each<[string, Close, Message[], LeaseHold[], object]>([
@@ -240,66 +244,72 @@ describe('summary completion query', () => {
 			owed,
 			[written],
 			[hold('abandoned')],
-			{ status: 'published', summary: written },
+			{ kind: 'published', summary: written },
 		],
 		[
 			'a summary over a wider range',
 			owed,
 			[covering({ from: 1, through: 6 })],
 			[],
-			{ status: 'published', summary: covering({ from: 1, through: 6 }) },
+			{ kind: 'published', summary: covering({ from: 1, through: 6 }) },
 		],
 		['a summary from another writer', owed, [{ ...written, from: 'another-agent' }], [], pending],
 		['a summary to another person', owed, [{ ...written, to: 'sam' }], [], pending],
 		['a summary that starts late', owed, [covering({ from: 3, through: 5 })], [], pending],
 		['a summary that stops early', owed, [covering({ from: 2, through: 4 })], [], pending],
-		['a summary on a close with no writer', unassigned, [written], [], { status: 'silent' }],
-		['no draft on a close with no writer', unassigned, [], [], { status: 'silent' }],
-		['a running draft on a close with no writer', unassigned, [], [hold()], { status: 'silent' }],
+		['a summary on a close with no writer', unassigned, [written], [], { kind: 'silent' }],
+		['no summary attempt on a close with no writer', unassigned, [], [], { kind: 'silent' }],
 		[
-			'a failed draft on a close with no writer',
+			'a running summary attempt on a close with no writer',
+			unassigned,
+			[],
+			[hold()],
+			{ kind: 'silent' },
+		],
+		[
+			'a failed summary attempt on a close with no writer',
 			unassigned,
 			[],
 			[hold('failed')],
-			{ status: 'silent' },
+			{ kind: 'silent' },
 		],
-		['no draft yet', owed, [], [], pending],
-		['a running draft', owed, [], [hold()], pending],
+		['no summary attempt yet', owed, [], [], pending],
+		['a running summary attempt', owed, [], [hold()], pending],
 		[
-			'a running retry after a released draft',
+			'a running retry after a released summary attempt',
 			owed,
 			[],
 			[hold(), hold('released', 'closed:5:assistant:2')],
-			{ status: 'pending' },
+			{ kind: 'pending' },
 		],
-		['a released draft', owed, [], [hold('released')], { status: 'silent' }],
-		['a revoked draft', owed, [], [hold('revoked')], { status: 'failed' }],
-		['an abandoned draft', owed, [], [hold('abandoned')], { status: 'failed' }],
-		['a failed draft', owed, [], [hold('failed')], pending],
-		['an expired draft', owed, [], [hold('expired')], pending],
+		['a released summary attempt', owed, [], [hold('released')], { kind: 'silent' }],
+		['a revoked summary attempt', owed, [], [hold('revoked')], { kind: 'failed' }],
+		['an abandoned summary attempt', owed, [], [hold('abandoned')], { kind: 'failed' }],
+		['a failed summary attempt', owed, [], [hold('failed')], pending],
+		['an expired summary attempt', owed, [], [hold('expired')], pending],
 		[
-			'a failed draft of a historical writer',
+			'a failed summary attempt of a historical writer',
 			closeBody(2, 5, 'historical-assistant'),
 			[],
 			[hold('failed')],
-			{ status: 'pending', writer: 'historical-assistant' },
+			{ kind: 'pending', writer: 'historical-assistant' },
 		],
 		[
-			'an abandoned draft from another seat',
+			'an abandoned summary attempt from another seat',
 			owed,
 			[],
 			[hold('abandoned', 'closed:5:other-seat:1')],
 			pending,
 		],
 		[
-			'an abandoned draft at another close',
+			'an abandoned summary attempt at another close',
 			owed,
 			[],
 			[hold('abandoned', 'closed:9:assistant:1')],
 			pending,
 		],
 		[
-			'an abandoned response activation',
+			'an abandoned respond activation',
 			owed,
 			[],
 			[hold('abandoned', 'message:5:assistant:1')],
@@ -311,8 +321,8 @@ describe('summary completion query', () => {
 		);
 	});
 
-	it("counts only the writer's drafts as attempts, in the fold and in the projection", () => {
-		const failed = (seq: number, id: string): Entry[] => [
+	it("counts only the writer's summary attempts, in the fold and in the projection", () => {
+		const failed = (seq: number, id: string): RoomEntry[] => [
 			{ kind: 'lease', seq, body: { id, phase: 'running', expiresAt: 0, at, readThrough: 0 } },
 			{
 				kind: 'lease',
@@ -320,7 +330,7 @@ describe('summary completion query', () => {
 				body: { id, phase: 'ended', reason: 'failed', at, readThrough: 0 },
 			},
 		];
-		// A journal from another writer: a seat that is not the close's writer drafted and failed.
+		// A journal from another writer: a seat that is not the close's writer attempted a summary and failed.
 		const entries = [
 			composition,
 			arrival(2, 'priya'),
@@ -339,20 +349,20 @@ describe('summary completion query', () => {
 });
 
 describe('cancellation fold', () => {
-	const question: Entry = {
+	const question: RoomEntry = {
 		kind: 'message',
 		seq: 3,
 		body: { kind: 'said', at, from: 'priya', text: 'Question?', wakes: ['worker'] },
 	};
 	const asked = [composition, arrival(2, 'priya'), question];
 	const worked = [...asked, running(4, 'message:3:worker:1')];
-	const completion = (entries: readonly Entry[], closes: Close) => {
+	const completion = (entries: readonly RoomEntry[], closes: Close) => {
 		const state = replayState(entries, retry);
 		return summaryCompletion(closes, state.messages, state.leases, state.cancelledAt);
 	};
 
 	it('matches replay and incremental evolution before and after a fresh prompt', () => {
-		const prompt: Entry = {
+		const prompt: RoomEntry = {
 			kind: 'message',
 			seq: 6,
 			body: { kind: 'said', at: cancelledAt, from: 'priya', text: 'New?', wakes: ['worker'] },
@@ -384,7 +394,7 @@ describe('cancellation fold', () => {
 	});
 
 	it('preserves published and silent summary outcomes after cancellation', () => {
-		const published: Entry = {
+		const published: RoomEntry = {
 			kind: 'message',
 			seq: 5,
 			body: {
@@ -399,32 +409,32 @@ describe('cancellation fold', () => {
 		const entries = [...asked, close(4, 3, 3, 'writer'), published, close(6, 2, 2), cancel(8)];
 		const state = replayState(entries, retry);
 		expect(completion(entries, closeBody(3, 3, 'writer'))).toEqual({
-			status: 'published',
+			kind: 'published',
 			summary: state.messages.find((message) => message.kind === 'summary'),
 		});
-		expect(completion(entries, closeBody(2, 2))).toEqual({ status: 'silent' });
+		expect(completion(entries, closeBody(2, 2))).toEqual({ kind: 'silent' });
 		expect(owedOf(state)).toEqual([]);
 	});
 
 	it.each([
 		[
-			'fails a released and a cancelled draft, across a repeat marker',
+			'fails a released and a cancelled summary attempt, across a repeat marker',
 			[running(7, 'closed:3:writer:2'), cancel(8), cancel(9)],
 			'failed',
 		],
 		[
-			'keeps a released and a revoked draft silent',
+			'keeps a released and a revoked summary attempt silent',
 			[ended(7, 'closed:3:writer:2', 'revoked'), cancel(8)],
 			'silent',
 		],
-	] as const)('%s', (_name, tail, status) => {
+	] as const)('%s', (_name, tail, kind) => {
 		const entries = [
 			...asked,
 			close(5, 3, 3, 'writer'),
 			ended(6, 'closed:3:writer:1', 'released'),
 			...tail,
 		];
-		expect(completion(entries, closeBody(3, 3, 'writer'))).toEqual({ status });
+		expect(completion(entries, closeBody(3, 3, 'writer'))).toEqual({ kind });
 	});
 });
 
@@ -440,9 +450,9 @@ describe('exchange session', () => {
 		readThrough: until - 1,
 		reason: 'released',
 		until,
-		session: { harness: 'pi', id },
+		session: { kind: 'pi', id },
 	});
-	const closes: Close[] = [{ person: 'priya', from: 4, through: 9, at, summary: 'writer' }];
+	const closes: Close[] = [{ person: 'priya', from: 4, through: 9, at, summaryWriter: 'writer' }];
 	const open = { person: 'priya', from: 12, at };
 	const leases = new Map(
 		[
@@ -456,7 +466,7 @@ describe('exchange session', () => {
 
 	it.each([
 		['the latest session of the seat in the same closed exchange', 'message:8:worker:2', 'second'],
-		['the session of the exchange a closing activation summarizes', 'closed:9:worker:1', 'second'],
+		['the session of the exchange a summary activation summarizes', 'closed:9:worker:1', 'second'],
 		['the own session of a seat beside another seat', 'message:8:writer:2', 'writer'],
 		['the session of the open exchange', 'message:15:worker:1', 'open'],
 		[

@@ -18,7 +18,7 @@ the table. `Limits` in
 | `limits.delivery.resend`          | How long a wake stays unanswered before the room resends it | 5,000 ms               |
 | `limits.lease.ttl`                | How long a lease lasts from each claim or renewal           | 60,000 ms              |
 | `limits.lease.deadline`           | How long an activation runs from its first claim            | 600,000 ms             |
-| `limits.activation.attempts`      | Attempts the room makes at one wake or one draft            | 3                      |
+| `limits.activation.attempts`      | Attempts the room makes at one due activation               | 3                      |
 | `limits.activation.backoff`       | The wait before each retry, from the attempt number         | `attempt * 30_000` ms  |
 | `limits.call.timeout`             | Each executor call to the room                              | 10,000 ms              |
 | `limits.call.attempts`            | Retries of a claim or a release                             | 2                      |

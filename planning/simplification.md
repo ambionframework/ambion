@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty-one reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-four reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                         | Files                                    |
@@ -55,6 +55,9 @@ changelog names each change to an export and to a behavior.
 | One view of the room host (K16)              | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
 | Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
 | One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
+| One owner of process liveness (W6)           | `endedProcesses`, its three writes, `processKey`                         | `processes.ts`, `sensor-connections.ts`  |
+| The schema is the one source of a body (K6)  | 18 hand-written body types, the third ended lease in `LeaseRequest`      | `bodies.ts`                              |
+| The bash backend takes its git backend (B2)  | `BashServices`, `gitTransports`, the transport check, `GitAccess`, casts | `workspace/src/backend.ts`               |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -81,7 +84,7 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | K3  | The commit result has two forms (done)                                             | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
 | K5  | Usage addition exists three times (done)                                           | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
-| K6  | A body shape is written as a type and again as a schema                            | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
+| K6  | A body shape is written as a type and again as a schema (done)                     | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
 | K7  | Three rules state "plain data", and they disagree                                  | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
 | K8  | Three renderers write one line of the record                                       | `record.ts:29`, `execution/render.ts:54`, `simulator/src/render.ts:29`                                   | 2       | Medium | 4    |
 | K9  | The `assistant` option restates `agents`, `seats`, and `summary`                   | `normalizeAssistant` (`room.ts:231`); the package is 70 lines over `pi()`                                | 2       | Medium | 4    |
@@ -156,7 +159,7 @@ definition runs on different executions in
 | W3  | Two wrappers audit a tool, under two placement rules (done)            | `bindTool`, `recordedOnShell`; 13 tools write their name twice          | 2       | High   | 6    |
 | W4  | Seven conformance suites each have a `check` and a harness type (done) | Five `check` copies; the suites already share `ConformanceCase`         | 3       | High   | 9    |
 | W5  | The sensor path validates at every layer                               | The client and the retention both check the schema and the digest       | 2       | Medium | 4    |
-| W6  | The sensor connections keep a second liveness table                    | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
+| W6  | The sensor connections keep a second liveness table (done)             | `endedProcesses` (`sensor-connections.ts:70`); `hostList`, `hostCancel` | 3       | Medium | 6    |
 | W7  | Two owners close the sensor connections (kept)                         | `workspace.ts:364` and `workspace.ts:517`                               | 0       | High   | —    |
 | W8  | The backends label themselves under four names                         | `database`, `server`, `store`, `hostname`                               | 2       | Medium | 4    |
 | W9  | Refs, logs, and constants repeat (done)                                | See the list below                                                      | 5       | High   | 15   |
@@ -200,12 +203,12 @@ the same promise twice, so each call has a purpose and no work repeats.
 
 ## The backends: `just-bash` and `workstation`
 
-| ID  | Finding                                                           | Evidence                                                           | Removes | Conf.  | Rank |
-| --- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
-| B1  | Repository registration is one state machine written twice (done) | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
-| B2  | A transport pairing guards a mismatch that one factory prevents   | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
-| B3  | The file adapter skeleton is written twice (done)                 | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
-| B4  | Git constants repeat (done)                                       | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
+| ID  | Finding                                                                | Evidence                                                           | Removes | Conf.  | Rank |
+| --- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ | ------- | ------ | ---- |
+| B1  | Repository registration is one state machine written twice (done)      | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
+| B2  | A transport pairing guards a mismatch that one factory prevents (done) | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
+| B3  | The file adapter skeleton is written twice (done)                      | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
+| B4  | Git constants repeat (done)                                            | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
 
 **B1 closed a gap.** The just-bash backend accepted a source path such
 as `../x` or `.git/config` and stored it in the tree. The shared path

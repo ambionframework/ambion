@@ -1,14 +1,12 @@
 /**
  * The room tools and the agent's own tools reach the model through the
  * stdio room tools server and the socket of the bridge. Each test runs the
- * server as a subprocess over a real socket. A ref names one absolute URI
- * with a scheme: the room refuses a bare path.
+ * server as a subprocess over a real socket.
  */
 import { defineTool } from '@ambionframework/ambion';
 import type { CommitRequest, CommitResult } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
-import { refOf } from '../src/tools.ts';
 import { type Connected, connect, lands, roomOf, seat, textOf, until, viewOf } from './support.ts';
 
 let live: Connected | undefined;
@@ -94,7 +92,7 @@ describe('the tool list and domain tools', () => {
 		await expect(client.listResourceTemplates()).rejects.toMatchObject({ code: -32601 });
 	});
 
-	it('serves only say, with the summary description, to a closing activation', async () => {
+	it('serves only say, with the summary description, to a summary activation', async () => {
 		const closing = viewOf({
 			kind: 'summarize',
 			exchange: 1,
@@ -110,12 +108,11 @@ describe('the tool list and domain tools', () => {
 });
 
 describe('say, seat and unseat', () => {
-	it('delivers a say, confirms the read position, and cites the paths that Codex changed, once', async () => {
-		const { client, commits, readThrough, note } = await on(lands);
-		note(['/work/plan.md', '/work/plan.md']);
+	it('delivers a say with its refs, and confirms the read position', async () => {
+		const { client, commits, readThrough } = await on(lands);
 		const result = await client.callTool({
 			name: 'say',
-			arguments: { text: 'Done.', refs: ['room://lab', '/work/plan.md'] },
+			arguments: { text: 'Done.', refs: ['room://lab', ' file:///work/plan.md '] },
 		});
 		expect(textOf(result)).toBe('said #2');
 		expect(readThrough()).toBe(2);
@@ -136,9 +133,8 @@ describe('say, seat and unseat', () => {
 		expect(commits[1]?.intent).toEqual({ kind: 'seated', name: 'ada' });
 	});
 
-	it('gives the model a refusal as an error result, and keeps the changed paths for the next say', async () => {
-		const { client, commits, note } = await on(() => ({ refused: 'You may not say that.' }));
-		note(['/work/plan.md']);
+	it('gives the model a refusal as an error result', async () => {
+		const { client, commits } = await on(() => ({ refused: 'You may not say that.' }));
 		for (const result of [await client.callTool(say()), await client.callTool(say())]) {
 			expect(result.isError).toBe(true);
 			expect(textOf(result)).toBe('You may not say that.');
@@ -146,12 +142,8 @@ describe('say, seat and unseat', () => {
 		const unseat = await client.callTool({ name: 'unseat', arguments: { name: 'writer' } });
 		expect(unseat.isError).toBe(true);
 		expect(textOf(unseat)).toBe('You may not say that.');
-		const [first, second, third] = commits.map((commit) => commit.intent);
-		expect([first, second]).toMatchObject([
-			{ refs: ['file:///work/plan.md'] },
-			{ refs: ['file:///work/plan.md'] },
-		]);
-		expect(third).toEqual({ kind: 'unseated', name: 'writer' });
+		expect(commits.map((commit) => commit.intent.kind)).toEqual(['said', 'said', 'unseated']);
+		expect(commits[2]?.intent).toEqual({ kind: 'unseated', name: 'writer' });
 	});
 
 	it('ends the turn on a stale answer, and refuses a call after the activation was cut', async () => {
@@ -190,13 +182,4 @@ describe('say, seat and unseat', () => {
 		expect(textOf(result)).toContain('And six.');
 		expect(readThrough()).toBe(3);
 	});
-});
-
-it.each([
-	['turns an absolute path into a file URI', '/tmp/a/note.txt', 'file:///tmp/a/note.txt'],
-	['encodes what a URI cannot hold', '/tmp/a b/note #1.txt', 'file:///tmp/a%20b/note%20%231.txt'],
-	['leaves a URI as it is, and trims it', '  ambion://room/lab  ', 'ambion://room/lab'],
-	['leaves a URI as it is', 'https://example.com/plan', 'https://example.com/plan'],
-])('refOf %s', (_what, path, ref) => {
-	expect(refOf(path)).toBe(ref);
 });

@@ -9,7 +9,7 @@
  *
  * const lab = openWorkspace({
  * 	name: 'lab',
- * 	backend: { bash: workstationBackend({ host, hostKey, layout, credentialFor }) },
+ * 	backend: { bash: workstationBackend({ server, hostKey, layout, credentialFor }) },
  * });
  * ```
  *
@@ -21,6 +21,7 @@ export type { WorkstationOptions } from './backend.ts';
 export { DEFAULT_IDLE_TIMEOUT_SECONDS, workstationBackend } from './backend.ts';
 export type {
 	WorkstationGitAccess,
+	WorkstationGitBackend,
 	WorkstationGitIdentity,
 	WorkstationGitOptions,
 } from './git-backend.ts';

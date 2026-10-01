@@ -97,7 +97,7 @@ const until = async (check: () => boolean, ms = 2_000) => {
 
 describe('workstationBackend options', () => {
 	const base = {
-		host: 'lab.internal',
+		server: 'lab.internal',
 		hostKey: `SHA256:${'A'.repeat(43)}`,
 		layout: { audit: '/srv/audit.jsonl', rooms: '/srv/rooms', snapshots: '/srv/snapshots' },
 		credentialFor: () => ({ username: 'x', privateKey: 'x' }),
@@ -479,7 +479,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 			return (result.details as { process: { state: string } }).process.state;
 		};
-		// A read adopts what it finds: ps reads both. The one past its timeout stops at once.
+		// A read adopts what it finds: ps reads both. The one past its timeout cancels at once.
 		// The pid of the one with the lost stop is in /proc, so the listing runs ps for it.
 		const listed = await toolOf(workspace, 'ps').invoke({}, context('ada'));
 		if (typeof listed === 'string') throw new Error('A process tool gives a structured result.');
@@ -552,7 +552,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			/^\(no new output\)\n\n\[Process .* is cancelled\./,
 		);
 		expect(await readFile(process.output, 'utf8')).toBe('first\nsecond\n');
-		// The table holds the timeout, and stops the process the way a cancel does.
+		// The table holds the timeout, and cancels the process with the cause timed_out.
 		const timed = await call('bash', {
 			command: 'echo second; exec sleep 30',
 			timeout: 1,
@@ -606,7 +606,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			'snapshot',
 			'sql',
 		]);
-		expect(workspace.host).toEqual({ name: 'lab-host' });
+		expect(workspace.mirrorAgent).toEqual({ name: 'lab-host' });
 	});
 
 	it("copies the agent's skills into its home over SFTP, and marks each script executable", async () => {

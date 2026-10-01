@@ -2,28 +2,28 @@
 
 **A room receives one executable definition for each agent name.** The
 definition stays with the host. The journal records the identity and current
-membership, so replay does not need executable values.
+roster, so replay does not need executable values.
 
 ## Configuration
 
-Pass every definition in `agents`. Use `seats` for initial membership and
+Pass every definition in `agents`. Use `seats` for initial seating and
 attention.
 
 ```ts
 const room = await startRoom({
   name: 'site',
   agents: [inspector, surveyor, editor],
-  summary: 'editor',
+  summaryWriter: 'editor',
   seats: { inspector: 'broadcast' },
 });
 ```
 
 **The default seating puts every defined agent at `broadcast`.** If `seats`
-is omitted, every defined agent starts as a member at `broadcast`.
-An empty map starts every defined agent in the reserve. `summary` names one
+is omitted, every defined agent starts seated at `broadcast`.
+An empty map starts every defined agent in the reserve. `summaryWriter` names one
 defined agent that may receive closing work. It does not create a separate
-membership type. `summary` must name an agent in `seats`. A room start
-rejects a `summary` name that is not seated.
+seating type. `summaryWriter` must name an agent in `seats`. A room start
+rejects a `summaryWriter` name that is not seated.
 
 A `seats` entry takes an attention value, or a `SeatOptions` object with
 `attention` and `fixed`. Use the object form to set `fixed` at start:
@@ -42,22 +42,22 @@ cannot be seated.
 
 ## Attention
 
-Attention controls which events wake an idle member.
+Attention controls which events wake an idle seat.
 
 | Attention   | Idle agent receives                               |
 | ----------- | ------------------------------------------------- |
 | `none`      | No ordinary speech; direct deliveries are refused |
 | `named`     | Speech addressed to the agent                     |
 | `broadcast` | Addressed and undirected speech                   |
-| `presence`  | Speech plus presence and membership changes       |
+| `presence`  | Speech plus presence and seating changes          |
 
 Omitted attention uses `broadcast`. The scale applies to every agent, including
-a configured summary writer. Closing assignments have their own authority.
+a configured summary writer. Summary activations have their own authority.
 
 Attention controls waking. It does not grant authority to commit. The room
 checks the activation, lease, recipient, and consumed context for every write.
 
-## Membership operations
+## Seating operations
 
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
 also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
@@ -65,11 +65,11 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 - `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a human name is refused.
-- Agent tool commits return `unchanged` when the requested membership already holds.
+- Agent tool commits return `unchanged` when the requested seating already holds.
 - A host `room.seat` / `room.unseat` call that repeats an already-satisfied
   request resolves without writing a new entry. A host `seat` that asks for
   other attention or fixing than the held seat has is refused.
-- Neither path writes another membership entry for that request.
+- Neither path writes another entry for that request.
 - An unseating drops the scheduled says of that seat
   ([Exchange](exchange.md#6-a-scheduled-say)). A seating again does not bring
   them back.
@@ -93,8 +93,8 @@ later seating creates new work only when the journal derives it.
 
 The `participants` field of `await room.read({ messages: false })` contains
 current agents and human visitors. Reserve agents
-do not appear. Views contain identity, membership status, and attention. They
+do not appear. Views contain identity, seating status, and attention. They
 do not contain executable definitions or authority.
 
-`resumeRoom` receives the complete definitions again. It preserves recorded
-membership and attention. Startup seating options do not reset a resumed room.
+`resumeRoom` receives the complete definitions again. It preserves the recorded
+roster and attention. Startup seating options do not reset a resumed room.

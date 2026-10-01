@@ -12,7 +12,7 @@ import { piExecution } from '../../../pi/src/index.ts';
 import { createRuntime, startRoom } from '../../src/index.ts';
 import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';
 import { waitForRoom } from './room.ts';
-import { scripted } from './scripted.ts';
+import { scriptedStream } from './scripted.ts';
 import { childStorage, tappedJournals } from './storage.ts';
 
 const [dir, name, delay, storage] = process.argv.slice(2);
@@ -30,10 +30,13 @@ const runtime = createRuntime({
 const session = await startRoom({
 	name,
 	runtime,
-	summary: assistant.name,
+	summaryWriter: assistant.name,
 	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
 	agents: [product, colleague, assistant],
-	execution: piExecution({ sessions: 'memory', stream: scripted(slowly(Number(delay ?? 40))) }),
+	execution: piExecution({
+		sessions: 'memory',
+		stream: scriptedStream(slowly(Number(delay ?? 40))),
+	}),
 });
 
 const [first, second, third] = questions;

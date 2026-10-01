@@ -4,14 +4,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
-import { type PortHarness, portConformance, speakOnce } from '../src/conformance.ts';
+import { type PortFixture, portConformance, speakOnce } from '../src/conformance.ts';
 import { type Execution, hostingOf, localExecution } from '../src/hosting.ts';
 import { createRuntime, defineAgent } from '../src/index.ts';
 import { serializing } from './support/ports.ts';
 
 const host = hostingOf(createRuntime({ limits: { call: { attempts: 2, timeout: 1_000 } } }));
 
-const harnessOver = (execution: Execution): PortHarness => ({
+const fixtureOver = (execution: Execution): PortFixture => ({
 	connect: async (room, names) =>
 		execution.connector(host).connect(room, {
 			room: names.room,
@@ -29,12 +29,12 @@ const harnessOver = (execution: Execution): PortHarness => ({
 const speaking = () => localExecution('port-conformance', () => () => speakOnce());
 
 describe('localExecution', () => {
-	for (const c of portConformance(harnessOver(speaking()))) it(c.name, c.run);
+	for (const c of portConformance(fixtureOver(speaking()))) it(c.name, c.run);
 });
 
 describe('serializing(localExecution())', () => {
 	const execution = serializing(speaking());
-	for (const c of portConformance(harnessOver(execution))) it(c.name, c.run);
+	for (const c of portConformance(fixtureOver(execution))) it(c.name, c.run);
 	it('sends nothing that would not survive the wire', () => {
 		expect(execution.violations).toEqual([]);
 	});

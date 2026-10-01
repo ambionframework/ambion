@@ -5,7 +5,7 @@
  * prove the model's recovery from a real non-fast-forward response.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import type { TraceRecord } from '@ambionframework/ambion';
+import type { TracedStep } from '@ambionframework/ambion';
 import { expect, it, onTestFailed } from 'vitest';
 import {
 	agent,
@@ -34,7 +34,7 @@ interface BashCall {
 	readonly error: string | undefined;
 }
 
-function bashCalls(records: readonly TraceRecord[], seat: string): BashCall[] {
+function bashCalls(records: readonly TracedStep[], seat: string): BashCall[] {
 	const steps = records.filter((record) => record.seat === seat).map((record) => record.step);
 	return steps.flatMap((step) => {
 		if (step.type !== 'tool_call' || step.name !== 'bash') return [];
@@ -82,19 +82,20 @@ live('shared git rebase', () => {
 		const workspace = openWorkspace({
 			name: roomName('shared-git'),
 			backend: {
-				bash: memoryBackend(),
-				git: justGitBackend({
-					storage: sqliteGitStorage(':memory:'),
-					secret: 'live-test-secret',
-					shared: {
-						notes: {
-							description: 'Working notes shared by the writing seats.',
-							source: {
-								'scribe-a.md': 'scribe-a: pending\n',
-								'scribe-b.md': 'scribe-b: pending\n',
+				bash: memoryBackend({
+					git: justGitBackend({
+						storage: sqliteGitStorage(':memory:'),
+						secret: 'live-test-secret',
+						shared: {
+							notes: {
+								description: 'Working notes shared by the writing seats.',
+								source: {
+									'scribe-a.md': 'scribe-a: pending\n',
+									'scribe-b.md': 'scribe-b: pending\n',
+								},
 							},
 						},
-					},
+					}),
 				}),
 			},
 		});
@@ -108,7 +109,7 @@ live('shared git rebase', () => {
 			thinking?: string;
 			usage?: Awaited<ReturnType<typeof spent>>;
 		} = {};
-		let records: readonly TraceRecord[] = [];
+		let records: readonly TracedStep[] = [];
 		keepEvidence(() => ({
 			...evidence,
 			first: bashCalls(records, FIRST),

@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { defineAgent, defineHuman, type Message, startRoom } from '@ambionframework/ambion';
-import { callTool, isClosing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
+import { callTool, isSummarizing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
 import type { Workspace } from '@ambionframework/workspace';
 
 export interface Action {
@@ -69,7 +69,7 @@ export async function runToolRoom(
 		name: `sn35-${randomUUID().slice(0, 8)}`,
 		agents: [agent],
 		execution: scripted((step) => {
-			if (!started || completed || isClosing(step.view)) return quiet();
+			if (!started || completed || isSummarizing(step.view)) return quiet();
 			if (!recordResults(step.results)) return quiet();
 			const next = actions[step.results.length];
 			if (next === undefined) {
@@ -142,16 +142,16 @@ export function expectSuccess(label: string): NonNullable<Action['verify']> {
 }
 
 /**
- * Require cancellation to report the requested process as stopped: the
+ * Require cancellation to report the requested process as cancelled: the
  * state `cancelled`, or exit code 0 when the server ended cleanly inside
  * the grace after `SIGTERM`.
  */
-export function expectStopped(handle: string): NonNullable<Action['verify']> {
+export function expectCancelled(handle: string): NonNullable<Action['verify']> {
 	return (text) => {
 		const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		const line = `^\\[Process ${escaped}(?: \\([^)]+\\))? (?:is cancelled|exited with code 0)\\.`;
 		if (!new RegExp(line, 'm').test(text)) {
-			throw new Error(`Process ${handle} was not confirmed stopped: ${text}`);
+			throw new Error(`Process ${handle} was not confirmed cancelled: ${text}`);
 		}
 	};
 }

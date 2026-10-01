@@ -13,10 +13,10 @@ export type Harness = 'pi' | 'claude' | 'codex';
 export function harnessOf(value: string | undefined): Harness {
 	if (value === undefined || value === '') return 'pi';
 	if (value === 'pi' || value === 'claude' || value === 'codex') return value;
-	throw new Error(`AMBION_HARNESS is '${value}'. Use 'pi', 'claude' or 'codex'.`);
+	throw new Error(`AMBION_EXECUTOR is '${value}'. Use 'pi', 'claude' or 'codex'.`);
 }
 
-export const HARNESS: Harness = harnessOf(process.env.AMBION_HARNESS);
+export const HARNESS: Harness = harnessOf(process.env.AMBION_EXECUTOR);
 
 /** The model of every Codex seat. `AMBION_MODEL` names a Pi or Claude model. */
 export const CODEX_MODEL = 'gpt-5.6-luna';
@@ -61,7 +61,6 @@ export function executorFor(options: Omit<PiOptions, 'model'> & { model?: string
 		return codex({
 			model: CODEX_MODEL,
 			modelReasoningEffort: 'medium',
-			nativeTools: 'none',
 			...rest,
 		});
 	}

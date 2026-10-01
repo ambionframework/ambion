@@ -1,7 +1,7 @@
 # Definitions and tools
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
-room owns the journal, membership, presence, execution authority, and exchange
+room owns the journal, roster, presence, execution authority, and exchange
 rules. `agents` supplies every executable definition for one room run.
 
 This page is not the entry point. Read [The room](room.md) first for the
@@ -26,7 +26,7 @@ const researcher = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [researcher, editor],
-  summary: 'editor',
+  summaryWriter: 'editor',
 });
 ```
 
@@ -35,7 +35,7 @@ public roster text. `executor` names the loop the agent runs on and its
 configuration. `pi`, `claude`, and `codex` are the executors that ship; see
 [the Pi guide](pi.md), [the Claude guide](claude.md), and [the Codex
 guide](codex.md). The `instructions`
-are private model guidance. `model` names a model of that family. `tools`
+are private model guidance. `model` names a model of that executor kind. `tools`
 and `bundles` supply the agent's domain tools. `activationTokenLimit`
 bounds the record one activation reads. Without a limit, an activation reads
 the whole record the room serves. See `limits.context.messages` in
@@ -53,9 +53,10 @@ registry does not hold fails `startRoom` and `resumeRoom`. The start is the
 first point where the definition and the registry meet, and a failure there
 reaches the host before any activation reads a view.
 
-`summary` is an optional name from `agents`. It assigns closing work to that
-ordinary agent. `assistant` accepts an ordinary agent definition and supplies
-its registration, broadcast seat, and summary assignment. The optional
+`summaryWriter` is an optional name from `agents`. It names the ordinary
+agent that runs summary activations. `assistant` accepts an ordinary agent
+definition and supplies its registration, broadcast seat, and summary
+writer. The optional
 `@ambionframework/assistant` package supplies a default definition factory.
 The shorthand introduces no separate role or tool set. See
 [Default assistant](assistant.md) for configuration and behavior.
@@ -84,8 +85,8 @@ const lookup = defineTool({
 property path and the rule it breaks, such as `handles must not have fewer
 than 1 items`. The model reads this text as a tool error.
 
-Every ordinary activation receives `say`, `schedule`, `seat`, `unseat`,
-`dismiss`, and `recall`, plus the tools from its definition. A closing
+Every respond activation receives `say`, `schedule`, `seat`, `unseat`,
+`dismiss`, and `recall`, plus the tools from its definition. A summary
 activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ delaySeconds, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,

@@ -1,7 +1,7 @@
-import type { JournalEntry as Entry } from '@ambionframework/journal';
+import type { Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { Close, LeaseChange } from '../src/journal/entries.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
 import { foldLeases, type LeaseHold } from '../src/room/lease.ts';
 import {
@@ -72,11 +72,11 @@ describe('verified rules', () => {
 		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage' | 'session'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
-		// The room adds the people a closing activation addresses to the rule's grant.
+		// The room adds the people a summary activation addresses to the rule's grant.
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<DistributiveOmit<ActivationPurpose, 'people'>>();
 		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		// A close that owes a summary names its person, so the closing grant reads it.
-		expectTypeOf<Extract<Close, { summary: string }>>().toMatchTypeOf<CloseFact>();
+		expectTypeOf<Extract<Close, { summaryWriter: string }>>().toMatchTypeOf<CloseFact>();
 		// The room's lease is the rule's lease plus the usage and the session of its end.
 		expectTypeOf<RuleLease>().toEqualTypeOf<DistributiveOmit<LeaseHold, 'usage' | 'session'>>();
 	});

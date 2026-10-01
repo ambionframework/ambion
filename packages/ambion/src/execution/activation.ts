@@ -2,10 +2,10 @@
  * The state of one activation that the core owns.
  *
  * The driver opens one `ActivationState` for each activation, over the
- * executor of the seat. The state keeps the read position and the cut, runs
+ * opener of the seat. The state keeps the read position and the cut, runs
  * the refresh test, binds the room tools, renders the prompt of each pass,
  * raises the tool events from the steps, and raises the `error` event of a
- * failure once. The executor session runs its harness over what the state
+ * failure once. The running activation runs its harness over what the state
  * hands it, and reports when the model consumed input.
  *
  * The state also records the `steer` step of every steered line. A line is
@@ -16,15 +16,15 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
-import type { AgentDefinition, ExecutionEvent, HarnessSession, Seq } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
 import type {
-	Executor,
-	ExecutorSession,
+	ActivationOpener,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 } from './executor.ts';
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
@@ -40,7 +40,7 @@ export interface ActivationInput {
 	/** The room calls of the activation. The room tools commit and read through it. */
 	readonly room: RoomToolBinding['room'];
 	readonly definition: AgentDefinition;
-	readonly emit: (event: ExecutionEvent) => void;
+	readonly emit: (event: ActivationEvent) => void;
 	/** The sink of the activation. The driver owns it and closes it. */
 	readonly trace: StepSink;
 }
@@ -56,8 +56,8 @@ export class ActivationState {
 	readonly id: string;
 	private readonly input: ActivationInput;
 	private readonly freshness = new Freshness();
-	private readonly cut = new AbortController();
-	private readonly executor: ExecutorSession;
+	private readonly controller = new AbortController();
+	private readonly opened: RunningActivation;
 	private tools: readonly RoomTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
@@ -68,17 +68,17 @@ export class ActivationState {
 	/** The lines the executor holds, by position, with the `after` of each. They have no step yet. */
 	private readonly forwarded = new Map<Seq, Seq>();
 
-	constructor(executor: Executor, input: ActivationInput) {
+	constructor(opener: ActivationOpener, input: ActivationInput) {
 		this.id = input.id;
 		this.input = input;
-		const calls = new ToolCalls(input.id, (type, toolName) =>
-			input.emit({ type, agent: input.definition.name, activation: input.id, toolName }),
+		const calls = new ToolCalls(input.id, (type, name) =>
+			input.emit({ type, seat: input.definition.name, activation: input.id, name }),
 		);
 		const freshness = this.freshness;
-		this.executor = executor({
+		this.opened = opener({
 			id: input.id,
 			trace: calls.watching(input.trace),
-			signal: this.cut.signal,
+			signal: this.controller.signal,
 			get readThrough() {
 				return freshness.readThrough;
 			},
@@ -95,13 +95,13 @@ export class ActivationState {
 
 	/** Whether the activation was cut. A cut activation earns no further room call. */
 	get cancelled(): boolean {
-		return this.cut.signal.aborted;
+		return this.controller.signal.aborted;
 	}
 
-	/** The harness session to record with the release, when the executor reported one. */
-	get session(): HarnessSession | undefined {
-		const id = this.executor.session;
-		return id === undefined ? undefined : { harness: this.input.definition.executor.kind, id };
+	/** The vendor session to record with the release, when the executor reported one. */
+	get session(): VendorSession | undefined {
+		const id = this.opened.session;
+		return id === undefined ? undefined : { kind: this.input.definition.executor.kind, id };
 	}
 
 	/** Whether the record stands past what the model read. A cut activation answers no. */
@@ -120,14 +120,14 @@ export class ActivationState {
 	}
 
 	/** Cut the activation. The pass in flight ends, and the driver runs no other. */
-	cancel(): void {
-		this.cut.abort();
+	cut(): void {
+		this.controller.abort();
 	}
 
 	/** Release what the session holds. A close that throws changes no outcome. */
 	close(): void {
 		try {
-			this.executor.close?.();
+			this.opened.close?.();
 		} catch {
 			// The activation is over. A failed close changes no outcome.
 		}
@@ -149,7 +149,7 @@ export class ActivationState {
 		this.running = input;
 		let result: PassResult;
 		try {
-			const done = this.executor.pass(this.passOf(input));
+			const done = this.opened.pass(this.passOf(input));
 			// The executor has started the pass: a line that waited can reach it now.
 			this.placeEarly();
 			result = await done;
@@ -167,7 +167,7 @@ export class ActivationState {
 		if (result.failed) {
 			this.input.emit({
 				type: 'error',
-				agent: this.input.definition.name,
+				seat: this.input.definition.name,
 				activation: this.id,
 				error: result.error ?? new Error(result.message ?? 'The activation failed.'),
 				...(result.cause === undefined ? {} : { cause: result.cause }),
@@ -203,7 +203,7 @@ export class ActivationState {
 		const { after, seq, line } = steered;
 		if (this.running === undefined) this.stamp(seq, false);
 		else if (seq <= this.running.view.through) this.stamp(seq, true);
-		else if (this.executor.steer === undefined) this.stamp(seq, false);
+		else if (this.opened.steer === undefined) this.stamp(seq, false);
 		else this.forward(after, seq, line);
 	}
 
@@ -214,7 +214,7 @@ export class ActivationState {
 	private forward(after: Seq, seq: Seq, line: string): void {
 		this.forwarded.set(seq, after);
 		try {
-			this.executor.steer?.(after, seq, line);
+			this.opened.steer?.(after, seq, line);
 		} catch {
 			if (this.forwarded.delete(seq)) this.stamp(seq, false);
 		}
@@ -241,12 +241,12 @@ export class ActivationState {
 
 	private passOf(input: PassInput): Pass {
 		const { view } = input;
-		const resume = sessionToResume(view, this.input.definition.executor.kind);
+		const resumeId = sessionToResume(view, this.input.definition.executor.kind);
 		return {
 			...input,
 			...renderSystem(view, this.input.definition),
 			record: (after) => this.record(input, after),
-			...(resume === undefined ? {} : { resume }),
+			...(resumeId === undefined ? {} : { resumeId }),
 			tools: this.toolsOf(view),
 		};
 	}
@@ -303,11 +303,11 @@ export class ActivationState {
 			},
 			acknowledgeThrough: (seq) => freshness.acknowledgeThrough(seq),
 			resultExpected: (call, seq) => freshness.resultExpected(call, seq),
-			abort: () => this.cancel(),
+			cut: () => this.cut(),
 		};
 		this.tools = [
-			...roomTools(view, binding, this.executor.roomTools),
-			...agentTools(view, this.input.definition, this.cut.signal, () => this.view ?? view),
+			...roomTools(view, binding),
+			...agentTools(view, this.input.definition, this.controller.signal, () => this.view ?? view),
 		];
 		return this.tools;
 	}

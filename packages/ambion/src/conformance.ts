@@ -14,13 +14,18 @@
  */
 import {
 	type ConformanceCase,
-	type ConformanceHarness,
+	type ConformanceFixture,
 	check,
 	conformanceSuite,
 } from '@ambionframework/journal/conformance';
 import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-room.ts';
 import { claims, leases, operations, pause, released, until } from './conformance-support.ts';
-import type { Executor, ExecutorActivation, ExecutorSession, Pass } from './execution/executor.ts';
+import type {
+	ActivationOpener,
+	ExecutorActivation,
+	Pass,
+	RunningActivation,
+} from './execution/executor.ts';
 import type {
 	AgentPort,
 	CommitRequest,
@@ -32,18 +37,18 @@ import type {
 export {
 	type ExecutorCapabilities,
 	type ExecutorCaseReport,
-	type ExecutorHarness,
+	type ExecutorFixture,
 	type ExecutorPlan,
 	executorConformance,
 } from './conformance-executor.ts';
-export { type ConformanceCase, type ConformanceHarness, check, conformanceSuite };
+export { type ConformanceCase, type ConformanceFixture, check, conformanceSuite };
 
 /** What an execution under test gives the suite. */
-export interface PortHarness {
+export interface PortFixture {
 	/**
 	 * Serve `room` to the seat side and connect one seat's port. In process,
 	 * `room` is the argument to `connect` of the connector of an `Execution`. Over a boundary, the
-	 * harness installs `room` where the seat's `view`, `commit`, and `lease`
+	 * fixture installs `room` where the seat's `view`, `commit`, and `lease`
 	 * arrive, so the suite observes every call the seat makes.
 	 *
 	 * The seat side must run an executor that says once on a `respond`
@@ -60,12 +65,12 @@ export interface PortHarness {
 const SAID = 'The pour is Saturday.';
 
 /**
- * An executor for an in-process harness. One pass reads the view, then calls
+ * An opener for an in-process fixture. One pass reads the view, then calls
  * `say` once under the key `${activation}:say`, and stops. `steer` records
  * the line.
  */
-export function speakOnce(): Executor {
-	return (activation: ExecutorActivation): ExecutorSession => {
+export function speakOnce(): ActivationOpener {
+	return (activation: ExecutorActivation): RunningActivation => {
 		const lines: string[] = [];
 		return {
 			async pass({ view, tools }: Pass) {
@@ -217,9 +222,9 @@ const cases: readonly (readonly [string, RoomScript, Body])[] = [
 ];
 
 /** The cases every port must pass. The order is stable and the names are the contract. */
-export function portConformance(harness: PortHarness): readonly ConformanceCase[] {
+export function portConformance(fixture: PortFixture): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
-	const patience = harness.patience ?? 5_000;
+	const patience = fixture.patience ?? 5_000;
 	let count = 0;
 	const run = async (script: RoomScript, body: Body): Promise<void> => {
 		count += 1;
@@ -227,7 +232,7 @@ export function portConformance(harness: PortHarness): readonly ConformanceCase[
 		const room = scriptedRoom(names.room, names.seat, script);
 		const activation = `message:1:${names.seat}:1`;
 		try {
-			const port = await harness.connect(room.protocol, names);
+			const port = await fixture.connect(room.protocol, names);
 			await body({
 				port,
 				room,
@@ -239,7 +244,7 @@ export function portConformance(harness: PortHarness): readonly ConformanceCase[
 			});
 		} finally {
 			room.release();
-			await harness.close?.();
+			await fixture.close?.();
 		}
 	};
 	return cases.map(([name, script, body]) => ({ name, run: () => run(script, body) }));

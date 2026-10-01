@@ -4,7 +4,12 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
-import { callTool, quiet, scripted, toolResultTexts } from '../../ambion/test/support/scripted.ts';
+import {
+	callTool,
+	quiet,
+	scriptedStream,
+	toolResultTexts,
+} from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { fromPiTool, piExecution } from '../src/index.ts';
 
@@ -84,10 +89,10 @@ it('prepares native arguments once per call and validates before execution', asy
 			agents: [worker],
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted((context, _agent, call) => {
+				stream: scriptedStream((context, _agent, request) => {
 					results.splice(0, results.length, ...toolResultTexts(context));
-					if (call === 1) return callTool('count', { count: 'invalid' });
-					return call === 2 ? callTool('count', { count: '7' }) : quiet();
+					if (request === 1) return callTool('count', { count: 'invalid' });
+					return request === 2 ? callTool('count', { count: '7' }) : quiet();
 				}),
 			}),
 		}),

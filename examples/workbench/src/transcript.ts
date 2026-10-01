@@ -326,7 +326,7 @@ export class Transcript {
 			paint('● ', { color: palette.coral }),
 			paint(block.text, { color: palette.muted }),
 			...detail,
-			paint('   /abort cancels it', { color: palette.dim }),
+			paint('   /cancel cancels it', { color: palette.dim }),
 		]);
 	}
 

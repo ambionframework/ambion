@@ -1,7 +1,7 @@
 /**
  * Activation dispatch: the room sends a wake for each recorded cause at
  * once, sends it again after a lost or failed delivery, and a durable
- * abort or unseat holds against a wake or a claim that never returns.
+ * cancel or unseat holds against a wake or a claim that never returns.
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
@@ -28,7 +28,7 @@ import {
 	stateOf,
 	waitForRoom,
 } from './support/room.ts';
-import { byAgent, quiet, scripted } from './support/scripted.ts';
+import { byAgent, quiet, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type Storage, storages } from './support/storage.ts';
 
@@ -36,7 +36,7 @@ const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const worker = scriptedAgent('worker');
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const quietly = () => piExecution({ sessions: 'memory', stream: scripted(() => quiet()) });
+const quietly = () => piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 /** Record every wake, and deliver it only when `deliver` says so. */
 function recorded(deliver = true): { tap: Tap; sent: Wake[] } {
@@ -97,7 +97,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 				execution: tapped(
 					piExecution({
 						sessions: 'memory',
-						stream: scripted(
+						stream: scriptedStream(
 							byAgent({
 								alpha: () => {
 									alphaStarted.resolve();
@@ -190,7 +190,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		expect(connects).toBeGreaterThan(0);
 		expect(deliveryErrors(events)).toContainEqual(
 			expect.objectContaining({
-				agent: worker.name,
+				seat: worker.name,
 				activation: pending?.id,
 				operation: 'wake',
 				error: expect.objectContaining({ message: 'connector unavailable' }),
@@ -235,11 +235,11 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const errors = deliveryErrors(events);
 		expect(errors).toHaveLength(2);
 		expect(errors[0]).toMatchObject({
-			agent: worker.name,
+			seat: worker.name,
 			activation: firstPending?.id,
 			operation: 'wake',
 		});
-		expect(errors[1]).toMatchObject({ agent: worker.name, operation: 'wake' });
+		expect(errors[1]).toMatchObject({ seat: worker.name, operation: 'wake' });
 		expect(errors[1]?.activation).not.toBe(errors[0]?.activation);
 	});
 
@@ -270,7 +270,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		);
 	});
 
-	it('does not block durable abort on a wake that never resolves, then keeps cancellation on restart', async () => {
+	it('does not block durable cancel on a wake that never resolves, then keeps cancellation on restart', async () => {
 		const {
 			opened,
 			clock,
@@ -281,7 +281,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		});
 		const exchange = await (await first.visit(priya)).send({ text: 'Cancel this delivery.' });
 		await flush();
-		await first.abort();
+		await first.cancel();
 		expect(stateOf(first).exchange).toBeUndefined();
 
 		crash(runtime, first);
@@ -301,7 +301,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 	});
 
 	it.each([
-		['abort', async (room: Room) => room.abort()],
+		['cancel', async (room: Room) => room.cancel()],
 		['unseat', async (room: Room) => room.unseat(worker.name)],
 	] as const)('lets durable %s reject a delayed claim', async (_operation, finish) => {
 		const claimStarted = deferred();

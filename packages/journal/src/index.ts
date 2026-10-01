@@ -28,7 +28,7 @@ export type {
 	Bodies,
 	CloneableJournal,
 	Entries,
-	Entry as JournalEntry,
+	Entry,
 	Seq,
 	Vocabulary,
 } from './journal.ts';

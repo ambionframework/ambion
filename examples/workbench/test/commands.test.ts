@@ -38,13 +38,13 @@ describe('parse', () => {
 		const cases: [string, Parsed][] = [
 			['  Which resistor?  ', { kind: 'message', text: 'Which resistor?' }],
 			['/room bringup', { kind: 'command', name: 'room', argument: 'bringup' }],
-			['/ABORT', { kind: 'command', name: 'abort', argument: '' }],
+			['/CANCEL', { kind: 'command', name: 'cancel', argument: '' }],
 			['/steps 2', { kind: 'command', name: 'steps', argument: '2' }],
 			['/library/led-5mm.md', { kind: 'unknown', name: 'library/led-5mm.md' }],
 			// A double slash sends a message that starts with one slash.
 			['//library/x.md is it', { kind: 'message', text: '/library/x.md is it' }],
 			// A multi-line text is a message, even after a slash.
-			['/abort\nand then explain', { kind: 'message', text: '/abort\nand then explain' }],
+			['/cancel\nand then explain', { kind: 'message', text: '/cancel\nand then explain' }],
 		];
 		for (const [text, parsed] of cases) expect(parse(text), text).toEqual(parsed);
 	});
@@ -62,7 +62,7 @@ describe('suggest', () => {
 				'/open',
 				'/attach',
 				'/try',
-				'/abort',
+				'/cancel',
 				'/dismiss',
 				'/stop',
 				'/resume',
@@ -74,11 +74,11 @@ describe('suggest', () => {
 	});
 
 	it('filters commands by prefix', () => {
-		expect(suggest('/a', choices).map((row) => row.label)).toEqual(['/attach', '/abort']);
+		expect(suggest('/c', choices).map((row) => row.label)).toEqual(['/cancel', '/collapse']);
 	});
 
 	it('runs a command that takes no argument, and only completes one that does', () => {
-		expect(suggest('/abo', choices)[0]).toMatchObject({ insert: '/abort', run: true });
+		expect(suggest('/can', choices)[0]).toMatchObject({ insert: '/cancel', run: true });
 		expect(suggest('/ro', choices)[0]).toMatchObject({ insert: '/room ', run: false });
 	});
 
@@ -128,7 +128,7 @@ describe('suggest', () => {
 	it('opens no palette for text, for a double slash, or for an argument of another command', () => {
 		expect(suggest('hello', choices)).toEqual([]);
 		expect(suggest('//path', choices)).toEqual([]);
-		expect(suggest('/abort now', choices)).toEqual([]);
+		expect(suggest('/cancel now', choices)).toEqual([]);
 		expect(suggest('/room a\nb', choices)).toEqual([]);
 	});
 });

@@ -11,7 +11,7 @@ import { createExecutionServices, runAgent } from '@ambionframework/pi';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { callTool, quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { callTool, quiet, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
@@ -190,12 +190,12 @@ describe('the skills of a seat', () => {
 				agent('clerk', { bundles: [workspace.tools({ skills: clerkSkills })] }),
 			],
 			{
-				surveyor: (context, _who, call) => {
+				surveyor: (context, _who, request) => {
 					prompts.surveyor = context.systemPrompt ?? '';
-					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
-					if (call === 2)
+					if (request === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
+					if (request === 2)
 						return callTool('read', { path: '~/.skills/pour-plan/references/limits.md' });
-					if (call === 3)
+					if (request === 3)
 						return callTool('bash', { command: '~/.skills/pour-plan/scripts/tonnage.sh 20' });
 					results.push(...toolResults(context).map((result) => result.text));
 					return quiet();
@@ -220,8 +220,8 @@ describe('the skills of a seat', () => {
 		let writes = 0;
 		const workspace = site(
 			wrapped((inner) => ({
-				connect: async (who, signal, services) => {
-					const env = await inner.connect(who, signal, services);
+				connect: async (who, signal) => {
+					const env = await inner.connect(who, signal);
 					const writeFile = env.writeFile.bind(env);
 					env.writeFile = (path, content, context) => {
 						writes += 1;
@@ -259,8 +259,8 @@ describe('the skills of a seat', () => {
 		const gate = Promise.withResolvers<void>();
 		const workspace = site(
 			wrapped((inner) => ({
-				connect: async (who, signal, services) => {
-					const env = await inner.connect(who, signal, services);
+				connect: async (who, signal) => {
+					const env = await inner.connect(who, signal);
 					const writeFile = env.writeFile.bind(env);
 					const exec = env.exec.bind(env);
 					env.writeFile = async (path, content, context) => {
@@ -305,8 +305,8 @@ describe('the skills of a seat', () => {
 		await runAgent(
 			createExecutionServices({
 				sessions: 'memory',
-				stream: scripted((context, _who, call) => {
-					if (call === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
+				stream: scriptedStream((context, _who, request) => {
+					if (request === 1) return callTool('read', { path: '~/.skills/pour-plan/SKILL.md' });
 					read.push(...toolResults(context).map((result) => result.text));
 					return callTool('finish', {});
 				}),

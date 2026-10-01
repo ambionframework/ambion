@@ -19,7 +19,7 @@ What is built:
 - **`RoomObject`** runs the room. Its constructor resumes an initialized room
   unless explicitly stopped; an uninitialized named record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
-  `unseat`, `abort`, `read`, `exchange`, `dismiss`,
+  `unseat`, `cancel`, `read`, `exchange`, `dismiss`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its runtime reaches each seat through `rpcExecution`, an
   execution with no kind whose port calls the seat object over RPC. Its
@@ -51,13 +51,13 @@ What is built:
 - **`configure`** names the complete agent definitions the objects resolve by
   name, the model call they make, and an optional `logger` for the steps of
   each activation. To send the steps to Workers Logs, pass
-  `(record) => console.log({ ambion: 'step', ...record })`. Its `estimators`
+  `(traced) => console.log({ ambion: 'step', ...traced })`. Its `estimators`
   go to the runtime of the room object, which windows each view: an agent
   with `activationTokenLimit` names one of them, or `length`, in
   `estimateTokens`.
 
-`RoomObject.start` receives the complete agent definitions in `agents`, an optional
-`summary` name, and an optional `seats` map. The map sets initial members and
+`RoomObject.start` receives the names of the definitions in `definitions`, an optional
+`summaryWriter` name, and an optional `seats` map. The map sets initial members and
 attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
 install a new definition. The room metadata retains the definition names, so

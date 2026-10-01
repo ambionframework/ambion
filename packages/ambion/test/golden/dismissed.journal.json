@@ -10,14 +10,14 @@
 	{
 		"kind": "composition",
 		"body": {
-			"agents": [
+			"seated": [
 				{
 					"name": "worker",
 					"identity": "Answers the question.",
 					"attention": "broadcast"
 				}
 			],
-			"available": [],
+			"reserve": [],
 			"at": "2026-01-01T09:00:00.000Z"
 		},
 		"seq": 2,
@@ -69,7 +69,7 @@
 			"text": "Check the pour log.",
 			"delaySeconds": 600,
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:4:worker:1",
+			"activation": "message:4:worker:1",
 			"from": "worker"
 		},
 		"seq": 6,
@@ -84,7 +84,7 @@
 			"text": "Check the crane log.",
 			"delaySeconds": 1200,
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:4:worker:1",
+			"activation": "message:4:worker:1",
 			"from": "worker"
 		},
 		"seq": 7,
@@ -97,7 +97,7 @@
 			"kind": "dismissed",
 			"message": 6,
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:4:worker:1",
+			"activation": "message:4:worker:1",
 			"from": "worker"
 		},
 		"seq": 8,
@@ -132,7 +132,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:4:worker:1"
 			}
 		},

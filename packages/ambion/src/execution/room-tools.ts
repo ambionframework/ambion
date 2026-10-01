@@ -2,9 +2,9 @@
  * The room tools of one activation, and the agent's own tools, in a shape
  * that names no harness.
  *
- * Every ordinary activation can speak, schedule a say to itself, seat an
+ * Every respond activation can speak, schedule a say to itself, seat an
  * agent, remove an agent, dismiss a scheduled say, or recall messages of the
- * room by URI. A closing activation
+ * room by URI. A summary activation
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
@@ -56,18 +56,10 @@ export interface RoomToolBinding {
 	/** The result of call `call` carries the record through `seq` to the model. */
 	resultExpected(call: string, seq: Seq): void;
 	/** End the activation. */
-	abort(): void;
+	cut(): void;
 }
 
-/** What an executor adds to the say and the schedule of its harness. */
-export interface RoomToolOptions {
-	/** The refs a say cites, from the refs the model gave, each trimmed and none empty. */
-	readonly refs?: (cited: readonly string[]) => readonly string[];
-	/** The room took an ordinary say or a scheduled say. */
-	readonly spoke?: () => void;
-}
-
-/** A closing activation: its person, everyone it addresses, and how many it has answered. */
+/** A summary activation: its person, everyone it addresses, and how many it has answered. */
 interface Closing {
 	readonly person: string;
 	readonly people: readonly string[];
@@ -115,19 +107,15 @@ const text = (value: string, isError = false): RoomToolResult => ({
 });
 
 /** The tools an activation holds from the room, by its purpose. */
-export function roomTools(
-	view: ActivationView,
-	binding: RoomToolBinding,
-	options: RoomToolOptions = {},
-): RoomTool[] {
+export function roomTools(view: ActivationView, binding: RoomToolBinding): RoomTool[] {
 	const { purpose } = view.spec;
 	if (purpose.kind === 'summarize') {
 		const closing = { person: purpose.person, people: purpose.people, answered: 0 };
-		return [sayTool(binding, options, closing)];
+		return [sayTool(binding, closing)];
 	}
 	return [
-		sayTool(binding, options),
-		scheduleTool(view.spec.seat, binding, options),
+		sayTool(binding),
+		scheduleTool(view.spec.seat, binding),
 		membershipTool(binding, 'seated'),
 		membershipTool(binding, 'unseated'),
 		dismissTool(binding),
@@ -136,7 +124,7 @@ export function roomTools(
 }
 
 /**
- * The agent's own tools, as room tools. A closing activation holds none. Each
+ * The agent's own tools, as room tools. A summary activation holds none. Each
  * call reads the view of the pass that runs it, so the room and the open
  * exchange it names are current. A tool that throws gives the model its
  * message as an error result.
@@ -196,7 +184,7 @@ function toolResultOf(value: string | ToolResult): RoomToolResult {
 function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResult {
 	if ('committed' in response || 'unchanged' in response) return text(landedLine(response));
 	if ('refused' in response) return text(response.refused, true);
-	binding.abort();
+	binding.cut();
 	if ('unknown' in response) {
 		// The message may already be on the record, so the activation ends here. A
 		// second say under a new key would land the same message twice.
@@ -238,37 +226,36 @@ function ended(why: string): RoomToolResult {
 	return { ...text(`${why} This turn is over.`, true), terminate: true };
 }
 
-/** The refs a say cites: each trimmed, none empty, and what the executor adds. */
-function refsOf(cited: readonly string[] | undefined, options: RoomToolOptions) {
-	const trimmed = (cited ?? []).map((ref) => ref.trim()).filter((ref) => ref.length > 0);
-	const refs = options.refs === undefined ? trimmed : options.refs(trimmed);
-	return refs.length > 0 ? { refs: [...refs] } : {};
+/** The refs a say cites: each trimmed, none empty. */
+function refsOf(cited: readonly string[] | undefined) {
+	const refs = (cited ?? []).map((ref) => ref.trim()).filter((ref) => ref.length > 0);
+	return refs.length > 0 ? { refs } : {};
 }
 
 /** The intent a say stands for: its text and refs trimmed, and no empty field. */
-function saidBy(args: SayArgs, options: RoomToolOptions): Intent {
+function saidBy(args: SayArgs): Intent {
 	const to = args.to?.trim();
 	return {
 		kind: 'said',
 		...(to ? { to } : {}),
 		text: args.text.trim(),
-		...refsOf(args.refs, options),
+		...refsOf(args.refs),
 	};
 }
 
 /** The intent a schedule stands for: a say to the seat itself, with `delaySeconds`. */
-function scheduledBy(seat: string, args: ScheduleArgs, options: RoomToolOptions): Intent {
+function scheduledBy(seat: string, args: ScheduleArgs): Intent {
 	return {
 		kind: 'said',
 		to: seat,
 		text: args.text.trim(),
-		...refsOf(args.refs, options),
+		...refsOf(args.refs),
 		delaySeconds: args.delaySeconds,
 	};
 }
 
-/** The tool that speaks for an ordinary activation or publishes its close. */
-function sayTool(binding: RoomToolBinding, options: RoomToolOptions, closing?: Closing): RoomTool {
+/** The tool that speaks for a respond activation or publishes its close. */
+function sayTool(binding: RoomToolBinding, closing?: Closing): RoomTool {
 	return {
 		name: SAY.name,
 		description:
@@ -276,13 +263,12 @@ function sayTool(binding: RoomToolBinding, options: RoomToolOptions, closing?: C
 				? SAY.description
 				: summaryToolDescription(closing.person, closing.people),
 		parameters: SAY.parameters,
-		run: (args, call) => say(binding, options, args as SayArgs, call, closing),
+		run: (args, call) => say(binding, args as SayArgs, call, closing),
 	};
 }
 
 async function say(
 	binding: RoomToolBinding,
-	options: RoomToolOptions,
 	args: SayArgs,
 	call: string,
 	closing: Closing | undefined,
@@ -291,24 +277,23 @@ async function say(
 		activation: binding.id,
 		key: call,
 		...(closing === undefined ? { readThrough: binding.readThrough } : {}),
-		intent: saidBy(args, options),
+		intent: saidBy(args),
 	});
-	return answered(sayResult(binding, options, call, response, closing), response);
+	return answered(sayResult(binding, call, response, closing), response);
 }
 
 /** What the model reads for a say the room answered. */
 function sayResult(
 	binding: RoomToolBinding,
-	options: RoomToolOptions,
 	call: string,
 	response: CommitResult,
 	closing: Closing | undefined,
 ): RoomToolResult {
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
-	if ('committed' in response) accepted(binding, options, response.committed, closing);
+	if ('committed' in response) accepted(binding, response.committed, closing);
 	const result = landed(binding, response);
 	if (closing === undefined || result.isError) return result;
-	// The closing activation ends after the last recipient has a message.
+	// The summary activation ends after the last recipient has a message.
 	return closing.answered >= closing.people.length ? { ...result, terminate: true } : result;
 }
 
@@ -317,7 +302,7 @@ function sayResult(
  * scheduled say at any position. When the record moved past the read
  * position, the result carries the messages the say landed past.
  */
-function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolOptions): RoomTool {
+function scheduleTool(seat: string, binding: RoomToolBinding): RoomTool {
 	return {
 		name: SCHEDULE.name,
 		description: SCHEDULE.description,
@@ -327,10 +312,9 @@ function scheduleTool(seat: string, binding: RoomToolBinding, options: RoomToolO
 				activation: binding.id,
 				key: call,
 				readThrough: binding.readThrough,
-				intent: scheduledBy(seat, args as ScheduleArgs, options),
+				intent: scheduledBy(seat, args as ScheduleArgs),
 			});
 			if (!('committed' in response)) return answered(landed(binding, response), response);
-			options.spoke?.();
 			const result = scheduleResult(binding, call, response.committed, response.unread ?? []);
 			return answered(result, response);
 		},
@@ -359,16 +343,10 @@ function scheduleResult(
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */
-function accepted(
-	binding: RoomToolBinding,
-	options: RoomToolOptions,
-	message: Message,
-	closing: Closing | undefined,
-): void {
+function accepted(binding: RoomToolBinding, message: Message, closing: Closing | undefined): void {
 	if (closing !== undefined) {
 		closing.answered += 1;
 	} else if (message.kind === 'said') {
-		options.spoke?.();
 		binding.acknowledgeThrough(message.seq);
 	}
 }

@@ -67,7 +67,7 @@ The core has four published entries:
 - `@ambionframework/ambion/conformance` for the port suite and the
   executor suite.
 - `@ambionframework/ambion/testing` for the scripted executor, the script
-  verbs (`speak`, `callTool`, `schedule`, `seat`, `spend`, `quiet`, `byAgent`),
+  verbs (`say`, `callTool`, `schedule`, `seat`, `spend`, `quiet`, `byAgent`),
   `settled`, and `fakeClock`. It imports no model library.
   `@ambionframework/pi/testing` holds the scripted Pi stream, which reads the
   same verbs.
@@ -305,7 +305,7 @@ reasoning in the Ambion, workspace, assistant, and simulator live suites. `JUDGE
 sets reasoning for assistant and simulator judges. If either variable is
 unset, each consumer uses its own default. With an
 `OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so
-another model family grades the assistant. The workflow cancels a superseded
+a model from another provider grades the assistant. The workflow cancels a superseded
 run. Run it locally
 with:
 
@@ -313,12 +313,12 @@ with:
 pnpm test:live
 ```
 
-`AMBION_HARNESS` is `pi` (the default), `claude`, or `codex`. It selects the
+`AMBION_EXECUTOR` is `pi` (the default), `claude`, or `codex`. It selects the
 executor of the live seats. The live workflow runs a matrix on the three
 values, and each leg runs the live files of `@ambionframework/ambion` only.
 A harness whose secret is empty skips. One separate job runs the live tier of
 every other package once, with both keys. Run one harness by hand with
-`AMBION_HARNESS=codex pnpm test:live`. The `codex` harness reads
+`AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
 
 `@ambionframework/codex` has a live tier of its own. Its files skip when

@@ -1,7 +1,7 @@
 /** The Pi execution: Pi's model services and one Pi executor for each seat. */
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import { createPiExecutor } from './executor.ts';
+import { createPiOpener } from './executor.ts';
 import { createExecutionServices, type PiExecutionOptions } from './services.ts';
 
 /**
@@ -14,7 +14,7 @@ import { createExecutionServices, type PiExecutionOptions } from './services.ts'
 export const piExecution = defineExecution<PiExecutionOptions>('pi', (host, options = {}) => {
 	const services = createExecutionServices(options);
 	return (request) =>
-		createPiExecutor({
+		createPiOpener({
 			...services,
 			definition: request.definition,
 			now: () => host.clock.now(),

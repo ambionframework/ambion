@@ -1,5 +1,5 @@
 /**
- * A judge that grades a run as an agent. It takes the options of an agent
+ * A judge that grades a simulation as an agent. It takes the options of an agent
  * definition, and it runs on Pi's `AgentHarness` through `runAgent`. It ends
  * with one call to `grade`, which carries one finding for each criterion.
  *
@@ -26,7 +26,7 @@ import {
 import { Type } from 'typebox';
 import { renderRecord } from './render.ts';
 import { deadlineSignal } from './signal.ts';
-import type { Run } from './types.ts';
+import type { Simulation } from './types.ts';
 
 /** The default of `timeoutMs`: real milliseconds for one grade. */
 export const DEFAULT_GRADE_MS = 120_000;
@@ -49,15 +49,15 @@ export interface Verdict {
 	readonly usage?: Usage;
 }
 
-/** A judge grades a run against a list of criteria. */
-export type Judge = (run: Run, criteria: readonly string[]) => Promise<Verdict>;
+/** A judge grades a simulation against a list of criteria. */
+export type Judge = (simulation: Simulation, criteria: readonly string[]) => Promise<Verdict>;
 
 export interface AgentJudgeOptions {
-	/** A `provider/model-id`. It can name another model family than the model under test. */
+	/** A `provider/model-id`. It can name another provider than the model under test. */
 	readonly model: string;
 	/** How much the model reasons before it grades. Absent, `off`. */
 	readonly thinking?: RunAgentRequest['thinking'];
-	/** Tools to read the state the run left, such as `workspace.tools()`. */
+	/** Tools to read the state the simulation left, such as `workspace.tools()`. */
 	readonly tools?: readonly AmbionTool[];
 	readonly bundles?: readonly ToolBundle[];
 	/** The Pi execution services. The default reads `<PROVIDER>_API_KEY`, with sessions in memory. */
@@ -107,11 +107,11 @@ function judgeSystem(token: string): string {
 	].join('\n\n');
 }
 
-function judgePrompt(run: Run, criteria: readonly string[], token: string): string {
+function judgePrompt(simulation: Simulation, criteria: readonly string[], token: string): string {
 	const list = criteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n');
 	return [
 		`Criteria:\n${list}`,
-		`BEGIN RECORD ${token}\n${renderRecord(run)}\nEND RECORD ${token}`,
+		`BEGIN RECORD ${token}\n${renderRecord(simulation)}\nEND RECORD ${token}`,
 	].join('\n\n');
 }
 
@@ -119,7 +119,7 @@ function judgePrompt(run: Run, criteria: readonly string[], token: string): stri
 export function agentJudge(options: AgentJudgeOptions): Judge {
 	const services = options.services ?? createExecutionServices({ sessions: 'memory' });
 	const ms = options.timeoutMs ?? DEFAULT_GRADE_MS;
-	return async (run, criteria) => {
+	return async (simulation, criteria) => {
 		if (criteria.length === 0) throw new RangeError('A judge needs at least one criterion.');
 		const token = crypto.randomUUID();
 		const deadline = deadlineSignal(ms, `The grade passed its timeout of ${ms} ms.`);
@@ -129,7 +129,7 @@ export function agentJudge(options: AgentJudgeOptions): Judge {
 				name: JUDGE,
 				agent: { name: JUDGE, identity: 'Grades a run against its criteria.' },
 				system: judgeSystem(token),
-				prompt: judgePrompt(run, criteria, token),
+				prompt: judgePrompt(simulation, criteria, token),
 				tools: [...(options.tools ?? []), gradeTool(criteria)],
 				...(options.bundles === undefined ? {} : { bundles: options.bundles }),
 				ends: ['grade'],

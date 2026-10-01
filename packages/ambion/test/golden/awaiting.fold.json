@@ -38,7 +38,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -48,13 +48,13 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:5:worker:1"
 					}
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "awaiting",

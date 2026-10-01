@@ -5,7 +5,7 @@
  */
 
 import {
-	type ConformanceHarness,
+	type ConformanceFixture,
 	type WorkspaceConformanceStore,
 	workspaceConformance,
 } from '@ambionframework/workspace/conformance';
@@ -14,7 +14,7 @@ import { workstationBackend } from '../src/index.ts';
 import { startSshServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
 
-const harness: ConformanceHarness<WorkspaceConformanceStore> = {
+const fixture: ConformanceFixture<WorkspaceConformanceStore> = {
 	name: 'workstation',
 	async open() {
 		const server = await startSshServer(['conformance']);
@@ -29,6 +29,6 @@ const harness: ConformanceHarness<WorkspaceConformanceStore> = {
 	},
 };
 
-describe.skipIf(!hasSetsid)(harness.name, () => {
-	for (const c of workspaceConformance(harness)) it(c.name, c.run);
+describe.skipIf(!hasSetsid)(fixture.name, () => {
+	for (const c of workspaceConformance(fixture)) it(c.name, c.run);
 });

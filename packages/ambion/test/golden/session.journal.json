@@ -10,7 +10,7 @@
 	{
 		"kind": "composition",
 		"body": {
-			"agents": [
+			"seated": [
 				{
 					"name": "worker",
 					"identity": "Answers the question.",
@@ -22,7 +22,7 @@
 					"attention": "named"
 				}
 			],
-			"available": [],
+			"reserve": [],
 			"at": "2026-01-01T09:00:00.000Z"
 		},
 		"seq": 2,
@@ -74,7 +74,7 @@
 			"to": "checker",
 			"text": "Is the crew free on Thursday?",
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:4:worker:1",
+			"activation": "message:4:worker:1",
 			"from": "worker",
 			"wakes": ["checker"]
 		},
@@ -122,7 +122,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:4:worker:1"
 			}
 		},
@@ -136,7 +136,7 @@
 			"to": "worker",
 			"text": "The crew is free on Thursday.",
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:6:checker:1",
+			"activation": "message:6:checker:1",
 			"from": "checker",
 			"wakes": ["worker"]
 		},
@@ -162,7 +162,7 @@
 			"kind": "said",
 			"text": "Thursday works.",
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:10:worker:1",
+			"activation": "message:10:worker:1",
 			"from": "worker"
 		},
 		"seq": 12,
@@ -197,7 +197,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:4:worker:1"
 			}
 		},
@@ -232,7 +232,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:6:checker:1"
 			}
 		},
@@ -282,7 +282,7 @@
 			"kind": "said",
 			"text": "Thursday works.",
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:18:worker:1",
+			"activation": "message:18:worker:1",
 			"from": "worker"
 		},
 		"seq": 20,
@@ -317,7 +317,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:18:worker:1"
 			}
 		},

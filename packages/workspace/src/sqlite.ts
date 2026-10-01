@@ -480,7 +480,7 @@ export function sqliteBackend(location: string, options: SqliteBackendOptions = 
 		cleanup: async () => undefined,
 	});
 	return {
-		database: location,
+		label: location,
 		guidance: guidance(timeout, options),
 		connect: async (_agent, files) => envFor(files),
 		dispose: async () => {

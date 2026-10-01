@@ -1,12 +1,12 @@
 /**
  * The git conformance cases for `justGitBackend`, on both just-bash
  * backends: in memory, and over a temporary directory
- * (`test/support/git-harness.ts`).
+ * (`test/support/git-fixture.ts`).
  */
 import { gitConformance } from '@ambionframework/workspace/conformance';
 import { describe, it } from 'vitest';
-import { harnesses } from './support/git-harness.ts';
+import { fixtures } from './support/git-fixture.ts';
 
-describe.each(harnesses)('$name', (harness) => {
-	for (const c of gitConformance(harness)) it(c.name, c.run);
+describe.each(fixtures)('$name', (fixture) => {
+	for (const c of gitConformance(fixture)) it(c.name, c.run);
 });

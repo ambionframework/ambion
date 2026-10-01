@@ -67,7 +67,7 @@ live('the exchange', () => {
 		const { session, events } = await open('exchange', {
 			goal: 'Ship the batch this week.',
 			agents: [planner, logistics, finance, assistant],
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 		});
 		try {
 			const visit = await enter(session, andrei);
@@ -143,7 +143,7 @@ live('the exchange', () => {
 		});
 		const { session, events } = await open('reserve', {
 			agents: [frontdesk, permits, catering, assistant],
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [frontdesk.name]: 'broadcast', [assistant.name]: 'broadcast' },
 		});
 		const visit = await enter(session, andrei);

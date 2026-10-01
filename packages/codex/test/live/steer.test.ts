@@ -3,9 +3,8 @@
  * The next pass reads it, and no say commits against a record the seat has
  * not read.
  */
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { memoryBackend } from '@ambionframework/just-bash';
+import { openWorkspace } from '@ambionframework/workspace';
 import { expect, it } from 'vitest';
 import {
 	activationsOf,
@@ -29,9 +28,8 @@ live('a message during a turn', () => {
 				seat('clerk', {
 					instructions:
 						'Do what the newest message asks. Report with one say when the record is read to its end.',
-					nativeTools: 'codex',
-					// Codex runs the command with no sandbox, so keep it out of the checkout.
-					workingDirectory: mkdtempSync(join(tmpdir(), 'ambion-codex-steer-')),
+					// The workspace bash tool runs the command in memory, behind the workspace port.
+					bundles: [openWorkspace({ name: 'steer', backend: { bash: memoryBackend() } }).tools()],
 				}),
 			],
 		});
@@ -39,11 +37,11 @@ live('a message during a turn', () => {
 			const visit = await room.visit(person);
 			const running = new Promise<void>((resolve) => {
 				room.subscribe((event) => {
-					if (event.type === 'tool_execution_start') resolve();
+					if (event.type === 'tool_call') resolve();
 				});
 			});
 			await visit.send({
-				text: 'Run the shell command `sleep 15`, then say "first".',
+				text: 'Run the bash command `sleep 15`, then say "first".',
 			});
 			await within(running, 120_000, 'the first command starting');
 			const second = await visit.send({ text: 'Also say the word "tangerine".' });
@@ -61,8 +59,9 @@ live('a message during a turn', () => {
 
 			const [activation] = activationsOf(events, 'clerk');
 			const read = stepsOf(activation ?? '');
-			// Codex takes no steer: no step of the activation records one.
-			expect(read.some((step) => step.type === 'steer')).toBe(false);
+			// Codex takes no steer: the core stamps the held line, and the pass does not consume it.
+			const steers = read.filter((step) => step.type === 'steer');
+			expect(steers).toEqual([expect.objectContaining({ seq: late?.seq, consumed: false })]);
 
 			// Freshness: every say of the seat comes after the message it read, or names no stale record.
 			const said = messages.filter(

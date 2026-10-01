@@ -31,8 +31,8 @@ import {
 	type RuntimeState,
 	tokenWindowOf,
 } from '../host/runtime.ts';
-import type { Composition } from '../journal/events.ts';
-import { type Entry, type RoomJournal, roomJournal } from '../journal/journal.ts';
+import type { Composition } from '../journal/entries.ts';
+import { type RoomEntry, type RoomJournal, roomJournal } from '../journal/journal.ts';
 import type {
 	AgentPort,
 	CommitRequest,
@@ -67,7 +67,7 @@ import type {
 } from '../types.ts';
 import * as control from './control.ts';
 import {
-	acceptedEvent,
+	acceptedEntry,
 	compositionOf,
 	decideAndAppend,
 	notificationFor,
@@ -101,7 +101,7 @@ type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 export interface CompositionDraft {
 	goal: string | undefined;
-	summary: string | undefined;
+	summaryWriter: string | undefined;
 	definitions: AgentDefinition[];
 	seats: ReadonlyMap<string, SeatOptions>;
 }
@@ -125,8 +125,8 @@ export interface Room {
 	 */
 	post(input: people.PostInput): Promise<waits.ExchangeHandle>;
 	stop(): Promise<void>;
-	/** Cancel work at one durable journal boundary. The room keeps running. */
-	abort(): Promise<void>;
+	/** Cancel the open work at one durable journal boundary. The room keeps running. */
+	cancel(): Promise<void>;
 	/**
 	 * Put a registered agent on the roster while the room runs. The seating lands on the record, and it wakes the seat it names.
 	 */
@@ -191,8 +191,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
 	private stopInFlight: Promise<void> | undefined;
 	/** A cancellation append in flight, with its key retained across uncertainty. */
-	abortInFlight: Promise<void> | undefined;
-	abortKey: string | undefined;
+	cancelInFlight: Promise<void> | undefined;
+	cancelKey: string | undefined;
 	private fold: { length: number; projection: RoomProjection; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
@@ -254,7 +254,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		this.enter('running');
 		dispatch.seedHeard(this);
 		// The composition is decided before the fence, so a refused one writes nothing.
-		acceptedEvent(decide(this.state(), { type: 'compose', composition }, this.now()));
+		acceptedEntry(decide(this.state(), { type: 'compose', composition }, this.now()));
 		requireSubmission(await decideAndAppend(this, 'run', { type: 'run' }));
 		requireSubmission(await decideAndAppend(this, 'composition', { type: 'compose', composition }));
 		await this.reconcile();
@@ -279,10 +279,10 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 				const current = this.state();
 				this.validateDefinitions(current);
 				const priorComposition = current.composition;
-				if (priorComposition === undefined) return { event: undefined };
+				if (priorComposition === undefined) return { entry: undefined };
 				const roster = new Set(current.roster.map((seat) => seat.name));
 				const definitions = new Map(
-					[...priorComposition.agents, ...priorComposition.available, ...current.roster].map(
+					[...priorComposition.seated, ...priorComposition.reserve, ...current.roster].map(
 						(seat) => [seat.name, seat],
 					),
 				);
@@ -293,9 +293,9 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 							identity: agent.identity,
 							attention: 'broadcast',
 						});
-				const available = [...definitions.values()].filter((seat) => !roster.has(seat.name));
+				const reserve = [...definitions.values()].filter((seat) => !roster.has(seat.name));
 				const { seq: _seq, at: _at, ...prior } = priorComposition;
-				const body = { ...prior, agents: current.roster, available, at: this.iso() };
+				const body = { ...prior, seated: current.roster, reserve, at: this.iso() };
 				return decide(current, { type: 'compose', composition: body }, this.now());
 			}),
 		);
@@ -309,8 +309,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 				`Room '${this.name}' has no composition on its record: start it instead.`,
 			);
 		const names = new Set([
-			...state.composition.agents.map((seat) => seat.name),
-			...state.composition.available.map((seat) => seat.name),
+			...state.composition.seated.map((seat) => seat.name),
+			...state.composition.reserve.map((seat) => seat.name),
 			...state.roster.map((seat) => seat.name),
 		]);
 		for (const name of names)
@@ -495,7 +495,7 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	 * same way to both, so it has one path from the record to a host and
 	 * never a second one for the entries it wrote itself.
 	 */
-	private hear(entry: Entry): void {
+	private hear(entry: RoomEntry): void {
 		dispatch.hearEntry(this, entry);
 	}
 
@@ -544,8 +544,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		return control.reconcile(this);
 	}
 
-	abort(): Promise<void> {
-		return control.abort(this);
+	cancel(): Promise<void> {
+		return control.cancel(this);
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */

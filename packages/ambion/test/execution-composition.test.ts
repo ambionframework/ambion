@@ -4,32 +4,32 @@
  * execution for its executor kind, and an execution with no kind serves
  * every kind. A room with no execution still runs its people and its
  * record. A seat whose kind no execution serves fails at once and for good,
- * and the room does not wake it again. Stub executions stand in for a
- * family, because the kernel imports no executor package.
+ * and the room does not wake it again. Stub executions stand in for an
+ * executor kind, because the kernel imports no executor package.
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import {
+	type ActivationOpener,
 	defineExecution,
 	type Execution,
-	type Executor,
 	hostingOf,
 	localExecution,
 } from '../src/hosting.ts';
 import {
-	type AgentExecutor,
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	isSpoken,
+	type Executor,
+	isSaid,
 	type Message,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, roomName, stateOf, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { memory } from './support/storage.ts';
 
@@ -53,7 +53,7 @@ function stub(connected: string[] = [], kind?: string) {
 }
 
 /** An executor whose sessions never run a pass: the stub of a default counts only its builds. */
-const idle: Executor = () => ({ pass: async () => ({ failed: false }) });
+const idle: ActivationOpener = () => ({ pass: async () => ({ failed: false }) });
 
 /** A default of `kind`, defined the way an executor package defines one, that counts its builds. */
 function defaultOf(kind: string) {
@@ -69,7 +69,7 @@ function defaultOf(kind: string) {
 }
 
 function seat(kind: string, name = 'worker') {
-	const executor: AgentExecutor = { kind, instructions: 'answer', tools: [] };
+	const executor: Executor = { kind, instructions: 'answer', tools: [] };
 	return defineAgent({ name, identity: 'Answers.', executor });
 }
 
@@ -175,7 +175,7 @@ describe('the execution a room chooses', () => {
 			expect(failures.length).toBeGreaterThan(0);
 			expect(failures[0]).toMatchObject({
 				cause: 'permanent',
-				agent: 'worker',
+				seat: 'worker',
 				error: { code: 'no_execution', message: reason },
 			});
 			const seen = events.length;
@@ -201,16 +201,16 @@ function definition(identity: string, instructions: string) {
 }
 
 function answer(question: string, response: string, calls: Call[]): StreamFn {
-	return scripted((context) => {
+	return scriptedStream((context) => {
 		const text = contextText(context);
 		calls.push({ systemPrompt: context.systemPrompt ?? '', context: text });
-		return text.includes(question) && !text.includes(response) ? speak(response) : quiet();
+		return text.includes(question) && !text.includes(response) ? say(response) : quiet();
 	});
 }
 
 async function spokenTexts(room: { read(): Promise<{ messages: readonly Message[] }> }) {
 	const { messages } = await room.read();
-	return messages.filter(isSpoken).map((message) => message.text);
+	return messages.filter(isSaid).map((message) => message.text);
 }
 
 describe('execution composition', () => {
@@ -219,7 +219,7 @@ describe('execution composition', () => {
 		const runtime = createRuntime({
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scripted(() => {
+				stream: scriptedStream(() => {
 					defaultCalls += 1;
 					return quiet();
 				}),

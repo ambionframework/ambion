@@ -100,7 +100,7 @@ room or to `createRuntime`.
 | `instructions`         | Required                      | The private guidance of the agent.                            |
 | `model`                | Required                      | A Pi model id, `provider/model-id`.                           |
 | `tools`, `bundles`     | None                          | The tools of the agent and the bundles that add tools.        |
-| `speaking`             | `DEFAULT_GUIDANCE`            | The speaking policy. It replaces the default.                 |
+| `speaking`             | `DEFAULT_SPEAKING`            | The speaking policy. It replaces the default.                 |
 | `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.           |
 | `estimateTokens`       | `'length'`                    | The name of the estimator in the runtime. It needs the limit. |
 | `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                        |
@@ -129,8 +129,8 @@ request, so the room refuses a say against a stale draft with the messages
 it missed. A line that lands mid-activation joins the steer queue of the
 lane, and counts when a provider request holds it.
 
-**Room tools are harness tools.** An ordinary activation receives `say`,
-`seat`, and `unseat`, and then the tools of the agent. A closing activation
+**Room tools are harness tools.** A respond activation receives `say`,
+`seat`, and `unseat`, and then the tools of the agent. A summary activation
 receives `say` only. The harness adds no built-in tool, no skill, and no
 prompt template.
 
@@ -150,7 +150,7 @@ included, and the executor deletes none of them.
 
 ## Exchange continuity
 
-**The release records `{ harness: 'pi', id }`,** where the id names the
+**The release records `{ kind: 'pi', id }`,** where the id names the
 activation that began the session. The next activation of the seat in the
 same exchange reopens the session and prompts it with the delta. The first
 activation in a new exchange begins a fresh session. A session the store
@@ -173,18 +173,18 @@ model are permanent. Every other failure is transient.
 ## Test
 
 `@ambionframework/pi/testing` exports a scripted stream and its helpers:
-`scripted`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
+`scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
 `toolResultTexts`. A script answers with the verbs of
-`@ambionframework/ambion/testing`: `speak`, `callTool`, `schedule`, `seat`,
-`quiet`, and `byAgent`. `piExecutorHarness()` runs the executor suite of
+`@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
+`quiet`, and `byAgent`. `piExecutorFixture()` runs the executor suite of
 `@ambionframework/ambion/conformance` on a scripted stream, and `scriptOf`
 maps each plan of the suite to a script.
 
 ```ts
-import { defineAgent, defineHuman, isSpoken, startRoom } from '@ambionframework/ambion';
-import { byAgent, quiet, speak } from '@ambionframework/ambion/testing';
+import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
+import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
-import { scripted } from '@ambionframework/pi/testing';
+import { scriptedStream } from '@ambionframework/pi/testing';
 
 const inventory = defineAgent({
   name: 'inventory',
@@ -192,9 +192,9 @@ const inventory = defineAgent({
   executor: pi({ instructions: 'Answer once.', model: 'anthropic/claude-sonnet-5' }),
 });
 
-const stream = scripted(
+const stream = scriptedStream(
   byAgent({
-    inventory: (_context, _agent, call) => (call === 1 ? speak('42 units in stock.') : quiet()),
+    inventory: (_context, _agent, request) => (request === 1 ? say('42 units in stock.') : quiet()),
   }),
 );
 
@@ -207,7 +207,7 @@ const room = await startRoom({
 try {
   const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Asks.' }));
   const exchange = await visit.send({ text: 'How many units?' });
-  console.log((await exchange.waitForClose()).filter(isSpoken).map((message) => message.text));
+  console.log((await exchange.waitForClose()).filter(isSaid).map((message) => message.text));
 } finally {
   await room.stop();
 }
@@ -228,7 +228,7 @@ registry, the price tables, or a real model. The live scenarios of
 | `createExecutionServices`                                    | The services for a host that runs seats apart from the room |
 | `memorySessions`, `PiSessions`, `SessionScope`               | A store of sessions in memory, and the store contract       |
 | `stubModel`                                                  | The model that a custom stream receives                     |
-| `piExecutorHarness` (`/testing`)                             | The executor suite on a scripted stream                     |
+| `piExecutorFixture` (`/testing`)                             | The executor suite on a scripted stream                     |
 
 ## Troubleshooting
 

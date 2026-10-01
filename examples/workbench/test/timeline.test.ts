@@ -14,7 +14,7 @@ const closedExchange = (
 	from: number,
 	through: number,
 	person: string,
-	summary: object = { status: 'silent' },
+	summary: object = { kind: 'silent' },
 ): Exchange =>
 	({
 		from,
@@ -67,7 +67,7 @@ const thread = [
 	summaryOf(145, 'theo'),
 ];
 const closed = closedExchange(98, 134, 'theo', {
-	status: 'published',
+	kind: 'published',
 	summary: summaryOf(145, 'theo'),
 });
 
@@ -100,7 +100,7 @@ describe('buildTimeline', () => {
 	it('shows one reply directly, with no discussion and no summary', () => {
 		const messages = [said(59, 'mira'), said(61, 'assistant', 'mira'), summaryOf(66, 'mira')];
 		const exchange = closedExchange(59, 61, 'mira', {
-			status: 'published',
+			kind: 'published',
 			summary: summaryOf(66, 'mira'),
 		});
 		expect(shape(build(messages, [exchange]))).toEqual(['question:59', 'said:61']);
@@ -161,7 +161,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
-		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
+		// An exchange cancelled after a follow-up: no agent replied, so there is nothing to show directly.
 		const exchange = closedExchange(4, 9, 'mira');
 		const blocks = build([said(4, 'mira'), said(9, 'mira')], [exchange]);
 		expect(shape(blocks)).toEqual(['question:4', 'discussion:4(1)']);
@@ -178,16 +178,16 @@ describe('buildTimeline', () => {
 		const attempt = (
 			id: string,
 			purpose: string,
-			status: string,
+			kind: string,
 			cause: string,
 			attempt = 1,
-		): object => ({ id, seat: 'assistant', purpose, attempt, outcome: { status, cause } });
+		): object => ({ id, seat: 'assistant', purpose, attempt, outcome: { kind, cause } });
 		const limit = '400 invalid_request_error: You have reached your specified API usage limits.';
 		const failures = new Map([
 			['m1', limit],
 			['s1', limit],
 		]);
-		const exhausted = (activations: object[], summary: object = { status: 'failed' }) =>
+		const exhausted = (activations: object[], summary: object = { kind: 'failed' }) =>
 			({
 				...closedExchange(75, 75, 'theo', summary),
 				outcome: { kind: 'exhausted' },
@@ -200,7 +200,7 @@ describe('buildTimeline', () => {
 				exhausted([
 					attempt('m1', 'respond', 'failed', 'permanent'),
 					attempt('m2', 'respond', 'abandoned', 'permanent', 2),
-					attempt('s1', 'summary', 'failed', 'permanent'),
+					attempt('s1', 'summarize', 'failed', 'permanent'),
 				]),
 				failures,
 				`Closed, assistant failed, the room does not retry this: ${limit}`,
@@ -214,8 +214,8 @@ describe('buildTimeline', () => {
 			[
 				'names why a summary failed after a reply',
 				{
-					...closedExchange(75, 75, 'theo', { status: 'failed' }),
-					activations: [attempt('s1', 'summary', 'failed', 'permanent')],
+					...closedExchange(75, 75, 'theo', { kind: 'failed' }),
+					activations: [attempt('s1', 'summarize', 'failed', 'permanent')],
 				} as Exchange,
 				failures,
 				`Closed, summary failed: assistant failed, the room does not retry this: ${limit}`,
@@ -242,7 +242,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('flags a discussion whose summary is pending or failed', () => {
-		const pending = closedExchange(98, 134, 'theo', { status: 'pending' });
+		const pending = closedExchange(98, 134, 'theo', { kind: 'pending' });
 		const blocks = build(thread.slice(0, -1), [pending]);
 		expect(blocks[1]).toMatchObject({ type: 'discussion', flag: 'Summary pending' });
 	});
@@ -279,7 +279,7 @@ describe('cost and awaiting', () => {
 	it('reads an awaiting exchange as waiting on the person, and not as a plain close', () => {
 		const awaiting = exchangeWith({
 			outcome: { kind: 'awaiting', person: 'theo' },
-			summary: { status: 'silent' },
+			summary: { kind: 'silent' },
 		});
 		expect(build(thread.slice(0, 6), [awaiting])[1]).toMatchObject({ flag: 'Waiting on theo' });
 	});
@@ -287,7 +287,7 @@ describe('cost and awaiting', () => {
 	it('puts the waiting and the cost in the note of an exchange with no messages', () => {
 		const awaiting = exchangeWith({
 			outcome: { kind: 'awaiting', person: 'theo' },
-			summary: { status: 'silent' },
+			summary: { kind: 'silent' },
 			usage: { ...usage, cost: 0.5 },
 		});
 		const blocks = build([said(98, 'theo')], [awaiting]);

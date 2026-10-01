@@ -1,23 +1,23 @@
 /**
- * The Pi executor: one activation's session, from the pass the driver hands
- * it until the activation stops.
+ * The Pi opener: it opens one running activation, which takes each pass the
+ * driver hands it until the activation stops.
  *
  * Pi's `AgentHarness` owns the model loop, the session, its persistence and
  * its compaction. The driver's contract is pass in and result out, so the
  * first pass of an activation opens one harness over the seat's session,
- * and each pass prompts its lane once and resolves when the run ends.
+ * and each pass prompts its lane once and resolves when the pass ends.
  *
  * - **Freshness.** The core keeps `readThrough`. Each range of the record
  *   goes into the session as a custom message that carries its positions.
  *   The harness hook that builds the provider input reads them from the
  *   exact messages of each request, and tells the core each range and each
  *   tool result that the request holds.
- * - **Steer.** A line that lands during a run goes to the lane as a steer.
+ * - **Steer.** A line that lands during a pass goes to the lane as a steer.
  *   It counts as consumed when a provider request holds it. A line that
- *   lands before the run starts joins the prompt. The core records the
+ *   lands before the pass starts joins the prompt. The core records the
  *   `steer` step ([`executors.md`](../../../docs/executors.md)), and a line
- *   the run does not read waits for the next delta.
- * - **Cut.** The signal of the activation aborts the run. `close` closes the
+ *   the pass does not read waits for the next delta.
+ * - **Cut.** The signal of the activation aborts the pass. `close` closes the
  *   harness and the session, and the driver calls it when the activation is
  *   over.
  * - **Exchange continuity.** A session carries the id of the activation
@@ -26,24 +26,24 @@
  *   one exchange, and prompts it with the record beyond the position the
  *   session read through. A session the store cannot open starts fresh.
  *   The lane goes back to the last position the session read, so a failed
- *   run leaves the provider input.
+ *   pass leaves the provider input.
  *
  * **Three spans, and only two are ours.** Pi has a *turn*, which is one
  * request to a provider and the tools it calls, and a *run*, which is one
- * prompt and the turns inside it. An activation is wider than both: it is
- * one or more runs, because a message landing mid-activation starts another
- * run over the record as it now stands. The word for what a room does to a
+ * prompt and the turns inside it. A pass is one Pi run. An activation is
+ * wider than both: it is one or more passes, because a message landing
+ * mid-activation starts another pass over the record as it now stands. The word for what a room does to a
  * seat is `activation` ([`agent.md`](../../../docs/agent.md), Execution
  * boundary), and the lease entries and the trace of each one carry that word.
  */
 import type {
+	ActivationOpener,
 	ActivationView,
 	AgentDefinition,
-	Executor,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassResult,
+	RunningActivation,
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
@@ -62,8 +62,8 @@ import { toolsFor } from './tools.ts';
 
 const CONTEXT = BACKGROUND_CONTEXT;
 
-/** What builds a Pi executor for one seat: its definition, and the room's services. */
-export interface PiExecutorOptions extends ExecutionServices {
+/** What builds a Pi opener for one seat: its definition, and the room's services. */
+export interface PiOpenerOptions extends ExecutionServices {
 	readonly definition: AgentDefinition;
 	/** The room's clock. The session stamps every range of the record with it. */
 	readonly now: () => number;
@@ -76,10 +76,10 @@ interface Seat {
 	readonly closing: Map<string, Promise<void>>;
 }
 
-/** The Pi executor. One instance per seat, for as long as the room runs. */
-export function createPiExecutor(options: PiExecutorOptions): Executor {
+/** The Pi opener. One instance per seat, for as long as the room runs. */
+export function createPiOpener(options: PiOpenerOptions): ActivationOpener {
 	const seat: Seat = { sessions: options.sessions, closing: new Map() };
-	return (activation: ExecutorActivation): ExecutorSession =>
+	return (activation: ExecutorActivation): RunningActivation =>
 		new Activation(activation, options, seat);
 }
 
@@ -98,10 +98,10 @@ interface Opened extends OpenHarness {
 const noop = () => {};
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-class Activation implements ExecutorSession {
+class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
-	private readonly options: PiExecutorOptions;
+	private readonly options: PiOpenerOptions;
 	private readonly seat: Seat;
 	private readonly steps = new PiSteps();
 	/** The harness of this activation. The first pass opens it, and `close` closes it. */
@@ -114,16 +114,16 @@ class Activation implements ExecutorSession {
 	/** The view of the running pass. The tools read the room and exchange from it. */
 	private view: ActivationView | undefined;
 	/**
-	 * Where the pass stands: `starting` prepares its run, `running` is its
-	 * run, and `idle` is any other time. A steer takes a different path in
+	 * Where the pass stands: `starting` prepares its prompt, `running` waits
+	 * on its prompt, and `idle` is any other time. A steer takes a different path in
 	 * each.
 	 */
 	private phase: 'idle' | 'starting' | 'running' = 'idle';
-	/** The steers that landed while a pass prepared its run. */
+	/** The steers that landed while a pass prepared its prompt. */
 	private held: Held[] = [];
 	/** The queue entry of each steered line that no provider request holds yet, by position. */
 	private readonly steered = new Map<Seq, Promise<string | undefined>>();
-	/** The last assistant message of the running run. */
+	/** The last assistant message of the running pass. */
 	private last: AssistantMessage | undefined;
 	private stopped = false;
 	private closed = false;
@@ -131,7 +131,7 @@ class Activation implements ExecutorSession {
 	private readonly cut: Promise<void>;
 	private cutNow: () => void = noop;
 
-	constructor(activation: ExecutorActivation, options: PiExecutorOptions, seat: Seat) {
+	constructor(activation: ExecutorActivation, options: PiOpenerOptions, seat: Seat) {
 		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;
@@ -153,8 +153,8 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * A line landed while a pass runs. A run takes it as a steer. A pass that
-	 * prepares its run adds it to the prompt. After the run, the line waits
+	 * A line landed while a pass runs. A running pass takes it as a steer. A pass that
+	 * prepares its prompt adds the line to it. After the pass, the line waits
 	 * for the record: the next delta has it.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
@@ -164,7 +164,7 @@ class Activation implements ExecutorSession {
 		}
 	}
 
-	/** The activation was cut: abort the run. The pass in flight ends. */
+	/** The activation was cut: abort the pass. The pass in flight ends. */
 	private abort(): void {
 		this.stopped = true;
 		this.cutNow();
@@ -187,21 +187,21 @@ class Activation implements ExecutorSession {
 		try {
 			return await this.runPass(pass);
 		} catch (error) {
-			// A cut closes the harness under the run. What it throws then is no failure.
+			// A cut closes the harness under the pass. What it throws then is no failure.
 			if (this.stopped) return { failed: false };
 			await this.renew(pass.view);
 			// A local fault, such as a lost room call or an unknown model. `failedPass` sets the cause.
 			return failedPass(error);
 		} finally {
 			this.phase = 'idle';
-			// A line the run never prompted waits for the next delta.
+			// A line the pass never prompted waits for the next delta.
 			this.held = [];
 		}
 	}
 
 	/**
 	 * Open the harness, and prompt it with what the pass has to read. A pass
-	 * with nothing new starts no run.
+	 * with nothing new starts no prompt.
 	 */
 	private async runPass(pass: Pass): Promise<PassResult> {
 		const opened = await this.prepare(pass);
@@ -258,7 +258,7 @@ class Activation implements ExecutorSession {
 	 * harness cannot attach to, closes, and a fresh session takes its place.
 	 */
 	private async openSession(pass: Pass, model: Model<Api>): Promise<Opened> {
-		const resumed = await this.resumed(scopeOf(pass.view, this.definition), pass.resume);
+		const resumed = await this.resumed(scopeOf(pass.view, this.definition), pass.resumeId);
 		if (resumed !== undefined) {
 			const opened = await this.attach(resumed, pass, model).catch(() => undefined);
 			if (opened !== undefined) return opened;
@@ -304,13 +304,13 @@ class Activation implements ExecutorSession {
 
 	/**
 	 * In a continued session, start from the position it read through. The
-	 * lane goes back to the entry that holds that position: a run that
+	 * lane goes back to the entry that holds that position: a pass that
 	 * failed or was cut after it leaves the provider input, and the record it
 	 * held comes again in the delta. With no such entry, the lane goes back
 	 * to the root, and the activation reads the whole view once.
 	 */
 	private async readBase(opened: Opened, pass: Pass): Promise<void> {
-		if (pass.resume === undefined) return;
+		if (pass.resumeId === undefined) return;
 		const entry = await opened.lane.findEntry(
 			{ type: 'custom', customType: READ, order: 'newestFirst' },
 			CONTEXT,
@@ -325,7 +325,7 @@ class Activation implements ExecutorSession {
 		this.activation.read({ after: 0, through });
 	}
 
-	/** The steers held while the pass prepared its run join the prompt. */
+	/** The steers held while the pass prepared its prompt join the prompt. */
 	private flush(): AgentMessage[] {
 		const now = this.options.now();
 		return this.held.splice(0).map((held) => steerMessage(held, now));
@@ -340,14 +340,14 @@ class Activation implements ExecutorSession {
 		this.steered.set(held.seq, queued);
 	}
 
-	/** One run over the prompt, and what it means for the pass. */
+	/** One prompt of the lane, and what it means for the pass. */
 	private async run(opened: Opened, prompt: AgentMessage[]): Promise<PassResult> {
 		this.last = undefined;
 		this.phase = 'running';
 		const result = await opened.lane.prompt(prompt, CONTEXT);
 		this.phase = 'idle';
 		await this.settle(opened);
-		// A cut run is no failure, whatever the closed harness answers.
+		// A cut pass is no failure, whatever the closed harness answers.
 		if (this.stopped) return { failed: false };
 		const outcome = passOutcome(result, this.last);
 		if (outcome.failed) {
@@ -359,7 +359,7 @@ class Activation implements ExecutorSession {
 	}
 
 	/**
-	 * The steers no provider request held once the run ended. Each leaves the
+	 * The steers no provider request held once the pass ended. Each leaves the
 	 * lane queue, and the record holds it for the next delta.
 	 */
 	private async settle(opened: Opened): Promise<void> {
@@ -373,7 +373,7 @@ class Activation implements ExecutorSession {
 
 	/**
 	 * The record moved, but not in a way a model reads: a delta with no
-	 * message in it. The core takes the view as read, and no run starts.
+	 * message in it. The core takes the view as read, and no pass starts.
 	 */
 	private async nothingNew(opened: Opened): Promise<PassResult> {
 		await this.remember(opened);

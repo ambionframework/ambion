@@ -32,7 +32,7 @@ import {
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
-import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessStatus } from './process-files.ts';
+import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type ProcessRecord } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
 import type { ProcessTable } from './process-table.ts';
@@ -145,7 +145,7 @@ type WaitParams = Static<typeof waitSchema>;
 
 /** What a handle tool gives in `details`. */
 export interface ProcessDetails {
-	process: ProcessStatus;
+	process: ProcessRecord;
 	/** The bytes of the output that the result shows: from the cursor to the end the read saw. */
 	read: { from: number; to: number };
 	truncation?: ShellOutputTruncation;
@@ -153,13 +153,13 @@ export interface ProcessDetails {
 
 /** What `wait` on several handles gives in `details`: every status in the order of the handles, and each process it shows. */
 export interface WaitDetails {
-	processes: readonly ProcessStatus[];
+	processes: readonly ProcessRecord[];
 	ended: readonly ProcessDetails[];
 }
 
 /** What `ps` gives in `details`. */
 export interface PsDetails {
-	processes: readonly ProcessStatus[];
+	processes: readonly ProcessRecord[];
 }
 
 /** The process capability: the five process tools, their note, and the reminder of the table. */
@@ -216,8 +216,8 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. A command can trap TERM, clean up, and exit in that time. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
 			execute: async (params: HandleParams, ctx) => {
-				const { status, stopped } = await table.cancel(ctx.agent, params.handle);
-				return cancelled(await described(options, status, ctx), stopped);
+				const { status, cancelled } = await table.cancel(ctx.agent, params.handle);
+				return cancelResult(await described(options, status, ctx), cancelled);
 			},
 		}),
 	]);
@@ -262,7 +262,7 @@ function withinActivation(asked: number, ctx: ToolContext): WaitWindow {
  * activation, and the room would take a `schedule` call: the call runs in an
  * activation of the room.
  */
-function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
+function outlasts(process: ProcessRecord, ctx: ToolContext): boolean {
 	if (process.state !== 'running' || ctx.deadline === undefined) return false;
 	const ends = Date.parse(process.startedAt) + process.timeout * 1000;
 	return ends > ctx.deadline - DEADLINE_MARGIN_SECONDS * 1000;
@@ -276,8 +276,8 @@ function outlasts(process: ProcessStatus, ctx: ToolContext): boolean {
  */
 function deadlineLine(
 	wait: { cut: boolean },
-	cut: ProcessStatus,
-	running: readonly ProcessStatus[],
+	cut: ProcessRecord,
+	running: readonly ProcessRecord[],
 	ctx: ToolContext,
 ): string {
 	if (ctx.deadline === undefined) return '';
@@ -353,8 +353,8 @@ async function waited(
  */
 async function waitedOnSeveral(
 	options: ProcessToolOptions,
-	processes: readonly ProcessStatus[],
-	first: ProcessStatus,
+	processes: readonly ProcessRecord[],
+	first: ProcessRecord,
 	wait: WaitWindow,
 	ctx: ToolContext,
 ): Promise<AgentToolResult<WaitDetails>> {
@@ -390,11 +390,11 @@ const HELD = 'Its new output did not fit this result: call status with its handl
  */
 async function describedWithin(
 	options: ProcessToolOptions,
-	ended: readonly ProcessStatus[],
+	ended: readonly ProcessRecord[],
 	ctx: ToolContext,
-): Promise<{ shown: AgentToolResult<ProcessDetails>[]; held: ProcessStatus[] }> {
+): Promise<{ shown: AgentToolResult<ProcessDetails>[]; held: ProcessRecord[] }> {
 	const shown: AgentToolResult<ProcessDetails>[] = [];
-	const held: ProcessStatus[] = [];
+	const held: ProcessRecord[] = [];
 	let bytes = 0;
 	for (const process of ended) {
 		if (bytes >= WAIT_OUTPUT_BYTES) {
@@ -409,7 +409,7 @@ async function describedWithin(
 }
 
 /** The line that tells the agent to drop each handle that ended from its next wait. */
-function dropLine(ended: readonly ProcessStatus[]): string {
+function dropLine(ended: readonly ProcessRecord[]): string {
 	const handles = ended.map((process) => process.handle).join(', ');
 	const which = ended.length === 1 ? 'it has ended' : 'they have ended';
 	return `Drop ${handles} from handles: ${which}, and a wait that holds one returns at once.`;
@@ -418,20 +418,20 @@ function dropLine(ended: readonly ProcessStatus[]): string {
 /**
  * The result of `cancel`. A process that had ended before the cancel leads
  * with a line that says so: the cancel stopped nothing. A process that the
- * stop ended can read `exited`, when its command ended inside the grace.
+ * cancel ended can read `exited`, when its command ended inside the grace.
  */
-function cancelled(
+function cancelResult(
 	result: AgentToolResult<ProcessDetails>,
-	stopped: boolean,
+	cancelled: boolean,
 ): AgentToolResult<ProcessDetails> {
 	const { process } = result.details;
-	if (stopped || process.state === 'running') return result;
+	if (cancelled || process.state === 'running') return result;
 	const lead = `Process ${process.handle} had ended before the cancel, so the cancel stopped nothing.`;
 	return { ...result, content: [{ type: 'text', text: `${lead}\n\n${textOf(result)}` }] };
 }
 
 /** Whether a process ended badly: a code other than 0, a timeout, or a failure. */
-function endedBadly(process: ProcessStatus): boolean {
+function endedBadly(process: ProcessRecord): boolean {
 	return (
 		process.state === 'timed_out' ||
 		process.state === 'failed' ||
@@ -445,7 +445,7 @@ function endedBadly(process: ProcessStatus): boolean {
  */
 function failedOr<D>(
 	result: AgentToolResult<D>,
-	reported: readonly ProcessStatus[],
+	reported: readonly ProcessRecord[],
 ): AgentToolResult<D> {
 	if (reported.some(endedBadly)) throw new ToolFailure(textOf(result), result.details);
 	return result;
@@ -475,7 +475,7 @@ async function listed(table: ProcessTable, ctx: ToolContext): Promise<AgentToolR
  */
 async function described(
 	options: ProcessToolOptions,
-	process: ProcessStatus,
+	process: ProcessRecord,
 	ctx: ToolContext,
 	note = '',
 ): Promise<AgentToolResult<ProcessDetails>> {
@@ -511,7 +511,7 @@ async function described(
  * The text before the state line: the new output, or a note for none. A
  * running process that has written nothing yet gives nothing.
  */
-function bodyOf(output: string, process: ProcessStatus, from: number): string {
+function bodyOf(output: string, process: ProcessRecord, from: number): string {
 	if (output !== '') return output;
 	if (from > 0) return '(no new output)';
 	return process.state === 'running' ? '' : '(no output)';

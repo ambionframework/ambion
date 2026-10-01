@@ -7,12 +7,12 @@ import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import { ActivationState } from '../src/execution/activation.ts';
 import type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassInput,
 	PassResult,
+	RunningActivation,
 } from '../src/execution/executor.ts';
 import { PermanentError } from '../src/execution/failure.ts';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
@@ -21,16 +21,16 @@ import {
 	byAgent,
 	callTool,
 	fakeClock,
-	isClosing,
+	isSummarizing,
 	quiet,
 	type Script,
+	say,
 	schedule,
 	scripted,
-	scriptedExecutor,
+	scriptedOpener,
 	settled,
-	speak,
 } from '../src/testing.ts';
-import type { AgentExecutor, ExecutionEvent, Step } from '../src/types.ts';
+import type { ActivationEvent, Executor, Step } from '../src/types.ts';
 import { andrei, collect, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -41,7 +41,7 @@ const echo = defineTool({
 	execute: () => 'echoed',
 });
 
-const agent = (name: string, tools: AgentExecutor['tools'] = []) =>
+const agent = (name: string, tools: Executor['tools'] = []) =>
 	defineAgent({
 		name,
 		identity: `The ${name} seat.`,
@@ -57,10 +57,10 @@ describe('scripted', () => {
 		const results: string[][] = [];
 		const record =
 			(label: string, then: Script = () => quiet()): Script =>
-			(step, seat, call) => {
-				seen.push(`${label}:${seat}:${call}`);
+			(step, seat, request) => {
+				seen.push(`${label}:${seat}:${request}`);
 				results.push(step.results.map((result) => result.text));
-				return then(step, seat, call);
+				return then(step, seat, request);
 			};
 		const room = await open({
 			name: roomName('testing-route'),
@@ -68,8 +68,8 @@ describe('scripted', () => {
 			runtime: createRuntime(),
 			execution: scripted(
 				byAgent({
-					a: record('a', (_step, _seat, call) =>
-						call === 1 ? callTool('echo') : call === 2 ? speak('an answer') : quiet(),
+					a: record('a', (_step, _seat, request) =>
+						request === 1 ? callTool('echo') : request === 2 ? say('an answer') : quiet(),
 					),
 					b: record('b'),
 				}),
@@ -82,12 +82,9 @@ describe('scripted', () => {
 		expect(seen).toContain('b:b:1');
 		expect(seen.every((line) => line.split(':')[0] === line.split(':')[1])).toBe(true);
 		const tools = events.filter(
-			(event) => event.type === 'tool_execution_start' || event.type === 'tool_execution_end',
+			(event) => event.type === 'tool_call' || event.type === 'tool_result',
 		);
-		expect(tools.map((event) => event.type)).toEqual([
-			'tool_execution_start',
-			'tool_execution_end',
-		]);
+		expect(tools.map((event) => event.type)).toEqual(['tool_call', 'tool_result']);
 		const { messages } = await room.read();
 		expect(messages.filter((m) => m.kind === 'said' && m.from === 'a')).toHaveLength(1);
 		expect(results).toContainEqual(['echoed', 'delivered']);
@@ -107,7 +104,7 @@ describe('scripted', () => {
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await vi.waitFor(() => expect(events.some((event) => event.type === 'error')).toBe(true));
 		expect(events.find((event) => event.type === 'error')).toMatchObject({
-			agent: 'a',
+			seat: 'a',
 			cause: 'transient',
 		});
 		const { messages } = await room.read();
@@ -115,18 +112,18 @@ describe('scripted', () => {
 	});
 });
 
-describe('isClosing', () => {
-	it('is false for an ordinary activation and true for the summary activation', async () => {
+describe('isSummarizing', () => {
+	it('is false for a respond activation and true for the summary activation', async () => {
 		const flags: boolean[] = [];
 		const room = await open({
 			name: roomName('testing-closing'),
 			agents: [agent('product'), agent('writer')],
-			summary: 'writer',
+			summaryWriter: 'writer',
 			seats: { product: 'broadcast', writer: 'none' },
 			runtime: createRuntime(),
-			execution: scripted((step, seat, call) => {
-				flags.push(isClosing(step.view));
-				return call === 1 ? speak(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
+			execution: scripted((step, seat, request) => {
+				flags.push(isSummarizing(step.view));
+				return request === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
 			}),
 		});
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -134,7 +131,7 @@ describe('isClosing', () => {
 		expect(flags.filter((flag) => flag).length).toBeGreaterThan(0);
 		expect(flags.at(-1)).toBe(true);
 		const read = await room.read();
-		expect(read.exchanges[0]).toMatchObject({ summary: { status: 'published' } });
+		expect(read.exchanges[0]).toMatchObject({ summary: { kind: 'published' } });
 	});
 });
 
@@ -144,7 +141,7 @@ describe('settled', () => {
 			name: roomName('testing-settled'),
 			agents: [agent('a')],
 			runtime: createRuntime(),
-			execution: scripted((_step, _seat, call) => (call === 1 ? speak('an answer') : quiet())),
+			execution: scripted((_step, _seat, request) => (request === 1 ? say('an answer') : quiet())),
 		});
 		let reads = 0;
 		await (await room.visit(andrei)).send({ text: 'Question?' });
@@ -214,7 +211,7 @@ describe('fakeClock', () => {
 });
 
 /** The executor contract, driven with no room and no driver. */
-describe('scriptedExecutor', () => {
+describe('scriptedOpener', () => {
 	const view = (through: number, purpose: ActivationView['spec']['purpose']): ActivationView => ({
 		spec: { id: 'act-1', seat: 'a', attempt: 1, purpose },
 		through,
@@ -225,9 +222,9 @@ describe('scriptedExecutor', () => {
 	/** The core state of one activation over `executor`, and a room that answers each commit with `commit`. */
 	function harness(commit: (request: CommitRequest) => CommitResult) {
 		const commits: CommitRequest[] = [];
-		const events: ExecutionEvent[] = [];
-		const open = (executor: Executor) =>
-			new ActivationState(executor, {
+		const events: ActivationEvent[] = [];
+		const open = (opener: ActivationOpener) =>
+			new ActivationState(opener, {
 				id: 'act-1',
 				room: {
 					view: async () => ({ stale: 'unused' }),
@@ -251,9 +248,9 @@ describe('scriptedExecutor', () => {
 	it('commits a say and a schedule against the position it read and advances readThrough', async () => {
 		const { open, commits } = harness(() => said(3 + commits.length));
 		const session = open(
-			scriptedExecutor(
-				(_step, _seat, call) =>
-					call === 1 ? speak('hi') : call === 2 ? schedule('Check the build.', 600) : quiet(),
+			scriptedOpener(
+				(_step, _seat, request) =>
+					request === 1 ? say('hi') : request === 2 ? schedule('Check the build.', 600) : quiet(),
 				agent('a'),
 			),
 		);
@@ -278,9 +275,9 @@ describe('scriptedExecutor', () => {
 		});
 		const seen: string[] = [];
 		const session = open(
-			scriptedExecutor((step) => {
+			scriptedOpener((step) => {
 				seen.push(step.results.map((result) => result.text).join(','));
-				return step.results.some((r) => r.text === 'delivered') ? quiet() : speak('again');
+				return step.results.some((r) => r.text === 'delivered') ? quiet() : say('again');
 			}, agent('a')),
 		);
 		await session.pass(input(respond));
@@ -292,7 +289,7 @@ describe('scriptedExecutor', () => {
 
 	it('stops when the room answers stale, and never asks again', async () => {
 		const { open, commits } = harness(() => ({ stale: 'lease ended' }));
-		const session = open(scriptedExecutor(() => speak('hi'), agent('a')));
+		const session = open(scriptedOpener(() => say('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
@@ -308,7 +305,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => schedule('Again.', 60), agent('a')));
+		const session = open(scriptedOpener(() => schedule('Again.', 60), agent('a')));
 		await expect(session.pass(input(closing))).resolves.toMatchObject({
 			failed: true,
 			cause: 'transient',
@@ -326,7 +323,7 @@ describe('scriptedExecutor', () => {
 			through: 5,
 		});
 		const { open, commits } = harness(() => said(6));
-		const session = open(scriptedExecutor(() => speak('summary'), agent('a')));
+		const session = open(scriptedOpener(() => say('summary'), agent('a')));
 		await session.pass(input(closing));
 		expect(commits).toHaveLength(1);
 		expect(commits[0]).not.toHaveProperty('readThrough');
@@ -335,7 +332,7 @@ describe('scriptedExecutor', () => {
 	it('reports a script that throws as a transient failure and emits the error', async () => {
 		const { open, events } = harness(() => said(4));
 		const session = open(
-			scriptedExecutor(() => {
+			scriptedOpener(() => {
 				throw new Error('broke');
 			}, agent('a')),
 		);
@@ -359,18 +356,18 @@ describe('scriptedExecutor', () => {
 			one: Pass,
 			handle: { readonly state: ActivationState; readonly activation: ExecutorActivation },
 		) => Promise<PassResult>,
-		tools: AgentExecutor['tools'] = [],
+		tools: Executor['tools'] = [],
 		steering: 'takes' | 'none' | 'throws' | 'readsThenThrows' = 'takes',
 	) {
 		const opened: ExecutorActivation[] = [];
 		const passes: Pass[] = [];
 		const steered: number[] = [];
 		const steps: Step[] = [];
-		const events: ExecutionEvent[] = [];
+		const events: ActivationEvent[] = [];
 		const state: ActivationState = new ActivationState(
 			(activation) => {
 				opened.push(activation);
-				const session: ExecutorSession = {
+				const session: RunningActivation = {
 					pass: (one) => {
 						passes.push(one);
 						return pass(one, { state, activation });
@@ -427,7 +424,7 @@ describe('scriptedExecutor', () => {
 				message: error.message,
 				error,
 			});
-			expect(events).toEqual([{ type: 'error', agent: 'a', activation: 'act-1', error, cause }]);
+			expect(events).toEqual([{ type: 'error', seat: 'a', activation: 'act-1', error, cause }]);
 		},
 	);
 
@@ -448,7 +445,7 @@ describe('scriptedExecutor', () => {
 	it('runs no pass and takes no steer once cut, and the session sees the cut', async () => {
 		const { state, activation, passes, steered, steps } = around(async () => ({ failed: false }));
 		state.steer(3, 4, 'first');
-		state.cancel();
+		state.cut();
 		state.steer(4, 5, 'second');
 		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(activation.signal.aborted).toBe(true);
@@ -640,8 +637,8 @@ describe('scriptedExecutor', () => {
 		);
 		await expect(state.pass(input(respond))).resolves.toEqual({ failed: false });
 		expect(events).toEqual([
-			{ type: 'tool_execution_start', agent: 'a', activation: 'act-1', toolName: 'echo' },
-			{ type: 'tool_execution_end', agent: 'a', activation: 'act-1', toolName: 'echo' },
+			{ type: 'tool_call', seat: 'a', activation: 'act-1', name: 'echo' },
+			{ type: 'tool_result', seat: 'a', activation: 'act-1', name: 'echo' },
 		]);
 	});
 });

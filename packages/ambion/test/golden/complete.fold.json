@@ -39,7 +39,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -49,7 +49,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				},
@@ -57,9 +57,9 @@
 					"id": "closed:6:assistant:1",
 					"seat": "assistant",
 					"attempt": 1,
-					"purpose": "summary",
+					"purpose": "summarize",
 					"outcome": {
-						"status": "released"
+						"kind": "released"
 					},
 					"usage": {
 						"input": 0,
@@ -69,13 +69,13 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "closed:6:assistant:1"
 					}
 				}
 			],
 			"summary": {
-				"status": "published",
+				"kind": "published",
 				"summary": {
 					"kind": "summary",
 					"text": "Thursday works.",
@@ -85,7 +85,7 @@
 						"through": 6
 					},
 					"at": "2026-01-01T09:00:00.000Z",
-					"activationId": "closed:6:assistant:1",
+					"activation": "closed:6:assistant:1",
 					"from": "assistant",
 					"seq": 11,
 					"key": "key-4"
@@ -104,7 +104,7 @@
 						"through": 6
 					},
 					"at": "2026-01-01T09:00:00.000Z",
-					"activationId": "closed:6:assistant:1",
+					"activation": "closed:6:assistant:1",
 					"from": "assistant",
 					"seq": 11,
 					"key": "key-4"

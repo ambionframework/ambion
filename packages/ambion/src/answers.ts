@@ -120,7 +120,7 @@ function refused(
 ): CommitResult {
 	if (refusal.category === 'missed') {
 		const missed = refusal.missed.map(copyMessage);
-		room.emit({ type: 'conflict', author: seat, activation, missed });
+		room.emit({ type: 'conflict', seat, activation, missed });
 		return { missed };
 	}
 	return refusal.category === 'stale' ? stale(refusal.reason) : { refused: refusal.reason };

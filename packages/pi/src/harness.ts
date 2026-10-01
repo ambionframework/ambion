@@ -62,9 +62,9 @@ export interface OpenHarness {
 }
 
 /**
- * Attach a harness to the session and take its lane. A run that a lost
+ * Attach a harness to the session and take its lane. A pass that a lost
  * process left open is cut before the lane takes a new one. The harness
- * settles the cut run with recovery events, and the activation reads none
+ * settles the cut pass with recovery events, and the activation reads none
  * of them. When the lane
  * cannot be set up, the harness closes, and the session with it.
  */
@@ -88,7 +88,7 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 	try {
 		const lane = await harness.lane(LANE, BACKGROUND_CONTEXT);
 		if (open.some((operation) => operation.lane === LANE)) await lane.abort(BACKGROUND_CONTEXT);
-		// The events of the cut run belong to no activation: the activation listens from here.
+		// The events of the cut pass belong to no activation: the activation listens from here.
 		for (const type of OBSERVED) harness.events.on(type, (event) => input.onEvent(event));
 		await configure(lane, input);
 		return { harness, lane };
@@ -101,7 +101,7 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 
 /**
  * A lane keeps its model and its tools in the session. A continued session
- * takes the model and the tools of this activation: a closing activation
+ * takes the model and the tools of this activation: a summary activation
  * holds fewer tools than the response before it.
  */
 async function configure(lane: AgentLane, input: HarnessInput): Promise<void> {

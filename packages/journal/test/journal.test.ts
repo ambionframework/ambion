@@ -317,7 +317,7 @@ describe('a journal', () => {
 	});
 });
 
-describe('the envelope and storage cursor', () => {
+describe('the entry and storage cursor', () => {
 	it('keeps storage positions distinct from accepted journal seqs', async () => {
 		const id = `journal-position-${++names}`;
 		await store(id, null);
@@ -329,8 +329,8 @@ describe('the envelope and storage cursor', () => {
 		expect('entry' in next && next.entry.seq).toBe(8);
 	});
 
-	it('keeps envelope fields separate from body fields', async () => {
-		const id = `journal-envelope-${++names}`;
+	it('keeps entry fields separate from body fields', async () => {
+		const id = `journal-entry-${++names}`;
 		const journal = await open(id, 'run-1');
 		const own = { text: 'mine', seq: 99, key: 'stolen', run: 'ghost' };
 		expect(await journal.append('note', { decide: () => body(own) })).toEqual({

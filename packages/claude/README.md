@@ -104,9 +104,9 @@ try {
 **A room with no `execution` runs each Claude seat on the default Claude
 execution.** A host that sets `env` or a path to the executable passes
 `claudeExecution(options)` to a room or to `createRuntime`. A room whose
-seats run on more than one family passes a list, such as
-`[piExecution(), claudeExecution()]`, or passes none when each family
-package is loaded.
+seats run on more than one executor kind passes a list, such as
+`[piExecution(), claudeExecution()]`, or passes none when the package of each executor
+kind is loaded.
 
 ## Options
 
@@ -115,7 +115,7 @@ package is loaded.
 | `instructions`          | Required                          | The private guidance of the agent.                            |
 | `model`                 | Required                          | A Claude model id.                                            |
 | `tools`, `bundles`      | None                              | The tools of the agent and the bundles that add tools.        |
-| `speaking`              | `DEFAULT_GUIDANCE`                | The speaking policy. It replaces the default.                 |
+| `speaking`              | `DEFAULT_SPEAKING`                | The speaking policy. It replaces the default.                 |
 | `activationTokenLimit`  | The whole record                  | The token limit of the record one activation reads.           |
 | `estimateTokens`        | `'length'`                        | The name of the estimator in the runtime. It needs the limit. |
 | `permissionMode`        | The SDK default, `default`        | The SDK permission mode.                                      |
@@ -143,7 +143,7 @@ passes waits for the next delta.
 
 **Room tools run in process.** One in-process MCP server serves `say`, `seat`,
 `unseat`, and the tools of the agent. The model sees them as `mcp__ambion__`
-tools. A closing activation receives `say` only.
+tools. A summary activation receives `say` only.
 
 ## Policy and the trust boundary
 
@@ -170,7 +170,7 @@ becomes an `approval` step with the answer. The executor denies a request when
 ## Exchange continuity
 
 **Every query persists its SDK session on the local disk.** The release
-records `{ harness: 'claude', id }`. The next activation of the seat in the
+records `{ kind: 'claude', id }`. The next activation of the seat in the
 same exchange resumes that session, and the first activation in a new
 exchange starts a fresh one. A host that loses the SDK session store starts
 a fresh session, and the next release records the new id. Each resumed
@@ -191,21 +191,21 @@ Every other failure is transient.
 
 ## Test
 
-`@ambionframework/claude/testing` exports `claudeExecutorHarness`. It runs the
+`@ambionframework/claude/testing` exports `claudeExecutorFixture`. It runs the
 executor suite of `@ambionframework/ambion/conformance` against a fake Claude
 Code executable that the SDK spawns through `pathToClaudeCodeExecutable`. The
 suite needs no key and no network.
 
 ```ts
 import { executorConformance } from '@ambionframework/ambion/conformance';
-import { claudeExecutorHarness } from '@ambionframework/claude/testing';
+import { claudeExecutorFixture } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 describe('claude executor', () => {
-  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+  for (const c of executorConformance(claudeExecutorFixture({ executable }))) it(c.name, c.run);
 });
 ```
 
@@ -220,7 +220,7 @@ settings sources, or a resume. The package has no live tier.
 | ------------------------------------------------------ | --------------------------------------------------------- |
 | `claude(options)`                                      | The executor of an agent definition                       |
 | `claudeExecution({ pathToClaudeCodeExecutable, env })` | The `execution` value for `startRoom` and `createRuntime` |
-| `claudeExecutorHarness`, `scenarioOf`                  | From `/testing`: the suite harness and its scenarios      |
+| `claudeExecutorFixture`, `scenarioOf`                  | From `/testing`: the suite fixture and its scenarios      |
 
 ## Troubleshooting
 

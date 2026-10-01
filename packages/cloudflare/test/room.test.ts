@@ -36,7 +36,7 @@ const priya = { name: 'priya', identity: 'Project manager.' };
 /** A started room with no agents that priya has visited. */
 async function visited(name: string) {
 	const stub = roomOf(name);
-	await stub.start({ name, agents: [] });
+	await stub.start({ name, definitions: [] });
 	await stub.visit(priya);
 	return stub;
 }
@@ -60,14 +60,14 @@ async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
 
 async function seedStoppedOpen(stub: ReturnType<typeof roomOf>, name: string): Promise<void> {
 	await inside<Room, void>(stub, async (object, state) => {
-		object.metadata.change(() => ({ patch: { name, agents: [], stopped: true } }));
+		object.metadata.change(() => ({ patch: { name, definitions: [], stopped: true } }));
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
 		let position = (await journal.read(0)).position;
 		const entries = [
 			{ kind: 'run', body: { at: '2026-01-01T00:00:00.000Z' }, seq: 1, run: 'seeded-run' },
 			{
 				kind: 'composition',
-				body: { agents: [], available: [], at: '2026-01-01T00:00:00.000Z' },
+				body: { seated: [], reserve: [], at: '2026-01-01T00:00:00.000Z' },
 				seq: 2,
 				run: 'seeded-run',
 			},
@@ -104,9 +104,9 @@ it('starts, admits a person, and returns one plain exchange for repeated sends, 
 	const stub = roomOf('room-test');
 	await stub.start({
 		name: 'room-test',
-		summary: 'assistant',
+		summaryWriter: 'assistant',
 		seats: { assistant: 'none' },
-		agents: ['assistant'],
+		definitions: ['assistant'],
 		goal: 'Decide the pour date.',
 	});
 	await stub.visit(priya);
@@ -151,7 +151,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 	const again = roomOf(name);
 	// The next call builds the object again, and its constructor resumes the name.
 	// The room takes the visit from journal presence, so a send needs no second
-	// visit. The abort may still be settling: the call that finds it retries.
+	// visit. The cancel may still be settling: the call that finds it retries.
 	const retry = await until(async () => {
 		try {
 			return await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
@@ -188,7 +188,7 @@ it('resumes over its own storage after eviction: it fences the old run, keeps th
 
 it('does not persist malformed visits and makes repeated leave harmless', async () => {
 	const stub = roomOf('room-malformed-visit');
-	await stub.start({ name: 'room-malformed-visit', agents: [] });
+	await stub.start({ name: 'room-malformed-visit', definitions: [] });
 	const metadata = await inside<Room, Record<string, unknown>>(stub, async (object) => {
 		await expect(object.visit({ name: 'Not valid', identity: 'Unknown.' })).rejects.toThrow(
 			/Invalid participant name/,
@@ -211,7 +211,7 @@ it('does not persist malformed visits and makes repeated leave harmless', async 
 it('rejects a conflicting delivery key payload and recipient over RPC', async () => {
 	const name = 'room-delivery-conflict';
 	const stub = roomOf(name);
-	await stub.start({ name, agents: ['assistant'] });
+	await stub.start({ name, definitions: ['assistant'] });
 	await stub.visit(priya);
 	await stub.visit({ name: 'sam', identity: 'Engineering lead.' });
 	await inside<Room, void>(stub, async (object) => {
@@ -285,7 +285,7 @@ it('keeps a visit that reenters while an older leave is in flight', async () => 
 
 it('can ensure a resumed room and report its current state', async () => {
 	const stub = roomOf('room-status');
-	const composition = { name: 'room-status', assistant: 'assistant', agents: [] } as const;
+	const composition = { name: 'room-status', assistant: 'assistant', definitions: [] } as const;
 	await stub.ensureStart(composition);
 	await stub.ensureStart(composition);
 	await expect(stub.read()).resolves.toMatchObject({
@@ -315,7 +315,7 @@ it('keeps a stopped record readable without resuming the room, and runs the alar
 		name: 'room-stopped-status',
 		initialized: true,
 		exchange: undefined,
-		exchanges: [{ status: 'closed', from: exchange.from, summary: { status: 'silent' } }],
+		exchanges: [{ status: 'closed', from: exchange.from, summary: { kind: 'silent' } }],
 	});
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
 });
@@ -331,7 +331,7 @@ it('reads a stopped open exchange and reconstructs it after eviction', async () 
 
 it('retains the stopped handle when saving stop metadata fails', async () => {
 	const stub = roomOf('room-stop-retry');
-	await stub.start({ name: 'room-stop-retry', agents: [] });
+	await stub.start({ name: 'room-stop-retry', definitions: [] });
 	type Stoppable = {
 		metadata: { change: (...args: never[]) => unknown };
 		stop(): Promise<void>;
@@ -356,7 +356,7 @@ it('leaves an uninitialized named record for an explicit start retry', async () 
 	const stub = roomOf(name);
 	await inside<Room, void>(stub, async (object) => {
 		object.metadata.change(() => ({
-			patch: { name, agents: ['assistant'], stopped: false },
+			patch: { name, definitions: ['assistant'], stopped: false },
 		}));
 	});
 	await evict(stub, 'reconstruct uninitialized object');
@@ -365,7 +365,7 @@ it('leaves an uninitialized named record for an explicit start retry', async () 
 		name,
 		initialized: false,
 	});
-	await again.start({ name, agents: [] });
+	await again.start({ name, definitions: [] });
 	await expect(again.read({ messages: false })).resolves.toMatchObject({
 		name,
 		initialized: true,
@@ -376,8 +376,8 @@ it('changes membership by name without installing a definition', async () => {
 	const stub = roomOf('room-roster');
 	await stub.start({
 		name: 'room-roster',
-		summary: 'assistant',
-		agents: ['product', 'assistant'],
+		summaryWriter: 'assistant',
+		definitions: ['product', 'assistant'],
 		seats: { assistant: 'none' },
 	});
 	const names = async () =>
@@ -403,7 +403,7 @@ it('serves a token-windowed view over RPC to a seat that names a registered esti
 	configure({ ...configuration, stream });
 	onTestFinished(() => configure(configuration));
 	const stub = roomOf('room-window');
-	await stub.start({ name: 'room-window', agents: ['reader'] });
+	await stub.start({ name: 'room-window', definitions: ['reader'] });
 	await stub.visit(priya);
 	// Four questions of 40 characters each: the window of 40 tokens holds one.
 	const question = (index: number) => `Question ${index} about the pour.`.padEnd(40, '.');

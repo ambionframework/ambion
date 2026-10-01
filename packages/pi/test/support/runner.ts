@@ -18,8 +18,8 @@ import { fakeClock } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { scriptedAgent, tick } from '../../../ambion/test/support/room.ts';
-import { quiet, scripted } from '../../../ambion/test/support/scripted.ts';
-import { createPiExecutor } from '../../src/executor.ts';
+import { quiet, scriptedStream } from '../../../ambion/test/support/scripted.ts';
+import { createPiOpener } from '../../src/executor.ts';
 import { createExecutionServices, type ModelResolver } from '../../src/index.ts';
 import { noTraces } from './trace.ts';
 
@@ -123,7 +123,7 @@ export function seatHost(options: SeatOptions = {}) {
 	const clock = fakeClock(0);
 	const runtime = createRuntime({ clock, limits: { call: options.call } });
 	const services = createExecutionServices({
-		stream: options.stream ?? scripted(() => quiet()),
+		stream: options.stream ?? scriptedStream(() => quiet()),
 		sessions: 'memory',
 	});
 	const start = (room: RoomProtocol) =>
@@ -133,7 +133,7 @@ export function seatHost(options: SeatOptions = {}) {
 			definition,
 			room: name,
 			seat: definition.name,
-			executor: createPiExecutor({
+			opener: createPiOpener({
 				...services,
 				definition,
 				model: options.model ?? services.model,

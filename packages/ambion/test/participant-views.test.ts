@@ -2,18 +2,18 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import {
-	type AgentParticipantInfo,
+	type AgentParticipant,
 	createRuntime,
 	defineHuman,
-	type HumanParticipantInfo,
+	type HumanParticipant,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { viewOf } from '../src/room/view.ts';
 import { replayState } from './support/fold.ts';
 import { participantsOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { contextText, quiet, say, scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -33,11 +33,11 @@ describe('participant views', () => {
 					runtime,
 					execution: piExecution({
 						sessions: 'memory',
-						stream: scripted((context) => {
+						stream: scriptedStream((context) => {
 							contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
 							const text = contextText(context);
 							return text.includes('Question?') && !text.includes('Answer.')
-								? speak('Answer.')
+								? say('Answer.')
 								: quiet();
 						}),
 					}),
@@ -57,16 +57,16 @@ describe('participant views', () => {
 			const participants = await participantsOf(room);
 			for (const participant of participants) {
 				if (participant.kind === 'agent') {
-					expectTypeOf(participant).toEqualTypeOf<AgentParticipantInfo>();
+					expectTypeOf(participant).toEqualTypeOf<AgentParticipant>();
 				} else {
-					expectTypeOf(participant).toEqualTypeOf<HumanParticipantInfo>();
+					expectTypeOf(participant).toEqualTypeOf<HumanParticipant>();
 				}
 			}
-			expectTypeOf<Extract<'sessionId', keyof AgentParticipantInfo>>().toEqualTypeOf<never>();
+			expectTypeOf<Extract<'sessionId', keyof AgentParticipant>>().toEqualTypeOf<never>();
 			expectTypeOf<
 				Extract<
 					'changedAt' | 'lastDeparture' | 'messagesSinceDeparture' | 'preferences',
-					keyof HumanParticipantInfo
+					keyof HumanParticipant
 				>
 			>().toEqualTypeOf<never>();
 			const agent = {
@@ -97,19 +97,19 @@ describe('participant views', () => {
 
 	it('carries the departure and the unread count in the context view of a person', () => {
 		const at = '2026-01-01T00:00:00.000Z';
-		const said = (seq: number, from: string): Entry => ({
+		const said = (seq: number, from: string): RoomEntry => ({
 			kind: 'message',
 			seq,
 			body: { kind: 'said', at, from, text: `Message ${seq}.` },
 		});
-		const entries: Entry[] = [
+		const entries: RoomEntry[] = [
 			{
 				kind: 'composition',
 				seq: 1,
 				body: {
-					summary: 'worker',
-					agents: [{ name: 'worker', identity: 'W.', attention: 'broadcast' }],
-					available: [],
+					summaryWriter: 'worker',
+					seated: [{ name: 'worker', identity: 'W.', attention: 'broadcast' }],
+					reserve: [],
 					at,
 				},
 			},

@@ -4,9 +4,9 @@
  * module scope, and every object in the isolate reads it.
  */
 import type {
+	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
-	ExecutionEvent,
 	Runtime,
 	TraceLogger,
 } from '@ambionframework/ambion';
@@ -25,8 +25,8 @@ export interface SeatEvent {
 	room: string;
 	seat: string;
 	activation: string;
-	event: ExecutionEvent['type'];
-	operation?: Extract<ExecutionEvent, { type: 'delivery_error' }>['operation'];
+	event: ActivationEvent['type'];
+	operation?: Extract<ActivationEvent, { type: 'delivery_error' }>['operation'];
 	tool?: string;
 	error?: string;
 	at: string;

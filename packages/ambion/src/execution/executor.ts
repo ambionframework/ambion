@@ -1,18 +1,18 @@
 /**
- * The contract between the core and the executor of one activation.
+ * The contract between the core and the running activation of an executor.
  *
  * The core owns what it causes or observes: the lease, its renewal, the cut,
  * the wake queue, the decision to run another pass, the read position, the
  * room tools and their binding, the prompt, the tool events, and the error
- * event. An executor owns one harness: the mapping of its events to steps,
- * the resume of a harness session, the place where it hosts the tools, and
- * the signal that the model consumed input. A session's `steer` is optional
- * because an executor family may only take context between passes. The core
- * records the `steer` step of every steered line.
+ * event. A running activation owns one harness: the mapping of its events to
+ * steps, the resume of a vendor session, the place where it hosts the
+ * tools, and the signal that the model consumed input. Its `steer` is
+ * optional because an executor kind may only take context between passes.
+ * The core records the `steer` step of every steered line.
  */
 import type { ActivationView } from '../protocol.ts';
 import type { FailureCause, Seq } from '../types.ts';
-import type { RoomTool, RoomToolOptions } from './room-tools.ts';
+import type { RoomTool } from './room-tools.ts';
 import type { StepSink } from './trace.ts';
 
 /** A range of the record: the messages after `after`, through `through`. */
@@ -22,9 +22,9 @@ export interface ReadRange {
 }
 
 /**
- * What the core gives an executor to open the session of one activation.
- * Every member serves the whole activation, so a session keeps it across
- * its passes.
+ * What the core gives an `ActivationOpener` to open one activation. Every
+ * member serves the whole activation, so a running activation keeps it
+ * across its passes.
  */
 export interface ExecutorActivation {
 	readonly id: string;
@@ -83,17 +83,17 @@ export type Pass = PassInput & {
 	 * The record this pass reads. The first pass reads the whole view, with
 	 * the reminders of the tool bundles. A later pass reads the delta after
 	 * the `after` of its input. The argument `after` names the position that
-	 * a resumed harness session read through: the first pass of a respond
+	 * a resumed vendor session read through: the first pass of a respond
 	 * activation then reads the reminders, the scheduled says, and the delta
 	 * after it. It gives nothing when no message is new, and the core then
 	 * counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
-	/** The id of the harness session to resume: `spec.resume`, when it names the kind of the executor. */
-	readonly resume?: string;
+	/** The id of the vendor session to resume: `spec.resume`, when its kind is the kind of the executor. */
+	readonly resumeId?: string;
 	/**
 	 * The room tools that the purpose grants, then the tools of the
-	 * definition, bound to the activation. A closing activation gets the room
+	 * definition, bound to the activation. A summary activation gets the room
 	 * tools alone. Every pass holds the same values.
 	 */
 	readonly tools: readonly RoomTool[];
@@ -113,20 +113,18 @@ export interface PassResult {
 }
 
 /**
- * One activation's session with its executor: opened once, passed over as
- * the record moves, then closed. The core cuts it through the signal of the
- * activation.
+ * One activation of a seat, as its executor runs it: opened once, passed over
+ * as the record moves, then closed. The core cuts it through the signal of
+ * the activation.
  */
-export interface ExecutorSession {
+export interface RunningActivation {
 	/**
-	 * The id of the harness session to record with the release, read after
+	 * The id of the vendor session to record with the release, read after
 	 * the last pass. The core records it under the executor kind. The room
 	 * hands it to the seat's next activation in the same exchange as
 	 * `spec.resume`. It never reads the id.
 	 */
 	readonly session?: string;
-	/** What the executor adds to a say and a schedule. The core reads it once, on the first pass. */
-	readonly roomTools?: RoomToolOptions;
 	/**
 	 * Run one pass. A pass that throws is a failed pass: a `PermanentError`
 	 * is permanent, and every other error is transient. A pass that the cut
@@ -142,22 +140,22 @@ export interface ExecutorSession {
 	 * `steer` step, and the executor records none. The executor reads
 	 * `{ after, through: seq }` when the model consumes the line. A line that
 	 * the pass does not read waits for the next delta, and the step says so. A
-	 * `steer` that throws counts as a line the pass does not read. A family
-	 * that cannot steer mid-run leaves `steer` out. The record already holds
+	 * `steer` that throws counts as a line the pass does not read. An executor
+	 * kind that cannot steer mid-run leaves `steer` out. The record already holds
 	 * the line, and the next pass reads it.
 	 */
 	steer?(after: Seq, seq: Seq, line: string): void;
 	/**
-	 * Release what the session holds, such as a process. The driver calls it
-	 * once, after the release of the activation. A session that holds nothing
-	 * leaves it out.
+	 * Release what the running activation holds, such as a process. The driver
+	 * calls it once, after the release of the activation. A running activation
+	 * that holds nothing leaves it out.
 	 */
 	close?(): void;
 }
 
 /**
- * Opens the session of one activation of one seat. One executor per seat,
- * for its whole lifetime. The core records and resumes harness sessions
- * under the seat's executor kind, `definition.executor.kind`.
+ * Opens one activation of one seat. One opener per seat, for its whole
+ * lifetime. The core records and resumes vendor sessions under the seat's
+ * executor kind, `definition.executor.kind`.
  */
-export type Executor = (activation: ExecutorActivation) => ExecutorSession;
+export type ActivationOpener = (activation: ExecutorActivation) => RunningActivation;

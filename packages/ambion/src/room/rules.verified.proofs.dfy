@@ -3,7 +3,7 @@ include "rules.verified.dfy"
 
 
 // The attempts at one message cause for one seat, in journal order. `count` is how many
-// covering leases the fold counts as unsuccessful (`failed.length` in `statusOf`); `running`
+// covering leases the fold counts as unsuccessful (`failed.length` in `dueOf`); `running`
 // is the attempt at this cause that holds a running lease; `ended` is every attempt number
 // at this cause whose lease ended, for any reason.
 datatype AttemptEvent =

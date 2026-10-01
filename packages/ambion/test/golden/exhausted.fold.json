@@ -32,7 +32,7 @@
 					"attempt": 1,
 					"purpose": "respond",
 					"outcome": {
-						"status": "failed",
+						"kind": "failed",
 						"cause": "permanent"
 					},
 					"usage": {
@@ -43,7 +43,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				},
@@ -53,13 +53,13 @@
 					"attempt": 2,
 					"purpose": "respond",
 					"outcome": {
-						"status": "abandoned",
+						"kind": "abandoned",
 						"cause": "permanent"
 					}
 				}
 			],
 			"summary": {
-				"status": "silent"
+				"kind": "silent"
 			},
 			"outcome": {
 				"kind": "exhausted"

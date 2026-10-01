@@ -7,24 +7,19 @@
  */
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type {
-	AgentDefinition,
-	AgentExecutor,
-	Message,
-	ReminderSeat,
-} from '@ambionframework/ambion';
+import type { AgentDefinition, Executor, Message, ReminderSeat } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
 	CommitRequest,
 	CommitResult,
-	HarnessSession,
 	LeaseRequest,
 	LeaseResponse,
 	RoomProtocol,
+	VendorSession,
 	ViewResponse,
 } from '@ambionframework/ambion/hosting';
-import { quiet, speak } from '@ambionframework/ambion/testing';
+import { quiet, say } from '@ambionframework/ambion/testing';
 import {
 	BACKGROUND_CONTEXT,
 	type CompactionSettings,
@@ -34,7 +29,7 @@ import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createPiExecutor } from '../src/executor.ts';
+import { createPiOpener } from '../src/executor.ts';
 import { createExecutionServices, stubModel } from '../src/index.ts';
 import {
 	defaultSessionDir,
@@ -43,7 +38,7 @@ import {
 	type PiSessions,
 	privateDirectory,
 } from '../src/sessions.ts';
-import { contextText, type PiScript, scripted } from '../src/testing.ts';
+import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
 import { tempDir } from './support/temp.ts';
 
@@ -109,11 +104,11 @@ class TwoQuestions implements RoomProtocol {
 /** The seat on compaction settings that `pi()` refuses, as a host could build it by hand. */
 const withCompaction = (compaction: CompactionSettings): AgentDefinition => {
 	const definition = scriptedAgent('product');
-	return { ...definition, executor: { ...definition.executor, compaction } as AgentExecutor };
+	return { ...definition, executor: { ...definition.executor, compaction } as Executor };
 };
 
 /** The session that the activation `message:<seq>:product:1` began. */
-const began = (seq: number): HarnessSession => ({ harness: 'pi', id: `message:${seq}:product:1` });
+const began = (seq: number): VendorSession => ({ kind: 'pi', id: `message:${seq}:product:1` });
 
 const texts = (context: Context) =>
 	context.messages.map((message) => contextText({ ...context, messages: [message] }));
@@ -131,12 +126,12 @@ function seatOn(
 ) {
 	const seen: Context[] = [];
 	const errors: string[] = [];
-	const executor = createPiExecutor({
+	const opener = createPiOpener({
 		definition,
 		model: stubModel,
-		stream: scripted((context, agent, call) => {
+		stream: scriptedStream((context, agent, request) => {
 			seen.push({ ...context, messages: [...context.messages] });
-			return script(context, agent, call);
+			return script(context, agent, request);
 		}),
 		now: () => 0,
 		sessions,
@@ -148,7 +143,7 @@ function seatOn(
 	) => {
 		const answer = await room.view(id);
 		if (!('view' in answer)) throw new Error('The room answered stale.');
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id,
 			room,
 			emit: (event) => {
@@ -165,7 +160,7 @@ function seatOn(
 		session.close?.();
 		return recorded;
 	};
-	return { seen, errors, run, executor, definition };
+	return { seen, errors, run, opener, definition };
 }
 
 const stores: [string, () => Promise<PiSessions>][] = [
@@ -249,8 +244,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 
 	it('refuses a say against a record that moved', async () => {
 		const room = new TwoQuestions(3);
-		const { run } = seatOn(room, await store(), (_context, _agent, call) =>
-			call === 2 ? speak('Yes.') : quiet(),
+		const { run } = seatOn(room, await store(), (_context, _agent, request) =>
+			request === 2 ? say('Yes.') : quiet(),
 		);
 		const first = await run('message:1:product:1');
 		await run('message:2:product:1', { resume: first.session });
@@ -260,12 +255,12 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('records no session for an activation that ran no pass', async () => {
-		const { executor, definition } = seatOn(new TwoQuestions(), await store());
-		const cut = stateOf(executor, definition, {
+		const { opener, definition } = seatOn(new TwoQuestions(), await store());
+		const cut = stateOf(opener, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
 		});
-		cut.cancel();
+		cut.cut();
 		expect(await cut.pass({ kind: 'view', view: await viewOf('message:2:product:1') })).toEqual({
 			failed: false,
 		});
@@ -275,18 +270,18 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 
 	it('resolves a pass with no failure when it is cut and closed during the model request', async () => {
 		const requested = deferred();
-		const { executor, definition } = seatOn(new TwoQuestions(), await store(), async () => {
+		const { opener, definition } = seatOn(new TwoQuestions(), await store(), async () => {
 			requested.resolve();
 			await new Promise(() => {});
 			return quiet();
 		});
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id: 'message:1:product:1',
 			room: new TwoQuestions(),
 		});
 		const running = session.pass({ kind: 'view', view: await viewOf('message:1:product:1') });
 		await requested.promise;
-		session.cancel();
+		session.cut();
 		// The driver closes the harness while the abort of the run is still active.
 		session.close();
 		expect(await running).toEqual({ failed: false });
@@ -296,15 +291,18 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('fails on a provider refusal, and records the session it continued', async () => {
-		const { run, errors } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) =>
-			call === 1
-				? quiet()
-				: ({
-						...fauxAssistantMessage('', {
-							stopReason: 'error',
-							errorMessage: 'Your credit balance is too low',
-						}),
-					} as AssistantMessage),
+		const { run, errors } = seatOn(
+			new TwoQuestions(),
+			await store(),
+			(_context, _agent, request) =>
+				request === 1
+					? quiet()
+					: ({
+							...fauxAssistantMessage('', {
+								stopReason: 'error',
+								errorMessage: 'Your credit balance is too low',
+							}),
+						} as AssistantMessage),
 		);
 		const first = await run('message:1:product:1');
 		const failed = await run('message:2:product:1', { resume: first.session });
@@ -324,7 +322,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		await run('message:2:product:1');
 		const closing = await run('closed:1:product:1', { purpose: summary, resume: began(1) });
 		expect(closing.session).toEqual(began(1));
-		// The closing activation continued the first session, and it reads the whole view.
+		// The summary activation continued the first session, and it reads the whole view.
 		const prompts = texts(seen.at(-1) as Context);
 		expect(prompts.length).toBeGreaterThan(1);
 		expect(prompts.at(-1)).toContain("The record of 'memory' so far:");
@@ -362,8 +360,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('reads the whole view once when the room retries a failed activation on its session', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
-			if (call === 1) throw new Error('overloaded 529');
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, request) => {
+			if (request === 1) throw new Error('overloaded 529');
 			return quiet();
 		});
 		const failed = await run('message:2:product:1');
@@ -378,8 +376,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	});
 
 	it('prompts the delta once when the room retries a failed activation that continued a session', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, call) => {
-			if (call === 2) throw new Error('overloaded 529');
+		const { seen, run } = seatOn(new TwoQuestions(), await store(), (_context, _agent, request) => {
+			if (request === 2) throw new Error('overloaded 529');
 			return quiet();
 		});
 		const first = await run('message:1:product:1');
@@ -396,14 +394,14 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		const sessions = await store();
 		await seatOn(new TwoQuestions(), sessions).run('message:1:product:1');
 		const definition = withCompaction({ enabled: true, reserveTokens: -1, keepRecentTokens: 1 });
-		const executor = createPiExecutor({
+		const opener = createPiOpener({
 			definition,
 			model: stubModel,
-			stream: scripted(() => quiet()),
+			stream: scriptedStream(() => quiet()),
 			now: () => 0,
 			sessions,
 		});
-		const session = stateOf(executor, definition, {
+		const session = stateOf(opener, definition, {
 			id: 'message:2:product:1',
 			room: new TwoQuestions(),
 		});
@@ -468,8 +466,8 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 				failing(await inner.create(scope, id, context), WRITES, () => broken),
 			open: (scope, id, context) => inner.open(scope, id, context),
 		};
-		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, call) => {
-			broken = call === 1;
+		const { seen, run } = seatOn(new TwoQuestions(), sessions, (_context, _agent, request) => {
+			broken = request === 1;
 			return quiet();
 		});
 		const failed = await run('message:2:product:1');
@@ -584,7 +582,7 @@ describe('exchange continuity on the local disk', () => {
 		expect(dir).toBe(join(temporary, `ambion-pi-sessions-${process.getuid?.()}`));
 		expect((await stat(dir)).mode & 0o777).toBe(0o700);
 		// With no option, every stream keeps its sessions there.
-		const services = createExecutionServices({ stream: scripted(() => quiet()) });
+		const services = createExecutionServices({ stream: scriptedStream(() => quiet()) });
 		const scope = { room: 'room', seat: 'seat' };
 		await (
 			await services.sessions.create(scope, 'kept', BACKGROUND_CONTEXT)
@@ -622,7 +620,7 @@ describe('exchange continuity on the local disk', () => {
 		const dir = await tempDir('ambion-services-');
 		const services = () =>
 			createExecutionServices({
-				stream: scripted(() => quiet()),
+				stream: scriptedStream(() => quiet()),
 				...(named ? { sessionDir: dir } : { sessions: 'memory' }),
 			});
 		const scope = { room: 'room', seat: 'seat' };

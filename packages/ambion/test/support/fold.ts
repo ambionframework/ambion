@@ -9,12 +9,12 @@
  * projection equal to it after every entry of a seeded walk.
  */
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
-import type { Close, Composition, Seating } from '../../src/journal/events.ts';
-import type { Entry } from '../../src/journal/journal.ts';
+import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
+import type { RoomEntry } from '../../src/journal/journal.ts';
 import type { MessageDelivery } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
 import {
-	applyEvent,
+	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
 	older,
@@ -23,11 +23,11 @@ import {
 	reserveOf,
 } from '../../src/room/fold.ts';
 import {
+	type DueActivation,
+	type DueWake,
+	dueOf,
 	type LeaseHold,
-	type PendingActivation,
-	type PendingWake,
 	removedAfter,
-	statusOf,
 } from '../../src/room/lease.ts';
 import { type Owed, withAttempts } from '../../src/room/owed.ts';
 import { advancePeople, type PersonState } from '../../src/room/presence.ts';
@@ -45,10 +45,10 @@ export function activationOf(id: string): ActivationId {
 }
 
 /** The state after every entry, folded over the whole journal. */
-export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
+export function foldRoom(entries: readonly RoomEntry[], options: FoldOptions): RoomState {
 	const read = older();
 	for (const entry of entries)
-		applyEvent(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
+		applyEntry(read, entry, entry.kind === 'cancel' ? open(read) : undefined);
 	return project(read, options);
 }
 
@@ -88,11 +88,11 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 }
 
 /** The wakes the room owes, from a state's `due`. */
-export const pendingOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+export const pendingOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'message');
 
-/** The summary drafts the room owes, from a state's `due`. */
-export const owedOf = (state: Pick<RoomState, 'due'>): PendingActivation[] =>
+/** The summary activations the room owes, from a state's `due`. */
+export const owedOf = (state: Pick<RoomState, 'due'>): DueActivation[] =>
 	state.due.filter((due) => due.source === 'closed');
 
 /** Every person the record knows, in the order the record met them. */
@@ -105,7 +105,7 @@ function foldPeople(messages: readonly Message[]): Map<string, PersonState> {
 /** The latest composition, then every seating and unseating after it, in order. */
 function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {
 	if (composition === undefined) return [];
-	const roster: Seating[] = composition.agents.map((seat) => ({ ...seat }));
+	const roster: Seating[] = composition.seated.map((seat) => ({ ...seat }));
 	for (const message of messages) {
 		if (message.seq > composition.seq) reseat(roster, message);
 	}
@@ -146,16 +146,16 @@ export function pendingWakes(
 	roster: ReadonlySet<string>,
 	options: FoldOptions,
 	cancelledAt?: Seq,
-): PendingWake[] {
+): DueWake[] {
 	const bySeat = leasesBySeat(leases, roster);
-	const pending: PendingWake[] = [];
+	const pending: DueWake[] = [];
 	for (const message of after(messages, cancelledAt)) {
 		const delivery = deliveries.get(message.seq);
 		if (delivery === undefined) continue;
 		for (const seat of reached(delivery, roster)) {
 			if (removedAfter(messages, seat, message.seq)) continue;
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options);
+			const wake = dueOf(message, seat, taken, options);
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
@@ -195,13 +195,13 @@ function foldOwed(
 	cancelledAt: Seq | undefined,
 ): Owed[] {
 	return closes.flatMap((close) => {
-		if (close.summary === undefined) return [];
+		if (close.summaryWriter === undefined) return [];
 		const completion = summaryCompletion(close, messages, leases, cancelledAt);
-		if (completion.status !== 'pending' || completion.writer === undefined) return [];
+		if (completion.kind !== 'pending' || completion.writer === undefined) return [];
 		return [withAttempts(close, completion.writer, leases, options)];
 	});
 }
 
 /** The state the room derives: the projection after every entry. */
-export const replayState = (entries: readonly Entry[], options: FoldOptions): RoomState =>
+export const replayState = (entries: readonly RoomEntry[], options: FoldOptions): RoomState =>
 	projectState(replay(entries, options));

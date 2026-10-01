@@ -10,8 +10,8 @@
 	{
 		"kind": "composition",
 		"body": {
-			"summary": "assistant",
-			"agents": [
+			"summaryWriter": "assistant",
+			"seated": [
 				{
 					"name": "worker",
 					"identity": "Answers the question.",
@@ -23,7 +23,7 @@
 					"attention": "none"
 				}
 			],
-			"available": [],
+			"reserve": [],
 			"at": "2026-01-01T09:00:00.000Z"
 		},
 		"seq": 2,
@@ -75,7 +75,7 @@
 			"text": "Check the pour log.",
 			"delaySeconds": 600,
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "message:4:worker:1",
+			"activation": "message:4:worker:1",
 			"from": "worker"
 		},
 		"seq": 6,
@@ -110,7 +110,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:4:worker:1"
 			}
 		},
@@ -124,7 +124,7 @@
 			"from": 4,
 			"through": 6,
 			"at": "2026-01-01T09:00:00.000Z",
-			"summary": "assistant"
+			"summaryWriter": "assistant"
 		},
 		"seq": 9,
 		"run": "run-1"
@@ -152,7 +152,7 @@
 				"through": 6
 			},
 			"at": "2026-01-01T09:00:00.000Z",
-			"activationId": "closed:6:assistant:1",
+			"activation": "closed:6:assistant:1",
 			"from": "assistant"
 		},
 		"seq": 11,
@@ -175,7 +175,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "closed:6:assistant:1"
 			}
 		},
@@ -213,7 +213,7 @@
 			"kind": "said",
 			"text": "The slab is poured.",
 			"at": "2026-01-01T09:10:00.000Z",
-			"activationId": "message:13:worker:1",
+			"activation": "message:13:worker:1",
 			"from": "worker"
 		},
 		"seq": 15,
@@ -248,7 +248,7 @@
 				"cost": 0
 			},
 			"session": {
-				"harness": "pi",
+				"kind": "pi",
 				"id": "message:13:worker:1"
 			}
 		},

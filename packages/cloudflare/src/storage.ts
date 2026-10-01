@@ -81,7 +81,7 @@ function metadataStore<T extends object>(sql: SqlStorage, name: string): Metadat
 export interface RoomMetadata {
 	name?: string;
 	/** Definition names supplied for this room run. Used for automatic resume. */
-	agents?: string[];
+	definitions?: string[];
 	/** A planned stop leaves the record readable without automatically resuming it. */
 	stopped?: boolean;
 }
@@ -91,7 +91,7 @@ export interface SeatMetadata {
 	seat?: string;
 	activation?: string;
 	phase?: 'pending' | 'running';
-	wakes?: number;
+	wakeCount?: number;
 	cuts?: number;
 	hold?: boolean;
 }

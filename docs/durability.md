@@ -116,7 +116,7 @@ backoff. Repeated claims renew the same activation; repeated release is stale
 and harmless.
 
 Lease ids derive from cause, journal position, seat, and attempt. No caller
-mints them. The room derives pending wakes and summary assignments from the
+mints them. The room derives pending wakes and summary activations from the
 record. It retries under `hostingOf(runtime).limits.activation` and records
 `abandoned` at `attempts`. `hostingOf` comes from
 `@ambionframework/ambion/hosting`, a host's own entry. Each claim or renewal
@@ -179,7 +179,7 @@ consume an execution attempt. Activation deadlines start at a claim, not at
 the source message.
 An unresolved delivery does not prevent a later resend.
 Work can remain pending through a shutdown or a deliberate executor hold.
-Abort and unseating record the boundaries that make delayed claims stale.
+Cancel and unseating record the boundaries that make delayed claims stale.
 
 Hosts receive `delivery_error` diagnostics for failed or uncertain delivery
 calls. Each diagnostic identifies the agent, activation, and operation.
@@ -189,11 +189,11 @@ execution has started.
 
 ## Cancellation
 
-**`await room.abort()` confirms one durable cancellation boundary.** The journal
+**`await room.cancel()` confirms one durable cancellation boundary.** The journal
 orders cancellation with messages and executor commits. Work before that boundary
 loses publication authority, including expired leases, pending retries, unread
 steering, and scheduled says that wait to return. Messages recorded afterward can
-start fresh work. Membership and human
+start fresh work. The roster and human
 presence remain unchanged.
 
 Cancellation closes the current exchange without assigning a summary. An existing
@@ -202,7 +202,7 @@ The cancellation entry records these effects atomically. Replay applies the same
 boundary, so restart cannot revive cancelled work.
 
 Concurrent calls share one operation. If storage rejects or leaves the write in
-doubt, retry `abort()` on the same room handle. The handle retains its request key
+doubt, retry `cancel()` on the same room handle. The handle retains its request key
 until confirmation. If that entry already committed, the retry acknowledges it
 without cancelling newer work. A call after confirmed success is a new cancellation.
 Stopped or evicted handles reject cancellation.
@@ -256,9 +256,9 @@ one.
   cancel key carry no prefix. The room reads each key back without its
   prefix.
 
-**A `session` on an ended lease entry names a harness session.** An
-executor hands the driver a harness session at release. The room writes it
-as `session: { harness, id }` on the `ended` entry. It hands the latest one
+**A `session` on an ended lease entry names a vendor session.** An
+executor hands the driver a vendor session at release. The room writes it
+as `session: { kind, id }` on the `ended` entry. It hands the latest one
 of the seat in the same exchange to the next activation as `spec.resume`.
 The room never reads the id.
 

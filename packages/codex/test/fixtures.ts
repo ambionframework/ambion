@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import type { ThreadEvent } from '@openai/codex-sdk';
 
 /** The events of one recorded run, in order. */
-export function recorded(name: 'plain-answer' | 'shell-command' | 'file-change'): ThreadEvent[] {
+export function recorded(name: 'plain-answer'): ThreadEvent[] {
 	const text = readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), 'utf8');
 	return text
 		.split('\n')

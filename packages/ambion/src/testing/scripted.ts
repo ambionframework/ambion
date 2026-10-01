@@ -1,11 +1,11 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
-	Executor,
+	ActivationOpener,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassResult,
+	RunningActivation,
 } from '../execution/executor.ts';
 import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
@@ -14,26 +14,26 @@ import type { ActivationView, CommitResult } from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
 /** One tool call of a scripted reply. */
-export interface Call {
+export interface ScriptCall {
 	readonly tool: string;
 	readonly args: Record<string, unknown>;
 }
 
 /** What a seat does in one step of a pass: the calls it makes. An empty reply ends the pass. */
-export type Reply = readonly Call[];
+export type Reply = readonly ScriptCall[];
 
 /** What one call answered. `text` is `delivered` when the room took it. */
-export interface Result {
+export interface ScriptResult {
 	readonly tool: string;
 	readonly text: string;
 }
 
 /** What a script reads to choose its next reply. */
-export interface Step {
+export interface ScriptStep {
 	/** The activation's latest view. The first pass reads it whole, a later pass rereads the record. */
 	readonly view: ActivationView;
 	/** Every result this activation has had, oldest first. */
-	readonly results: readonly Result[];
+	readonly results: readonly ScriptResult[];
 }
 
 /**
@@ -41,7 +41,7 @@ export interface Step {
  * and which step this is for that seat. It runs once per step, the way a
  * model runs once per request, and the pass ends on the first empty reply.
  */
-export type Script = (step: Step, seat: string, call: number) => Reply | Promise<Reply>;
+export type Script = (step: ScriptStep, seat: string, request: number) => Reply | Promise<Reply>;
 
 /** A reply with one call to a tool. */
 export const callTool = (tool: string, args: Record<string, unknown> = {}): Reply => [
@@ -49,7 +49,7 @@ export const callTool = (tool: string, args: Record<string, unknown> = {}): Repl
 ];
 
 /** A reply that calls `say`, to one seat or to the room. */
-export const speak = (text: string, to?: string): Reply =>
+export const say = (text: string, to?: string): Reply =>
 	callTool('say', to ? { to, text } : { text });
 
 /** A reply that calls `schedule`: the room wakes the seat with the say after `delaySeconds` seconds. */
@@ -81,18 +81,19 @@ export const quiet = (): Reply => [];
 
 /**
  * One script per seat. A seat with no entry answers `quiet()`. `Input` is what
- * the scripts read: a `Step` for the scripted executor, a Pi context for the
+ * the scripts read: a `ScriptStep` for the scripted executor, a Pi context for the
  * Pi stream. `Out` is what they return, or what their promises resolve to.
  */
-export const byAgent = <Input = Step, Out = Reply>(
-	seats: Record<string, (input: Input, seat: string, call: number) => Out | Promise<Out>>,
-): ((input: Input, seat: string, call: number) => Out | Reply | Promise<Out>) => {
+export const byAgent = <Input = ScriptStep, Out = Reply>(
+	seats: Record<string, (input: Input, seat: string, request: number) => Out | Promise<Out>>,
+): ((input: Input, seat: string, request: number) => Out | Reply | Promise<Out>) => {
 	const table = new Map(Object.entries(seats));
-	return (input, name, call) => table.get(name)?.(input, name, call) ?? quiet();
+	return (input, name, request) => table.get(name)?.(input, name, request) ?? quiet();
 };
 
 /** True when the view asks for the summary of a closed exchange. */
-export const isClosing = (view: ActivationView): boolean => view.spec.purpose.kind === 'summarize';
+export const isSummarizing = (view: ActivationView): boolean =>
+	view.spec.purpose.kind === 'summarize';
 
 /** The room tools a script calls by name. Every other call names a tool of the agent. */
 const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
@@ -131,8 +132,8 @@ function failureOf(thrown: unknown): PassResult {
 }
 
 /** One activation of the scripted executor. */
-class ScriptedSession implements ExecutorSession {
-	private readonly results: Result[] = [];
+class ScriptedActivation implements RunningActivation {
+	private readonly results: ScriptResult[] = [];
 	/** Set when a closing say landed. The activation has nothing more to do. */
 	private done = false;
 
@@ -164,7 +165,7 @@ class ScriptedSession implements ExecutorSession {
 		this.activation.read({ after, through: pass.view.through });
 		try {
 			while (!this.over) {
-				const step: Step = { view: pass.view, results: this.results };
+				const step: ScriptStep = { view: pass.view, results: this.results };
 				const reply = await this.script(step, this.definition.name, this.next());
 				if (reply.length === 0) break;
 				for (const call of reply) await this.run(call, pass);
@@ -182,7 +183,7 @@ class ScriptedSession implements ExecutorSession {
 		return count;
 	}
 
-	private async run(call: Call, pass: Pass): Promise<void> {
+	private async run(call: ScriptCall, pass: Pass): Promise<void> {
 		if (this.over) return;
 		if (call.tool === 'usage') {
 			this.activation.trace.record({ type: 'usage', ...usageOf(call.args) });
@@ -196,7 +197,7 @@ class ScriptedSession implements ExecutorSession {
 	}
 
 	/** A call of a room tool, keyed on its place in the activation. */
-	private async commit(call: Call, pass: Pass): Promise<string> {
+	private async commit(call: ScriptCall, pass: Pass): Promise<string> {
 		const tool = pass.tools.find((one) => one.name === call.tool);
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
 		const id = this.callId();
@@ -208,7 +209,7 @@ class ScriptedSession implements ExecutorSession {
 		// answer itself, so the answer comes from beside the result.
 		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
 		const outcome = answer(response);
-		if (isClosing(pass.view) && outcome.text === 'delivered') this.done = true;
+		if (isSummarizing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
 	}
 
@@ -218,7 +219,7 @@ class ScriptedSession implements ExecutorSession {
 	}
 
 	/** An agent's own tool: record its steps, and give it the context a model loop would. */
-	private async invoke(call: Call, view: ActivationView): Promise<string> {
+	private async invoke(call: ScriptCall, view: ActivationView): Promise<string> {
 		const tool = this.definition.executor.tools.find((candidate) => candidate.name === call.tool);
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
 		const id = this.callId();
@@ -245,14 +246,14 @@ class ScriptedSession implements ExecutorSession {
 }
 
 /**
- * A scripted executor for one seat. It implements the `Executor` contract
- * with no model: the script says what the seat does, and the session calls
- * the room tools of the pass the way a model loop does. The executor
- * conformance suite runs it.
+ * A scripted opener for one seat. It follows the `ActivationOpener` contract
+ * with no model: the script says what the seat does, and the running
+ * activation calls the room tools of the pass the way a model loop does. The
+ * executor conformance suite runs it.
  */
-export function scriptedExecutor(script: Script, definition: AgentDefinition): Executor {
+export function scriptedOpener(script: Script, definition: AgentDefinition): ActivationOpener {
 	const counts = new Map<string, number>();
-	return (activation) => new ScriptedSession(activation, definition, script, counts);
+	return (activation) => new ScriptedActivation(activation, definition, script, counts);
 }
 
 /**
@@ -267,7 +268,7 @@ export function scripted(script: Script): Execution {
 			return localConnector(
 				host,
 				(request) => (activation) =>
-					new ScriptedSession(activation, request.definition, script, counts),
+					new ScriptedActivation(activation, request.definition, script, counts),
 			);
 		},
 	};

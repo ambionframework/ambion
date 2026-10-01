@@ -3,8 +3,8 @@
  * and each step equals `foldRoom`.
  */
 import { expect, it } from 'vitest';
-import type { Close, Composition } from '../src/journal/events.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { Close, Composition } from '../src/journal/entries.ts';
+import type { RoomEntry } from '../src/journal/journal.ts';
 import { evolve } from './support/evolve.ts';
 import { foldRoom } from './support/fold.ts';
 
@@ -14,12 +14,12 @@ const retry = { backoff: (attempt: number) => attempt * 30_000 };
 const composition: Composition = {
 	seq: 2,
 	at,
-	agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
-	available: [{ name: 'surveyor', identity: 'Surveyor.', attention: 'named' }],
+	seated: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
+	reserve: [{ name: 'surveyor', identity: 'Surveyor.', attention: 'named' }],
 };
 const close: Close = { person: 'priya', from: 4, through: 7, at };
 const id = 'message:4:product:1';
-const entries: Entry[] = [
+const entries: RoomEntry[] = [
 	{ kind: 'run', seq: 1, body: { at } },
 	{ kind: 'composition', seq: 2, body: composition },
 	{
@@ -54,7 +54,7 @@ const entries: Entry[] = [
 		kind: 'message',
 		seq: 7,
 		key: 'answer',
-		body: { kind: 'said', at, from: 'product', text: 'Ready.', activationId: id },
+		body: { kind: 'said', at, from: 'product', text: 'Ready.', activation: id },
 	},
 	{ kind: 'lease', seq: 8, body: { id, phase: 'ended', reason: 'released', at, readThrough: 0 } },
 	{ kind: 'close', seq: 9, body: close },
@@ -87,7 +87,7 @@ function freeze(value: unknown): void {
 it('evolves every event without changing any earlier projection or committed input', () => {
 	let state = foldRoom([], retry);
 	const retained: { state: typeof state; snapshot: typeof state }[] = [];
-	const history: Entry[] = [];
+	const history: RoomEntry[] = [];
 	for (const event of entries) {
 		retained.push({ state, snapshot: structuredClone(state) });
 		freeze(state);
