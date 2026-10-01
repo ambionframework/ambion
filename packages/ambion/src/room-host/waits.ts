@@ -9,23 +9,7 @@ import { AmbionError } from '../errors.ts';
 import { closedExchange, discussionMessages, summaryCompletion } from '../room/exchange.ts';
 import type { ExchangeRange, ExchangeRef, Message, Seq, SummaryMessage } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { RoomHostState } from './core.ts';
-
-export interface ExchangeHandle extends ExchangeRef {
-	/**
-	 * True when the delivery that returned this handle asked the question
-	 * that opened the exchange. False when it joined one already open, or
-	 * when the handle came from `room.exchange(from)` instead of a delivery.
-	 */
-	readonly opened: boolean;
-	/**
-	 * Resolve with the fixed non-summary conversation after the durable close.
-	 * Reject if the room stops before the exchange closes.
-	 */
-	waitForClose(): Promise<Message[]>;
-	/** Resolve with the durable summary, or `undefined` when no summary is needed; reject when required work fails. */
-	waitForSummary(): Promise<SummaryMessage | undefined>;
-}
+import type { ExchangeHandle, RoomHostState } from './core.ts';
 
 /** Reacquire an exchange by the source sequence of its opening question. */
 export function exchange(host: RoomHostState, from: Seq): ExchangeHandle | undefined {

@@ -15,8 +15,8 @@ import type {
 	ExecutionHost,
 	Limits,
 } from '../host/runtime.ts';
+import type { ActivationOpener } from '../protocol.ts';
 import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
-import type { ActivationOpener } from './executor.ts';
 import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
 

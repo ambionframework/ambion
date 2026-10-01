@@ -16,8 +16,8 @@ import type {
 	ExecutionConnector,
 	ExecutionHost,
 } from '../host/runtime.ts';
+import type { ActivationOpener } from '../protocol.ts';
 import { localConnector } from './connector.ts';
-import type { ActivationOpener } from './executor.ts';
 import type { AgentRunner } from './runner.ts';
 
 /** The execution that each kind defined last. A room with no execution for a kind runs it. */

@@ -18,7 +18,8 @@ import { discussionMessages } from './room/exchange.ts';
 import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, toRoomRead } from './room/read.ts';
-import { type CompositionDraft, type Room, RoomHost, type Visit } from './room-host/room.ts';
+import type { CompositionDraft } from './room-host/core.ts';
+import { type Room, RoomHost, type Visit } from './room-host/room.ts';
 import type {
 	AgentDefinition,
 	Attention,

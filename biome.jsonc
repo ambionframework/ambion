@@ -93,7 +93,7 @@
 		},
 		// The core is laid out in layers, and an import points down only:
 		//
-		//   types, refs, scheduling, bundle, protocol, define, errors  the vocabulary: public and protocol shapes
+		//   types, refs, scheduling, bundle, protocol, define, errors  the vocabulary: public and protocol shapes, and the executor contract
 		//   bodies.ts                      the vocabulary's stored bodies: the schemas that the types derive from
 		//   record.ts                      the vocabulary's record lines and summary folds
 		//   activation-id.ts               the vocabulary's durable activation identity codec
@@ -101,8 +101,8 @@
 		//   journal/                      the room's kinds, over @ambionframework/journal
 		//   room/                         every fact and every decision, pure over the journal
 		//   answers.ts                    what the room answers a seat's three calls with
-		//   execution/                   the execution side of the wire: driver, contract, rendering
-		//   testing/                      the deterministic test tools, over the vocabulary and the execution contract
+		//   execution/                   the execution side of the wire: driver, rendering, tool bodies
+		//   testing/                      the deterministic test tools, over the vocabulary and the execution side
 		//   room-host/                    room.ts (state, phases), core.ts (shared view), one file per mechanism
 		//   room.ts                     the room facade, which composes them all
 		//
@@ -173,7 +173,7 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../execution/runner*",
+											"../execution/*",
 											"../room.ts",
 											"../room-host/*",
 											"../index.ts",
@@ -452,6 +452,45 @@
 							"level": "error",
 							"options": {
 								"patterns": [
+									{
+										"group": ["../execution/*", "../room.ts", "../index.ts", "../hosting.ts"],
+										"message": "The room host owns collaboration state; execution services belong to the facade."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// A mechanism of the room host may import `core.ts`. `core.ts` imports no
+			// sibling. This override repeats every group of the override above,
+			// because Biome replaces the options of an earlier override.
+			"includes": ["packages/ambion/src/room-host/core.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["./*"],
+										"message": "The shared view imports none of the mechanisms."
+									},
 									{
 										"group": ["../execution/*", "../room.ts", "../index.ts", "../hosting.ts"],
 										"message": "The room host owns collaboration state; execution services belong to the facade."
