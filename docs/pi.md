@@ -413,7 +413,7 @@ model did.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds and
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds and
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 

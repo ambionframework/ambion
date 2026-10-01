@@ -417,7 +417,7 @@ the context that the core gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has ten kinds,
+**A step is one thing an activation did.** The vocabulary has eleven kinds,
 and every executor kind shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
@@ -434,6 +434,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
 | `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
 | `usage`       | executor    | Tokens and cost.                                                                                   |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.    |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),

@@ -30,6 +30,9 @@ export interface CodexPolicy {
 	readonly additionalDirectories?: readonly string[];
 }
 
+/** What Codex asks of the model about its reasoning. Codex shows a summary, never the raw reasoning. */
+export type ReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none';
+
 export interface CodexOptions extends ExecutorBaseOptions, CodexPolicy {
 	/** A Codex model identifier. */
 	model: string;
@@ -43,6 +46,12 @@ export interface CodexOptions extends ExecutorBaseOptions, CodexPolicy {
 	 * says.
 	 */
 	nativeTools?: 'none' | 'codex';
+	/**
+	 * The reasoning summary that Codex asks of the model. The trace shows it as
+	 * `thinking` steps. The default is `auto`. The catalog default of some
+	 * models is `none`, and then Codex asks for no summary.
+	 */
+	reasoningSummary?: ReasoningSummary;
 }
 
 /** An agent's Codex executor: the Codex SDK loop, model, instructions, tools and policy. */
@@ -50,6 +59,7 @@ export interface CodexExecutor extends Executor, CodexPolicy {
 	readonly kind: 'codex';
 	readonly model: string;
 	readonly nativeTools?: 'none' | 'codex';
+	readonly reasoningSummary?: ReasoningSummary;
 }
 
 const POLICY = [
@@ -83,5 +93,6 @@ export function codex(options: CodexOptions): CodexExecutor {
 		kind: 'codex' as const,
 		model: options.model,
 		nativeTools: options.nativeTools ?? 'none',
+		reasoningSummary: options.reasoningSummary ?? 'auto',
 	});
 }

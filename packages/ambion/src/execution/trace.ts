@@ -195,6 +195,10 @@ class Trace implements TraceSink {
 						: bounded(loggedToolResult(plain(step.output)), this.options.limits.toolOutputBytes);
 				return { ...step, output };
 			}
+			case 'notice':
+				return step.data === undefined
+					? step
+					: { ...step, data: plain(step.data) as typeof step.data };
 			default:
 				return step;
 		}
