@@ -2,10 +2,10 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import {
-	type AgentParticipantInfo,
+	type AgentParticipant,
 	createRuntime,
 	defineHuman,
-	type HumanParticipantInfo,
+	type HumanParticipant,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -57,16 +57,16 @@ describe('participant views', () => {
 			const participants = await participantsOf(room);
 			for (const participant of participants) {
 				if (participant.kind === 'agent') {
-					expectTypeOf(participant).toEqualTypeOf<AgentParticipantInfo>();
+					expectTypeOf(participant).toEqualTypeOf<AgentParticipant>();
 				} else {
-					expectTypeOf(participant).toEqualTypeOf<HumanParticipantInfo>();
+					expectTypeOf(participant).toEqualTypeOf<HumanParticipant>();
 				}
 			}
-			expectTypeOf<Extract<'sessionId', keyof AgentParticipantInfo>>().toEqualTypeOf<never>();
+			expectTypeOf<Extract<'sessionId', keyof AgentParticipant>>().toEqualTypeOf<never>();
 			expectTypeOf<
 				Extract<
 					'changedAt' | 'lastDeparture' | 'messagesSinceDeparture' | 'preferences',
-					keyof HumanParticipantInfo
+					keyof HumanParticipant
 				>
 			>().toEqualTypeOf<never>();
 			const agent = {

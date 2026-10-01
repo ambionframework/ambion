@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { defineAgent, defineHuman, type Message, startRoom } from '@ambionframework/ambion';
-import { callTool, isClosing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
+import { callTool, isSummarizing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
 import type { Workspace } from '@ambionframework/workspace';
 
 export interface Action {
@@ -69,7 +69,7 @@ export async function runToolRoom(
 		name: `sn35-${randomUUID().slice(0, 8)}`,
 		agents: [agent],
 		execution: scripted((step) => {
-			if (!started || completed || isClosing(step.view)) return quiet();
+			if (!started || completed || isSummarizing(step.view)) return quiet();
 			if (!recordResults(step.results)) return quiet();
 			const next = actions[step.results.length];
 			if (next === undefined) {

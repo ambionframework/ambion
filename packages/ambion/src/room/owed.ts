@@ -34,7 +34,7 @@ export interface Owed extends DueActivation {
 export interface OwedFacts {
 	/** The summary and unseated messages. `summaryCompletion` reads no other kind. */
 	summaryFacts: readonly Message[];
-	/** The leases of closing activations, by the position they name. */
+	/** The leases of summary activations, by the position they name. */
 	closedLeases: ReadonlyMap<Seq, ReadonlyMap<string, LeaseHold>>;
 	cancelledAt: Seq | undefined;
 }

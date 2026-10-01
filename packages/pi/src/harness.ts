@@ -101,7 +101,7 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 
 /**
  * A lane keeps its model and its tools in the session. A continued session
- * takes the model and the tools of this activation: a closing activation
+ * takes the model and the tools of this activation: a summary activation
  * holds fewer tools than the response before it.
  */
 async function configure(lane: AgentLane, input: HarnessInput): Promise<void> {

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The purpose of an activation has one pair of values, and `ParticipantInfo`
+becomes `Participant`.** `ExchangeActivation.purpose` held `summary` for the
+activation that writes a summary. It now holds `summarize`, the value that
+`ActivationPurpose.kind` already used. The prose names the two purposes a
+respond activation and a summary activation. `isClosing` in
+`@ambionframework/ambion/testing` is now `isSummarizing`. `ParticipantInfo`,
+`AgentParticipantInfo`, and `HumanParticipantInfo` are now `Participant`,
+`AgentParticipant`, and `HumanParticipant`. The activation source and the
+activation ids do not change.
 **The body schemas are the one source of the body types.** The new file
 `packages/ambion/src/bodies.ts` holds the schema of each stored body.
 Before, a type and a schema each stated the body, and the two drifted.

@@ -94,7 +94,7 @@ describe('the tool list and domain tools', () => {
 		await expect(client.listResourceTemplates()).rejects.toMatchObject({ code: -32601 });
 	});
 
-	it('serves only say, with the summary description, to a closing activation', async () => {
+	it('serves only say, with the summary description, to a summary activation', async () => {
 		const closing = viewOf({
 			kind: 'summarize',
 			exchange: 1,

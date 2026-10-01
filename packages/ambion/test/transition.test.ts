@@ -327,7 +327,7 @@ describe('room transition', () => {
 		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3]);
 	});
 
-	it('starts a new summary assignment after reseating before close, and never revives one ended after close', () => {
+	it('starts a new summary activation after reseating before close, and never revives one ended after close', () => {
 		const start = [composition('writer'), person(), question()];
 		const beforeClose = fold(...start, unseated(4), seated(5), closed(6, 5));
 		expect(owedOf(beforeClose)).toMatchObject([{ seat: 'writer', position: 5 }]);
@@ -591,7 +591,7 @@ describe('a scheduled say', () => {
 		expect(dismiss(state, handle, activation)).toMatchObject(because(reason));
 	});
 
-	it('refuses a dismissal in a closing activation', () => {
+	it('refuses a dismissal in a summary activation', () => {
 		expect(summary(closing(), { kind: 'dismissed', message: 5 })).toMatchObject(
 			because(/cannot submit/),
 		);
