@@ -275,25 +275,49 @@ templates: {
   and `repos` shows it. A person names the kind of work, and the agent
   finds the template that fits.
 
-**Registration is idempotent, and it resumes after a crash.** For each
-template, the backend builds the git tree of the source in memory with
-`just-git`. It then takes the first case that holds.
+**One function holds the decisions of registration, and it resumes after a
+crash.** `registerRepositories` of `@ambionframework/workspace/git` runs
+the templates, then the shared repositories, each in name order. A backend
+supplies the storage steps of `RegistrationSteps` and takes no decision of
+registration. It loads no git library.
 
-1. The template exists, and the tree at its tip equals the source tree.
-   The backend writes nothing.
-2. The template exists, and the trees differ. The backend makes
-   `template-sources/<template>` hold the source tree at its tip. It then
-   moves the default branch of `templates/<template>` to that commit, and
-   the move compares the old commit.
-3. The template does not exist. The backend makes
-   `template-sources/<template>` hold the source tree at its tip: it
-   creates the repository when it is absent, and it commits the source
-   when the tip differs. It then forks that repository to
-   `templates/<template>`, read-only, and waits until the fork can be
-   cloned.
+- **A name must pass the name rule.** The error reads `'<name>' is not a
+valid template name.` or `'<name>' is not a valid shared repository
+name.` The function reads no source before it checks the name.
+- **A source path stays inside the repository.** A path with an empty
+  part, `.`, `..`, or `.git` leaves the root. The error names the kind,
+  the repository, and the path. Both backends refuse such a path before
+  they write.
+- **A template takes the first case that holds.** The function compares
+  the blob hashes at the tip with the hashes of the source.
+  1. The template exists, and the hashes are equal. The backend writes nothing.
+  2. The template exists, and the hashes differ. The backend commits the
+     source on the tip and moves the default branch to that commit. The
+     move compares the old commit.
+  3. The template does not exist. The backend creates it from the source
+     and publishes it.
+- **A shared repository is seeded once.**
+  [Shared repositories](#shared-repositories) states the case.
+- **Each write ends with a read.** The function reads the repository
+  again. It fails with the name of the repository when the repository is
+  missing. It fails for a template that does not hold its source.
+- **A refused update can still succeed.** The update step throws with the
+  cause when the backend refuses the move. The function then reads the
+  tip. When the tip holds the source, another host process landed the same
+  files, and the registration succeeds. Otherwise it throws the error of
+  the step. Two host processes that register one template at once then
+  agree.
 
 **Each case writes the description of the registration.** A changed
 description replaces the old one, and the tree can stay the same.
+
+**`justGitBackend` builds the template in `just-git` storage.** For case 2,
+the backend makes `template-sources/<template>` hold the source tree at
+its tip, and it moves the default branch of `templates/<template>` to that
+commit. For case 3, it makes `template-sources/<template>` hold the source
+tree, and it creates the repository when it is absent. It commits the
+source when the tip differs. It then forks that repository to
+`templates/<template>`, read-only, and waits until the fork can be cloned.
 
 **An update is a fast-forward.** The new commit has the old tip as its
 parent, so a clone of the template can pull it. The commit goes to
@@ -864,19 +888,20 @@ identity of a push.
 | `packages/workspace`   | `src/git-conformance*.ts`              | `gitConformance`, with its revision cases and helpers in two more files                     |
 | `packages/workspace`   | `src/git-entry.ts`                     | The `/git` entry                                                                            |
 | `packages/workspace`   | `src/git-names.ts`                     | The name rules of a repository ID                                                           |
-| `packages/workspace`   | `src/git-templates.ts`                 | The template registration, `filesOf`, and `changeTo`                                        |
+| `packages/workspace`   | `src/git-registration.ts`              | `registerRepositories`, the decisions of registration, and `RegistrationSteps`              |
+| `packages/workspace`   | `src/git-templates.ts`                 | `RepositoryRegistration`, `filesOf`, and `changeTo`                                         |
 | `packages/workspace`   | `src/sources.ts`                       | `fromDirectory`, the source types, `hashesOf`, and `sameFiles`                              |
 | `packages/just-bash`   | `src/just-bash.ts`                     | `gitFor(agent, access)`                                                                     |
 | `packages/just-bash`   | `src/git/access.ts`                    | `JustGitAccess`, `GitCredential`, and `GitFetch`                                            |
 | `packages/just-bash`   | `src/git/backend.ts`                   | `justGitBackend`, the access, and the environment                                           |
 | `packages/just-bash`   | `src/git/server.ts`, `tokens.ts`       | The `just-git` server, its authentication, and the tokens                                   |
-| `packages/just-bash`   | `src/git/registration.ts`              | Template registration                                                                       |
+| `packages/just-bash`   | `src/git/registration.ts`              | The storage steps of registration and the settle of a crash                                 |
 | `packages/just-bash`   | `src/git/storage.ts`                   | `sqliteGitStorage` and the registry table                                                   |
 | `packages/workstation` | `src/git-backend.ts`                   | `workstationGitBackend`, its options, the access, and the identity                          |
 | `packages/workstation` | `src/git-account.ts`, `git-prepare.ts` | The client of the git account, its scripts, the preparation, and `serve`                    |
 | `packages/workstation` | `src/git-keys.ts`                      | The agent keys and the lines of `authorized_keys.ambion`                                    |
 | `packages/workstation` | `src/git-repositories.ts`              | `list`, `get`, and `fork` on the git account                                                |
-| `packages/workstation` | `src/git-registration.ts`              | Template registration on the git account                                                    |
+| `packages/workstation` | `src/git-registration.ts`              | The storage steps of registration on the git account                                        |
 | `packages/workstation` | `src/git-agent.ts`                     | The key files and the ssh configuration in the agent's home                                 |
 
 ## Tests
@@ -924,6 +949,8 @@ and each hook takes the backend and the workspace that the case opened.
   description. A fork made before the update keeps its commit, and a
   clone of a fork made after it has the new files and the old tip in its
   history.
+- A registration of a template, or of a shared repository, with a path
+  that leaves its root is refused. The next call fails the same way.
 - A credential is refused after it expires (the hook `probeCredential`).
   The harness names its shortest `credentialTtl`, and the case skips a
   backend whose shortest `credentialTtl` is longer than 5 seconds.

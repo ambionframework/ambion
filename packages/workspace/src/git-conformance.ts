@@ -427,6 +427,37 @@ const registrationFollowsSource = async <B extends GitBackend>(
 	check(last === updated, 'a registration after the update wrote a commit');
 };
 
+const REFUSED: readonly [GitConformanceOptions, string][] = [
+	[
+		{ templates: { bad: { files: { '../x': 'y' } } } },
+		"The template 'bad' holds the path '../x', which leaves its root.",
+	],
+	[
+		{ templates: {}, shared: { bad: { source: { '.git/config': 'y' } } } },
+		"The shared repository 'bad' holds the path '.git/config', which leaves its root.",
+	],
+];
+
+const refusesPathsOutsideTheRoot = async <B extends GitBackend>(
+	store: GitConformanceStore<B>,
+): Promise<void> => {
+	for (const [options, message] of REFUSED) {
+		await registered(store, options, async (workspace) => {
+			// A failed registration lets the next call try again, and it fails the same way.
+			for (const attempt of ['first', 'second']) {
+				const error = await git(workspace, ANALYST, (env) => env.list()).then(
+					() => undefined,
+					(reason: unknown) => reason,
+				);
+				check(
+					error instanceof Error && error.message.includes(message),
+					`the ${attempt} call after a refused registration did not name it: ${String(error)}`,
+				);
+			}
+		});
+	}
+};
+
 const credentialExpires = async <B extends GitBackend>(
 	harness: GitConformanceBackend<B>,
 	store: GitConformanceStore<B>,
@@ -497,6 +528,7 @@ export function gitConformance<B extends GitBackend>(
 			'a registration with the same source writes nothing, and a changed one fast-forwards the template',
 			registrationFollowsSource,
 		],
+		['a registration with a path that leaves its root is refused', refusesPathsOutsideTheRoot],
 		[
 			'a shared repository persists through restart, ignores changed and unreadable sources, and stays writable when omitted',
 			(store) => sharedRegistrationPersists(store, SHARED_FIXTURE),

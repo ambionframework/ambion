@@ -10,10 +10,10 @@
  * forced command exists.
  */
 
-import type { RepositoryRegistration } from '@ambionframework/workspace/git';
+import { type RepositoryRegistration, registerRepositories } from '@ambionframework/workspace/git';
 import type { GitAccount } from './git-account.ts';
 import { runIn } from './git-account.ts';
-import { registerShared, registerTemplates } from './git-registration.ts';
+import { registrationSteps } from './git-registration.ts';
 
 /** What the preparation learns about the account. */
 export interface Prepared {
@@ -70,7 +70,7 @@ const PREPARE_SCRIPT = [
 	'',
 ].join('\n');
 
-/** Prepare the account, and register every template. */
+/** Prepare the account, and register every template and shared repository. */
 export async function prepareAccount(
 	account: GitAccount,
 	root: string,
@@ -86,7 +86,6 @@ export async function prepareAccount(
 		await runIn(env, PREPARE_SCRIPT, { AMBION_ROOT: root, AMBION_SERVE: serveScript(root) });
 		return { serve: `${session.home}/.ambion/serve`, hostKey: session.hostKey };
 	});
-	await registerTemplates(account, root, templates);
-	await registerShared(account, root, shared);
+	await registerRepositories(registrationSteps(account, root), { templates, shared });
 	return prepared;
 }

@@ -1,35 +1,29 @@
 /**
- * Template registration: idempotent, and it resumes after a crash.
+ * The storage steps of registration over the registry and the `just-git`
+ * server. `registerRepositories` of the workspace holds the decisions and
+ * calls these steps. Each step finishes what a crash left.
  *
- * It runs once, before the first operation of the backend. For each
- * template it takes the first case that holds.
+ * A template has two repositories. The step writes the source to
+ * `template-sources/<name>`, because a fork reads its objects from the root
+ * of its fork tree. A new template forks from that commit to
+ * `templates/<name>`. A changed template fast-forwards to it. A fork of the
+ * template then reads the new objects. A fork made before the update keeps
+ * its own refs.
  *
- * 1. The template exists, and its tree equals the source. Nothing happens.
- * 2. The template exists, and its tree differs. `template-sources/<name>`
- *    gets the source at its tip, and `templates/<name>` fast-forwards to
- *    that commit.
- * 3. The template does not exist. `template-sources/<name>` gets the source
- *    at its tip, and the backend forks it to `templates/<name>`.
- *
- * The commit goes to `template-sources/<name>`, because a fork reads its
- * objects from the root of its fork tree. A fork of the template then reads
- * the new objects. A fork made before the update keeps its own refs.
- *
- * A crash between the steps of case 2 or case 3 leaves a state that the
- * same case finishes at the next registration.
+ * A crash between the steps of a write leaves a state that the same step
+ * finishes at the next registration. A `forking` row of a shared
+ * repository that holds its commit becomes `ready` without a new seed.
  */
 
 import type { SourceFiles } from '@ambionframework/workspace';
 import {
 	changeTo,
-	filesOf,
 	hashesOf,
 	namespaceOf,
-	type RepositoryRegistration,
+	type RegistrationSteps,
 	SHARED,
 	sameFiles,
 	TEMPLATES,
-	validName,
 } from '@ambionframework/workspace/git';
 import { flattenTree, type GitRepo, readCommit, readHead } from 'just-git/repo';
 import type { GitServer } from 'just-git/server';
@@ -100,98 +94,26 @@ export async function settleAll(
 	}
 }
 
-/** Register every template, in name order. */
-export async function registerTemplates(
-	store: OpenGitStorage,
-	server: GitServer<TokenClaims>,
-	templates: Readonly<Record<string, RepositoryRegistration>>,
-): Promise<void> {
-	for (const name of Object.keys(templates).sort()) {
-		const registration = templates[name];
-		if (registration !== undefined) await registerOne(store, server, name, registration);
-	}
-}
-
-async function registerOne(
+/**
+ * Whether the shared repository is published. A `ready` row is published,
+ * and an interrupted seed that holds its commit finishes here. Each case
+ * writes the description.
+ */
+async function sharedPublished(
 	store: OpenGitStorage,
 	server: GitServer<TokenClaims>,
 	name: string,
-	registration: RepositoryRegistration,
-): Promise<void> {
-	if (!validName(name)) throw new Error(`'${name}' is not a valid template name.`);
-	const files = await filesOf(registration);
-	const wanted = hashesOf(files);
-	const template = `${TEMPLATES}/${name}`;
-	const row = await settledRow(store, template);
-	if (row !== undefined && row.description !== registration.description) {
-		store.registry.describe(template, registration.description);
-	}
-	const existing = row === undefined ? null : await server.repo(template);
-	if (existing !== null && sameFiles(await tipHashes(existing), wanted)) return;
-	const source = await commitSource(store, server, name, files);
-	if (existing !== null) {
-		await fastForward(server, name, (await readHead(existing)).hash, source.head);
-		return;
-	}
-	if (row === undefined) store.registry.begin(template, undefined, registration.description);
-	await server.forkRepo(source.id, template);
-	store.registry.ready(template);
-}
-
-/** Register shared repositories without changing any repository already published. */
-export async function registerShared(
-	store: OpenGitStorage,
-	server: GitServer<TokenClaims>,
-	shared: Readonly<Record<string, RepositoryRegistration>>,
-): Promise<void> {
-	for (const name of Object.keys(shared).sort()) {
-		const registration = shared[name];
-		if (registration !== undefined) await registerSharedOne(store, server, name, registration);
-	}
-}
-
-async function registerSharedOne(
-	store: OpenGitStorage,
-	server: GitServer<TokenClaims>,
-	name: string,
-	registration: RepositoryRegistration,
-): Promise<void> {
-	if (!validName(name)) throw new Error(`'${name}' is not a valid shared repository name.`);
+	description: string | undefined,
+): Promise<boolean> {
 	const id = `${SHARED}/${name}`;
 	const row = store.registry.get(id);
 	if (row?.state === 'ready') {
-		await describeRegisteredShared(
-			store,
-			server,
-			id,
-			name,
-			row.description,
-			registration.description,
-		);
-		return;
+		if (row.description !== description) store.registry.describe(id, description);
+		if ((await server.repo(id)) === null)
+			throw new Error(`The shared repository '${name}' is registered but missing from storage.`);
+		return true;
 	}
-	if (await completeInterruptedSharedSeed(store, server, id, row, registration.description)) return;
-
-	// A forking row is an interrupted initial seed. Only this unpublished
-	// state reads the source; ready repositories above are description-only.
-	const files = await filesOf(registration);
-	if (row === undefined) store.registry.begin(id, undefined, registration.description);
-	await seedSharedRepository(store, server, name, id, files);
-	store.registry.describe(id, registration.description);
-	store.registry.ready(id);
-}
-
-async function describeRegisteredShared(
-	store: OpenGitStorage,
-	server: GitServer<TokenClaims>,
-	id: string,
-	name: string,
-	previousDescription: string | undefined,
-	description: string | undefined,
-): Promise<void> {
-	if (previousDescription !== description) store.registry.describe(id, description);
-	if ((await server.repo(id)) === null)
-		throw new Error(`The shared repository '${name}' is registered but missing from storage.`);
+	return completeInterruptedSharedSeed(store, server, id, row, description);
 }
 
 async function completeInterruptedSharedSeed(
@@ -272,4 +194,43 @@ async function fastForward(
 	if (refused !== undefined) {
 		throw new Error(`The template '${name}' did not move to its new source: ${refused.error}`);
 	}
+}
+
+/** The storage steps of registration over the registry and the `just-git` server. */
+export function registrationSteps(
+	store: OpenGitStorage,
+	server: GitServer<TokenClaims>,
+): RegistrationSteps {
+	return {
+		template: async (name, description) => {
+			const id = `${TEMPLATES}/${name}`;
+			const row = await settledRow(store, id);
+			if (row !== undefined && row.description !== description) {
+				store.registry.describe(id, description);
+			}
+			const existing = row === undefined ? null : await server.repo(id);
+			return existing === null ? undefined : tipHashes(existing);
+		},
+		createTemplate: async (name, files, description) => {
+			const id = `${TEMPLATES}/${name}`;
+			const source = await commitSource(store, server, name, files);
+			if (store.registry.get(id) === undefined) store.registry.begin(id, undefined, description);
+			await server.forkRepo(source.id, id);
+			store.registry.ready(id);
+		},
+		updateTemplate: async (name, files) => {
+			const source = await commitSource(store, server, name, files);
+			const existing = await server.requireRepo(`${TEMPLATES}/${name}`);
+			await fastForward(server, name, (await readHead(existing)).hash, source.head);
+		},
+		shared: (name, description) => sharedPublished(store, server, name, description),
+		seedShared: async (name, files, description) => {
+			const id = `${SHARED}/${name}`;
+			// A forking row is an interrupted seed. It needs no new row.
+			if (store.registry.get(id) === undefined) store.registry.begin(id, undefined, description);
+			await seedSharedRepository(store, server, name, id, files);
+			store.registry.describe(id, description);
+			store.registry.ready(id);
+		},
+	};
 }

@@ -126,7 +126,7 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 		expect((await blank(gitBackend(changed)))?.branches.main).toBe(updated?.branches.main);
 	});
 
-	it('names the error of git when the move of main fails, and a later registration moves it', async () => {
+	it('names the error of git when the move of main fails, and two hosts then register one source', async () => {
 		const { home, options } = await gitServer();
 		await gitBackend(options).connect(ANALYST);
 		const repo = join(home, 'repos', 'templates', 'blank.git');
@@ -140,19 +140,48 @@ describe.skipIf(!hasGitTools)('workstationGitBackend', () => {
 			/git update-ref failed: .*main\.lock/s,
 		);
 		await rm(lock);
-		await gitBackend(changed).connect(ANALYST);
+		// Two hosts register one source. A host whose move loses finds the files landed.
+		await Promise.all([gitBackend(changed).connect(ANALYST), gitBackend(changed).connect(ANALYST)]);
 		expect(git(repo, 'ls-tree', '-r', '--name-only', 'main')).toBe('NOTES.md\n');
 	});
 
-	it.each<[string, WorkstationGitOptions['templates'], RegExp]>([
-		['an invalid name', { 'Weekly Report': { source: {} } }, /'Weekly Report' is not a valid/],
-		['a path that leaves its root', { bad: { source: { '../x': 'y' } } }, /leaves its root/],
-	])('refuses a template with %s', async (_name, templates, message) => {
+	it('seeds a shared repository once with its description and hook, and reads no source again', async () => {
+		const { home, options } = await gitServer();
+		const seeded: WorkstationGitOptions = {
+			...options,
+			shared: { notes: { description: 'Room notes.', source: { 'README.md': 'notes\n' } } },
+		};
+		const first = await (await gitBackend(seeded).connect(ANALYST)).get('shared/notes');
+		const repo = join(home, 'repos', 'shared', 'notes.git');
+		expect(git(repo, 'show', 'main:README.md')).toBe('notes\n');
+		expect(git(repo, 'log', '-1', '--format=%an %s', 'main')).toBe(
+			'ambion Register the shared repository notes\n',
+		);
+		expect(await readFile(join(repo, 'description'), 'utf8')).toBe('Room notes.');
+		expect(await modeOf(join(repo, 'hooks', 'pre-receive'))).toBe(0o755);
+		expect(await readdir(join(home, 'repos', '.staging'))).toEqual([]);
+
+		const unreadable = {
+			description: 'Changed notes.',
+			source: {
+				read: async () => {
+					throw new Error('The source was read.');
+				},
+			},
+		};
+		const again = await (
+			await gitBackend({ ...options, shared: { notes: unreadable } }).connect(ANALYST)
+		).get('shared/notes');
+		expect(again?.branches.main).toBe(first?.branches.main);
+		expect(await readFile(join(repo, 'description'), 'utf8')).toBe('Changed notes.');
+	});
+
+	it('refuses a template that leaves its root, and a later call fails the same way', async () => {
 		const { options } = await gitServer();
-		const backend = gitBackend({ ...options, templates });
-		await expect(backend.connect(ANALYST)).rejects.toThrow(message);
-		// A failed preparation lets the next call try again, and it fails the same way.
-		await expect(backend.access.identityFor(ANALYST)).rejects.toThrow(message);
+		const backend = gitBackend({ ...options, templates: { bad: { source: { '../x': 'y' } } } });
+		await expect(backend.connect(ANALYST)).rejects.toThrow(/leaves its root/);
+		// A failed preparation lets the next call try again.
+		await expect(backend.access.identityFor(ANALYST)).rejects.toThrow(/leaves its root/);
 	});
 
 	it('lands a fork with one rename, with its source in its config and its objects hard-linked', async () => {
