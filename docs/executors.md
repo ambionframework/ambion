@@ -542,8 +542,8 @@ that a shipped family reaches. The patterns are `credit balance`,
 `billing_error`, `usage limit`, `insufficient_quota`, `exceeded your
 current quota`, `authentication_error`, `permission_error`,
 `invalid_request_error`, an invalid API key, `x-api-key`, `unauthorized`,
-`permission denied`, `not logged in`, and `missing bearer`. OpenAI sends a
-spent quota with a 429, and only the text tells it from a rate limit.
+`permission denied`, `not logged in`, `missing bearer`, `invalid_grant`, and
+`provider is not configured`. OpenAI sends a spent quota with a 429, and only the text tells it from a rate limit.
 
 **A status decides the cause when no text matches.** An uncertain failure
 is transient, so the room retries it.
