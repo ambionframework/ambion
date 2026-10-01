@@ -43,10 +43,12 @@ describe('ed25519Pair', () => {
 	const unreadable = { private: 'not a key', public: 'ssh-ed25519 AAAA' };
 
 	it('generates again until ssh2 reads both halves', () => {
+		// About one generated pair in 256 is unreadable, so the second pair is one that ssh2 reads.
+		const good = ed25519Pair();
 		const calls: string[] = [];
 		const pair = ed25519Pair(() => {
 			calls.push('generate');
-			return calls.length === 1 ? unreadable : utils.generateKeyPairSync('ed25519');
+			return calls.length === 1 ? unreadable : good;
 		});
 		expect(calls).toHaveLength(2);
 		expect(publicOf(pair.private)).toBe(pair.public);
