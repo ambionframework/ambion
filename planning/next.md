@@ -37,7 +37,7 @@ This scope incorporates the owner's response to the review of `origin/main`
 
 **0.5.0 also holds the layer boundaries that a review of `main` found
 open on 2026-10-01.** The review read the import graph of every source file and
-probed every import rule of `biome.jsonc`. LB1 and LB2 are done. LB3 to
+probed every import rule of `biome.jsonc`. LB1 to LB3 are done. LB4 to
 LB9 remain, in [Phase 4](#phase-4-the-layer-boundaries).
 
 ## The scope
@@ -236,7 +236,7 @@ of sent to Priya. The ignored run evidence is under
 - [x] **1.** Hold the neutral and published-surface rules. (LB1, #417)
 - [x] **2.** Refuse model libraries and platform modules in every core
       layer. (LB2, #419)
-- [ ] **3.** One table of the core layers drives the probes. (LB3)
+- [x] **3.** One table of the core layers drives the probes. (LB3)
 - [ ] **4.** The overrides outside the core refuse subpaths. (LB4)
 - [ ] **5.** The host layer imports no execution file. Needs 3. (LB5)
 - [ ] **6.** The room-host core imports none of its mechanisms. Needs 3.
