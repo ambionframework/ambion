@@ -11,7 +11,7 @@ import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
 import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
-import type { ClosedExchange, Seq } from '../types.ts';
+import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { RoomHostState } from './core.ts';
 
@@ -120,7 +120,7 @@ function queueCloses(host: RoomHostState): void {
  */
 function queueClose(host: RoomHostState, close: Close): void {
 	const question = host.state().messages.find((m) => m.seq === close.from);
-	const exchange: ClosedExchange = {
+	const exchange: ExchangeRange = {
 		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,

@@ -104,7 +104,7 @@ export async function waitForRoom(
 
 export async function messagesOf(
 	room: Pick<Room, 'read'>,
-	options: { since?: number } = {},
+	options: { after?: number } = {},
 ): Promise<Message[]> {
 	return [...(await room.read({ messages: options })).messages];
 }
