@@ -1,9 +1,9 @@
 /**
  * The default object backend: one file for each digest under
- * `layout.snapshots`, on the bash backend, written as the host agent.
+ * `layout.snapshots`, on the bash backend, written as the mirror agent.
  *
  * A workspace opens it when `WorkspaceBackends.objects` is absent. Each
- * operation runs on the bash resource as the host agent, so the object
+ * operation runs on the bash resource as the mirror agent, so the object
  * resource may wait on the bash resource, and no bash operation waits on
  * the object resource. A put writes a temporary file beside the target and renames it, so
  * no reader sees a part, and a put of a digest the folder holds writes
@@ -25,10 +25,10 @@ import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 import { assertDigest, assertObjectSize } from './object-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 
-/** What the file store writes through: the bash resource, the host agent, and the folder. */
+/** What the file store writes through: the bash resource, the mirror agent, and the folder. */
 export interface FileObjectOptions {
 	readonly bash: WorkspaceResource<WorkspaceEnv>['use'];
-	readonly host: WorkspaceAgent;
+	readonly mirrorAgent: WorkspaceAgent;
 	readonly root: string;
 }
 
@@ -84,18 +84,26 @@ async function getFile(
 
 /** The file store over the bash resource at `root`. Every agent reaches the one folder. */
 export function fileObjectBackend(options: FileObjectOptions): ObjectBackend {
-	const { bash, host, root } = options;
+	const { bash, mirrorAgent, root } = options;
 	const env: ObjectEnv = {
 		put: async (digest, bytes, signal) => {
 			assertDigest(digest);
 			assertObjectSize(digest, bytes.byteLength);
 			const context = contextOf(signal);
-			await bash(host, (files) => putFile(files, posix.join(root, digest), bytes, context), signal);
+			await bash(
+				mirrorAgent,
+				(files) => putFile(files, posix.join(root, digest), bytes, context),
+				signal,
+			);
 		},
 		get: async (digest, signal) => {
 			assertDigest(digest);
 			const context = contextOf(signal);
-			return bash(host, (files) => getFile(files, posix.join(root, digest), context), signal);
+			return bash(
+				mirrorAgent,
+				(files) => getFile(files, posix.join(root, digest), context),
+				signal,
+			);
 		},
 		cleanup: async () => undefined,
 	};

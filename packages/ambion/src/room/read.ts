@@ -1,7 +1,7 @@
 /** Coherent, detached room reads built from one folded projection. */
 
 import { copyMessage, type Exchange, type Message, type RoomRead, type Seq } from '../types.ts';
-import { exchangeViews } from './exchange.ts';
+import { exchangesOf } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
 import { participantsOf } from './view.ts';
@@ -40,7 +40,7 @@ export function toRoomRead(
 			through,
 		};
 
-	const exchanges = exchangeViews(
+	const exchanges = exchangesOf(
 		state.closes,
 		state.messages,
 		state.exchange,

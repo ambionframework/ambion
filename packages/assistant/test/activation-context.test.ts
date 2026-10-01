@@ -37,7 +37,7 @@ const isSummarizing = (context: Context) => {
 interface Capture {
 	agent: string;
 	phase: number;
-	closing: boolean;
+	summarizing: boolean;
 	system: string;
 	input: string;
 	tools: string[];
@@ -56,16 +56,16 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		['writer:1', answer()],
 	]);
 	const stream = scriptedStream((context, name) => {
-		const closing = isSummarizing(context);
+		const summarizing = isSummarizing(context);
 		captures.push({
 			agent: name,
 			phase,
-			closing,
+			summarizing,
 			tools: toolNames(context),
 			system: context.systemPrompt ?? '',
 			input: JSON.stringify(context.messages),
 		});
-		if (closing) return say(summary);
+		if (summarizing) return say(summary);
 		const key = `${name}:${phase}`;
 		const message = planned.get(key);
 		planned.delete(key);
@@ -94,11 +94,11 @@ it.each(['reserve', 'named'] as const)(
 	'preserves activation context for %s handoff and renewed work',
 	async (attention) => {
 		const captures = await captureActivations(attention);
-		const ordinary = captures.filter((capture) => !capture.closing);
-		const closing = captures.filter((capture) => capture.closing);
+		const responding = captures.filter((capture) => !capture.summarizing);
+		const summarizing = captures.filter((capture) => capture.summarizing);
 		const find = (phase: number, name: string) =>
-			ordinary.find((capture) => capture.phase === phase && capture.agent === name);
-		expect(closing.length).toBeGreaterThanOrEqual(2);
+			responding.find((capture) => capture.phase === phase && capture.agent === name);
+		expect(summarizing.length).toBeGreaterThanOrEqual(2);
 		for (const phase of [0, 1]) {
 			expect(find(phase, 'writer')?.input).toContain(request);
 			expect(find(phase, 'assistant')?.input).toContain(request);
@@ -106,16 +106,16 @@ it.each(['reserve', 'named'] as const)(
 				expect.arrayContaining(['say', 'seat', 'unseat']),
 			);
 		}
-		for (const capture of ordinary) {
+		for (const capture of responding) {
 			expect(capture.input).toContain(goal);
 			expect(capture.system + capture.input).not.toContain(preferences);
 		}
 		for (const capture of captures.filter((entry) => entry.agent === 'assistant')) {
 			expect(capture.system).toContain(override);
 			expect(capture.system).toContain('Application instructions take precedence');
-			expect(capture.system.includes('This is an ordinary activation.')).toBe(!capture.closing);
+			expect(capture.system.includes('This is a respond activation.')).toBe(!capture.summarizing);
 		}
-		for (const capture of closing) {
+		for (const capture of summarizing) {
 			expect(capture.tools).toEqual(['say']);
 			expect(capture.system).toContain(preferences);
 			expect(capture.input).toContain(request);

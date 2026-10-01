@@ -165,12 +165,12 @@ the five tools.
 2. **A graceful cancel.** Implemented: `cancel`, the timeout, a cancel by
    the host, and `dispose()` send `SIGTERM` to the group, and `SIGKILL`
    after a grace of 10 seconds. The grace goes to the backend in the
-   options of `exec`. [Processes](../docs/processes.md#the-stop) states
+   options of `exec`. [Processes](../docs/processes.md#the-cancel) states
    the contract. Implemented: `dispose()` aborts the processes of this run
    of one agent at once and waits for them together, so 4 processes that
    ignore `TERM` take about 15 seconds. Implemented: a grace for each call.
    `bash` takes `grace`, 1 to 300 seconds, and `cancel` waits at most 15
-   seconds ([Processes](../docs/processes.md#the-stop)). No stop holds the
+   seconds ([Processes](../docs/processes.md#the-cancel)). No stop holds the
    chain of its agent for the grace, and the workstation opens one signal
    channel at a time for each client
    ([Workstation](../docs/workstation.md#the-ssh-client)). D24 builds on

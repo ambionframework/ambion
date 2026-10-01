@@ -5,19 +5,17 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 /**
- * The vocabulary check. `planning/terminology.md` lists the names that break
- * the controlled vocabulary. Each entry here refuses one old name in the
- * paths where the plan removed it. The check reads the tracked files, so
- * ignored files stay out. `CHANGELOG.md` keeps the old names as history, and
- * `planning/` names them on purpose.
+ * The vocabulary check. The glossary in `docs/room.md` gives each word one
+ * meaning. Each entry here refuses one old name in the paths where a rename
+ * removed it. The check reads the tracked files, so ignored files stay out.
+ * `CHANGELOG.md` and `planning/` keep the old names as history.
  *
- * A new entry lands with the rename that removes the word. The entry names
- * the plan rows that own it.
+ * A new entry lands with the rename that removes the word.
  *
  * The `turn` entry refuses the phrases that used `turn` for an activation.
- * A vendor turn, such as a Codex `turn.started` event, stays legal. Row T8
- * renames the `after` delay, and a regex cannot tell it from the `after`
- * position, so T8 has no entry.
+ * A vendor turn, such as a Codex `turn.started` event, stays legal. The
+ * `after` delay is now `delaySeconds`, and a regex cannot tell the old delay
+ * from the `after` position, so it has no entry.
  */
 
 const root = join(import.meta.dirname, '..');
@@ -33,69 +31,65 @@ const SOURCE = /^(packages|examples)\/[^/]+\/src\/.*\.(ts|tsx)$/;
 const PROSE = /^(docs\/.*\.md|README\.md|packages\/[^/]+\/README\.md)$/;
 
 /** A pattern that matches one old name in the file of the paths that `paths` accepts. */
-const entry = (id, rows, pattern, paths, options = {}) => ({
+const entry = (id, pattern, paths, options = {}) => ({
 	id,
-	rows,
 	pattern,
 	paths,
 	exclude: options.exclude,
 	allow: options.allow ?? [],
 });
 
-// Old names that the renames of the plan removed. A name has a word boundary
-// and no false positive in the current tree. One entry holds one plan row.
+// Old names that a rename removed. A name has a word boundary and no false
+// positive in the current tree. One entry holds one concept.
 const OLD_NAMES = [
 	[
-		'T1',
+		'executor',
 		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,
 	],
-	['T2', /\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/],
-	['T3', /\bisClosing\b|\bpurpose\b[^'\n]{0,8}'summary'/],
-	['T4', /\broom\.abort\(/],
-	['T5', /\b(?:SpokenMessage|isSpoken)\b/],
-	['T6', /\bDEFAULT_GUIDANCE\b/],
-	['T7', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
-	['T9', /\bwatermark\b/],
-	['T10', /\b(?:PendingSay|pendingFor)\b/],
-	['T11', /\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/],
-	['T12', /\bJournalEntry\b/],
-	['S1', /\b(?:ClaudeRuntime|CodexRuntime)\b/],
-	['O5', /\b(?:seatFamilies|scriptedFamilies)\b/],
-	['O2', /\bWorkspacePorts?\b/],
-	['S7', /\b(?:tokenTtl|keyTtl)\b/],
-	['S8', /\b(?:StopCause|process-stop)\b/],
-	['S9', /\bProcessStatus\b/],
-	['O3', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
-	['O7', /\bthinking:\s*'summary'/],
-	['O10', /\bRunExchange\b/],
-	['O11', /\bTraceRecord\b/],
-	['S11', /\bDEFAULT_TRACE\b/],
+	['activation event', /\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/],
+	['summarize purpose', /\bisClosing\b|\bpurpose\b[^'\n]{0,8}'summary'/],
+	['cancel', /\broom\.abort\(/],
+	['said message', /\b(?:SpokenMessage|isSpoken)\b/],
+	['speaking default', /\bDEFAULT_GUIDANCE\b/],
+	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
+	['read position', /\bwatermark\b/],
+	['scheduled say', /\b(?:PendingSay|pendingFor)\b/],
+	[
+		'journal entries',
+		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,
+	],
+	['journal entry type', /\bJournalEntry\b/],
+	['execution options', /\b(?:ClaudeRuntime|CodexRuntime)\b/],
+	['executor kind', /\b(?:seatFamilies|scriptedFamilies)\b/],
+	['workspace endpoint', /\bWorkspacePorts?\b/],
+	['credential lifetime', /\b(?:tokenTtl|keyTtl)\b/],
+	['process cancel', /\b(?:StopCause|process-stop)\b/],
+	['process record', /\bProcessStatus\b/],
+	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
+	['trace policy', /\bthinking:\s*'summary'/],
+	['simulation', /\bRunExchange\b/],
+	['traced step', /\bTraceRecord\b/],
+	['trace policy default', /\bDEFAULT_TRACE\b/],
 ];
 
 const entries = [
-	entry('member', ['O8'], /\bmember(?:ship)?s?\b/i, PROSE),
-	entry('family', ['O5'], /(?<!font-)\bfamil(?:y|ies)\b/i, PROSE),
+	entry('member', /\bmember(?:ship)?s?\b/i, PROSE),
+	entry('family', /(?<!font-)\bfamil(?:y|ies)\b/i, PROSE),
 	entry(
 		'turn',
-		['O9'],
 		/\b(?:your turn|mid-turn|this turn|taking a turn|take your turn)\b/i,
 		/^(?:packages|examples)\/[^/]+\/(?:src|test\/live)\/.*\.(?:ts|tsx|mjs)$/,
 	),
-	entry('Spoken', ['T5'], /\w+Spoken\b|\bSpoken\w+/, SOURCE),
-	entry(
-		'Info',
-		['T14'],
-		/\bexport\s+(?:type|interface)\s+\w+Info\b/,
-		/^packages\/ambion\/src\/.*\.ts$/,
-	),
-	entry('Harness', ['O4a', 'O4b'], /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
+	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
+	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
+	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
 		exclude: /^packages\/pi\//,
 		allow: [
 			/^(?:AgentHarness|AgentHarnessTool|AgentHarnessToolInvocation|HarnessEvent|HarnessEventType|OpenHarness|openHarness|HarnessInput|HarnessTool)$/,
 		],
 	}),
-	entry('harness matrix', ['O4a'], /\bmatrix\.harness\b|^\s*harness: \[/, CODE),
-	...OLD_NAMES.map(([row, pattern]) => entry(`old names of ${row}`, [row], pattern, TEXT)),
+	entry('harness matrix', /\bmatrix\.harness\b|^\s*harness: \[/, CODE),
+	...OLD_NAMES.map(([concept, pattern]) => entry(`old names of the ${concept}`, pattern, TEXT)),
 ];
 
 const lines = new Map();
@@ -121,11 +115,11 @@ function hitsOf({ pattern, paths, exclude, allow }) {
 }
 
 for (const item of entries) {
-	test(`vocabulary: ${item.id} (${item.rows.join(', ')})`, () => {
+	test(`vocabulary: ${item.id}`, () => {
 		const hits = hitsOf(item);
 		assert.ok(
 			hits.length === 0,
-			`${item.id} breaks ${item.rows.join(', ')} of planning/terminology.md:\n${hits.join('\n')}`,
+			`${item.id}: an old name is back. docs/room.md holds the glossary.\n${hits.join('\n')}`,
 		);
 	});
 }

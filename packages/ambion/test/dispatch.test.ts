@@ -81,7 +81,7 @@ async function workerRoom(
 }
 
 describe.each(storages)('activation dispatch on $name', (storage) => {
-	it('starts ordinary work promptly with only their recorded causes', async () => {
+	it('starts a respond activation promptly with only their recorded causes', async () => {
 		const opened = await openFor(storage);
 		const clock = fakeClock();
 		const before = clock.now();

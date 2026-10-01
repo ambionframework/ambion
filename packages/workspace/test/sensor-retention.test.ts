@@ -40,10 +40,15 @@ async function defaultStore(
 	});
 	const objects = openResource<ObjectEnv>({
 		name: 'retention-objects',
-		backend: fileObjectBackend({ bash: bash.use, host: owner, root: '/snapshots' }),
+		backend: fileObjectBackend({ bash: bash.use, mirrorAgent: owner, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'retention-test', host: owner, bash: bash.use, objects: objects.use },
+		store: {
+			workspace: 'retention-test',
+			mirrorAgent: owner,
+			bash: bash.use,
+			objects: objects.use,
+		},
 		async dispose() {
 			await objects.dispose();
 			await bash.dispose();
@@ -243,13 +248,13 @@ describe('sensor evidence retention', () => {
 		)
 			.fileObjectBackend({
 				bash: bash.use,
-				host: owner,
+				mirrorAgent: owner,
 				root: '/snapshots',
 			})
 			.connect(owner);
 		const store: SnapshotStore = {
 			workspace: 'retention-clone',
-			host: owner,
+			mirrorAgent: owner,
 			bash: bash.use,
 			objects: objects.use,
 		};
@@ -437,7 +442,7 @@ describe('sensor evidence retention', () => {
 		});
 		const store: SnapshotStore = {
 			workspace: 'retention-write-failure',
-			host: owner,
+			mirrorAgent: owner,
 			bash: bash.use,
 			objects: objects.use,
 		};
@@ -505,11 +510,11 @@ describe('sensor evidence retention', () => {
 			});
 			const objects = openResource<ObjectEnv>({
 				name: 'retention-partial-objects',
-				backend: fileObjectBackend({ bash: bash.use, host: owner, root: '/snapshots' }),
+				backend: fileObjectBackend({ bash: bash.use, mirrorAgent: owner, root: '/snapshots' }),
 			});
 			const store: SnapshotStore = {
 				workspace: 'retention-partial',
-				host: owner,
+				mirrorAgent: owner,
 				bash: bash.use,
 				objects: objects.use,
 			};

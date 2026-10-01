@@ -38,7 +38,7 @@ function fileStore(bash: () => BashBackend) {
 		const resource = openResource({ name: 'objects', backend: bash() });
 		const backend = fileObjectBackend({
 			bash: resource.use,
-			host: { name: 'objects-host' },
+			mirrorAgent: { name: 'objects-host' },
 			root: '/snapshots',
 		});
 		return { backend: { ...backend, dispose: () => resource.dispose() } };
@@ -83,7 +83,7 @@ describe.each(objectStores)('$name', (fixture) => {
 		});
 		const snapshotStore = {
 			workspace: 'retention-conformance',
-			host: { name: 'retention-host' },
+			mirrorAgent: { name: 'retention-host' },
 			bash: resource.use,
 			objects: objects.use,
 		};

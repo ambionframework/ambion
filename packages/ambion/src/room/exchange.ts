@@ -221,7 +221,7 @@ function summariesOf(close: Close, range: readonly Message[], pass: Pass): Summa
 }
 
 /** Build one detached closed `Exchange` from the recorded close. */
-function closedExchangeView(close: Close, pass: Pass): Extract<Exchange, { status: 'closed' }> {
+function closedExchangeOf(close: Close, pass: Pass): Extract<Exchange, { status: 'closed' }> {
 	const { usage, exhausted } = workOf(close.from, close.through, pass.leases);
 	const range = rangeOf(pass.messages, close.from, close.through);
 	const summaries = summariesOf(close, range, pass);
@@ -336,7 +336,7 @@ function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): 
 }
 
 /** Build detached `Exchange` values in journal order, including the current open exchange. */
-export function exchangeViews(
+export function exchangesOf(
 	closes: readonly Close[],
 	messages: readonly Message[],
 	open: ExchangeRef | undefined,
@@ -352,7 +352,7 @@ export function exchangeViews(
 		lastSaid: lastSaidBy(messages, people),
 		cancelledAt,
 	};
-	const closed = closes.map((close) => closedExchangeView(close, pass));
+	const closed = closes.map((close) => closedExchangeOf(close, pass));
 	if (open === undefined) return closed;
 	const activations = [...leases.values()]
 		.filter((lease) => lease.activation.position >= open.from)

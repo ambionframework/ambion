@@ -3,7 +3,7 @@
 > **Actuators are a pattern over processes.** The workbench ships the
 > [actuator controller template](../examples/workbench/templates/actuator-controller),
 > and its tests pass. A cancel sends `SIGTERM`, waits the `grace` of the
-> `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-stop)).
+> `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-cancel)).
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
