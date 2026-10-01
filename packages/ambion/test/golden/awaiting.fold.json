@@ -48,7 +48,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:5:worker:1"
 					}
 				}

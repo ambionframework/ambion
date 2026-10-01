@@ -94,10 +94,10 @@ describe('sensor evidence retention with Git launch provenance', () => {
 			},
 		]);
 
-		const storeHarness = await createStore(snapshotPath);
-		onTestFinished(() => storeHarness.dispose());
+		const storeFixture = await createStore(snapshotPath);
+		onTestFinished(() => storeFixture.dispose());
 		const retained = await retainSensorObservation(
-			storeHarness.store,
+			storeFixture.store,
 			{ name: 'observer' },
 			{
 				sensor: 'bench-one/bench-camera',
@@ -123,12 +123,12 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		expect(laterCommit).not.toBe(launchCommit);
 		expect(git(checkout, ['status', '--porcelain'])).toBe('');
 
-		const restored = await createRestoreTool(storeHarness.store).invoke(
+		const restored = await createRestoreTool(storeFixture.store).invoke(
 			{ ref: retained.manifestRef },
 			callAs('reviewer'),
 		);
 		const manifestPath = (restored as { details: { path: string } }).details.path;
-		const manifestBytes = await storeHarness.store.shell({ name: 'reviewer' }, async (env) => {
+		const manifestBytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
 			const read = await env.readBinaryFile(manifestPath, BACKGROUND_CONTEXT);
 			if (!read.ok) throw read.error;
 			return read.value;
@@ -159,12 +159,12 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		});
 		const retainedFile = manifest.files[0];
 		if (!retainedFile) throw new Error('The retained manifest has no frame file.');
-		const restoredFile = await createRestoreTool(storeHarness.store).invoke(
+		const restoredFile = await createRestoreTool(storeFixture.store).invoke(
 			{ ref: retainedFile.ref },
 			callAs('reviewer'),
 		);
 		const imagePath = (restoredFile as { details: { path: string } }).details.path;
-		const restoredBytes = await storeHarness.store.shell({ name: 'reviewer' }, async (env) => {
+		const restoredBytes = await storeFixture.store.shell({ name: 'reviewer' }, async (env) => {
 			const read = await env.readBinaryFile(imagePath, BACKGROUND_CONTEXT);
 			if (!read.ok) throw read.error;
 			return read.value;

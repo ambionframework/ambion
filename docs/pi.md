@@ -362,8 +362,8 @@ stay in memory.
 session, and the fresh start.
 
 **A session carries the id of the activation that began it.** The release
-records `{ harness: 'pi', id }`. An activation reopens the session only
-when `pass.resume` names that id. Its first prompt is `pass.record(after)`,
+records `{ kind: 'pi', id }`. An activation reopens the session only
+when `pass.resumeId` names that id. Its first prompt is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
 delta with no message starts no pass. A summary activation reads the whole
@@ -465,7 +465,7 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 **A scripted stream tests the room with no model and no key.**
 `@ambionframework/pi/testing` exports `scriptedStream`, `PiScript`,
 `isClosingContext`, `contextText`, `toolNames`, `toolResultTexts`,
-`scriptOf`, and `piExecutorHarness`. A script answers with the verbs of
+`scriptOf`, and `piExecutorFixture`. A script answers with the verbs of
 `@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
 `quiet`, and `byAgent`. The executor puts the stream in one provider of a Pi
 `Models` collection, which holds the model of the seat under its provider
@@ -485,7 +485,7 @@ const inventory = defineAgent({
 
 const stream = scriptedStream(
   byAgent({
-    inventory: (_context, _agent, call) => (call === 1 ? say('42 units in stock.') : quiet()),
+    inventory: (_context, _agent, request) => (request === 1 ? say('42 units in stock.') : quiet()),
   }),
 );
 
@@ -523,7 +523,7 @@ has no Pi meaning. A script that needs a usage report returns a message
 with a `usage` field. A call whose arguments JSON cannot hold also fails,
 because Pi tool calls carry JSON.
 
-**`piExecutorHarness()` runs the executor suite.** It maps each plan of
+**`piExecutorFixture()` runs the executor suite.** It maps each plan of
 `@ambionframework/ambion/conformance` to a script, and declares steering,
 usage, permanent failure, and memory.
 `packages/pi/test/executor-conformance.test.ts` runs the suite with no key.

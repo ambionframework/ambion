@@ -24,8 +24,8 @@ async function asked(name: string) {
 	const seat = seatOf(name);
 	await room.start({
 		name,
-		summary: 'assistant',
-		agents: ['product', 'assistant'],
+		summaryWriter: 'assistant',
+		definitions: ['product', 'assistant'],
 		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
@@ -51,7 +51,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		return messages.find((m) => m.kind === 'said' && m.from === 'product');
 	});
 	expect(said).toMatchObject({
-		activationId: 'message:4:product:1',
+		activation: 'message:4:product:1',
 		text: 'The pour is Saturday.',
 	});
 	const leases = await until(async () =>
@@ -131,7 +131,7 @@ it('runs one activation when a second alarm starts while the first runs', async 
 	const said = (await room.read()).messages.filter(
 		(m) => m.kind === 'said' && m.from === 'product',
 	);
-	expect(said).toMatchObject([{ activationId: 'message:4:product:1' }]);
+	expect(said).toMatchObject([{ activation: 'message:4:product:1' }]);
 	const leases = await runInDurableObject(room, async (_instance, state) => {
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open('alarm-twice');
 		return (await journal.read(0)).entries

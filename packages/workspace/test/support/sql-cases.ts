@@ -25,7 +25,7 @@ function check(condition: boolean, what: string): void {
 }
 
 /** A SQL backend under test. `open` runs inside every case. */
-export interface SqlHarness {
+export interface SqlFixture {
 	readonly name: string;
 	open(): Promise<{ backend: SqlBackend; dispose(): Promise<void> }>;
 }
@@ -292,9 +292,9 @@ const SQL_CASES: readonly [string, SqlBody][] = [
 	['an aborted context rejects before the first statement runs', abortBeforeRun],
 ];
 
-/** Opens the backend through `harness`, runs `body`, and disposes it. */
-async function runSqlCase(harness: SqlHarness, body: SqlBody): Promise<void> {
-	const { backend, dispose } = await harness.open();
+/** Opens the backend through `fixture`, runs `body`, and disposes it. */
+async function runSqlCase(fixture: SqlFixture, body: SqlBody): Promise<void> {
+	const { backend, dispose } = await fixture.open();
 	const files = caseFiles();
 	try {
 		await body({
@@ -308,6 +308,6 @@ async function runSqlCase(harness: SqlHarness, body: SqlBody): Promise<void> {
 }
 
 /** The cases of a `SqlBackend`, as named test bodies. */
-export function sqlCases(harness: SqlHarness): readonly ConformanceCase[] {
-	return SQL_CASES.map(([name, body]) => ({ name, run: () => runSqlCase(harness, body) }));
+export function sqlCases(fixture: SqlFixture): readonly ConformanceCase[] {
+	return SQL_CASES.map(([name, body]) => ({ name, run: () => runSqlCase(fixture, body) }));
 }

@@ -77,19 +77,19 @@ describe('the built-in tools', () => {
 		const session = await run(
 			[agent('writer', { bundles: [tools] }), agent('reader', { bundles: [tools] })],
 			{
-				writer: (context, who, call) => {
+				writer: (context, who, request) => {
 					results[who] = toolResults(context);
-					if (call === 1)
+					if (request === 1)
 						return callTool('write', { path: 'notes.txt', content: 'slab pour Thu\n' });
-					if (call === 2) return callTool('bash', { command: 'pwd; cat ~/notes.txt; ls /home' });
-					if (call > 3) return quiet();
+					if (request === 2) return callTool('bash', { command: 'pwd; cat ~/notes.txt; ls /home' });
+					if (request > 3) return quiet();
 					writerDone.resolve();
 					return say('written');
 				},
-				reader: async (context, who, call) => {
+				reader: async (context, who, request) => {
 					results[who] = toolResults(context);
 					// The reader waits for the writer's file, then reads it from the other home.
-					if (call === 1) {
+					if (request === 1) {
 						await writerDone.promise;
 						return callTool('read', { path: '/home/writer/notes.txt' });
 					}
@@ -121,16 +121,16 @@ describe('the built-in tools', () => {
 		const edit = (from: string, to: string) =>
 			fauxToolCall('edit', { path: 'f.txt', edits: [{ oldText: from, newText: to }] });
 		await run([agent('editor', { bundles: [site.tools()] })], {
-			editor: (context, _who, call) => {
-				if (call === 1)
+			editor: (context, _who, request) => {
+				if (request === 1)
 					return callTool('write', { path: 'f.txt', content: 'alpha\nbeta\ngamma\n' });
-				if (call === 2)
+				if (request === 2)
 					return callTool('edit', { path: 'f.txt', oldText: 'alpha', newText: 'ALPHA' });
-				if (call === 3)
+				if (request === 3)
 					return fauxAssistantMessage([edit('beta', 'BETA'), edit('gamma', 'GAMMA')], {
 						stopReason: 'toolUse',
 					});
-				if (call === 4) return callTool('read', { path: 'f.txt' });
+				if (request === 4) return callTool('read', { path: 'f.txt' });
 				final = toolResults(context).at(-1)?.text;
 				return quiet();
 			},
@@ -151,14 +151,14 @@ describe('the built-in tools', () => {
 			execute: async (_params, ctx) => site.use(ctx.agent, async () => 'some', ctx.signal),
 		});
 		await run([agent('worker', { tools: [probe], bundles: [tools] })], {
-			worker: async (context, _who, call) => {
-				if (call === 1) return callTool('write', { path: 'a.txt', content: 'x' });
-				if (call === 2) {
+			worker: async (context, _who, request) => {
+				if (request === 1) return callTool('write', { path: 'a.txt', content: 'x' });
+				if (request === 2) {
 					await site.dispose();
 					return callTool('read', { path: 'a.txt' });
 				}
-				if (call === 3) return callTool('probe', {});
-				if (call > 4) return quiet();
+				if (request === 3) return callTool('probe', {});
+				if (request > 4) return quiet();
 				after = toolResults(context);
 				custom = after.at(-1)?.text;
 				return say('still here');
@@ -236,15 +236,15 @@ describe('ToolContext', () => {
 			},
 		});
 		await run([agent('inside', { tools: [where] }), agent('outside', { tools: [where] })], {
-			inside: (context, who, call) => {
-				if (call <= 2) return callTool('where', {});
+			inside: (context, who, request) => {
+				if (request <= 2) return callTool('where', {});
 				seen[who] = toolResults(context)
 					.map((r) => r.text)
 					.join(' | ');
 				return quiet();
 			},
-			outside: (context, who, call) => {
-				if (call === 1) return callTool('where', {});
+			outside: (context, who, request) => {
+				if (request === 1) return callTool('where', {});
 				seen[who] = toolResults(context)
 					.map((r) => r.text)
 					.join(' | ');
@@ -285,11 +285,11 @@ describe('a workspace beside a running room', () => {
 				sessions: 'memory',
 				stream: scriptedStream(
 					byAgent({
-						worker: (_context, _who, call) => {
-							if (call === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
-							if (call === 2) return callTool('snapshot', { paths: ['notes.txt'] });
-							if (call === 3) return callTool('say', { text: 'first', refs: [ref] });
-							return call === 4 ? say('second') : quiet();
+						worker: (_context, _who, request) => {
+							if (request === 1) return callTool('write', { path: 'notes.txt', content: 'done\n' });
+							if (request === 2) return callTool('snapshot', { paths: ['notes.txt'] });
+							if (request === 3) return callTool('say', { text: 'first', refs: [ref] });
+							return request === 4 ? say('second') : quiet();
 						},
 					}),
 				),

@@ -26,8 +26,8 @@ const agents = [
 ];
 
 const pilotStream = () =>
-	scriptedStream((_context, _agent, call) =>
-		call === 1 ? say('The pour is Saturday, says Pi.') : quiet(),
+	scriptedStream((_context, _agent, request) =>
+		request === 1 ? say('The pour is Saturday, says Pi.') : quiet(),
 	);
 
 const pilot = () => piExecution({ sessions: 'memory', stream: pilotStream() });

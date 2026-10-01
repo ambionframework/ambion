@@ -320,12 +320,12 @@ describe('executor tool authority', () => {
 				kind: 'composition',
 				seq: 1,
 				body: {
-					summary: 'worker',
-					agents: [
+					summaryWriter: 'worker',
+					seated: [
 						{ name: 'worker', identity: 'A.', attention: 'broadcast' },
 						{ name: 'product', identity: 'P.', attention: 'broadcast' },
 					],
-					available: [],
+					reserve: [],
 					at,
 				},
 			},
@@ -342,7 +342,7 @@ describe('executor tool authority', () => {
 			{
 				kind: 'close',
 				seq: 4,
-				body: { person: 'priya', from: 3, through: 3, at, summary: 'worker' },
+				body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'worker' },
 			},
 			{
 				kind: 'message',

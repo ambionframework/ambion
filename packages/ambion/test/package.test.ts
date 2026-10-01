@@ -130,8 +130,8 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	>().toEqualTypeOf<main.ExchangeRange>();
 	expectTypeOf<main.StartRoomOptions>().toHaveProperty('execution');
 	expectTypeOf<main.StartRoomOptions>().not.toHaveProperty('stream');
-	expectTypeOf<main.HarnessSession>().toEqualTypeOf<hosting.HarnessSession>();
-	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.HarnessSession | undefined>();
+	expectTypeOf<main.VendorSession>().toEqualTypeOf<hosting.VendorSession>();
+	expectTypeOf<hosting.ActivationSpec['resume']>().toEqualTypeOf<main.VendorSession | undefined>();
 	expectTypeOf<hosting.RunningActivation['session']>().toEqualTypeOf<string | undefined>();
 	// The room windows the record: a view names one message at most, and a seat names its estimator.
 	expectTypeOf<Parameters<hosting.RoomProtocol['view']>>().toEqualTypeOf<

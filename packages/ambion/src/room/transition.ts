@@ -9,11 +9,11 @@ import type { ScheduleLimits } from '../scheduling.ts';
 import type {
 	EndReason,
 	FailureCause,
-	HarnessSession,
 	Message,
 	PresenceMessage,
 	Seq,
 	Usage,
+	VendorSession,
 } from '../types.ts';
 import { activationSpec, NO_GRANT, seatAuthority } from './activation.ts';
 import { coveringSummary } from './exchange.ts';
@@ -54,7 +54,7 @@ type MessageCommand =
 	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
 	| { type: 'return'; message: Seq }
 	| { type: 'dismiss'; message: Seq };
-type DismissStamp = { at: string; activationId?: string; from?: string };
+type DismissStamp = { at: string; activation?: string; from?: string };
 /** How one lease ends: what an end entry carries beside its stamp. */
 interface LeaseEnding {
 	id: string;
@@ -62,7 +62,7 @@ interface LeaseEnding {
 	readThrough: number;
 	cause?: FailureCause;
 	usage?: Usage;
-	session?: HarnessSession;
+	session?: VendorSession;
 }
 /** The room ends a lease: a pass, or a stop. */
 type EndCommand = { type: 'end' } & LeaseEnding;
@@ -323,7 +323,7 @@ function sameSeating(
 ): boolean {
 	if ((change.identity ?? '') !== seat.identity) return false;
 	if ((change.attention ?? 'broadcast') !== seat.attention) return false;
-	const fixed = change.fixed ?? change.subject === composition?.summary;
+	const fixed = change.fixed ?? change.subject === composition?.summaryWriter;
 	return isFixed(seat, composition) === fixed;
 }
 
@@ -401,7 +401,7 @@ function closingCommit(
 			...refsField(intent.refs),
 			...stampedSummary(recipient, purpose.exchange, purpose.through),
 			at: iso(now),
-			activationId: request.activation,
+			activation: request.activation,
 			from: live.seat,
 		},
 		now,
@@ -420,7 +420,7 @@ function ordinaryCommit(
 	const { intent } = request;
 	const fresh = speechFreshness(state, request);
 	if (fresh !== undefined) return fresh;
-	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
+	const stamp = { at: iso(now), activation: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
 	if (intent.kind === 'dismissed') return dismissing(state, intent.message, stamp);
@@ -477,7 +477,7 @@ function validReadThrough(readThrough: number | undefined, lastSeq: number): rea
 function seating(
 	state: RoomState,
 	name: string,
-	stamp: { at: string; activationId: string; from: string },
+	stamp: { at: string; activation: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
 	if (state.roster.some((seat) => seat.name === name)) {
@@ -509,7 +509,7 @@ function seating(
 function unseating(
 	state: RoomState,
 	name: string,
-	stamp: { at: string; activationId: string; from: string },
+	stamp: { at: string; activation: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
 	const seat = state.roster.find((candidate) => candidate.name === name);
@@ -656,7 +656,7 @@ function invalidProgress(
  * that takes the name of a person.
  */
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
-	const person = [...composition.agents, ...composition.available].find((seat) =>
+	const person = [...composition.seated, ...composition.reserve].find((seat) =>
 		state.people.has(seat.name),
 	);
 	if (person !== undefined)
@@ -679,7 +679,8 @@ function closing(state: RoomState, command: CloseCommand, now: number): RoomDeci
 	const { from, through } = command;
 	const person = exchange?.person;
 	const writer = person === undefined ? undefined : summaryWriter(state.composition, state.roster);
-	const owed = person === undefined || writer === undefined ? {} : { person, summary: writer };
+	const owed =
+		person === undefined || writer === undefined ? {} : { person, summaryWriter: writer };
 	return {
 		entry: {
 			kind: 'close',

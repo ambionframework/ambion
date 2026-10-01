@@ -152,7 +152,7 @@ function queueCancellation(host: RoomHostState, seq: Seq): void {
 					type: 'activation_end',
 					seat,
 					activation: lease.id,
-					said: state.messages.some((message) => message.activationId === lease.id),
+					said: state.messages.some((message) => message.activation === lease.id),
 				});
 		}
 	});
@@ -190,7 +190,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 		});
 		return;
 	}
-	const said = host.state().messages.some((m) => m.activationId === lease.id);
+	const said = host.state().messages.some((m) => m.activation === lease.id);
 	publish(host, () => {
 		if (revoked) cutPort(host, seat, lease.id);
 		host.emit({

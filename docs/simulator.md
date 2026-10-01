@@ -569,9 +569,9 @@ reached the provider, and the specialist returned one fixed `say`.
   the counter between cases.
 
 **The specialist script reads the view and its results, and ignores the
-counter.** The `call` argument counts every step of the seat in the
-runtime, so a script that speaks at `call === 1` answers the first exchange
-only. The view of a later step in one activation may not hold the say the
+counter.** The `request` argument counts every step of the seat in the
+runtime, so a script that speaks at `request === 1` answers the first
+exchange only. The view of a later step in one activation may not hold the say the
 seat just made, so the script also stops once the activation has a result.
 A script for a case with several exchanges speaks once in each exchange:
 

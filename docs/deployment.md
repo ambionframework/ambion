@@ -55,7 +55,7 @@ A host must:
 Pass a `logger` to `createRuntime`, or to `configure` on Cloudflare, to
 receive the steps of each activation. A restart keeps no trace.
 
-**A harness session is not part of the recovery.** A restart on a new
+**A vendor session is not part of the recovery.** A restart on a new
 disk, or on a host with no disk, loses the session, and the next activation
 reads the record again. Pi keeps its sessions under `sessionDir` on the
 local disk. The default is `ambion-pi-sessions-<uid>` in the OS temporary

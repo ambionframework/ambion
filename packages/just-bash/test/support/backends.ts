@@ -1,5 +1,5 @@
 /**
- * The two just-bash backends as conformance harnesses, and a helper that runs
+ * The two just-bash backends as conformance fixtures, and a helper that runs
  * one command. `memory` holds the files for as long as the handle lives, and
  * `directory` writes them through to a temporary directory and removes it
  * after.
@@ -13,7 +13,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-	ConformanceHarness,
+	ConformanceFixture,
 	WorkspaceConformanceStore,
 } from '@ambionframework/workspace/conformance';
 import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
@@ -25,7 +25,7 @@ export async function tempDir(prefix: string) {
 	return { dir, dispose: () => rm(dir, { recursive: true, force: true }) };
 }
 
-export const backends: readonly ConformanceHarness<WorkspaceConformanceStore>[] = [
+export const backends: readonly ConformanceFixture<WorkspaceConformanceStore>[] = [
 	{
 		name: 'memory',
 		async open() {

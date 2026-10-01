@@ -16,7 +16,7 @@ import { tempDir } from './support/temp.ts';
 const worker = scriptedAgent('worker');
 
 const answering = () =>
-	scriptedStream((_context, _agent, call) => (call === 1 ? say('42') : quiet()));
+	scriptedStream((_context, _agent, request) => (request === 1 ? say('42') : quiet()));
 
 /** Ask the one question and return what was said, once the exchange closes. */
 async function ask(room: Room) {

@@ -15,21 +15,21 @@ import {
 
 const PLAN = 'LED plan: 330 ohm series resistor at 10 mA.\n';
 
-function scriptedResponse(agent: string, call: number, closing: boolean) {
+function scriptedResponse(agent: string, request: number, closing: boolean) {
 	if (closing)
 		return fauxAssistantMessage([fauxToolCall('say', { text: 'Summary: the bench answered.' })], {
 			stopReason: 'toolUse',
 		});
-	if (agent === 'assistant' && call === 1)
+	if (agent === 'assistant' && request === 1)
 		return fauxAssistantMessage(
 			[fauxToolCall('say', { to: 'design', text: 'Please choose the resistor.' })],
 			{ stopReason: 'toolUse' },
 		);
-	if (agent === 'assistant' && call === 2)
+	if (agent === 'assistant' && request === 2)
 		return fauxAssistantMessage([fauxToolCall('read', { path: '/library/led-5mm.md' })], {
 			stopReason: 'toolUse',
 		});
-	if (agent === 'assistant' && call === 3)
+	if (agent === 'assistant' && request === 3)
 		return fauxAssistantMessage(
 			[fauxToolCall('say', { to: 'design', text: 'Thanks, that is clear.' })],
 			{ stopReason: 'toolUse' },
@@ -39,9 +39,9 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 
 /** The design seat runs on the Claude executor. A script drives it, with no key. */
 const designScript = byAgent({
-	design: (_step, _seat, call) => {
-		if (call === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
-		if (call === 2) return say('Resistor chosen.', 'assistant');
+	design: (_step, _seat, request) => {
+		if (request === 1) return callTool('write', { path: 'shared/plan.md', content: PLAN });
+		if (request === 2) return say('Resistor chosen.', 'assistant');
 		return quiet();
 	},
 });
@@ -274,8 +274,8 @@ describe('Workbench host', () => {
 
 	it('lists a say that waits to return, and dismisses it once', async () => {
 		const workbench = await openHost({
-			stream: respondingStream((agent, call, closing) => {
-				if (closing || agent !== 'assistant' || call !== 1)
+			stream: respondingStream((agent, request, closing) => {
+				if (closing || agent !== 'assistant' || request !== 1)
 					return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 				const later = { text: 'Check the bench supply.', after: 600 };
 				return fauxAssistantMessage([fauxToolCall('schedule', later)], { stopReason: 'toolUse' });
@@ -330,14 +330,14 @@ describe('Workbench host', () => {
 
 	it('lists the processes that an agent starts with bash, reads an output, and cancels a running one', async () => {
 		// The assistant starts a short process that ends in its window, then a long one that it leaves running.
-		const stream = respondingStream((agent, call, closing) => {
+		const stream = respondingStream((agent, request, closing) => {
 			const start = (command: string, name: string, wait: number) =>
 				fauxAssistantMessage([fauxToolCall('bash', { command, name, wait })], {
 					stopReason: 'toolUse',
 				});
 			if (agent !== 'assistant' || closing) return fauxAssistantMessage('quiet');
-			if (call === 1) return start('echo hello from the bench', 'greet', 5);
-			if (call === 2) return start('sleep 60', 'soak', 0);
+			if (request === 1) return start('echo hello from the bench', 'greet', 5);
+			if (request === 2) return start('sleep 60', 'soak', 0);
 			return fauxAssistantMessage('quiet');
 		});
 		const workbench = await openHost({ stream });

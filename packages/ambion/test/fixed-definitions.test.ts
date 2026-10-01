@@ -51,12 +51,12 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 	it.each([
 		[
 			'a summary writer that is not seated',
-			{ agents: [alpha, beta], seats: { alpha: 'broadcast' }, summary: 'beta' },
+			{ agents: [alpha, beta], seats: { alpha: 'broadcast' }, summaryWriter: 'beta' },
 			/not seated/,
 		],
 		[
 			'a summary name that no definition holds',
-			{ agents: [alpha], summary: 'ghost' },
+			{ agents: [alpha], summaryWriter: 'ghost' },
 			/summary agent 'ghost'/,
 		],
 		['a duplicate catalog name', { agents: [alpha, alpha] }, /./],
@@ -94,17 +94,17 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		const { room } = await open('reserve-writer', {
 			agents: [alpha, beta],
 			seats: { alpha: 'broadcast', beta: 'none' },
-			summary: 'beta',
+			summaryWriter: 'beta',
 		});
 		await room.unseat('beta');
 		const visit = await room.visit(priya);
 		const first = await visit.send({ text: 'No writer seated yet.' });
 		await expect(first.waitForSummary()).resolves.toBeUndefined();
-		expect(stateOf(room).closes.at(-1)?.summary).toBeUndefined();
+		expect(stateOf(room).closes.at(-1)?.summaryWriter).toBeUndefined();
 		await room.seat('beta', { attention: 'none' });
 		const second = await visit.send({ text: 'The writer is seated now.' });
 		await second.waitForSummary();
-		expect(stateOf(room).closes.at(-1)?.summary).toBe('beta');
+		expect(stateOf(room).closes.at(-1)?.summaryWriter).toBe('beta');
 	});
 
 	it('separates the catalog from membership and returns every unseated agent to reserve', async () => {
@@ -172,9 +172,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			seats,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context, _agent, call) => {
+				stream: scriptedStream((context, _agent, request) => {
 					prompts.push(context.systemPrompt ?? '');
-					return call === 1 ? callTool('inspect', {}) : quiet();
+					return request === 1 ? callTool('inspect', {}) : quiet();
 				}),
 			}),
 		});

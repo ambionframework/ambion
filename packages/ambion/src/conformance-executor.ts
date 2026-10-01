@@ -28,11 +28,11 @@ import {
 	type AgentDefinition,
 	addUsage,
 	type FailureCause,
-	type HarnessSession,
 	type Message,
 	type TracedStep,
 	type TraceStep,
 	type Usage,
+	type VendorSession,
 } from './types.ts';
 
 /** The neutral behaviours the suite asks an executor to perform. The suite owns this set. */
@@ -61,7 +61,7 @@ export interface ExecutorCapabilities {
 	/** The executor can end an activation as a permanent failure. */
 	readonly permanentFailure: boolean;
 	/**
-	 * The executor records a harness session with each release, resumes the
+	 * The executor records a vendor session with each release, resumes the
 	 * session that `spec.resume` names, and starts fresh when the view names
 	 * none. Absent means false.
 	 */
@@ -69,7 +69,7 @@ export interface ExecutorCapabilities {
 }
 
 /** What an executor under test gives the suite. */
-export interface ExecutorHarness {
+export interface ExecutorFixture {
 	/**
 	 * Build the opener for one seat, ready to perform `plan`. The scripted
 	 * kind maps the plan to a script, and a model kind maps it to a fake
@@ -338,9 +338,9 @@ const usageCase: ExecutorCase = {
  * the `spec.resume` the second view carried.
  */
 async function twoActivations(run: Run): Promise<{
-	first: HarnessSession | undefined;
-	second: HarnessSession | undefined;
-	resume: HarnessSession | undefined;
+	first: VendorSession | undefined;
+	second: VendorSession | undefined;
+	resume: VendorSession | undefined;
 	line: Message;
 }> {
 	await run.wake();
@@ -354,7 +354,7 @@ async function twoActivations(run: Run): Promise<{
 	const view = operations(run.room, 'view').find(
 		(call) => (call.request as { id?: string }).id === next,
 	);
-	const answer = view?.response as { view?: { spec?: { resume?: HarnessSession } } } | undefined;
+	const answer = view?.response as { view?: { spec?: { resume?: VendorSession } } } | undefined;
 	return { first, second: releasesOf(run)[1]?.session, resume: answer?.view?.spec?.resume, line };
 }
 
@@ -424,10 +424,10 @@ const orderCase: ExecutorCase = {
 };
 
 /** The cases every executor must pass. The order is stable and the names are the contract. */
-export function executorConformance(harness: ExecutorHarness): readonly ConformanceCase[] {
+export function executorConformance(fixture: ExecutorFixture): readonly ConformanceCase[] {
 	const suite = Math.random().toString(36).slice(2);
-	const patience = harness.patience ?? 5_000;
-	const { can } = harness;
+	const patience = fixture.patience ?? 5_000;
+	const { can } = fixture;
 	const cases = [
 		...baseCases,
 		can.steer ? liveSteer : heldSteer,
@@ -450,7 +450,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			executor: describeExecutor({ kind: 'conformance', instructions: '' }),
 		});
 		try {
-			const opener = await harness.open(one.plan, definition);
+			const opener = await fixture.open(one.plan, definition);
 			const emit = (event: ActivationEvent) => void events.push(event);
 			const port = new AgentRunner(
 				room.protocol,
@@ -487,7 +487,7 @@ export function executorConformance(harness: ExecutorHarness): readonly Conforma
 			});
 		} finally {
 			room.release();
-			await harness.close?.({
+			await fixture.close?.({
 				name: one.name,
 				calls: room.calls,
 				violations: room.violations,

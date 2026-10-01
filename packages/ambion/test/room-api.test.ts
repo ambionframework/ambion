@@ -41,12 +41,13 @@ const beta = scriptedAgent('beta');
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-const answer: PiScript = (_context, _agent, call) => (call === 2 ? say('The answer.') : quiet());
-/** A seat script that holds its second model call until the test opens the gate. */
+const answer: PiScript = (_context, _agent, request) =>
+	request === 2 ? say('The answer.') : quiet();
+/** A seat script that holds its second model request until the test opens the gate. */
 const heldBy =
 	(gate: Promise<void>): PiScript =>
-	async (_context, _agent, call) => {
-		if (call === 2) await gate;
+	async (_context, _agent, request) => {
+		if (request === 2) await gate;
 		return quiet();
 	};
 const withSummary = (): PiScript => {
@@ -188,7 +189,7 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 describe('the room API', () => {
 	it('opens ready, returns an exchange handle, and reads a durable snapshot', async () => {
 		const { runtime, room } = await world(withSummary(), {
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, beta, assistant],
 		});
@@ -224,7 +225,7 @@ describe('the room API', () => {
 		['the room has no assistant', {}],
 		[
 			'the assistant claims no summary',
-			{ summary: assistant.name, seats: { [assistant.name]: 'none' }, agents: [assistant] },
+			{ summaryWriter: assistant.name, seats: { [assistant.name]: 'none' }, agents: [assistant] },
 		],
 	] as const)('resolves the response as undefined when %s', async (_case, options) => {
 		const { room } = await world(answer, options);

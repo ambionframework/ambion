@@ -56,7 +56,7 @@ type Drive = (room: Room, clock: FakeClock) => Promise<void>;
 
 interface Setup {
 	readonly agents: (typeof worker)[];
-	readonly summary?: string;
+	readonly summaryWriter?: string;
 	readonly seats: Record<string, 'broadcast' | 'named' | 'none'>;
 	readonly stream: Parameters<typeof scriptedStream>[0];
 	readonly attempts?: number;
@@ -75,7 +75,7 @@ async function record(setup: Setup): Promise<readonly Entry[]> {
 		name: roomName('golden'),
 		runtime,
 		agents: setup.agents,
-		...(setup.summary === undefined ? {} : { summary: setup.summary }),
+		...(setup.summaryWriter === undefined ? {} : { summaryWriter: setup.summaryWriter }),
 		seats: setup.seats,
 		execution: piExecution({ sessions: 'memory', stream: scriptedStream(setup.stream) }),
 	});
@@ -92,7 +92,7 @@ async function record(setup: Setup): Promise<readonly Entry[]> {
 const complete = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: says(['Thursday works.']),
@@ -131,10 +131,10 @@ function session(): Promise<readonly Entry[]> {
 		seats: { worker: 'named', checker: 'named' },
 		stream: byAgent({
 			worker: asksTheChecker,
-			checker: async (context, name, call) => {
+			checker: async (context, name, request) => {
 				await workerEnded;
 				await tick();
-				return reply(context, name, call);
+				return reply(context, name, request);
 			},
 		}),
 		async drive(room) {
@@ -207,7 +207,7 @@ const checksLater: PiScript = (context) => {
 const scheduled = (): Promise<readonly Entry[]> =>
 	record({
 		agents: [worker, assistant],
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: { worker: 'broadcast', assistant: 'none' },
 		stream: byAgent({
 			worker: checksLater,

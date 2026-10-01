@@ -13,13 +13,13 @@ import type {
 	dismissedSchema,
 	endReasonSchema,
 	failureCauseSchema,
-	harnessSessionSchema,
 	postedSchema,
 	presenceChangeSchema,
 	presenceSchema,
 	saidSchema,
 	summarySchema,
 	usageSchema,
+	vendorSessionSchema,
 } from './bodies.ts';
 import type { AmbionTool, Reminder } from './bundle.ts';
 import type { ScheduledSay } from './scheduling.ts';
@@ -97,7 +97,7 @@ export interface ExchangeActivation {
 	readonly outcome: ActivationOutcome;
 	/** What the activation spent, once it ended and recorded usage. */
 	readonly usage?: Usage;
-	readonly session?: HarnessSession;
+	readonly session?: VendorSession;
 }
 
 /**
@@ -377,8 +377,8 @@ export type ActivationEvent =
  */
 export interface Usage extends Static<typeof usageSchema> {}
 
-/** A harness session that an ended activation recorded. The room never reads the id. */
-export type HarnessSession = Static<typeof harnessSessionSchema>;
+/** A vendor session that an ended activation recorded. The room never reads the id. */
+export type VendorSession = Static<typeof vendorSessionSchema>;
 
 /** Two totals added. `cost` stays absent until a step carries it. */
 export function addUsage(total: Usage | undefined, step: Usage): Usage {
@@ -458,8 +458,8 @@ export type TraceLogger = (traced: TracedStep) => void;
 
 /** What the trace keeps of an agent's work. */
 export interface TracePolicy {
-	/** `summary` keeps the start of each block. */
-	readonly thinking: 'omit' | 'summary' | 'full';
+	/** `start` keeps the start of each block. */
+	readonly thinking: 'omit' | 'start' | 'full';
 	readonly toolOutput: 'omit' | 'full';
 }
 

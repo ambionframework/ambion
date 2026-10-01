@@ -30,7 +30,7 @@ It needs credentials for the chosen provider.
 ## Use
 
 This example uses the current API. Every executable agent belongs in `agents`.
-The optional `summary` field names an ordinary agent that may write a closing
+The optional `summaryWriter` field names an ordinary agent that may write a closing
 summary.
 
 ```ts
@@ -62,7 +62,7 @@ const editor = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   goal: 'Check delivery promises against stock.',
-  summary: 'editor',
+  summaryWriter: 'editor',
   agents: [inventory, editor],
 });
 

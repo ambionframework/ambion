@@ -42,8 +42,8 @@ const composition: RoomEntry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		agents: [{ name: 'worker', identity: 'Works.', attention: 'broadcast' }],
-		available: [],
+		seated: [{ name: 'worker', identity: 'Works.', attention: 'broadcast' }],
+		reserve: [],
 		at,
 	},
 };

@@ -87,7 +87,7 @@ function session(inner: RunningActivation, seen: Seen): RunningActivation {
 				...(pass.kind === 'delta' ? { after: pass.after } : {}),
 				spec,
 				through,
-				resume: pass.resume,
+				resume: pass.resumeId,
 				tools: pass.tools.map((tool) => tool.name),
 			};
 			seen.passes.push(entry);

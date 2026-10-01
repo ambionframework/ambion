@@ -5,7 +5,7 @@
  * the wake queue, the decision to run another pass, the read position, the
  * room tools and their binding, the prompt, the tool events, and the error
  * event. A running activation owns one harness: the mapping of its events to
- * steps, the resume of a harness session, the place where it hosts the
+ * steps, the resume of a vendor session, the place where it hosts the
  * tools, and the signal that the model consumed input. Its `steer` is
  * optional because an executor kind may only take context between passes.
  * The core records the `steer` step of every steered line.
@@ -83,14 +83,14 @@ export type Pass = PassInput & {
 	 * The record this pass reads. The first pass reads the whole view, with
 	 * the reminders of the tool bundles. A later pass reads the delta after
 	 * the `after` of its input. The argument `after` names the position that
-	 * a resumed harness session read through: the first pass of a respond
+	 * a resumed vendor session read through: the first pass of a respond
 	 * activation then reads the reminders, the scheduled says, and the delta
 	 * after it. It gives nothing when no message is new, and the core then
 	 * counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
-	/** The id of the harness session to resume: `spec.resume`, when it names the kind of the executor. */
-	readonly resume?: string;
+	/** The id of the vendor session to resume: `spec.resume`, when its kind is the kind of the executor. */
+	readonly resumeId?: string;
 	/**
 	 * The room tools that the purpose grants, then the tools of the
 	 * definition, bound to the activation. A summary activation gets the room
@@ -119,7 +119,7 @@ export interface PassResult {
  */
 export interface RunningActivation {
 	/**
-	 * The id of the harness session to record with the release, read after
+	 * The id of the vendor session to record with the release, read after
 	 * the last pass. The core records it under the executor kind. The room
 	 * hands it to the seat's next activation in the same exchange as
 	 * `spec.resume`. It never reads the id.
@@ -155,7 +155,7 @@ export interface RunningActivation {
 
 /**
  * Opens one activation of one seat. One opener per seat, for its whole
- * lifetime. The core records and resumes harness sessions under the seat's
+ * lifetime. The core records and resumes vendor sessions under the seat's
  * executor kind, `definition.executor.kind`.
  */
 export type ActivationOpener = (activation: ExecutorActivation) => RunningActivation;

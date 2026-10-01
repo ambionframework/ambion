@@ -322,7 +322,7 @@ activation to its store, and the executor removes none.
 executor sends no delta on resume. The resumed session holds the earlier
 record and the view again. `readThrough` starts at zero in each activation,
 and a say against newer record gets a `missed` answer. The executor resumes
-the session that `pass.resume` names.
+the session that `pass.resumeId` names.
 
 **The first message of a resumed query restates the seat's part.** A
 resumed session keeps the system prompt it began with, and the SDK ignores
@@ -397,8 +397,8 @@ Claude Code login.
 ## Testing
 
 **A fake Claude Code executable tests the executor with no key.**
-`@ambionframework/claude/testing` exports `claudeExecutorHarness` and
-`scenarioOf`. The harness runs the executor suite of
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`scenarioOf`. The fixture runs the executor suite of
 `@ambionframework/ambion/conformance` through the real driver. The SDK
 spawns `test/fake/claude-executable.mjs` through
 `pathToClaudeCodeExecutable`. The fake reads a scenario from `AMBION_FAKE`,
@@ -408,14 +408,14 @@ stream-json protocol of the SDK over stdio.
 
 ```ts
 import { executorConformance } from '@ambionframework/ambion/conformance';
-import { claudeExecutorHarness } from '@ambionframework/claude/testing';
+import { claudeExecutorFixture } from '@ambionframework/claude/testing';
 import { describe, it } from 'vitest';
 
 // The path of a fake Claude Code executable that the caller supplies.
 const executable = fileURLToPath(new URL('./fake/claude-executable.mjs', import.meta.url));
 
 describe('claude executor', () => {
-  for (const c of executorConformance(claudeExecutorHarness({ executable }))) it(c.name, c.run);
+  for (const c of executorConformance(claudeExecutorFixture({ executable }))) it(c.name, c.run);
 });
 ```
 

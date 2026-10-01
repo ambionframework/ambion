@@ -49,7 +49,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				},
@@ -69,7 +69,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:6:checker:1"
 					}
 				},
@@ -89,7 +89,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:4:worker:1"
 					}
 				}
@@ -131,7 +131,7 @@
 						"cost": 0
 					},
 					"session": {
-						"harness": "pi",
+						"kind": "pi",
 						"id": "message:18:worker:1"
 					}
 				}

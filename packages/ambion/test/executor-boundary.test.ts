@@ -26,10 +26,10 @@ function assertRoomCalls(room: RoomProtocol): void {
 }
 
 const reply = (text: string, exerciseTool = false) =>
-	scriptedStream((context, _agent, call) => {
+	scriptedStream((context, _agent, request) => {
 		if (isClosingContext(context)) return say(`Summary: ${text}`);
-		if (exerciseTool && call === 1) return callTool('recall', { refs: ['#1'] });
-		return call === (exerciseTool ? 2 : 1) ? say(text) : quiet();
+		if (exerciseTool && request === 1) return callTool('recall', { refs: ['#1'] });
+		return request === (exerciseTool ? 2 : 1) ? say(text) : quiet();
 	});
 
 describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (mode) => {
@@ -58,7 +58,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			await startRoom({
 				name: roomName('executor-boundary'),
 				agents: [writer],
-				summary: writer.name,
+				summaryWriter: writer.name,
 				runtime,
 				execution: mode === 'json' ? serializing(observed) : observed,
 			}),

@@ -73,6 +73,6 @@ export type {
 	AgentDefinition,
 	Executor,
 	FailureCause,
-	HarnessSession,
 	Seq,
+	VendorSession,
 } from './types.ts';

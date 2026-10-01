@@ -48,7 +48,7 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	// recipient when the intent omits one, which is safe only because the
 	// activation already matches. Do not loosen this check without tightening
 	// that branch.
-	if (message.activationId !== activation) return false;
+	if (message.activation !== activation) return false;
 	const parsed = decodeActivationId(activation);
 	if (parsed !== undefined && message.from !== parsed.seat) return false;
 

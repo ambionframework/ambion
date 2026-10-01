@@ -14,6 +14,31 @@ through its port. `AgentRunner.abort()` becomes `AgentRunner.cutAll()`.
 `stop: 'aborted'`. `abort` now names only `AbortSignal` and
 `AbortController`. The journal bodies do not change.
 
+**Four stored bodies change field names, and Ambion does not read a
+journal of an earlier release.** A message body holds `activation` for
+`activationId`. An ended `lease` body holds `session: { kind, id }` for
+`session: { harness, id }`. A `composition` body holds `seated`, `reserve`,
+and `summaryWriter` for `agents`, `available`, and `summary`, and a `close`
+body holds `summaryWriter` for `summary`. The Cloudflare room metadata holds
+`definitions` for `agents`. The types follow: `Landed.activationId` is
+`activation`, `HarnessSession` is `VendorSession`, `Pass.resume` is
+`resumeId`, `Composition.agents` and `Composition.available` are `seated` and
+`reserve`, and `summary` is `summaryWriter` on `StartRoomOptions`,
+`Composition`, `Close`, and the Cloudflare `StartOptions`. `StartOptions.agents`
+is `definitions`, and `TracePolicy.thinking` takes `'start'` for `'summary'`.
+The golden journals hold the new names.
+**A conformance fixture is a fixture, and the testing entry names its own
+script types.** `@ambionframework/ambion/conformance` exports
+`ExecutorFixture` and `PortFixture` in place of `ExecutorHarness` and
+`PortHarness`. `ConformanceHarness` is now `ConformanceFixture` in
+`@ambionframework/journal/conformance`, and in the entries that re-export
+it. `@ambionframework/pi/testing` exports `piExecutorFixture`.
+`@ambionframework/claude/testing` exports `claudeExecutorFixture` and
+`ClaudeFixtureOptions`. `@ambionframework/ambion/testing` exports
+`ScriptStep`, `ScriptCall`, and `ScriptResult` in place of `Step`, `Call`,
+and `Result`, so `Step` names the trace step alone. The request counter of a
+script is now `request`. The live tier reads `AMBION_EXECUTOR` in place of
+`AMBION_HARNESS`.
 **`Executor` now names one thing: the value in an agent definition.** The
 word named three things before. The hosting entry renames the function type
 `Executor` to `ActivationOpener`. It renames `ExecutorSession` to
@@ -72,7 +97,7 @@ activation ids do not change.
 Before, a type and a schema each stated the body, and the two drifted.
 `SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
 `DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
-`FailureCause`, `Usage`, `HarnessSession`, `LeaseChange`, `Close`,
+`FailureCause`, `Usage`, `VendorSession`, `LeaseChange`, `Close`,
 `Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
 schemas with `Static`.
 

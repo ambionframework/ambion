@@ -228,14 +228,14 @@ describe('durable cancellation', () => {
 	it('fails an already pending summary without assigning one to the cancelled exchange', async () => {
 		const summaryStarted = deferred();
 		const room = await workerRoom(undefined, {
-			summary: assistant.name,
+			summaryWriter: assistant.name,
 			agents: [worker, assistant],
 			seats: { [worker.name]: 'broadcast', [assistant.name]: 'none' },
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scriptedStream(
 					byAgent({
-						worker: (_context, _agent, call) => (call === 1 ? say('answer') : quiet()),
+						worker: (_context, _agent, request) => (request === 1 ? say('answer') : quiet()),
 						assistant: (context) => {
 							if (!isClosingContext(context)) return quiet();
 							summaryStarted.resolve();

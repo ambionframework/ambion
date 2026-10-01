@@ -117,7 +117,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(prompts[0]).toContain("The record of 'passes' so far:");
 		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 		expect(after?.session).toBe(before?.session);
-		expect(session.session).toEqual({ harness: 'pi', id: 'message:1:worker:1' });
+		expect(session.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 		expect(session.readThrough).toBe(2);
 	});
 
@@ -135,9 +135,9 @@ describe('the Pi executor across the passes of one activation', () => {
 		const gate = deferred();
 		const started = deferred();
 		const seen: number[] = [];
-		const { session, requests, steers } = activation(async (_context, _agent, call) => {
+		const { session, requests, steers } = activation(async (_context, _agent, request) => {
 			seen.push(steers().length);
-			if (call === 1) {
+			if (request === 1) {
 				started.resolve();
 				await gate.promise;
 				return callTool('look', {});

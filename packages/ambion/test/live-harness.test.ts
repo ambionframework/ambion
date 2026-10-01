@@ -1,5 +1,5 @@
 /**
- * The harness switch of the live tier. `AMBION_HARNESS` names one of three
+ * The harness switch of the live tier. `AMBION_EXECUTOR` names one of three
  * executor kinds, and a bad value fails at import with a clear message.
  * No key and no network: the test builds definitions and calls no model.
  */
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 async function harnessWith(value: string | undefined) {
 	vi.resetModules();
-	vi.stubEnv('AMBION_HARNESS', value ?? '');
+	vi.stubEnv('AMBION_EXECUTOR', value ?? '');
 	return import('./live/support/harness.ts');
 }
 
@@ -42,7 +42,7 @@ describe('the live harness switch', () => {
 
 	it('throws on a value that names no harness', async () => {
 		await expect(harnessWith('gemini')).rejects.toThrow(
-			"AMBION_HARNESS is 'gemini'. Use 'pi', 'claude' or 'codex'.",
+			"AMBION_EXECUTOR is 'gemini'. Use 'pi', 'claude' or 'codex'.",
 		);
 	});
 });

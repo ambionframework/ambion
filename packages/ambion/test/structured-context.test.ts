@@ -18,12 +18,12 @@ const entries: RoomEntry[] = [
 		seq: 1,
 		body: {
 			goal: 'Ship payments v2.',
-			summary: 'worker',
-			agents: [
+			summaryWriter: 'worker',
+			seated: [
 				{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' },
 				{ name: 'product', identity: 'Owns product facts.', attention: 'broadcast' },
 			],
-			available: [{ name: 'surveyor', identity: 'Checks tonnage.', attention: 'broadcast' }],
+			reserve: [{ name: 'surveyor', identity: 'Checks tonnage.', attention: 'broadcast' }],
 			at,
 		},
 	},
@@ -43,7 +43,7 @@ const entries: RoomEntry[] = [
 	{
 		kind: 'close',
 		seq: 4,
-		body: { person: 'priya', from: 3, through: 3, at, summary: 'worker' },
+		body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'worker' },
 	},
 	{
 		kind: 'message',
@@ -205,9 +205,9 @@ describe('structured activation context', () => {
 				kind: 'composition',
 				seq: 1,
 				body: {
-					summary: 'worker',
-					agents: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
-					available: [],
+					summaryWriter: 'worker',
+					seated: [{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' }],
+					reserve: [],
 					at,
 				},
 			},
@@ -216,7 +216,7 @@ describe('structured activation context', () => {
 			{
 				kind: 'close',
 				seq: 4,
-				body: { person: 'sam', from: 3, through: 3, at, summary: 'worker' },
+				body: { person: 'sam', from: 3, through: 3, at, summaryWriter: 'worker' },
 			},
 			{
 				kind: 'message',
@@ -239,7 +239,7 @@ describe('structured activation context', () => {
 			{
 				kind: 'close',
 				seq: 8,
-				body: { person: 'priya', from: 7, through: 7, at, summary: 'worker' },
+				body: { person: 'priya', from: 7, through: 7, at, summaryWriter: 'worker' },
 			},
 		];
 		const priyaClose: ActivationSpec = {

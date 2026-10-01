@@ -81,7 +81,7 @@ const room = await startRoom({
   goal: 'Prepare the weekly report.',
   agents: [researcher, editor],
   seats: { researcher: 'broadcast', editor: 'none' },
-  summary: 'editor',
+  summaryWriter: 'editor',
 });
 ```
 
@@ -161,7 +161,7 @@ activation consumed.
 
 ## History and limits
 
-A seat keeps its harness session for one exchange.
+A seat keeps its vendor session for one exchange.
 [Exchange continuity](executors.md#exchange-continuity) states the rule.
 
 The journal retains complete history. The room windows the record of each

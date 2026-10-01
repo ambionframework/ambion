@@ -3,7 +3,7 @@
  *
  * A schema here is the one source of its body. The type of the body derives
  * from it with `Static`, and the journal validates each entry against it.
- * `types.ts` and `journal/events.ts` name the derived types. A rule that
+ * `types.ts` and `journal/entries.ts` name the derived types. A rule that
  * spans fields stays in code, in `journal/validate.ts`.
  */
 
@@ -47,8 +47,8 @@ export const usageSchema = Type.Object(
 	extra,
 );
 
-export const harnessSessionSchema = Type.Object(
-	{ harness: Type.Readonly(Type.String()), id: Type.Readonly(Type.String()) },
+export const vendorSessionSchema = Type.Object(
+	{ kind: Type.Readonly(Type.String()), id: Type.Readonly(Type.String()) },
 	extra,
 );
 
@@ -57,7 +57,7 @@ export const harnessSessionSchema = Type.Object(
 /** The fields that every message body holds. */
 const common = {
 	/** The activation that wrote it. Absent when a person or the host wrote it. */
-	activationId: Type.Optional(Type.String()),
+	activation: Type.Optional(Type.String()),
 	/** The seats the room decided to wake for it, written with the message. */
 	wakes: Type.Optional(Type.Array(Type.String())),
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
@@ -208,8 +208,8 @@ export const leaseEndedSchema = Type.Object(
 		cause: Type.Optional(failureCauseSchema),
 		/** What the activation spent, on an end its driver wrote. */
 		usage: Type.Optional(usageSchema),
-		/** The harness session the activation ended with, when the harness reports one. */
-		session: Type.Optional(harnessSessionSchema),
+		/** The vendor session the activation ended with, when the executor reports one. */
+		session: Type.Optional(vendorSessionSchema),
 	},
 	extra,
 );
@@ -226,7 +226,7 @@ export const closeSchema = Type.Object(
 		through: seq,
 		at: Type.String(),
 		/** The configured seated agent that writes the summary, when the close owes one. */
-		summary: Type.Optional(Type.String()),
+		summaryWriter: Type.Optional(Type.String()),
 	},
 	extra,
 );
@@ -246,9 +246,9 @@ export const compositionSchema = Type.Object(
 	{
 		goal: Type.Optional(Type.String()),
 		/** The configured agent that writes summaries for human owners. */
-		summary: Type.Optional(Type.String()),
-		agents: Type.Array(seatingSchema),
-		available: Type.Array(seatingSchema),
+		summaryWriter: Type.Optional(Type.String()),
+		seated: Type.Array(seatingSchema),
+		reserve: Type.Array(seatingSchema),
 		at: Type.String(),
 	},
 	extra,

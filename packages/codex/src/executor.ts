@@ -236,7 +236,7 @@ class Activation implements RunningActivation {
 		const make = this.options.client ?? ((options: CodexOptions) => new Codex(options));
 		const summary = codexOf(this.definition.executor).reasoningSummary ?? 'auto';
 		this.client = make(clientOptions(this.options, home, bridge.socketPath, summary, scratch));
-		this.resuming = pass.resume;
+		this.resuming = pass.resumeId;
 		this.thread = this.begin(this.resuming);
 		return this.thread;
 	}

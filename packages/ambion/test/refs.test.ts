@@ -220,8 +220,8 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 		let from = 0;
 		const stream = scriptedStream(
 			byAgent({
-				product: (_context, _agent, call) =>
-					call === 1 ? callTool('say', { text: 'Answer.', refs: answerRefs }) : quiet(),
+				product: (_context, _agent, request) =>
+					request === 1 ? callTool('say', { text: 'Answer.', refs: answerRefs }) : quiet(),
 				assistant: (context) =>
 					isClosingContext(context)
 						? callTool('say', { text: 'Summary.', refs: [messageUri(name, from)] })
@@ -234,7 +234,7 @@ describe.each(storages)('refs through the room on $name storage', (storage) => {
 				goal: 'Cite what is said.',
 				agents: [product, assistant],
 				seats: { product: 'broadcast', assistant: 'none' },
-				summary: assistant.name,
+				summaryWriter: assistant.name,
 				runtime: createRuntime({ storage: opened.storage }),
 				execution: piExecution({ sessions: 'memory', stream }),
 			}),

@@ -218,8 +218,8 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const time = manualClock();
 		const drafted = deferred();
 		let summaryCalls = 0;
-		const stream = scriptedStream((context, agent, call) => {
-			if (agent === worker.name) return call === 1 ? say('answer') : quiet();
+		const stream = scriptedStream((context, agent, request) => {
+			if (agent === worker.name) return request === 1 ? say('answer') : quiet();
 			if (!isClosingContext(context)) return quiet();
 			summaryCalls += 1;
 			drafted.resolve();
@@ -236,7 +236,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 			executor: pi({ instructions: 'summarise the exchange', model: 'scripted/summary' }),
 		});
 		const room = await workerRoom(runtime, stream, {
-			summary: summary.name,
+			summaryWriter: summary.name,
 			agents: [worker, summary],
 			seats: { [worker.name]: 'named', [summary.name]: 'none' },
 		});
@@ -281,7 +281,7 @@ describe.each(storages)('stop on $name storage', (storage) => {
 		const resumed = await resume(
 			room,
 			createRuntime({ storage: opened.storage }),
-			scriptedStream((_context, _agent, call) => (call === 1 ? say('the answer') : quiet())),
+			scriptedStream((_context, _agent, request) => (request === 1 ? say('the answer') : quiet())),
 		);
 		await waitForRoom(resumed, 'quiet');
 		expect(await messagesOf(resumed)).toContainEqual(

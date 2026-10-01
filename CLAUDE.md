@@ -109,7 +109,7 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 - **CI runs the live tier on `main` and weekly.** Add no live run to a pull
   request workflow.
 
-`AMBION_HARNESS=<pi|claude|codex>` selects the harness of the live seats.
+`AMBION_EXECUTOR=<pi|claude|codex>` selects the harness of the live seats.
 `pi` reads `<PROVIDER>_API_KEY` for the provider of `AMBION_MODEL`
 (`ANTHROPIC_API_KEY` by default). `claude` reads `ANTHROPIC_API_KEY`, and
 `codex` reads `CODEX_API_KEY`.

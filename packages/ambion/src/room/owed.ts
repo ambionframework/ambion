@@ -43,7 +43,7 @@ const closeOf = (owed: Owed): SummaryClose => ({
 	person: owed.person,
 	from: owed.from,
 	through: owed.position,
-	summary: owed.seat,
+	summaryWriter: owed.seat,
 });
 
 /** The summary a close owes, or nothing when the close owes no summary for good. */
@@ -53,7 +53,7 @@ export function judgeOwed(
 	options: DueActivationOptions,
 ): Owed | undefined {
 	// A close with no writer owes no summary. A close with one names its person.
-	if (close.summary === undefined) return undefined;
+	if (close.summaryWriter === undefined) return undefined;
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
 	const completion = summaryCompletion(close, facts.summaryFacts, leases, facts.cancelledAt);
 	if (completion.kind !== 'pending' || completion.writer === undefined) return undefined;

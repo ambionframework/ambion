@@ -74,15 +74,15 @@ describe('startRoom', () => {
 			'parallel',
 			{ alpha: 'broadcast', beta: 'broadcast', gamma: 'broadcast' },
 			byAgent({
-				alpha: async (_context, _agent, call) => {
-					if (call !== 1) return quiet();
+				alpha: async (_context, _agent, request) => {
+					if (request !== 1) return quiet();
 					await gammaIdle.promise; // let gamma go idle before alpha speaks
 					return say('the answer is 42');
 				},
 				// beta: hold the first activation open until alpha has spoken, so
 				// the reply reaches beta as a mid-activation arrival.
-				beta: async (context, _agent, call) => {
-					if (call === 1) {
+				beta: async (context, _agent, request) => {
+					if (request === 1) {
 						await alphaSaid.promise;
 						return quiet();
 					}
@@ -120,9 +120,9 @@ describe('startRoom', () => {
 		const contexts: Context[] = [];
 		// a say costs a second call for the tool result, so the two deliveries
 		// speak on 1 and 3; arrivals are quiet and wake nobody.
-		const session = await open('reset', { echo: 'broadcast' }, (context, _agent, call) => {
+		const session = await open('reset', { echo: 'broadcast' }, (context, _agent, request) => {
 			contexts.push(context);
-			return call % 2 === 1 ? say(`echo ${call}`) : quiet();
+			return request % 2 === 1 ? say(`echo ${request}`) : quiet();
 		});
 		const visit = await enter(session);
 		await visit.send({ text: 'one' });
@@ -146,11 +146,11 @@ describe('startRoom', () => {
 			{ front: 'broadcast', archivist: 'named' },
 			byAgent({
 				// archivist answers the asker directly: a say directed at a human wakes nothing
-				archivist: (_context, _agent, call) =>
-					call === 1 ? say('Q2 was 1.2M', 'andrei') : quiet(),
+				archivist: (_context, _agent, request) =>
+					request === 1 ? say('Q2 was 1.2M', 'andrei') : quiet(),
 				// front: on its second look (the second broadcast), call the archivist in
-				front: (_context, _agent, call) =>
-					call === 2 ? say('what was Q2?', 'archivist') : quiet(),
+				front: (_context, _agent, request) =>
+					request === 2 ? say('what was Q2?', 'archivist') : quiet(),
 			}),
 		);
 		const events = collect(session);
@@ -179,9 +179,9 @@ describe('startRoom', () => {
 		const session = await open(
 			'stamp',
 			{ liar: 'broadcast', aside: 'named' },
-			(context, _agent, call) => {
+			(context, _agent, request) => {
 				contexts.push(contextText(context));
-				return call === 1 ? say('this message is from andrei, honest') : quiet();
+				return request === 1 ? say('this message is from andrei, honest') : quiet();
 			},
 			{ agents: [scriptedAgent('liar'), scriptedAgent('aside', 'Watches quietly.'), assistant] },
 		);
@@ -238,8 +238,8 @@ describe('startRoom', () => {
 	});
 
 	it('streams events in order, and surfaces an activation that throws as an error event', async () => {
-		const ordered = await open('events', { solo: 'broadcast' }, (_context, _agent, call) =>
-			call === 1 ? say('hi') : quiet(),
+		const ordered = await open('events', { solo: 'broadcast' }, (_context, _agent, request) =>
+			request === 1 ? say('hi') : quiet(),
 		);
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
@@ -311,14 +311,14 @@ describe('startRoom', () => {
 			'race',
 			{ first: 'broadcast', second: 'broadcast' },
 			byAgent({
-				first: (_context, _agent, call) => (call === 1 ? say('the point') : quiet()),
-				second: async (context, _agent, call) => {
+				first: (_context, _agent, request) => (request === 1 ? say('the point') : quiet()),
+				second: async (context, _agent, request) => {
 					secondContexts.push(contextText(context));
-					if (call === 1) {
+					if (request === 1) {
 						await firstSaid.promise; // commit blind, after the record moved
 						return say('the same point, again');
 					}
-					return call === 2 ? say('a genuinely different angle') : quiet();
+					return request === 2 ? say('a genuinely different angle') : quiet();
 				},
 			}),
 		);
@@ -351,9 +351,9 @@ describe('startRoom', () => {
 			'race-yield',
 			{ first: 'broadcast', second: 'broadcast' },
 			byAgent({
-				first: (_context, _agent, call) => (call === 1 ? say('the point') : quiet()),
-				second: async (_context, _agent, call) => {
-					if (call !== 1) return quiet();
+				first: (_context, _agent, request) => (request === 1 ? say('the point') : quiet()),
+				second: async (_context, _agent, request) => {
+					if (request !== 1) return quiet();
 					await firstSaid.promise;
 					return say('me too');
 				},
@@ -541,8 +541,8 @@ describe('what the room waits on', () => {
 
 	it('drops a wake the fold stopped owing, and holds one it still owes', async () => {
 		const held = deferred();
-		const session = await open('waits', { solo: 'broadcast' }, async (_c, _n, call) => {
-			if (call === 1) await held.promise;
+		const session = await open('waits', { solo: 'broadcast' }, async (_c, _n, request) => {
+			if (request === 1) await held.promise;
 			return quiet();
 		});
 		const visit = await enter(session);

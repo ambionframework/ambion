@@ -55,7 +55,7 @@ function deliveryMatches(
 		);
 	return (
 		message.kind === 'said' &&
-		message.activationId === undefined &&
+		message.activation === undefined &&
 		message.from === command.from &&
 		saidContentMatches(message, command)
 	);

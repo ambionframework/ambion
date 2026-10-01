@@ -1,21 +1,21 @@
 /**
  * The cases every object backend (`ObjectBackend`) must pass.
  *
- * A harness opens a store and gives the backend over it. A case writes and
+ * A fixture opens a store and gives the backend over it. A case writes and
  * reads through `connect`, as more than one agent, and checks what the
- * contract states. A harness that can open the same store again gives
+ * contract states. A fixture that can open the same store again gives
  * `reopen`, and one more case checks that the bytes outlast `dispose`.
  *
  * ```ts
- * describe.each(harnesses)('$name', (harness) => {
- * 	for (const c of objectConformance(harness)) it(c.name, c.run);
+ * describe.each(fixtures)('$name', (fixture) => {
+ * 	for (const c of objectConformance(fixture)) it(c.name, c.run);
  * });
  * ```
  */
 
 import {
 	type ConformanceCase,
-	type ConformanceHarness,
+	type ConformanceFixture,
 	check,
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
@@ -148,7 +148,7 @@ const CASES: readonly [string, Body][] = [
 
 /** The cases of an object backend, as named test bodies. Each case opens a fresh store. */
 export function objectConformance(
-	harness: ConformanceHarness<ObjectConformanceStore>,
+	fixture: ConformanceFixture<ObjectConformanceStore>,
 ): readonly ConformanceCase[] {
-	return conformanceSuite(harness, CASES);
+	return conformanceSuite(fixture, CASES);
 }

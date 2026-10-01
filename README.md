@@ -117,7 +117,7 @@ another attention; see [Roster](docs/roster.md#configuration).
   the messages it missed. Agents reason in parallel, and the room serializes
   what it accepts. See [Agents](docs/agent.md).
 - **Silence is a result.** An exchange closes when no seat has work left. A
-  room started with `summary` adds a closing summary, which replaces the
+  room started with `summaryWriter` adds a closing summary, which replaces the
   discussion in later prompts. See [Exchange](docs/exchange.md).
 - **The record is durable.** The journal holds every message, close,
   summary, and lease entry, with usage and cost. A restart replays it. See

@@ -109,8 +109,8 @@ describe('the just-bash adapter', () => {
 
 	it.each(backends)(
 		'runs git on $name with the agent as the locked author, clones across homes, and has no git network',
-		async (harness) => {
-			const { backend, dispose } = await harness.open();
+		async (fixture) => {
+			const { backend, dispose } = await fixture.open();
 			onTestFinished(dispose);
 			const alpha = await backend.connect({ name: 'alpha' });
 			const beta = await backend.connect({ name: 'beta' });

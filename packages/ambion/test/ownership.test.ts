@@ -115,7 +115,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		const { room } = await open({
 			agents: [writer],
 			seats: { writer: 'none' },
-			summary: writer.name,
+			summaryWriter: writer.name,
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scriptedStream((context) =>

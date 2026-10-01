@@ -18,11 +18,11 @@ import type { leaseEndedSchema } from './bodies.ts';
 import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipant,
-	HarnessSession,
 	HumanParticipant,
 	Intent,
 	Message,
 	Seq,
+	VendorSession,
 	Without,
 } from './types.ts';
 
@@ -50,7 +50,7 @@ export interface ActivationSpec {
 	 * recorded. The harness resumes it, and starts fresh when it is absent.
 	 * The room only carries it.
 	 */
-	readonly resume?: HarnessSession;
+	readonly resume?: VendorSession;
 }
 
 // -- the room reaching a seat -------------------------------------------------
@@ -139,10 +139,10 @@ export interface Stale {
 
 export type ViewResponse = { view: ActivationView } | Stale;
 
-/** The session the room recorded for this seat, when `harness` wrote it. */
-export function sessionToResume(view: ActivationView, harness: string): string | undefined {
+/** The session the room recorded for this seat, when an executor of `kind` wrote it. */
+export function sessionToResume(view: ActivationView, kind: string): string | undefined {
 	const { resume } = view.spec;
-	return resume?.harness === harness ? resume.id : undefined;
+	return resume?.kind === kind ? resume.id : undefined;
 }
 
 export type { Intent };

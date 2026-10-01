@@ -65,7 +65,6 @@ export type {
 	ExchangeRange,
 	ExchangeRef,
 	Executor,
-	HarnessSession,
 	HumanDefinition,
 	HumanParticipant,
 	Message,
@@ -88,6 +87,7 @@ export type {
 	TracePolicy,
 	TraceStep,
 	Usage,
+	VendorSession,
 } from './types.ts';
 export { addUsage, isPosted, isPresence, isSaid, isSummary } from './types.ts';
 

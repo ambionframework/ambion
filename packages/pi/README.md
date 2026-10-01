@@ -150,7 +150,7 @@ included, and the executor deletes none of them.
 
 ## Exchange continuity
 
-**The release records `{ harness: 'pi', id }`,** where the id names the
+**The release records `{ kind: 'pi', id }`,** where the id names the
 activation that began the session. The next activation of the seat in the
 same exchange reopens the session and prompts it with the delta. The first
 activation in a new exchange begins a fresh session. A session the store
@@ -173,10 +173,10 @@ model are permanent. Every other failure is transient.
 ## Test
 
 `@ambionframework/pi/testing` exports a scripted stream and its helpers:
-`scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`,
-and `toolResultTexts`. A script answers with the verbs of
+`scriptedStream`, `PiScript`, `isClosingContext`, `contextText`, `toolNames`, and
+`toolResultTexts`. A script answers with the verbs of
 `@ambionframework/ambion/testing`: `say`, `callTool`, `schedule`, `seat`,
-`quiet`, and `byAgent`. `piExecutorHarness()` runs the executor suite of
+`quiet`, and `byAgent`. `piExecutorFixture()` runs the executor suite of
 `@ambionframework/ambion/conformance` on a scripted stream, and `scriptOf`
 maps each plan of the suite to a script.
 
@@ -194,7 +194,7 @@ const inventory = defineAgent({
 
 const stream = scriptedStream(
   byAgent({
-    inventory: (_context, _agent, call) => (call === 1 ? say('42 units in stock.') : quiet()),
+    inventory: (_context, _agent, request) => (request === 1 ? say('42 units in stock.') : quiet()),
   }),
 );
 
@@ -228,7 +228,7 @@ registry, the price tables, or a real model. The live scenarios of
 | `createExecutionServices`                                    | The services for a host that runs seats apart from the room |
 | `memorySessions`, `PiSessions`, `SessionScope`               | A store of sessions in memory, and the store contract       |
 | `stubModel`                                                  | The model that a custom stream receives                     |
-| `piExecutorHarness` (`/testing`)                             | The executor suite on a scripted stream                     |
+| `piExecutorFixture` (`/testing`)                             | The executor suite on a scripted stream                     |
 
 ## Troubleshooting
 

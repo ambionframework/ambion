@@ -64,7 +64,7 @@ describe('assistant room shorthand', () => {
 		[
 			'matching explicit settings',
 			{
-				summary: 'assistant',
+				summaryWriter: 'assistant',
 				seats: { assistant: 'broadcast', builder: 'named', reviewer: 'none' },
 			},
 			everySeat,
@@ -87,19 +87,19 @@ describe('assistant room shorthand', () => {
 			const composition = (await storedOf(opened.journals, room.name)).find(
 				(entry) => entry.kind === 'composition',
 			);
-			expect(composition?.body).toMatchObject({ summary: seats[0]?.name });
+			expect(composition?.body).toMatchObject({ summaryWriter: seats[0]?.name });
 		},
 	);
 
 	it('rejects duplicate and conflicting assistant configuration, and reserves no name', async () => {
 		await expect(open({ agents: [assistant] })).rejects.toThrow("Duplicate agent name 'assistant'");
-		await expect(open({ summary: 'builder' })).rejects.toThrow('conflicts with summary');
+		await expect(open({ summaryWriter: 'builder' })).rejects.toThrow('conflicts with summary');
 		await expect(open({ seats: { assistant: 'named' } })).rejects.toThrow("must use 'broadcast'");
 
 		const name = roomName('assistant-conflict-retry');
 		const opened = await openFor(memory);
 		const runtime = createRuntime({ storage: opened.storage });
-		await expect(startRoom({ name, runtime, assistant, summary: 'builder' })).rejects.toThrow(
+		await expect(startRoom({ name, runtime, assistant, summaryWriter: 'builder' })).rejects.toThrow(
 			'conflicts with summary',
 		);
 		expect(await storedOf(opened.journals, name)).toEqual([]);
@@ -113,8 +113,8 @@ describe('assistant room shorthand', () => {
 			seats: { builder: 'broadcast' },
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context, agent, call) => {
-					if (agent === 'builder' && call === 1) return say('The answer.');
+				stream: scriptedStream((context, agent, request) => {
+					if (agent === 'builder' && request === 1) return say('The answer.');
 					if (agent === 'assistant' && isClosingContext(context)) {
 						closingTools.push(toolNames(context));
 						return say('The answer, summarized.');

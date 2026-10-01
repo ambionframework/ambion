@@ -53,8 +53,8 @@ import { gatedJournals, memory } from './support/storage.ts';
 /** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
 	(text: string): PiScript =>
-	(_context, _name, call) =>
-		call === 1 ? summarise(text) : quiet();
+	(_context, _name, request) =>
+		request === 1 ? summarise(text) : quiet();
 
 /** An activation that fails outright: no draft, nothing written, and an error on the stream. */
 const broken: PiScript = () =>
@@ -122,7 +122,7 @@ async function open(options: {
 	const session = await startRoom({
 		name: roomName(),
 		goal: 'Decide the pour date and keep the plan honest.',
-		summary: (options.assistant ?? assistant).name,
+		summaryWriter: (options.assistant ?? assistant).name,
 		agents: [...(options.agents ?? [product]), options.assistant ?? assistant],
 		seats: {
 			...(options.seats ??
@@ -155,37 +155,37 @@ const said = (record: Message[]) => record.filter(isSaid).map((m) => m.text);
 // -- what the products say ---------------------------------------------------
 
 /** Two answers to one question, then silence. */
-const twoAnswers: PiScript = (_context, _name, call) => {
-	if (call === 1) return say('Thursday is out: the inspector needs 48h notice.');
-	if (call === 2) return say('Saturday works if the rebar lands Wednesday.');
+const twoAnswers: PiScript = (_context, _name, request) => {
+	if (request === 1) return say('Thursday is out: the inspector needs 48h notice.');
+	if (request === 2) return say('Saturday works if the rebar lands Wednesday.');
 	return quiet();
 };
 
 /** Two answers to the first question, then one to each that follows. */
-const answersEach: PiScript = (_context, _name, call) => {
-	if (call === 3 || call === 5) return quiet();
-	return say(`answer ${call}`);
+const answersEach: PiScript = (_context, _name, request) => {
+	if (request === 3 || request === 5) return quiet();
+	return say(`answer ${request}`);
 };
 
 /** Two answers to every question it is asked. */
-const twoAnswersEach: PiScript = (_context, _name, call) =>
-	call % 3 === 0 ? quiet() : say(`answer ${call}`);
+const twoAnswersEach: PiScript = (_context, _name, request) =>
+	request % 3 === 0 ? quiet() : say(`answer ${request}`);
 
 /** An assistant that writes once per activation, however many activations it takes. */
 const writesEach =
 	(text: string): PiScript =>
-	(_context, _name, call) =>
-		summarise(`${text} ${call}`);
+	(_context, _name, request) =>
+		summarise(`${text} ${request}`);
 
 /** A product that is still reading when the room changes under it. */
 function heldUntil(held: Promise<void>): PiScript {
-	return async (_context, _name, call) => {
-		if (call === 1) {
+	return async (_context, _name, request) => {
+		if (request === 1) {
 			await held;
 			return quiet();
 		}
-		if (call === 2) return say('answer 1');
-		if (call === 3) return say('answer 2');
+		if (request === 2) return say('answer 1');
+		if (request === 3) return say('answer 2');
 		return quiet();
 	};
 }
@@ -198,15 +198,15 @@ describe('closing summaries', () => {
 		const tools: string[] = [];
 		const session = await open({
 			script: byAgent({
-				product: (context, name, call) => {
+				product: (context, name, request) => {
 					read.push(contextText(context));
-					return twoAnswers(context, name, call);
+					return twoAnswers(context, name, request);
 				},
-				assistant: (context, _name, call) => {
+				assistant: (context, _name, request) => {
 					contexts.push(contextText(context));
 					prompts.push(context.systemPrompt ?? '');
 					tools.push((context.tools ?? []).map((tool) => tool.name).join(','));
-					return call === 1
+					return request === 1
 						? summarise('Thursday is out. Saturday holds if the rebar lands Wednesday.')
 						: quiet();
 				},
@@ -281,8 +281,8 @@ describe('closing summaries', () => {
 			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: twoAnswers,
-				greeter: async (_context, _name, call) => {
-					if (call === 1) await greeting.promise;
+				greeter: async (_context, _name, request) => {
+					if (request === 1) await greeting.promise;
 					return quiet();
 				},
 				assistant: writes('Thursday is out; Saturday holds.'),
@@ -307,10 +307,10 @@ describe('closing summaries', () => {
 		const session = await open({
 			script: byAgent({
 				product: answersEach,
-				assistant: async (context, _name, call) => {
+				assistant: async (context, _name, request) => {
 					contexts.push(contextText(context));
-					if (call === 1) await held.promise;
-					return call === 1 ? summarise('the first answer') : quiet();
+					if (request === 1) await held.promise;
+					return request === 1 ? summarise('the first answer') : quiet();
 				},
 			}),
 		});
@@ -349,10 +349,10 @@ describe('closing summaries', () => {
 		const session = await open({
 			script: byAgent({
 				product: answersEach,
-				assistant: async (context, _name, call) => {
+				assistant: async (context, _name, request) => {
 					drafts.push(contextText(context));
-					if (call === 1) await first.promise;
-					return summarise(`draft ${call}`);
+					if (request === 1) await first.promise;
+					return summarise(`draft ${request}`);
 				},
 			}),
 		});
@@ -416,9 +416,9 @@ describe('closing summaries', () => {
 			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: twoAnswers,
-				assistant: (context, name, call) => {
-					if (call === 1) return broken(context, name, call);
-					return call === 2 ? summarise('written the second time') : quiet();
+				assistant: (context, name, request) => {
+					if (request === 1) return broken(context, name, request);
+					return request === 2 ? summarise('written the second time') : quiet();
 				},
 			}),
 		});
@@ -474,9 +474,9 @@ describe('closing summaries', () => {
 		const session = await open({
 			script: byAgent({
 				product: heldUntil(working.promise),
-				assistant: (context, name, call) => {
+				assistant: (context, name, request) => {
 					prompts.push(context.systemPrompt ?? '');
-					return writes('The answer, waiting for her.')(context, name, call);
+					return writes('The answer, waiting for her.')(context, name, request);
 				},
 			}),
 		});
@@ -499,11 +499,11 @@ describe('closing summaries', () => {
 		const session = await open({
 			script: byAgent({
 				product: twoAnswersEach,
-				assistant: (context, name, call) => {
+				assistant: (context, name, request) => {
 					// one entry per activation: the calls inside one share a prompt
 					const prompt = context.systemPrompt ?? '';
 					if (prompts.at(-1) !== prompt) prompts.push(prompt);
-					return writesEach('the answer')(context, name, call);
+					return writesEach('the answer')(context, name, request);
 				},
 			}),
 		});
@@ -635,10 +635,10 @@ describe('closing summaries', () => {
 		const contexts: string[] = [];
 		const session = await open({
 			script: byAgent({
-				product: (context, _name, call) => {
+				product: (context, _name, request) => {
 					contexts.push(contextText(context));
-					if (call === 1) return say('   ');
-					if (call === 2) return say('Thursday is out.');
+					if (request === 1) return say('   ');
+					if (request === 2) return say('Thursday is out.');
 					return quiet();
 				},
 			}),
@@ -732,7 +732,7 @@ describe('an exchange', () => {
 				product: answersEach,
 				// It meets the arrival once; a seat that speaks on every activation
 				// would keep waking the other one, and the room would never settle.
-				greeter: (_context, _name, call) => (call === 1 ? say('who just arrived?') : quiet()),
+				greeter: (_context, _name, request) => (request === 1 ? say('who just arrived?') : quiet()),
 			}),
 		});
 		const events = collect(session);
@@ -815,8 +815,8 @@ describe('an exchange', () => {
 				...room,
 				runtime: await gated((_type, data) => (data.text === 'second?' ? gate.promise : undefined)),
 				script: byAgent({
-					product: async (_context, _name, call) => {
-						if (call === 1) await working.promise;
+					product: async (_context, _name, request) => {
+						if (request === 1) await working.promise;
 						return quiet();
 					},
 				}),
@@ -1114,15 +1114,15 @@ describe('a summary for each person who spoke', () => {
 		const held = deferred();
 		const session = await open({
 			script: byAgent({
-				product: async (_context, _name, call) => {
-					if (call !== 1) return quiet();
+				product: async (_context, _name, request) => {
+					if (request !== 1) return quiet();
 					await held.promise;
 					return say('Saturday works.', 'sam');
 				},
 				// the second message to priya is refused, and the third goes to sam
-				assistant: (_context, _name, call) => {
-					if (call <= 2) return say(`For priya ${call}.`, 'priya');
-					return call === 3 ? say('For sam.', 'sam') : quiet();
+				assistant: (_context, _name, request) => {
+					if (request <= 2) return say(`For priya ${request}.`, 'priya');
+					return request === 3 ? say('For sam.', 'sam') : quiet();
 				},
 			}),
 		});

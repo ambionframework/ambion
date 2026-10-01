@@ -84,7 +84,7 @@ async function splitRoom(storage: Storage, gate?: () => Promise<void> | undefine
 	const room = await startRoom({
 		name,
 		runtime: first,
-		summary: assistant.name,
+		summaryWriter: assistant.name,
 		seats: {
 			[product.name]: 'broadcast',
 			[colleague.name]: 'broadcast',

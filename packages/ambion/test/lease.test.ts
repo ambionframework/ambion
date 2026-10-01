@@ -84,7 +84,7 @@ async function open(
 	const session = stopAtEnd(
 		await startRoom({
 			name: roomName('lease'),
-			...(summary ? { summary: assistant.name } : {}),
+			...(summary ? { summaryWriter: assistant.name } : {}),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
@@ -94,7 +94,7 @@ async function open(
 	return { session, clock, runtime };
 }
 
-const speaksOnce: PiScript = (_c, _a, call) => (call === 1 ? say('hi') : quiet());
+const speaksOnce: PiScript = (_c, _a, request) => (request === 1 ? say('hi') : quiet());
 const starts = (events: ReturnType<typeof collect>) =>
 	events.filter((e) => e.type === 'activation_start').length;
 const ends = (events: ReturnType<typeof collect>) =>
@@ -176,8 +176,8 @@ describe('a lease', () => {
 	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
 		const held = deferred();
 		const { session, clock, runtime } = await open(
-			async (_c, _a, call) => {
-				if (call === 1) await held.promise;
+			async (_c, _a, request) => {
+				if (request === 1) await held.promise;
 				return quiet();
 			},
 			{ limits: { lease: { ttl: 60_000, deadline: 120_000 } } },
@@ -295,8 +295,8 @@ describe('a lease', () => {
 		const held = deferred();
 		// the claim goes through; the one renewal before the expiry is lost
 		const { session, clock } = await open(
-			async (_c, _a, call) => {
-				if (call !== 1) return quiet();
+			async (_c, _a, request) => {
+				if (request !== 1) return quiet();
 				await held.promise;
 				return say('too late');
 			},
@@ -362,9 +362,9 @@ describe('a lease', () => {
 		const contexts: string[] = [];
 		// the first wake starts the activation; the second, the steer into it, is lost
 		const { session } = await open(
-			async (context, _a, call) => {
+			async (context, _a, request) => {
 				contexts.push(contextText(context as Context));
-				if (call === 1) await held.promise;
+				if (request === 1) await held.promise;
 				return quiet();
 			},
 			{ faults: [{ on: 'wake', kind: 'drop', skip: 1 }] },
@@ -452,12 +452,12 @@ describe('a lease judged where its change is written', () => {
 		});
 		const held = deferred();
 		const { session, clock, runtime } = await open(
-			async (_c, _a, call) => {
-				if (call === 1) {
+			async (_c, _a, request) => {
+				if (request === 1) {
 					await held.promise;
 					return say('late but alive');
 				}
-				return call === 2 ? say('recovered after expiry') : quiet();
+				return request === 2 ? say('recovered after expiry') : quiet();
 			},
 			{ runtime: (clock) => createRuntime({ clock, storage: journals }) },
 		);
@@ -504,16 +504,16 @@ describe('a lease judged where its change is written', () => {
 		};
 		const { session, clock } = await open(
 			byAgent({
-				solo: async (context, name, call) => {
+				solo: async (context, name, request) => {
 					if (!contextText(context).includes('Second?')) {
-						return says(['a1', 'a2'])(context, name, call);
+						return says(['a1', 'a2'])(context, name, request);
 					}
 					await held.promise;
-					return says(['a3', 'a4'])(context, name, call);
+					return says(['a3', 'a4'])(context, name, request);
 				},
-				assistant: (context, _name, call) => {
+				assistant: (context, _name, request) => {
 					if (!isClosingContext(context)) return quiet();
-					if (call === 1) throw new Error('the model failed');
+					if (request === 1) throw new Error('the model failed');
 					return summarise('The one message.');
 				},
 			}),
