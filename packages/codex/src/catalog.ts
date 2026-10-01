@@ -2,13 +2,17 @@
  * Native tools off. The seat reaches the world only through the room tools
  * and the tools the application gives it.
  *
- * Codex 0.155.1 gives a seat native tools that no sandbox setting removes.
- * Code Mode, a JavaScript runtime, reads host files under a read-only
- * sandbox with no network. The model catalog turns it on, so a feature flag
- * cannot turn it off. A custom catalog can. This file holds the recipe:
+ * Codex gives a seat native tools that no sandbox setting removes. Code
+ * Mode, a JavaScript runtime, read host files under a read-only sandbox
+ * with no network on 0.155.1. On 0.158.0 the catalog entry of the model
+ * still lists the Code Mode tools `exec` and `wait` when every feature is
+ * off. The model catalog turns Code Mode on, so a feature flag cannot turn
+ * it off. A custom catalog can. This file holds the recipe, and its
+ * facts belong to Codex 0.158.0:
  *
  * 1. `exclusiveEntry` patches the catalog entry of the model.
- * 2. `exclusiveConfig` turns off every feature and tool the config controls.
+ * 2. `exclusiveConfig` turns off every feature and tool the config controls,
+ *    and the skills block.
  * 3. `Scratch` holds the patched catalog, the instructions file of the seat,
  *    and an empty working directory.
  */
@@ -49,7 +53,29 @@ export function exclusiveEntry(entry: CatalogEntry): CatalogEntry {
 	return { ...entry, ...structuredClone(NO_NATIVE_TOOLS) };
 }
 
-/** The features of Codex 0.155.1 that give a seat a native tool. Each is off. */
+/**
+ * The features of Codex 0.158.0 that give a seat a native tool, or that act
+ * on the host or the network. Each is off.
+ * `shell_snapshot` runs the shell of the host user at the start of a session
+ * and writes its environment to a file in the seat home. `daemon_auto_start`
+ * starts a background server on the host, `workspace_dependencies` fetches
+ * runtime dependencies, `worktrees` creates Git worktrees, and
+ * `realtime_conversation` opens a voice session on the network. `memories`
+ * writes notes from past threads outside the journal and reads them into a
+ * later prompt. It is off by default. The entry stops the `config.toml` of
+ * the seat home from turning it on. These features give no tool, and a seat
+ * has no use for them.
+ *
+ * The features that stay on by default give no tool and reach nothing:
+ * the app features (`in_app_chat`, `in_app_dictation`,
+ * `in_app_local_automation`, `in_app_updates`, `mentions_v2`), the approval
+ * features (`guardian_approval`, `guardian_reuse_parent_compaction`,
+ * `write_stdin_approval`), the wire features (`compaction_image_budget`,
+ * `content_item_kinds`, `enable_request_compression`,
+ * `system_proxy_fallback`, `unbounded_connection_retries`),
+ * `auth_elicitation`, and `fast_mode`. A feature that is off by default
+ * stays off unless the `config.toml` of the seat home turns it on.
+ */
 export const EXCLUSIVE_FEATURES: readonly string[] = [
 	'shell_tool',
 	'apps',
@@ -82,7 +108,22 @@ export const EXCLUSIVE_FEATURES: readonly string[] = [
 	'code_mode_prewarm',
 	'tool_call_mcp_elicitation',
 	'skill_mcp_dependency_install',
+	'shell_snapshot',
+	'daemon_auto_start',
+	'workspace_dependencies',
+	'worktrees',
+	'realtime_conversation',
+	'memories',
 ];
+
+/**
+ * The skills of Codex off. The `skills_instructions` developer message lists
+ * the system skills with absolute paths in the seat home, even when the
+ * catalog entry has `include_skills_usage_instructions: false`.
+ * `include_instructions` removes that message. `bundled.enabled` stops Codex
+ * from installing the system skills in the home.
+ */
+const NO_SKILLS = { include_instructions: false, bundled: { enabled: false } } as const;
 
 /** The bundled JavaScript REPL server. Codex adds it beside the servers the config names. */
 export const NODE_REPL = 'node_repl';
@@ -90,14 +131,22 @@ export const NODE_REPL = 'node_repl';
 /** The server entry that disables the bundled `node_repl` by name. */
 export const NODE_REPL_OFF = { command: 'true', enabled: false } as const;
 
-/** The config keys of the client that turn off the native tools. `mcp_servers` is separate. */
+/**
+ * The config keys of the client that turn off the native tools and the
+ * traffic and the state that a seat does not need: the update check, the
+ * analytics, the feedback upload, and the memories. `mcp_servers` is separate.
+ */
 export function exclusiveConfig(catalogPath: string): Record<string, unknown> {
 	return {
 		model_catalog_json: catalogPath,
 		features: Object.fromEntries(EXCLUSIVE_FEATURES.map((name) => [name, false])),
 		web_search: 'disabled',
+		check_for_update_on_startup: false,
+		analytics: { enabled: false },
+		feedback: { enabled: false },
+		memories: { generate_memories: false, use_memories: false },
+		skills: structuredClone(NO_SKILLS),
 		tools: {
-			view_image: false,
 			update_plan: { enabled: false },
 			experimental_request_user_input: { enabled: false },
 		},
