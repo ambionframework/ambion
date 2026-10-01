@@ -145,24 +145,29 @@ function codexBinary(codexPath?: string): string {
 	return found;
 }
 
-/** The catalogs that `codex debug models` printed, by binary. A failed run leaves no entry. */
+/** The catalogs that `codex debug models` printed, by binary and environment. A failed run leaves no entry. */
 const catalogs = new Map<string, Promise<readonly CatalogEntry[]>>();
 
 /** How long `codex debug models` may run. A hung binary would hold the first pass for ever. */
 const CATALOG_TIMEOUT_MS = 30_000;
 
-/** Run `codex debug models` once for each binary in this process. */
+/**
+ * Run `codex debug models` once for each binary and environment in this
+ * process. The environment holds the Codex home, so two homes keep two
+ * catalogs.
+ */
 function catalogOf(
 	binary: string,
-	env: Readonly<Record<string, string | undefined>> | undefined,
+	env: Readonly<Record<string, string>>,
 	timeout: number,
 ): Promise<readonly CatalogEntry[]> {
-	const cached = catalogs.get(binary);
+	const key = JSON.stringify([binary, Object.entries(env).sort()]);
+	const cached = catalogs.get(key);
 	if (cached !== undefined) return cached;
 	const pending = run(binary, ['debug', 'models'], {
 		maxBuffer: 256 * 1024 * 1024,
 		timeout,
-		env: { ...process.env, ...env },
+		env: { ...env },
 	}).then(({ stdout }) => {
 		try {
 			const parsed = JSON.parse(stdout) as { models?: readonly CatalogEntry[] };
@@ -171,18 +176,21 @@ function catalogOf(
 			throw new Error(`'${binary} debug models' printed text that is not JSON.`);
 		}
 	});
-	catalogs.set(binary, pending);
-	pending.catch(() => catalogs.delete(binary));
+	catalogs.set(key, pending);
+	pending.catch(() => catalogs.delete(key));
 	return pending;
 }
 
 /** What answers the catalog entry of a model. The executor takes one so a test can supply the entries. */
 export type CatalogSource = (model: string) => Promise<CatalogEntry | undefined>;
 
-/** The catalog entry of `model` from the installed binary, or nothing when the catalog has none. */
+/**
+ * The catalog entry of `model` from the installed binary, or nothing when
+ * the catalog has none. `env` is the whole environment of the binary.
+ */
 export function installedCatalog(
 	codexPath: string | undefined,
-	env: Readonly<Record<string, string | undefined>> | undefined,
+	env: Readonly<Record<string, string>>,
 	timeout: number = CATALOG_TIMEOUT_MS,
 ): CatalogSource {
 	return async (model) => {

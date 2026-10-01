@@ -19,8 +19,8 @@ the room tools and the tools that you give it, as a Pi seat does. Set
 `nativeTools: 'codex'` to give the seat the tools of Codex: file edits,
 shell commands, and web search. Both kinds of seat join one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
-an execution. Pass `codexExecution({ codexPath, env })` for another binary
-or environment.
+an execution. Pass `codexExecution({ codexPath, env, home, login })` for
+another binary, environment, Codex home, or login.
 
 **Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
 `list_mcp_resource_templates`, and `read_mcp_resource` whenever an MCP server
@@ -51,17 +51,54 @@ that runs your process.
 
 - Set `CODEX_API_KEY` in the environment of the process. The binary reads it
   on each run.
-- Run `codex login` once. The binary reads the sign-in from `~/.codex`.
-  Sign in with ChatGPT to run on a ChatGPT Plus or Pro subscription. A
-  host with no browser runs `codex login --device-auth`.
+- Run `codex login` once. The seats link the sign-in file that the command
+  writes, `~/.codex/auth.json`. Sign in with ChatGPT to run on a ChatGPT
+  Plus or Pro subscription. A host with no browser runs
+  `codex login --device-auth`.
 
 **A subscription needs no key.** Leave `CODEX_API_KEY` out of the
 environment, so that the binary runs on the ChatGPT sign-in. A
-custom `env` on `codexExecution()` needs `HOME`, or `CODEX_HOME`, so that the
-binary finds `~/.codex`. A subscription has its own usage limit, which is a
-permanent failure. Codex reports no cost, so the executor records none. A
-provider may restrict the use of a consumer subscription outside its own
-clients. Read its terms first.
+custom `env` on `codexExecution()` needs `HOME`, so that the execution finds
+`~/.codex/auth.json`, or a `login` option. A subscription has its own usage
+limit, which is a permanent failure. Codex reports no cost, so the executor
+records none. A provider may restrict the use of a consumer subscription
+outside its own clients. Read its terms first.
+
+**The seats of an execution share a Codex home of their own.** The default home is
+`~/.ambion/codex`, under the `HOME` of `env`. The execution sets
+`CODEX_HOME` to it for each run of the binary, and the `CODEX_HOME` of the
+host never reaches the binary. A seat reads no `config.toml` and no
+`AGENTS.md` from `~/.codex`, and it starts none of the MCP servers that
+file names. The home persists, so a thread survives a restart of the host.
+The execution creates the home when the first activation starts, with the
+mode `0700`, because it holds full transcripts, logs, and the linked login.
+
+**The home links the login of the host.** The first activation creates the
+symbolic link `auth.json` in the home. It points to the login file of the
+host: `auth.json` in the `CODEX_HOME` of `env` when that
+variable is set, else `~/.codex/auth.json`. Codex writes that file in
+place, and it reads the file again before it refreshes a token. The host and
+all seats then share one login. A copy would hold a refresh token that
+Codex rotates, and the copy and the original would diverge.
+
+**The link has rules.**
+
+- A home that already holds an `auth.json` keeps it. The execution never
+  replaces or edits that file.
+- A host with no login file gets no link. A seat on `CODEX_API_KEY` needs
+  none. `login: false` links nothing in any case.
+- Where the host refuses symbolic links, such as Windows with no privilege,
+  the execution makes a hard link. If both fail, the activation fails as
+  permanent. The message names both paths.
+- Several activations can start at once. A link that another activation made
+  counts as success.
+
+**A keyring login cannot be shared.** With `cli_auth_credentials_store`
+set to `keyring`, or to `auto` on a host with a keyring, Codex stores the
+login in the keyring under a key that holds a hash of the `CODEX_HOME` path.
+A seat home has another path, so it finds no login. Set the store to `file`
+in `~/.codex/config.toml` and run `codex login` again. Or sign in to the
+home: `CODEX_HOME=~/.ambion/codex codex login`.
 
 ## A complete example
 
@@ -152,10 +189,18 @@ it back.
 
 **`codexExecution(options)` takes the options of the executable.**
 
-| Option      | Default            | What it does                      |
-| ----------- | ------------------ | --------------------------------- |
-| `codexPath` | The bundled binary | A `codex` executable to run       |
-| `env`       | `process.env`      | The environment of the executable |
+| Option      | Default                                   | What it does                                                                   |
+| ----------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `codexPath` | The bundled binary                        | A `codex` executable to run                                                    |
+| `env`       | `process.env`                             | The environment of the executable. Its `CODEX_HOME` names the home of the host |
+| `home`      | `.ambion/codex` under the `HOME` of `env` | The Codex home of every seat                                                   |
+| `login`     | The `auth.json` of the host               | The `auth.json` to link into the home. `false` links nothing                   |
+
+**`CODEX_HOME` in `env` names the Codex home of the host.** It sets the
+default `login` to `<CODEX_HOME>/auth.json`. It never reaches the binary.
+The execution sets `CODEX_HOME` to `home` in the environment of every run
+of the binary, including the `codex debug models` run for the catalog. A
+host can spread `process.env` into `env` with no further step.
 
 **The executor always sets `skipGitRepoCheck`.** A room seat runs where the
 application puts it, and that place is often no git repository.
@@ -359,9 +404,12 @@ before `thread.started`. The executor then starts a fresh thread, runs the
 same prompt, and records the new id. A failure after `thread.started` is an
 ordinary failure.
 
-**Threads live in the Codex store.** The SDK persists threads under
-`~/.codex/sessions`. A host that loses that directory falls back to a fresh
-thread.
+**Threads live in the Codex store of the seat home.** The SDK persists
+threads under `sessions` in the home, `~/.ambion/codex/sessions` by default.
+A host that loses that directory falls back to a fresh thread. A thread that
+an earlier version started under `~/.codex/sessions` is not in the seat home,
+so it starts fresh. Give `home` a directory that persists. Codex refuses to
+create its helper binaries under a temporary directory.
 
 ## The trust boundary
 
@@ -431,10 +479,24 @@ the recipe does not turn off. Run the live exclusivity test
 only when it passes.
 
 **The environment includes the key by default.** With no `env` on
-`codexExecution()`, the binary inherits `process.env`. A command that runs
-under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it. Pass an `env`
-that leaves the key out to prevent that, and sign in with `codex login`
-instead.
+`codexExecution()`, the binary runs with a copy of `process.env`. A command
+that runs under `nativeTools: 'codex'` can read `CODEX_API_KEY` from it.
+Pass an `env` that leaves the key out to prevent that, and sign in with
+`codex login`.
+
+**The seat home keeps the config of the host user out.** The binary reads
+its config, its instructions, and its MCP servers from `CODEX_HOME`. The
+execution points that variable at the seat home, so the `~/.codex` of the
+host user changes no seat: its `model_provider` reroutes no request, its
+`mcp_servers` start no process, and its `AGENTS.md` joins no prompt. The
+binary tier proves each of the three. Put a `config.toml` in `home` to
+configure every seat on purpose.
+
+**A linked login is shared with the host.** A command of a seat under
+`nativeTools: 'codex'` runs as the user of the process. It can read the
+seat home, and through the link it can read and write the login file of the
+host. Set `login: false` and `CODEX_API_KEY` to give such a seat no login
+file.
 
 **The room tools are approved.** They only call the room, and the room
 checks each call.
@@ -453,13 +515,28 @@ tests in `test/binary.test.ts` run the bundled `codex`, its MCP client, the
 room tools server, the bridge, and a room over a journal. Only the model is
 scripted.
 
-**The binary tier runs in a Codex home of its own.** `test/binary.ts` writes
+**The binary tier runs in a seat home of its own.** `test/binary.ts` writes
 a temporary home with a `config.toml` that sends the provider to the
-endpoint. The environment of the binary holds `PATH`, that home as `HOME`
-and `CODEX_HOME`, and a dummy key variable. No real sign-in reaches the
-binary, and every model request goes to the endpoint. The catalog lookup
-(`codex debug models`) still adds the environment of the host. The file
-skips on a platform with no bundled binary, except under CI, where it fails.
+endpoint, and passes it as `home`. The environment of the binary holds
+`PATH`, a host home as `HOME`, a dummy key variable, and a proxy that
+records and refuses every outbound connection. The catalog lookup
+(`codex debug models`) runs in the same environment. No real sign-in reaches
+the binary, and every model request goes to the endpoint. The file skips on
+a platform with no bundled binary, except under CI, where it fails.
+
+**The host home holds traps.** Its `.codex` has a `config.toml` that
+reroutes the provider to a dead port and starts an MCP server that writes a
+marker file, and an `AGENTS.md` with a unique text. A test asserts that the
+endpoint got the requests, that the marker file does not exist, and that the
+text is in no request body.
+
+**The login test uses an API key file.** A host `auth.json` holds an API
+key, and the provider takes the sign-in of the home. The test asserts that
+every request carries the key of the host file, that the home holds a
+symbolic link to that file, and that the file is as it was. A ChatGPT login
+file makes Codex connect to `chatgpt.com`, so the test does not use one. The
+proxy would show it. `test/home.test.ts` covers the rest of the rules of the
+link on real files.
 
 **A scripted call names the namespace of an MCP tool.** The model calls a
 room tool with `name: 'say'` and `namespace: 'mcp__ambion'`. A call with the
@@ -559,12 +636,23 @@ a built package with a syntax or an engine error.
 
 **A thread cannot resume.** The executor starts a fresh thread and the seat
 loses what the old thread held. The record still holds every line. Look for a
-missing `~/.codex/sessions` directory, a `codex` of another version, or a
-different account than the one that started the thread.
+missing `sessions` directory in the seat home, a changed `home` option, a
+`codex` of another version, or a different account than the one that started
+the thread.
 
 **A run fails with a sign-in message.** The failure is permanent, so the room
 does not retry. Set `CODEX_API_KEY`, or run `codex login`. A custom `env`
-needs `HOME` or `CODEX_HOME` for the sign-in.
+needs `HOME`, or the `login` option, for the sign-in. A login in the OS
+keyring is invisible to a seat: see "A keyring login cannot be shared".
+
+**`Cannot link .../auth.json to the login file ...`** The activation could
+make neither a symbolic link nor a hard link, and the failure is permanent.
+Run `CODEX_HOME=<home> codex login` to sign in to the home, or pass
+`login: false` and set `CODEX_API_KEY`.
+
+**A seat starts with no login although the host has one.** The host login
+file is `<CODEX_HOME>/auth.json` when the environment sets `CODEX_HOME`, else
+`~/.codex/auth.json`. Check that path, or pass `login`.
 
 **`Cannot run an executor of kind '...': this seat needs 'codex'.`** A Pi or
 Claude seat reached a Codex executor through an execution with no kind.
