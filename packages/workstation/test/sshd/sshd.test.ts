@@ -497,7 +497,9 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			}
 			const began = Date.now();
 			await workspace.dispose();
-			expect(Date.now() - began).toBeLessThan(25_000);
+			const elapsed = Date.now() - began;
+			expect(elapsed).toBeGreaterThanOrEqual(10_000);
+			expect(elapsed).toBeLessThan(25_000);
 			await withEnv(checker, OWNER, async (env) => {
 				const pids: number[] = [];
 				for (const name of names) {

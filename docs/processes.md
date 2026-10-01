@@ -719,8 +719,8 @@ one.** The bash owner refuses new work and drains its queue. The table
 then refuses new processes and stops each running process, each one with
 its grace. The processes of this run of one agent stop at the same time.
 The adopted processes of one agent stop one at a time. The agents stop in
-parallel. The bash backend then disposes. The git owner disposes after the bash owner, so a push in a
-process still reaches the git backend.
+parallel. The bash backend then disposes. The git owner disposes after
+the bash owner, so a push in a process still reaches the git backend.
 
 ## Backends
 

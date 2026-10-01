@@ -12,9 +12,9 @@
  * A process runs on an environment of its own, which the table connects
  * outside the queue of the bash owner, so a long command holds no other
  * tool call. A timeout, a cancel, and `close` stop a process through one
- * chain for each agent, so the stops of one agent hold at most one signal
- * channel on the workstation. A stop sends `SIGTERM`, waits for the grace,
- * and then sends `SIGKILL`.
+ * chain for each agent. A timeout and a cancel hold at most one signal
+ * channel on the workstation, and `close` holds up to 4. A stop sends
+ * `SIGTERM`, waits for the grace, and sends `SIGKILL`.
  *
  * An agent reads its own processes alone: each table is the agent's own
  * home. The host reads the tables of the agents that used the workspace in
@@ -292,7 +292,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		await pollDetached(agent, spec.handle, STOP_SLACK_MS);
 	};
 
-	/** Name the cause in `stop`, then abort a process of this run. This does not wait for the end. */
+	/** Name the cause in `stop`, then abort a process of this run. It does not wait. */
 	const abortOwn = async (process: Live, own: Own, cause: StopCause): Promise<void> => {
 		await nameStop(process, own.env, cause).catch(() => undefined);
 		own.controller.abort();
@@ -564,14 +564,14 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 
 	/**
 	 * Stop one process for `close`. A process of this run takes its abort on
-	 * the chain and waits for its end outside it, so the graces overlap. An
-	 * adopted process takes its full stop on the chain.
+	 * the chain and waits for its end outside it, so the graces overlap. The
+	 * step reads `own` again: a run can end while the chain holds the step.
 	 */
 	const stopForClose = async (one: Live): Promise<void> => {
-		const { own } = one;
-		if (own === undefined) return stop(one.agent, one.spec.handle, 'cancelled');
-		await enqueue(one.agent, one.spec.handle, (p) => abortOwn(p, own, 'cancelled'));
-		await within(own.ended, one.grace * 1000 + STOP_SLACK_MS);
+		await enqueue(one.agent, one.spec.handle, (p) =>
+			p.own === undefined ? stopLive(p, 'cancelled') : abortOwn(p, p.own, 'cancelled'),
+		);
+		if (one.own) await within(one.own.ended, one.grace * 1000 + STOP_SLACK_MS);
 	};
 
 	const close = async (): Promise<void> => {
