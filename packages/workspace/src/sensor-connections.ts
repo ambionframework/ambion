@@ -67,9 +67,7 @@ export function createSensorConnections(
 	const attempts = new Set<Attempt>();
 	const transports = new Set<WorkspacePort>();
 	const closeInFlight = new WeakMap<WorkspacePort, Promise<void>>();
-	const endedProcesses = new Set<string>();
 	let closing: Promise<void> | undefined;
-	const processKey = (owner: string, handle: string): string => `${owner}\0${handle}`;
 
 	const closeTransport = (transport: WorkspacePort): Promise<void> => {
 		const pending = closeInFlight.get(transport);
@@ -111,7 +109,6 @@ export function createSensorConnections(
 
 	const ended = (event: ProcessEvent): void => {
 		if (event.type !== 'ended') return;
-		endedProcesses.add(processKey(event.process.agent, event.process.handle));
 		for (const connection of byName.values()) {
 			if (connection.process.handle !== event.process.handle) continue;
 			if (connection.owner !== event.process.agent) continue;
@@ -123,7 +120,6 @@ export function createSensorConnections(
 
 	const markEnded = (connection: MutableConnection, status?: ProcessStatus): void => {
 		if (status !== undefined) connection.process = status;
-		endedProcesses.add(processKey(connection.owner, connection.process.handle));
 		connection.available = false;
 		void disposeTransport(connection).catch(() => undefined);
 	};
@@ -133,18 +129,16 @@ export function createSensorConnections(
 		handle: string,
 		signal?: AbortSignal,
 	): Promise<ProcessStatus> => {
-		if (endedProcesses.has(processKey(agent.name, handle)))
+		if (processes.ended(agent.name, handle))
 			throw new Error(`Process '${handle}' has ended and cannot be connected again.`);
 		const status = await processes.find(agent, handle, signal);
 		if (status.agent !== agent.name || status.handle !== handle)
 			throw new Error(`Process '${handle}' is not owned by '${agent.name}'.`);
-		if (status.state !== 'running') {
-			endedProcesses.add(processKey(agent.name, handle));
+		if (status.state !== 'running')
 			throw new Error(
 				`Process '${handle}' is ${status.state}; connect requires a running process.`,
 			);
-		}
-		if (endedProcesses.has(processKey(agent.name, handle)))
+		if (processes.ended(agent.name, handle))
 			throw new Error(`Process '${handle}' has ended and cannot be connected again.`);
 		return status;
 	};
@@ -162,7 +156,7 @@ export function createSensorConnections(
 			status.state !== 'running' ||
 			status.agent !== connection.owner ||
 			status.handle !== connection.process.handle ||
-			endedProcesses.has(processKey(connection.owner, connection.process.handle));
+			processes.ended(connection.owner, connection.process.handle);
 		if (ended) markEnded(connection, status);
 		else connection.process = status;
 	};
@@ -190,7 +184,7 @@ export function createSensorConnections(
 			throw new Error(`Connection '${input.name}' is already assigned to a running process.`);
 		if (!sameSource(current.source, index.source))
 			throw new Error('The sensor launch source changed for this process.');
-		if (endedProcesses.has(processKey(agent.name, input.process)))
+		if (processes.ended(agent.name, input.process))
 			throw new Error(`Process '${input.process}' has ended and cannot be connected again.`);
 	};
 
@@ -213,7 +207,7 @@ export function createSensorConnections(
 	): void => {
 		if (active.aborted || closing !== undefined)
 			throw active.reason ?? new Error('Workspace is disposing.');
-		if (endedProcesses.has(processKey(agent.name, input.process)))
+		if (processes.ended(agent.name, input.process))
 			throw new Error(`Process '${input.process}' has ended and cannot be connected again.`);
 	};
 
@@ -385,7 +379,7 @@ export function createSensorConnections(
 		if (
 			process.state !== 'running' ||
 			process.agent !== connection.owner ||
-			endedProcesses.has(processKey(connection.owner, connection.process.handle))
+			processes.ended(connection.owner, connection.process.handle)
 		) {
 			markEnded(connection, process);
 			return undefined;
