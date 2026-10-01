@@ -72,7 +72,7 @@ describe('verified rules', () => {
 		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage' | 'session'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
-		// The room adds the people a closing activation addresses to the rule's grant.
+		// The room adds the people a summary activation addresses to the rule's grant.
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<DistributiveOmit<ActivationPurpose, 'people'>>();
 		expectTypeOf<OutcomeKind>().toEqualTypeOf<ExchangeOutcome['kind']>();
 		// A close that owes a summary names its person, so the closing grant reads it.

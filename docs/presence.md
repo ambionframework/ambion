@@ -3,7 +3,8 @@
 Presence is the contract for people in a room. The implementation is in
 [`room-host/`](../packages/ambion/src/room-host/room.ts), with the durable fold in
 [`room/presence.ts`](../packages/ambion/src/room/presence.ts) and the message
-shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+types in [`types.ts`](../packages/ambion/src/types.ts) over the body schemas in
+[`bodies.ts`](../packages/ambion/src/bodies.ts). Read
 [`room.md`](room.md) first: presence follows the same journal, routing, and
 activation rules as every other message.
 
@@ -191,7 +192,7 @@ The full rendering rules are in [`execution/render.ts`](../packages/ambion/src/e
 ## 10. Observing presence
 
 The `participants` field of `await room.read({ messages: false })` contains
-`ParticipantInfo` values, distinguished by `kind`.
+`Participant` values, distinguished by `kind`.
 Both variants have `name` and `identity`. An agent has activity `status` and
 `attention`; a human has `presence`. These views contain no transcript IDs.
 `room.read()` and `room.subscribe()` expose presence through the existing

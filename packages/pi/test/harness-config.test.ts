@@ -158,7 +158,7 @@ describe('the harness of an activation', () => {
 		]);
 		const rendered = renderActivation(view, definition);
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
-		// The closing activation continues the session with fewer tools and its own prompt.
+		// The summary activation continues the session with fewer tools and its own prompt.
 		expect(names(closed?.context as Context)).toEqual(['say']);
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);

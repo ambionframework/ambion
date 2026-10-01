@@ -116,7 +116,7 @@ export function summaryCompletion(
 }
 
 /**
- * The leases of one close's summary: every lease of the writer's closing
+ * The leases of one close's summary: every lease of the writer's summary
  * activations at the close. A lease from another seat is no summary lease
  * of this close. The validator holds `through >= 1`. A close with no writer
  * has no summary leases, and every activation id names a seat.
@@ -160,7 +160,7 @@ function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message
 }
 
 /**
- * The people a closing activation addresses: every person who spoke in the
+ * The people a summary activation addresses: every person who spoke in the
  * range, in the order they first spoke. The first is the `person` of the
  * exchange.
  */
@@ -275,7 +275,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 		id: lease.id,
 		seat,
 		attempt,
-		purpose: source === 'closed' ? 'summary' : 'respond',
+		purpose: source === 'closed' ? 'summarize' : 'respond',
 		outcome: outcomeOf(lease),
 		...(lease.usage === undefined ? {} : { usage: { ...lease.usage } }),
 		...(lease.session === undefined ? {} : { session: { ...lease.session } }),
@@ -284,7 +284,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 
 /**
  * What the activations in the range spent, or nothing when none recorded
- * usage, and whether the room gave up on a response activation.
+ * usage, and whether the room gave up on a respond activation.
  */
 function workOf(
 	from: Seq,
@@ -361,8 +361,8 @@ export function exchangeViews(
 }
 
 /**
- * The `from` of the exchange an activation serves, or nothing. A closing
- * activation serves the exchange its close ended. A response activation
+ * The `from` of the exchange an activation serves, or nothing. A summary
+ * activation serves the exchange its close ended. A respond activation
  * serves the exchange whose range holds the message that caused it. A
  * message outside every exchange, such as agent speech in a quiet room,
  * serves none.

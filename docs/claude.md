@@ -328,7 +328,7 @@ the session that `pass.resume` names.
 resumed session keeps the system prompt it began with, and the SDK ignores
 a new `systemPrompt`. The seat's duties and instructions for the
 activation, its agent part, therefore go at the head of the first message.
-A closing activation resumes the session of the exchange it summarizes.
+A summary activation resumes the session of the exchange it summarizes.
 This message gives it the summary duties and the reader's preferences.
 When the resume fails, the fresh session gets the same message, and the
 seat's part then appears twice.

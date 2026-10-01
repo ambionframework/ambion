@@ -232,6 +232,7 @@ flowchart LR
    socket. The bridge runs the call on the tool that the core bound, takes
    the id of the call with `callId`, and returns the result.
 5. `close` stops the socket. The server exits when the socket closes.
+   It first stops `codex exec` if that process is still its parent.
 
 **Codex spawns the built server.** The package ships
 `dist/room-tools-server.mjs` and starts it with `node`. In the source tree
@@ -239,9 +240,20 @@ the same path resolves to `src/room-tools-server.ts`, which Node runs by
 stripping types. `serverPath` picks the file from the extension of the module
 that calls it, and a test covers both cases.
 
-**The config key sets three limits and one mode.**
-`startup_timeout_sec` is 30. `tool_timeout_sec` is 600.
-`default_tools_approval_mode` is `approve`.
+**The config key sets two limits, one flag, and one mode.**
+`startup_timeout_sec` is 30. `tool_timeout_sec` is 600. `required` is
+`true`. `default_tools_approval_mode` is `approve`.
+
+**A required server is ready before the first model request.** Codex starts
+its MCP servers in the background. For an optional server, it waits one
+second (`mcp_optional_startup_grace_ms`) and then sends the first request
+with the tools that exist at that time. A Node process on a loaded host
+needs more than one second, so that request listed no room tool. With
+`required = true`, Codex waits for the server up to `startup_timeout_sec`
+while it creates the session. The room tools are then ready before the
+first model request, and a default seat lists them on every request. The
+binary tier asserts it. Under `nativeTools: 'codex'`, the model reaches them
+through Code Mode or tool search, as its catalog entry says.
 
 **Approval is set because a headless run cannot answer.** Under
 `approvalPolicy: 'never'`, Codex denies an MCP call that needs approval. The
@@ -300,6 +312,17 @@ records the `steer` step of that line with `consumed: false`; see
 **A cut signals the run.** The signal of the activation signals the run in
 flight. `close` stops the socket and the server. A late cut signals no dead
 process.
+
+**A host that dies takes `codex exec` with it.** The SDK closes the input of
+`codex exec` at once. When the host process dies (SIGKILL, out of memory, a
+crash), the OS gives `codex exec` to init and the process runs its turn to the
+end. It keeps calling the model and keeps writing the thread. The
+room tools server sees the host socket close. If `codex exec` is still its
+parent, the server sends it SIGTERM and then exits. A `codex exec` that
+exited first has left the server to init, so the server sends no signal. On
+Windows, Node cannot tell that the parent is gone, so this guard holds on
+Linux and macOS only. A test kills a real host in the middle of a model request and proves that
+`codex exec` and its server go away within seconds.
 
 ## Step mapping
 
@@ -396,6 +419,12 @@ failure reaches the host as an `error` event before the driver sees it.
 A seat with `nativeTools: 'none'` reads the model catalog from the binary.
 The executor throws `PermanentError` when the platform has no binary, or
 when `@openai/codex` is not installed and no `codexPath` is set.
+
+**A room tools server that fails to start is transient.** The server is
+`required`, so `codex exec` exits with an error that starts "required MCP
+servers failed to initialize: ambion". The SDK throws it, and the executor
+reports a transient failure. The room retries the activation. Codex has sent
+no model request at that time.
 
 **A bad `codexPath` or a socket error is transient.** The executor uses a
 `codexPath` (see [Options](#options)) as given. A path that names no file
@@ -507,6 +536,15 @@ and the network. A `sandboxMode` and `approvalPolicy` set what a command
 may do, and Code Mode is outside their reach. Use it only for a seat that
 may use the host.
 
+**A dead host ends the native commands of a seat.** `codex exec` ends the
+commands that it started when it receives SIGTERM, and the room tools server
+sends that signal when the host dies. The test runs `sleep 47` through the
+native `exec_command` tool, kills the host, and finds the command ended within
+seconds. The test does not cover a command that detaches itself from the
+process tree of Codex, such as a daemon. Only the OS can bound such a command.
+Use a container or a dedicated account for the seat, as the section above
+advises.
+
 **The version pin guards the recipe.** The package pins `@openai/codex-sdk`
 0.155.1, which brings `codex` 0.155.1. The feature names and the catalog
 fields belong to that version. A newer `codex` can add a native tool that
@@ -579,14 +617,18 @@ room tool with `name: 'say'` and `namespace: 'mcp__ambion'`. A call with the
 name alone gets the tool result `unsupported call: say`, and nothing reaches
 the room.
 
-**A loaded host can send the first request before the room tools are ready.**
-Codex starts the room tools server while it starts the turn. The first
-request then lists no room tool, and a call to `say` gets the result
-`unsupported call`. The endpoint finds this case: when a request does not
-list the tool that the next reply calls, it answers with a call to
-`list_mcp_resources`, which reports no usage, and keeps the reply. The
-next request lists the tools. A real model that meets this case has no
-`say` for that request.
+**Every request lists the room tools.** The config marks the room tools
+server as `required`, and Codex waits for it before the first model request.
+The endpoint does not retry or skip a request that lacks a tool. A request
+without `say` gets the result `unsupported call`, and the assertions on the
+request count and on the tool list fail. A test ran the tier on 4 cores with
+24 busy loops. Without `required`, every run had requests that listed no
+room tool. With `required`, every run passed.
+
+**A room tools server that cannot start fails the pass.** One test points
+the server at a command that does not exist. Codex exits with "required MCP
+servers failed to initialize: ambion", before it sends a model request. The
+pass reports a transient failure, and the test asserts the message.
 
 **The binary tier proves what the model receives.** The recorded request
 bodies show the tool list, the prompts, and the items of an earlier pass.
@@ -672,8 +714,10 @@ nothing. The trace shows a `tool_result` with "MCP tool call requires
 approval". The config key `default_tools_approval_mode` must be `approve`. A
 custom `config` that replaces `mcp_servers` removes it.
 
-**The server does not start.** Codex reports the startup as failed after 30
-seconds. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
+**The server does not start.** Codex waits up to 30 seconds. It then exits
+with "required MCP servers failed to initialize: ambion", and the activation
+fails as transient. A server that exits at once fails the activation at
+once. Check that `dist/room-tools-server.mjs` exists beside `dist/index.mjs`
 and that `node` on the `PATH` of the process is Node 22.19 or newer. Run
 `node dist/room-tools-server.mjs /tmp/none.sock` to see its error.
 

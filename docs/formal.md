@@ -312,7 +312,7 @@ found no such rule.
 | `countsAgainst`        | The attempt number in the next id, and the attempt limit                     |
 | `summarizesClose`      | The attempt number of a summary attempt, and the summary verdict             |
 | `survivesCancellation` | The grants and the owed summaries that a cancellation leaves                 |
-| `closeFor`             | The grant of a closing activation                                            |
+| `closeFor`             | The grant of a summary activation                                            |
 | `activationGrant`      | A claim entry, a renewal entry, a commit entry, and a release entry          |
 | `speechFreshness`      | A message entry that an activation writes                                    |
 | `stampedSummary`       | The recipient and the range of a summary entry                               |

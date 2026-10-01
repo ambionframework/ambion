@@ -7,6 +7,20 @@
  */
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
+import type { Static } from 'typebox';
+import type {
+	attentionSchema,
+	dismissedSchema,
+	endReasonSchema,
+	failureCauseSchema,
+	harnessSessionSchema,
+	postedSchema,
+	presenceChangeSchema,
+	presenceSchema,
+	saidSchema,
+	summarySchema,
+	usageSchema,
+} from './bodies.ts';
 import type { AmbionTool, Reminder } from './bundle.ts';
 import type { ScheduledSay } from './scheduling.ts';
 
@@ -16,7 +30,7 @@ export type Seq = RecordSeq;
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 /** Why a lease ended. */
-export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
+export type EndReason = Static<typeof endReasonSchema>;
 
 /**
  * Why an activation failed. A permanent failure does not pass on a retry, so
@@ -25,7 +39,7 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
  * quota or usage limit, and a fault in the configuration are permanent. A
  * rate limit, a server error, or a lost connection is transient.
  */
-export type FailureCause = 'permanent' | 'transient';
+export type FailureCause = Static<typeof failureCauseSchema>;
 
 /** What a seat asks the room to record. The room stamps everything else. */
 export type Intent =
@@ -53,7 +67,7 @@ export interface ExchangeRange extends ExchangeRef {
 	readonly through: Seq;
 }
 
-/** The durable outcome of the optional summary assignment for a closed exchange. */
+/** The durable outcome of the optional summary work for a closed exchange. */
 export type SummaryOutcome =
 	| { readonly kind: 'pending'; readonly writer?: string }
 	| { readonly kind: 'published'; readonly summary: SummaryMessage }
@@ -78,8 +92,8 @@ export interface ExchangeActivation {
 	readonly seat: string;
 	/** The attempt number. A retry is a new attempt of one due activation. */
 	readonly attempt: number;
-	/** `respond` answers a message. `summary` writes the closing summary. */
-	readonly purpose: 'respond' | 'summary';
+	/** `respond` answers a message. `summarize` writes the closing summary. */
+	readonly purpose: 'respond' | 'summarize';
 	readonly outcome: ActivationOutcome;
 	/** What the activation spent, once it ended and recorded usage. */
 	readonly usage?: Usage;
@@ -95,7 +109,7 @@ export type ExchangeOutcome =
 	| { readonly kind: 'complete' }
 	/** A cancellation wrote the close. */
 	| { readonly kind: 'cancelled' }
-	/** The room gave up on a response activation in the range. */
+	/** The room gave up on a respond activation in the range. */
 	| { readonly kind: 'exhausted' }
 	/** The last spoken message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
@@ -124,7 +138,7 @@ interface RoomReadFields {
 	readonly messages: readonly Message[];
 	/** The scheduled says that wait to return, in the order they landed. */
 	readonly scheduled: readonly ScheduledSay[];
-	readonly participants: readonly ParticipantInfo[];
+	readonly participants: readonly Participant[];
 	readonly exchanges: readonly Exchange[];
 	readonly exchange: Extract<Exchange, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
@@ -157,7 +171,7 @@ export interface Clock {
 	alarm(at: number, fire: () => void): () => void;
 }
 
-/** What every message carries once it lands on the record. */
+/** What every message carries once the journal has placed it. */
 interface Landed {
 	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;
@@ -167,130 +181,46 @@ interface Landed {
 	 * the same token, and the token lands once (`docs/durability.md` §2).
 	 */
 	key?: string;
-	/** The activation that wrote it. Absent when a person or the host wrote it. */
-	activationId?: string;
-	/** The seats the room decided to wake for it, written with the message. */
-	wakes?: string[];
-	/** ISO timestamp, stamped by the runtime at the moment it landed. */
-	at: string;
 }
 
 /** What a participant said. */
-export interface SaidMessage extends Landed {
-	kind: 'said';
-	/**
-	 * URIs the message cites. The room validates and stores them and never reads
-	 * behind one. Absent when the author cited nothing.
-	 */
-	refs?: string[];
-	/** A participant's name — stamped by the runtime, never claimed. */
-	from: string;
-	/** Present when the delivery or say was directed. */
-	to?: string;
-	text: string;
-	/**
-	 * Seconds after `at` when the room returns the say to its author. Present
-	 * only on a say that an agent addressed to itself: a scheduled say.
-	 */
-	after?: number;
-}
+export interface SaidMessage extends Landed, Static<typeof saidSchema> {}
 
 /**
  * A message of the system: the host posted it, or the room's clock returned a
  * scheduled say. It has no author, and the room is not a participant. When no
  * exchange is open, it opens one, as a person's question does.
  */
-export interface PostedMessage extends Landed {
-	kind: 'posted';
+export interface PostedMessage extends Landed, Static<typeof postedSchema> {
 	/** The system wrote it, so it has no author. */
 	from?: undefined;
-	/** The seat or the person it goes to. Absent for a post to the room. */
-	to?: string;
-	text: string;
-	/** URIs the post cites. Absent when it cites nothing. */
-	refs?: string[];
-	/**
-	 * On a returned say, the seq of the scheduled say. The post copies the text
-	 * and the refs of that say, and `to` names the seat that scheduled it.
-	 */
-	returns?: Seq;
 }
 
 /**
  * The four ways a participant's presence changes: a person arrives or leaves,
  * and an agent is seated or unseated while the room runs.
  */
-export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
+export type PresenceChange = Static<typeof presenceChangeSchema>;
 
 /**
  * What happened to a participant. It carries no text, because they said
  * nothing: writing words under their name is what `say` prevents: an author writes only under their own name.
  */
-export interface PresenceMessage extends Landed {
-	kind: PresenceChange;
-	/**
-	 * Who wrote it, the way every other kind reads `from`. A person writes
-	 * their own arrival and their own departure. An agent writes a
-	 * seating it decided. A seating the host decided has no author: the host
-	 * is not a participant, and nothing on the record speaks for it.
-	 */
-	from?: string;
-	/**
-	 * The participant whose presence changed: a person, stamped from the visit
-	 * the runtime observed, or the agent the runtime seated or unseated. On an
-	 * arrival and a departure it is the author, because a person's presence is
-	 * theirs to change.
-	 */
-	subject: string;
-	/**
-	 * How the room knew them, on `arrived` and `seated`. Replay rebuilds the
-	 * roster from the record, and a name without an identity is not a roster line.
-	 */
-	identity?: string;
-	/** What wakes the seat, on `seated`. Absent means `broadcast`. */
-	attention?: Attention;
-	/**
-	 * Whether an agent cannot unseat this seat, on `seated`. Absent leaves the
-	 * default to the seat's own name: the summary writer's seat is fixed
-	 * unless this says `false`.
-	 */
-	fixed?: boolean;
-	/** How the person reads, on `arrived`, when they said so. */
-	preferences?: string;
-}
+export interface PresenceMessage extends Landed, Static<typeof presenceSchema> {}
 
 /**
  * The assigned writer's closing contribution for one exchange. The room records
  * its `say` as a summary with a fixed recipient and source range.
  */
-export interface SummaryMessage extends Landed {
-	kind: 'summary';
-	/** The agent that wrote it. */
-	from: string;
-	/** The person the summary addresses: a person who spoke in the range. */
-	to: string;
-	text: string;
-	/** The range it stands for, ending at the last message before this one. */
-	covers: { from: Seq; through: Seq };
-	/**
-	 * URIs the message cites. The room validates and stores them and never reads
-	 * behind one. Absent when the author cited nothing.
-	 */
-	refs?: string[];
-}
+export interface SummaryMessage extends Landed, Static<typeof summarySchema> {}
 
-/** One entry on a room's record. */
 /**
  * A seat or the host dismissed a scheduled say that waited to return. The
  * room returns it no more. A dismissal by the host has no author.
  */
-export interface DismissedMessage extends Landed {
-	kind: 'dismissed';
-	from?: string;
-	/** The seq of the scheduled say. */
-	message: Seq;
-}
+export interface DismissedMessage extends Landed, Static<typeof dismissedSchema> {}
 
+/** One entry on a room's record. */
 export type Message =
 	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
@@ -335,7 +265,7 @@ export type SeatStatus = 'active' | 'idle';
  * `none` is the seat that is present and unreachable. Any configured agent may
  * use this attention when it should receive no ordinary messages.
  */
-export type Attention = 'none' | 'named' | 'broadcast' | 'presence';
+export type Attention = Static<typeof attentionSchema>;
 
 /** How a seat wakes, and whether an agent can unseat it. */
 export interface SeatOptions {
@@ -350,7 +280,7 @@ export interface SeatOptions {
 /** A person is in the room or they are not. */
 export type PresenceStatus = 'present' | 'absent';
 
-export interface AgentParticipantInfo {
+export interface AgentParticipant {
 	kind: 'agent';
 	name: string;
 	identity: string;
@@ -358,14 +288,14 @@ export interface AgentParticipantInfo {
 	attention: Attention;
 }
 
-export interface HumanParticipantInfo {
+export interface HumanParticipant {
 	kind: 'human';
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
 }
 
-export type ParticipantInfo = AgentParticipantInfo | HumanParticipantInfo;
+export type Participant = AgentParticipant | HumanParticipant;
 
 /** A room-level fact: what landed on the record, or what happened to this run. */
 export type RoomEvent =
@@ -445,16 +375,10 @@ export type ActivationEvent =
  * What an activation spent, or the sum of what activations spent. `cost` is
  * present when at least one contributing step carried it.
  */
-export interface Usage {
-	readonly input: number;
-	readonly output: number;
-	readonly cacheRead: number;
-	readonly cacheWrite: number;
-	readonly cost?: number;
-}
+export interface Usage extends Static<typeof usageSchema> {}
 
 /** A harness session that an ended activation recorded. The room never reads the id. */
-export type HarnessSession = { readonly harness: string; readonly id: string };
+export type HarnessSession = Static<typeof harnessSessionSchema>;
 
 /** Two totals added. `cost` stays absent until a step carries it. */
 export function addUsage(total: Usage | undefined, step: Usage): Usage {

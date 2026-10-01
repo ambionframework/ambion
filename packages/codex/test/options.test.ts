@@ -17,7 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PermanentError } from '@ambionframework/ambion/hosting';
+import { PermanentError, ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
 	EXCLUSIVE_FEATURES,
@@ -55,13 +55,18 @@ describe('clientOptions', () => {
 	it('carries the seat text as developer_instructions, and serves only the approved room server, without a scratch', () => {
 		const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'seat text').config as {
 			developer_instructions: string;
-			mcp_servers: Record<string, { default_tools_approval_mode?: string; args: string[] }>;
+			mcp_servers: Record<
+				string,
+				{ default_tools_approval_mode?: string; required?: boolean; args: string[] }
+			>;
 		};
 		expect(Object.keys(config)).toEqual(['developer_instructions', 'mcp_servers']);
 		expect(config.developer_instructions).toBe('seat text');
 		const servers = Object.values(config.mcp_servers);
 		expect(servers).toHaveLength(1);
 		expect(servers[0]?.default_tools_approval_mode).toBe('approve');
+		// Codex then waits for the server before the first model request.
+		expect(servers[0]?.required).toBe(true);
 		expect(servers[0]?.args.at(-1)).toBe('/tmp/room.sock');
 	});
 
@@ -77,13 +82,14 @@ describe('clientOptions', () => {
 				.config as {
 				model_catalog_json: string;
 				model_instructions_file: string;
-				mcp_servers: Record<string, { enabled?: boolean; command: string }>;
+				mcp_servers: Record<string, { enabled?: boolean; required?: boolean; command: string }>;
 			};
 			expect(config).not.toHaveProperty('developer_instructions');
 			expect(config.model_instructions_file).toBe(scratch.instructions);
 			expect(config.model_catalog_json).toBe(scratch.catalog);
 			expect(config.mcp_servers[NODE_REPL]).toEqual({ command: 'true', enabled: false });
 			expect(Object.keys(config.mcp_servers)).toHaveLength(2);
+			expect(config.mcp_servers[ROOM_SERVER]?.required).toBe(true);
 		} finally {
 			scratch.remove();
 		}

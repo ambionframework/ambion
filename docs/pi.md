@@ -299,7 +299,7 @@ The harness adds no built-in tool, no skill, and no prompt template. The
 skills of an agent come from its workspace bundle ([Skills](skills.md)). A
 call to a tool the model does not hold gets an error result, and the pass
 continues. A continued session takes the tools of the activation that
-continues it: a closing activation holds `say` alone.
+continues it: a summary activation holds `say` alone.
 
 **An `unknown` or `stale` answer ends the pass.** The executor aborts the activation
 and stands the seat down. The tool result names why the turn ended, and no
@@ -366,7 +366,7 @@ records `{ harness: 'pi', id }`. An activation reopens the session only
 when `pass.resume` names that id. Its first prompt is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
-delta with no message starts no pass. A closing activation reads the whole
+delta with no message starts no pass. A summary activation reads the whole
 view. `readThrough` starts at the position the session read through.
 
 **A custom entry holds the position the session read through.** After each

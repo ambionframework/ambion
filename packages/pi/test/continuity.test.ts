@@ -327,7 +327,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		await run('message:2:product:1');
 		const closing = await run('closed:1:product:1', { purpose: summary, resume: began(1) });
 		expect(closing.session).toEqual(began(1));
-		// The closing activation continued the first session, and it reads the whole view.
+		// The summary activation continued the first session, and it reads the whole view.
 		const prompts = texts(seen.at(-1) as Context);
 		expect(prompts.length).toBeGreaterThan(1);
 		expect(prompts.at(-1)).toContain("The record of 'memory' so far:");
