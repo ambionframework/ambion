@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult } from '../bundle.ts';
+import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
 	Executor,
@@ -8,7 +8,7 @@ import type {
 	PassResult,
 } from '../execution/executor.ts';
 import { failedPass } from '../execution/failure.ts';
-import { answerOf, contentText } from '../execution/room-tools.ts';
+import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
 import type { AgentDefinition, FailureCause, Usage } from '../types.ts';

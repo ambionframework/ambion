@@ -14,7 +14,7 @@
  * repository's default branch.
  */
 
-import { namespaceOf, readOnly, SHARED } from '@ambionframework/workspace/git';
+import { DEFAULT_BRANCH, namespaceOf, readOnly, SHARED } from '@ambionframework/workspace/git';
 import { type GitRepo, readHead } from 'just-git/repo';
 import { createServer, type GitServer, type RefUpdate, type Storage } from 'just-git/server';
 import { SOURCES } from './registration.ts';
@@ -56,7 +56,7 @@ async function sharedDefaultBranchRefusal(
 	updates: readonly RefUpdate[],
 ): Promise<PushRefusal | undefined> {
 	if (namespaceOf(repoId) !== SHARED) return undefined;
-	const branch = (await readHead(repo)).branch ?? 'main';
+	const branch = (await readHead(repo)).branch ?? DEFAULT_BRANCH;
 	const ref = `refs/heads/${branch}`;
 	const rejected = updates.find(
 		(update) => update.ref === ref && (update.isDelete || (!update.isCreate && !update.isFF)),

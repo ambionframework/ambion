@@ -55,6 +55,11 @@ export type ToolContent =
 	| { readonly type: 'text'; readonly text: string }
 	| { readonly type: 'image'; readonly data: string; readonly mimeType: string };
 
+/** The text parts of a tool result, joined. An image part adds nothing. */
+export function contentText(content: readonly ToolContent[]): string {
+	return content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+}
+
 /** What a tool hands back to the model: content it reads, and details it does not. */
 export interface ToolResult {
 	readonly content: ToolContent[];

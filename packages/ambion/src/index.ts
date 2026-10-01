@@ -11,11 +11,13 @@ export type {
 	Reminder,
 	ReminderSeat,
 	ToolBundle,
+	ToolContent,
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,
 	ToolUpdate,
 } from './bundle.ts';
+export { contentText } from './bundle.ts';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { defineAgent, defineHuman, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';

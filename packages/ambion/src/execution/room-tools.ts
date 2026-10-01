@@ -26,11 +26,6 @@ import { refusal, summaryToolDescription } from './render.ts';
 /** The name of the MCP server that serves the room tools to a harness. */
 export const ROOM_SERVER = 'ambion';
 
-/** The text parts of a tool result, joined. An image part adds nothing. */
-export function contentText(content: readonly ToolContent[]): string {
-	return content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-}
-
 /** What a room tool or an agent tool hands back to the model. */
 export interface RoomToolResult {
 	readonly content: readonly ToolContent[];

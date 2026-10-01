@@ -19,7 +19,11 @@
  */
 
 import { randomName, type SourceFiles } from '@ambionframework/workspace';
-import { BACKEND_AUTHOR, type RegistrationSteps } from '@ambionframework/workspace/git';
+import {
+	BACKEND_AUTHOR,
+	DEFAULT_BRANCH,
+	type RegistrationSteps,
+} from '@ambionframework/workspace/git';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type GitAccount, runIn, tagged } from './git-account.ts';
 import type { SshEnv } from './ssh-env.ts';
@@ -73,8 +77,8 @@ const BUILD_SCRIPT = [
 	'tree=$(git write-tree)',
 	...AS_BACKEND,
 	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree")`,
-	'git update-ref refs/heads/main "$commit"',
-	'git symbolic-ref HEAD refs/heads/main',
+	`git update-ref refs/heads/${DEFAULT_BRANCH} "$commit"`,
+	`git symbolic-ref HEAD refs/heads/${DEFAULT_BRANCH}`,
 	'git config core.logAllRefUpdates always',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
 	`[ -z "$AMBION_DESCRIPTION" ] || printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,
@@ -98,14 +102,14 @@ const UPDATE_SCRIPT = [
 	'stage="$root/.staging/$AMBION_STAGE"',
 	'repo="$root/templates/$AMBION_NAME.git"',
 	'mkdir -p "$stage/files"',
-	'old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/main || true)',
+	`old=$(git --git-dir="$repo" rev-parse -q --verify refs/heads/${DEFAULT_BRANCH} || true)`,
 	'export GIT_DIR="$repo" GIT_WORK_TREE="$stage/files" GIT_INDEX_FILE="$stage/index"',
 	'git add -A --force',
 	'tree=$(git write-tree)',
 	...AS_BACKEND,
 	'if [ -n "$old" ]; then set -- -p "$old"; else set --; fi',
 	String.raw`commit=$(printf 'Register the template %s\n' "$AMBION_NAME" | git commit-tree "$tree" "$@")`,
-	'if ! refused=$(git update-ref refs/heads/main "$commit" "$old" 2>&1); then',
+	`if ! refused=$(git update-ref refs/heads/${DEFAULT_BRANCH} "$commit" "$old" 2>&1); then`,
 	String.raw`  printf 'AMBION_REFUSED %s\n' "$(printf '%s' "$refused" | base64 -w0)"`,
 	'fi',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
@@ -126,8 +130,8 @@ const SHARED_BUILD_SCRIPT = [
 	'tree=$(git write-tree)',
 	...AS_BACKEND,
 	String.raw`commit=$(printf 'Register the shared repository %s\n' "$AMBION_NAME" | git commit-tree "$tree")`,
-	'git update-ref refs/heads/main "$commit"',
-	'git symbolic-ref HEAD refs/heads/main',
+	`git update-ref refs/heads/${DEFAULT_BRANCH} "$commit"`,
+	`git symbolic-ref HEAD refs/heads/${DEFAULT_BRANCH}`,
 	'git config core.logAllRefUpdates always',
 	'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE',
 	`[ -z "$AMBION_DESCRIPTION" ] || printf '%s' "$AMBION_DESCRIPTION" >"$repo/description"`,

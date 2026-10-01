@@ -11,12 +11,8 @@
  * request holds. The core keeps the position read. A user message with the
  * same text never counts: only the custom type and its details do.
  */
-import {
-	contentText,
-	type ExecutorActivation,
-	type ReadRange,
-	type Seq,
-} from '@ambionframework/ambion/hosting';
+import { contentText } from '@ambionframework/ambion';
+import type { ExecutorActivation, ReadRange, Seq } from '@ambionframework/ambion/hosting';
 import type { AgentMessage, CustomMessage } from '@earendil-works/pi-agent-core';
 import { convertToLlm, createCustomMessage } from '@earendil-works/pi-agent-core';
 import type { Message } from '@earendil-works/pi-ai';

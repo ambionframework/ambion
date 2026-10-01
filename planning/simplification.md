@@ -29,30 +29,31 @@ and the order of the dependencies together.
 
 ## Done
 
-**Nineteen reductions have landed.** `pnpm check` passes on them, and the
+**Twenty reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
-| Change                                      | Concepts removed                                                         | Files                                    |
-| ------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- |
-| One shape of a say that waits               | `ScheduledSay`, `pendingSay()`                                           | `room/scheduled.ts`, `scheduling.ts`     |
-| One read of the pending says and waits      | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`    | `room-host/room.ts`, `room-object.ts`    |
-| One acquisition of a room name              | The second copy of build, register, start, and release on failure        | `room.ts` (`acquire`)                    |
-| One call defines an executor family         | The `*Build` closures, `localExecution` in adapters, two option aliases  | `execution/route.ts`, `compose.ts` ×3    |
-| One wrapper audits every tool (W3)          | `recordedOnShell`, the audit code of `bindTool`, the `audit` options     | `tools.ts`, `workspace.ts`               |
-| One shape holds each capability (W2)        | `sqlPart`, `gitPart`, `sensorTools`, `workspaceReminder`, the name lists | `capability.ts`, `workspace.ts`          |
-| One harness for the conformance suites (W4) | Four harness types, six `check` copies, the hand-written case runners    | `journal/src/conformance.ts`, the suites |
-| One registration state machine (B1)         | Two register pairs, two name and path checks, two equal-tree decisions   | `workspace/src/git-registration.ts`      |
-| One file adapter for the backends (B3)      | Two `attempt` helpers, two `FileResult` types, 26 member bodies          | `workspace/src/execution-env.ts`         |
-| One rule for a thrown pass (E2)             | `UnknownModel`, a second `PermanentError`, six copies of the conversion  | `execution/failure.ts` (`failedPass`)    |
-| One function opens a session (E3)           | `Executor.harness`, `Executor.open`, three public `create*Executor`      | `execution/executor.ts`, `activation.ts` |
-| The core stamps every steer (E1)            | Two `Held` stampers, Pi `early` and `drop`, the Claude echo stamp        | `execution/activation.ts`                |
-| One option type for the Pi services (E4)    | `ExecutionServicesOptions`, the unread `clock`, `call`, `trace` fields   | `pi/src/services.ts`                     |
-| The hosting entry exports what is used (K4) | 28 exports with no user outside the core                                 | `hosting.ts`                             |
-| One scripted test language (E7)             | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
-| One copy of each small rule (W9)            | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
-| The journal reads its own format (K1)       | Five refusal guards of earlier releases, the bare-key promise            | `journal/validate.ts`, `durability.md`   |
-| One runtime state, nested views (K2)        | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
-| One view of the room host (K16)             | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
+| Change                                       | Concepts removed                                                         | Files                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- |
+| One shape of a say that waits                | `ScheduledSay`, `pendingSay()`                                           | `room/scheduled.ts`, `scheduling.ts`     |
+| One read of the pending says and waits       | `room.pendingFor()`, `room.scheduled()`, `RoomObject.scheduledSays()`    | `room-host/room.ts`, `room-object.ts`    |
+| One acquisition of a room name               | The second copy of build, register, start, and release on failure        | `room.ts` (`acquire`)                    |
+| One call defines an executor family          | The `*Build` closures, `localExecution` in adapters, two option aliases  | `execution/route.ts`, `compose.ts` ×3    |
+| One wrapper audits every tool (W3)           | `recordedOnShell`, the audit code of `bindTool`, the `audit` options     | `tools.ts`, `workspace.ts`               |
+| One shape holds each capability (W2)         | `sqlPart`, `gitPart`, `sensorTools`, `workspaceReminder`, the name lists | `capability.ts`, `workspace.ts`          |
+| One harness for the conformance suites (W4)  | Four harness types, six `check` copies, the hand-written case runners    | `journal/src/conformance.ts`, the suites |
+| One registration state machine (B1)          | Two register pairs, two name and path checks, two equal-tree decisions   | `workspace/src/git-registration.ts`      |
+| One file adapter for the backends (B3)       | Two `attempt` helpers, two `FileResult` types, 26 member bodies          | `workspace/src/execution-env.ts`         |
+| One rule for a thrown pass (E2)              | `UnknownModel`, a second `PermanentError`, six copies of the conversion  | `execution/failure.ts` (`failedPass`)    |
+| One function opens a session (E3)            | `Executor.harness`, `Executor.open`, three public `create*Executor`      | `execution/executor.ts`, `activation.ts` |
+| The core stamps every steer (E1)             | Two `Held` stampers, Pi `early` and `drop`, the Claude echo stamp        | `execution/activation.ts`                |
+| One option type for the Pi services (E4)     | `ExecutionServicesOptions`, the unread `clock`, `call`, `trace` fields   | `pi/src/services.ts`                     |
+| The hosting entry exports what is used (K4)  | 28 exports with no user outside the core                                 | `hosting.ts`                             |
+| One scripted test language (E7)              | The six Pi verbs, the Pi `Script`, the core `Turn`                       | `ambion/src/testing/scripted.ts`         |
+| One copy of each small rule (W9)             | Ref checks ×2, digests ×5, timer ceilings ×5, byte formatters ×4         | `ref-rules.ts`, `format-bytes.ts`        |
+| The journal reads its own format (K1)        | Five refusal guards of earlier releases, the bare-key promise            | `journal/validate.ts`, `durability.md`   |
+| One runtime state, nested views (K2)         | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
+| One view of the room host (K16)              | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
+| Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -76,14 +77,14 @@ is not a family, such as `examples/workbench/src/unavailable.ts`.
 | --- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
 | K1  | Readers of older formats remain, which CLAUDE.md forbids (done)                    | Bare keys (`durability.md:272`), `removed` fields (`validate.ts:29`), run-less entries (`journal.ts:93`) | 3       | High   | 9    |
 | K2  | One runtime has five facets (done)                                                 | `Runtime`, `ExecutionHost`, `Hosting`, `RuntimeState`, `RoomRuntime` (`runtime.ts:53-249`)               | 3       | High   | 9    |
-| K3  | The commit result has two forms                                                    | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
+| K3  | The commit result has two forms (done)                                             | `CommitOutcome`, `classifyCommit` (`protocol.ts:190-204`); one caller                                    | 2       | High   | 6    |
 | K4  | The hosting entry exports 16 names that no package or test imports (done; 28 left) | `SAY`, `SEAT`, `DEFAULT_TRACE`, `Hosting`, `Stale`, `RoomToolResult`, and others                         | 16      | High   | 48   |
-| K5  | Usage addition exists three times                                                  | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
+| K5  | Usage addition exists three times (done)                                           | `addUsage` (`types.ts:463`, not exported), `sum` in Pi, `total` in the simulator                         | 2       | High   | 6    |
 | K6  | A body shape is written as a type and again as a schema                            | `events.ts`, `validate.ts`; a third ended lease in `protocol.ts:206-217`                                 | 3       | Medium | 6    |
 | K7  | Three rules state "plain data", and they disagree                                  | `Cloneable` allows `Date` (`journal.ts:109`); storage needs JSON; `assertWire`                           | 2       | Medium | 4    |
 | K8  | Three renderers write one line of the record                                       | `record.ts:29`, `execution/render.ts:54`, `simulator/src/render.ts:29`                                   | 2       | Medium | 4    |
 | K9  | The `assistant` option restates `agents`, `seats`, and `summary`                   | `normalizeAssistant` (`room.ts:231`); the package is 70 lines over `pi()`                                | 2       | Medium | 4    |
-| K10 | Five close shapes serve one fact                                                   | `SummaryClose` (`exchange.ts:85`) and the `OwedClose` alias (`owed.ts:43`) go                            | 2       | High   | 6    |
+| K10 | Five close shapes serve one fact (done in part)                                    | `SummaryClose` (`exchange.ts:85`) and the `OwedClose` alias (`owed.ts:43`) go                            | 2       | High   | 6    |
 | K11 | Three state shapes hold the fold                                                   | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                 | 1       | Medium | 2    |
 | K12 | The wakes and the owed summaries are two parallel indexes                          | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                    | 3       | Low    | 3    |
 | K13 | The journal keeps a `seq` beside a dense storage position                          | `nextSeq`, `advanceSeq`, `scanned` (`rules.verified.ts:49-71`)                                           | 2       | Medium | 4    |
@@ -120,16 +121,16 @@ concepts, high confidence.
 
 ## The executors: `pi`, `claude`, `codex`
 
-| ID  | Finding                                                        | Evidence                                                                                    | Removes | Conf.  | Rank |
-| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
-| E1  | The steer bookkeeping is in each executor (done)               | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
-| E2  | A thrown error becomes a transient pass in five places (done)  | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
-| E3  | `Executor.harness` always equals the executor kind (done)      | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
-| E4  | Pi has three option types for its services (done)              | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
-| E5  | The kind narrowing and the policy copy are written three times | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
-| E6  | A pass carries `tools` and `agentTools` apart                  | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
-| E7  | Two scripted test languages export the same six verbs (done)   | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
-| E8  | Small helpers repeat                                           | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
+| ID  | Finding                                                                       | Evidence                                                                                    | Removes | Conf.  | Rank |
+| --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------- | ------ | ---- |
+| E1  | The steer bookkeeping is in each executor (done)                              | `Held` in `pi/executor.ts:93` and `claude/executor.ts:71`                                   | 3       | High   | 9    |
+| E2  | A thrown error becomes a transient pass in five places (done)                 | `runner.ts:507`, `activation.ts:49`, Pi, Claude, Codex; `UnknownModel` and `PermanentError` | 3       | High   | 9    |
+| E3  | `Executor.harness` always equals the executor kind (done)                     | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
+| E4  | Pi has three option types for its services (done)                             | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
+| E5  | The kind narrowing and the policy copy are written three times (done in part) | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
+| E6  | A pass carries `tools` and `agentTools` apart                                 | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
+| E7  | Two scripted test languages export the same six verbs (done)                  | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
+| E8  | Small helpers repeat (done)                                                   | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
 
 **E1 hides a defect.** `ActivationState.steer` (`activation.ts:116`)
 drops a steer when the executor has no `steer`. A Codex seat then stamps
@@ -203,7 +204,7 @@ the same promise twice, so each call has a purpose and no work repeats.
 | B1  | Repository registration is one state machine written twice (done) | `just-bash/git/registration.ts`, `workstation/git-registration.ts` | 1       | High   | 3    |
 | B2  | A transport pairing guards a mismatch that one factory prevents   | `GitAccess.transport`, `BashBackend.gitTransports`, `BashServices` | 3       | Medium | 6    |
 | B3  | The file adapter skeleton is written twice (done)                 | `bash-env.ts:42,83`, `ssh-env.ts:56,65,111`                        | 2       | High   | 6    |
-| B4  | Git constants repeat                                              | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
+| B4  | Git constants repeat (done)                                       | `DEFAULT_BRANCH` ×2, the `ambion` author ×4                        | 2       | High   | 6    |
 
 **B1 closed a gap.** The just-bash backend accepted a source path such
 as `../x` or `.git/config` and stored it in the tree. The shared path
@@ -219,11 +220,15 @@ bash server each accept pushes, so each enforces the policy.
 
 ## The adapters, the simulator, and the workbench
 
-| ID  | Finding                                                          | Evidence                                                                   | Removes | Conf.  | Rank |
-| --- | ---------------------------------------------------------------- | -------------------------------------------------------------------------- | ------- | ------ | ---- |
-| C1  | Cloudflare keeps the room name and agent names in a second store | `RoomMetadata` (`storage.ts`); `SeatMetadata.wakes` and `cuts` serve tests | 3       | Medium | 6    |
-| C2  | `RoomObject` forwards three methods of the exchange handle       | `room-object.ts:231-244`                                                   | 2       | Low    | 2    |
-| S1  | The simulator and the workbench write helpers the platform has   | `deadlineSignal` (`simulator/signal.ts:2`), `formatUsage` (`steps.ts:56`)  | 2       | Medium | 4    |
+| ID  | Finding                                                               | Evidence                                                                   | Removes | Conf.  | Rank |
+| --- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------- | ------ | ---- |
+| C1  | Cloudflare keeps the room name and agent names in a second store      | `RoomMetadata` (`storage.ts`); `SeatMetadata.wakes` and `cuts` serve tests | 3       | Medium | 6    |
+| C2  | `RoomObject` forwards three methods of the exchange handle            | `room-object.ts:231-244`                                                   | 2       | Low    | 2    |
+| S1  | The simulator and the workbench write helpers the platform has (kept) | `deadlineSignal` (`simulator/signal.ts:2`), `formatUsage` (`steps.ts:56`)  | 2       | Medium | 4    |
+
+**S1 stays.** `AbortSignal.timeout` gives a fixed reason, and a test pins
+the reason of `deadlineSignal`, which names the timeout. No core helper
+formats usage.
 
 **C1 keeps the seat state.** `SeatMetadata.activation`, `phase`, and
 `hold` are state of their own.

@@ -28,7 +28,6 @@
  * design contract for the wire.
  */
 
-export type { ToolContent } from './bundle.ts';
 export type { AgentExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
 export type {
@@ -43,7 +42,7 @@ export type {
 } from './execution/executor.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
 export type { RoomTool, RoomToolOptions } from './execution/room-tools.ts';
-export { contentText, ROOM_SERVER, toolContext } from './execution/room-tools.ts';
+export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
 export { defineExecution, localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { StepSink, TraceOpener, TraceSink } from './execution/trace.ts';

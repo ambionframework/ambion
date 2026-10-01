@@ -4,6 +4,8 @@
  * An ID is `<namespace>/<name>`. `templates` holds the read-only templates,
  * `shared` holds writable repositories common to the workspace, and every
  * other namespace is the name of an agent. No agent takes a reserved name.
+ * The file also holds the default branch and the author of the commits that
+ * a backend writes itself.
  */
 
 import type { GitCommit, GitRevision } from './git-backend.ts';

@@ -12,8 +12,12 @@
  * provenance, so a backend with append-only tables writes it on each row.
  */
 
-import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
-import { contentText } from '@ambionframework/ambion/hosting';
+import {
+	type AmbionTool,
+	contentText,
+	defineTool,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
 	BACKGROUND_CONTEXT,

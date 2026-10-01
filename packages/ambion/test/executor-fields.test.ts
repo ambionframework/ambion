@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { contentText, pickPresent, present } from '../src/hosting.ts';
+import { pickPresent, present } from '../src/hosting.ts';
+import { contentText } from '../src/index.ts';
 
 it('keeps the fields of an executor family that hold a value', () => {
 	expect(present({ a: 1, b: undefined, c: 0, d: '' })).toEqual({ a: 1, c: 0, d: '' });

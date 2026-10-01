@@ -17,8 +17,12 @@
  * while it waits for a process. `docs/processes.md` states the texts.
  */
 
-import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
-import { contentText } from '@ambionframework/ambion/hosting';
+import {
+	type AmbionTool,
+	contentText,
+	defineTool,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import {
 	type AgentToolResult,
 	DEFAULT_MAX_BYTES,

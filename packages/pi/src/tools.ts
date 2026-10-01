@@ -9,13 +9,8 @@
  * keep their Pi fields: the harness prepares and checks the arguments, and
  * passes the signal of the run and the updates.
  */
-import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
-import type {
-	ActivationView,
-	AgentDefinition,
-	RoomTool,
-	ToolContent,
-} from '@ambionframework/ambion/hosting';
+import type { AmbionTool, ToolContent, ToolContext, ToolUpdate } from '@ambionframework/ambion';
+import type { ActivationView, AgentDefinition, RoomTool } from '@ambionframework/ambion/hosting';
 import { toolContext } from '@ambionframework/ambion/hosting';
 import type { AgentHarnessTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 

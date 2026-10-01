@@ -7,7 +7,7 @@
  */
 import { createInterface } from 'node:readline';
 import type { Readable } from 'node:stream';
-import type { ToolContent } from '@ambionframework/ambion/hosting';
+import type { ToolContent } from '@ambionframework/ambion';
 
 /** What an MCP tool hands back to the model. */
 export interface Result {

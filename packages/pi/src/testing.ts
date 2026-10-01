@@ -8,8 +8,9 @@
  * `scripted` from `@ambionframework/ambion/testing`, which runs a script with
  * no model.
  */
+
+import { contentText } from '@ambionframework/ambion';
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
-import { contentText } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, type Reply, speak } from '@ambionframework/ambion/testing';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
