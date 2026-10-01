@@ -8,15 +8,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { sh } from '../../just-bash/test/support/backends.ts';
 import { openWorkspace, type SqlBackend, type Workspace } from '../src/index.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
 import { toolOf } from './support/backends.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 type Details = {
 	database: string;
@@ -72,7 +69,7 @@ async function call(
 
 async function shellText(workspace: Workspace, path: string): Promise<string | undefined> {
 	return workspace.use({ name: 'host' }, async (env) => {
-		const read = await env.readTextFile(path, ctx);
+		const read = await env.readTextFile(path);
 		return read.ok ? read.value : undefined;
 	});
 }
@@ -363,7 +360,7 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 	it('exposes the SQL resource for host code, which exports as the host agent', async () => {
 		const { workspace } = withSql();
 		const run = (options: { maxRows: number; export?: string }) =>
-			workspace.sql?.use({ name: 'host' }, (env) => env.run('SELECT 7 AS n', options, ctx));
+			workspace.sql?.use({ name: 'host' }, (env) => env.run('SELECT 7 AS n', options));
 		expect(await run({ maxRows: 50 })).toEqual({
 			ok: true,
 			columns: ['n'],
@@ -408,11 +405,11 @@ describe('the import of a CSV file', () => {
 	/** Write `text` to ada's `in.csv`, import it as ada, and give the staged rows or the message. */
 	async function imported(text: string): Promise<unknown> {
 		const { workspace } = withSql();
-		await workspace.use({ name: 'host' }, (env) => env.writeFile('/home/ada/in.csv', text, ctx));
+		await workspace.use({ name: 'host' }, (env) => env.writeFile('/home/ada/in.csv', text));
 		const resource = workspace.sql;
 		if (resource === undefined) throw new Error('The workspace has no SQL backend.');
 		const outcome = await resource.use({ name: 'ada' }, (env) =>
-			env.run('SELECT * FROM import.rows', { maxRows: 50, import: 'in.csv' }, ctx),
+			env.run('SELECT * FROM import.rows', { maxRows: 50, import: 'in.csv' }),
 		);
 		await workspace.dispose();
 		return outcome.ok ? outcome.rows.map((row) => ({ ...row })) : outcome.message;

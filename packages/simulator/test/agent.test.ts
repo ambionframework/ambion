@@ -14,7 +14,7 @@ import {
 	scriptedStream,
 	toolResultTexts,
 } from '@ambionframework/pi/testing';
-import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import type { AssistantMessage, Context, JsonValue } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -104,7 +104,7 @@ describe('agentActor', () => {
 		]);
 		// The workspace wrote the file in the person's home.
 		const note = await workspace.use({ name: 'priya' }, (env) =>
-			env.readTextFile('/home/priya/note.txt', BACKGROUND_CONTEXT),
+			env.readTextFile('/home/priya/note.txt'),
 		);
 		expect(note).toMatchObject({ ok: true, value: 'Pour on Thursday.' });
 	});

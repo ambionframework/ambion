@@ -1,10 +1,10 @@
 /** Internal automatic retention for already validated sensor observations. */
 
 import { posix } from 'node:path';
-import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { Check } from 'typebox/value';
+import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
-import { contextOf, unwrap } from './object-files.ts';
+import { unwrap } from './object-files.ts';
 import { sha256Hex } from './object-rules.ts';
 import { isHandle } from './process-files.ts';
 import type { WorkspaceAgent } from './resource.ts';
@@ -100,12 +100,12 @@ function fileDigests(observations: ObserveResponse['observations']): Set<string>
 }
 
 function write(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	bytes: Uint8Array,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
-	return env.writeFile(path, bytes, context).then((result) => {
+	return env.writeFile(path, bytes, signal).then((result) => {
 		unwrap(result, `Cannot export ${path}`);
 	});
 }
@@ -178,23 +178,22 @@ async function publishExport(
 	files: readonly (ReceivedFile & { readonly name: string })[],
 	manifestBytes: Uint8Array,
 	signal: AbortSignal | undefined,
-	context: Context,
 ): Promise<void> {
 	try {
 		await store.bash(
 			observer,
 			async (env) => {
 				unwrap(
-					await env.createDir(paths.staging, { recursive: true }, context),
+					await env.createDir(paths.staging, { recursive: true }, signal),
 					`Cannot create ${paths.staging}`,
 				);
 				for (const file of files)
-					await write(env, posix.join(paths.staging, file.name), file.bytes, context);
+					await write(env, posix.join(paths.staging, file.name), file.bytes, signal);
 				// The manifest is the completion marker and is written after all files.
-				await write(env, posix.join(paths.staging, 'manifest.json'), manifestBytes, context);
+				await write(env, posix.join(paths.staging, 'manifest.json'), manifestBytes, signal);
 				if (signal?.aborted) throw signal.reason ?? new Error('Operation aborted.');
 				unwrap(
-					await env.renameFile(paths.staging, paths.directory, context),
+					await env.renameFile(paths.staging, paths.directory, signal),
 					`Cannot publish ${paths.directory}`,
 				);
 			},
@@ -207,7 +206,7 @@ async function publishExport(
 				observer,
 				async (env) => {
 					for (const path of [paths.staging, paths.directory])
-						await env.remove(path, { recursive: true, force: true }, contextOf(undefined));
+						await env.remove(path, { recursive: true, force: true });
 				},
 				undefined,
 			)
@@ -240,16 +239,15 @@ export async function retainSensorObservation(
 	const id = randomName();
 	const rootPath = `~/sensor-observations/${id}`;
 	const stagePath = `~/sensor-observations/.${id}.part`;
-	const context = contextOf(signal);
 	const paths = await store.bash(
 		observer,
 		async (env) => {
 			const directory = unwrap(
-				await env.absolutePath(rootPath, context),
+				await env.absolutePath(rootPath, signal),
 				'Cannot resolve the sensor export directory',
 			);
 			const staging = unwrap(
-				await env.absolutePath(stagePath, context),
+				await env.absolutePath(stagePath, signal),
 				'Cannot resolve the sensor staging directory',
 			);
 			return { directory, staging };
@@ -279,7 +277,7 @@ export async function retainSensorObservation(
 	const savedManifest = await retainSnapshotBuffer(store, manifestPath, manifestBytes, signal);
 	const manifestRef = savedManifest.ref;
 
-	await publishExport(store, observer, paths, exportFiles, manifestBytes, signal, context);
+	await publishExport(store, observer, paths, exportFiles, manifestBytes, signal);
 
 	return {
 		manifest,

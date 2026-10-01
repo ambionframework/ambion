@@ -19,12 +19,6 @@
  */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
-import {
-	type AgentToolResult,
-	BACKGROUND_CONTEXT,
-	type Context,
-	withAbortSignal,
-} from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
@@ -33,6 +27,7 @@ import type { GitEnv, GitRepository } from './git-backend.ts';
 import { NAME_PATTERN } from './git-names.ts';
 import { unwrap } from './object-files.ts';
 import type { WorkspaceResource } from './resource.ts';
+import type { DetailedResult } from './tools.ts';
 
 /** The most branches one line of the `repos` table shows. */
 const SHOWN_BRANCHES = 5;
@@ -154,7 +149,7 @@ async function listed(
 	options: GitToolOptions,
 	params: ReposParams,
 	ctx: ToolContext,
-): Promise<AgentToolResult<ReposDetails>> {
+): Promise<DetailedResult<ReposDetails>> {
 	const repositories = await options.git(
 		ctx.agent,
 		(env) => env.list(params.namespace, ctx.signal),
@@ -216,7 +211,7 @@ async function cloned(
 	options: GitToolOptions,
 	params: CloneParams,
 	ctx: ToolContext,
-): Promise<AgentToolResult<CloneDetails>> {
+): Promise<DetailedResult<CloneDetails>> {
 	const repository = await options.git(
 		ctx.agent,
 		(env) => env.get(params.source, ctx.signal),
@@ -245,7 +240,7 @@ async function forked(
 	options: GitToolOptions,
 	params: ForkParams,
 	ctx: ToolContext,
-): Promise<AgentToolResult<ForkDetails>> {
+): Promise<DetailedResult<ForkDetails>> {
 	const outcome = await options.git(
 		ctx.agent,
 		(env) => env.fork(params.source, params.name, ctx.signal),
@@ -285,19 +280,18 @@ async function cloneInto(
 	ctx: ToolContext,
 	origin: 'fork' | 'source',
 ): Promise<{ path: string; text: string; failed?: true }> {
-	const context =
-		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
+	const { signal } = ctx;
 	return options.bash(
 		ctx.agent,
 		async (env) => {
-			const target = unwrap(await env.absolutePath(path, context), `Cannot clone into ${path}`);
+			const target = unwrap(await env.absolutePath(path, signal), `Cannot clone into ${path}`);
 			if (existing) {
-				const found = await env.exists(target, context);
+				const found = await env.exists(target, signal);
 				if (found.ok && found.value) {
 					return { path: target, text: `${target} already exists, so the tool made no clone.` };
 				}
 			}
-			const failure = await gitClone(env, repository.url, target, context);
+			const failure = await gitClone(env, repository.url, target, signal);
 			if (failure === undefined) {
 				return {
 					path: target,
@@ -322,17 +316,17 @@ async function gitClone(
 	env: WorkspaceEnv,
 	url: string,
 	target: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<string | undefined> {
 	const ran = await runScript(
 		env,
 		`git clone ${shellQuote(url)} ${shellQuote(target)}`,
 		{ timeout: CLONE_TIMEOUT_SECONDS, capture: { limits: CLONE_OUTPUT } },
-		context,
+		signal,
 	);
 	if (!ran.ok) {
 		// An abort rejects the call. Any other failure is text for the agent.
-		if (context.abortSignal?.aborted) throw ran.error;
+		if (signal?.aborted) throw ran.error;
 		return ran.error.message;
 	}
 	if (ran.value.exitCode === 0) return undefined;
@@ -340,6 +334,6 @@ async function gitClone(
 	return text === '' ? `git exited with status ${ran.value.exitCode}` : text;
 }
 
-function report<T>(text: string, details: T): AgentToolResult<T> {
+function report<T>(text: string, details: T): DetailedResult<T> {
 	return { content: [{ type: 'text', text }], details };
 }

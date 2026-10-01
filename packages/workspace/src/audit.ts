@@ -14,7 +14,7 @@
  * and reporting a write failure to `onError` instead of the tool call.
  */
 
-import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { WorkspaceEnv } from './backend.ts';
 import { formatBytes } from './format-bytes.ts';
 import {
 	appendOnly,
@@ -76,7 +76,7 @@ export interface AuditLog {
 	/** The callback of the options. The workspace tells it about an entry that a refused operation loses. */
 	readonly onError?: (error: Error) => void;
 	/** Append one entry over `env`. Never throws: a failure goes to `onError` instead. */
-	append(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
+	append(env: WorkspaceEnv, entry: AuditEntry, signal?: AbortSignal): Promise<void>;
 }
 
 /** A short line in place of the full entry, naming why the full one could not be written. */
@@ -111,20 +111,20 @@ function line(entry: AuditEntry): string {
  * entry that is too large.
  */
 async function recordEntry(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	rotateBytes: number,
 	entry: AuditEntry,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
-	await ensureDir(env, path, context);
+	await ensureDir(env, path, signal);
 	try {
-		await appendOnly(env, path, line(entry), context);
+		await appendOnly(env, path, line(entry), signal);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		await appendOnly(env, path, notice(entry, 'RecordTooLarge', message), context);
+		await appendOnly(env, path, notice(entry, 'RecordTooLarge', message), signal);
 	}
-	await rotateIfDue(env, path, rotateBytes, context);
+	await rotateIfDue(env, path, rotateBytes, signal);
 }
 
 /**
@@ -138,8 +138,8 @@ export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 		options.rotateBytes ?? DEFAULT_AUDIT_ROTATE_BYTES,
 		'rotateBytes',
 	);
-	const append = (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> =>
-		bestEffort(() => recordEntry(env, path, rotateBytes, entry, context), options.onError);
+	const append = (env: WorkspaceEnv, entry: AuditEntry, signal?: AbortSignal): Promise<void> =>
+		bestEffort(() => recordEntry(env, path, rotateBytes, entry, signal), options.onError);
 	return Object.freeze({
 		path,
 		rotateBytes,

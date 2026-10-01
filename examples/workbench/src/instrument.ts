@@ -1,10 +1,5 @@
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
-import {
-	BACKGROUND_CONTEXT,
-	type SqlEnv,
-	type SqlProvenance,
-	type SqlRow,
-} from '@ambionframework/workspace';
+import type { SqlEnv, SqlProvenance, SqlRow } from '@ambionframework/workspace';
 import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { Type } from 'typebox';
 
@@ -60,11 +55,10 @@ function literal(value: string | number): string {
 
 /** Run one statement on the lab database with the provenance of `ctx`, and give its rows. */
 async function labRun(env: SqlEnv, sql: string, ctx: ToolContext): Promise<readonly SqlRow[]> {
-	const outcome = await env.run(
-		sql,
-		{ maxRows: Number.MAX_SAFE_INTEGER, provenance: provenanceOf(ctx) },
-		BACKGROUND_CONTEXT,
-	);
+	const outcome = await env.run(sql, {
+		maxRows: Number.MAX_SAFE_INTEGER,
+		provenance: provenanceOf(ctx),
+	});
 	if (!outcome.ok) throw new Error(outcome.message);
 	return outcome.rows;
 }

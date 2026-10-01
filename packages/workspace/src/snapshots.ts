@@ -26,12 +26,11 @@ import {
 	snapshotUri,
 	type ToolContext,
 } from '@ambionframework/ambion';
-import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
 import type { ObjectEnv } from './object-backend.ts';
-import { contextOf, unwrap } from './object-files.ts';
+import { unwrap } from './object-files.ts';
 import { assertObjectSize, MAX_OBJECT_BYTES, sha256Hex } from './object-rules.ts';
 import { assertRefLength, assertRefWorkspace } from './ref-rules.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
@@ -79,13 +78,13 @@ interface Found {
  */
 async function find(
 	store: SnapshotStore,
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<Found> {
-	const absolute = unwrap(await env.absolutePath(path, context), `Cannot read ${path}`);
-	const canonical = unwrap(await env.canonicalPath(absolute, context), `Cannot read ${absolute}`);
-	const info = unwrap(await env.fileInfo(canonical, context), `Cannot read ${absolute}`);
+	const absolute = unwrap(await env.absolutePath(path, signal), `Cannot read ${path}`);
+	const canonical = unwrap(await env.canonicalPath(absolute, signal), `Cannot read ${absolute}`);
+	const info = unwrap(await env.fileInfo(canonical, signal), `Cannot read ${absolute}`);
 	if (info.kind !== 'file') throw new Error(`${absolute} is not a file.`);
 	assertObjectSize(absolute, info.size);
 	// Every digest has 64 digits, so a placeholder gives the length of the ref.
@@ -94,9 +93,9 @@ async function find(
 }
 
 /** The bytes of a found file. The file can grow between the find and the read. */
-async function read(env: ExecutionEnv, file: Found, context: Context): Promise<Uint8Array> {
+async function read(env: WorkspaceEnv, file: Found, signal?: AbortSignal): Promise<Uint8Array> {
 	const bytes = unwrap(
-		await env.readBinaryFile(file.canonical, context),
+		await env.readBinaryFile(file.canonical, signal),
 		`Cannot read ${file.path}`,
 	);
 	assertObjectSize(file.path, bytes.byteLength);
@@ -132,13 +131,13 @@ function checkPaths(paths: readonly unknown[]): asserts paths is readonly string
 /** Find the file of each path, in order. A message holds each ref once, so two paths of one file are refused. */
 async function findAll(
 	store: SnapshotStore,
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	paths: readonly string[],
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<Found[]> {
 	const files: Found[] = [];
 	for (const path of paths) {
-		const file = await find(store, env, path, context);
+		const file = await find(store, env, path, signal);
 		if (files.some((other) => other.path === file.path))
 			throw new Error(`The snapshot names ${file.path} twice. Name each file once.`);
 		files.push(file);
@@ -161,12 +160,11 @@ export async function takeSnapshot(
 ): Promise<readonly string[]> {
 	checkPaths(paths);
 	const { signal } = options;
-	const context = contextOf(signal);
 	const reader = options.agent ?? store.mirrorAgent;
-	const found = await store.bash(reader, (env) => findAll(store, env, paths, context), signal);
+	const found = await store.bash(reader, (env) => findAll(store, env, paths, signal), signal);
 	const refs: string[] = [];
 	for (const file of found) {
-		const bytes = await store.bash(reader, (env) => read(env, file, context), signal);
+		const bytes = await store.bash(reader, (env) => read(env, file, signal), signal);
 		const saved = await retainSnapshotBuffer(store, file.path, bytes, signal);
 		refs.push(saved.ref);
 	}
@@ -276,17 +274,17 @@ interface RestoreDetails {
 
 /** Write `bytes` to `path` as the agent of `env`, and give the absolute path. */
 async function writeFile(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	bytes: Uint8Array,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<string> {
-	const target = unwrap(await env.absolutePath(path, context), `Cannot write ${path}`);
+	const target = unwrap(await env.absolutePath(path, signal), `Cannot write ${path}`);
 	unwrap(
-		await env.createDir(posix.dirname(target), { recursive: true }, context),
+		await env.createDir(posix.dirname(target), { recursive: true }, signal),
 		`Cannot write ${target}`,
 	);
-	unwrap(await env.writeFile(target, bytes, context), `Cannot write ${target}`);
+	unwrap(await env.writeFile(target, bytes, signal), `Cannot write ${target}`);
 	return target;
 }
 
@@ -307,8 +305,7 @@ async function restoreSnapshot(
 		await store.objects(store.mirrorAgent, (env) => env.get(digest, signal), signal),
 	);
 	const path = request.path ?? `~/snapshots/${digest}/${posix.basename(named)}`;
-	const context = contextOf(signal);
-	const target = await store.bash(agent, (env) => writeFile(env, path, bytes, context), signal);
+	const target = await store.bash(agent, (env) => writeFile(env, path, bytes, signal), signal);
 	return { ref: request.ref, path: target, bytes: bytes.byteLength };
 }
 

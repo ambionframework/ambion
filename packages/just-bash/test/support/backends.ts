@@ -12,11 +12,11 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { WorkspaceEnv } from '@ambionframework/workspace';
 import type {
 	ConformanceFixture,
 	WorkspaceConformanceStore,
 } from '@ambionframework/workspace/conformance';
-import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { directoryBackend, memoryBackend } from '../../src/index.ts';
 
 /** A temporary directory, and a function that removes it. */
@@ -43,22 +43,18 @@ export const backends: readonly ConformanceFixture<WorkspaceConformanceStore>[] 
 
 /** Run one command and return its exit code or error code, and its combined output. */
 export async function sh(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	command: string,
 	options: { cwd?: string; timeout?: number } = {},
 ): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
 	let output = '';
-	const result = await env.exec(
-		command,
-		{
-			...options,
-			capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
-			onUpdate: (update) => {
-				if (update.kind === 'replace') output = update.output.text;
-			},
+	const result = await env.exec(command, {
+		...options,
+		capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
+		onUpdate: (view) => {
+			output = view.text;
 		},
-		BACKGROUND_CONTEXT,
-	);
+	});
 	return result.ok
 		? { ok: true, exitCode: result.value.exitCode, output }
 		: { ok: false, code: result.error.code, output };

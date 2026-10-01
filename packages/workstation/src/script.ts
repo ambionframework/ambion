@@ -9,7 +9,7 @@
  * `sshd` drops an `env` request unless `AcceptEnv` names the variable, so the
  * variables travel in the script, and no value reaches a command line that
  * `ps` shows to another account. The command runs as `bash -c <command>`,
- * the same as in Pi's `NodeExecutionEnv`: it is the body of a quoted heredoc,
+ * the same as a local shell: it is the body of a quoted heredoc,
  * so bash reads it as text, and its standard input is `/dev/null`, so it
  * cannot read the rest of the script.
  *

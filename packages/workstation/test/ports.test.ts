@@ -1,6 +1,5 @@
 import { get as httpGet } from 'node:http';
 import net from 'node:net';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationCredential, workstationBackend } from '../src/index.ts';
 import { startHttpServer } from './support/http-server.ts';
@@ -113,7 +112,7 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 		await expect(open(backend, unavailable)).rejects.toThrow(/forward.*127\.0\.0\.1/i);
 		await until(() => ssh.forwards.size === 0, 'A refused SSH channel remained open.');
 		const env = await backend.connect({ name: 'ada' });
-		expect(await env.writeFile('probe.txt', 'ready', BACKGROUND_CONTEXT)).toMatchObject({
+		expect(await env.writeFile('probe.txt', 'ready')).toMatchObject({
 			ok: true,
 		});
 		await env.cleanup();
@@ -154,7 +153,7 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 			() => tcpServerCount() === listenersBefore,
 			'Aborted port establishment kept a local listener alive.',
 		);
-		expect(await env.writeFile('probe.txt', 'ready', BACKGROUND_CONTEXT)).toMatchObject({
+		expect(await env.writeFile('probe.txt', 'ready')).toMatchObject({
 			ok: true,
 		});
 		await env.cleanup();
@@ -265,7 +264,7 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 			() => ssh.pendingForwards.size === 0 && ssh.forwards.size === 0,
 			'A late reader channel leaked.',
 		);
-		expect(await env.writeFile('probe.txt', 'ready', BACKGROUND_CONTEXT)).toMatchObject({
+		expect(await env.writeFile('probe.txt', 'ready')).toMatchObject({
 			ok: true,
 		});
 		await env.cleanup();

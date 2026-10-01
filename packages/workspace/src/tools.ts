@@ -4,12 +4,14 @@ import {
 	type ToolContext,
 	type ToolResult,
 } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { AuditEntry, AuditLog } from './audit.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import { callEnvelope } from './call-envelope.ts';
 import { bestEffort } from './log.ts';
 import type { WorkspaceResource } from './resource.ts';
+
+/** A tool result with typed details. */
+export type DetailedResult<Details> = ToolResult & { readonly details: Details };
 
 /**
  * A failure that keeps the details of its result. The model reads the
@@ -74,8 +76,8 @@ async function outcomeOf(tool: AmbionTool, params: unknown, ctx: ToolContext): P
 /**
  * A copy of `tool` that records one audit entry for each call, successful
  * or not. A call with invalid arguments has an entry. The entry runs as one
- * more operation on the bash resource after the call ends, over
- * `BACKGROUND_CONTEXT`, so a cut call still leaves its entry. Another
+ * more operation on the bash resource after the call ends, with no abort
+ * signal, so a cut call still leaves its entry. Another
  * operation can run between the call and its entry. A call that ends after
  * `dispose` starts has no entry: the bash resource refuses the record, and the
  * log's `onError` receives the loss. A failure to record does not replace
@@ -97,7 +99,7 @@ export function audited(
 			);
 		await bestEffort(async () => {
 			const entry = auditEntry(tool.name, params, ctx, outcome);
-			await bash(ctx.agent, (env) => audit.append(env, entry, BACKGROUND_CONTEXT));
+			await bash(ctx.agent, (env) => audit.append(env, entry));
 		}, lost);
 	};
 	return Object.freeze({

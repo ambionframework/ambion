@@ -1,4 +1,3 @@
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
@@ -22,7 +21,7 @@ async function textAt(
 	path: string,
 ) {
 	return site.use({ name: agent }, async (env) => {
-		const result = await env.readTextFile(path, BACKGROUND_CONTEXT);
+		const result = await env.readTextFile(path);
 		if (!result.ok) throw result.error;
 		return result.value;
 	});
@@ -187,7 +186,7 @@ describe('workspace observe integration', () => {
 					throw new Error('restore returned a string instead of details.');
 				const path = (restored.details as { path: string }).path;
 				const bytes = await rig.site.use({ name: 'reviewer' }, async (env) => {
-					const result = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
+					const result = await env.readBinaryFile(path);
 					if (!result.ok) throw result.error;
 					return result.value;
 				});
@@ -222,7 +221,7 @@ describe('workspace observe integration', () => {
 
 			const pngPath = '/home/observer/example.png';
 			await rig.site.use({ name: 'observer' }, async (env) => {
-				const result = await env.writeFile(pngPath, frameBytes, BACKGROUND_CONTEXT);
+				const result = await env.writeFile(pngPath, frameBytes);
 				if (!result.ok) throw result.error;
 			});
 			const read = rig.site.tools().tools.find((tool) => tool.name === 'read');
@@ -239,7 +238,7 @@ describe('workspace observe integration', () => {
 			// A format with no image part, such as BMP, still names the path of the file.
 			const bmpPath = '/home/observer/example.bmp';
 			await rig.site.use({ name: 'observer' }, async (env) => {
-				const result = await env.writeFile(bmpPath, onePixelBmp(), BACKGROUND_CONTEXT);
+				const result = await env.writeFile(bmpPath, onePixelBmp());
 				if (!result.ok) throw result.error;
 			});
 			const bmp = await read.invoke({ path: bmpPath }, rig.observer);
@@ -295,11 +294,7 @@ describe('workspace observe integration', () => {
 			await entered;
 			let writeFinished = false;
 			const write = rig.site.use({ name: 'observer' }, async (env) => {
-				const result = await env.writeFile(
-					'/home/observer/while-observe.txt',
-					'ready',
-					BACKGROUND_CONTEXT,
-				);
+				const result = await env.writeFile('/home/observer/while-observe.txt', 'ready');
 				if (!result.ok) throw result.error;
 				writeFinished = true;
 			});
@@ -339,7 +334,7 @@ describe('workspace observe integration', () => {
 			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -369,7 +364,7 @@ describe('workspace observe integration', () => {
 			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -409,7 +404,7 @@ describe('workspace observe integration', () => {
 			await expect(observation).rejects.toThrow(/ended or its connection changed before/i);
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -443,7 +438,7 @@ describe('workspace observe integration', () => {
 			releaseRequest();
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -477,7 +472,7 @@ describe('workspace observe integration', () => {
 			releaseFile();
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -508,7 +503,7 @@ describe('workspace observe integration', () => {
 			);
 			expect(rig.observeCalls).toBe(1);
 			const exports = await rig.site.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {

@@ -24,7 +24,6 @@
  * `docs/processes.md` is the design contract.
  */
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
 import { cancelWaitMs, type Live, type Own, openCancels, POLL_MS } from './process-cancel.ts';
@@ -256,7 +255,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	const recordEnd = async (process: Live, own: Own, run: Run): Promise<void> => {
 		if (process.stopping !== undefined) return;
 		await onFiles(process, own, async (env) => {
-			const exit = await env.exists(`${process.dir}/exit`, BACKGROUND_CONTEXT);
+			const exit = await env.exists(`${process.dir}/exit`);
 			if (!exit.ok) throw exit.error;
 			if (!exit.value) await writeEnd(env, process.dir, run);
 		});
@@ -299,7 +298,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 			.sort((a, b) => Number(b.files.seen) - Number(a.files.seen));
 		const excess = Math.max(0, finished.length - MAX_FINISHED_PROCESSES + 1);
 		for (const one of finished.slice(0, excess)) {
-			await env.remove(one.files.dir, { recursive: true, force: true }, BACKGROUND_CONTEXT);
+			await env.remove(one.files.dir, { recursive: true, force: true });
 		}
 	};
 
@@ -323,7 +322,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 			await own.cleanup().catch(() => undefined);
 			throw new Error(CLOSED);
 		} catch (error) {
-			await env.remove(dir, { recursive: true, force: true }, BACKGROUND_CONTEXT);
+			await env.remove(dir, { recursive: true, force: true });
 			throw error;
 		}
 	};

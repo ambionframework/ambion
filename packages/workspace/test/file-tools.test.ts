@@ -5,7 +5,6 @@
  * tools reproduce.
  */
 import type { ToolContent } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { backends } from '../../just-bash/test/support/backends.ts';
@@ -480,7 +479,7 @@ const cases: readonly Case[] = [
 async function seed(site: ReturnType<typeof openWorkspace>, files: Case['files'] = {}) {
 	await site.use(agent, async (env) => {
 		for (const [path, content] of Object.entries(files)) {
-			const written = await env.writeFile(`${home}/${path}`, content, BACKGROUND_CONTEXT);
+			const written = await env.writeFile(`${home}/${path}`, content);
 			if (!written.ok) throw written.error;
 		}
 	});
@@ -489,7 +488,7 @@ async function seed(site: ReturnType<typeof openWorkspace>, files: Case['files']
 /** The text of a file in the home of the agent. */
 const textOf = (site: ReturnType<typeof openWorkspace>, path: string) =>
 	site.use(agent, async (env) => {
-		const read = await env.readTextFile(`${home}/${path}`, BACKGROUND_CONTEXT);
+		const read = await env.readTextFile(`${home}/${path}`);
 		if (!read.ok) throw read.error;
 		return read.value;
 	});

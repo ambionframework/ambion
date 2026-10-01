@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
@@ -174,7 +173,7 @@ describe('sensor evidence retention', () => {
 			);
 			const manifestPath = (restored as { details: { path: string } }).details.path;
 			const manifestContents = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-				const result = await env.readTextFile(manifestPath, BACKGROUND_CONTEXT);
+				const result = await env.readTextFile(manifestPath);
 				if (!result.ok) throw result.error;
 				return result.value;
 			});
@@ -197,7 +196,7 @@ describe('sensor evidence retention', () => {
 				);
 				const path = (result as { details: { path: string } }).details.path;
 				const bytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-					const found = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
+					const found = await env.readBinaryFile(path);
 					if (!found.ok) throw found.error;
 					return found.value;
 				});
@@ -207,7 +206,7 @@ describe('sensor evidence retention', () => {
 			const firstExport = retained.files[0];
 			if (!firstExport) throw new Error('Expected a retained file export.');
 			await storeFixture.store.bash({ name: 'observer' }, async (env) => {
-				const changed = await env.writeFile(firstExport.path, 'edited export', BACKGROUND_CONTEXT);
+				const changed = await env.writeFile(firstExport.path, 'edited export');
 				if (!changed.ok) throw changed.error;
 			});
 			const originalAgain = await storeFixture.store.objects(owner, (env) =>
@@ -407,9 +406,7 @@ describe('sensor evidence retention', () => {
 					]),
 				),
 			).rejects.toMatchObject({ name: 'SensorDigestError', expected: frameDigest });
-			const noObjects = await storeFixture.store.bash(owner, (env) =>
-				env.exists('/snapshots', BACKGROUND_CONTEXT),
-			);
+			const noObjects = await storeFixture.store.bash(owner, (env) => env.exists('/snapshots'));
 			expect(noObjects).toMatchObject({ ok: true, value: false });
 		} finally {
 			await storeFixture.dispose();
@@ -480,7 +477,7 @@ describe('sensor evidence retention', () => {
 			expect(writes).toBe(2);
 			expect(stored.get(frameDigest)).toEqual(new Uint8Array(frameBytes));
 			const exports = await bash.use({ name: 'observer' }, (env) =>
-				env.exists('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+				env.exists('/home/observer/sensor-observations'),
 			);
 			expect(exports).toMatchObject({ ok: true, value: false });
 		} finally {
@@ -554,7 +551,7 @@ describe('sensor evidence retention', () => {
 							: 'cancel after rename',
 				);
 				const entries = await bash.use({ name: 'observer' }, (env) =>
-					env.listDir('/home/observer/sensor-observations', BACKGROUND_CONTEXT),
+					env.listDir('/home/observer/sensor-observations'),
 				);
 				expect(entries).toMatchObject({ ok: true, value: [] });
 			} finally {

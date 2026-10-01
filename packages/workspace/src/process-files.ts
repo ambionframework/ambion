@@ -15,7 +15,6 @@
  * `docs/processes.md` is the design contract.
  */
 
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript, shellQuote } from './execution-env.ts';
 
@@ -108,7 +107,7 @@ export function isHandle(handle: string): boolean {
 
 /** The absolute directory of the agent's processes. */
 export async function processesDir(env: WorkspaceEnv): Promise<string> {
-	const dir = await env.absolutePath(PROCESSES_DIR, BACKGROUND_CONTEXT);
+	const dir = await env.absolutePath(PROCESSES_DIR);
 	if (!dir.ok) throw dir.error;
 	return dir.value;
 }
@@ -120,15 +119,11 @@ export async function writeSpec(
 	spec: ProcessSpec,
 ): Promise<string> {
 	const dir = `${root}/${spec.handle}`;
-	const made = await env.createDir(dir, { recursive: true }, BACKGROUND_CONTEXT);
+	const made = await env.createDir(dir, { recursive: true });
 	if (!made.ok) throw made.error;
-	const written = await env.writeFile(
-		`${dir}/spec`,
-		`${JSON.stringify(spec)}\n`,
-		BACKGROUND_CONTEXT,
-	);
+	const written = await env.writeFile(`${dir}/spec`, `${JSON.stringify(spec)}\n`);
 	if (!written.ok) throw written.error;
-	const output = await env.writeFile(`${dir}/out`, '', BACKGROUND_CONTEXT);
+	const output = await env.writeFile(`${dir}/out`, '');
 	if (!output.ok) throw output.error;
 	return dir;
 }
@@ -185,7 +180,7 @@ export function lostLine(): string {
 export async function writeStop(env: WorkspaceEnv, dir: string, line: string): Promise<void> {
 	const at = shellQuote(dir);
 	const script = `[ -f ${at}/exit ] || printf '%s' ${shellQuote(line)} > ${at}/stop`;
-	const result = await env.exec(script, undefined, BACKGROUND_CONTEXT);
+	const result = await env.exec(script, undefined);
 	if (!result.ok) throw result.error;
 }
 
@@ -195,12 +190,12 @@ export async function writeStop(env: WorkspaceEnv, dir: string, line: string): P
  */
 export async function writeExit(env: WorkspaceEnv, dir: string, code: number): Promise<void> {
 	const at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-	await env.writeFile(`${dir}/exit`, `${code} ${at}\n`, BACKGROUND_CONTEXT);
+	await env.writeFile(`${dir}/exit`, `${code} ${at}\n`);
 }
 
 /** Write `seen` for a process whose end a result or a reminder showed. Best-effort. */
 export async function writeSeen(env: WorkspaceEnv, dir: string): Promise<void> {
-	await env.writeFile(`${dir}/seen`, 'seen\n', BACKGROUND_CONTEXT);
+	await env.writeFile(`${dir}/seen`, 'seen\n');
 }
 
 /**
@@ -241,12 +236,9 @@ const LISTING_BYTES = 8 * 1024 * 1024;
 
 /** Run a script on `env`, and return what it printed. */
 async function printed(env: WorkspaceEnv, script: string, bytes: number): Promise<string> {
-	const result = await runScript(
-		env,
-		script,
-		{ capture: { limits: { maxBytes: bytes, maxLines: Number.MAX_SAFE_INTEGER, retain: 'head' } } },
-		BACKGROUND_CONTEXT,
-	);
+	const result = await runScript(env, script, {
+		capture: { limits: { maxBytes: bytes, maxLines: Number.MAX_SAFE_INTEGER, retain: 'head' } },
+	});
 	if (!result.ok) throw result.error;
 	return result.value.output;
 }
@@ -463,5 +455,5 @@ export async function signalGroup(
 	handle: string,
 	signal: CancelSignal,
 ): Promise<void> {
-	await env.exec(signalScript(dir, handle, signal), undefined, BACKGROUND_CONTEXT);
+	await env.exec(signalScript(dir, handle, signal), undefined);
 }

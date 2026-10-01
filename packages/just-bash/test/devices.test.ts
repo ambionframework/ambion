@@ -6,18 +6,16 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openWorkspace } from '@ambionframework/workspace';
-import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { openWorkspace, type WorkspaceEnv } from '@ambionframework/workspace';
 import { describe, expect, it } from 'vitest';
 import { directoryBackend, memoryBackend } from '../src/just-bash.ts';
 import { backends, sh } from './support/backends.ts';
 
-const ctx = BACKGROUND_CONTEXT;
 const agent = { name: 'ada' };
 const empty = { ok: true, value: '' };
 
 describe.each(backends)('the root and the null device on $name', (backend) => {
-	async function withEnv(run: (env: ExecutionEnv) => Promise<void>) {
+	async function withEnv(run: (env: WorkspaceEnv) => Promise<void>) {
 		const handle = await backend.open();
 		const workspace = openWorkspace({ name: 'devices', backend: { bash: handle.backend } });
 		try {
@@ -30,14 +28,14 @@ describe.each(backends)('the root and the null device on $name', (backend) => {
 
 	it('finds shared artifacts from the virtual root', () =>
 		withEnv(async (env) => {
-			expect((await env.createDir('/shared', undefined, ctx)).ok).toBe(true);
-			expect((await env.writeFile('/shared/prototype.html', '<h1>Relay</h1>', ctx)).ok).toBe(true);
-			expect(await env.readBinaryFile('/shared/prototype.html', ctx)).toEqual({
+			expect((await env.createDir('/shared', undefined)).ok).toBe(true);
+			expect((await env.writeFile('/shared/prototype.html', '<h1>Relay</h1>')).ok).toBe(true);
+			expect(await env.readBinaryFile('/shared/prototype.html')).toEqual({
 				ok: true,
 				value: new TextEncoder().encode('<h1>Relay</h1>'),
 			});
 			expect((await sh(env, 'cat /shared/prototype.html')).output).toBe('<h1>Relay</h1>');
-			expect(await env.fileInfo('/', ctx)).toMatchObject({
+			expect(await env.fileInfo('/')).toMatchObject({
 				ok: true,
 				value: { kind: 'directory' },
 			});
@@ -50,16 +48,16 @@ describe.each(backends)('the root and the null device on $name', (backend) => {
 
 	it('reads empty, before and after a redirect or the write tool path writes to it', () =>
 		withEnv(async (env) => {
-			expect(await env.readTextFile('/dev/null', ctx)).toEqual(empty);
+			expect(await env.readTextFile('/dev/null')).toEqual(empty);
 			expect((await sh(env, 'cat /dev/null')).output).toBe('');
 			await sh(env, 'printf "%s" big > /dev/null');
 			await sh(env, 'echo a > /dev/null; echo b >> /dev/null');
 			expect((await sh(env, 'cat /dev/null')).output).toBe('');
-			expect(await env.canonicalPath('/dev/null', ctx)).toEqual({ ok: true, value: '/dev/null' });
-			expect((await env.writeFile('/dev/null', 'x', ctx)).ok).toBe(true);
-			expect((await env.appendFile('/dev/null', 'y', ctx)).ok).toBe(true);
-			expect(await env.readTextFile('/dev/null', ctx)).toEqual(empty);
-			expect(await env.readBinaryFile('/dev/null', ctx)).toEqual({
+			expect(await env.canonicalPath('/dev/null')).toEqual({ ok: true, value: '/dev/null' });
+			expect((await env.writeFile('/dev/null', 'x')).ok).toBe(true);
+			expect((await env.appendFile('/dev/null', 'y')).ok).toBe(true);
+			expect(await env.readTextFile('/dev/null')).toEqual(empty);
+			expect(await env.readBinaryFile('/dev/null')).toEqual({
 				ok: true,
 				value: new Uint8Array(),
 			});

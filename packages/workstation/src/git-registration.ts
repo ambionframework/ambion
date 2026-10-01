@@ -24,7 +24,6 @@ import {
 	DEFAULT_BRANCH,
 	type RegistrationSteps,
 } from '@ambionframework/workspace/git';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type GitAccount, runIn, tagged } from './git-account.ts';
 import type { SshEnv } from './ssh-env.ts';
 
@@ -190,7 +189,7 @@ async function tipOf(
 /** Write each file into the staging folder over SFTP. */
 async function writeFiles(env: SshEnv, folder: string, files: SourceFiles): Promise<void> {
 	for (const [path, bytes] of Object.entries(files)) {
-		const written = await env.writeFile(`${folder}/${path}`, bytes, BACKGROUND_CONTEXT);
+		const written = await env.writeFile(`${folder}/${path}`, bytes);
 		if (!written.ok) throw written.error;
 	}
 }

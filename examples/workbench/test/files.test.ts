@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile as writeLocalFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachFile, isImagePath, readFile } from '../src/files.ts';
 import { readSnapshotFile } from '../src/previews.ts';
@@ -31,9 +31,7 @@ describe('isImagePath', () => {
 describe('readFile on a picture', () => {
 	it('reads an image file as bytes, with its mime type and no text', async () => {
 		const site = openWorkspace({ name: 'files-image', backend: { bash: memoryBackend() } });
-		await site.use(scribe, (env) =>
-			env.writeFile('/home/scribe/photo.png', FAKE_PNG, BACKGROUND_CONTEXT),
-		);
+		await site.use(scribe, (env) => env.writeFile('/home/scribe/photo.png', FAKE_PNG));
 
 		const file = await readFile(site, '/home/scribe/photo.png');
 
@@ -47,7 +45,7 @@ describe('readFile on a picture', () => {
 		const site = openWorkspace({ name: 'files-image-big', backend: { bash: memoryBackend() } });
 		const big = new Uint8Array(8_388_609);
 		big.set(FAKE_PNG);
-		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big, BACKGROUND_CONTEXT));
+		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big));
 
 		await expect(readFile(site, '/home/scribe/big.png')).rejects.toThrow(/8 MiB/);
 		await site.dispose();
@@ -66,9 +64,7 @@ describe('attachFile', () => {
 
 		expect(entry.path).toMatch(/^\/attachments\/\d+-board\.png$/);
 		expect(entry.size).toBe(FAKE_PNG.length);
-		const stored = await site.use(scribe, (env) =>
-			env.readBinaryFile(entry.path, BACKGROUND_CONTEXT),
-		);
+		const stored = await site.use(scribe, (env) => env.readBinaryFile(entry.path));
 		if (!stored.ok) throw new Error('The attached file is missing from the workspace.');
 		expect(Array.from(stored.value)).toEqual(Array.from(FAKE_PNG));
 		expect(Array.from(await site.readSnapshot(entry.ref))).toEqual(Array.from(FAKE_PNG));

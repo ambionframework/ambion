@@ -1,5 +1,4 @@
 import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
@@ -249,7 +248,7 @@ function withSkills(
 	const copied = new Set<string>();
 	const copy = (agent: string): void => {
 		copied.add(agent);
-		bash({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(() => undefined);
+		bash({ name: agent }, (env) => syncSkills(env, set)).catch(() => undefined);
 	};
 	const tools = bundle.tools.map((tool): AmbionTool =>
 		Object.freeze({

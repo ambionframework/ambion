@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, type ProcessRecord, type Workspace } from '@ambionframework/workspace';
+import type { ProcessRecord, Workspace } from '@ambionframework/workspace';
 
 /** One background process, as the workspace reports it. */
 export type ProcessView = ProcessRecord;
@@ -49,11 +49,11 @@ export async function readOutput(
 	process: ProcessView,
 ): Promise<ProcessOutput> {
 	return workspace.use({ name: process.agent }, async (env) => {
-		const info = await env.fileInfo(process.output, BACKGROUND_CONTEXT);
+		const info = await env.fileInfo(process.output);
 		const size = info.ok ? info.value.size : 0;
 		const empty = { handle: process.handle, text: '', size, truncated: size > 0 };
 		if (size === 0 || size > MAX_READ) return empty;
-		const read = await env.readTextFile(process.output, BACKGROUND_CONTEXT);
+		const read = await env.readTextFile(process.output);
 		if (!read.ok) return empty;
 		return { handle: process.handle, size, ...lastPart(read.value) };
 	});

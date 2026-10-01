@@ -17,7 +17,7 @@ import { memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
 import { validRefName } from '../src/git-names.ts';
 import { gitToolGuidance } from '../src/git-tools.ts';
-import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
 import { callAs, invokeText, toolOf } from './support/backends.ts';
@@ -210,7 +210,7 @@ describe('the audit log', () => {
 		for (const tool of workspace.tools().tools)
 			await Promise.resolve(tool.invoke({}, who)).catch(() => undefined);
 		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+			env.readTextFile('/workspace/audit.jsonl'),
 		);
 		const entries = (log.ok ? log.value : '')
 			.trim()
@@ -250,7 +250,7 @@ describe('repos', () => {
 			(name) => `git branch ${name} && git push origin ${name}`,
 		);
 		const pushed = await workspace.use({ name: 'analyst' }, (env) =>
-			env.exec(`cd ~/report && ${branches.join(' && ')}`, undefined, BACKGROUND_CONTEXT),
+			env.exec(`cd ~/report && ${branches.join(' && ')}`, undefined),
 		);
 		expect(pushed.ok && pushed.value.exitCode).toBe(0);
 		const line = (await text(workspace, 'repos', { namespace: 'analyst' })).split('\n')[2] ?? '';
@@ -275,7 +275,7 @@ describe('fork', () => {
 			].join('\n'),
 		);
 		const read = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/home/analyst/report/report.md', BACKGROUND_CONTEXT),
+			env.readTextFile('/home/analyst/report/report.md'),
 		);
 		expect(read.ok && read.value).toBe('# Week\n');
 	});
@@ -310,7 +310,7 @@ describe('fork', () => {
 	it('keeps the fork when the clone fails, and says how to clone it', async () => {
 		const { workspace } = await lab();
 		await workspace.use({ name: 'analyst' }, (env) =>
-			env.writeFile('/home/analyst/busy/file.txt', 'in the way', BACKGROUND_CONTEXT),
+			env.writeFile('/home/analyst/busy/file.txt', 'in the way'),
 		);
 		// The fork stands, and the failed clone fails the call.
 		const forked = await text(workspace, 'fork', {
@@ -333,7 +333,7 @@ describe('fork', () => {
 		const { workspace } = await lab({ audit: true });
 		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
 		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+			env.readTextFile('/workspace/audit.jsonl'),
 		);
 		const entries = (log.ok ? log.value : '')
 			.trim()
@@ -377,7 +377,7 @@ describe('clone', () => {
 		expect(checkout).toContain('main');
 		expect(checkout).toContain('# Week');
 		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+			env.readTextFile('/workspace/audit.jsonl'),
 		);
 		const entry = (log.ok ? log.value : '')
 			.trim()
@@ -405,7 +405,6 @@ describe('clone', () => {
 			env.exec(
 				'cd ~/copy && git switch -c cloned-work && git commit --allow-empty -m copied && git push origin cloned-work',
 				undefined,
-				BACKGROUND_CONTEXT,
 			),
 		);
 		expect(pushed.ok && pushed.value.exitCode).toBe(0);
@@ -421,13 +420,13 @@ describe('clone', () => {
 			text(workspace, 'clone', { source: 'templates/none', path: '~/missing' }),
 		).rejects.toThrow('templates/none does not exist. Call repos to list the repositories.');
 		await workspace.use({ name: 'analyst' }, (env) =>
-			env.writeFile('/home/analyst/busy/file.txt', 'in the way', BACKGROUND_CONTEXT),
+			env.writeFile('/home/analyst/busy/file.txt', 'in the way'),
 		);
 		await expect(
 			text(workspace, 'clone', { source: 'templates/weekly-report', path: '~/busy' }),
 		).rejects.toThrow(/^The clone into \/home\/analyst\/busy failed: .+\.$/s);
 		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl', BACKGROUND_CONTEXT),
+			env.readTextFile('/workspace/audit.jsonl'),
 		);
 		const entries = (log.ok ? log.value : '')
 			.trim()
@@ -460,7 +459,7 @@ describe('clone', () => {
 			),
 		).rejects.toThrow();
 		const destination = await workspace.use({ name: 'analyst' }, (env) =>
-			env.exists('/home/analyst/aborted', BACKGROUND_CONTEXT),
+			env.exists('/home/analyst/aborted'),
 		);
 		expect(destination.ok && destination.value).toBe(false);
 		expect(await text(workspace, 'repos', {})).toBe(before);

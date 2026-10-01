@@ -17,7 +17,6 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { piExecution } from '@ambionframework/pi';
-import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -31,7 +30,7 @@ import {
 } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { defaultToolGuidance } from '../src/default-tools.ts';
-import { openWorkspace } from '../src/index.ts';
+import { openWorkspace, type WorkspaceEnv } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
 import { snapshotGuidance } from '../src/snapshots.ts';
@@ -51,11 +50,10 @@ const BASE_TOOLS = [
 	'snapshot',
 	'restore',
 ];
-const ctx = BACKGROUND_CONTEXT;
 
 /** Every line of one JSONL file, parsed. */
-async function linesOf(env: ExecutionEnv, path: string): Promise<Record<string, unknown>[]> {
-	const read = await env.readTextFile(path, ctx);
+async function linesOf(env: WorkspaceEnv, path: string): Promise<Record<string, unknown>[]> {
+	const read = await env.readTextFile(path);
 	if (!read.ok) throw read.error;
 	return read.value
 		.split('\n')
@@ -315,7 +313,7 @@ describe('a workspace beside a running room', () => {
 		expect(spoken[0]?.refs).toEqual([ref]);
 		expect(new TextDecoder().decode(await site.readSnapshot(ref))).toBe('done\n');
 		expect(
-			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`, ctx)),
+			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`)),
 		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
 		expect(lines).toHaveLength((await session.read()).messages.length);
@@ -337,9 +335,9 @@ describe('two agents on one workspace', () => {
 		const workspace = openWorkspace({ name: name('serialized-edits'), backend: { bash: backend } });
 		const append = async (agentName: string, line: string) =>
 			workspace.use({ name: agentName }, async (env) => {
-				const read = await env.readTextFile('/shared.txt', ctx);
+				const read = await env.readTextFile('/shared.txt');
 				if (!read.ok) throw read.error;
-				const write = await env.writeFile('/shared.txt', `${read.value}${line}\n`, ctx);
+				const write = await env.writeFile('/shared.txt', `${read.value}${line}\n`);
 				if (!write.ok) throw write.error;
 			});
 		await Promise.all([append('alpha', 'alpha'), append('beta', 'beta')]);

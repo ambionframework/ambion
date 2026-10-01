@@ -14,21 +14,15 @@ import { type AmbionTool, snapshotUri, type ToolContext } from '@ambionframework
 import {
 	loadSkills,
 	openWorkspace,
+	type ShellOutputView,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
-import {
-	BACKGROUND_CONTEXT,
-	type ShellOutputUpdate,
-	withAbortSignal,
-} from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../src/index.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -67,16 +61,12 @@ async function run(
 	command: string,
 	options: Parameters<WorkspaceEnv['exec']>[1] = {},
 ) {
-	const updates: ShellOutputUpdate[] = [];
-	const result = await env.exec(
-		command,
-		{ ...options, onUpdate: (update) => updates.push(update) },
-		ctx,
-	);
+	const updates: ShellOutputView[] = [];
+	const result = await env.exec(command, { ...options, onUpdate: (view) => updates.push(view) });
 	const view = updates[0];
 	return {
 		result,
-		text: view?.kind === 'replace' ? view.output.text : undefined,
+		text: view?.text,
 		updates: updates.length,
 	};
 }
@@ -156,7 +146,7 @@ describe.skipIf(!hasSetsid)('a workstation session', () => {
 		const held = await backend.connect({ name: 'ada' });
 		await withEnv(backend, 'ada', async () => undefined);
 		await new Promise((resolve) => setTimeout(resolve, 200));
-		const ran = await held.exec('true', undefined, ctx);
+		const ran = await held.exec('true', undefined);
 		await held.cleanup();
 		expect(ran).toMatchObject({ ok: true, value: { exitCode: 0 } });
 		expect(started.logins.get('ada')).toBe(1);
@@ -171,7 +161,7 @@ describe.skipIf(!hasSetsid)('a workstation session', () => {
 		await withEnv(backend, 'ada', async () => undefined);
 		started.dropClients();
 		await new Promise((resolve) => setTimeout(resolve, 100));
-		const written = await withEnv(backend, 'ada', (env) => env.writeFile('after.txt', 'x', ctx));
+		const written = await withEnv(backend, 'ada', (env) => env.writeFile('after.txt', 'x'));
 		expect(written.ok).toBe(true);
 		expect(started.logins.get('ada')).toBe(2);
 	});
@@ -183,11 +173,11 @@ describe.skipIf(!hasSetsid)('a workstation channel', () => {
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
 			started.refuseChannels(true);
-			const refused = await env.exec('true', undefined, ctx);
+			const refused = await env.exec('true', undefined);
 			expect(refused).toMatchObject({ ok: false, error: { code: 'unknown' } });
 			started.refuseChannels(false);
 		});
-		const ran = await withEnv(backend, 'ada', (env) => env.exec('true', undefined, ctx));
+		const ran = await withEnv(backend, 'ada', (env) => env.exec('true', undefined));
 		expect(ran).toMatchObject({ ok: true, value: { exitCode: 0 } });
 		expect(started.logins.get('ada')).toBe(2);
 	});
@@ -198,7 +188,7 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		const started = await server();
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
-			await env.createDir('sub', undefined, ctx);
+			await env.createDir('sub', undefined);
 			const vars = await run(env, 'printf "%s|%s\\n" "$GREETING" "$(pwd)"; cat; exit 3', {
 				env: { GREETING: "it's here" },
 				cwd: 'sub',
@@ -241,12 +231,12 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		const started = await server();
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
-			const missing = await env.exec('true', { cwd: 'nowhere' }, ctx);
+			const missing = await env.exec('true', { cwd: 'nowhere' });
 			expect(missing).toMatchObject({ ok: false, error: { code: 'spawn_error' } });
-			const bad = await env.exec('true', { env: { 'A;B': 'x' } }, ctx);
+			const bad = await env.exec('true', { env: { 'A;B': 'x' } });
 			expect(bad).toMatchObject({ ok: false, error: { code: 'spawn_error' } });
 			for (const grace of [-1, Number.NaN, 3_000_000]) {
-				const refused = await env.exec('true', { grace }, ctx);
+				const refused = await env.exec('true', { grace });
 				expect(refused, String(grace)).toMatchObject({
 					ok: false,
 					error: { code: 'spawn_error', message: expect.stringContaining('Invalid grace') },
@@ -285,7 +275,7 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		const command = `${trap}\nsleep 30 & echo $! > child.pid\nwait`;
 		const { result, stoppedIn } = await withEnv(backend, 'ada', async (env) => {
 			const options = { timeout: 60, ...(grace === undefined ? {} : { grace }) };
-			const running = env.exec(command, options, withAbortSignal(controller.signal, ctx));
+			const running = env.exec(command, options, controller.signal);
 			await until(() => spawnSync('test', ['-s', join(home, 'child.pid')]).status === 0);
 			const abortedAt = Date.now();
 			controller.abort();
@@ -306,7 +296,7 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		const backend = backendFor(started.options);
 		const controller = new AbortController();
 		const results = await withEnv(backend, 'ada', async (env) => {
-			const aborted = withAbortSignal(controller.signal, ctx);
+			const aborted = controller.signal;
 			const runs = [1, 2, 3, 4].map(() =>
 				env.exec('trap : TERM\nsleep 30 & wait', { timeout: 60, grace: 1 }, aborted),
 			);
@@ -331,7 +321,7 @@ describe.skipIf(!hasSetsid)('a workstation command', () => {
 		const backend = backendFor(started.options);
 		const home = started.homes.get('ada') ?? '';
 		const timedOut = await withEnv(backend, 'ada', (env) =>
-			env.exec('sleep 30 & echo $! > child.pid; sleep 30', { timeout: 0.5 }, ctx),
+			env.exec('sleep 30 & echo $! > child.pid; sleep 30', { timeout: 0.5 }),
 		);
 		expect(timedOut).toMatchObject({ ok: false, error: { code: 'timeout' } });
 		const pid = Number((await readFile(join(home, 'child.pid'), 'utf8')).trim());
@@ -346,38 +336,31 @@ describe.skipIf(!hasSetsid)('workstation files', () => {
 		const started = await server();
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
-			await env.createDir('full', undefined, ctx);
-			await env.writeFile('full/a.txt', 'x', ctx);
-			const notEmpty = await env.remove('full', undefined, ctx);
+			await env.createDir('full', undefined);
+			await env.writeFile('full/a.txt', 'x');
+			const notEmpty = await env.remove('full', undefined);
 			expect(notEmpty).toMatchObject({ ok: false, error: { code: 'invalid' } });
-			const underFile = await env.readTextFile('full/a.txt/x', ctx);
+			const underFile = await env.readTextFile('full/a.txt/x');
 			expect(underFile).toMatchObject({ ok: false, error: { code: 'not_directory' } });
-			const noParent = await env.readTextFile('none/a.txt', ctx);
+			const noParent = await env.readTextFile('none/a.txt');
 			expect(noParent).toMatchObject({ ok: false, error: { code: 'not_found' } });
-			const renamed = await env.renameFile('full/a.txt', 'none/b.txt', ctx);
+			const renamed = await env.renameFile('full/a.txt', 'none/b.txt');
 			expect(renamed).toMatchObject({ ok: false, error: { code: 'not_found' } });
-			const written = await env.writeFile('deep/er/a.txt', 'x', ctx);
+			const written = await env.writeFile('deep/er/a.txt', 'x');
 			expect(written.ok).toBe(true);
-			const exists = await env.createDir('full', { recursive: false }, ctx);
+			const exists = await env.createDir('full', { recursive: false });
 			expect(exists).toMatchObject({ ok: false, error: { code: 'invalid' } });
 		});
 	});
 
-	it('creates private temporary files and directories, and reads mtime in milliseconds', async () => {
+	it('reads mtime in milliseconds', async () => {
 		const started = await server();
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
-			const file = await env.createTempFile(undefined, ctx);
-			const dir = await env.createTempDir(undefined, ctx);
-			if (!file.ok || !dir.ok) throw new Error('no temporary names');
-			expect((await stat(file.value)).mode & 0o777).toBe(0o600);
-			expect((await stat(dir.value)).mode & 0o777).toBe(0o700);
-			const again = await env.writeFile(file.value, 'x', ctx);
-			expect(again.ok).toBe(true);
-			const info = await env.fileInfo(file.value, ctx);
+			const written = await env.writeFile('mtime.txt', 'x');
+			expect(written.ok).toBe(true);
+			const info = await env.fileInfo('mtime.txt');
 			expect(info.ok && Math.abs(info.value.mtimeMs - Date.now()) < 5_000).toBe(true);
-			await env.remove(file.value, undefined, ctx);
-			await env.remove(dir.value, { recursive: true }, ctx);
 		});
 	});
 
@@ -387,10 +370,10 @@ describe.skipIf(!hasSetsid)('workstation files', () => {
 		await writeFile(join(home, 'image.bin'), Buffer.from([0, 1, 2, 255]));
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
-			const bytes = await env.readBinaryFile('image.bin', ctx);
+			const bytes = await env.readBinaryFile('image.bin');
 			expect(bytes.ok && [...bytes.value]).toEqual([0, 1, 2, 255]);
-			await env.createDir('dir', undefined, ctx);
-			const listed = await env.listDir('.', ctx);
+			await env.createDir('dir', undefined);
+			const listed = await env.listDir('.');
 			const kinds = listed.ok
 				? Object.fromEntries(listed.value.map((entry) => [entry.name, entry.kind]))
 				: {};
@@ -435,7 +418,7 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		};
 		const shell = async (dir: string, on = env) => {
 			const script = `echo "$$" > '${dir}/pid'\n(\nexec sleep 30\n) < /dev/null > '${dir}/out' 2>&1`;
-			void on.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+			void on.exec(script, { timeout: 60 }).catch(() => undefined);
 			await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
 			return Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
 		};

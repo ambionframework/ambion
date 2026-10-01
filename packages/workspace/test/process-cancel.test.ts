@@ -10,7 +10,6 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ToolContext } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { workstationBackend } from '../../workstation/src/index.ts';
 import { startSshServer, type TestServer } from '../../workstation/test/support/server.ts';
@@ -18,8 +17,6 @@ import { hasSetsid } from '../../workstation/test/support/setsid.ts';
 import type { ProcessRecord } from '../src/process-files.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { toolOf } from './support/backends.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 async function server(accounts: readonly string[]): Promise<TestServer> {
 	const started = await startSshServer(accounts);
@@ -99,7 +96,7 @@ async function earlierProcess(
 		`) < /dev/null > '${dir}/out' 2>&1`,
 		`echo "$? x" > '${dir}/exit'`,
 	].join('\n');
-	void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+	void env.exec(script, { timeout: 60 }).catch(() => undefined);
 	await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
 	const pid = Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
 	await env.cleanup();

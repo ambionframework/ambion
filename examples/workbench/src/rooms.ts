@@ -15,7 +15,7 @@ import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import { BACKGROUND_CONTEXT, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
+import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
@@ -175,9 +175,7 @@ export async function openRooms(
 	try {
 		await seedWorkspace(workspacePath);
 		// The first call opens the lab database, runs its schema, and guards its tables.
-		await lab.use(workspace.mirrorAgent, (env) =>
-			env.run('SELECT 1', { maxRows: 0 }, BACKGROUND_CONTEXT),
-		);
+		await lab.use(workspace.mirrorAgent, (env) => env.run('SELECT 1', { maxRows: 0 }));
 	} catch (error) {
 		await workspace.dispose().catch(() => {});
 		throw error;

@@ -8,7 +8,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { defineTool } from '@ambionframework/ambion';
 import { createExecutionServices, runAgent } from '@ambionframework/pi';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { callTool, quiet, scriptedStream } from '../../ambion/test/support/scripted.ts';
@@ -58,7 +57,7 @@ const live = () => new AbortController().signal;
 /** Run a command as `name`, and give its exit code. */
 const exitOf = (workspace: Workspace, name: string, command: string) =>
 	workspace.use({ name }, async (env) => {
-		const ran = await env.exec(command, undefined, BACKGROUND_CONTEXT);
+		const ran = await env.exec(command, undefined);
 		if (!ran.ok) throw ran.error;
 		return ran.value.exitCode;
 	});

@@ -13,7 +13,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { openWorkspace, type SqlOutcome, type Workspace } from '../src/index.ts';
@@ -57,17 +56,13 @@ async function run(
 ): Promise<SqlOutcome> {
 	const resource = site.sql;
 	if (resource === undefined) throw new Error('The workspace has no SQL backend.');
-	const context =
-		options.signal === undefined
-			? BACKGROUND_CONTEXT
-			: withAbortSignal(options.signal, BACKGROUND_CONTEXT);
 	const runOptions = {
 		maxRows: options.maxRows ?? 50,
 		...(options.export === undefined ? {} : { export: options.export }),
 		...(options.import === undefined ? {} : { import: options.import }),
 	};
 	return resource.use({ name: options.agent ?? 'alpha' }, (env) =>
-		env.run(sql, runOptions, context),
+		env.run(sql, runOptions, options.signal),
 	);
 }
 
@@ -251,8 +246,8 @@ describe('the SQLite backend', () => {
 		expect(messageOf(await run(site, endless))).toContain('ran past 0.05 seconds');
 		expect(messageOf(await run(site, endless, { export: '~/big.csv' }))).toContain('ran past');
 		const left = await site.use({ name: 'alpha' }, async (env) => {
-			const listed = await env.listDir('/home/alpha', BACKGROUND_CONTEXT);
-			const exists = await env.exists('/home/alpha/big.csv', BACKGROUND_CONTEXT);
+			const listed = await env.listDir('/home/alpha');
+			const exists = await env.exists('/home/alpha/big.csv');
 			return {
 				parts: listed.ok ? listed.value.filter((file) => file.name.endsWith('.part')) : [],
 				target: exists.ok && exists.value,
@@ -265,7 +260,7 @@ describe('the SQLite backend', () => {
 		const site = workspace(':memory:', 0.05);
 		const lines = Array.from({ length: 300_000 }, (_, index) => `${index},row ${index}`);
 		await site.use({ name: 'alpha' }, (env) =>
-			env.writeFile('/home/alpha/big.csv', `id,label\n${lines.join('\n')}\n`, BACKGROUND_CONTEXT),
+			env.writeFile('/home/alpha/big.csv', `id,label\n${lines.join('\n')}\n`),
 		);
 		const outcome = await run(site, 'SELECT count(*) AS n FROM import.rows', { import: 'big.csv' });
 		expect(messageOf(outcome)).toContain('ran past 0.05 seconds');
@@ -462,7 +457,7 @@ describe('the append-only tables of the SQLite backend', () => {
 		});
 		if (one === undefined || two === undefined) throw new Error('Two workspaces open.');
 		await one.use({ name: 'design' }, (env) =>
-			env.writeFile('/home/design/in.csv', 'label\nimported\n', BACKGROUND_CONTEXT),
+			env.writeFile('/home/design/in.csv', 'label\nimported\n'),
 		);
 		await Promise.all([
 			invokeText(

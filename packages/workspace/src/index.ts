@@ -10,7 +10,8 @@
  * the neutral resource contract. The bash backends are separate packages:
  * `@ambionframework/just-bash` and `@ambionframework/workstation`. The root
  * entry exports the environment helpers from `./execution-env.ts`, so a new
- * `ExecutionEnv` backend can build on them.
+ * `WorkspaceEnv` backend can build on them. The file and shell types of the
+ * port come from `./port.ts`.
  *
  * ```ts
  * import { defineAgent } from '@ambionframework/ambion';
@@ -28,11 +29,6 @@
  * The design contract is `docs/workspace.md`.
  */
 
-/**
- * A caller of `workspace.use` reaches Pi's `ExecutionEnv`, whose members take
- * a context. Use this context when the call has no other one.
- */
-export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { AuditEntry, AuditLog, AuditLogOptions } from './audit.ts';
 export { DEFAULT_AUDIT_LOG, openAuditLog } from './audit.ts';
 export type {
@@ -43,12 +39,7 @@ export type {
 	WorkspaceEnv,
 	WorkspaceLayout,
 } from './backend.ts';
-export type {
-	FileExpect,
-	FileOperations,
-	ScriptRun,
-	WorkspaceExecOptions,
-} from './execution-env.ts';
+export type { FileExpect, FileOperations, ScriptRun } from './execution-env.ts';
 export {
 	boundedView,
 	DEFAULT_TIMEOUT_SECONDS,
@@ -59,9 +50,6 @@ export {
 	resolvePath,
 	runScript,
 	shellQuote,
-	TMP,
-	tempDirPath,
-	tempFilePath,
 	withDeadline,
 } from './execution-env.ts';
 export type {
@@ -78,6 +66,19 @@ export type { WorkspaceLog, WorkspaceLogOptions } from './log.ts';
 export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export type { ObjectBackend, ObjectDigest, ObjectEnv } from './object-backend.ts';
+export type {
+	ExecutionErrorCode,
+	FileErrorCode,
+	FileInfo,
+	FileResult,
+	Result,
+	ShellExecResult,
+	ShellOutputLimits,
+	ShellOutputTruncation,
+	ShellOutputView,
+	WorkspaceExecOptions,
+} from './port.ts';
+export { ExecutionError, err, FileError, ok } from './port.ts';
 export type { ProcessKind, ProcessRecord, ProcessState } from './process-files.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';

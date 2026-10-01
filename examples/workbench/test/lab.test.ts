@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import { memoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT, openWorkspace, type SqlEnv } from '@ambionframework/workspace';
+import { openWorkspace, type SqlEnv } from '@ambionframework/workspace';
 import type { WorkspaceResource } from '@ambionframework/workspace/resource';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -51,7 +51,7 @@ function caller(tools: readonly AmbionTool[]) {
 /** The rows of `sql` on the lab database, read as host code does. */
 const query = (lab: WorkspaceResource<SqlEnv>, sql: string) =>
 	lab.use({ name: 'test' }, async (env) => {
-		const outcome = await env.run(sql, { maxRows: 1000 }, BACKGROUND_CONTEXT);
+		const outcome = await env.run(sql, { maxRows: 1000 });
 		if (!outcome.ok) throw new Error(outcome.message);
 		return outcome.rows;
 	});

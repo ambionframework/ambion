@@ -18,11 +18,6 @@ import {
 	defineTool,
 	type ToolContext,
 } from '@ambionframework/ambion';
-import {
-	type AgentToolResult,
-	BACKGROUND_CONTEXT,
-	withAbortSignal,
-} from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import { callEnvelope } from './call-envelope.ts';
 import type { Capability } from './capability.ts';
@@ -38,6 +33,7 @@ import type {
 } from './sql-backend.ts';
 import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
 import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
+import type { DetailedResult } from './tools.ts';
 
 /** How many rows the preview shows when the caller names no limit. */
 const PREVIEW_ROWS = 50;
@@ -55,7 +51,7 @@ interface SqlDetails {
 	imported?: number;
 }
 
-type SqlResult = AgentToolResult<SqlDetails>;
+type SqlResult = DetailedResult<SqlDetails>;
 
 type Rows = Extract<SqlOutcome, { ok: true }>;
 
@@ -136,8 +132,6 @@ async function run(
 	params: SqlParams,
 	ctx: ToolContext,
 ): Promise<SqlResult> {
-	const context =
-		ctx.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
 	const runOptions: SqlRunOptions = {
 		maxRows: params.rows ?? PREVIEW_ROWS,
 		provenance: provenanceOf(ctx),
@@ -146,7 +140,7 @@ async function run(
 	};
 	const outcome = await options.sql(
 		ctx.agent,
-		(env) => env.run(params.sql, runOptions, context),
+		(env) => env.run(params.sql, runOptions, ctx.signal),
 		ctx.signal,
 	);
 	if (!outcome.ok) return failed(options.database, outcome.message);
