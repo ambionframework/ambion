@@ -11,7 +11,7 @@ condition holds moves to the top of its section.
 
 | Section                                       | Items  | First item                               |
 | --------------------------------------------- | ------ | ---------------------------------------- |
-| [Known defects](#known-defects)               | K1–K6  | K2, the allow-list of the SQL guard      |
+| [Known defects](#known-defects)               | K1–K5  | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
 | [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
@@ -66,13 +66,6 @@ RFC 4180 export case in `packages/workspace/test/sql.test.ts`. Find the
 rate and whether Linux fails too, and report the smallest failing command
 to `just-bash`. **Condition:** a user report, a CI Node version at 26.9 or
 later, or a failed release gate on the owner's machine.
-
-**K6. The neutral-file import rule does not hold for `git-backend.ts` and
-`object-backend.ts`.** The neutral override of `biome.jsonc` lists both
-files. The next override, for `packages/workspace/src/**`, does not
-exclude them, and replaces the options of the neutral rule. So Biome
-does not refuse an import of `@ambionframework/ambion` in either file.
-**Condition:** none. It belongs with the next change of `biome.jsonc`.
 
 ## Release and CI
 
