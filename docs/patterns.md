@@ -6,21 +6,21 @@ mechanism. The [repository README](../README.md) holds the positioning.
 
 ## The patterns
 
-| Pattern                             | Primitives                                                             | How the room represents it                                                                           |
-| ----------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Ask and get an answer               | [Exchange](exchange.md), close, optional [summary](summary.md)         | A question opens an exchange. Quiescence closes it. The closed `Exchange` carries the outcome.       |
-| Ongoing room over days              | [Visits](presence.md), presence, catch-up, resume                      | `lastDeparture` and `room.read({ messages: { after } })` catch a returning person up.                |
-| Broadcast, no reply owed            | A said message                                                         | Seats may stay silent. No reply is owed.                                                             |
-| Bring in a specialist               | [Reserve](roster.md), `seat`, `say({ to })`                            | An agent seats a reserve agent and addresses it by name.                                             |
-| Steer work in progress              | [Steer](exchange.md#3-three-rules) between provider requests           | A message that lands in an open exchange steers each eligible active seat.                           |
-| Two people in one discussion        | The open exchange, `summaries`, `purpose.people`                       | A second question joins the open exchange. The room assigns one summary to each person who spoke.    |
-| Waiting on a person                 | The `awaiting` outcome, `pendingFor`                                   | The closed exchange reads `awaiting` with the `person`. `pendingFor` lists what waits on one person. |
-| Approve before an agent acts        | `say({ to })` a person, the `awaiting` outcome                         | The directed question is the request. The `awaiting` outcome is the wait. No entry kind is new.      |
-| Stop one agent, keep the room       | `room.unseat`, the `unseat` tool, [fixed seats](roster.md#fixed-seats) | The seat leaves and the room continues. See below.                                                   |
-| Consult privately                   | Every message is visible to every seat                                 | A second room, by reference. The room has no private channel.                                        |
-| Delegate to a working group         | None in the kernel                                                     | Not built. The backlog holds it.                                                                     |
-| Vote, sign off, structured decision | Application tools and artifacts                                        | Outside the kernel by design. A tool can write the record of the decision.                           |
-| Scheduled check-in                  | A scheduled say ([Exchange](exchange.md#6-a-scheduled-say))            | The agent calls `schedule` with `after`. The room returns the say when it is due.                    |
+| Pattern                             | Primitives                                                             | How the room represents it                                                                            |
+| ----------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Ask and get an answer               | [Exchange](exchange.md), close, optional [summary](summary.md)         | A question opens an exchange. Quiescence closes it. The closed `Exchange` carries the outcome.        |
+| Ongoing room over days              | [Visits](presence.md), presence, catch-up, resume                      | `lastDeparture` and `room.read({ messages: { after } })` catch a returning person up.                 |
+| Broadcast, no reply owed            | A said message                                                         | Seats may stay silent. No reply is owed.                                                              |
+| Bring in a specialist               | [Reserve](roster.md), `seat`, `say({ to })`                            | An agent seats a reserve agent and addresses it by name.                                              |
+| Steer work in progress              | [Steer](exchange.md#3-three-rules) between provider requests           | A message that lands in an open exchange steers each eligible active seat.                            |
+| Two people in one discussion        | The open exchange, `summaries`, `purpose.people`                       | A second question joins the open exchange. The room assigns one summary to each person who spoke.     |
+| Waiting on a person                 | The `awaiting` outcome, `awaitingFor`                                  | The closed exchange reads `awaiting` with the `person`. `awaitingFor` lists what waits on one person. |
+| Approve before an agent acts        | `say({ to })` a person, the `awaiting` outcome                         | The directed question is the request. The `awaiting` outcome is the wait. No entry kind is new.       |
+| Stop one agent, keep the room       | `room.unseat`, the `unseat` tool, [fixed seats](roster.md#fixed-seats) | The seat leaves and the room continues. See below.                                                    |
+| Consult privately                   | Every message is visible to every seat                                 | A second room, by reference. The room has no private channel.                                         |
+| Delegate to a working group         | None in the kernel                                                     | Not built. The backlog holds it.                                                                      |
+| Vote, sign off, structured decision | Application tools and artifacts                                        | Outside the kernel by design. A tool can write the record of the decision.                            |
+| Scheduled check-in                  | A scheduled say ([Exchange](exchange.md#6-a-scheduled-say))            | The agent calls `schedule` with `after`. The room returns the say when it is due.                     |
 
 ## Two people in one discussion
 
@@ -38,7 +38,7 @@ on a person reads `awaiting` and carries the `person`.
 [The outcome contract](exchange.md#7-the-edges-a-host-sees) states the
 derivation and the clearing.
 
-**`pendingFor` lists the waits.** `pendingFor(read, person)` returns the
+**`awaitingFor` lists the waits.** `awaitingFor(read, person)` returns the
 closed exchanges of a room read that await one person. The room derives the
 outcome from the record, so a resumed room reads the same answer.
 
@@ -46,7 +46,7 @@ outcome from the record, so a resumed room reads the same answer.
 
 **The directed question is the approval request.** An agent asks a person
 with `say({ to })` and ends its activation. The exchange closes and reads
-`awaiting`. `pendingFor` shows the request to that person. The person must
+`awaiting`. `awaitingFor` shows the request to that person. The person must
 differ from the author of the opening message. A message to that author
 answers their question, so the exchange reads `complete`. See
 [exchange outcomes](exchange.md#7-the-edges-a-host-sees).

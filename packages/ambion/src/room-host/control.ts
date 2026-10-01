@@ -296,7 +296,7 @@ function arm(host: RoomHostState, at: number | undefined): void {
 // -- control ----------------------------------------------------------------
 
 /**
- * The host dismisses one pending say. The write decides again inside the
+ * The host dismisses one scheduled say. The write decides again inside the
  * journal queue, so a say that returned first writes nothing. The room then
  * looks again, so its alarm drops the due time of the say.
  */
