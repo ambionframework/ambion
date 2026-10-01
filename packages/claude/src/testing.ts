@@ -10,7 +10,7 @@
  */
 import type { ExecutorHarness, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { claude } from './define.ts';
-import { createClaudeExecutor } from './executor.ts';
+import { createClaudeOpener } from './executor.ts';
 
 /** One thing the fake does in a turn. `test/fake/claude-executable.mjs` lists them. */
 export type FakeAction = Record<string, unknown>;
@@ -70,7 +70,7 @@ export interface ClaudeHarnessOptions {
 export function claudeExecutorHarness(options: ClaudeHarnessOptions): ExecutorHarness {
 	return {
 		open: (plan, definition) =>
-			createClaudeExecutor({
+			createClaudeOpener({
 				// The suite names a neutral executor. The seat runs on a Claude one.
 				definition: {
 					...definition,

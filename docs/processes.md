@@ -542,7 +542,7 @@ process to name gets no process reminder. A summarize activation calls none.
 
 **The core resolves the reminders once, at the start of an activation.** `ToolBundle.remind` returns the text, or a promise of it.
 `describeExecutor` collects the reminders of the bundles into
-`AgentExecutor.reminders`. The core runs them together when it renders
+`Executor.reminders`. The core runs them together when it renders
 the record of the first pass of a respond activation. The text goes in the
 turn context, before the ask line.
 

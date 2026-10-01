@@ -2,10 +2,10 @@
  * The state of one activation that the core owns.
  *
  * The driver opens one `ActivationState` for each activation, over the
- * executor of the seat. The state keeps the read position and the cut, runs
+ * opener of the seat. The state keeps the read position and the cut, runs
  * the refresh test, binds the room tools, renders the prompt of each pass,
  * raises the tool events from the steps, and raises the `error` event of a
- * failure once. The executor session runs its harness over what the state
+ * failure once. The running activation runs its harness over what the state
  * hands it, and reports when the model consumed input.
  *
  * The state also records the `steer` step of every steered line. A line is
@@ -18,13 +18,13 @@ import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
 import type { ActivationEvent, AgentDefinition, HarnessSession, Seq } from '../types.ts';
 import type {
-	Executor,
-	ExecutorSession,
+	ActivationOpener,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 } from './executor.ts';
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
@@ -57,7 +57,7 @@ export class ActivationState {
 	private readonly input: ActivationInput;
 	private readonly freshness = new Freshness();
 	private readonly cut = new AbortController();
-	private readonly executor: ExecutorSession;
+	private readonly opened: RunningActivation;
 	private tools: readonly RoomTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
@@ -68,14 +68,14 @@ export class ActivationState {
 	/** The lines the executor holds, by position, with the `after` of each. They have no step yet. */
 	private readonly forwarded = new Map<Seq, Seq>();
 
-	constructor(executor: Executor, input: ActivationInput) {
+	constructor(opener: ActivationOpener, input: ActivationInput) {
 		this.id = input.id;
 		this.input = input;
 		const calls = new ToolCalls(input.id, (type, name) =>
 			input.emit({ type, seat: input.definition.name, activation: input.id, name }),
 		);
 		const freshness = this.freshness;
-		this.executor = executor({
+		this.opened = opener({
 			id: input.id,
 			trace: calls.watching(input.trace),
 			signal: this.cut.signal,
@@ -100,7 +100,7 @@ export class ActivationState {
 
 	/** The harness session to record with the release, when the executor reported one. */
 	get session(): HarnessSession | undefined {
-		const id = this.executor.session;
+		const id = this.opened.session;
 		return id === undefined ? undefined : { harness: this.input.definition.executor.kind, id };
 	}
 
@@ -127,7 +127,7 @@ export class ActivationState {
 	/** Release what the session holds. A close that throws changes no outcome. */
 	close(): void {
 		try {
-			this.executor.close?.();
+			this.opened.close?.();
 		} catch {
 			// The activation is over. A failed close changes no outcome.
 		}
@@ -149,7 +149,7 @@ export class ActivationState {
 		this.running = input;
 		let result: PassResult;
 		try {
-			const done = this.executor.pass(this.passOf(input));
+			const done = this.opened.pass(this.passOf(input));
 			// The executor has started the pass: a line that waited can reach it now.
 			this.placeEarly();
 			result = await done;
@@ -203,7 +203,7 @@ export class ActivationState {
 		const { after, seq, line } = steered;
 		if (this.running === undefined) this.stamp(seq, false);
 		else if (seq <= this.running.view.through) this.stamp(seq, true);
-		else if (this.executor.steer === undefined) this.stamp(seq, false);
+		else if (this.opened.steer === undefined) this.stamp(seq, false);
 		else this.forward(after, seq, line);
 	}
 
@@ -214,7 +214,7 @@ export class ActivationState {
 	private forward(after: Seq, seq: Seq, line: string): void {
 		this.forwarded.set(seq, after);
 		try {
-			this.executor.steer?.(after, seq, line);
+			this.opened.steer?.(after, seq, line);
 		} catch {
 			if (this.forwarded.delete(seq)) this.stamp(seq, false);
 		}

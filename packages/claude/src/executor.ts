@@ -1,6 +1,6 @@
 /**
- * The Claude executor: one activation's session, from the pass the driver
- * hands it until the activation stops.
+ * The Claude opener: it opens one running activation, which takes each pass
+ * the driver hands it until the activation stops.
  *
  * The Claude Agent SDK owns the loop. The driver's contract is pass in and
  * result out, so one activation opens one SDK query, kept alive by
@@ -26,14 +26,14 @@
  *   honor starts a fresh session, and the release records the new id.
  */
 import type {
+	ActivationOpener,
 	AgentDefinition,
-	Executor,
 	ExecutorActivation,
-	ExecutorSession,
 	Pass,
 	PassRecord,
 	PassResult,
 	ReadRange,
+	RunningActivation,
 	Seq,
 } from '@ambionframework/ambion/hosting';
 import { failedPass } from '@ambionframework/ambion/hosting';
@@ -52,16 +52,16 @@ export const RESUMED_NOTE =
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
 
-/** What builds a Claude executor for one seat: its definition, and the options that run it. */
-export interface ClaudeExecutorOptions extends ClaudeExecutionOptions {
+/** What builds a Claude opener for one seat: its definition, and the options that run it. */
+export interface ClaudeOpenerOptions extends ClaudeExecutionOptions {
 	readonly definition: AgentDefinition;
 	/** The SDK entry. Absent, the SDK's own `query`. */
 	readonly query?: (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
 }
 
-/** The Claude executor. One instance per seat, for as long as the room runs. */
-export function createClaudeExecutor(options: ClaudeExecutorOptions): Executor {
-	return (activation: ExecutorActivation): ExecutorSession => new Activation(activation, options);
+/** The Claude opener. One instance per seat, for as long as the room runs. */
+export function createClaudeOpener(options: ClaudeOpenerOptions): ActivationOpener {
+	return (activation: ExecutorActivation): RunningActivation => new Activation(activation, options);
 }
 
 /** A steered line held until its pass sends its prompt. */
@@ -72,11 +72,11 @@ interface Held {
 }
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-class Activation implements ExecutorSession {
+class Activation implements RunningActivation {
 	private readonly activation: ExecutorActivation;
 	private readonly definition: AgentDefinition;
 	private readonly options: ClaudeExecutionOptions;
-	private readonly open: NonNullable<ClaudeExecutorOptions['query']>;
+	private readonly open: NonNullable<ClaudeOpenerOptions['query']>;
 	private readonly steps = new ClaudeSteps();
 	private inbox = new Inbox();
 	private readonly echoes = new Echoes();
@@ -98,7 +98,7 @@ class Activation implements ExecutorSession {
 	private grace: ReturnType<typeof setTimeout> | undefined;
 	private stopped = false;
 
-	constructor(activation: ExecutorActivation, options: ClaudeExecutorOptions) {
+	constructor(activation: ExecutorActivation, options: ClaudeOpenerOptions) {
 		this.activation = activation;
 		this.definition = options.definition;
 		this.options = options;

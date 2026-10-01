@@ -1,7 +1,7 @@
 /** The Claude execution: one Claude executor for each seat. */
 
 import { defineExecution } from '@ambionframework/ambion/hosting';
-import { createClaudeExecutor } from './executor.ts';
+import { createClaudeOpener } from './executor.ts';
 import type { ClaudeExecutionOptions } from './options.ts';
 
 /**
@@ -13,5 +13,5 @@ import type { ClaudeExecutionOptions } from './options.ts';
 export const claudeExecution = defineExecution<ClaudeExecutionOptions>(
 	'claude',
 	(_host, options) => (request) =>
-		createClaudeExecutor({ definition: request.definition, ...options }),
+		createClaudeOpener({ definition: request.definition, ...options }),
 );
