@@ -54,7 +54,7 @@ option, the template selects the built-in Mac camera.
 pnpm demo
 ```
 
-Send a message to trigger the scripted agent. It executes the actual Git,
+Send a message to start the scripted agent. It executes the actual Git,
 process, connect, and observe tools against a clone of the camera template.
 The cloned server runs with `--demo` and produces a synthetic image. It opens
 no physical device and makes no provider request. Its reply does not perform

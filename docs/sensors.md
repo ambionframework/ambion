@@ -318,7 +318,7 @@ that connection unavailable at once, as for a process that ends just after
 registration's transport. A listener that later reuses the port is never
 attached silently.
 
-**Sensor readers use one internal registry boundary.** The source
+**Sensor readers and the host use one registry boundary.** The source
 module `sensor-connections.ts` exposes
 `createSensorConnections(...).get('<connection>/<sensor>', signal)` to
 workspace internals. It checks the captured process owner and handle before
