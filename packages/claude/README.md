@@ -181,7 +181,10 @@ cover must pass `env` with the variables it needs.
 `CLAUDE_CONFIG_DIR` for it, turns the skills off, and sets
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`. Without `configRoot`, the
 directory is private and lives in the temporary directory, a restart loses
-it, and the executor never removes it. A seat with no built-in tool runs in a scratch directory, and the
+it, and the executor never removes it. Without `env`, the seat also gets a `HOME` of
+its own, so its shell reads no rc file of the host user. The executor turns
+auto-memory off and empties the attribution text of commits and pull
+requests. A seat with no built-in tool runs in a scratch directory, and the
 executor aliases a built-in name such as `Bash` to the tool of the seat with
 the same name.
 
