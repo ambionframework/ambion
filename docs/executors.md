@@ -416,24 +416,25 @@ the context that the core gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has ten kinds,
+**A step is one thing an activation did.** The vocabulary has eleven kinds,
 and every executor family shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
 
-| Step          | Recorded by | Meaning                                                                                            |
-| ------------- | ----------- | -------------------------------------------------------------------------------------------------- |
-| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                      |
-| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                    |
-| `text`        | executor    | A block of model text. `final` closes the block.                                                   |
-| `tool_call`   | executor    | A tool starts, with its input.                                                                     |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
-| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
-| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                    |
-| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                        |
-| `usage`       | executor    | Tokens and cost.                                                                                   |
-| `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
+| Step          | Recorded by | Meaning                                                                                                             |
+| ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                                       |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                                     |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                                    |
+| `tool_call`   | executor    | A tool starts, with its input.                                                                                      |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                                      |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.                   |
+| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                                     |
+| `approval`    | executor    | A tool call needed a decision. `decision` holds the answer.                                                         |
+| `harness`     | executor    | What the harness ran with: its name, model, `cwd`, tools, and servers. Claude records it. Pi and Codex record none. |
+| `usage`       | executor    | Tokens and cost.                                                                                                    |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`.                  |
 
 **A family page holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map

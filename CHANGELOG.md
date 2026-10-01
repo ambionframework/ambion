@@ -28,10 +28,29 @@ pass an `env` with the variables that provider needs. The allowlist holds no
 one. The executor passes `toolAliases`, which route `Bash`, `Read`, `Write`,
 and `Edit` to the tool of the seat with the matching name. An alias redirects the name only and converts no argument.
 
-**A failed Claude pass carries the end of the process stderr.** A query that
-ends before the pass settles, or throws, adds the last 2,000 characters of
-the stderr to the message. The failure class still comes from the original
-error.
+**A failed Claude pass carries the end of the process stderr.** Every failed
+pass adds the last 2,000 characters of the stderr to the message: a failed
+result, a query that ends early, and a query that throws. A failed result
+waits 50 milliseconds for the stderr. The failure class still comes from the
+result or the original error.
+
+**A Claude seat gets a `HOME` of its own, and a settings overlay.** Without
+`env`, `HOME` is the `home` directory of the seat directory, so the shell of
+the seat reads no `.bashrc` of the host user. Git, ssh, and cloud tools that
+read `~` find that directory, so a `Bash` seat has no git identity unless the
+host passes an `env`. The filesystem stays open to a seat with `Bash` or
+`Read`. An explicit `env` keeps its own `HOME`. The executor also passes
+`settings` at the flag tier: auto-memory is off, so no `MEMORY.md` in the
+config home reaches the model, and the commit, pull request, and session-link
+attribution is empty. `settingSources` stays empty.
+
+**The trace has a `harness` step.** `Step` gains
+`{ type: 'harness'; name; version?; model?; cwd?; session?; auth?;
+permissionMode?; tools; servers }`, which records what the harness ran with.
+The Claude executor records one for each `system` init message. `tools` holds
+the room tools by plain name, `servers` holds each MCP server with its status,
+and `auth` is the name of the source of the credential. Pi and Codex record
+none. The step vocabulary now has eleven kinds.
 
 **`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
 purpose grants, then the tools of the definition. A closing activation gets

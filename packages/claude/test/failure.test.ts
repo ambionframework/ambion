@@ -89,3 +89,28 @@ it.each([
 		expect(result.message?.split('ended with:')[1]?.trim().length).toBeLessThanOrEqual(STDERR_TAIL);
 	},
 );
+
+it.each([
+	{
+		what: 'a transient failed result',
+		fail: { status: 529, text: 'API Error: 529 overloaded_error: try again later' },
+		cause: 'transient',
+	},
+	{
+		what: 'a permanent failed result',
+		fail: { status: 401, text: 'API Error: 401 authentication_error: invalid x-api-key' },
+		cause: 'permanent',
+	},
+])(
+	'puts the end of the standard error in the message of $what, and takes the cause from the result',
+	async ({ fail, cause }) => {
+		// For a transient result, the line holds words that the classifier reads as a refusal.
+		const line = 'model catalog: 401 authentication_error is not described here';
+		const run = open({ turns: [[{ stderr: line }, { fail }]] });
+		const result = await run.session.pass({ kind: 'view', view: viewOf() });
+		run.session.close?.();
+		expect(result).toMatchObject({ failed: true, cause });
+		expect(result.message).toContain(fail.text);
+		expect(result.message).toContain(line);
+	},
+);

@@ -50,6 +50,9 @@ import { roomServer } from './tools.ts';
 export const RESUMED_NOTE =
 	'Your duties and instructions for this activation follow. Where they differ from the start of this session, follow these.';
 
+/** How long a failed result waits for the end of the standard error, in milliseconds. */
+const STDERR_DRAIN = 50;
+
 /** How long a finished result waits for an echo the SDK owes, in milliseconds. */
 const ECHO_GRACE = 5_000;
 
@@ -310,7 +313,8 @@ class Activation implements ExecutorSession {
 	/**
 	 * A failed result with the end of the standard error in its message. The
 	 * cause and the error stay as they were, so the text of the process never
-	 * changes how the core classifies the failure.
+	 * changes how the core classifies the failure. A pass that did not fail
+	 * stays as it is.
 	 */
 	private withTail(result: PassResult): PassResult {
 		return result.failed && result.message !== undefined
@@ -356,12 +360,22 @@ class Activation implements ExecutorSession {
 			return;
 		}
 		const more = this.echoes.waiting > 0 || (message.queued_turn_count ?? 0) > 0;
-		if (!more) {
-			this.finish(passResultOf(message));
+		this.settleWith(passResultOf(message), more ? ECHO_GRACE : 0);
+	}
+
+	/**
+	 * Settle the pass with a result after `delay` milliseconds. A failed
+	 * result waits a moment more, because the standard error comes on a pipe
+	 * of its own and can trail the result. The message then holds its tail.
+	 */
+	private settleWith(result: PassResult, delay: number): void {
+		clearTimeout(this.grace);
+		const wait = result.failed ? delay + STDERR_DRAIN : delay;
+		if (wait === 0) {
+			this.finish(result);
 			return;
 		}
-		clearTimeout(this.grace);
-		this.grace = setTimeout(() => this.finish(passResultOf(message)), ECHO_GRACE);
+		this.grace = setTimeout(() => this.finish(this.withTail(result)), wait);
 		this.grace.unref();
 	}
 

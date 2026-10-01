@@ -18,6 +18,7 @@ import {
 	PARENT_SESSION,
 	type QueryInput,
 	queryOptions,
+	SEAT_SETTINGS,
 	TOOL_ALIASES,
 	toolAliases,
 } from '../src/options.ts';
@@ -66,6 +67,9 @@ it('passes the policy options to the SDK, reads no settings source, and names th
 	expect(flagValue(argv, '--model')).toBe('claude-fake');
 	expect(String(cwd)).toMatch(/tmp$/);
 	expect(flagValue(argv, '--tools')).toBe('Read,Bash');
+	// The settings overlay holds at the flag tier, with every setting source off.
+	expect(JSON.parse(String(flagValue(argv, '--settings')))).toEqual(SEAT_SETTINGS);
+	expect(SEAT_SETTINGS.autoMemoryEnabled).toBe(false);
 	for (const flag of [
 		'--add-dir',
 		'--setting-sources=',
@@ -154,7 +158,7 @@ function optionsOf(
 	const made: string[] = [];
 	const home: QueryInput['home'] = () => {
 		made.push('home');
-		return { config: '/home/config', work: '/home/work' };
+		return { config: '/seat/config', work: '/seat/work', home: '/seat/home' };
 	};
 	const result = queryOptions({
 		executor: claudeOf(seat(options).executor),
@@ -187,7 +191,10 @@ it('gives a seat the allowlisted variables of this process and no other when the
 	vi.stubEnv('GITHUB_TOKEN', 'hidden');
 	try {
 		const { env } = optionsOf();
-		for (const name of [...ENV_ALLOWLIST, ...prefixed]) expect(env?.[name]).toBe(`host-${name}`);
+		// The seat gets a home of its own, so its shell reads no rc file of the host user.
+		for (const name of [...ENV_ALLOWLIST, ...prefixed].filter((name) => name !== 'HOME'))
+			expect(env?.[name]).toBe(`host-${name}`);
+		expect(env?.HOME).toBe('/seat/home');
 		expect(env).not.toHaveProperty('AMBION_SECRET');
 		expect(env).not.toHaveProperty('GITHUB_TOKEN');
 	} finally {
@@ -201,12 +208,17 @@ it('lets an explicit env replace the environment, and sets the two variables of 
 		const { env } = optionsOf({ env: { ONLY: 'this' } });
 		expect(env).toEqual({
 			ONLY: 'this',
-			CLAUDE_CONFIG_DIR: '/home/config',
+			CLAUDE_CONFIG_DIR: '/seat/config',
 			CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 		});
 	} finally {
 		vi.unstubAllEnvs();
 	}
+});
+
+it('keeps the HOME of an explicit env, and gives the seat HOME only on the allowlist path', () => {
+	expect(optionsOf({ env: { HOME: '/srv/user' } }).env?.HOME).toBe('/srv/user');
+	expect(optionsOf({ env: { PATH: '/bin' } }).env).not.toHaveProperty('HOME');
 });
 
 it('keeps the config home and the traffic setting that an explicit env names, and makes no home for the config', () => {
@@ -223,12 +235,12 @@ it('keeps the config home and the traffic setting that an explicit env names, an
 });
 
 it.each([
-	{ what: 'a seat with no built-in tool', options: {}, cwd: '/home/work' },
+	{ what: 'a seat with no built-in tool', options: {}, cwd: '/seat/work' },
 	{ what: 'a seat with no built-in tool that sets a cwd', options: { cwd: '/srv' }, cwd: '/srv' },
 	{
 		what: 'a seat that only names a room tool',
 		options: { allowedTools: ['mcp__x__y'] },
-		cwd: '/home/work',
+		cwd: '/seat/work',
 	},
 	{ what: 'a seat with a built-in tool', options: { allowedTools: ['Read'] }, cwd: undefined },
 	{
@@ -355,4 +367,32 @@ it('makes a private config home under the temporary directory when the host name
 it('keeps the config home that an explicit env names', async () => {
 	const { env } = await argvOf({}, { CLAUDE_CONFIG_DIR: '/shared/claude' });
 	expect(env.values.CLAUDE_CONFIG_DIR).toBe('/shared/claude');
+});
+
+it('records one harness step from the init message, with the room tools by their plain names', async () => {
+	const cwd = mkdtempSync(join(tmpdir(), 'ambion-cwd-'));
+	const definition = seat({ allowedTools: ['Bash'], permissionMode: 'acceptEdits', cwd });
+	const run = open(
+		{ turns: [[]], initTools: ['Bash', 'mcp__ambion__say'], apiKeySource: 'none' },
+		definition,
+	);
+	await run.session.pass({ kind: 'view', view: viewOf() });
+	run.session.close?.();
+	const steps = run.steps.filter((step) => step.type === 'harness');
+	expect(steps).toEqual([
+		{
+			type: 'harness',
+			name: 'claude',
+			version: '0.0.0-fake',
+			model: 'claude-fake',
+			cwd: expect.stringContaining('ambion-cwd-'),
+			session: expect.any(String),
+			auth: 'none',
+			permissionMode: 'acceptEdits',
+			tools: ['Bash', 'say'],
+			servers: [{ name: 'ambion', status: 'connected' }],
+		},
+	]);
+	// The step holds no list of skills, agents, plugins, or slash commands.
+	expect(Object.keys(steps[0] ?? {})).not.toEqual(expect.arrayContaining(['skills', 'plugins']));
 });

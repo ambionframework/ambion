@@ -242,7 +242,7 @@ process.
 
 ## Step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the Codex source of each step.
 
 **Each item that Codex reports becomes steps in the trace.** Codex reports an

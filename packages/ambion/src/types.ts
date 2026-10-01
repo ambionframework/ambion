@@ -8,6 +8,7 @@
 
 import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { AmbionTool, Reminder } from './bundle.ts';
+import type { HarnessFacts } from './harness.ts';
 import type { PendingSay } from './scheduling.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
@@ -499,6 +500,8 @@ export type Step =
 	| { type: 'steer'; seq: Seq; consumed: boolean }
 	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
 	| ({ type: 'usage' } & Usage)
+	/** What the harness ran with, as it reported at the start of a session. */
+	| ({ type: 'harness' } & HarnessFacts)
 	/** The activation stops. `failure` is present when it failed. */
 	| {
 			type: 'end';

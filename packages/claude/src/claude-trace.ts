@@ -110,6 +110,27 @@ function deltaStep(kind: 'text' | 'thinking', delta: StreamEvent['delta']): Step
 	return text === undefined ? [] : [{ type: kind, text, final: false }];
 }
 
+/**
+ * What the session started with, as the `system` init message reports it.
+ * The step holds the room tools by their plain names, and leaves out the
+ * skills, the agents, the plugins, and the slash commands.
+ */
+function harnessOf(init: Extract<SDKMessage, { type: 'system'; subtype: 'init' }>): Step {
+	return {
+		type: 'harness',
+		name: 'claude',
+		version: init.claude_code_version,
+		model: init.model,
+		cwd: init.cwd,
+		...(init.session_id === '' ? {} : { session: init.session_id }),
+		auth: init.apiKeySource,
+		permissionMode: init.permissionMode,
+		// An older executable can leave a list out, and the step then holds an empty one.
+		tools: (init.tools ?? []).map(plainName),
+		servers: (init.mcp_servers ?? []).map(({ name, status }) => ({ name, status })),
+	};
+}
+
 /** Turns SDK messages into the steps they stand for. One instance serves one activation. */
 export class ClaudeSteps {
 	/** The messages whose text and thinking blocks the stream already sent. */
@@ -122,6 +143,8 @@ export class ClaudeSteps {
 
 	steps(message: SDKMessage): Step[] {
 		switch (message.type) {
+			case 'system':
+				return message.subtype === 'init' ? [harnessOf(message)] : [];
 			case 'stream_event':
 				return message.parent_tool_use_id === null ? this.stream(message.event as StreamEvent) : [];
 			case 'assistant':

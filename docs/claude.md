@@ -274,14 +274,15 @@ tools and the tools of the definition run in the host process.
 **The room defines the seat, and fixed options enforce it.** The executor
 sets them on every query. The definition cannot change them.
 
-| Option or variable                         | Value                        | Effect                                                                               |
-| ------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `tools`                                    | Base names of the allow list | The built-in tools of the model. An empty allow list gives none.                     |
-| `strictMcpConfig`                          | `true`                       | The query reads no MCP server but the room server.                                   |
-| `settingSources`                           | `[]`                         | The query reads no user, project, or local settings, and no `CLAUDE.md`.             |
-| `skills`                                   | `[]`                         | No skill joins the query. The executor adds no `Skill` entry to the allow list.      |
-| `CLAUDE_CONFIG_DIR`                        | The config home of the seat  | The sessions and settings of the seat stay in its own directory.                     |
-| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1`                          | The executable skips the update check, telemetry, and other traffic that work omits. |
+| Option or variable                         | Value                        | Effect                                                                                                  |
+| ------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `tools`                                    | Base names of the allow list | The built-in tools of the model. An empty allow list gives none.                                        |
+| `strictMcpConfig`                          | `true`                       | The query reads no MCP server but the room server.                                                      |
+| `settingSources`                           | `[]`                         | The query reads no user, project, or local settings, and no `CLAUDE.md`.                                |
+| `skills`                                   | `[]`                         | No skill joins the query. The executor adds no `Skill` entry to the allow list.                         |
+| `settings`                                 | `SEAT_SETTINGS`              | The flag tier turns auto-memory off and empties the commit, pull request, and session-link attribution. |
+| `CLAUDE_CONFIG_DIR`                        | The config home of the seat  | The sessions and settings of the seat stay in its own directory.                                        |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1`                          | The executable skips the update check, telemetry, and other traffic that work omits.                    |
 
 A host that passes an `env` with either variable keeps its own value. A
 seat with no built-in tool gets two more settings; see [A seat with no
@@ -296,6 +297,15 @@ of the host process that an allowlist names, and no other. The allowlist
 limits the environment variables of the seat. It does not limit the
 filesystem. `HOME` passes, and a seat with `Bash` or `Read` runs as the host
 user and can read the files of that user.
+
+**Without `env`, the seat gets a `HOME` of its own.** `HOME` is the `home`
+directory of the [seat directory](#config-home), and the host `HOME` does not
+pass. The shell of the seat reads no rc file of the host user, such as
+`.bashrc`. Git, ssh, and cloud tools that read `~` find the seat directory, so
+a `Bash` seat has no git identity unless the host passes an `env` that holds
+`HOME` and the other variables it needs. This does not make the filesystem
+private. A seat with `Bash` or `Read` reaches any absolute path that the host
+user can read. An `env` keeps its own `HOME`.
 
 | Kind         | Names                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------- |
@@ -383,7 +393,8 @@ A spent budget is a permanent failure.
 
 **Each seat has its own Claude config directory.** The executor sets
 `CLAUDE_CONFIG_DIR` to `<seat directory>/config` and uses
-`<seat directory>/work` as the scratch directory. It makes both with mode
+`<seat directory>/work` as the scratch directory. Without an `env`, it also
+makes `<seat directory>/home` for `HOME`. It makes the three with mode
 `0700`, on the first need. Every activation of the seat gets the same
 directory, because a resume reads the session store there. Two seats get two
 directories. The executable keeps its sessions, its settings, and on Linux
@@ -446,19 +457,20 @@ failure does.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the ten step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 
-| Step          | Source in the SDK                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------- |
-| `thinking`    | `content_block_delta` events, then `content_block_stop`. A block the stream did not send arrives whole. |
-| `text`        | The same events for a text block.                                                                       |
-| `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                       |
-| `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.           |
-| `approval`    | A permission request for a tool that is not a room tool. `decision` is `allow` or `deny`.               |
-| `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                    |
-| `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                    |
+| Step          | Source in the SDK                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `thinking`    | `content_block_delta` events, then `content_block_stop`. A block the stream did not send arrives whole.                |
+| `text`        | The same events for a text block.                                                                                      |
+| `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                                      |
+| `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                          |
+| `harness`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name. |
+| `approval`    | A permission request for a tool that is not a room tool. `decision` is `allow` or `deny`.                              |
+| `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                   |
+| `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                                   |
 
 ## Usage and cost
 
@@ -487,6 +499,13 @@ The known limits:
 | ----------------------------------------------------- | ---------------------------------------------- |
 | `error_max_budget_usd`                                | `permanent`                                    |
 | `error_max_turns`, or a `stop_reason` of `max_tokens` | No failure. The pass reports `stop: 'length'`. |
+
+**Every failed pass carries the end of the process stderr.** The message
+gets the last 2,000 characters of the stderr of the query. This holds for a
+failed `result`, for a query that ends early, and for a query that throws. A
+failed `result` waits 50 milliseconds, because the stderr arrives on its own
+pipe. The class comes from the result, the status, or the error, and never
+from the stderr text.
 
 **The executor reads a status only from `api_error_status`.** Free text
 never gives one, because a rate limit names a token count that reads like a
@@ -551,19 +570,21 @@ for its tool list and for `/etc/hosts`. See [Example](example.md).
 
 ## Troubleshooting
 
-| Symptom                                                             | Cause                                                                                                                                                                              |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                                                           |
-| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`    | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                                                          |
-| The model cannot see `Bash` or `Read`                               | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                                                  |
-| Every request is denied                                             | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                                                         |
-| The model ignores `CLAUDE.md` and project settings                  | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                                                           |
-| A project MCP server is missing                                     | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                     |
-| The seat is abandoned after one attempt with an authentication text | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have dropped the key or `HOME`. |
-| `The Claude session ended before the pass did.`                     | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class. |
-| The executable cannot sign in on Bedrock, Vertex, or Foundry        | The allowlist holds no variable of that provider. Pass an `env` with `PATH`, `HOME`, and the variables the provider needs.                                                         |
-| The executable cannot find `node`, `git`, or `HOME`                 | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                                                    |
-| A pass ends 5 seconds after its result                              | A sent message had no echo yet. The grace period ended the pass.                                                                                                                   |
-| The seat is abandoned with a budget text                            | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                                                |
-| A resumed seat opens a new session                                  | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                                                            |
-| A say returns `Not delivered — the room moved`                      | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                                         |
+| Symptom                                                                  | Cause                                                                                                                                                                              |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each seat fails at once with `no_execution`                              | No loaded package serves the kind of the seat. Import the executor package, or pass `claudeExecution()`.                                                                           |
+| `Cannot run an executor of kind 'pi': this seat needs 'claude'.`         | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each family.                                                                          |
+| The model cannot see `Bash` or `Read`                                    | `allowedTools` does not name it. The list gives the built-in tools, and an empty list gives none.                                                                                  |
+| Every request is denied                                                  | `canUseTool` is absent, or it throws. The executor denies both. Read the `approval` steps.                                                                                         |
+| The model ignores `CLAUDE.md` and project settings                       | `settingSources` is empty by design. Put the guidance in `instructions`.                                                                                                           |
+| A project MCP server is missing                                          | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                     |
+| The seat is abandoned after one attempt with an authentication text      | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have dropped the key or `HOME`. |
+| `The Claude session ended before the pass did.`                          | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class. |
+| A failed pass names a model or a setting the executable does not know    | The message ends with the stderr of the process, which often names the cause. For an unknown model, it says that the model catalog does not describe it.                           |
+| A `Bash` seat has no git identity, or `~` holds nothing of the host user | Without `env`, `HOME` is the `home` directory of the seat. Pass an `env` with `HOME` and the other variables the seat needs.                                                       |
+| The executable cannot sign in on Bedrock, Vertex, or Foundry             | The allowlist holds no variable of that provider. Pass an `env` with `PATH`, `HOME`, and the variables the provider needs.                                                         |
+| The executable cannot find `node`, `git`, or `HOME`                      | A custom `env` replaced the environment. Add `PATH` and `HOME`.                                                                                                                    |
+| A pass ends 5 seconds after its result                                   | A sent message had no echo yet. The grace period ended the pass.                                                                                                                   |
+| The seat is abandoned with a budget text                                 | `maxBudgetUsd` ran out. The failure is permanent. Raise the budget.                                                                                                                |
+| A resumed seat opens a new session                                       | The SDK could not resume the recorded id. The fallback is designed, and the release records the new id.                                                                            |
+| A say returns `Not delivered — the room moved`                           | The freshness rule refused a say against newer record. The model reads the new messages and decides again.                                                                         |

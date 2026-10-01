@@ -76,13 +76,18 @@ export function viewOf(through = 1): ActivationView {
 	};
 }
 
+/** A scenario of the fake, with the fields that only the tests set. */
+export type Scenario = FakeScenario & {
+	session?: string;
+	apiKeySource?: string;
+	initTools?: string[];
+	rejectResume?: boolean;
+	rejectResumeResult?: boolean;
+};
+
 /** An executor of `definition` over the fake, and a room that records what the seat commits. */
 export function fakeRoom(
-	scenario: FakeScenario & {
-		session?: string;
-		rejectResume?: boolean;
-		rejectResumeResult?: boolean;
-	},
+	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
 	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},
@@ -177,7 +182,7 @@ export function fakeRoom(
 
 /** Open one activation of `definition` over the fake, with a scenario. */
 export function open(
-	scenario: FakeScenario,
+	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
 	extra: Pick<ClaudeExecutorOptions, 'configRoot' | 'room' | 'seat'> = {},

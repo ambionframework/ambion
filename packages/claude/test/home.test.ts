@@ -1,5 +1,5 @@
 /** The directories of a seat: each name gives one safe path segment, and a home stays under its root. */
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { expect, it } from 'vitest';
@@ -48,7 +48,11 @@ it('makes the directories of a seat once, under the root, and keeps them for eve
 	expect(home()).toBe(dirs);
 	expect(dirs.config).toBe(join(root, segment('../lab'), segment('a/b'), 'config'));
 	expect(dirs.work).toBe(join(root, segment('../lab'), segment('a/b'), 'work'));
-	expect(existsSync(dirs.config) && existsSync(dirs.work)).toBe(true);
+	expect(dirs.home).toBe(join(root, segment('../lab'), segment('a/b'), 'home'));
+	for (const directory of [dirs.config, dirs.work, dirs.home]) {
+		expect(existsSync(directory)).toBe(true);
+		expect(statSync(directory).mode & 0o077).toBe(0);
+	}
 });
 
 it('makes a different private directory for each seat when no root is named', () => {

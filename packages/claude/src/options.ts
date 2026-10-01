@@ -12,7 +12,12 @@ import {
 	ROOM_SERVER,
 	type StepSink,
 } from '@ambionframework/ambion/hosting';
-import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type {
+	CanUseTool,
+	Options,
+	PermissionResult,
+	Settings,
+} from '@anthropic-ai/claude-agent-sdk';
 import { plainName } from './claude-trace.ts';
 import type { ClaudeExecutor } from './define.ts';
 import type { SeatHome } from './home.ts';
@@ -126,8 +131,9 @@ function allowlisted(
 /**
  * The environment of a seat's executable. An `env` of the host replaces the
  * environment. Without one, the seat gets the allowlisted variables of this
- * process. The seat never holds the variables of a Claude Code session of
- * the host. It gets its own config home, unless `env` names one, and the
+ * process, and its own `HOME`, so the shell of the seat reads no rc file of
+ * the host user. The seat never holds the variables of a Claude Code session
+ * of the host. It gets its own config home, unless `env` names one, and the
  * executable sends no traffic that the work does not need.
  */
 function seatEnv(
@@ -135,6 +141,7 @@ function seatEnv(
 	home: SeatHome,
 ): Record<string, string | undefined> {
 	const seat = env === undefined ? allowlisted(process.env) : { ...env };
+	if (env === undefined) seat.HOME = home().home;
 	for (const name of PARENT_SESSION) delete seat[name];
 	if (seat.CLAUDE_CONFIG_DIR === undefined || seat.CLAUDE_CONFIG_DIR === '')
 		seat.CLAUDE_CONFIG_DIR = home().config;
@@ -142,6 +149,18 @@ function seatEnv(
 		seat.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
 	return seat;
 }
+
+/**
+ * The settings that the executor passes at the flag tier, so they hold with
+ * `settingSources` empty. Auto-memory is off, because a `MEMORY.md` in the
+ * config home would be state outside the journal. The attribution text of a
+ * commit and of a pull request is empty, and so is the session link, because
+ * the room defines what a seat writes.
+ */
+export const SEAT_SETTINGS = {
+	autoMemoryEnabled: false,
+	attribution: { commit: '', pr: '', sessionUrl: false },
+} as const satisfies Settings;
 
 /**
  * The built-in tools of Claude Code, and the tool of the seat that each one
@@ -259,6 +278,7 @@ export function queryOptions(input: QueryInput): Options {
 		tools: builtins,
 		// An empty list turns the skills off. Without it, the executable lists the skills it finds on disk.
 		skills: [],
+		settings: SEAT_SETTINGS,
 		stderr: input.stderr,
 		allowedTools: allowed,
 		canUseTool: input.canUseTool,

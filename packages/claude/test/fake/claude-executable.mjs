@@ -16,6 +16,9 @@
  * echoes no user message.
  *
  * Actions:
+ * The first turn of a start sends the `system` init message first, as the real
+ * executable does. `apiKeySource` and `initTools` in the scenario set two of its fields.
+ *
  * - `{ say }`: call the room tool `say`.
  * - `{ sayUntilLanded }`: call `say`, and call it again when the room answers an error.
  * - `{ call: { tool, args } }`: call one tool of the room server.
@@ -23,6 +26,7 @@
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
  * - `{ fail: { status, text } }`: end the turn with an error result.
+ * - `{ stderr }`: write the text to standard error.
  * - `{ crash: { stderr, code } }`: write `stderr` to standard error and exit with `code`, with no result.
  * - `{ permission: { tool, input } }`: ask the SDK for permission, then run or refuse the tool.
  * - `{ own: { name, input, output } }`: a tool the executable runs itself.
@@ -55,6 +59,7 @@ let turn = 0;
 let running = false;
 let cut = false;
 let mcpReady = false;
+let introduced = false;
 const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 const waiters = new Set();
 const answers = new Map();
@@ -205,6 +210,7 @@ const actions = {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
 	},
 	permission,
+	stderr: (text) => process.stderr.write(`${text}\n`),
 	crash: ({ stderr, code }) => {
 		process.stderr.write(`${stderr}\n`);
 		process.exit(code);
@@ -245,11 +251,30 @@ function result(fields) {
 	);
 }
 
+/** The `system` init message of the real executable, with the facts that the trace reads. */
+const init = (cwd = process.cwd()) =>
+	envelope({
+		type: 'system',
+		subtype: 'init',
+		apiKeySource: config.apiKeySource ?? 'ANTHROPIC_API_KEY',
+		claude_code_version: '0.0.0-fake',
+		cwd,
+		tools: config.initTools ?? ['Bash', 'mcp__ambion__say'],
+		mcp_servers: [{ name: 'ambion', status: 'connected' }],
+		model: args[args.indexOf('--model') + 1] ?? 'fake',
+		permissionMode: args[args.indexOf('--permission-mode') + 1] ?? 'default',
+		slash_commands: [],
+		skills: [],
+		plugins: [],
+		agents: [],
+		output_style: 'default',
+	});
+
 const unresumable = () => resumed !== undefined && config.rejectResumeResult === true;
 
 async function play(list) {
 	if (unresumable()) {
-		out(envelope({ type: 'system', subtype: 'init' }));
+		out(init());
 		return result({
 			subtype: 'error_during_execution',
 			is_error: true,
@@ -274,6 +299,8 @@ async function run() {
 	running = true;
 	consumed = users.length;
 	try {
+		if (!introduced && !unresumable()) out(init());
+		introduced = true;
 		await play(config.turns[turn] ?? []);
 	} catch (error) {
 		if (!cut) throw error;

@@ -1,6 +1,6 @@
 /**
- * The directories of one seat: its Claude config home and its scratch
- * working directory.
+ * The directories of one seat: its Claude config home, its scratch working
+ * directory, and its home directory for the shell and the tools in it.
  *
  * The Claude Code executable keeps its sessions, its settings, and on Linux
  * its credentials in the config home. One home for each seat keeps the
@@ -17,6 +17,8 @@ interface SeatDirs {
 	readonly config: string;
 	/** The working directory of a seat that has no built-in tool and sets no `cwd`. */
 	readonly work: string;
+	/** The `HOME` of a seat that gets the allowlisted environment. */
+	readonly home: string;
 }
 
 /** The directories of a seat, made on the first call. Every call returns the same ones. */
@@ -58,6 +60,7 @@ export function seatHome(configRoot: string | undefined, room: string, seat: str
 		dirs = {
 			config: privateDirectory(join(root, 'config')),
 			work: privateDirectory(join(root, 'work')),
+			home: privateDirectory(join(root, 'home')),
 		};
 		return dirs;
 	};
