@@ -33,6 +33,29 @@ throw `PermanentError`. The internal `UnknownModel` of Pi and the internal
 `PermanentError` now fails as permanent. A Codex pass that throws a value
 that is no `Error` now carries an `error` in its result.
 
+**The core records every `steer` step.** `ActivationState` records the
+`steer` step of each steered line, with one rule for every family. A line
+that lands between passes is `consumed: false`. A line that the view of the
+pass in flight holds is `consumed: true`. A line that lands in a pass whose
+executor has no `steer` is `consumed: false`. A line that the executor
+delivers is `consumed: true` when the executor calls `read` for its range,
+`{ after, through: seq }`, and `consumed: false` when the pass ends first.
+A line that lands before the first pass waits for that pass, and then
+follows the same rule. The executor records no `steer` step. The `steer`
+member of `ExecutorSession` only delivers the line, and the core calls it
+after it calls `pass`. The Pi and Claude executors lose their own stamps.
+Three steps change. A
+Codex seat and a scripted seat now record a `steer` step with
+`consumed: false`. Before, they recorded none. A Pi line that lands before
+the first pass is now `consumed: true` when the first view holds it, as a
+Claude line was before. A Pi line past the first view now joins the first
+prompt, and it is `consumed: true` when the first request holds it. Before,
+Pi dropped it with `consumed: false`. A Claude steer that finds no echo
+when its pass ends now records `consumed: false`. Before, it recorded no
+step. The conformance case `holds a steer for the record when the executor
+cannot steer` now requires a `steer` step with `consumed: false` for the
+line.
+
 **`HomeEnv` implements the file members of `ExecutionEnv`.**
 `@ambionframework/workspace` exports two new types: `FileOperations` and
 `FileExpect`. `FileOperations` holds one throwing storage operation for each

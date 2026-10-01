@@ -185,16 +185,16 @@ position; see [Executors](executors.md#how-an-activation-runs).
 
 **A steer goes to the steer queue of the lane.** A line that lands during a
 run joins the queue as a `[new]` range, and the harness delivers it with
-the next provider request. The trace records `steer` with `consumed: true`
-when a provider request holds the line. A line that lands while the pass
-prepares its run joins the prompt of the run. A line that no request holds
-by the end of the run leaves the queue, and the trace records
-`consumed: false`.
+the next provider request. The executor calls `read` for the line when a
+provider request holds it. A line that lands while the pass prepares its
+run joins the prompt of the run. A line that no request holds by the end
+of the run leaves the queue. The core records the `steer` step; see
+[Executors](executors.md#how-an-activation-runs).
 
-**A line that lands between passes waits for the record.** The trace
-records `consumed: false`. The core runs a pass with the delta when the
-last position of the room is past `readThrough`. A delta with no message
-in it starts no run, and the core takes the view as read.
+**A line that lands between passes waits for the record.** The core runs a
+pass with the delta when the last position of the room is past
+`readThrough`. A delta with no message in it starts no run, and the core
+takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
 retry policy of the harness to `{ enabled: false }` and the stream option
@@ -351,15 +351,15 @@ model did.
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 
-| Step          | Source in Pi                                                                                       |
-| ------------- | -------------------------------------------------------------------------------------------------- |
-| `thinking`    | `thinking_delta` updates, then `thinking_end`. A block the stream did not send arrives whole.      |
-| `text`        | `text_delta` updates, then `text_end`. A block the stream did not send arrives whole.              |
-| `tool_call`   | `tool_start`, with the call id, the tool name, and the arguments.                                  |
-| `tool_result` | `tool_end`, with the result. A failed call adds `error` with the text of the result.               |
-| `steer`       | A line a provider request holds is `consumed: true`. A line no request holds is `consumed: false`. |
-| `usage`       | The harness `usage` event, one for each provider request.                                          |
-| `approval`    | Never. Pi has no approval step.                                                                    |
+| Step          | Source in Pi                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| `thinking`    | `thinking_delta` updates, then `thinking_end`. A block the stream did not send arrives whole. |
+| `text`        | `text_delta` updates, then `text_end`. A block the stream did not send arrives whole.         |
+| `tool_call`   | `tool_start`, with the call id, the tool name, and the arguments.                             |
+| `tool_result` | `tool_end`, with the result. A failed call adds `error` with the text of the result.          |
+| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line. |
+| `usage`       | The harness `usage` event, one for each provider request.                                     |
+| `approval`    | Never. Pi has no approval step.                                                               |
 
 A redacted thinking block adds no step. The trace policy of the definition
 sets how much of `thinking` and tool output the journal keeps.

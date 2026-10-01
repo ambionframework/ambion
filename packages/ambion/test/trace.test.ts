@@ -414,7 +414,7 @@ describe('the steps the driver owns', () => {
 		const log = collectSteps();
 		const { room, actor } = play(stream, log.logger);
 		const done = actor.run(id);
-		// Before the provider starts, a steer is held and then dropped by the pass.
+		// Before the first pass, the core holds a steer. The first prompt carries it.
 		await actor.steer({
 			room: 'played',
 			seat: 'product',
@@ -441,7 +441,7 @@ describe('the steps the driver owns', () => {
 		]);
 		const steers = steps.filter((step) => step.type === 'steer');
 		expect(steers).toEqual([
-			expect.objectContaining({ seq: 2, consumed: false, pass: 1 }),
+			expect.objectContaining({ seq: 2, consumed: true, pass: 1 }),
 			expect.objectContaining({ seq: 3, consumed: true, pass: 1 }),
 		]);
 		await tick();

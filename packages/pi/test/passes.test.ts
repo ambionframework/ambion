@@ -6,7 +6,13 @@
  * request waits for the record.
  */
 import type { Message, Step } from '@ambionframework/ambion';
-import type { ActivationView, CommitRequest, CommitResult } from '@ambionframework/ambion/hosting';
+import type {
+	ActivationView,
+	CommitRequest,
+	CommitResult,
+	Executor,
+	ExecutorSession,
+} from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -59,7 +65,18 @@ function activation(
 		return base(model, context, options);
 	};
 	const definition = scriptedAgent('worker');
-	const executor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
+	const piExecutor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
+	const sessions: ExecutorSession[] = [];
+	const executor: Executor = (opened) => {
+		const one = piExecutor(opened);
+		sessions.push(one);
+		return one;
+	};
+	const raw = (): ExecutorSession => {
+		const one = sessions[0];
+		if (one === undefined) throw new Error('The core opened no session.');
+		return one;
+	};
 	const commits: CommitRequest[] = [];
 	const session = stateOf(executor, definition, {
 		room: answer === undefined ? unusedRoom : roomThatCommits(commits, answer),
@@ -71,7 +88,7 @@ function activation(
 		},
 	});
 	const steers = () => steps.filter((step) => step.type === 'steer');
-	return { session, requests, steps, steers, commits };
+	return { session, requests, steps, steers, commits, raw };
 }
 
 const texts = (context: Context) =>
@@ -134,16 +151,19 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(session.shouldRefresh(2)).toBe(false);
 	});
 
-	it('leaves a line that lands between passes to the record, and asks for another pass', async () => {
-		const { session, requests, steers } = activation(() => quiet());
+	it('takes no line that lands outside a run, and the next delta carries it', async () => {
+		const { session, requests, raw } = activation(() => quiet());
 		await session.pass({ kind: 'view', view: viewOf(first, 1) });
-		session.steer?.(1, 2, '[priya] And the pump?');
-		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
-		expect(session.shouldRefresh(2)).toBe(true);
-		expect(requests).toHaveLength(1);
+		// The core never steers outside a pass. The executor still queues nothing then.
+		raw().steer?.(1, 2, '[priya] Late.');
+		await session.pass({ kind: 'delta', since: 1, view: viewOf(both, 2) });
+		expect(requests).toHaveLength(2);
+		const prompts = texts(requests[1]?.context as Context);
+		expect(prompts.filter((text) => text.includes('Late'))).toEqual([]);
+		expect(prompts.at(-1)).toBe('[new] #2 [andrei] And the pump?');
 	});
 
-	it('takes a line that lands before the lane runs into the prompt, and a line the view holds as read', async () => {
+	it('takes a line that lands before the lane runs into the prompt', async () => {
 		const ready = deferred();
 		const resolving = deferred();
 		const definition = scriptedAgent('worker');
@@ -165,12 +185,10 @@ describe('the Pi executor across the passes of one activation', () => {
 		});
 		const running = session.pass({ kind: 'view', view: viewOf(both, 2) });
 		await resolving.promise;
-		session.steer?.(1, 2, '[andrei] And the pump?');
 		session.steer?.(2, 3, '[priya] And the hose?');
 		ready.resolve();
 		await running;
 		expect(steps.filter((step) => step.type === 'steer')).toEqual([
-			{ type: 'steer', seq: 2, consumed: true },
 			{ type: 'steer', seq: 3, consumed: true },
 		]);
 		expect(session.readThrough).toBe(3);
@@ -210,8 +228,6 @@ describe('the Pi executor across the passes of one activation', () => {
 		session.cancel();
 		expect(await running).toEqual({ failed: false });
 		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
-		session.steer?.(2, 3, '[priya] Late.');
-		expect(steers()).toHaveLength(1);
 		expect(session.cancelled).toBe(true);
 	});
 

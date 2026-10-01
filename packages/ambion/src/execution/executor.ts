@@ -7,7 +7,8 @@
  * event. An executor owns one harness: the mapping of its events to steps,
  * the resume of a harness session, the place where it hosts the tools, and
  * the signal that the model consumed input. A session's `steer` is optional
- * because an executor family may only take context between passes.
+ * because an executor family may only take context between passes. The core
+ * records the `steer` step of every steered line.
  */
 import type { ActivationView } from '../protocol.ts';
 import type { FailureCause, Seq } from '../types.ts';
@@ -40,7 +41,10 @@ export interface ExecutorActivation {
 	/**
 	 * The model consumed `range`: a prompt, a delta, or a steered line. A
 	 * range counts once it joins the position already read, so a line that
-	 * lands out of order waits until the gap closes.
+	 * lands out of order waits until the gap closes. A steered line is
+	 * consumed when the executor reads `{ after, through: seq }` for it, the
+	 * range that `steer` received. The core then records the consumed `steer`
+	 * step.
 	 */
 	read(range: ReadRange): void;
 	/** The result of the tool call `call` reached the model. */
@@ -127,9 +131,13 @@ export interface ExecutorSession {
 	 */
 	pass(pass: Pass): Promise<PassResult>;
 	/**
-	 * Steer a line into a live pass. Absent when the executor family cannot
-	 * steer mid-run; a dropped steer is not lost, because the record already
-	 * holds it, and the next pass reads it.
+	 * Deliver a line to the pass in flight, when the harness can take it. The
+	 * core calls it after it called `pass` and before that pass ends. The core
+	 * records the `steer` step, and the executor records none. The executor
+	 * reads `{ after, through: seq }` when the model consumes the line. A line
+	 * that the pass does not read waits for the next delta, and the step says
+	 * so. A family that cannot steer mid-run leaves `steer` out. The record
+	 * already holds the line, and the next pass reads it.
 	 */
 	steer?(after: Seq, seq: Seq, line: string): void;
 	/**

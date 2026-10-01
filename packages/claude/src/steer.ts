@@ -54,22 +54,16 @@ export function userMessage(text: string, uuid: string): SDKUserMessage {
 	};
 }
 
-/** What an echo confirms: the range of the record the message carried, and whether a steer sent it. */
-export interface Sent {
-	readonly range: ReadRange;
-	readonly steer: boolean;
-}
-
-/** The messages sent and not yet echoed, by uuid. */
+/** The range of the record that each message sent and not yet echoed carries, by uuid. */
 export class Echoes {
-	private readonly sent = new Map<string, Sent>();
+	private readonly sent = new Map<string, ReadRange>();
 
-	expect(uuid: string, sent: Sent): void {
-		this.sent.set(uuid, sent);
+	expect(uuid: string, range: ReadRange): void {
+		this.sent.set(uuid, range);
 	}
 
-	/** The message this echo confirms, once. An echo of another message gives nothing. */
-	confirm(uuid: string | undefined): Sent | undefined {
+	/** The range of the message this echo confirms, once. An echo of another message gives nothing. */
+	confirm(uuid: string | undefined): ReadRange | undefined {
 		if (uuid === undefined) return undefined;
 		const found = this.sent.get(uuid);
 		this.sent.delete(uuid);

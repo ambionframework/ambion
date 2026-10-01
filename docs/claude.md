@@ -186,10 +186,10 @@ already read.** The core holds the range of an echo that leaves a gap, and
 joins it when the gap closes.
 
 **A steer joins the streaming input.** A line that lands during a pass is
-pushed into the input as a user message. The trace records `steer` with
-`consumed: true` on its echo. A line that lands before the query starts waits
-for the first pass. The executor sends it after the view unless the view
-already holds it.
+pushed into the input as a user message. The executor calls `read` for the
+line on its echo. A line that lands before the query starts waits for the
+first pass, and the executor sends it after the view. The core records the
+`steer` step; see [Executors](executors.md#how-an-activation-runs).
 
 **The cut interrupts the query and ends the pass.** The executor listens
 to the signal of the activation. `close` ends the input and the process.
@@ -343,7 +343,7 @@ table below gives the SDK source of each step. A message from a subagent
 | `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                       |
 | `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.           |
 | `approval`    | A permission request for a tool that is not a room tool. `decision` is `allow` or `deny`.               |
-| `steer`       | The echo of a steered line is `consumed: true`. A line between passes is `consumed: false`.             |
+| `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                    |
 | `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                    |
 
 ## Usage and cost

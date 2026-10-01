@@ -13,6 +13,8 @@ import type {
 	AgentDefinition,
 	CommitRequest,
 	ExecutionEvent,
+	Executor,
+	ExecutorSession,
 	RoomProtocol,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
@@ -122,6 +124,12 @@ export function fakeRoom(
 		pathToClaudeCodeExecutable: executable,
 		env: { ...process.env, ...env, AMBION_FAKE: JSON.stringify({ ...scenario, log: file }) },
 	});
+	const sessions: ExecutorSession[] = [];
+	const recording: Executor = (activation) => {
+		const session = executor(activation);
+		sessions.push(session);
+		return session;
+	};
 	/** The lines the fake wrote to its log. */
 	const log = (): Record<string, unknown>[] => {
 		try {
@@ -144,9 +152,11 @@ export function fakeRoom(
 		moveRecordTo: (seq: number) => {
 			lastSeq = seq;
 		},
+		/** The executor sessions that the core opened, with no core state around them. */
+		sessions,
 		/** The core state of one activation, as the driver opens it. */
 		activate: (id: string): ActivationState =>
-			new ActivationState(executor, {
+			new ActivationState(recording, {
 				id,
 				room,
 				definition,
