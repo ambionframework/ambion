@@ -29,7 +29,7 @@ and the order of the dependencies together.
 
 ## Done
 
-**Twenty reductions have landed.** `pnpm check` passes on them, and the
+**Twenty-one reductions have landed.** `pnpm check` passes on them, and the
 changelog names each change to an export and to a behavior.
 
 | Change                                       | Concepts removed                                                         | Files                                    |
@@ -54,6 +54,7 @@ changelog names each change to an export and to a behavior.
 | One runtime state, nested views (K2)         | `RoomRuntime`, `roomRuntime`, `executionHostOf`, four registry helpers   | `host/runtime.ts`                        |
 | One view of the room host (K16)              | `RoomBase` and four host views; nine repeated members                    | `room-host/core.ts`                      |
 | Small helpers once (K3, K5, K10, E5, E8, B4) | `CommitOutcome`, `OwedClose`, six helper and constant copies             | `bundle.ts`, `define.ts`, `git-names.ts` |
+| One list of tools for a pass (E6)            | `Pass.agentTools`, the joins in Claude and Codex                         | `execution/executor.ts`                  |
 
 **The fold, a view, and a read now hold one `PendingSay`.** Its `due` is
 ISO, and the reconcile parses it. A view and a read clone it, so no
@@ -128,7 +129,7 @@ concepts, high confidence.
 | E3  | `Executor.harness` always equals the executor kind (done)                     | `pi:85`, `claude:63`, `codex:94`                                                            | 2       | High   | 6    |
 | E4  | Pi has three option types for its services (done)                             | `services.clock`, `.call`, and `.trace` are written and never read                          | 4       | High   | 12   |
 | E5  | The kind narrowing and the policy copy are written three times (done in part) | `POLICY` and `policyOf` twice, `present()` twice, `modelOf`                                 | 3       | Medium | 6    |
-| E6  | A pass carries `tools` and `agentTools` apart                                 | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
+| E6  | A pass carries `tools` and `agentTools` apart (done)                          | Claude and Codex join them; Pi rebuilds (`pi/tools.ts:88-102`)                              | 3       | Medium | 6    |
 | E7  | Two scripted test languages export the same six verbs (done)                  | `ambion/testing/scripted.ts`, `pi/testing.ts`                                               | 5       | Medium | 10   |
 | E8  | Small helpers repeat (done)                                                   | `ROOM_SERVER` ×2, the content union ×3, the text join of a tool result ×5                   | 4       | Medium | 8    |
 
