@@ -9,7 +9,6 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { systemClock } from '@ambionframework/ambion';
 import { type Credential, normalizeContext } from '@earendil-works/pi-ai';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { fileCredentials } from '../src/credentials.ts';
@@ -162,14 +161,12 @@ describe('a stored sign-in', () => {
 		await credentials.modify('anthropic', async () => oauth('sk-ant-oat-from-store'));
 
 		const withStore = await headersOf((baseUrl) =>
-			stream(createExecutionServices({ clock: systemClock(), credentials }), baseUrl),
+			stream(createExecutionServices({ credentials }), baseUrl),
 		);
 		expect(withStore.authorization).toBe('Bearer sk-ant-oat-from-store');
 		expect(withStore['x-api-key']).toBeUndefined();
 
-		const withKey = await headersOf((baseUrl) =>
-			stream(createExecutionServices({ clock: systemClock() }), baseUrl),
-		);
+		const withKey = await headersOf((baseUrl) => stream(createExecutionServices(), baseUrl));
 		expect(withKey['x-api-key']).toBe('sk-ant-api-from-environment');
 	});
 
@@ -178,7 +175,7 @@ describe('a stored sign-in', () => {
 		onTestFinished(() => void vi.unstubAllEnvs());
 		const credentials = fileCredentials(join(await tempDir('ambion-credentials-'), 'auth.json'));
 		const seen = await headersOf((baseUrl) =>
-			stream(createExecutionServices({ clock: systemClock(), credentials }), baseUrl),
+			stream(createExecutionServices({ credentials }), baseUrl),
 		);
 		expect(seen['x-api-key']).toBe('sk-ant-api-from-environment');
 	});

@@ -431,7 +431,7 @@ function isList(execution: Execution | readonly Execution[]): execution is reado
 }
 
 /** The executor call bounds, checked once for every room in the runtime. */
-export function callLimits(given: Partial<Limits['call']> | undefined): Limits['call'] {
+function callLimits(given: Partial<Limits['call']> | undefined): Limits['call'] {
 	const attempts = given?.attempts ?? 2;
 	const timeout = given?.timeout ?? 10_000;
 	if (!Number.isSafeInteger(attempts) || attempts < 1)

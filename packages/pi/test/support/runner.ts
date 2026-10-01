@@ -123,8 +123,8 @@ export function seatHost(options: SeatOptions = {}) {
 	const clock = fakeClock(0);
 	const runtime = createRuntime({ clock, limits: { call: options.call } });
 	const services = createExecutionServices({
-		clock,
 		stream: options.stream ?? scripted(() => quiet()),
+		sessions: 'memory',
 	});
 	const start = (room: RoomProtocol) =>
 		new AgentRunner(room, {
@@ -134,9 +134,9 @@ export function seatHost(options: SeatOptions = {}) {
 			room: name,
 			seat: definition.name,
 			executor: createPiExecutor({
+				...services,
 				definition,
 				model: options.model ?? services.model,
-				stream: services.stream,
 				now: () => clock.now(),
 			}),
 			emit: options.emit,

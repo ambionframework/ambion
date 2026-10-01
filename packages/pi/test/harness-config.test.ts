@@ -101,7 +101,13 @@ function recording(script: Script) {
 
 function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
 	const definition = workerWith(compaction, thinking);
-	const executor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
+	const executor = createPiExecutor({
+		definition,
+		model: stubModel,
+		stream,
+		now: () => 0,
+		sessions: memorySessions(),
+	});
 	const open = (id: string): ActivationState => stateOf(executor, definition, { id });
 	return { definition, open };
 }
@@ -306,6 +312,7 @@ describe('the harness of an activation', () => {
 			model: stubModel,
 			stream: scripted(() => quiet()),
 			now: () => 0,
+			sessions: memorySessions(),
 		});
 		const session = stateOf(executor, definition);
 		const view = { ...respond([said(1, 'Go.')], 1), spec };

@@ -188,28 +188,27 @@ states the commit-freshness promise.
 main entry names none of it. Journal events and projected lease state stay
 internal. Participant views omit `sessionId`.
 
-| Export               | What it is                                                                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Execution`          | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                   |
-| `ExecutionHost`      | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                         |
-| `ExecutionConnector` | `connect(room, request)` returns the port of one seat                                                                                                          |
-| `ConnectorRequest`   | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                          |
-| `AgentPort`          | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
-| `RoomProtocol`       | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
-| `AgentRunner`        | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
-| `defineExecution`    | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
-| `localExecution`     | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
-| `hostingOf`          | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
-| `visitOf`            | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
-| `describeExecutor`   | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
-| `Executor`           | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
+| Export             | What it is                                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Execution`        | What a runtime or a room takes: the `kind` that it serves, and its connector                                                                                   |
+| `ExecutionHost`    | What the runtime gives a connector: the clock, the storage, the limits, and the logger                                                                         |
+| `ConnectorRequest` | What the room gives for one seat: the room and seat names, the definition, and `emit`                                                                          |
+| `AgentPort`        | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                       |
+| `RoomProtocol`     | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                      |
+| `AgentRunner`      | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost |
+| `defineExecution`  | Defines an executor family: the executions of one kind by options, and the default of the kind                                                                 |
+| `localExecution`   | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
+| `hostingOf`        | The journal namespace, the limits, the executions, and the room registry of a runtime                                                                          |
+| `visitOf`          | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
+| `describeExecutor` | The neutral half of an executor definition, which an executor family extends with its fields                                                                   |
+| `Executor`         | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `ExecutorSession`                                |
 
 **`RoomProtocol.view(activation, message?)` takes no range.** The room
 serves the record windowed to its cap and to the token limit of the seat,
 so a seat never pages the record. With `message`, the view holds that one
 message when the purpose may read it; `recall` reads a message below the
-window this way. The hosting entry exports no `ViewRange`, and
-`CollaborationContext` holds `omitted` and no `earliest`.
+window this way. The hosting entry exports no `ViewRange`, and the
+`context` of a view holds `omitted` and no `earliest`.
 
 ## The prompt the core renders
 
@@ -227,8 +226,8 @@ an adapter places it where it caches best.
 
 **A later pass reads the delta.** `record()` marks each message beyond
 `since` with the `[new]` prefix, and gives `undefined` when nothing is new.
-The core then counts the view read. `renderLine` renders one steered line.
-`refusal` renders a room refusal for the model.
+The core then counts the view read. The core renders each steered line and
+each room refusal for the model.
 
 **A resumed session reads the delta on its first pass.** `record(after)`
 takes the position that the harness session read through. The first pass
@@ -240,11 +239,11 @@ view.
 `DEFAULT_GUIDANCE`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
 The core resolves the `reminders` of the bundles once for each respond
-activation, when `record()` has something to send. Each reminder has
-`REMINDER_TIMEOUT_MS`, 5 seconds, to answer, and at that bound the core
-aborts the signal that it passed to the reminder. A reminder that throws,
-rejects, gives blank text, or answers late gives no text. The core does not
-cut a reminder, so the bundle bounds the length of its own text.
+activation, when `record()` has something to send. Each reminder has 5
+seconds to answer, and at that bound the core aborts the signal that it
+passed to the reminder. A reminder that throws, rejects, gives blank text,
+or answers late gives no text. The core does not cut a reminder, so the
+bundle bounds the length of its own text.
 
 ## How an activation runs
 
@@ -309,9 +308,7 @@ every family, and one view is one call over the wire.
 ## The room tools
 
 [Definitions and tools](agent.md#tools) states which tools an ordinary
-activation receives and which tools a closing activation receives. The hosting
-entry exports `SAY`, `SCHEDULE`, `SEAT`, `UNSEAT`, `DISMISS`, `RECALL`, and
-`summaryToolDescription`.
+activation receives and which tools a closing activation receives.
 
 **The core binds the room tools once, in a form that names no harness.**
 Each family adapts them to its own tool shape.
@@ -332,10 +329,10 @@ Each family adapts them to its own tool shape.
   hosts the tools of the definition itself. It carries the view's
   `deadline`: when the room ends the activation, on the wall clock.
 
-**A `RoomToolResult` holds the content that the model reads.** `isError`
-marks an error result. `terminate` marks an activation that has nothing more
-to do: an `unknown` or `stale` answer, or the last answer of a closing
-activation.
+**The result of a room tool holds the content that the model reads.**
+`isError` marks an error result. `terminate` marks an activation that has
+nothing more to do: an `unknown` or `stale` answer, or the last answer of a
+closing activation.
 
 **The scripted executor also reads the room answer of a commit.** A script
 of `@ambionframework/ambion/testing` branches on a short answer, such as

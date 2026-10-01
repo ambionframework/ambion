@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiExecutor } from '../src/executor.ts';
-import { stubModel } from '../src/index.ts';
+import { memorySessions, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { callTool, contextText, quiet, type Script, scripted } from '../src/testing.ts';
 import { roomThatCommits, stateOf, unusedRoom } from './support/activation.ts';
@@ -65,7 +65,13 @@ function activation(
 		return base(model, context, options);
 	};
 	const definition = scriptedAgent('worker');
-	const piExecutor = createPiExecutor({ definition, model: stubModel, stream, now: () => 0 });
+	const piExecutor = createPiExecutor({
+		definition,
+		model: stubModel,
+		stream,
+		now: () => 0,
+		sessions: memorySessions(),
+	});
 	const sessions: ExecutorSession[] = [];
 	const executor: Executor = (opened) => {
 		const one = piExecutor(opened);
@@ -176,6 +182,7 @@ describe('the Pi executor across the passes of one activation', () => {
 			},
 			stream: scripted(() => quiet()),
 			now: () => 0,
+			sessions: memorySessions(),
 		});
 		const steps: Step[] = [];
 		const session = stateOf(executor, definition, {
@@ -245,6 +252,7 @@ describe('the Pi executor across the passes of one activation', () => {
 			},
 			stream: scripted(() => quiet()),
 			now: () => 0,
+			sessions: memorySessions(),
 		});
 		const session = stateOf(executor, definition, {
 			trace: {

@@ -71,8 +71,8 @@ export interface ToolBundle {
 	/**
 	 * Text for one respond activation of one seat, or undefined for none. The
 	 * executor calls it once, at the start of the activation, and the text
-	 * joins the turn context. A throw, a rejection, or no answer within
-	 * `REMINDER_TIMEOUT_MS` gives no text. At that bound the executor aborts
+	 * joins the turn context. A throw, a rejection, or no answer within 5
+	 * seconds gives no text. At that bound the executor aborts
 	 * `signal`, so a reminder that records what it showed records nothing.
 	 */
 	readonly remind?: Reminder;

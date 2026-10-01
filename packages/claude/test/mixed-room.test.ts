@@ -66,11 +66,9 @@ it('routes a Pi seat and a Claude seat to the default of each family, which a bu
 		const services = createExecutionServices({ sessions: 'memory', stream: pilotStream() });
 		return (request) =>
 			createPiExecutor({
+				...services,
 				definition: request.definition,
-				model: services.model,
-				stream: services.stream,
 				now: () => host.clock.now(),
-				sessions: services.sessions,
 			});
 	});
 	defineExecution(

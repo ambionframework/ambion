@@ -18,6 +18,32 @@ permanent. The Claude and Codex guides state how to run those seats on a
 subscription: `claude login` or `CLAUDE_CODE_OAUTH_TOKEN`, and `codex
 login`. Neither package changes.
 
+**The hosting entry exports what a host or an executor family uses.**
+`@ambionframework/ambion/hosting` no longer exports 28 names. No package,
+test, or example outside the core imported them, and no page told a reader
+to use them. These 17 values leave: `DEFAULT_TRACE`, `DEFAULT_TRACE_LIMITS`,
+`SAY`, `SEAT`, `UNSEAT`, `DISMISS`, `SCHEDULE`, `RECALL`,
+`PERMANENT_STATUS`, `REMINDER_TIMEOUT_MS`, `callLimits`, `refusal`,
+`renderLine`, `summaryToolDescription`, `assertWire`, `roundTrip`, and
+`classifyCommit`. These 11 types leave: `Hosting`, `Limits`,
+`ExecutionConnector`, `Clock`, `EndReason`, `RoomToolResult`,
+`ActivationPurpose`, `CollaborationContext`, `ContextParticipant`,
+`CommitOutcome`, and `Stale`. The core keeps each symbol that it still uses
+internally. `Clock` stays in the main entry. `PERMANENT_STATUS` and
+`callLimits` have no other user, so their
+modules no longer export them. `hostingOf` still returns the same value. A
+host reads its fields without a name for its type.
+
+**`ExecutionServices` holds what the executor reads.**
+`@ambionframework/pi` exports `ExecutionServices` with `stream`, `model`,
+and `sessions`. The `clock`, `call`, and `trace` fields are gone, because
+no code read them. The executor takes its clock from the host.
+`createExecutionServices` takes `PiExecutionOptions`: `stream`, `sessions`,
+`sessionDir`, and `credentials`. The `clock`, `call`, and `trace` options are gone.
+`PiExecutionOptions` is the one option type of the Pi execution and its
+services. `ExecutionServicesOptions` and `SessionPlace` leave the entry of
+`@ambionframework/pi`.
+
 **`Executor` is a function of the activation.**
 `@ambionframework/ambion/hosting` exports `Executor` as
 `(activation: ExecutorActivation) => ExecutorSession`. Before, it was an
