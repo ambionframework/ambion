@@ -72,6 +72,49 @@ try {
 parallel. Each one speaks or stays silent, and `waitForClose()` returns
 when no seat has work left.
 
+## Evaluate the room
+
+**The simulator runs an eval on the same room.** An actor plays the person
+on a model. Code reads the record, and a judge grades the rest. The actor
+and the judge call the provider, so each run costs money.
+
+```sh
+npm install @ambionframework/simulator
+```
+
+**Add the import to `room.mts`, and replace its `try` block.**
+
+```ts
+import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
+
+try {
+  const simulation = await simulate(room, {
+    person: priya,
+    actor: agentActor({
+      model,
+      brief: 'Choose a regulator for a 3.3 V, 2 A rail. Stop when you have a part and its limits.',
+    }),
+    messages: 3,
+  });
+  const outcomes = simulation.exchanges.map((exchange) => exchange.view.outcome.kind);
+  console.log(simulation.ended, outcomes);
+
+  const verdict = await agentJudge({ model })(simulation, [
+    'The design agent names one part and gives the reason.',
+    'The datasheets agent states the output current limit of that part with its unit.',
+  ]);
+  console.log(verdict.pass, verdict.findings);
+} finally {
+  await room.stop();
+}
+```
+
+**`simulate` sends each message of the actor as one exchange.** It ends
+when the actor stops, after `messages` messages, at a timeout, or on a
+failure. A healthy run prints `stopped` or `limit`, and no `exhausted`
+outcome. [The simulator page](docs/simulator.md) shows an eval as a vitest
+test.
+
 ## One team on three harnesses
 
 **One room runs Pi, the Claude Agent SDK, and Codex.** Install
