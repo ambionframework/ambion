@@ -13,7 +13,6 @@
  * logger.
  */
 import type { Limits } from '../host/runtime.ts';
-import type { TraceOpener, TraceSink } from '../protocol.ts';
 import {
 	addUsage,
 	type Seq,
@@ -23,6 +22,7 @@ import {
 	type TraceStep,
 	type Usage,
 } from '../types.ts';
+import type { TraceOpener, TraceSink } from './contract.ts';
 
 /** How many characters of a thinking block the `start` policy keeps. */
 const THINKING_START_CHARS = 280;

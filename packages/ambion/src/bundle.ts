@@ -40,7 +40,7 @@ export interface AmbionTool {
 	readonly parameters: TSchema;
 	readonly label: string;
 	readonly prepareArguments?: (args: unknown) => unknown;
-	readonly executionMode?: ToolExecutionMode;
+	readonly executionMode?: ToolConcurrency;
 	readonly invoke: (
 		params: unknown,
 		ctx: ToolContext,
@@ -48,7 +48,7 @@ export interface AmbionTool {
 }
 
 /** Whether an executor runs the calls of one activation in turn or together. */
-export type ToolExecutionMode = 'sequential' | 'parallel';
+export type ToolConcurrency = 'sequential' | 'parallel';
 
 /** One part of what a tool hands back to the model. */
 export type ToolContent =
