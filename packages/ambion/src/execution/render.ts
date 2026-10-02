@@ -26,7 +26,7 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-type HumanContextParticipant = Extract<ContextParticipant, { kind: 'human' }>;
+type PersonContextParticipant = Extract<ContextParticipant, { kind: 'person' }>;
 
 /** A gap a person can read, not a duration a machine can parse. */
 function ago(at: string, now: number): string {
@@ -53,7 +53,7 @@ function plural(n: number, unit: string): string {
  */
 export function renderRecord(
 	record: readonly Message[],
-	people: readonly HumanContextParticipant[],
+	people: readonly PersonContextParticipant[],
 	now: number,
 	exchangeFrom?: Seq,
 	omitted = 0,
@@ -86,7 +86,7 @@ function divide(block: Block, dividers: Map<Seq, string[]>): string[] {
 }
 
 /** Seq to the people whose divider sits right after it. */
-function departureDividers(people: readonly HumanContextParticipant[]): Map<Seq, string[]> {
+function departureDividers(people: readonly PersonContextParticipant[]): Map<Seq, string[]> {
 	const dividers = new Map<Seq, string[]>();
 	for (const person of people) {
 		if (
@@ -126,14 +126,14 @@ function seatNotes(seat: Extract<ContextParticipant, { kind: 'agent' }>): string
 }
 
 /** Who the room knows, how they are reading, and what they have not read. */
-function renderPeople(people: readonly HumanContextParticipant[], now: number): string {
+function renderPeople(people: readonly PersonContextParticipant[], now: number): string {
 	if (people.length === 0) return 'Nobody has been in this room.';
 	return people
 		.map((person) => `- ${person.name} (${notes(person, now)}): ${person.identity}`)
 		.join('\n');
 }
 
-function notes(person: HumanContextParticipant, now: number): string {
+function notes(person: PersonContextParticipant, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
 	if (person.messagesSinceDeparture > 0)
@@ -203,7 +203,7 @@ export function renderActivation(
 	def: AgentDefinition,
 	reminders?: string,
 ): RenderedPrompt {
-	return { ...renderSystem(view, def), context: renderTurnContext(view, def, reminders) };
+	return { ...renderSystem(view, def), context: renderContext(view, def, reminders) };
 }
 
 /** The two parts of the prompt that do not read the record: `mechanism` and `agent`. */
@@ -276,14 +276,14 @@ function renderSetting(view: ActivationView): string[] {
 	return lines;
 }
 
-function renderTurnContext(
+function renderContext(
 	view: ActivationView,
 	def: AgentDefinition,
 	reminders: string | undefined,
 ): string {
 	const { context } = view;
 	const people = context.participants.filter(
-		(participant): participant is HumanContextParticipant => participant.kind === 'human',
+		(participant): participant is PersonContextParticipant => participant.kind === 'person',
 	);
 	return [
 		renderClock(context.now),
@@ -292,7 +292,7 @@ function renderTurnContext(
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-		`nothing reaches it and you cannot address it. A closing assignment writes the one`,
+		`nothing reaches it and you cannot address it. A summary assignment writes the one`,
 		`message a person reads when their exchange closes.`,
 		`(active: in an activation now; idle: at rest.)`,
 		renderAgents(context.participants),
@@ -312,7 +312,7 @@ function renderTurnContext(
 			context.omitted,
 		),
 		``,
-		...paragraph(renderPending(view)),
+		...paragraph(renderScheduled(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -328,7 +328,7 @@ function paragraph(text: string | undefined): string[] {
  * waits. A seat that continues its session reads it beside the delta, so the
  * list is current at every response activation.
  */
-export function renderPending(view: ActivationView): string | undefined {
+export function renderScheduled(view: ActivationView): string | undefined {
 	const { scheduled } = view.context;
 	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
 	if (scheduled.length === 0) return undefined;
@@ -338,7 +338,7 @@ export function renderPending(view: ActivationView): string | undefined {
 	].join('\n');
 }
 
-/** The agents that are available to seat. Every ordinary activation may read this list. */
+/** The agents that are available to seat. Every respond activation may read this list. */
 function renderReserve(reserve: readonly { name: string; identity: string }[]): string[] {
 	return [
 		`The reserve: agents not in the room. You may seat a colleague when the question needs them.`,
@@ -379,14 +379,14 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = openingLine(view, def.name);
 	return (
-		`${open}Begin your activation, ${def.name}: this is ordinary work. ` +
-		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
+		`${open}Begin your activation, ${def.name}: this is a respond activation. ` +
+		`Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed ` +
 		`and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
-		`A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. ` +
+		`A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. ` +
 		`These speech defaults yield to explicit instructions in your agent definition. ` +
-		`Closing summaries require a separate closing assignment.`
+		`Closing summaries require a separate summary assignment.`
 	);
 }
 

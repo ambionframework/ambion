@@ -9,14 +9,14 @@
 
 import { DEFAULT_TRACE_POLICY } from '../define.ts';
 import type {
-	AgentExecutionContext,
 	ConnectorRequest,
 	ExecutionConnector,
 	ExecutionHost,
 	Limits,
+	SeatContext,
 } from '../host/runtime.ts';
-import type { ActivationOpener } from '../protocol.ts';
 import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
+import type { ActivationOpener } from './contract.ts';
 import { AgentRunner } from './runner.ts';
 import { traceOpener } from './trace.ts';
 
@@ -35,7 +35,7 @@ export interface SeatContextInput {
 }
 
 /** The context of one seat, with its trace opener built from the definition's policy. */
-export function seatContext(input: SeatContextInput): AgentExecutionContext {
+export function seatContext(input: SeatContextInput): SeatContext {
 	const { logger, limits, ...rest } = input;
 	return {
 		...rest,

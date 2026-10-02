@@ -12,7 +12,6 @@
 import { contentText } from '@ambionframework/ambion';
 import type { ExecutorFixture, ExecutorPlan } from '@ambionframework/ambion/conformance';
 import { callTool, quiet, type Reply, say } from '@ambionframework/ambion/testing';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context, JsonObject, JsonValue } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
@@ -21,6 +20,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { pi } from './define.ts';
 import { createPiOpener } from './executor.ts';
+import type { StreamFn } from './models.ts';
 import { scriptContext } from './script-context.ts';
 import { stubModel } from './services.ts';
 import { memorySessions } from './sessions.ts';

@@ -8,7 +8,6 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-	BACKGROUND_CONTEXT,
 	fromDirectory,
 	openWorkspace,
 	runScript,
@@ -53,12 +52,7 @@ function workspaceOver(file: string, options: Partial<Parameters<typeof justGitB
 
 async function sh(workspace: Workspace, agent: { name: string }, command: string) {
 	const ran = await workspace.use(agent, (env) =>
-		runScript(
-			env,
-			command,
-			{ capture: { limits: { maxBytes: 100_000, maxLines: 1000 } } },
-			BACKGROUND_CONTEXT,
-		),
+		runScript(env, command, { capture: { limits: { maxBytes: 100_000, maxLines: 1000 } } }),
 	);
 	if (!ran.ok) throw ran.error;
 	return { code: ran.value.exitCode, output: ran.value.output };

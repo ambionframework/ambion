@@ -12,7 +12,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { type AgentPort, type CommitResult, type Execution, hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isPresence,
 	isSaid,
 	isSummary,
@@ -54,7 +54,7 @@ import {
 	tappedJournals,
 } from './support/storage.ts';
 
-const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
+const person = definePerson({ name: 'andrei', identity: 'Founder.' });
 const alpha = scriptedAgent('alpha');
 const assistant = scriptedAgent('assistant');
 const watcher = scriptedAgent('watcher');

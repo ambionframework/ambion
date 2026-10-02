@@ -1,7 +1,7 @@
 /** Coherent, detached room reads built from one folded projection. */
 
 import { copyMessage, type Exchange, type Message, type RoomRead, type Seq } from '../types.ts';
-import { exchangeViews } from './exchange.ts';
+import { exchangesOf } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
 import { participantsOf } from './view.ts';
@@ -40,7 +40,7 @@ export function toRoomRead(
 			through,
 		};
 
-	const exchanges = exchangeViews(
+	const exchanges = exchangesOf(
 		state.closes,
 		state.messages,
 		state.exchange,
@@ -84,7 +84,7 @@ function validateSelection(selection: MessageSelection | undefined): void {
 }
 
 /**
- * The closed exchanges that wait on one person: the last spoken message asks
+ * The closed exchanges that wait on one person: the last said message asks
  * them and they have said nothing since. The read holds the answer, so this
  * waits for nothing and starts nothing.
  */

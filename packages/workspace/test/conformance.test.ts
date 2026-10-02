@@ -8,7 +8,6 @@
  */
 
 import { createHash } from 'node:crypto';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, it } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { backends, tempDir } from '../../just-bash/test/support/backends.ts';
@@ -38,7 +37,7 @@ function fileStore(bash: () => BashBackend) {
 		const resource = openResource({ name: 'objects', backend: bash() });
 		const backend = fileObjectBackend({
 			bash: resource.use,
-			host: { name: 'objects-host' },
+			mirrorAgent: { name: 'objects-host' },
 			root: '/snapshots',
 		});
 		return { backend: { ...backend, dispose: () => resource.dispose() } };
@@ -83,7 +82,7 @@ describe.each(objectStores)('$name', (fixture) => {
 		});
 		const snapshotStore = {
 			workspace: 'retention-conformance',
-			host: { name: 'retention-host' },
+			mirrorAgent: { name: 'retention-host' },
 			bash: resource.use,
 			objects: objects.use,
 		};
@@ -117,7 +116,7 @@ describe.each(objectStores)('$name', (fixture) => {
 			);
 			const manifestPath = (restored as { details: { path: string } }).details.path;
 			const manifestText = await resource.use({ name: 'reviewer' }, async (env) => {
-				const result = await env.readTextFile(manifestPath, BACKGROUND_CONTEXT);
+				const result = await env.readTextFile(manifestPath);
 				if (!result.ok) throw result.error;
 				return result.value;
 			});
@@ -137,7 +136,7 @@ describe.each(objectStores)('$name', (fixture) => {
 			);
 			const filePath = (fileResult as { details: { path: string } }).details.path;
 			const restoredBytes = await resource.use({ name: 'reviewer' }, async (env) => {
-				const result = await env.readBinaryFile(filePath, BACKGROUND_CONTEXT);
+				const result = await env.readBinaryFile(filePath);
 				if (!result.ok) throw result.error;
 				return result.value;
 			});

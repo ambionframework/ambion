@@ -63,7 +63,7 @@ const STALE = { stale: 'the lease ended' };
 function participants(seat: string) {
 	return [
 		{
-			kind: 'human' as const,
+			kind: 'person' as const,
 			name: PERSON,
 			identity: 'Project manager.',
 			presence: 'present' as const,

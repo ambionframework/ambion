@@ -38,7 +38,7 @@ describe('Workbench with no key', () => {
 			'design',
 			'experiments',
 		]);
-		await workbench.join('sensing', 'theo');
+		await workbench.visit('sensing', 'theo');
 		await workbench.send('sensing', 'theo', 'nokey-1', 'Plan a test.');
 		await vi.waitFor(async () => {
 			const view = await workbench.read('sensing', 0);

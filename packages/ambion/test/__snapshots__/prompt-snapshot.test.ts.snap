@@ -30,7 +30,7 @@ The room is 'site'. Its URI is ambion://room/site.
 The agents. Each is seated at one point of a scale — the widest kind of message
 that wakes it. Unmarked: anything said. "named only": a say addressed to it.
 "watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A closing assignment writes the one
+nothing reaches it and you cannot address it. A summary assignment writes the one
 message a person reads when their exchange closes.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
@@ -47,7 +47,7 @@ The record of 'site' so far:
 priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. Write the one message with say, or end your activation."
 `;
 
-exports[`the rendered prompt > renders an ordinary activation > agent 1`] = `
+exports[`the rendered prompt > renders a respond activation > agent 1`] = `
 "You are 'worker'.
 
 Speaking is the say tool. Silence is the default: if this does not concern you, end
@@ -90,7 +90,7 @@ Your instructions:
 Work carefully."
 `;
 
-exports[`the rendered prompt > renders an ordinary activation > context 1`] = `
+exports[`the rendered prompt > renders a respond activation > context 1`] = `
 "The time is 2026-01-01T09:05:00.000Z.
 
 The room is 'site'. Its URI is ambion://room/site.
@@ -98,7 +98,7 @@ The room is 'site'. Its URI is ambion://room/site.
 The agents. Each is seated at one point of a scale — the widest kind of message
 that wakes it. Unmarked: anything said. "named only": a say addressed to it.
 "watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A closing assignment writes the one
+nothing reaches it and you cannot address it. A summary assignment writes the one
 message a person reads when their exchange closes.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
@@ -118,10 +118,10 @@ The record of 'site' so far:
 Your scheduled messages. The room wakes you with each one at its due time. Call \`dismiss\` with the seq of one that no longer fits:
 - #4, due 2026-01-01T10:00:00.000Z: Check the pour log. (refs: file:///pours.log)
 
-priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Begin your activation, worker: this is ordinary work. Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate closing assignment."
+priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
 `;
 
-exports[`the rendered prompt > renders an ordinary activation > mechanism 1`] = `
+exports[`the rendered prompt > renders a respond activation > mechanism 1`] = `
 "You are an agent seated in a room: a shared room with a record. Every participant sees
 what is said; nobody sees your tool use. A room has a URI, and a message has the URI
 <room URI>/message/<seq>. The context gives the room's URI. Each line of the record

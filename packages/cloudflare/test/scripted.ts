@@ -9,7 +9,7 @@
  * in flight while a test takes the room object away, so the commit that
  * follows is served by the room that came back.
  */
-import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { StreamFn } from '@ambionframework/pi';
 import type { Context } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,

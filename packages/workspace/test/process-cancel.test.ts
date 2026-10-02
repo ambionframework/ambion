@@ -10,16 +10,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ToolContext } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { workstationBackend } from '../../workstation/src/index.ts';
 import { startSshServer, type TestServer } from '../../workstation/test/support/server.ts';
 import { hasSetsid } from '../../workstation/test/support/setsid.ts';
-import type { ProcessRecord } from '../src/process-files.ts';
+import type { Process } from '../src/process-files.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { toolOf } from './support/backends.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 async function server(accounts: readonly string[]): Promise<TestServer> {
 	const started = await startSshServer(accounts);
@@ -61,7 +58,7 @@ const invoke = async (workspace: Workspace, tool: string, params: unknown, agent
 	).catch((error: unknown) => ({ content: [{ type: 'text' as const, text: String(error) }] }));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-	const details = 'details' in result ? (result.details as { process?: ProcessRecord }) : {};
+	const details = 'details' in result ? (result.details as { process?: Process }) : {};
 	return { text, process: details.process };
 };
 
@@ -99,7 +96,7 @@ async function earlierProcess(
 		`) < /dev/null > '${dir}/out' 2>&1`,
 		`echo "$? x" > '${dir}/exit'`,
 	].join('\n');
-	void env.exec(script, { timeout: 60 }, ctx).catch(() => undefined);
+	void env.exec(script, { timeout: 60 }).catch(() => undefined);
 	await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
 	const pid = Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
 	await env.cleanup();
@@ -142,7 +139,7 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 			invoke(workspace, 'cancel', { handle: 'bash-0000000000b1' }, 'bob'),
 		]);
 		// While the grace runs, the status reads running, and names the cancel that waits.
-		let listed: ProcessRecord | undefined;
+		let listed: Process | undefined;
 		for (let reads = 0; listed?.stopping !== true && reads < 50; reads += 1) {
 			[listed] = await workspace.processes.list({ agent: 'ada' });
 		}

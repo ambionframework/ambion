@@ -11,7 +11,7 @@ import {
 	type AgentDefinition,
 	type AmbionErrorCode,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -50,7 +50,7 @@ import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha', 'Alpha.');
 const beta = scriptedAgent('beta', 'Beta.');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 const agents = [alpha, beta, assistant];
 
 /** The assistant writes once when it holds `summarise`, or fails when told to. */
@@ -174,7 +174,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		// the fold before the crash is the fold after the resume
 		expect(await participantsOf(resumed)).toEqual(participants);
 		expect(await currentExchange(resumed)).toEqual(exchange);
-		// the pending wake is sent again, and beta answers into the same exchange
+		// the due wake is sent again, and beta answers into the same exchange
 		await ended(resumed, 'beta');
 		expect((await messagesOf(resumed)).filter(isSaid).map((m) => m.from)).toEqual([
 			'priya',
@@ -316,8 +316,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		await drafted;
 		// the first summary attempt failed: priya is owed, and the room waits for the backoff
 		expect(await summaries(session)).toHaveLength(0);
+		const redrafted = assistantEnded(session);
 		await visit.send({ text: 'Second?' });
 		await waitForRoom(session, 'settled');
+		// the failure of the second summary attempt lands in the journal before the crash
+		await redrafted;
 		expect(await summaries(session)).toHaveLength(0);
 		const questions = (await messagesOf(session)).filter((m) => isSaid(m) && m.from === 'priya');
 		crash(first, session);

@@ -14,11 +14,11 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `packages/ambion`: the runtime. One file per concern, in layers that Biome
   holds. `room.ts` composes them.
 - `packages/journal`: the append-only journal. One queue, fenced by run, with
-  conditional commits.
+  conditional appends.
 - `packages/assistant`: the default assistant definition. Membership guidance
   and closing summaries over the core.
 - `packages/simulator`: evals. `simulate()` drives a room as a person and
-  returns the run that checks read.
+  returns the simulation that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
@@ -35,7 +35,7 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `examples/workbench`: rooms and an OpenTUI terminal in one process.
 - `planning/`: `next.md` is the 0.5.0 scope and plan, `0.6.0.md` is the next
   release, `simplification.md` is the concepts that the repository holds twice,
-  `terminology.md` is one word, one meaning, `backlog.md` is everything else.
+  `backlog.md` is everything else.
 
 ## Read before you change
 
@@ -138,8 +138,8 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 
 ## Code rules
 
-- **Each concern has one owner.** Pi's AgentHarness
-  (`@earendil-works/pi-agent-core`) owns the model loop, the session, and
+- **Each concern has one owner.** The Pi harness
+  (`@earendil-works/pi-durable`) owns the model loop, the session, and
   compaction. `packages/workspace` owns the workspace port, resource, tools,
   and backend helpers. `packages/just-bash` owns the just-bash filesystem and
   shell. The core composes ordinary tools. `packages/journal` owns the queue, the fence, and the entry
@@ -203,8 +203,8 @@ sentence. `README.md` and `docs/` follow these rules.
 4. **One word, one meaning.** An **activation** is the room waking one seat.
    An **exchange** is a person's question and every activation until the
    room goes quiet. What the journal holds is an **entry**. `turn` belongs to
-   Pi (one request to a provider). `row` belongs to SQL. `round` belongs to
-   nobody. An activation is never a `trigger`, a `call`, or a `wake`.
+   a vendor loop (one request to a provider). `row` belongs to SQL. `round`
+   belongs to nobody. An activation is never a `trigger`, a `call`, or a `wake`.
 5. **Simple tenses.** Present for how things work, imperative for
    instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits".

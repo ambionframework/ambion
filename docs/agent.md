@@ -122,7 +122,7 @@ states how the guidance follows the speaking policy.
 `ctx.activation`, and `ctx.exchange` hold, and that the value grants no
 authority.
 
-**Spoken contributions require nonblank text.** The room refuses empty or
+**Said contributions require nonblank text.** The room refuses empty or
 whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.

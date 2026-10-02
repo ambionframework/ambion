@@ -14,7 +14,7 @@ import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { ScheduledSay } from '../scheduling.ts';
 import type { ExchangeRef, Message, Seq } from '../types.ts';
-import { type MessageDelivery, messageDelivery } from './delivery.ts';
+import { type MessageRecipients, messageDelivery } from './delivery.ts';
 import { applyLease, type DueActivation, type LeaseHold } from './lease.ts';
 import type { PersonState } from './presence.ts';
 import { cancelHold } from './rules.verified.ts';
@@ -29,7 +29,7 @@ export interface RoomState {
 	/** The latest cancellation marker, whose journal position bounds old work. */
 	readonly cancelledAt?: Seq;
 	readonly leases: Map<string, LeaseHold>;
-	readonly deliveries: Map<Seq, MessageDelivery>;
+	readonly deliveries: Map<Seq, MessageRecipients>;
 	/** Every activation the room owes, whatever caused it: the message activations and the summary activations as one list. */
 	readonly due: DueActivation[];
 	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
@@ -53,11 +53,11 @@ export interface BaseFacts {
 	cancelledAt: Seq | undefined;
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
-	deliveries: Map<Seq, MessageDelivery>;
+	deliveries: Map<Seq, MessageRecipients>;
 }
 
 /** The empty room facts before the first committed entry. */
-export const older = (): BaseFacts => ({
+export const noFacts = (): BaseFacts => ({
 	messages: [],
 	closes: [],
 	cancelledAt: undefined,

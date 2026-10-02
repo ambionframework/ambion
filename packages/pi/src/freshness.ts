@@ -1,90 +1,77 @@
 /**
- * What the provider received of the record, read from the exact provider
- * input.
+ * The ranges of the record in the session.
  *
- * The executor hands the harness each range of the record as a custom
- * message of type `ambion.record`: the rendered text, and in its details the
- * position the range starts after and the position it runs through. The
- * session keeps the details on disk and in memory. The harness hook that
- * turns the session into provider messages reads the messages of each
- * request, and tells the core each range and each tool result that the
- * request holds. The core keeps the position read. A user message with the
- * same text never counts: only the custom type and its details do.
+ * The executor writes each range of the record into the session as an entry
+ * of kind `ambion.record`. The entry carries `{ after, through, steer? }` as
+ * data, and the text of the range reaches the model in the user input of the
+ * pass. A line steered into a live pass carries its own text as the model
+ * message of its entry. A session that a later activation reopens tells it
+ * where the earlier one stopped reading: the largest `through` of the range
+ * entries that stay in the context. An `ambion.omit` entry removes the
+ * entries of a pass that did not answer.
  */
-import { contentText } from '@ambionframework/ambion';
-import type { ExecutorActivation, ReadRange, Seq } from '@ambionframework/ambion/hosting';
-import type { AgentMessage, CustomMessage } from '@earendil-works/pi-agent-core';
-import { convertToLlm, createCustomMessage } from '@earendil-works/pi-agent-core';
-import type { Message } from '@earendil-works/pi-ai';
+import type { ReadRange, Seq } from '@ambionframework/ambion/hosting';
+import type { EntryDraft, EntryId, EntryRecord } from '@earendil-works/pi-durable';
 
-/** The custom type of a range of the record in the session. */
+/** The kind of an entry that marks a range of the record in the session. */
 export const RECORD = 'ambion.record';
 
-/** The custom entry that holds the position a session read through. */
-export const READ = 'ambion.read';
+/** The kind of an entry that removes entries from the model context. */
+export const OMIT = 'ambion.omit';
 
 /** One range of the record in the session. */
-interface Range extends ReadRange {
+export interface Range extends ReadRange {
 	/** Set on a line steered into a live pass. */
 	readonly steer?: true;
 }
 
-/** A range of the record as a custom message the session keeps. */
-export function recordMessage(range: Range, text: string, timestamp: number): CustomMessage<Range> {
-	return createCustomMessage(RECORD, text, false, range, timestamp) as CustomMessage<Range>;
+/** The data of a range entry. */
+const dataOf = (range: Range) => ({
+	after: range.after,
+	through: range.through,
+	...(range.steer === true ? { steer: true } : {}),
+});
+
+/** A marker for a range of the record. The text of the range travels in the user input. */
+export function recordDraft(range: Range): EntryDraft {
+	return { kind: RECORD, data: dataOf(range) };
+}
+
+/** A range of the record that carries its own text, as a user message. */
+export function steerDraft(range: Range, text: string, timestamp: number): EntryDraft {
+	return { kind: RECORD, data: dataOf(range), model: [{ role: 'user', content: text, timestamp }] };
+}
+
+/** An entry that removes the `targets` from the model context. */
+export function omitDraft(targets: readonly EntryId[]): EntryDraft {
+	return {
+		kind: OMIT,
+		data: { targets: [...targets] },
+		edits: targets.map((target) => ({ target, action: 'omit' as const })),
+	};
 }
 
 const isPosition = (value: unknown): value is Seq =>
 	typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
-/** The range a message carries, when it is a range of the record. */
-function rangeOf(message: AgentMessage): Range | undefined {
-	if (message.role !== 'custom' || message.customType !== RECORD) return undefined;
-	const details = message.details as Partial<Record<keyof Range, unknown>> | undefined;
-	if (!isPosition(details?.after) || !isPosition(details?.through)) return undefined;
+/** The range an entry carries, when it is a range of the record. */
+export function rangeOf(entry: EntryRecord): Range | undefined {
+	if (entry.kind !== RECORD) return undefined;
+	const data = entry.data;
+	if (typeof data !== 'object' || data === null || Array.isArray(data)) return undefined;
+	if (!isPosition(data.after) || !isPosition(data.through)) return undefined;
 	return {
-		after: details.after,
-		through: details.through,
-		...(details.steer === true ? { steer: true } : {}),
+		after: data.after,
+		through: data.through,
+		...(data.steer === true ? { steer: true } : {}),
 	};
 }
 
-/** The text of a custom message. */
-function textOf(message: CustomMessage): string {
-	if (typeof message.content === 'string') return message.content;
-	return contentText(message.content);
-}
-
-/**
- * The provider messages of one request. A range of the record reaches the
- * provider as a user message with plain text. Every other message converts
- * as Pi converts it.
- */
-export function providerMessages(messages: AgentMessage[]): Message[] {
-	return messages.flatMap((message): Message[] =>
-		rangeOf(message) !== undefined && message.role === 'custom'
-			? [{ role: 'user', content: textOf(message), timestamp: message.timestamp }]
-			: convertToLlm([message]),
-	);
-}
-
-/**
- * Tell the core what the messages of one provider request hold: each range
- * of the record, and each tool result. Answer the positions of the steered
- * lines the request holds.
- */
-export function provided(
-	messages: readonly AgentMessage[],
-	activation: Pick<ExecutorActivation, 'read' | 'delivered'>,
-): Seq[] {
-	const steers: Seq[] = [];
-	for (const message of messages) {
-		const range = rangeOf(message);
-		if (range !== undefined) {
-			activation.read({ after: range.after, through: range.through });
-			if (range.steer === true) steers.push(range.through);
-		}
-		if (message.role === 'toolResult') activation.delivered(message.toolCallId);
+/** The entries that an omit edit removed from the context. */
+export function omittedIn(entries: readonly EntryRecord[]): ReadonlySet<EntryId> {
+	const omitted = new Set<EntryId>();
+	for (const entry of entries) {
+		for (const edit of entry.edits ?? []) if (edit.action === 'omit') omitted.add(edit.target);
 	}
-	return steers;
+	return omitted;
 }

@@ -1,13 +1,13 @@
 /**
- * How a harness run ends a pass: with no failure, at a length limit, or as a
- * failure the room classifies as permanent or transient.
+ * How a settled submission ends a pass: with no failure, at a length limit,
+ * or as a failure the room classifies as permanent or transient.
  */
 import type { FailureCause } from '@ambionframework/ambion/hosting';
 import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
-import type { RunResult } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { SettledSubmissionRecord } from '@earendil-works/pi-durable';
 
-/** What a run means for its pass. */
+/** What a settled submission means for its pass. */
 export type PassOutcome =
 	| { readonly failed: false; readonly stop?: 'length' }
 	| { readonly failed: true; readonly cause: FailureCause; readonly error: Error };
@@ -18,40 +18,49 @@ const transient = (message: string): PassOutcome => ({
 	error: new Error(message),
 });
 
-/**
- * The run error codes that name a fault in the configuration of the harness:
- * a model or a tool this process does not have. A retry runs in the same
- * process with the same configuration, so these failures are permanent.
- */
-const CONFIGURATION_CODES: ReadonlySet<string> = new Set([
-	'model_unavailable',
-	'configured_tools_unavailable',
-]);
+/** The text of the detail a settled submission carries. */
+const detailText = (detail: unknown): string =>
+	typeof detail === 'string' && detail !== '' ? detail : 'The activation failed.';
 
-/** A failed run with no provider message: permanent for a fault in the configuration. */
-function runFailure(error: { code: string; message: string } | undefined): PassOutcome {
-	if (error !== undefined && CONFIGURATION_CODES.has(error.code))
-		return { failed: true, cause: 'permanent', error: new Error(error.message) };
-	return transient(error?.message ?? 'The activation failed.');
+/**
+ * The outcome of one settled input, given the last assistant message of the
+ * pass. A failed provider message names the failure and its cause. A model
+ * error with no such message is transient. A harness with no model for the
+ * conversation is a fault in the configuration, which a retry in the same
+ * process does not fix, so it is permanent. Every other reason is transient.
+ * A cut pass is no failure.
+ */
+export function passOutcome(
+	settled: SettledSubmissionRecord,
+	last: AssistantMessage | undefined,
+): PassOutcome {
+	if (settled.status === 'done') {
+		return last?.stopReason === 'length' ? { failed: false, stop: 'length' } : { failed: false };
+	}
+	switch (settled.reason) {
+		case 'aborted':
+			return { failed: false };
+		case 'no_model':
+			return {
+				failed: true,
+				cause: 'permanent',
+				error: new Error('The conversation has no model.'),
+			};
+		case 'model_error':
+			return last?.stopReason === 'error' ? failureOf(last) : providerFailure(settled.detail);
+		default:
+			return transient(`The activation ended without an answer: ${settled.reason}.`);
+	}
 }
 
-/**
- * The outcome of one run, given the last assistant message it produced. A
- * failed provider message names the failure and its cause. A run that fails
- * with no such message is transient, unless its code names a fault in the
- * configuration, such as a model the harness cannot find. A cut run is no
- * failure.
- */
-export function passOutcome(result: RunResult, last: AssistantMessage | undefined): PassOutcome {
-	if (!result.ok) return transient(result.error.message);
-	const run = result.value;
-	if (run.status === 'suspended') return transient('The run suspended.');
-	if (run.status === 'aborted') return { failed: false };
-	if (run.status === 'failed') {
-		if (last?.stopReason === 'error') return failureOf(last);
-		return runFailure(run.error);
-	}
-	return last?.stopReason === 'length' ? { failed: false, stop: 'length' } : { failed: false };
+/** A model error the conversation reports as text alone. */
+function providerFailure(detail: unknown): PassOutcome {
+	const text = detailText(detail);
+	return {
+		failed: true,
+		cause: classifyCause({ text }),
+		error: new Error(providerMessage(text) || text),
+	};
 }
 
 /** A failed provider message: name it in the error, and classify its cause. */

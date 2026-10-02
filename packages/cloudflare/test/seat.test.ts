@@ -29,10 +29,14 @@ async function woken(room: ReturnType<typeof roomOf>, seat: DurableObjectStub): 
 	return read.exchanges.some((one) => one.activations.length > 0);
 }
 
-/** A room whose product seat answers, with priya's first question sent. */
-async function asked(name: string) {
+/**
+ * A room whose product seat answers, with priya's first question sent. A seat
+ * on hold keeps its wake and claims nothing.
+ */
+async function asked(name: string, hold = false) {
 	const room = roomOf(name);
 	const seat = seatOf(name);
+	if (hold) await seat.hold(true);
 	await room.start({
 		summaryWriter: 'assistant',
 		definitions: ['product', 'assistant'],
@@ -173,7 +177,9 @@ it('runs one activation when a second alarm starts while the first runs', async 
 });
 
 it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
-	const { room, seat, exchange } = await asked('cut-test');
+	// The hold keeps the wake unclaimed. Without it, the alarm of the wake can
+	// run the activation and publish its answer before the cancellation.
+	const { room, seat, exchange } = await asked('cut-test', true);
 
 	// The room records the cancellation and writes off the unclaimed wake.
 	await room.cancel();
@@ -184,7 +190,11 @@ it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	);
 	// The RPC returns after the durable cancellation cut and exchange close.
 	await room.waitForClose(exchange.from);
+	// The lift of the hold sets the alarm, and the room refuses its claim.
+	await seat.hold(false);
 	await runDurableObjectAlarm(seat);
+	// The refused activation ends, and the seat holds no activation.
+	await until(async () => (await stateOf(seat)).activation === undefined);
 	// The revoked exchange remains addressable by its opening sequence, while
 	// the product has no answer to publish.
 	expect(await room.exchange(exchange.from)).toEqual(exchange);
@@ -286,13 +296,13 @@ async function recovering(
 	});
 	await runDurableObjectAlarm(seat);
 	await until(async () =>
-		events.some((event) => event.event === 'delivery_error' && event.operation === 'release'),
+		events.some((event) => event.event === 'port_error' && event.operation === 'release'),
 	);
 	const read = () => runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
 	const timedOut = () =>
 		expect(events).toContainEqual(
 			expect.objectContaining({
-				event: 'delivery_error',
+				event: 'port_error',
 				activation,
 				operation: 'release',
 				error: 'Room call timed out.',

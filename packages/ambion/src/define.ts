@@ -13,12 +13,12 @@ import type {
 	AmbionTool,
 	Reminder,
 	ToolBundle,
+	ToolConcurrency,
 	ToolContext,
-	ToolExecutionMode,
 	ToolResult,
 } from './bundle.ts';
 import { AmbionError } from './errors.ts';
-import type { AgentDefinition, Executor, HumanDefinition, TracePolicy } from './types.ts';
+import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a room and on the record. */
@@ -191,12 +191,12 @@ export interface DefineHumanOptions {
 }
 
 /** Define a person. The room captures the definition the same way, so both check and trim alike. */
-export function defineHuman(options: DefineHumanOptions): HumanDefinition {
+export function definePerson(options: DefineHumanOptions): PersonDefinition {
 	return captureHuman(options);
 }
 
 /** Capture a person at a room boundary. Blank preferences are no preferences. */
-export function captureHuman(human: HumanDefinition): HumanDefinition {
+export function captureHuman(human: PersonDefinition): PersonDefinition {
 	assertName(human.name);
 	const preferences = human.preferences?.trim() || undefined;
 	return Object.freeze({
@@ -212,7 +212,7 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	parameters: TParameters;
 	label?: string;
 	prepareArguments?: (args: unknown) => Static<TParameters>;
-	executionMode?: ToolExecutionMode;
+	executionMode?: ToolConcurrency;
 	/**
 	 * Return a string (or the full content shape when needed). Throw on failure.
 	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
@@ -358,7 +358,7 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person who owns the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
+		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person of the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		delaySeconds: Type.Integer({
 			minimum: 1,
@@ -524,7 +524,7 @@ function isToolSchema(value: unknown): value is TSchema {
 	return typeof value === 'boolean' || IsSchema(value);
 }
 
-function isExecutionMode(value: unknown): value is ToolExecutionMode | undefined {
+function isExecutionMode(value: unknown): value is ToolConcurrency | undefined {
 	return value === undefined || value === 'sequential' || value === 'parallel';
 }
 

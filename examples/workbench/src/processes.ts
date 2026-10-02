@@ -1,7 +1,6 @@
-import { BACKGROUND_CONTEXT, type ProcessRecord, type Workspace } from '@ambionframework/workspace';
+import type { Process, Workspace } from '@ambionframework/workspace';
 
 /** One background process, as the workspace reports it. */
-export type ProcessView = ProcessRecord;
 
 /** The end of one output file, as the processes panel shows it. */
 export interface ProcessOutput {
@@ -20,8 +19,8 @@ const MAX_READ = 1_048_576;
 const SHOWN = 65_536;
 
 /** The order of the panel: the running processes first, then the newest start first. */
-export function byRecency(processes: readonly ProcessView[]): ProcessView[] {
-	const running = (process: ProcessView) => (process.state === 'running' ? 0 : 1);
+export function byRecency(processes: readonly Process[]): Process[] {
+	const running = (process: Process) => (process.state === 'running' ? 0 : 1);
 	return [...processes].sort(
 		(a, b) => running(a) - running(b) || b.startedAt.localeCompare(a.startedAt),
 	);
@@ -44,16 +43,13 @@ export function lastPart(text: string, shown = SHOWN): { text: string; truncated
  * does not exist yet reads as empty. A file larger than 1 MiB gives no text,
  * so a large output does not reach the host whole.
  */
-export async function readOutput(
-	workspace: Workspace,
-	process: ProcessView,
-): Promise<ProcessOutput> {
+export async function readOutput(workspace: Workspace, process: Process): Promise<ProcessOutput> {
 	return workspace.use({ name: process.agent }, async (env) => {
-		const info = await env.fileInfo(process.output, BACKGROUND_CONTEXT);
+		const info = await env.fileInfo(process.output);
 		const size = info.ok ? info.value.size : 0;
 		const empty = { handle: process.handle, text: '', size, truncated: size > 0 };
 		if (size === 0 || size > MAX_READ) return empty;
-		const read = await env.readTextFile(process.output, BACKGROUND_CONTEXT);
+		const read = await env.readTextFile(process.output);
 		if (!read.ok) return empty;
 		return { handle: process.handle, size, ...lastPart(read.value) };
 	});

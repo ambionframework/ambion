@@ -113,7 +113,7 @@ positioning and the current capabilities.
 | Package                        | Concern                                                                                 |
 | ------------------------------ | --------------------------------------------------------------------------------------- |
 | `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing`   |
-| `@ambionframework/pi`          | The Pi executor, on Pi's AgentHarness                                                   |
+| `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                      |
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                           |
 | `@ambionframework/codex`       | The Codex SDK executor                                                                  |
 | `@ambionframework/workspace`   | The workspace interface, sensor subpaths, SQLite backend, and conformance suites        |

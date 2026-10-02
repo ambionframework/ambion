@@ -8,8 +8,8 @@
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
- * The core binds the tools to one activation, and an executor adapts each
- * `RoomTool` to its harness: a Pi tool, an MCP tool, or a tool that a bridge
+ * The driver binds the tools to one activation, and an executor adapts each
+ * `BoundTool` to its harness: a Pi tool, an MCP tool, or a tool that a bridge
  * serves over a socket. The executor gives each call its id, and the id is
  * the idempotency key of the commit. The rules for what the model reads, and
  * for when the activation ends, live here once.
@@ -17,18 +17,11 @@
 
 import type { ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
-import type {
-	ActivationView,
-	CommitResult,
-	Intent,
-	RoomProtocol,
-	RoomTool,
-	RoomToolResult,
-	Unchanged,
-} from '../protocol.ts';
+import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
+import type { BoundTool, BoundToolResult } from './contract.ts';
 import { refusal, summaryToolDescription } from './render.ts';
 
 /** The name of the MCP server that serves the room tools to a harness. */
@@ -50,7 +43,7 @@ export interface RoomToolBinding {
 }
 
 /** A summary activation: its person, everyone it addresses, and how many it has answered. */
-interface Closing {
+interface Summarizing {
 	readonly person: string;
 	readonly people: readonly string[];
 	answered: number;
@@ -78,26 +71,26 @@ interface ScheduleArgs {
  * `answerOf`. The map holds each result weakly, so it keeps no entry past
  * its result.
  */
-const answers = new WeakMap<RoomToolResult, CommitResult>();
+const answers = new WeakMap<BoundToolResult, CommitResult>();
 
 /** The result of a commit, with the room's answer kept beside it. */
-function answered(result: RoomToolResult, response: CommitResult): RoomToolResult {
+function answered(result: BoundToolResult, response: CommitResult): BoundToolResult {
 	answers.set(result, response);
 	return result;
 }
 
 /** The room's answer to the commit that gave `result`, or nothing when the tool committed nothing. */
-export function answerOf(result: RoomToolResult): CommitResult | undefined {
+export function answerOf(result: BoundToolResult): CommitResult | undefined {
 	return answers.get(result);
 }
 
-const text = (value: string, isError = false): RoomToolResult => ({
+const text = (value: string, isError = false): BoundToolResult => ({
 	content: [{ type: 'text', text: value }],
 	...(isError ? { isError: true as const } : {}),
 });
 
 /** The tools an activation holds from the room, by its purpose. */
-export function roomTools(view: ActivationView, binding: RoomToolBinding): RoomTool[] {
+export function roomTools(view: ActivationView, binding: RoomToolBinding): BoundTool[] {
 	const { purpose } = view.spec;
 	if (purpose.kind === 'summarize') {
 		const closing = { person: purpose.person, people: purpose.people, answered: 0 };
@@ -106,8 +99,8 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): RoomT
 	return [
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
-		membershipTool(binding, 'seated'),
-		membershipTool(binding, 'unseated'),
+		seatingTool(binding, 'seated'),
+		seatingTool(binding, 'unseated'),
 		dismissTool(binding),
 		recallTool(view.context.name, binding),
 	];
@@ -124,7 +117,7 @@ export function agentTools(
 	agent: AgentDefinition,
 	signal: AbortSignal,
 	current: () => ActivationView,
-): RoomTool[] {
+): BoundTool[] {
 	if (view.spec.purpose.kind === 'summarize') return [];
 	return agent.executor.tools.map((one) => ({
 		name: one.name,
@@ -165,13 +158,13 @@ export function toolContext(
 }
 
 /** What an agent's tool returned, as the model reads it: its content only. */
-function toolResultOf(value: string | ToolResult): RoomToolResult {
+function toolResultOf(value: string | ToolResult): BoundToolResult {
 	if (typeof value === 'string') return text(value);
 	return { content: value.content.map((part) => ({ ...part })) };
 }
 
 /** What the model reads for a commit the room answered. */
-function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResult {
+function landed(binding: RoomToolBinding, response: CommitResult): BoundToolResult {
 	if ('committed' in response || 'unchanged' in response) return text(landedLine(response));
 	if ('refused' in response) return text(response.refused, true);
 	binding.cut();
@@ -186,7 +179,7 @@ function landed(binding: RoomToolBinding, response: CommitResult): RoomToolResul
 
 /**
  * What the model reads for a commit the room took: what landed, and its seq,
- * so the agent can cite its own message. A membership change the record
+ * so the agent can cite its own message. A seating change the record
  * already holds says so.
  */
 function landedLine(response: { committed: Message } | { unchanged: Unchanged }): string {
@@ -212,7 +205,7 @@ function scheduledLine(message: Message): string {
 }
 
 /** The result that tells the model its activation has ended. */
-function ended(why: string): RoomToolResult {
+function ended(why: string): BoundToolResult {
 	return { ...text(`${why} This activation is over.`, true), terminate: true };
 }
 
@@ -245,7 +238,7 @@ function scheduledBy(seat: string, args: ScheduleArgs): Intent {
 }
 
 /** The tool that speaks for a respond activation or publishes its close. */
-function sayTool(binding: RoomToolBinding, closing?: Closing): RoomTool {
+function sayTool(binding: RoomToolBinding, closing?: Summarizing): BoundTool {
 	return {
 		name: SAY.name,
 		description:
@@ -261,8 +254,8 @@ async function say(
 	binding: RoomToolBinding,
 	args: SayArgs,
 	call: string,
-	closing: Closing | undefined,
-): Promise<RoomToolResult> {
+	closing: Summarizing | undefined,
+): Promise<BoundToolResult> {
 	const response = await binding.room.commit({
 		activation: binding.id,
 		key: call,
@@ -277,8 +270,8 @@ function sayResult(
 	binding: RoomToolBinding,
 	call: string,
 	response: CommitResult,
-	closing: Closing | undefined,
-): RoomToolResult {
+	closing: Summarizing | undefined,
+): BoundToolResult {
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
 	if ('committed' in response) accepted(binding, response.committed, closing);
 	const result = landed(binding, response);
@@ -292,7 +285,7 @@ function sayResult(
  * scheduled say at any position. When the record moved past the read
  * position, the result carries the messages the say landed past.
  */
-function scheduleTool(seat: string, binding: RoomToolBinding): RoomTool {
+function scheduleTool(seat: string, binding: RoomToolBinding): BoundTool {
 	return {
 		name: SCHEDULE.name,
 		description: SCHEDULE.description,
@@ -322,7 +315,7 @@ function scheduleResult(
 	call: string,
 	message: Message,
 	unread: readonly Message[],
-): RoomToolResult {
+): BoundToolResult {
 	const line = scheduledLine(message);
 	if (unread.length === 0) {
 		binding.acknowledgeThrough(message.seq);
@@ -333,7 +326,11 @@ function scheduleResult(
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */
-function accepted(binding: RoomToolBinding, message: Message, closing: Closing | undefined): void {
+function accepted(
+	binding: RoomToolBinding,
+	message: Message,
+	closing: Summarizing | undefined,
+): void {
 	if (closing !== undefined) {
 		closing.answered += 1;
 	} else if (message.kind === 'said') {
@@ -346,8 +343,8 @@ function missedSay(
 	binding: RoomToolBinding,
 	call: string,
 	missed: readonly Message[],
-	closing: Closing | undefined,
-): RoomToolResult {
+	closing: Summarizing | undefined,
+): BoundToolResult {
 	if (closing === undefined) {
 		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
 	}
@@ -362,7 +359,7 @@ function missedSay(
 }
 
 /** The tool that seats or removes one agent. */
-function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): RoomTool {
+function seatingTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): BoundTool {
 	const spec = kind === 'seated' ? SEAT : UNSEAT;
 	return {
 		name: spec.name,
@@ -380,7 +377,7 @@ function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): 
 }
 
 /** The room tool that dismisses one scheduled say of the seat, by its seq. */
-function dismissTool(binding: RoomToolBinding): RoomTool {
+function dismissTool(binding: RoomToolBinding): BoundTool {
 	return {
 		name: DISMISS.name,
 		description: DISMISS.description,
@@ -410,7 +407,7 @@ function dismissTool(binding: RoomToolBinding): RoomTool {
  * what the view of the activation may read, commits nothing, and moves no
  * read position: a recalled message is old.
  */
-function recallTool(room: string, binding: RoomToolBinding): RoomTool {
+function recallTool(room: string, binding: RoomToolBinding): BoundTool {
 	return {
 		name: RECALL.name,
 		description: RECALL.description,

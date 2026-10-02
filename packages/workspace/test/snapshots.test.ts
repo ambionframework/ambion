@@ -11,7 +11,6 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseSnapshotUri, snapshotUri } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { roomName as name } from '../../ambion/test/support/room.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
@@ -20,7 +19,6 @@ import { assertObjectSize } from '../src/object-rules.ts';
 import { s3ObjectBackend } from '../src/s3-entry.ts';
 import { callAs, toolOf } from './support/backends.ts';
 
-const ctx = BACKGROUND_CONTEXT;
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -34,9 +32,9 @@ function site(label: string): Workspace {
 /** Write `content` to `path` as `agent`. */
 async function put(workspace: Workspace, agent: string, path: string, content: string) {
 	await workspace.use({ name: agent }, async (env) => {
-		const made = await env.createDir(path.slice(0, path.lastIndexOf('/')) || '/', undefined, ctx);
+		const made = await env.createDir(path.slice(0, path.lastIndexOf('/')) || '/', undefined);
 		if (!made.ok) throw made.error;
-		const written = await env.writeFile(path, content, ctx);
+		const written = await env.writeFile(path, content);
 		if (!written.ok) throw written.error;
 	});
 }
@@ -47,7 +45,7 @@ describe('snapshot', () => {
 		await put(workspace, 'analyst', '/shared/a.md', 'alpha\n');
 		await put(workspace, 'analyst', '/shared/b.md', 'alpha\n');
 		await workspace.use({ name: 'analyst' }, (env) =>
-			env.exec('ln -s /shared/a.md /shared/link.md', undefined, ctx),
+			env.exec('ln -s /shared/a.md /shared/link.md', undefined),
 		);
 		const refs = await workspace.snapshot(['/shared/a.md', '/shared/b.md', '/shared/link.md']);
 		expect(refs).toEqual([
@@ -56,9 +54,7 @@ describe('snapshot', () => {
 			snapshotUri(workspace.name, sha256('alpha\n'), '/shared/link.md'),
 		]);
 		expect(await workspace.snapshot(['/shared/a.md'])).toEqual(refs.slice(0, 1));
-		const copies = await workspace.use(workspace.mirrorAgent, (env) =>
-			env.listDir('/snapshots', ctx),
-		);
+		const copies = await workspace.use(workspace.mirrorAgent, (env) => env.listDir('/snapshots'));
 		expect(copies.ok && copies.value.map((entry) => entry.name)).toEqual([sha256('alpha\n')]);
 	});
 
@@ -125,7 +121,7 @@ describe('snapshot', () => {
 		}
 		await expect(workspace.snapshot(paths)).rejects.toThrow(error);
 		expect(
-			await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots', ctx)),
+			await workspace.use(workspace.mirrorAgent, (env) => env.exists('/snapshots')),
 		).toMatchObject({ ok: true, value: false });
 	});
 });
@@ -179,7 +175,7 @@ describe('restore', () => {
 		});
 		await restore.invoke({ ref, path: 'review/plan.md' }, callAs('reviewer'));
 		const read = (path: string) =>
-			workspace.use({ name: 'reviewer' }, (env) => env.readTextFile(path, ctx));
+			workspace.use({ name: 'reviewer' }, (env) => env.readTextFile(path));
 		expect(await read(into)).toEqual({ ok: true, value: 'pour on Thursday\n' });
 		expect(await read('/home/reviewer/review/plan.md')).toEqual({
 			ok: true,

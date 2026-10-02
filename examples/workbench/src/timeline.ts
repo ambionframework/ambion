@@ -83,7 +83,7 @@ interface Group {
 	direct: boolean;
 }
 
-const spoken = (message: Message): boolean =>
+const hasText = (message: Message): boolean =>
 	message.kind === 'said' || message.kind === 'summary' || message.kind === 'posted';
 
 function waitingOn(exchange: ClosedView): string | undefined {
@@ -213,7 +213,7 @@ class Builder {
 	}
 
 	build(): Block[] {
-		for (const message of this.input.messages.filter(spoken)) this.place(message);
+		for (const message of this.input.messages.filter(hasText)) this.place(message);
 		for (const group of this.groups) this.emit(group);
 		this.blocks.push(...(this.input.tail ?? []));
 		if (this.input.open)
@@ -258,7 +258,7 @@ class Builder {
 /**
  * Turn the record into the blocks the conversation shows.
  *
- * A closed exchange shows its question, then one discussion holding every spoken
+ * A closed exchange shows its question, then one discussion holding every said
  * message after it, in order, and then its summary. A person's steering message
  * is part of the discussion. An exchange with one reply shows that reply and no
  * discussion or summary. The open exchange keeps its messages in the open, and a

@@ -12,7 +12,7 @@
 import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
 import {
 	openWorkspace,
-	type ProcessRecord,
+	type Process,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
@@ -22,18 +22,15 @@ import {
 	workspaceConformance,
 } from '@ambionframework/workspace/conformance';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../../src/index.ts';
 import { type Backend, configPath, options, run, WIPE, withEnv } from '../support/sshd.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 const fixture: ConformanceFixture<WorkspaceConformanceStore> = {
 	name: 'workstation on OpenSSH',
 	async open() {
 		const backend = workstationBackend(await options());
-		await withEnv(backend, 'conformance', (env) => env.exec(WIPE, undefined, ctx));
+		await withEnv(backend, 'conformance', (env) => env.exec(WIPE, undefined));
 		return { backend, dispose: async () => backend.dispose?.() };
 	},
 };
@@ -50,36 +47,36 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 		layout = resolved.layout;
 		backend = workstationBackend(resolved);
 		for (const agent of ['surveyor', 'planner']) {
-			await withEnv(backend, agent, (env) => env.exec(WIPE, undefined, ctx));
+			await withEnv(backend, agent, (env) => env.exec(WIPE, undefined));
 		}
 		await withEnv(backend, 'lab-host', (env) =>
-			env.exec(`rm -rf -- ${layout.rooms}/* ${layout.snapshots}/*`, undefined, ctx),
+			env.exec(`rm -rf -- ${layout.rooms}/* ${layout.snapshots}/*`, undefined),
 		);
 	});
 	afterAll(async () => backend.dispose?.());
 
 	it('classifies the status codes of OpenSSH by the kind of operation', async () => {
 		await withEnv(backend, 'surveyor', async (env) => {
-			await env.createDir('full', undefined, ctx);
-			await env.writeFile('full/a.txt', 'x', ctx);
-			expect(await env.remove('full', undefined, ctx)).toMatchObject({
+			await env.createDir('full', undefined);
+			await env.writeFile('full/a.txt', 'x');
+			expect(await env.remove('full', undefined)).toMatchObject({
 				ok: false,
 				error: { code: 'invalid' },
 			});
-			expect(await env.readTextFile('full/a.txt/x', ctx)).toMatchObject({
+			expect(await env.readTextFile('full/a.txt/x')).toMatchObject({
 				ok: false,
 				error: { code: 'not_directory' },
 			});
-			expect(await env.readTextFile('none/a.txt', ctx)).toMatchObject({
+			expect(await env.readTextFile('none/a.txt')).toMatchObject({
 				ok: false,
 				error: { code: 'not_found' },
 			});
-			expect(await env.renameFile('full/a.txt', 'none/b.txt', ctx)).toMatchObject({
+			expect(await env.renameFile('full/a.txt', 'none/b.txt')).toMatchObject({
 				ok: false,
 				error: { code: 'not_found' },
 			});
-			expect(await env.writeFile('deep/er/a.txt', 'x', ctx)).toMatchObject({ ok: true });
-			expect(await env.createDir('full', { recursive: false }, ctx)).toMatchObject({
+			expect(await env.writeFile('deep/er/a.txt', 'x')).toMatchObject({ ok: true });
+			expect(await env.createDir('full', { recursive: false })).toMatchObject({
 				ok: false,
 				error: { code: 'invalid' },
 			});
@@ -88,17 +85,12 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 
 	it('kills the whole process group on a timeout', async () => {
 		await withEnv(backend, 'surveyor', async (env) => {
-			const timedOut = await env.exec(
-				'sleep 30 & echo $! > child.pid; sleep 30',
-				{ timeout: 0.5 },
-				ctx,
-			);
+			const timedOut = await env.exec('sleep 30 & echo $! > child.pid; sleep 30', { timeout: 0.5 });
 			expect(timedOut).toMatchObject({ ok: false, error: { code: 'timeout' } });
 			// A killed child that no init reaps stays a zombie, and `kill -0` still finds it.
 			const gone = await env.exec(
 				'sleep 0.2; case "$(ps -o stat= -p "$(cat child.pid)")" in "" | Z*) exit 0 ;; *) exit 1 ;; esac',
 				undefined,
-				ctx,
 			);
 			expect(gone).toMatchObject({ ok: true, value: { exitCode: 0 } });
 		});
@@ -107,66 +99,55 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 	it('stays under MaxSessions over many commands, timeouts, and aborts on one client', async () => {
 		await withEnv(backend, 'surveyor', async (env) => {
 			for (let i = 0; i < 12; i += 1) {
-				expect(await env.exec('true', undefined, ctx)).toMatchObject({ ok: true });
-				const timedOut = await env.exec('sleep 30', { timeout: 0.05 }, ctx);
+				expect(await env.exec('true', undefined)).toMatchObject({ ok: true });
+				const timedOut = await env.exec('sleep 30', { timeout: 0.05 });
 				expect(timedOut).toMatchObject({ ok: false, error: { code: 'timeout' } });
 			}
-			expect(await env.exec('echo done', undefined, ctx)).toMatchObject({
+			expect(await env.exec('echo done', undefined)).toMatchObject({
 				ok: true,
 				value: { exitCode: 0 },
 			});
 		});
 	});
 
-	it('keeps one account out of another account home and temporary files', async () => {
-		const temp = await withEnv(backend, 'surveyor', async (env) => {
-			await env.writeFile('secret.txt', 'mine', ctx);
-			const file = await env.createTempFile(undefined, ctx);
-			if (!file.ok) throw new Error('no temporary file');
-			await env.writeFile(file.value, 'mine', ctx);
-			return file.value;
+	it('keeps one account out of another account home', async () => {
+		await withEnv(backend, 'surveyor', async (env) => {
+			await env.writeFile('secret.txt', 'mine');
 		});
 		await withEnv(backend, 'planner', async (env) => {
-			expect(await env.readTextFile('/home/surveyor/secret.txt', ctx)).toMatchObject({
+			expect(await env.readTextFile('/home/surveyor/secret.txt')).toMatchObject({
 				ok: false,
 				error: { code: 'permission_denied' },
 			});
-			expect(await env.readTextFile(temp, ctx)).toMatchObject({
-				ok: false,
-				error: { code: 'permission_denied' },
-			});
-			const cat = await env.exec('cat /home/surveyor/secret.txt', undefined, ctx);
+			const cat = await env.exec('cat /home/surveyor/secret.txt', undefined);
 			expect(cat).toMatchObject({ ok: true, value: { exitCode: 1 } });
 		});
 	});
 
-	it('bounds a large output to the view, and names no spill file', async () => {
+	it('bounds a large output to the view', async () => {
 		await withEnv(backend, 'surveyor', async (env) => {
-			const result = await env.exec(
-				'seq 1 200000',
-				{ capture: { limits: { maxBytes: 2_000, maxLines: 50 } } },
-				ctx,
-			);
+			const result = await env.exec('seq 1 200000', {
+				capture: { limits: { maxBytes: 2_000, maxLines: 50 } },
+			});
 			if (!result.ok) throw result.error;
 			expect(result.value.truncation).toMatchObject({ truncated: true, totalLines: 200_000 });
-			expect(result.value.spillPath).toBeUndefined();
 		});
 	});
 
 	it('keeps each new file in the audit folder writable for every agent', async () => {
 		const first = `${layout.audit}.first`;
 		const rotated = `${layout.audit}.rotated`;
-		await withEnv(backend, 'surveyor', (env) => env.writeFile(first, 'a\n', ctx));
+		await withEnv(backend, 'surveyor', (env) => env.writeFile(first, 'a\n'));
 		await withEnv(backend, 'planner', async (env) => {
-			expect(await env.appendFile(first, 'b\n', ctx)).toMatchObject({ ok: true });
-			expect(await env.renameFile(first, rotated, ctx)).toMatchObject({ ok: true });
-			expect(await env.writeFile(first, 'c\n', ctx)).toMatchObject({ ok: true });
+			expect(await env.appendFile(first, 'b\n')).toMatchObject({ ok: true });
+			expect(await env.renameFile(first, rotated)).toMatchObject({ ok: true });
+			expect(await env.writeFile(first, 'c\n')).toMatchObject({ ok: true });
 		});
 		await withEnv(backend, 'surveyor', async (env) => {
-			expect(await env.appendFile(first, 'd\n', ctx)).toMatchObject({ ok: true });
-			expect(await env.readTextFile(rotated, ctx)).toMatchObject({ ok: true, value: 'a\nb\n' });
-			await env.remove(first, undefined, ctx);
-			await env.remove(rotated, undefined, ctx);
+			expect(await env.appendFile(first, 'd\n')).toMatchObject({ ok: true });
+			expect(await env.readTextFile(rotated)).toMatchObject({ ok: true, value: 'a\nb\n' });
+			await env.remove(first, undefined);
+			await env.remove(rotated, undefined);
 		});
 	});
 
@@ -175,15 +156,15 @@ describe.skipIf(configPath === undefined)('integration tier', () => {
 		async (folder) => {
 			const path = `${layout[folder]}/lobby.jsonl`;
 			await withEnv(backend, 'surveyor', async (env) => {
-				expect(await env.writeFile(`${layout[folder]}/x.txt`, 'x', ctx)).toMatchObject({
+				expect(await env.writeFile(`${layout[folder]}/x.txt`, 'x')).toMatchObject({
 					ok: false,
 					error: { code: 'permission_denied' },
 				});
 			});
-			await withEnv(backend, 'lab-host', (env) => env.writeFile(path, 'entry\n', ctx));
+			await withEnv(backend, 'lab-host', (env) => env.writeFile(path, 'entry\n'));
 			await withEnv(backend, 'planner', async (env) => {
-				expect(await env.readTextFile(path, ctx)).toMatchObject({ ok: true, value: 'entry\n' });
-				expect(await env.appendFile(path, 'forged\n', ctx)).toMatchObject({
+				expect(await env.readTextFile(path)).toMatchObject({ ok: true, value: 'entry\n' });
+				expect(await env.appendFile(path, 'forged\n')).toMatchObject({
 					ok: false,
 					error: { code: 'permission_denied' },
 				});
@@ -215,7 +196,7 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 			expect(JSON.stringify(surveyor)).toContain('surveyor');
 			expect(JSON.stringify(planner)).toContain('planner');
 			const audit = await withEnv(bashBackend, 'surveyor', (env) =>
-				env.readTextFile(resolved.layout.audit, ctx),
+				env.readTextFile(resolved.layout.audit),
 			);
 			if (!audit.ok) throw audit.error;
 			const agents = audit.value
@@ -233,13 +214,13 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 		const bashBackend = workstationBackend(resolved);
 		const workspace = openWorkspace({ name: 'lab', backend: { bash: bashBackend } });
 		try {
-			await withEnv(bashBackend, 'surveyor', (env) => env.writeFile('plan.md', 'pour\n', ctx));
+			await withEnv(bashBackend, 'surveyor', (env) => env.writeFile('plan.md', 'pour\n'));
 			const [ref] = await workspace.snapshot(['plan.md'], { agent: { name: 'surveyor' } });
 			const digest = parseSnapshotUri(ref ?? '')?.digest ?? '';
 			const copy = `${resolved.layout.snapshots}/${digest}`;
 			await withEnv(bashBackend, 'planner', async (env) => {
-				expect(await env.readTextFile(copy, ctx)).toMatchObject({ ok: true, value: 'pour\n' });
-				expect(await env.writeFile(copy, 'forged\n', ctx)).toMatchObject({
+				expect(await env.readTextFile(copy)).toMatchObject({ ok: true, value: 'pour\n' });
+				expect(await env.writeFile(copy, 'forged\n')).toMatchObject({
 					ok: false,
 					error: { code: 'permission_denied' },
 				});
@@ -249,7 +230,7 @@ describe.skipIf(configPath === undefined)('a workspace on OpenSSH', () => {
 			if (restore === undefined) throw new Error('No restore tool.');
 			await restore.invoke({ ref, path: 'plan.md' }, context('planner'));
 			await withEnv(bashBackend, 'planner', async (env) => {
-				expect(await env.readTextFile('plan.md', ctx)).toMatchObject({ ok: true, value: 'pour\n' });
+				expect(await env.readTextFile('plan.md')).toMatchObject({ ok: true, value: 'pour\n' });
 			});
 		} finally {
 			await workspace.dispose();
@@ -271,11 +252,11 @@ async function specOf(
 	timeout = 600,
 	startedAt = new Date().toISOString(),
 ): Promise<string> {
-	const dir = await env.absolutePath(`~/.processes/${handle}`, ctx);
+	const dir = await env.absolutePath(`~/.processes/${handle}`);
 	if (!dir.ok) throw dir.error;
 	const spec = { handle, kind: 'bash', agent: OWNER, command, timeout, grace: 10, startedAt };
-	expect(await env.createDir(dir.value, { recursive: true }, ctx)).toMatchObject({ ok: true });
-	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec), ctx)).toMatchObject({
+	expect(await env.createDir(dir.value, { recursive: true })).toMatchObject({ ok: true });
+	expect(await env.writeFile(`${dir.value}/spec`, JSON.stringify(spec))).toMatchObject({
 		ok: true,
 	});
 	return dir.value;
@@ -295,10 +276,10 @@ async function shellOf(env: WorkspaceEnv, dir: string, command: string): Promise
 		`) < /dev/null > '${dir}/out' 2>&1`,
 		`echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '${dir}/exit.tmp' && mv '${dir}/exit.tmp' '${dir}/exit'`,
 	].join('\n');
-	void env.exec(script, { timeout: 120 }, ctx);
+	void env.exec(script, { timeout: 120 });
 	const deadline = Date.now() + 10_000;
 	while (Date.now() < deadline) {
-		const pid = await env.readTextFile(`${dir}/pid`, ctx);
+		const pid = await env.readTextFile(`${dir}/pid`);
 		if (pid.ok && pid.value.trim() !== '') return Number(pid.value.trim());
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
@@ -326,7 +307,7 @@ async function call(workspace: Workspace, name: string, params: unknown) {
 	const result = await tool.invoke(params, context(OWNER));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-	const details = result.details as { process?: ProcessRecord; processes?: ProcessRecord[] };
+	const details = result.details as { process?: Process; processes?: Process[] };
 	return { process: details.process, processes: details.processes ?? [], text };
 }
 
@@ -346,7 +327,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		// An earlier run of the host starts two processes over OpenSSH, and then goes away.
 		const earlier = workstationBackend(await options());
 		const pids = await withEnv(earlier, OWNER, async (env) => {
-			await env.exec(WIPE, undefined, ctx);
+			await env.exec(WIPE, undefined);
 			const kept = 'sleep 300 &\necho "$!" > child\necho adopted\nwait';
 			const late = 'exec sleep 300';
 			const lateStart = new Date(Date.now() - 5_000).toISOString();
@@ -357,7 +338,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			];
 			// A read whose ps failed once wrote the lost stop for the live shell of the late one.
 			const line = `failed ${new Date().toISOString()} ${LOST}\n`;
-			expect(await env.writeFile(`${lateDir}/stop`, line, ctx)).toMatchObject({ ok: true });
+			expect(await env.writeFile(`${lateDir}/stop`, line)).toMatchObject({ ok: true });
 			return shells;
 		}).finally(() => earlier.dispose?.());
 		const { workspace, backend } = await nextRun();
@@ -385,7 +366,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			expect(cancelled.process?.state).toBe('cancelled');
 			// The kill reaches the whole group: each wrapper shell, and the child that one started.
 			await withEnv(backend, OWNER, async (env) => {
-				const child = await env.readTextFile('child', ctx);
+				const child = await env.readTextFile('child');
 				if (!child.ok) throw child.error;
 				expect(await allEnded(env, [...pids, Number(child.value.trim())])).toBe(true);
 			});
@@ -399,7 +380,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		const { workspace, backend } = await nextRun();
 		try {
 			const [lost, pending, decoy] = await withEnv(backend, OWNER, async (env) => {
-				await env.exec(WIPE, undefined, ctx);
+				await env.exec(WIPE, undefined);
 				// A process whose shell ended and left no end in the files, and a spec with no pid yet.
 				const dir = await specOf(env, 'bash-0000000000b1', 'true');
 				expect(await run(env, `sh -c 'echo "$$"' > '${dir}/pid'`)).toMatchObject({ code: 0 });
@@ -414,14 +395,14 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			expect(first).toMatchObject({ state: 'failed', error: LOST });
 			expect(first?.endedAt).toBeUndefined();
 			await withEnv(backend, OWNER, async (env) => {
-				expect(await env.readTextFile(`${lost}/stop`, ctx)).toMatchObject({
+				expect(await env.readTextFile(`${lost}/stop`)).toMatchObject({
 					ok: true,
 					value: expect.stringMatching(
 						/^failed \S+ The host run ended before the process did\.\n$/,
 					),
 				});
 				// A process with no pid costs no ps, and its shell can still start: it gets no stop.
-				expect(await env.readTextFile(`${pending}/stop`, ctx)).toMatchObject({
+				expect(await env.readTextFile(`${pending}/stop`)).toMatchObject({
 					ok: false,
 					error: { code: 'not_found' },
 				});
@@ -433,23 +414,21 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			});
 			// The pid file now names the decoy twice, as a list: ps reads the list, and /proc has no
 			// directory of that name. Only the skip keeps the decoy from the listing.
-			await withEnv(backend, OWNER, (env) =>
-				env.writeFile(`${lost}/pid`, `${decoy},${decoy}\n`, ctx),
-			);
+			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy},${decoy}\n`));
 			expect((await call(workspace, 'ps', {})).processes).toEqual([]);
 			expect(await lostStatus(workspace, 'bash-0000000000b1')).toMatchObject({
 				state: 'failed',
 				error: LOST,
 			});
 			// With the pid of the decoy alone, /proc has it: the listing runs ps and adopts it.
-			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy}\n`, ctx));
+			await withEnv(backend, OWNER, (env) => env.writeFile(`${lost}/pid`, `${decoy}\n`));
 			const found = await call(workspace, 'status', { handle: 'bash-0000000000b1' });
 			expect(found.process?.state).toBe('running');
 			const cancelled = await call(workspace, 'cancel', { handle: 'bash-0000000000b1' });
 			expect(cancelled.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
 				// The stop of the cancel writes over the lost line.
-				expect(await env.readTextFile(`${lost}/stop`, ctx)).toMatchObject({
+				expect(await env.readTextFile(`${lost}/stop`)).toMatchObject({
 					ok: true,
 					value: expect.stringMatching(/^cancelled /),
 				});
@@ -463,7 +442,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 	it('cancels an owned process with SIGTERM: a trap ends it inside the grace, and SIGKILL ends one that ignores TERM', async () => {
 		const { workspace, backend } = await nextRun();
 		try {
-			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined));
 			const clean = "trap 'echo cleanup; exit 0' TERM\nsleep 300 &\nwait";
 			const started = await call(workspace, 'bash', { command: clean, wait: 0 });
 			const cancelled = await call(workspace, 'cancel', { handle: started.process?.handle });
@@ -476,7 +455,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			expect(Date.now() - began).toBeGreaterThanOrEqual(10_000);
 			expect(killed.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
-				const child = await env.readTextFile('child', ctx);
+				const child = await env.readTextFile('child');
 				if (!child.ok) throw child.error;
 				expect(await allEnded(env, [Number(child.value.trim())])).toBe(true);
 			});
@@ -488,7 +467,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 	it('cancels an owned process that ignores TERM after the grace of its call', async () => {
 		const { workspace, backend } = await nextRun();
 		try {
-			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			await withEnv(backend, OWNER, (env) => env.exec(WIPE, undefined));
 			const stubborn = 'trap \'\' TERM\nsleep 300 &\necho "$!" > child\nwait';
 			const started = await call(workspace, 'bash', { command: stubborn, grace: 2, wait: 1 });
 			expect(started.process).toMatchObject({ state: 'running', grace: 2 });
@@ -500,7 +479,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			expect(elapsed).toBeLessThan(9_000);
 			expect(killed.process?.state).toBe('cancelled');
 			await withEnv(backend, OWNER, async (env) => {
-				const child = await env.readTextFile('child', ctx);
+				const child = await env.readTextFile('child');
 				if (!child.ok) throw child.error;
 				expect(await allEnded(env, [Number(child.value.trim())])).toBe(true);
 			});
@@ -513,7 +492,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 		const { workspace } = await nextRun();
 		const checker = workstationBackend(await options());
 		try {
-			await withEnv(checker, OWNER, (env) => env.exec(WIPE, undefined, ctx));
+			await withEnv(checker, OWNER, (env) => env.exec(WIPE, undefined));
 			const names = ['one', 'two', 'three', 'four'];
 			for (const name of names) {
 				const command = `trap '' TERM\nsleep 300 &\necho "$!" > child-${name}\nwait`;
@@ -527,7 +506,7 @@ describe.skipIf(configPath === undefined)('processes on OpenSSH', () => {
 			await withEnv(checker, OWNER, async (env) => {
 				const pids: number[] = [];
 				for (const name of names) {
-					const child = await env.readTextFile(`child-${name}`, ctx);
+					const child = await env.readTextFile(`child-${name}`);
 					if (!child.ok) throw child.error;
 					pids.push(Number(child.value.trim()));
 				}

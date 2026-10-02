@@ -1,7 +1,7 @@
 import { readFile as readLocalFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { BACKGROUND_CONTEXT, type Workspace } from '@ambionframework/workspace';
+import type { Workspace } from '@ambionframework/workspace';
 import {
 	isDatabase,
 	isDatabasePath,
@@ -73,7 +73,7 @@ export async function listFiles(workspace: Workspace): Promise<FileEntry[]> {
 		const pending = ['/'];
 		let visited = 0;
 		while (pending.length > 0 && visited < 500) {
-			const result = await env.listDir(pending.shift() ?? '/', BACKGROUND_CONTEXT);
+			const result = await env.listDir(pending.shift() ?? '/');
 			if (!result.ok) throw result.error;
 			const entries = result.value.slice(0, 500 - visited);
 			visited += entries.length;
@@ -123,8 +123,8 @@ export async function attachFile(workspace: Workspace, localPath: string): Promi
 	const bytes = await readLocal(() => readLocalFile(resolved), localPath);
 	const path = `${ATTACHMENTS_DIR}/${Date.now()}-${basename(resolved)}`;
 	await workspace.use(browser, async (env) => {
-		await env.createDir(ATTACHMENTS_DIR, { recursive: true }, BACKGROUND_CONTEXT);
-		const written = await env.writeFile(path, bytes, BACKGROUND_CONTEXT);
+		await env.createDir(ATTACHMENTS_DIR, { recursive: true });
+		const written = await env.writeFile(path, bytes);
 		if (!written.ok) fail(written.error.message);
 	});
 	const [ref] = await workspace.snapshot([path], { agent: browser });
@@ -145,7 +145,7 @@ export async function readFile(workspace: Workspace, path: string): Promise<File
 		await checkAncestors(env, parts, kind);
 		if (kind === 'database') return readDatabase(env, path);
 		if (kind === 'image') return readImage(env, path);
-		const result = await env.readTextFile(path, BACKGROUND_CONTEXT);
+		const result = await env.readTextFile(path);
 		if (!result.ok) fail(result.error.message);
 		return { path, text: result.value, truncated: false };
 	});
@@ -175,11 +175,9 @@ function checkFile(
 interface Reader {
 	readBinaryFile(
 		path: string,
-		context: typeof BACKGROUND_CONTEXT,
 	): Promise<{ ok: true; value: Uint8Array } | { ok: false; error: { message: string } }>;
 	fileInfo(
 		path: string,
-		context: typeof BACKGROUND_CONTEXT,
 	): Promise<
 		{ ok: true; value: { kind: string; size: number } } | { ok: false; error: { message: string } }
 	>;
@@ -194,14 +192,14 @@ async function checkAncestors(
 	let prefix = '';
 	for (const part of parts) {
 		prefix += `/${part}`;
-		const info = await env.fileInfo(prefix, BACKGROUND_CONTEXT);
+		const info = await env.fileInfo(prefix);
 		if (!info.ok) fail('File not found.');
 		checkFile(info.value, kind);
 	}
 }
 
 async function readDatabase(env: Reader, path: string): Promise<FileContent> {
-	const result = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
+	const result = await env.readBinaryFile(path);
 	if (!result.ok) return fail(result.error.message);
 	if (!isDatabase(result.value)) return fail('This file is not a SQLite database.');
 	try {
@@ -215,7 +213,7 @@ async function readDatabase(env: Reader, path: string): Promise<FileContent> {
 }
 
 async function readImage(env: Reader, path: string): Promise<FileContent> {
-	const result = await env.readBinaryFile(path, BACKGROUND_CONTEXT);
+	const result = await env.readBinaryFile(path);
 	if (!result.ok) return fail(result.error.message);
 	return {
 		path,

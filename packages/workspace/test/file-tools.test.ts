@@ -5,7 +5,6 @@
  * tools reproduce.
  */
 import type { ToolContent } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { backends } from '../../just-bash/test/support/backends.ts';
@@ -480,7 +479,7 @@ const cases: readonly Case[] = [
 async function seed(site: ReturnType<typeof openWorkspace>, files: Case['files'] = {}) {
 	await site.use(agent, async (env) => {
 		for (const [path, content] of Object.entries(files)) {
-			const written = await env.writeFile(`${home}/${path}`, content, BACKGROUND_CONTEXT);
+			const written = await env.writeFile(`${home}/${path}`, content);
 			if (!written.ok) throw written.error;
 		}
 	});
@@ -489,7 +488,7 @@ async function seed(site: ReturnType<typeof openWorkspace>, files: Case['files']
 /** The text of a file in the home of the agent. */
 const textOf = (site: ReturnType<typeof openWorkspace>, path: string) =>
 	site.use(agent, async (env) => {
-		const read = await env.readTextFile(`${home}/${path}`, BACKGROUND_CONTEXT);
+		const read = await env.readTextFile(`${home}/${path}`);
 		if (!read.ok) throw read.error;
 		return read.value;
 	});
@@ -531,8 +530,8 @@ describe('the byte order mark', () => {
 			...inner,
 			connect: async (who, signal) => {
 				const env = await inner.connect(who, signal);
-				env.readTextFile = async (path, context) => {
-					const bytes = await env.readBinaryFile(path, context);
+				env.readTextFile = async (path, signal) => {
+					const bytes = await env.readBinaryFile(path, signal);
 					return bytes.ok
 						? { ok: true, value: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.value) }
 						: bytes;
@@ -547,6 +546,39 @@ describe('the byte order mark', () => {
 		await seed(site, { 'f.txt': '﻿a\nb\n' });
 		await call(site, 'edit', { path: 'f.txt', edits: [edit('b', 'B')] });
 		expect(await textOf(site, 'f.txt')).toBe('﻿a\nB\n');
+		await site.dispose();
+	});
+});
+
+describe('an abort during a call', () => {
+	/** A backend whose `readTextFile` aborts `controller` once it has read, as a cut call does mid-way. */
+	function abortingAfterRead(controller: AbortController): BashBackend {
+		const inner = memoryBackend();
+		return {
+			...inner,
+			connect: async (who, signal) => {
+				const env = await inner.connect(who, signal);
+				const read = env.readTextFile.bind(env);
+				env.readTextFile = async (path, signal) => {
+					const result = await read(path, signal);
+					controller.abort();
+					return result;
+				};
+				return env;
+			},
+		};
+	}
+
+	it('stops an edit before it writes, and leaves the file untouched', async () => {
+		const controller = new AbortController();
+		const site = openWorkspace({ name: 'cut', backend: { bash: abortingAfterRead(controller) } });
+		await seed(site, { 'f.txt': 'a\nb\n' });
+		const outcome = toolOf(site, 'edit').invoke(
+			{ path: 'f.txt', edits: [edit('b', 'B')] },
+			callAs(agent.name, { signal: controller.signal }),
+		);
+		await expect(outcome).rejects.toThrow('Operation aborted');
+		expect(await textOf(site, 'f.txt')).toBe('a\nb\n');
 		await site.dispose();
 	});
 });

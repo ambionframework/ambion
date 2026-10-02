@@ -1,6 +1,6 @@
 /**
  * A judge that grades a simulation as an agent. It takes the options of an agent
- * definition, and it runs on Pi's `AgentHarness` through `runAgent`. It ends
+ * definition, and it runs on the Pi harness through `runAgent`. It ends
  * with one call to `grade`, which carries one finding for each criterion.
  *
  * - **The record is evidence.** The agents under test wrote the record, and
@@ -28,7 +28,7 @@ import { renderRecord } from './render.ts';
 import { deadlineSignal } from './signal.ts';
 import type { Simulation } from './types.ts';
 
-/** The default of `timeoutMs`: real milliseconds for one grade. */
+/** The default of `gradeMs`: real milliseconds for one grade. */
 export const DEFAULT_GRADE_MS = 120_000;
 
 /** The routing name of every judge request. A scripted stream routes on it. */
@@ -63,7 +63,7 @@ export interface AgentJudgeOptions {
 	/** The Pi execution services. The default reads `<PROVIDER>_API_KEY`, with sessions in memory. */
 	readonly services?: ExecutionServices;
 	/** Real milliseconds for one grade. The default is 120 000. */
-	readonly timeoutMs?: number;
+	readonly gradeMs?: number;
 }
 
 const FINDINGS = Type.Object({
@@ -118,16 +118,16 @@ function judgePrompt(simulation: Simulation, criteria: readonly string[], token:
 /** A judge on a model, with the tools and bundles of any agent. */
 export function agentJudge(options: AgentJudgeOptions): Judge {
 	const services = options.services ?? createExecutionServices({ sessions: 'memory' });
-	const ms = options.timeoutMs ?? DEFAULT_GRADE_MS;
+	const ms = options.gradeMs ?? DEFAULT_GRADE_MS;
 	return async (simulation, criteria) => {
 		if (criteria.length === 0) throw new RangeError('A judge needs at least one criterion.');
 		const token = crypto.randomUUID();
-		const deadline = deadlineSignal(ms, `The grade passed its timeout of ${ms} ms.`);
+		const deadline = deadlineSignal(ms, `The grade passed its timeout of ${ms} ms.`, 'gradeMs');
 		try {
 			const result = await runAgent(services, {
 				model: options.model,
 				name: JUDGE,
-				agent: { name: JUDGE, identity: 'Grades a run against its criteria.' },
+				agent: { name: JUDGE, identity: 'Grades a simulation against its criteria.' },
 				system: judgeSystem(token),
 				prompt: judgePrompt(simulation, criteria, token),
 				tools: [...(options.tools ?? []), gradeTool(criteria)],

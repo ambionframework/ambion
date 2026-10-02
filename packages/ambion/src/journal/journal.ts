@@ -4,7 +4,7 @@
  * `@ambionframework/journal` holds the machinery and the entry: one
  * serial queue, the fence between runs, the idempotency key, and the read that settles a write in doubt. It reads no body.
  *
- * What lives here is the part that is the room's: the five kinds of entry it
+ * What lives here is the part that is the room's: the six kinds of entry it
  * writes, what the storage holds each one under, and what it accepts as a
  * body under each. A message makes up the record a person reads; every other
  * kind sits beside the messages, and takes its place from the same counter.
@@ -17,7 +17,7 @@ import {
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message, Without } from '../types.ts';
-import type { Cancellation, Close, Composition, Fence, LeaseChange } from './entries.ts';
+import type { Cancel, Close, Composition, Lease, Run } from './entries.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The entry kinds the room writes to its journal. */
@@ -38,12 +38,12 @@ export type Body<T> = Without<T, 'seq' | 'key'>;
 /** The body each kind carries. The journal reads none of them. */
 export interface Bodies {
 	message: Body<Message>;
-	lease: LeaseChange;
+	lease: Lease;
 	/** A close entry is the room's own close. The close a cancellation derives is not an entry. */
 	close: Without<Close, 'cancelled'>;
 	composition: Body<Composition>;
-	run: Fence;
-	cancel: Cancellation;
+	run: Run;
+	cancel: Cancel;
 }
 
 /** The room validates bodies. The journal orders and fences entries. */

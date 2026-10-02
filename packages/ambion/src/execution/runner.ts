@@ -9,17 +9,14 @@
  * its seat: the room calls its wake, steer, and cut.
  */
 
-import type { AgentExecutionContext } from '../host/runtime.ts';
+import type { SeatContext } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
 	CommitRequest,
 	CommitResult,
-	PassInput,
-	PassResult,
 	RoomProtocol,
 	Steer,
-	TraceSink,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
@@ -34,10 +31,10 @@ import type {
 	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
+import type { PassInput, PassResult, TraceSink } from './contract.ts';
 import { failedPass } from './failure.ts';
 
-type CallResult<T> =
-	{ kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cancelled' };
+type CallResult<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cut' };
 
 // -- the actor ----------------------------------------------------------------
 
@@ -62,12 +59,12 @@ interface Current {
  */
 export class AgentRunner implements AgentPort {
 	private readonly room: RoomProtocol;
-	private readonly context: AgentExecutionContext;
+	private readonly context: SeatContext;
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 
-	constructor(room: RoomProtocol, context: AgentExecutionContext) {
+	constructor(room: RoomProtocol, context: SeatContext) {
 		this.room = room;
 		this.context = context;
 	}
@@ -124,7 +121,7 @@ export class AgentRunner implements AgentPort {
 	 * Release, as failed, an activation whose run this process lost. A host
 	 * that dropped a run with its memory calls this when it comes back. The
 	 * release makes the attempts of one room call, and a release that none
-	 * of them confirms raises a `delivery_error`.
+	 * of them confirms raises a `port_error`.
 	 */
 	async recover(activation: string): Promise<void> {
 		await this.release(activation, 'failed', 0, undefined, undefined, undefined);
@@ -228,19 +225,19 @@ export class AgentRunner implements AgentPort {
 		id: string,
 		state: ActivationState,
 		trace: TraceSink,
-		cancelled: Promise<void>,
+		cutOff: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
 		let after: Seq | undefined;
 		try {
 			for (;;) {
-				const opened = await this.viewFor(id, cancelled);
+				const opened = await this.viewFor(id, cutOff);
 				if ('stale' in opened) return last;
 				const view = opened.view;
 				last = await passOver(state, trace, passInput(view, after));
 				after = state.readThrough;
-				if (last.failed || state.cancelled || view.spec.purpose.kind !== 'respond') return last;
-				if (!(await this.needsRefresh(id, state, cancelled))) return last;
+				if (last.failed || state.isCut || view.spec.purpose.kind !== 'respond') return last;
+				if (!(await this.needsRefresh(id, state, cutOff))) return last;
 			}
 		} catch (error) {
 			return broke(state, error);
@@ -253,15 +250,12 @@ export class AgentRunner implements AgentPort {
 	 * nobody, or its answer was lost, so the seat sends it again, up to the
 	 * attempts the runtime names. A cut cancels the call without a retry.
 	 */
-	private async calls<T>(
-		send: () => Promise<T>,
-		cancelled?: Promise<void>,
-	): Promise<CallResult<T>> {
+	private async calls<T>(send: () => Promise<T>, cutOff?: Promise<void>): Promise<CallResult<T>> {
 		let last: CallResult<T> = { kind: 'lost', error: new Error('Room call failed.') };
 		for (let attempt = 0; attempt < this.context.call.attempts; attempt += 1) {
-			const result = await this.call(send, cancelled);
+			const result = await this.call(send, cutOff);
 			if (result.kind === 'value') return result;
-			if (result.kind === 'cancelled') return result;
+			if (result.kind === 'cut') return result;
 			last = result;
 		}
 		return last;
@@ -270,7 +264,7 @@ export class AgentRunner implements AgentPort {
 	/** Wait for one room call, its host-clock deadline, or the activation cut. */
 	private async call<T>(
 		send: () => Promise<T>,
-		cancelled: Promise<void> | undefined,
+		cutOff: Promise<void> | undefined,
 		timeout = this.context.call.timeout,
 	): Promise<CallResult<T>> {
 		let stopAlarm = () => {};
@@ -294,7 +288,7 @@ export class AgentRunner implements AgentPort {
 				}),
 			),
 			deadline.then(() => ({ kind: 'lost' as const, error: new Error('Room call timed out.') })),
-			...(cancelled === undefined ? [] : [cancelled.then(() => ({ kind: 'cancelled' as const }))]),
+			...(cutOff === undefined ? [] : [cutOff.then(() => ({ kind: 'cut' as const }))]),
 		]);
 		stopAlarm();
 		return outcome;
@@ -363,7 +357,7 @@ export class AgentRunner implements AgentPort {
 		);
 		if (renewed.kind !== 'value') {
 			if (renewed.kind === 'lost') this.reportCallFailure(id, 'renew', renewed.error);
-			return renewed.kind === 'cancelled' ? 'stale' : 'lost';
+			return renewed.kind === 'cut' ? 'stale' : 'lost';
 		}
 		return 'stale' in renewed.value ? 'stale' : renewed.value.ok.expiresAt;
 	}
@@ -432,13 +426,13 @@ export class AgentRunner implements AgentPort {
 	private async needsRefresh(
 		id: string,
 		state: ActivationState,
-		cancelled: Promise<void>,
+		cutOff: Promise<void>,
 	): Promise<boolean> {
 		const renewed = await this.call(
 			() => this.room.lease({ activation: id, operation: 'renew', readThrough: state.readThrough }),
-			cancelled,
+			cutOff,
 		);
-		if (renewed.kind === 'cancelled') return false;
+		if (renewed.kind === 'cut') return false;
 		if (renewed.kind !== 'value') {
 			this.reportCallFailure(id, 'renew', renewed.error);
 			throw renewed.error;
@@ -448,10 +442,10 @@ export class AgentRunner implements AgentPort {
 	}
 
 	/** The record a pass reads, as the room windows it for this seat. */
-	private async viewFor(id: string, cancelled: Promise<void>): Promise<ViewResponse> {
-		const opened = await this.call(() => this.room.view(id), cancelled);
+	private async viewFor(id: string, cutOff: Promise<void>): Promise<ViewResponse> {
+		const opened = await this.call(() => this.room.view(id), cutOff);
 		if (opened.kind === 'value') return opened.value;
-		if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
+		if (opened.kind === 'cut') return { stale: 'the activation was cut' };
 		this.reportCallFailure(id, 'view', opened.error);
 		throw opened.error;
 	}
@@ -461,7 +455,7 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
+		this.emit({ type: 'port_error', seat: this.context.seat, activation, operation, error });
 	}
 
 	private emit(event: ActivationEvent): void {
@@ -476,11 +470,11 @@ export class AgentRunner implements AgentPort {
 	 * The room calls the room tools make. A commit ends when the activation is
 	 * cut, and its answer becomes a `room` step.
 	 */
-	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): ActivationInput['room'] {
+	private boundedRoom(cutOff: Promise<void>, trace: TraceSink): ActivationInput['room'] {
 		return {
 			view: (id, message) => this.room.view(id, message),
 			commit: async (request) => {
-				const response = await this.commitOnce(request, cancelled);
+				const response = await this.commitOnce(request, cutOff);
 				trace.record(roomStep(request, response));
 				return response;
 			},
@@ -494,13 +488,10 @@ export class AgentRunner implements AgentPort {
 	 * the activation. A second say under a new key would land the same message
 	 * twice.
 	 */
-	private async commitOnce(
-		request: CommitRequest,
-		cancelled: Promise<void>,
-	): Promise<CommitResult> {
-		const committed = await this.calls(() => this.room.commit(request), cancelled);
+	private async commitOnce(request: CommitRequest, cutOff: Promise<void>): Promise<CommitResult> {
+		const committed = await this.calls(() => this.room.commit(request), cutOff);
 		if (committed.kind === 'value') return committed.value;
-		if (committed.kind === 'cancelled') return { stale: 'the activation was cut' };
+		if (committed.kind === 'cut') return { stale: 'the activation was cut' };
 		this.reportCallFailure(request.activation, 'commit', committed.error);
 		return { unknown: committed.error.message };
 	}
@@ -532,7 +523,7 @@ function roomStep(request: CommitRequest, response: CommitResult): Step {
 
 /** How the activation stopped. A cut or an expired lease is `cut`. */
 function endStep(current: Current, last: PassResult | undefined): Step {
-	const cut = current.expired || current.state.cancelled;
+	const cut = current.expired || current.state.isCut;
 	const stop = cut ? 'cut' : (last?.stop ?? 'stopped');
 	if (last?.failed === true) {
 		const failure = {

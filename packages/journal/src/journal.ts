@@ -77,7 +77,7 @@ export type Seq = number;
  * `kind` is what the writer called it, and `body` is what the writer wrote.
  * The other three fields are the journal's own, and the storage holds them
  * beside the body: `seq` is the place the entry took, from the one counter
- * the journal keeps, `key` is what named the commit, and `run` is who wrote
+ * the journal keeps, `key` is what named the append, and `run` is who wrote
  * it. An entry that took no place is not one this journal takes.
  *
  * The journal reads a body for one thing, and never for what it means: it
@@ -90,7 +90,7 @@ export interface Entry<TBody = unknown> {
 	readonly body: TBody;
 	/** The place it took on the record. Every entry takes one. */
 	readonly seq: Seq;
-	/** The idempotency token the commit carried. A repeated token lands once. */
+	/** The idempotency token the append carried. A repeated token lands once. */
 	readonly key?: string;
 	/** The run that wrote it, or nothing when a journal with no run wrote it. */
 	readonly run?: string;
@@ -174,7 +174,7 @@ function entryOf<TKind extends string>(words: Vocabulary<TKind>, data: unknown):
 	// be able to mutate a storage snapshot that the journal later caches.
 	const candidate = detached(stored.body);
 	if (!words.accepts(kind, candidate)) return undefined;
-	const seq = positionOf(stored.seq);
+	const seq = seqOf(stored.seq);
 	// Every entry takes a place on the record. A known kind without one is corrupt.
 	if (seq === undefined) throw new Error(`The stored '${kind}' entry has no valid seq.`);
 	return {
@@ -197,7 +197,7 @@ function entryOf<TKind extends string>(words: Vocabulary<TKind>, data: unknown):
 const LAST_SEQ = Number.MAX_SAFE_INTEGER - 1;
 
 /** A place off a stored field, or nothing when the field holds no place. */
-function positionOf(value: unknown): Seq | undefined {
+function seqOf(value: unknown): Seq | undefined {
 	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= LAST_SEQ
 		? value
 		: undefined;

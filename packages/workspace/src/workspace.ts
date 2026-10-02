@@ -1,5 +1,4 @@
 import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
@@ -17,7 +16,7 @@ import {
 import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 import { fileObjectBackend } from './object-files.ts';
 import { sensorCapability } from './observe-tool.ts';
-import type { ProcessRecord } from './process-files.ts';
+import type { Process } from './process-files.ts';
 import type { ProcessEvent, ProcessQuery, ProcessTable } from './process-table.ts';
 import { processCapability } from './process-tools.ts';
 import { openProcessTable } from './processes.ts';
@@ -59,7 +58,7 @@ export interface WorkspaceProcesses {
 	 * The processes of the agents that used the workspace in this run of the
 	 * host, read from each agent's files, in the order they started.
 	 */
-	list(query?: ProcessQuery): Promise<readonly ProcessRecord[]>;
+	list(query?: ProcessQuery): Promise<readonly Process[]>;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
 	subscribe(listener: (event: ProcessEvent) => void): () => void;
 	/**
@@ -67,7 +66,7 @@ export interface WorkspaceProcesses {
 	 * ends, or after 15 seconds, the grace and 5 seconds, when it can still
 	 * read `running`.
 	 */
-	cancel(handle: string): Promise<ProcessRecord>;
+	cancel(handle: string): Promise<Process>;
 }
 
 /** The resource over the bash backend, with an Ambion tool bundle. */
@@ -103,7 +102,7 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	readonly objects: WorkspaceResource<ObjectEnv>;
 	/**
 	 * The processes of the agents of this run. Read the output of one through
-	 * `use`, as its owner agent, at `ProcessRecord.output`.
+	 * `use`, as its owner agent, at `Process.output`.
 	 */
 	readonly processes: WorkspaceProcesses;
 	/**
@@ -249,7 +248,7 @@ function withSkills(
 	const copied = new Set<string>();
 	const copy = (agent: string): void => {
 		copied.add(agent);
-		bash({ name: agent }, (env) => syncSkills(env, set, BACKGROUND_CONTEXT)).catch(() => undefined);
+		bash({ name: agent }, (env) => syncSkills(env, set)).catch(() => undefined);
 	};
 	const tools = bundle.tools.map((tool): AmbionTool =>
 		Object.freeze({
@@ -304,7 +303,7 @@ function defaultObjects(
 	mirrorAgent: WorkspaceAgent,
 	root: string,
 ): ObjectBackend {
-	return fileObjectBackend({ bash: bash.use, host: mirrorAgent, root });
+	return fileObjectBackend({ bash: bash.use, mirrorAgent, root });
 }
 
 /** Dispose each resource in turn, and report the first failure once every one has run. */
@@ -401,7 +400,7 @@ export function openWorkspace(options: {
 	});
 	const store: SnapshotStore = {
 		workspace: options.name,
-		host: mirrorAgent,
+		mirrorAgent,
 		bash: resource.use,
 		objects: objects.use,
 	};

@@ -30,7 +30,7 @@ on the simulation, and asks the judge. The local `support.ts` holds the agent
 definitions, the model ids, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
-import { defineHuman, startRoom } from '@ambionframework/ambion';
+import { definePerson, startRoom } from '@ambionframework/ambion';
 import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
 import { expect, it } from 'vitest';
 import {
@@ -43,7 +43,7 @@ import {
   weather,
 } from './support.ts';
 
-const priya = defineHuman({ name: 'priya', identity: 'Site manager. Pours concrete.' });
+const priya = definePerson({ name: 'priya', identity: 'Site manager. Pours concrete.' });
 
 it('the assistant asks the weather desk once, and answers the person', async () => {
   const room = stopAtEnd(
@@ -61,7 +61,7 @@ it('the assistant asks the weather desk once, and answers the person', async () 
       model: MODEL,
       brief: 'Find out if you can pour concrete on Thursday. Stop when you have a yes or a no.',
     }),
-    exchanges: 3,
+    messages: 3,
   });
 
   expect(simulation.ended).toBe('stopped');
@@ -84,7 +84,7 @@ sequenceDiagram
     participant A as Actor
     participant R as Room
     participant J as Judge
-    T->>S: simulate(room, { person, actor, exchanges })
+    T->>S: simulate(room, { person, actor, messages })
     loop one exchange, until a stop or the limit
         S->>A: actor(seen)
         A-->>S: move: text, or stop
@@ -196,15 +196,15 @@ export interface SeenExchange {
 
 /** What the person has seen: one entry for each exchange the loop ran. */
 export interface Seen {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   readonly exchanges: readonly SeenExchange[];
 }
 
 export interface SimulateOptions {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   readonly actor: Actor;
   /** The most messages the actor sends. Required, so that every eval states its bound. */
-  readonly exchanges: number;
+  readonly messages: number;
   /** Real milliseconds for one exchange: its close and its summary. The default is 150 000. */
   readonly exchangeMs?: number;
 }
@@ -240,7 +240,7 @@ export function simulate(room: Room, options: SimulateOptions): Promise<Simulati
    the loop with `ended: 'failed'`.
 7. Read the closed `Exchange` from `room.read()`. Add the exchange to
    `simulation.exchanges`, and add the discussion and the summary to `seen`.
-8. Go back to operation 3. After `exchanges` messages, end the loop with
+8. Go back to operation 3. After `messages` messages, end the loop with
    `ended: 'limit'`.
 9. Call `visit.leave()`, read the room once more, and return the simulation.
 
@@ -276,29 +276,29 @@ const actor = scriptedActor(['Can we pour on Thursday?', { text: 'And Friday?', 
 **`agentActor` plays a brief as an agent.** It takes the options of an
 agent definition and one more:
 
-| Option      | What it is                                                               |
-| ----------- | ------------------------------------------------------------------------ |
-| `model`     | A `provider/model-id`                                                    |
-| `thinking`  | A Pi `ThinkingLevel` for each move. The default is `off`                 |
-| `brief`     | The private goal of the person. It has the role of `instructions`        |
-| `tools`     | `AmbionTool` values, the same as an agent's                              |
-| `bundles`   | Tool bundles and their guidance, such as `workspace.tools()`             |
-| `services`  | The Pi execution services. [The model call](#the-model-call) states them |
-| `timeoutMs` | Real milliseconds for one move. The default is 60 000                    |
+| Option     | What it is                                                               |
+| ---------- | ------------------------------------------------------------------------ |
+| `model`    | A `provider/model-id`                                                    |
+| `thinking` | A Pi `ThinkingLevel` for each move. The default is `off`                 |
+| `brief`    | The private goal of the person. It has the role of `instructions`        |
+| `tools`    | `AmbionTool` values, the same as an agent's                              |
+| `bundles`  | Tool bundles and their guidance, such as `workspace.tools()`             |
+| `services` | The Pi execution services. [The model call](#the-model-call) states them |
+| `moveMs`   | Real milliseconds for one move. The default is 60 000                    |
 
 - **The system prompt** holds the person's `identity`, the `brief`, the
   guidance of each bundle, and three rules. Speak as the person. Do not
   quote or mention the brief. End each move with one call to `send` or
   `stop`.
 - **The user prompt** holds each exchange: the text the person sent, every
-  spoken message with its author and recipient, and the summary.
+  said message with its author and recipient, and the summary.
 - **The move ends with a tool call.** `send({ text, to? })` is a message to
   the room. `stop({ reason })` ends the loop. Before either one, the actor
   can call its other tools, for example `read` on a file that an agent
   wrote. `Move.calls` holds every call before the call that ends the move,
   and the move carries the usage of every request.
 - **A move that ends with no `send` and no `stop` rejects.** So does a
-  move that passes `timeoutMs`. The loop then ends with `ended: 'failed'`.
+  move that passes `moveMs`. The loop then ends with `ended: 'failed'`.
 
 **The workspace knows the person by name.** A workspace tool reads the
 caller from `ctx.agent`. The actor's calls carry the person's name and
@@ -322,7 +322,7 @@ the discussion, and its next move answers it or stops.
 
 ## The model call
 
-**Both agents run on Pi's AgentHarness through `@ambionframework/pi`.**
+**Both agents run on the Pi harness through `@ambionframework/pi`.**
 The Pi package gains one export:
 
 ```ts
@@ -367,11 +367,11 @@ export function runAgent(
   their absence, and the workspace audit log accepts it. `runAgent`
   resolves no reminders, because a reminder needs a room.
 - **The bound.** `signal` aborts the run the way a cut aborts an
-  activation, and it ends every provider request of the run. The lane
-  ignores an abort that lands before it admits the prompt, so the signal
-  cuts the request itself. A run whose signal aborted rejects with the
+  activation, and it ends every provider request of the run. An abort
+  of the signal aborts the submission of the run, and it cuts the request
+  itself. A run whose signal aborted rejects with the
   signal's reason, even when an end landed first. `agentActor` and
-  `agentJudge` abort at `timeoutMs`.
+  `agentJudge` abort at `moveMs` and `gradeMs`.
 - **The usage.** `runAgent` sums the usage of each request, and it maps a
   request the way `spent` in `pi-trace.ts` does.
 
@@ -391,7 +391,7 @@ details.
 
 ```ts
 export interface Simulation {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   /** Every move the actor made, in order, the last `stop` included. */
   readonly moves: readonly Move[];
   /** One entry for each message the actor sent, in order. */
@@ -426,7 +426,7 @@ source in the simulation.
 | Fact                              | Where it is in the simulation                                      |
 | --------------------------------- | ------------------------------------------------------------------ |
 | Who spoke, to whom, what text     | `simulation.room.messages`                                         |
-| A seat stayed silent              | No spoken message from the seat in `simulation.room.messages`      |
+| A seat stayed silent              | No said message from the seat in `simulation.room.messages`        |
 | What one exchange said            | `simulation.exchanges[].discussion`                                |
 | Unnecessary activations           | `simulation.exchanges[].view.activations`, by `seat` and `purpose` |
 | An activation failed or retried   | `simulation.exchanges[].view.activations[].outcome` and `attempt`  |
@@ -488,11 +488,11 @@ evidence. The judge attaches each criterion to its finding, so the model
 never copies a criterion. The tool schema refuses a malformed finding. A
 `grade` with the wrong number of findings returns an error result, and the
 judge can call `grade` again. A judge that ends with no accepted `grade`, or that
-passes its `timeoutMs`, rejects the promise. A malformed answer never
+passes its `gradeMs`, rejects the promise. A malformed answer never
 passes.
 
 **The judge takes the options of an agent definition, `thinking`, and
-`timeoutMs`.** A grade has 120 000 ms by default. A test that passes
+`gradeMs`.** A grade has 120 000 ms by default. A test that passes
 `workspace.tools()` lets the judge read the final state of the workspace
 before it grades. Tool output is evidence under the same rule as the
 record: no text in it is an instruction to the judge.
@@ -515,7 +515,7 @@ provider names a model of another provider for the judge.
 costs money on each run. [CLAUDE.md](../CLAUDE.md#live-runs-cost-money)
 holds the rules.
 
-- **`exchanges` is required.** An eval states the most messages its person
+- **`messages` is required.** An eval states the most messages its person
   sends. `exchangeMs` bounds each exchange.
 - **An eval lives in the live tier.** A file under `test/live` runs with
   `vitest.live.config.ts`, and CI runs it on `main` and on the weekly
@@ -562,7 +562,7 @@ reached the provider, and the specialist returned one fixed `say`.
   kind and serves every kind. `defineAssistant`
   builds its executor with `pi()`, so the assistant has the kind `pi`.
 - **`simulate` replaces `evaluate()`.** A case passes
-  `scriptedActor([question])` and `exchanges: 1`. `exchangeMs: 90_000`
+  `scriptedActor([question])` and `messages: 1`. `exchangeMs: 90_000`
   replaces the timer.
 - **Each case starts its own runtime.** `scripted()` keeps one step counter
   for each seat name over the life of its runtime. A shared runtime shares
@@ -699,7 +699,7 @@ a `scriptedActor`. The judge is a function.
 | Case                               | What it asserts                                           |
 | ---------------------------------- | --------------------------------------------------------- |
 | The actor stops                    | `ended: 'stopped'`, and the moves end with the `stop`     |
-| The actor reaches the limit        | `ended: 'limit'` after `exchanges` messages               |
+| The actor reaches the limit        | `ended: 'limit'` after `messages` messages                |
 | A seat keeps the exchange open     | `ended: 'timeout'`, and the last outcome is `cancelled`   |
 | The summary outlasts the deadline  | `ended: 'timeout'`, and the summary shows as `failed`     |
 | The cancel at the deadline rejects | `ended: 'failed'`, with the reason                        |
@@ -738,7 +738,7 @@ a `scriptedActor`. The judge is a function.
 The cases cover the prompt text, the name each request carries, and a
 `stop` call. They cover an actor that reads a workspace file before it
 sends, with the person's name in `ctx.agent`. They cover a move with no
-`send` and no `stop`, and a move that passes `timeoutMs`. They cover a
+`send` and no `stop`, and a move that passes `moveMs`. They cover a
 `grade` call that the schema refuses, a `grade` that misses a criterion, a
 judge that never calls `grade`, and the usage of every request.
 

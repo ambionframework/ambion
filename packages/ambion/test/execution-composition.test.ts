@@ -7,9 +7,8 @@
  * and the room does not wake it again. Stub executions stand in for an
  * executor kind, because the kernel imports no executor package.
  */
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { pi, piExecution, type StreamFn } from '../../pi/src/index.ts';
 import {
 	type ActivationOpener,
 	defineExecution,
@@ -20,7 +19,7 @@ import {
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Executor,
 	isSaid,
 	type Message,
@@ -179,7 +178,7 @@ describe('the execution a room chooses', () => {
 				error: { code: 'no_execution', message: reason },
 			});
 			const seen = events.length;
-			await clock.advance(3 * hostingOf(runtime).limits.delivery.resend);
+			await clock.advance(3 * hostingOf(runtime).limits.port.resend);
 			await room.reconcile();
 			expect(events.slice(seen)).toEqual([]);
 			expect(stateOf(room).due).toEqual([]);
@@ -316,7 +315,7 @@ describe('execution composition', () => {
 			}),
 		);
 		const replacement = await (
-			await resumed.visit(defineHuman({ name: 'replacement-person', identity: 'A new visitor.' }))
+			await resumed.visit(definePerson({ name: 'replacement-person', identity: 'A new visitor.' }))
 		).send({ text: 'Replacement question?' });
 		const other = await (await second.visit(andrei)).send({ text: 'Other question?' });
 		await Promise.all([replacement.waitForClose(), other.waitForClose()]);

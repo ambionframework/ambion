@@ -14,7 +14,7 @@ import {
 } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Room,
 	type Runtime,
@@ -28,7 +28,7 @@ import { stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const runner = scriptedAgent('runner', 'Runs on a separate host.');
-const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 interface RecordingSeat {
 	readonly execution: Execution;

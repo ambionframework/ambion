@@ -13,7 +13,7 @@ import {
 	type AgentDefinition,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Execution,
 	type Room,
 	startRoom,
@@ -34,7 +34,7 @@ export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(
 	!process.env.ANTHROPIC_API_KEY,
 );
 
-export const person = defineHuman({ name: 'andrei', identity: 'Founder. Asks the questions.' });
+export const person = definePerson({ name: 'andrei', identity: 'Founder. Asks the questions.' });
 
 /** A seat on the real SDK. */
 export const seat = (

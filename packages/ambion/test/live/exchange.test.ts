@@ -8,7 +8,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineHuman, defineTool, isPresence, isSummary } from '../../src/index.ts';
+import { definePerson, defineTool, isPresence, isSummary } from '../../src/index.ts';
 import { enter, messageBefore, messagesOf, participantsOf } from '../support/room.ts';
 import {
 	activationsOf,
@@ -25,7 +25,7 @@ import {
 	untilQuiet,
 } from './support.ts';
 
-const andrei = defineHuman({
+const andrei = definePerson({
 	name: 'andrei',
 	identity: 'Founder. Decides whether the batch ships.',
 	preferences: `

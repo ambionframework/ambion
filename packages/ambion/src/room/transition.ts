@@ -20,7 +20,7 @@ import { coveringSummary } from './exchange.ts';
 import { isFixed, type RoomState } from './fold.ts';
 import { seatOf } from './lease.ts';
 import {
-	type Ending,
+	type LeaseEnd,
 	liveWork,
 	planReconciliation,
 	type ReconcileOptions,
@@ -46,11 +46,11 @@ type ProposedEntry<K extends Kind = Kind> = {
 	[P in K]: { kind: P; body: Bodies[P] };
 }[K];
 
-type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
+type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string; refs?: string[]; bytes?: number }
 	| { type: 'post'; to?: string; text: string; refs?: string[]; bytes?: number }
-	| { type: 'presence'; change: PresenceChange; route: boolean }
+	| { type: 'presence'; change: PresenceDraft; route: boolean }
 	| { type: 'commit'; commit: CommitRequest; bytes?: number; schedule?: ScheduleLimits }
 	| { type: 'return'; message: Seq }
 	| { type: 'dismiss'; message: Seq };
@@ -296,7 +296,7 @@ function presence(
 
 function presenceRefusal(
 	state: RoomState,
-	change: PresenceChange,
+	change: PresenceDraft,
 ): { refusal: Refusal } | undefined {
 	const seat = state.roster.find((candidate) => candidate.name === change.subject);
 	if (change.kind === 'seated') {
@@ -318,7 +318,7 @@ function presenceRefusal(
 /** Whether a repeated seating asks for exactly what the roster already holds. */
 function sameSeating(
 	seat: Seating,
-	change: PresenceChange,
+	change: PresenceDraft,
 	composition: Composition | undefined,
 ): boolean {
 	if ((change.identity ?? '') !== seat.identity) return false;
@@ -340,10 +340,7 @@ function unseatRefusal(
 	return undefined;
 }
 
-function arrivalRefusal(
-	state: RoomState,
-	change: PresenceChange,
-): { refusal: Refusal } | undefined {
+function arrivalRefusal(state: RoomState, change: PresenceDraft): { refusal: Refusal } | undefined {
 	const name = change.subject;
 	if ([...state.roster, ...state.reserve].some((seat) => seat.name === name)) {
 		return refused(
@@ -372,11 +369,11 @@ function commit(state: RoomState, command: CommitCommand, now: number): RoomDeci
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
-		return closingCommit(state, request, live, purpose, now, bytes);
+		return summaryCommit(state, request, live, purpose, now, bytes);
 	return ordinaryCommit(state, command, live, now);
 }
 
-function closingCommit(
+function summaryCommit(
 	state: RoomState,
 	request: CommitRequest,
 	live: ActivationSpec,
@@ -454,7 +451,7 @@ function speechFreshness(
 	const readThrough = safePosition(request.readThrough);
 	const freshness = freshnessRule(readThrough, state.lastSeq);
 	if (readThrough === undefined || freshness === 'invalid')
-		return refused('A spoken message must state a current record position.');
+		return refused('A said message must state a current record position.');
 	return freshness === 'missed'
 		? {
 				refusal: {
@@ -701,7 +698,7 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 		...command.options,
 		now,
 	});
-	const ending = (order: Ending): EndCommand => ({ type: 'end', ...order });
+	const ending = (order: LeaseEnd): EndCommand => ({ type: 'end', ...order });
 	return {
 		steps: [
 			...[...revoked, ...expired, ...abandoned].map(ending),

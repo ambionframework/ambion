@@ -25,7 +25,7 @@ const context = {
 	now: Date.parse(at) + 5 * 60_000,
 	participants: [
 		{
-			kind: 'human' as const,
+			kind: 'person' as const,
 			name: 'priya',
 			identity: 'Project manager.',
 			presence: 'present' as const,
@@ -76,7 +76,7 @@ const summarize: ActivationView = {
 };
 
 describe('the rendered prompt', () => {
-	it('renders an ordinary activation', () => {
+	it('renders a respond activation', () => {
 		const { mechanism, agent, context: read } = renderActivation(respond, worker);
 		expect(mechanism).toMatchSnapshot('mechanism');
 		expect(agent).toMatchSnapshot('agent');

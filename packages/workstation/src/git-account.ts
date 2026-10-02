@@ -15,7 +15,6 @@
  */
 
 import { runScript } from '@ambionframework/workspace';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import { type ServerAddress, Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 
@@ -109,13 +108,11 @@ export async function runIn(
 	signal?: AbortSignal,
 	label = 'A script of the git account',
 ): Promise<string> {
-	const context =
-		signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(signal, BACKGROUND_CONTEXT);
 	const ran = await runScript(
 		env,
 		script,
 		{ env: variables, timeout: SCRIPT_TIMEOUT_SECONDS },
-		context,
+		signal,
 	);
 	if (!ran.ok) throw ran.error;
 	const text = ran.value.output;

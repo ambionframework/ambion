@@ -4,17 +4,15 @@
  * logs, `openLog` and `openAuditLog`, refuse a relative path.
  */
 import { posix } from 'node:path';
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { backends } from '../../just-bash/test/support/backends.ts';
-import { BACKGROUND_CONTEXT, openAuditLog, openLog } from '../src/index.ts';
+import type { WorkspaceEnv } from '../src/index.ts';
+import { openAuditLog, openLog } from '../src/index.ts';
 import { isLogFile } from '../src/log.ts';
 
-const ctx = BACKGROUND_CONTEXT;
-
 /** Every line of one file, parsed as JSON. An unreadable file has no lines. */
-async function linesOf(env: ExecutionEnv, path: string): Promise<unknown[]> {
-	const read = await env.readTextFile(path, ctx);
+async function linesOf(env: WorkspaceEnv, path: string): Promise<unknown[]> {
+	const read = await env.readTextFile(path);
 	if (!read.ok) return [];
 	return read.value
 		.split('\n')
@@ -22,14 +20,14 @@ async function linesOf(env: ExecutionEnv, path: string): Promise<unknown[]> {
 		.map((line) => JSON.parse(line) as unknown);
 }
 
-async function namesIn(env: ExecutionEnv, dir: string): Promise<string[]> {
-	const listed = await env.listDir(dir, ctx);
+async function namesIn(env: WorkspaceEnv, dir: string): Promise<string[]> {
+	const listed = await env.listDir(dir);
 	if (!listed.ok) throw listed.error;
 	return listed.value.map((entry) => entry.name);
 }
 
 /** Every record across the named files in `/logs`, in no particular file order. */
-async function recordsIn(env: ExecutionEnv, names: string[]): Promise<{ i: number }[]> {
+async function recordsIn(env: WorkspaceEnv, names: string[]): Promise<{ i: number }[]> {
 	const records: { i: number }[] = [];
 	for (const name of names)
 		records.push(...((await linesOf(env, posix.join('/logs', name))) as { i: number }[]));
@@ -37,7 +35,7 @@ async function recordsIn(env: ExecutionEnv, names: string[]): Promise<{ i: numbe
 }
 
 describe.each(backends)('a workspace log on $name', (backend) => {
-	async function withEnv(run: (env: ExecutionEnv) => Promise<void>) {
+	async function withEnv(run: (env: WorkspaceEnv) => Promise<void>) {
 		const opened = await backend.open();
 		const env = await opened.backend.connect({ name: 'host' });
 		try {
@@ -53,9 +51,9 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 			const journal = openLog({ path: '/var/log/room/journal.jsonl' });
 			const audit = openLog({ path: '/var/log/audit/audit.jsonl' });
 			expect(journal.path).toBe('/var/log/room/journal.jsonl');
-			await journal.append(env, { kind: 'joined', who: 'alpha' }, ctx);
-			await audit.append(env, { kind: 'checked' }, ctx);
-			await journal.append(env, { kind: 'said', text: 'hi' }, ctx);
+			await journal.append(env, { kind: 'joined', who: 'alpha' });
+			await audit.append(env, { kind: 'checked' });
+			await journal.append(env, { kind: 'said', text: 'hi' });
 			expect(await linesOf(env, journal.path)).toEqual([
 				{ kind: 'joined', who: 'alpha' },
 				{ kind: 'said', text: 'hi' },
@@ -69,12 +67,12 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 		withEnv(async (env) => {
 			const options = { path: '/logs/j.jsonl', rotateBytes: 24 } as const;
 			const first = openLog(options);
-			for (let i = 0; i < 4; i++) await first.append(env, { i }, ctx);
+			for (let i = 0; i < 4; i++) await first.append(env, { i });
 			// A fresh `openLog` over the same path: no state carries over but the file.
 			const second = openLog(options);
-			for (let i = 4; i < 8; i++) await second.append(env, { i }, ctx);
+			for (let i = 4; i < 8; i++) await second.append(env, { i });
 
-			const listed = await env.listDir('/logs', ctx);
+			const listed = await env.listDir('/logs');
 			if (!listed.ok) throw listed.error;
 			const names = listed.value.map((entry) => entry.name);
 			expect(names).toContain('j.jsonl');

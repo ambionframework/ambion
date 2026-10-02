@@ -6,15 +6,14 @@
  * seed function and `readFiles`.
  */
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { BACKGROUND_CONTEXT, DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
+import { DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
 import { Bash, InMemoryFs } from 'just-bash';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { BashEnv } from '../src/bash-env.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 import { backends, sh, tempDir } from './support/backends.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 describe('the just-bash adapter', () => {
 	const connect = (agentName = 'alpha') => memoryBackend().connect({ name: agentName });
@@ -23,16 +22,16 @@ describe('the just-bash adapter', () => {
 
 	it('answers path queries beyond the conformance suite', async () => {
 		const alpha = await connect();
-		await alpha.writeFile('f.txt', 'x', ctx);
+		await alpha.writeFile('f.txt', 'x');
 		// canonicalPath maps a missing path as readTextFile does; Pi's write and
 		// edit tools read that mapping to decide whether a path is a new file.
-		expect(codeOf(await alpha.canonicalPath('missing', ctx))).toBe('not_found');
+		expect(codeOf(await alpha.canonicalPath('missing'))).toBe('not_found');
 		// createDir with no recursive flag, and remove on the root of the env, answer invalid.
-		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }, ctx))).toBe('invalid');
-		expect(codeOf(await alpha.remove('.', undefined, ctx))).toBe('invalid');
+		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }))).toBe('invalid');
+		expect(codeOf(await alpha.remove('.', undefined))).toBe('invalid');
 		// A path that never existed answers false, with no remove call before.
-		expect(await alpha.exists('missing', ctx)).toEqual({ ok: true, value: false });
-		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({
+		expect(await alpha.exists('missing')).toEqual({ ok: true, value: false });
+		expect(await alpha.absolutePath('sub/../y')).toEqual({
 			ok: true,
 			value: `${alpha.cwd}/y`,
 		});
@@ -49,28 +48,22 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
-	it('honors a temp file prefix and suffix, appends, lists each entry sized, reads lines, and renames', async () => {
+	it('appends, lists each entry sized, and renames', async () => {
 		const alpha = await connect();
-		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
-		if (!file.ok) throw file.error;
-		expect(file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
-		await alpha.appendFile(file.value, 'a', ctx);
-		await alpha.appendFile(file.value, 'b', ctx);
-		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
+		await alpha.appendFile('log.txt', 'a');
+		await alpha.appendFile('log.txt', 'b');
+		expect(await alpha.readTextFile('log.txt')).toEqual({ ok: true, value: 'ab' });
 
-		await alpha.writeFile('a.txt', 'one\ntwo\nthree', ctx);
-		await alpha.createDir('d', undefined, ctx);
-		const listed = await alpha.listDir('.', ctx);
+		await alpha.writeFile('a.txt', 'one\ntwo\nthree');
+		await alpha.createDir('d', undefined);
+		const listed = await alpha.listDir('.');
 		expect(listed.ok && listed.value.map((f) => [f.name, f.kind, f.size])).toEqual([
 			['a.txt', 'file', 13],
 			['d', 'directory', 0],
+			['log.txt', 'file', 2],
 		]);
-		expect(await alpha.readTextLines('a.txt', { maxLines: 2 }, ctx)).toEqual({
-			ok: true,
-			value: ['one', 'two'],
-		});
-		await alpha.renameFile('a.txt', 'd/b.txt', ctx);
-		expect(await alpha.readTextFile('d/b.txt', ctx)).toEqual({
+		await alpha.renameFile('a.txt', 'd/b.txt');
+		expect(await alpha.readTextFile('d/b.txt')).toEqual({
 			ok: true,
 			value: 'one\ntwo\nthree',
 		});
@@ -141,26 +134,26 @@ describe('the just-bash adapter', () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const alpha = await connect();
 		const half = new Uint8Array(MEMORY_LIMIT_BYTES / 2);
-		expect(await alpha.writeFile('first', half, ctx)).toEqual({ ok: true, value: undefined });
+		expect(await alpha.writeFile('first', half)).toEqual({ ok: true, value: undefined });
 		// The second half does not fit beside the layout `Bash` seeds into a fresh filesystem.
-		const over = await alpha.writeFile('second', half, ctx);
+		const over = await alpha.writeFile('second', half);
 		expect(!over.ok && over.error.message).toMatch(/ENOSPC/);
-		await alpha.remove('first', undefined, ctx);
-		expect(await alpha.writeFile('second', half, ctx)).toEqual({ ok: true, value: undefined });
+		await alpha.remove('first', undefined);
+		expect(await alpha.writeFile('second', half)).toEqual({ ok: true, value: undefined });
 	});
 
 	it('recreates a home removed out from under it, and shares files across agents', async () => {
 		const backend = memoryBackend();
 		const alpha = await backend.connect({ name: 'alpha' });
-		await alpha.writeFile('shared.txt', 'from alpha', ctx);
+		await alpha.writeFile('shared.txt', 'from alpha');
 		const beta = await backend.connect({ name: 'beta' });
-		expect(await beta.readTextFile('/home/alpha/shared.txt', ctx)).toEqual({
+		expect(await beta.readTextFile('/home/alpha/shared.txt')).toEqual({
 			ok: true,
 			value: 'from alpha',
 		});
-		await beta.remove('/home/alpha', { recursive: true }, ctx);
+		await beta.remove('/home/alpha', { recursive: true });
 		const again = await backend.connect({ name: 'alpha' });
-		expect(await again.exists('.', ctx)).toEqual({ ok: true, value: true });
+		expect(await again.exists('.')).toEqual({ ok: true, value: true });
 		expect(await sh(again, 'ls ~')).toMatchObject({ ok: true, output: '' });
 	});
 
@@ -169,7 +162,12 @@ describe('the just-bash adapter', () => {
 		onTestFinished(dispose);
 		const backend = directoryBackend(dir);
 		const alpha = await backend.connect({ name: 'alpha' });
-		await sh(alpha, 'mkdir src && for i in $(seq 1 300); do echo $i > src/f$i; done');
+		// The host writes the 300 files. A shell loop spends most of the test on them.
+		const src = join(dir, 'home', 'alpha', 'src');
+		await mkdir(src);
+		await Promise.all(
+			Array.from({ length: 300 }, (_, i) => writeFile(join(src, `f${i + 1}`), `${i + 1}\n`)),
+		);
 		// `cp -r` is one change for the whole copy, and it is the last command of the script.
 		const copy = sh(alpha, 'cp -r src dst');
 		while (!existsSync(join(dir, 'home', 'alpha', 'dst'))) {
@@ -185,7 +183,7 @@ describe('the just-bash adapter', () => {
 				new Promise((resolve) => setTimeout(() => resolve('pending'), 2_000)),
 			]);
 		expect(await settles(beta)).toBe('settled');
-		expect(await settles(alpha.writeFile('after.txt', 'x', ctx))).toBe('settled');
+		expect(await settles(alpha.writeFile('after.txt', 'x'))).toBe('settled');
 	});
 });
 
@@ -203,8 +201,8 @@ describe('memoryBackend', () => {
 		expect(calls).toBe(0); // nothing runs until something asks for the filesystem
 		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'start here\n' }]);
 		const alpha = await backend.connect({ name: 'alpha' });
-		await alpha.writeFile('/site/notes.md', 'a note\n', ctx);
-		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling', undefined, ctx);
+		await alpha.writeFile('/site/notes.md', 'a note\n');
+		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling', undefined);
 		expect(calls).toBe(1); // connect reused the filesystem readFiles already built
 		// The first `connect` also lays the just-bash binaries into the shared
 		// filesystem (`docs/workspace.md` §8), so the two site files are among others.

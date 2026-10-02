@@ -45,7 +45,7 @@ export function participantsOf(facts: Pick<RoomFacts, 'state' | 'live'>): Partic
 	return [
 		...agentsOf(facts),
 		...[...facts.state.people.values()].map((person) => ({
-			kind: 'human' as const,
+			kind: 'person' as const,
 			name: person.name,
 			identity: person.identity,
 			presence: person.presence,
@@ -228,9 +228,9 @@ function purposeContext(
 }
 
 /** Public human facts and recorded reading progress, without private preferences. */
-function peopleOf(facts: RoomFacts): Extract<ContextParticipant, { kind: 'human' }>[] {
+function peopleOf(facts: RoomFacts): Extract<ContextParticipant, { kind: 'person' }>[] {
 	return [...facts.state.people.values()].map((person) => ({
-		kind: 'human',
+		kind: 'person',
 		name: person.name,
 		identity: person.identity,
 		presence: person.presence,

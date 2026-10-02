@@ -75,22 +75,24 @@ it('holds exactly eight entries, builds each under the name the manifest gives i
 	}
 });
 
-it('exports one resource, its two logs, the environment helpers, runScript, shellQuote, sqlImport, sqlResult, fromDirectory, and loadSkills from the root, and no backend', () => {
+it('exports one resource, its two logs, the port values, the environment helpers, runScript, shellQuote, sqlImport, sqlResult, fromDirectory, and loadSkills from the root, and no backend', () => {
 	expect(Object.keys(main).sort()).toEqual([
-		'BACKGROUND_CONTEXT',
 		'DEFAULT_AUDIT_LOG',
 		'DEFAULT_TIMEOUT_SECONDS',
 		'Deadline',
+		'FileError',
 		'HomeEnv',
 		'MAX_TIMER_SECONDS',
 		'PACKAGE_NAME',
 		'SNAPSHOT_LIMITS',
-		'TMP',
+		'ShellError',
 		'ToolFailure',
 		'boundedView',
 		'deliverView',
+		'err',
 		'fromDirectory',
 		'loadSkills',
+		'ok',
 		'openAuditLog',
 		'openLog',
 		'openWorkspace',
@@ -100,8 +102,6 @@ it('exports one resource, its two logs, the environment helpers, runScript, shel
 		'shellQuote',
 		'sqlImport',
 		'sqlResult',
-		'tempDirPath',
-		'tempFilePath',
 		'withDeadline',
 	]);
 });
@@ -256,6 +256,23 @@ it.each([
 		expect({ file, banned: specifiers.filter((s) => banned.includes(s)) }).toEqual({
 			file,
 			banned: [],
+		});
+	}
+});
+
+it.each([
+	'index.mjs',
+	'resource-entry.mjs',
+	'sqlite-entry.mjs',
+	'git-entry.mjs',
+	's3-entry.mjs',
+	'conformance.mjs',
+])('keeps the %s build, and every chunk it imports, free of Pi packages', async (entry) => {
+	const chunks = await chunksOf(new URL('../dist/', import.meta.url), entry);
+	for (const [file, specifiers] of chunks) {
+		expect({ file, pi: specifiers.filter((s) => s.startsWith('@earendil-works/')) }).toEqual({
+			file,
+			pi: [],
 		});
 	}
 });

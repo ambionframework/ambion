@@ -24,7 +24,7 @@ import { countsAgainst } from './rules.verified.ts';
  * seat is the writer that the close named, and the position is the close's
  * `through`, the boundary that the summary must retain.
  */
-export interface Owed extends DueActivation {
+export interface DueSummarize extends DueActivation {
 	person: string;
 	/** The opening question that identifies the closed exchange. */
 	from: Seq;
@@ -39,7 +39,7 @@ export interface OwedFacts {
 	cancelledAt: Seq | undefined;
 }
 
-const closeOf = (owed: Owed): SummaryClose => ({
+const closeOf = (owed: DueSummarize): SummaryClose => ({
 	person: owed.person,
 	from: owed.from,
 	through: owed.position,
@@ -51,7 +51,7 @@ export function judgeOwed(
 	close: SummaryClose,
 	facts: OwedFacts,
 	options: DueActivationOptions,
-): Owed | undefined {
+): DueSummarize | undefined {
 	// A close with no writer owes no summary. A close with one names its person.
 	if (close.summaryWriter === undefined) return undefined;
 	const leases = facts.closedLeases.get(close.through) ?? new Map<string, LeaseHold>();
@@ -62,11 +62,11 @@ export function judgeOwed(
 
 /** Read again every owed summary that the test names. The others stay as they are. */
 export function rejudgeOwed(
-	owed: readonly Owed[],
-	affected: (owed: Owed) => boolean,
+	owed: readonly DueSummarize[],
+	affected: (owed: DueSummarize) => boolean,
 	facts: OwedFacts,
 	options: DueActivationOptions,
-): Owed[] {
+): DueSummarize[] {
 	return owed.flatMap((entry) => {
 		if (!affected(entry)) return [entry];
 		const next = judgeOwed(closeOf(entry), facts, options);
@@ -85,7 +85,7 @@ export function withAttempts(
 	writer: string,
 	leases: ReadonlyMap<string, LeaseHold>,
 	options: DueActivationOptions,
-): Owed {
+): DueSummarize {
 	const failed = summaryLeasesOf(leases, close.through, writer).filter((lease) =>
 		countsAgainst(lease, close.through),
 	);

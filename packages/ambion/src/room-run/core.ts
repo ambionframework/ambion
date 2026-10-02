@@ -1,9 +1,9 @@
 /**
- * What every mechanism of the room host shares: the state of the room each
+ * What every mechanism of the room run shares: the state of the room each
  * one reads, and the way a decision becomes an entry on the journal.
  *
- * `RoomHost` in `room.ts` holds all state. A mechanism module exports
- * functions that take it as `RoomHostState`.
+ * `RoomRun` in `room.ts` holds all state. A mechanism module exports
+ * functions that take it as `RoomRunState`.
  */
 
 import { AmbionError } from '../errors.ts';
@@ -33,10 +33,10 @@ import type {
 import { copyMessage } from '../types.ts';
 
 /**
- * What the mechanism files read and write of the room. `RoomHost`
+ * What the mechanism files read and write of the room. `RoomRun`
  * implements it, and every mechanism function takes it.
  */
-export interface RoomHostState {
+export interface RoomRunState {
 	readonly name: string;
 	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */
@@ -59,10 +59,10 @@ export interface RoomHostState {
 	 * wake empties the set.
 	 */
 	readonly waiters: Set<() => void>;
-	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
+	/** When this room last sent each wake. A cache: a resumed room sends every due wake again. */
 	readonly sentAt: Map<string, number>;
 	/** The delivery in flight for each due or live activation. A token fences a late reply. */
-	readonly deliveryStates: Map<string, DeliveryState>;
+	readonly deliveryStates: Map<string, SendState>;
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases: Set<string>;
 	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
@@ -128,18 +128,18 @@ export function submit<K extends Kind>(
  * since the stop still writes its revocations and departures.
  */
 export function decideAndAppend<K extends DecidedKind>(
-	host: Pick<RoomHostState, 'journal' | 'state' | 'now' | 'gone'>,
+	run: Pick<RoomRunState, 'journal' | 'state' | 'now' | 'gone'>,
 	kind: K,
 	command: CommandFor[K],
 	options: { key?: string; whileRunning?: boolean } = {},
 ) {
 	return submit(
-		host.journal,
+		run.journal,
 		kind,
 		() =>
-			options.whileRunning === true && host.gone()
+			options.whileRunning === true && run.gone()
 				? { entry: undefined }
-				: decide<K>(host.state(), command, host.now()),
+				: decide<K>(run.state(), command, run.now()),
 		options.key,
 	);
 }
@@ -251,7 +251,7 @@ export interface ExchangeHandle extends ExchangeRef {
 	waitForSummary(): Promise<SummaryMessage | undefined>;
 }
 
-export interface DeliveryState {
+export interface SendState {
 	activation: string;
 	token: number;
 	pending: boolean;

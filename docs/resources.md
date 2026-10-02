@@ -2,7 +2,7 @@
 
 **A resource is application data that an agent's tools reach.** One
 contract describes every resource. Two bindings implement it: a filesystem
-binding over just-bash and Pi, and a SQL binding over the SQL backend of a
+binding over just-bash, and a SQL binding over the SQL backend of a
 workspace. Every tool call that reaches a resource carries provenance. The
 README states the positioning. This page states the contract, the records
 of the SQL binding, and the rules for references and provenance.
@@ -57,7 +57,8 @@ cached filesystem. A host deletes the data that it owns. The
 lifecycle.
 
 **A binding picks its own `Env`.** The environment extends `ResourceEnv`.
-The filesystem binding uses `WorkspaceEnv`, a Pi `ExecutionEnv`. The SQL
+The filesystem binding uses `WorkspaceEnv`, the port that the workspace
+owns. The SQL
 binding uses `SqlEnv`, and `workspace.sql` is its owner. `workspace.tools()`
 returns the tool bundle of both, which an agent definition lists.
 

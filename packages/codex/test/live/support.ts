@@ -3,17 +3,19 @@
  * memory, a deadline on the room going quiet, and the logged steps of an
  * activation.
  *
- * A live file needs `CODEX_API_KEY`. Without it the file skips. Every seat
- * runs `gpt-5.6-luna` at medium reasoning effort, so a run is the same
- * whichever account pays for it. Each file holds one claim that a recorded
+ * A live file runs in one of two modes: on `CODEX_API_KEY`, or on the
+ * ChatGPT login of the host. Without either the file skips. Every seat runs
+ * `gpt-5.6-luna` at medium reasoning effort, so a run is the same whichever
+ * account pays for it. Each file holds one claim that a recorded
  * stream cannot prove: a real `codex` runs, and a real model answers.
  */
 
+import { existsSync } from 'node:fs';
 import {
 	type AgentDefinition,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Execution,
 	isSaid,
 	type Message,
@@ -29,6 +31,7 @@ import { settled } from '@ambionframework/ambion/testing';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe } from 'vitest';
 import { type CodexOpenerOptions, createCodexOpener } from '../../src/executor.ts';
+import { seatHome } from '../../src/home.ts';
 import { type CodexOptions, codex, codexExecution } from '../../src/index.ts';
 import { dumpDirectory, liveDump } from './dump.ts';
 
@@ -38,13 +41,27 @@ export const MODEL = 'gpt-5.6-luna';
 /** The variable that holds the key. */
 export const KEY_VAR = 'CODEX_API_KEY';
 
-/** `describe` when the key is set; a skipped block when it is not. */
-export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);
+/** The login file a seat links by default: `auth.json` of the host. */
+const HOST_LOGIN = seatHome({}).login;
+
+/**
+ * How the seats sign in. `key` when `CODEX_API_KEY` is set, because the
+ * binary reads the key before the login. `login` when the host has a login
+ * file from `codex login`. Absent when the host has neither.
+ */
+export const SIGN_IN: 'key' | 'login' | undefined = process.env[KEY_VAR]
+	? 'key'
+	: HOST_LOGIN !== undefined && existsSync(HOST_LOGIN)
+		? 'login'
+		: undefined;
+
+/** `describe` when the seats can sign in; a skipped block when they cannot. */
+export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(SIGN_IN === undefined);
 
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;
 
-export const person = defineHuman({
+export const person = definePerson({
 	name: 'priya',
 	identity: 'Project manager. Asks the questions.',
 });
@@ -127,7 +144,7 @@ export const activationsOf = (events: readonly RoomNotification[], agent: string
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
 export const errorsIn = (events: readonly RoomNotification[]) =>
-	events.filter((event) => event.type === 'error' || event.type === 'delivery_error');
+	events.filter((event) => event.type === 'error' || event.type === 'port_error');
 
 /** The instructions that make a real model perform one plan of the executor suite. */
 function instructionsOf(plan: ExecutorPlan): string {

@@ -1,9 +1,9 @@
 /** The `connect` tool over a workspace sensor connection registry. */
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
-import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
+import type { DetailedResult } from './tools.ts';
 
 const CONNECT_TOOL_NAME = 'connect';
 
@@ -61,7 +61,7 @@ export function connectToolGuidance(): string {
 	].join('\n');
 }
 
-function result(connection: RegisteredSensorConnection): AgentToolResult<ConnectDetails> {
+function result(connection: RegisteredSensorConnection): DetailedResult<ConnectDetails> {
 	const sensors = connection.index.sensors.map((sensor) => `${connection.name}/${sensor.name}`);
 	const source = connection.source;
 	const text = [

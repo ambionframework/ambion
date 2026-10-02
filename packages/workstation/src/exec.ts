@@ -10,9 +10,8 @@
  * `sshd`, so `exec` looks for that line among the others. An abort or a
  * deadline stops the whole group through a second channel: `SIGTERM`, and
  * `SIGKILL` after the grace that the options name when the command has not
- * exited by then. With no grace, the stop sends `SIGKILL` at once, as Pi's
- * `NodeExecutionEnv` does on a local machine. The SSH signal request
- * cannot do this: it reaches the session's own child alone.
+ * exited by then. With no grace, the stop sends `SIGKILL` at once. The SSH
+ * signal request cannot do this: it reaches the session's own child alone.
  *
  * The command's output arrives on the channel's stdout, and `Capture` holds
  * it within a bound. `exec` hands one view to `onUpdate` after the command
@@ -28,18 +27,15 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	type Deadline,
 	deliverView,
+	err,
 	MAX_TIMER_SECONDS,
+	ok,
+	type Result,
+	ShellError,
+	type ShellExecResult,
 	type WorkspaceExecOptions,
 	withDeadline,
 } from '@ambionframework/workspace';
-import {
-	type Context,
-	ExecutionError,
-	err,
-	ok,
-	type Result,
-	type ShellExecResult,
-} from '@earendil-works/pi-agent-core';
 import type { ClientChannel } from 'ssh2';
 import { Capture } from './capture.ts';
 import { commandScript, invalidNames, PGID_PREFIX } from './script.ts';
@@ -51,7 +47,7 @@ const CLOSE_WAIT_MS = 2_000;
  * How long the channel stays open after the last output, once the command
  * exits. `sshd` sends the exit status first and the output it still holds
  * after it, and over a slow link the rest waits on a window adjustment.
- * Pi's 100 ms fits a local pipe and can cut a remote output.
+ * A wait of 100 ms fits a local pipe and can cut a remote output.
  */
 const EXIT_WAIT_MS = 1_000;
 
@@ -294,10 +290,10 @@ function stopWhenAborted(
 }
 
 /** A grace that no timer can hold. */
-function invalidGrace(grace: number | undefined): ExecutionError | undefined {
+function invalidGrace(grace: number | undefined): ShellError | undefined {
 	if (grace === undefined) return undefined;
 	if (!Number.isFinite(grace) || grace < 0 || grace > MAX_TIMER_SECONDS) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Invalid grace: must be 0 to ${MAX_TIMER_SECONDS} seconds`,
 		);
@@ -305,17 +301,14 @@ function invalidGrace(grace: number | undefined): ExecutionError | undefined {
 	return undefined;
 }
 
-/** A timeout that no timer can hold, refused the same as in `NodeExecutionEnv`. */
-function invalidTimeout(timeout: number | undefined): ExecutionError | undefined {
+/** A timeout that no timer can hold, is refused. */
+function invalidTimeout(timeout: number | undefined): ShellError | undefined {
 	if (timeout === undefined) return undefined;
 	if (!Number.isFinite(timeout) || timeout <= 0) {
-		return new ExecutionError('timeout', 'Invalid timeout: must be a finite number of seconds');
+		return new ShellError('timeout', 'Invalid timeout: must be a finite number of seconds');
 	}
 	if (timeout > MAX_TIMER_SECONDS) {
-		return new ExecutionError(
-			'timeout',
-			`Invalid timeout: maximum is ${MAX_TIMER_SECONDS} seconds`,
-		);
+		return new ShellError('timeout', `Invalid timeout: maximum is ${MAX_TIMER_SECONDS} seconds`);
 	}
 	return undefined;
 }
@@ -324,13 +317,13 @@ function invalidTimeout(timeout: number | undefined): ExecutionError | undefined
 async function refusal(host: CommandHost, cwd: string, options: WorkspaceExecOptions | undefined) {
 	const invalid = invalidNames(options?.env);
 	if (invalid.length > 0) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Invalid environment variable names: ${invalid.join(', ')}`,
 		);
 	}
 	if (!(await host.isDirectory(cwd))) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Working directory does not exist: ${cwd}\nCannot execute bash commands.`,
 		);
@@ -362,33 +355,32 @@ async function run(
 function settled(
 	ran: Awaited<ReturnType<typeof run>>,
 	options: WorkspaceExecOptions | undefined,
-	context: Context,
-): Result<ShellExecResult, ExecutionError> {
+): Result<ShellExecResult, ShellError> {
 	if (!ran.ending.exited) {
-		return err(new ExecutionError('unknown', 'The channel closed before the command ended.'));
+		return err(new ShellError('unknown', 'The channel closed before the command ended.'));
 	}
 	const exitCode = exitCodeOf(ran.ending.code, ran.ending.signal);
-	return ok(deliverView(ran.output.view(), exitCode, options, context));
+	return ok(deliverView(ran.output.view(), exitCode, options));
 }
 
-/** Run `command` in `cwd` on the workstation under its deadline, and turn what it throws into an `ExecutionError`. */
+/** Run `command` in `cwd` on the workstation under its deadline, and turn what it throws into an `ShellError`. */
 export async function runCommand(
 	host: CommandHost,
 	command: string,
 	cwd: string,
 	options: WorkspaceExecOptions | undefined,
-	context: Context,
-): Promise<Result<ShellExecResult, ExecutionError>> {
+	signal?: AbortSignal,
+): Promise<Result<ShellExecResult, ShellError>> {
 	const invalid = invalidTimeout(options?.timeout) ?? invalidGrace(options?.grace);
 	if (invalid) return err(invalid);
 	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;
-	return withDeadline(context.abortSignal, timeout, async (deadline) => {
+	return withDeadline(signal, timeout, async (deadline) => {
 		const early = deadline.error() ?? (await refusal(host, cwd, options));
 		if (early) return err(early);
 		const ran = await run(host, command, cwd, options, deadline);
 		// A command that exited before its deadline keeps its exit status.
 		const stopped = ran.ending.exited && !ran.ending.late ? undefined : deadline.error();
 		if (stopped) return err(stopped);
-		return settled(ran, options, context);
+		return settled(ran, options);
 	});
 }

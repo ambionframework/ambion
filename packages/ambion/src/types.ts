@@ -112,7 +112,7 @@ export type ExchangeOutcome =
 	| { readonly kind: 'cancelled' }
 	/** The room gave up on a respond activation in the range. */
 	| { readonly kind: 'exhausted' }
-	/** The last spoken message is directed at a person who has said nothing since. */
+	/** The last said message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
 
 /** A detached exchange, open or closed, that a host reads without starting a room. */
@@ -292,21 +292,21 @@ export interface AgentParticipant {
 	attention: Attention;
 }
 
-export interface HumanParticipant {
-	kind: 'human';
+export interface PersonParticipant {
+	kind: 'person';
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
 }
 
-export type Participant = AgentParticipant | HumanParticipant;
+export type Participant = AgentParticipant | PersonParticipant;
 
 /** A room-level fact: what landed on the record, or what happened to this run. */
 export type RoomEvent =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
-	 * whoever wrote it: what a person delivered, what an agent said, what the
-	 * an agent wrote, and a person arriving or leaving all reach a host the same
+	 * whoever wrote it: what a person delivered, what an agent said, what an
+	 * agent wrote, and a person arriving or leaving all reach a host the same
 	 * way.
 	 */
 	| { type: 'message'; message: Message }
@@ -319,16 +319,15 @@ export type RoomEvent =
 	| { type: 'superseded' }
 	/**
 	 * A person's question opened an exchange: the room has an exchange to work on,
-	 * and one person owns it. A client that folds the working under the
-	 * question it answered starts here, whatever the room makes of it
+	 * and its `person` is the first who spoke. A client that folds the working
+	 * under the question it answered starts here, whatever the room makes of it
 	 * later.
 	 */
 	| { type: 'exchange_opened'; exchange: ExchangeRef }
 	/**
 	 * The room went quiet with an exchange open, so that exchange is over and
-	 * holds the range it turned out to cover. It arrives after `settled` and
-	 * before any summary: the configured writer is one reader of this, not the only
-	 * one.
+	 * holds the range it turned out to cover. It arrives before any summary:
+	 * the configured writer is one reader of this, not the only one.
 	 */
 	| { type: 'exchange_closed'; exchange: ExchangeRange };
 
@@ -359,7 +358,7 @@ export type ActivationEvent =
 	| { type: 'error'; seat: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
-			type: 'delivery_error';
+			type: 'port_error';
 			seat: string;
 			activation: string;
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
@@ -509,7 +508,7 @@ export interface AgentDefinition {
 	readonly trace?: TracePolicy;
 }
 
-export interface HumanDefinition {
+export interface PersonDefinition {
 	readonly name: string;
 	readonly identity: string;
 	/**

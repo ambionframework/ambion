@@ -10,8 +10,8 @@
  * (`room/projection.ts`), so a room that resumes over the journal continues where the
  * last run stopped.
  *
- * `RoomHost` holds the state and the phases of the room. Its mechanisms live
- * in the files beside it, as functions over `RoomHostState`:
+ * `RoomRun` holds the state and the phases of the room. Its mechanisms live
+ * in the files beside it, as functions over `RoomRunState`:
  *
  * - `people.ts` — visits, deliveries from a visit, and the roster.
  * - `dispatch.ts` — the reaction to each entry, and the ports that send.
@@ -57,8 +57,8 @@ import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts
 import type { TokenWindow } from '../room/view.ts';
 import type {
 	AgentDefinition,
-	HumanDefinition,
 	Message,
+	PersonDefinition,
 	RoomNotification,
 	RoomRead,
 	SeatOptions,
@@ -70,12 +70,12 @@ import {
 	acceptedEntry,
 	type CompositionDraft,
 	compositionOf,
-	type DeliveryState,
 	decideAndAppend,
 	type ExchangeHandle,
 	notificationFor,
-	type RoomHostState,
+	type RoomRunState,
 	requireSubmission,
+	type SendState,
 	submit,
 } from './core.ts';
 import * as dispatch from './dispatch.ts';
@@ -112,7 +112,7 @@ export interface Room {
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
-	visit(human: HumanDefinition): Promise<people.Visit>;
+	visit(person: PersonDefinition): Promise<people.Visit>;
 	/**
 	 * Post a message as the system: to a seat, a person, or the room. The post
 	 * has no author, wakes and steers as the room routes it, and opens an
@@ -145,9 +145,9 @@ export interface Room {
 
 /**
  * The state is public inside the package so the mechanism files can reach it
- * through `RoomHostState`. The public surface of a room is the `Room` interface.
+ * through `RoomRunState`. The public surface of a room is the `Room` interface.
  */
-export class RoomHost implements Room, RunningRoom, RoomHostState {
+export class RoomRun implements Room, RunningRoom, RoomRunState {
 	readonly name: string;
 	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */
@@ -170,10 +170,10 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
 	readonly waiters = new Set<() => void>();
-	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
+	/** When this room last sent each wake. A cache: a resumed room sends every due wake again. */
 	readonly sentAt = new Map<string, number>();
 	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
-	readonly deliveryStates = new Map<string, DeliveryState>();
+	readonly deliveryStates = new Map<string, SendState>();
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases = new Set<string>();
 	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
@@ -198,8 +198,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		runtime: RuntimeState,
 		cast: CompositionDraft,
 		connector: ExecutionConnector,
-	): RoomHost {
-		return new RoomHost(name, runtime, cast, connector);
+	): RoomRun {
+		return new RoomRun(name, runtime, cast, connector);
 	}
 
 	static resume(
@@ -207,8 +207,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		runtime: RuntimeState,
 		bindings: Map<string, AgentDefinition>,
 		connector: ExecutionConnector,
-	): RoomHost {
-		return new RoomHost(name, runtime, undefined, connector, bindings);
+	): RoomRun {
+		return new RoomRun(name, runtime, undefined, connector, bindings);
 	}
 
 	private constructor(
@@ -454,8 +454,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	// -- people -----------------------------------------------------------------
 
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
-	visit(human: HumanDefinition): Promise<people.Visit> {
-		return people.visit(this, human);
+	visit(person: PersonDefinition): Promise<people.Visit> {
+		return people.visit(this, person);
 	}
 
 	/** The visit of a person whom the record holds present, or undefined. It writes nothing. */

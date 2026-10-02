@@ -14,7 +14,6 @@ import {
 	type ToolContext,
 	type ToolResult,
 } from '@ambionframework/ambion';
-import type { Context, FileError, Result } from '@earendil-works/pi-agent-core';
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import {
@@ -27,7 +26,7 @@ import {
 	unifiedPatch,
 } from './edit-diff.ts';
 import { imageMimeType } from './image-type.ts';
-import { contextOf } from './object-files.ts';
+import type { FileError, Result } from './port.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from './truncate.ts';
 
@@ -85,9 +84,9 @@ function accessError(path: string, error: FileError): Error {
 }
 
 /** The absolute path of a tool path. A leading `@` and the Unicode spaces of a pasted path go. */
-async function resolvePath(env: WorkspaceEnv, path: string, context: Context): Promise<string> {
+async function resolvePath(env: WorkspaceEnv, path: string, signal?: AbortSignal): Promise<string> {
 	const plain = path.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
-	return value(await env.absolutePath(plain.startsWith('@') ? plain.slice(1) : plain, context));
+	return value(await env.absolutePath(plain.startsWith('@') ? plain.slice(1) : plain, signal));
 }
 
 /**
@@ -95,8 +94,12 @@ async function resolvePath(env: WorkspaceEnv, path: string, context: Context): P
  * a model types in the narrow space before AM or PM, in the form of its
  * accents, and in its apostrophe. The first form that exists wins.
  */
-async function resolveReadPath(env: WorkspaceEnv, path: string, context: Context): Promise<string> {
-	const resolved = await resolvePath(env, path, context);
+async function resolveReadPath(
+	env: WorkspaceEnv,
+	path: string,
+	signal?: AbortSignal,
+): Promise<string> {
+	const resolved = await resolvePath(env, path, signal);
 	const forms = [
 		resolved,
 		resolved.replace(/ (AM|PM)\./gi, '\u202F$1.'),
@@ -105,7 +108,7 @@ async function resolveReadPath(env: WorkspaceEnv, path: string, context: Context
 		resolved.normalize('NFD').replace(/'/g, '\u2019'),
 	];
 	for (const form of new Set(forms)) {
-		if (value(await env.exists(form, context))) return form;
+		if (value(await env.exists(form, signal))) return form;
 	}
 	return resolved;
 }
@@ -116,9 +119,9 @@ async function readImage(
 	path: string,
 	bytes: Uint8Array,
 	mimeType: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<ToolResult> {
-	const resolved = await env.absolutePath(path, context);
+	const resolved = await env.absolutePath(path, signal);
 	const note = {
 		type: 'text' as const,
 		text: `Image path: ${resolved.ok ? resolved.value : path}`,
@@ -191,13 +194,12 @@ async function readFile(
 	params: ReadParams,
 	signal: AbortSignal | undefined,
 ): Promise<ToolResult> {
-	const context = contextOf(signal);
-	const path = await resolveReadPath(env, params.path, context);
-	const bytes = value(await env.readBinaryFile(path, context));
+	const path = await resolveReadPath(env, params.path, signal);
+	const bytes = value(await env.readBinaryFile(path, signal));
 	const mimeType = imageMimeType(bytes);
 	return mimeType === undefined
 		? readText(bytes, params)
-		: readImage(env, params.path, bytes, mimeType, context);
+		: readImage(env, params.path, bytes, mimeType, signal);
 }
 
 async function writeFile(
@@ -205,10 +207,9 @@ async function writeFile(
 	{ path, content }: WriteParams,
 	signal: AbortSignal | undefined,
 ): Promise<ToolResult> {
-	const context = contextOf(signal);
-	const absolute = await resolvePath(env, path, context);
+	const absolute = await resolvePath(env, path, signal);
 	assertLive(signal);
-	value(await env.writeFile(absolute, content, context));
+	value(await env.writeFile(absolute, content, signal));
 	assertLive(signal);
 	return text(`Successfully wrote to ${path}`);
 }
@@ -218,14 +219,14 @@ async function readEditable(
 	env: WorkspaceEnv,
 	path: string,
 	absolute: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<string> {
-	const info = await env.fileInfo(absolute, context);
+	const info = await env.fileInfo(absolute, signal);
 	if (!info.ok) throw accessError(path, info.error);
 	if (info.value.kind !== 'file' && info.value.kind !== 'symlink') {
 		throw new Error(`Could not edit file: ${path}. Path is not a file.`);
 	}
-	const content = await env.readTextFile(absolute, context);
+	const content = await env.readTextFile(absolute, signal);
 	if (!content.ok) throw accessError(path, content.error);
 	return content.value;
 }
@@ -238,10 +239,9 @@ async function editFile(
 	if (edits.length === 0) {
 		throw new Error('Edit tool input is invalid. edits must contain at least one replacement.');
 	}
-	const context = contextOf(signal);
-	const absolute = await resolvePath(env, path, context);
+	const absolute = await resolvePath(env, path, signal);
 	assertLive(signal);
-	const original = await readEditable(env, path, absolute, context);
+	const original = await readEditable(env, path, absolute, signal);
 	assertLive(signal);
 	const { bom, text: content } = stripBom(original);
 	const ending = detectLineEnding(content);
@@ -250,7 +250,7 @@ async function editFile(
 	const written = await env.writeFile(
 		absolute,
 		bom + restoreLineEndings(newContent, ending),
-		context,
+		signal,
 	);
 	if (!written.ok) throw accessError(path, written.error);
 	assertLive(signal);

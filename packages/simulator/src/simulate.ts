@@ -71,8 +71,8 @@ export async function simulate(room: Room, options: SimulateOptions): Promise<Si
 }
 
 function checkOptions(options: SimulateOptions): void {
-	if (!Number.isSafeInteger(options.exchanges) || options.exchanges < 1) {
-		throw new RangeError('`exchanges` must be a positive integer.');
+	if (!Number.isSafeInteger(options.messages) || options.messages < 1) {
+		throw new RangeError('`messages` must be a positive integer.');
 	}
 	const ms = options.exchangeMs;
 	if (ms !== undefined && (!Number.isFinite(ms) || ms <= 0)) {
@@ -113,7 +113,7 @@ class Loop {
 	}
 
 	private async iterate(visit: Visit): Promise<Ended> {
-		while (this.exchanges.length < this.options.exchanges) {
+		while (this.exchanges.length < this.options.messages) {
 			const move = await this.options.actor(this.seen());
 			this.moves.push(move);
 			if (isStop(move)) return 'stopped';

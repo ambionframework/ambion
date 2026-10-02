@@ -9,8 +9,8 @@ import { pi } from '../../../pi/src/index.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
-	defineHuman,
-	type HumanDefinition,
+	definePerson,
+	type PersonDefinition,
 } from '../../src/index.ts';
 import {
 	answersEveryQuestion,
@@ -39,12 +39,12 @@ export const colleague = defineAgent({
 	identity: 'The second product.',
 	executor: pi({ instructions: 'x', model: 'scripted/colleague' }),
 });
-export const priya = defineHuman({
+export const priya = definePerson({
 	name: 'priya',
 	identity: 'Project manager.',
 	preferences: 'Lead with the decision.',
 });
-export const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+export const sam = definePerson({ name: 'sam', identity: 'Site foreman.' });
 
 export const agents: readonly AgentDefinition[] = [assistant, product, colleague];
 const people = [priya.name, sam.name];
@@ -143,7 +143,7 @@ export const slowly =
 // -- the scenario -------------------------------------------------------------
 
 export interface Question {
-	person: HumanDefinition;
+	person: PersonDefinition;
 	key: string;
 	text: string;
 	to?: string;

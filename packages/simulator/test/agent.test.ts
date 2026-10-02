@@ -14,7 +14,7 @@ import {
 	scriptedStream,
 	toolResultTexts,
 } from '@ambionframework/pi/testing';
-import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import type { AssistantMessage, Context, JsonValue } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -67,7 +67,7 @@ describe('agentActor', () => {
 		});
 		const room = await open(desk, ['desk']);
 		const actor = agentActor({ model: MODEL, brief: BRIEF, services: services(script) });
-		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		const simulation = await simulate(room, { person: priya, actor, messages: 3 });
 		expect(simulation.ended).toBe('stopped');
 		expect(simulation.moves.map((move) => ('text' in move ? move.text : move.stop))).toEqual([
 			'Can we pour?',
@@ -80,7 +80,7 @@ describe('agentActor', () => {
 		expect(first?.systemPrompt).toContain('Do not quote or mention your goal.');
 		expect(contextText(first as Context)).toContain('You have sent nothing yet.');
 		expect(contextText(second as Context)).toMatch(/Exchange 1\. You sent: Can we pour\?/);
-		expect(contextText(second as Context)).toMatch(/\[\d+\] desk to priya: \\"Which day\?\\"/);
+		expect(contextText(second as Context)).toMatch(/\[\d+\] desk to priya: "Which day\?"/);
 		// The move carries the usage of its requests.
 		expect(simulation.moves[0]).toHaveProperty('usage');
 	});
@@ -104,7 +104,7 @@ describe('agentActor', () => {
 		]);
 		// The workspace wrote the file in the person's home.
 		const note = await workspace.use({ name: 'priya' }, (env) =>
-			env.readTextFile('/home/priya/note.txt', BACKGROUND_CONTEXT),
+			env.readTextFile('/home/priya/note.txt'),
 		);
 		expect(note).toMatchObject({ ok: true, value: 'Pour on Thursday.' });
 	});
@@ -126,15 +126,15 @@ describe('agentActor', () => {
 		['passes its timeout', () => forever(), 50, /The move passed its timeout of 50 ms/],
 	] as const)(
 		'rejects a move that %s, and the loop ends failed',
-		async (_case, answer, timeoutMs, error) => {
+		async (_case, answer, moveMs, error) => {
 			const actor = agentActor({
 				model: MODEL,
 				brief: BRIEF,
 				services: services(answer as PiScript),
-				...(timeoutMs === undefined ? {} : { timeoutMs }),
+				...(moveMs === undefined ? {} : { moveMs }),
 			});
 			const room = await open(desk, ['desk']);
-			const simulation = await simulate(room, { person: priya, actor, exchanges: 1 });
+			const simulation = await simulate(room, { person: priya, actor, messages: 1 });
 			expect(simulation.ended).toBe('failed');
 			expect(simulation.error).toMatch(error);
 		},
@@ -157,7 +157,7 @@ async function injectedSimulation() {
 	return simulate(room, {
 		person: priya,
 		actor: scriptedActor(['Can we pour?', { stop: 'SECRET BRIEF: pour on Thursday.' }]),
-		exchanges: 3,
+		messages: 3,
 	});
 }
 

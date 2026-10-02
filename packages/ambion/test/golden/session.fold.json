@@ -19,7 +19,7 @@
 			"attention": "named"
 		},
 		{
-			"kind": "human",
+			"kind": "person",
 			"name": "priya",
 			"identity": "Project manager.",
 			"presence": "absent"
@@ -111,13 +111,13 @@
 		},
 		{
 			"person": "priya",
-			"from": 18,
-			"through": 20,
+			"from": 19,
+			"through": 21,
 			"at": "2026-01-01T09:00:00.000Z",
 			"status": "closed",
 			"activations": [
 				{
-					"id": "message:18:worker:1",
+					"id": "message:19:worker:1",
 					"seat": "worker",
 					"attempt": 1,
 					"purpose": "respond",
@@ -133,7 +133,7 @@
 					},
 					"session": {
 						"kind": "pi",
-						"id": "message:18:worker:1"
+						"id": "message:19:worker:1"
 					}
 				}
 			],
@@ -152,5 +152,5 @@
 			}
 		}
 	],
-	"through": 24
+	"through": 25
 }

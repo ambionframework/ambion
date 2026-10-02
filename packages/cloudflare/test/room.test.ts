@@ -5,7 +5,7 @@
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { StreamFn } from '@ambionframework/pi';
 import { expect, it, onTestFinished } from 'vitest';
 import { configure } from '../src/configure.ts';
 import { sqlStorage } from '../src/storage.ts';
@@ -54,7 +54,7 @@ const refusesImpostor = (stub: ReturnType<typeof roomOf>) =>
 
 async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
 	const participants = (await stub.read({ messages: false })).participants;
-	const found = participants.find((one) => one.kind === 'human' && one.name === name);
+	const found = participants.find((one) => one.kind === 'person' && one.name === name);
 	return found && 'presence' in found ? found.presence : undefined;
 }
 

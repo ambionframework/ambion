@@ -20,7 +20,7 @@ import type {
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { defineHuman, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
+import { definePerson, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -50,7 +50,7 @@ export interface StartOptions {
 	goal?: string;
 }
 
-export interface Person {
+export interface Visitor {
 	name: string;
 	identity: string;
 	preferences?: string;
@@ -120,7 +120,7 @@ export class RoomObject extends DurableObject<Env> {
 			const read = await readRoom(name, { runtime: this.runtime, messages: false });
 			if (!read.initialized) return;
 			const recorded = [
-				...read.participants.filter((one) => one.kind !== 'human'),
+				...read.participants.filter((one) => one.kind !== 'person'),
 				...read.reserve,
 			].map((one) => one.name);
 			this.room = await resumeRoom(name, {
@@ -157,8 +157,8 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	/** The room journal holds identity and presence. The object keeps no copy of either. */
-	async visit(person: Person): Promise<void> {
-		await this.running().visit(defineHuman(person));
+	async visit(person: Visitor): Promise<void> {
+		await this.running().visit(definePerson(person));
 	}
 
 	/** The visit of a person whom the record holds present. A resumed room takes it from the record. */

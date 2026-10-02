@@ -1,18 +1,18 @@
 /**
  * SFTP calls as promises, and the classification of an SFTP status into
- * Pi's `FileErrorCode`.
+ * a `FileErrorCode` of the workspace port.
  *
  * OpenSSH's `sftp-server` answers with a coarse status: `ENOTDIR` comes back
  * as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` all come back as
  * `FAILURE`. On either status, one `lstat` of the path, and of its parent when
- * the path is missing, picks the Pi code by the kind of operation. The
+ * the path is missing, picks the code by the kind of operation. The
  * `lstat` runs after the failed call, so a change between the two can pick
  * the wrong code. It changes no file.
  */
 
 import { posix } from 'node:path';
-import type { FileExpect } from '@ambionframework/workspace';
-import { FileError, type FileErrorCode } from '@earendil-works/pi-agent-core';
+import type { FileErrorCode, FileExpect } from '@ambionframework/workspace';
+import { FileError } from '@ambionframework/workspace';
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2';
 
 /** The SFTP v3 status codes that `ssh2` puts on an error's `code`. */
@@ -62,14 +62,14 @@ async function kindAt(sftp: SFTPWrapper, path: string): Promise<'directory' | 'o
 	}
 }
 
-/** The Pi code for a path that exists, by what the call expected there. */
+/** The code for a path that exists, by what the call expected there. */
 function codeForExisting(kind: 'directory' | 'other', expect: FileExpect): FileErrorCode {
 	if (kind === 'directory' && expect === 'file') return 'is_directory';
 	if (kind === 'other' && expect === 'directory') return 'not_directory';
 	return 'invalid';
 }
 
-/** The Pi code for a path that is missing: a parent that is a file answers `not_directory`. */
+/** The code for a path that is missing: a parent that is a file answers `not_directory`. */
 async function codeForMissing(sftp: SFTPWrapper, path: string): Promise<FileErrorCode> {
 	const parent = posix.dirname(path);
 	if (parent === path) return 'not_found';

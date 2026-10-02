@@ -1,7 +1,7 @@
 # The workstation
 
 **The workstation forwards endpoints through SSH.** See
-[Workstation ports](sensors.md#workstation-ports) for the transport contract.
+[Workstation endpoints](sensors.md#workstation-endpoints) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
 workspace interface that [Workspace](workspace.md) states. The
@@ -199,7 +199,6 @@ different permissions.
 | `rooms`               | The host account alone                                 | Owner write, group read                           |
 | `snapshots`           | The host account alone                                 | Owner write, group read                           |
 | Each agent's home     | That agent alone                                       | `0700`                                            |
-| `/tmp`                | Every account, one private file each                   | The server's own `/tmp`, with the sticky bit      |
 
 **One group holds every agent account and the host account.** The folder
 of the audit log belongs to that group, with group write and the setgid
@@ -216,13 +215,9 @@ next file, and every other agent still appends to it.
 **Each home stays at mode `0700`.** A file of mode `0664` in a home
 reaches no other account.
 
-**A temporary file is private to its account.** Every account shares
-`/tmp`. `SshEnv` creates a temporary file with an exclusive create and
-mode `0600`, and a temporary directory with mode `0700`.
-
 ## The environment
 
-**`SshEnv` implements the transport of Pi's `ExecutionEnv`.** A file call
+**`SshEnv` implements the transport of the `WorkspaceEnv` port.** A file call
 goes over SFTP. Each `exec` opens one channel on the SSH client. The root
 entry's helpers supply the rest:
 
@@ -232,22 +227,18 @@ entry's helpers supply the rest:
 - `resolvePath` for `~` and a relative path
 - `Deadline`, which tells an abort apart from a timeout
 - `boundedView` for the output view
-- `tempDirPath` and `tempFilePath` for the names under `/tmp`
-
-Pi's `NodeExecutionEnv` implements the same methods on a local machine,
-and `SshEnv` follows its behavior.
 
 **SFTP needs six adjustments.** `workspaceConformance` checks most rows,
 and the package's own tests check the rest.
 
-| Method                    | SFTP gap                                                                                          | `SshEnv` does                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Every file method         | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the Pi code, as the next paragraph states |
-| `renameFile`              | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`   |
-| `createDir`               | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists  |
-| `writeFile`, `appendFile` | SFTP creates no parent folder                                                                     | Makes each missing parent first, as `NodeExecutionEnv` does                   |
-| `remove`                  | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                          |
-| `fileInfo`, `listDir`     | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes  |
+| Method                    | SFTP gap                                                                                          | `SshEnv` does                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Every file method         | OpenSSH answers `ENOTDIR` as `NO_SUCH_FILE`, and `EISDIR`, `EEXIST`, and `ENOTEMPTY` as `FAILURE` | On either status, one `lstat` picks the code of the port, as the next paragraph states |
+| `renameFile`              | SFTP v3 refuses to rename onto a file                                                             | Calls `posix-rename@openssh.com`; a server without it gets a plain `RENAME`            |
+| `createDir`               | SFTP makes one directory per request, and an existing one answers `FAILURE`                       | Makes each missing component in order; `lstat` finds a directory that exists           |
+| `writeFile`, `appendFile` | SFTP creates no parent folder                                                                     | Makes each missing parent first                                                        |
+| `remove`                  | SFTP removes one entry per request                                                                | Runs `rm -rf --` through `exec` for a recursive call                                   |
+| `fileInfo`, `listDir`     | SFTP gives `mtime` in seconds                                                                     | Multiplies it by 1000 for `mtimeMs`; `readdir` gives each entry's attributes           |
 
 **One `lstat` classifies a coarse status by the operation.** A file
 operation on a directory gives `is_directory`. A directory operation on a
@@ -265,8 +256,7 @@ one folder.
 
 **`exec` checks the directory first.** `SshEnv` runs one SFTP `stat` of
 the working directory, which follows a symbolic link. When the directory
-does not exist, it returns `spawn_error`, as `NodeExecutionEnv` does, and
-opens no channel.
+does not exist, it returns `spawn_error` and opens no channel.
 
 **`exec` sends the script on standard input.** `sshd` drops an `env`
 request unless `AcceptEnv` names the variable. `SshEnv` runs
@@ -293,8 +283,8 @@ standard input:
    )" </dev/null 2>&1
    ```
 
-   The command runs as `bash -c <command>`, the same as in
-   `NodeExecutionEnv`, and it reads an empty standard input. `SshEnv` picks
+   The command runs as `bash -c <command>`, and it reads an empty
+   standard input. `SshEnv` picks
    a random delimiter that no line of the command equals.
 
 **The output arrives in the order the command wrote it.** The command's
@@ -312,9 +302,7 @@ of one agent to another account.
 
 ## Commands and aborts
 
-**Each command runs in its own process group.** Pi's `NodeExecutionEnv`
-starts each command detached and kills the whole group with `SIGKILL`.
-`setsid --wait` makes `bash` the leader of a new group and waits for it,
+**Each command runs in its own process group.** `setsid --wait` makes `bash` the leader of a new group and waits for it,
 so the channel reports the exit status of the command. An abort that
 comes before the `AMBION_PGID=` line waits for that line, which is the
 first thing the script prints.
@@ -326,7 +314,7 @@ signals. Each signal opens a short channel that runs
 
 | `grace`            | What an abort sends                                                       |
 | ------------------ | ------------------------------------------------------------------------- |
-| Absent, or 0       | `SIGKILL` at once, as `NodeExecutionEnv` does                             |
+| Absent, or 0       | `SIGKILL` at once                                                         |
 | 1 or more          | `SIGTERM`, then `SIGKILL` after `grace` seconds if the command still runs |
 | Not 0 to 2,147,483 | No command: `exec` fails with `spawn_error`                               |
 
@@ -344,7 +332,7 @@ sends no `SIGKILL`.
 **A command that ends inside the grace gives its own exit status.** The
 channel reports it, and `exec` still returns the abort as `aborted` or
 `timeout`. The process table reads the code from the `exit` file
-([Processes](processes.md#the-stop)). The command's channel closes 2
+([Processes](processes.md#the-cancel)). The command's channel closes 2
 seconds after the time of the `SIGKILL` at the latest. The times of the
 signals count from the `AMBION_PGID=` line. Until that line comes, the
 channel closes after the grace and 2 seconds.
@@ -375,14 +363,14 @@ workspace's `deliverView`.
 **The Ambion host holds a bounded window of the output.** A command can
 write gigabytes, and every agent's workspace runs in the host's process.
 `SshEnv` keeps twice `maxBytes` on the side the view retains, and counts
-the bytes and lines of the whole output, as Pi's `OutputCapture` does.
+the bytes and lines of the whole output.
 With no `maxBytes`, the window is 8 MiB.
 
 **A child that keeps the output open does not hold the result.** The
 server sends the exit status when the command exits, and the output it
 still holds after it. `SshEnv` closes the channel 1 second after the last
-output, and 5 seconds after the exit status at most. Pi waits 100 ms on a
-local pipe, and over a slow link that cuts the output that waits on a
+output, and 5 seconds after the exit status at most. A wait of 100 ms fits a
+local pipe, and over a slow link it cuts the output that waits on a
 window adjustment.
 
 **A stall of the host does not count as a quiet channel.** When the
@@ -426,7 +414,7 @@ call adds network round trips to every tool call.
   the channel closes, and keeps a request made after that pending forever.
   So every call races the end of its client. A connection that dies with
   no sign ends after three keepalives with no answer, about 45 seconds. A
-  file call answers `unknown`, and a command answers `ExecutionError`
+  file call answers `unknown`, and a command answers `ShellError`
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client with no open
@@ -564,14 +552,11 @@ account writes `layout.rooms` and `layout.snapshots`, and the agents read
 them through the group. A snapshot reads each file as the agent that asks,
 so the host account never reads a home.
 
-**No agent reads another agent's temporary files.** Each temporary file
-has mode `0600`, and each temporary directory has mode `0700`.
-
 ## Tests
 
 **Both tiers run `workspaceConformance`.** A
 `ConformanceFixture<WorkspaceConformanceStore>` opens a fresh
-`workstationBackend` and disposes of it. The cases check the `ExecutionEnv`
+`workstationBackend` and disposes of it. The cases check the `WorkspaceEnv`
 rules that the file tools and the process tools need. The scripted fixture
 starts an `ssh2` server for each case
 (`packages/workstation/test/conformance.test.ts`).
@@ -631,7 +616,7 @@ the script writes. It proves what only OpenSSH can:
 - the conformance cases, with the replacing rename and the group kill
 - the error classification against the status codes of OpenSSH
 - the channel count under `MaxSessions` over many commands and timeouts
-- that one account cannot read another account's home or temporary files
+- that one account cannot read another account's home
 - that a large output stays within the view, with no spill file
 - that a file one agent creates in the audit folder stays writable for
   the other agent, across a rotation

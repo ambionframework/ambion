@@ -39,7 +39,7 @@ import {
 	sharedPushesMergeFromBothAgents,
 	sharedRegistrationPersists,
 } from './git-conformance-shared.ts';
-import { ANALYST, ctx, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
+import { ANALYST, forkAs, git, REVIEWER, sh } from './git-conformance-support.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import type { SourceInput } from './sources.ts';
 import { openWorkspace, type Workspace } from './workspace.ts';
@@ -184,7 +184,7 @@ const cloneSetsOrigin: Body = async ({ workspace }) => {
 	const url = await forkAs(workspace, ANALYST, 'templates/weekly-report', 'report');
 	const clone = await sh(workspace, ANALYST, `git clone ${url} ~/report`);
 	check(clone.code === 0, `the clone failed: ${clone.output}`);
-	const read = await workspace.use(ANALYST, (env) => env.readTextFile('~/report/report.md', ctx));
+	const read = await workspace.use(ANALYST, (env) => env.readTextFile('~/report/report.md'));
 	check(read.ok && read.value === '# Week\n', 'the clone lacks the template file');
 	const origin = await sh(workspace, ANALYST, 'cd ~/report && git remote -v');
 	check(origin.output.includes(url), `origin is not the fork: ${origin.output}`);
@@ -389,9 +389,9 @@ async function checkLateFork(workspace: Workspace, before: string): Promise<void
 	);
 	check(clone.code === 0, `the clone of the updated template failed: ${clone.output}`);
 	check(clone.output.includes(before), 'the update did not fast-forward from the old tip');
-	const notes = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/NOTES.md', ctx));
+	const notes = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/NOTES.md'));
 	check(notes.ok && notes.value === 'changed\n', 'a fork after the update lacks the new file');
-	const readme = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/README.md', ctx));
+	const readme = await workspace.use(ANALYST, (env) => env.readTextFile('~/late/README.md'));
 	check(!readme.ok, 'a fork after the update keeps a file that the source removed');
 }
 

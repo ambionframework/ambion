@@ -183,7 +183,7 @@ coordination messages that create further work without advancing the
 request.
 
 **A specialist's answer needs no forwarding.** Even a result addressed to
-the assistant is visible in the shared record. During ordinary work, do not
+the assistant is visible in the shared record. During a respond activation, do not
 repeat that result or write a preliminary summary. End the activation when
 no useful work remains. The room runs the summary work in a separate
 summary activation.
@@ -268,7 +268,7 @@ assigns the closing summary to the `person` of the exchange, the assistant
 writes it, and the person reads it on return. The seating guidance of the package states this
 rule.
 
-Unseating can interrupt active work and settle pending activations. Do not
+Unseating can interrupt active work and settle due activations. Do not
 use it as routine cleanup after each contribution. Avoid repeated seating
 and unseating. The assistant's seat is fixed as the summary writer: no
 agent, including the assistant itself, can unseat it through the room's
@@ -281,7 +281,7 @@ and roster restrictions require enforcement outside the prompt.
 
 ## Goals and preferences
 
-**The room goal and the user's current request guide ordinary work.** Later
+**The room goal and the user's current request guide respond activations.** Later
 user corrections can change the requested outcome. An explicit change from
 the user is new direction.
 
@@ -301,10 +301,10 @@ how that person wants to read the response. Respond activations receive the
 room goal and conversation, but do not receive those private preferences.
 
 Working preferences, such as prioritizing cost over speed, need explicit
-scope and visibility during ordinary work. For this implementation, provide
+scope and visibility during a respond activation. For this implementation, provide
 shared working constraints through the room goal, conversation, or application
 instructions. Do not claim that the package automatically reads private
-preferences during ordinary work. Broader preference routing needs a separate
+preferences during a respond activation. Broader preference routing needs a separate
 contract, including how preferences from multiple people interact.
 
 ## Summaries

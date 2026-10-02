@@ -1,7 +1,7 @@
 # Presence
 
 Presence is the contract for people in a room. The implementation is in
-[`room-host/`](../packages/ambion/src/room-host/room.ts), with the durable fold in
+[`room-run/`](../packages/ambion/src/room-run/room.ts), with the durable fold in
 [`room/presence.ts`](../packages/ambion/src/room/presence.ts) and the message
 types in [`types.ts`](../packages/ambion/src/types.ts) over the body schemas in
 [`bodies.ts`](../packages/ambion/src/bodies.ts). Read
@@ -71,8 +71,8 @@ They wait on the journal and are available after the person returns.
 
 ## 4. The visit
 
-The public handle is deliberately small: a `human` definition, a live `lastDeparture`
-position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host/people.ts)
+The public handle is deliberately small: a `person` definition, a live `lastDeparture`
+position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-run/people.ts)
 for the exact TypeScript signature.
 
 `lastDeparture` is a live read of the person's latest durable `left` message. It is
@@ -81,7 +81,7 @@ moves when a later departure lands. A visit does not become usable until its
 `arrived` write is confirmed.
 
 **`visit` ensures presence, `send` contributes through that visit, and `leave`
-ends it.** Calling `visit(human)` repeatedly is idempotent:
+ends it.** Calling `visit(person)` repeatedly is idempotent:
 
 | Recorded state                  | Result                                           |
 | ------------------------------- | ------------------------------------------------ |
@@ -110,7 +110,7 @@ before it; later deliveries cannot pass the recorded departure.
 ## 5. Arriving is a message
 
 The record has one message stream. Human presence uses `kind: 'arrived'` and
-`kind: 'left'`; agent seating uses `seated` and `unseated`; spoken messages
+`kind: 'left'`; agent seating uses `seated` and `unseated`; said messages
 use `said`; summaries use `summary`. Presence carries no invented text. Its
 `from` and identity come from the live visit, and its routing is stored with the
 message just like routing for speech.

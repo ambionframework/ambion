@@ -222,7 +222,7 @@ describe.skipIf(available.length === 0)('Workbench tool set on every executor ki
 				for (const tool of HOST_READERS) expect(called, seat).not.toContain(tool);
 			}
 			const errors = opened.events.filter(
-				(event) => event.type === 'error' || event.type === 'delivery_error',
+				(event) => event.type === 'error' || event.type === 'port_error',
 			);
 			expect(errors).toEqual([]);
 		} finally {

@@ -9,7 +9,6 @@
  */
 
 import type { ConformanceCase } from '@ambionframework/ambion/conformance';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type {
 	SqlBackend,
 	SqlEnv,
@@ -17,8 +16,6 @@ import type {
 	SqlRunOptions,
 	WorkspaceFiles,
 } from '../../src/sql-backend.ts';
-
-const ctx = BACKGROUND_CONTEXT;
 
 function check(condition: boolean, what: string): void {
 	if (!condition) throw new Error(what);
@@ -95,7 +92,7 @@ async function runAs(
 ): Promise<SqlOutcome> {
 	const env = await sql.connect(agent);
 	try {
-		return await env.run(text, options, ctx);
+		return await env.run(text, options);
 	} finally {
 		await env.cleanup();
 	}
@@ -258,16 +255,15 @@ async function abortBeforeRun(sql: SqlCase): Promise<void> {
 	controller.abort();
 	const env = await sql.connect('conformance');
 	try {
-		const aborted = withAbortSignal(controller.signal, ctx);
-		const rejected = await env.run('INSERT INTO w VALUES (1)', PREVIEW, aborted).then(
+		const rejected = await env.run('INSERT INTO w VALUES (1)', PREVIEW, controller.signal).then(
 			() => false,
 			() => true,
 		);
-		check(rejected, 'run on an aborted context did not reject');
+		check(rejected, 'run on an aborted signal did not reject');
 	} finally {
 		await env.cleanup();
 	}
-	check((await count(sql, 'w')) === 0, 'run on an aborted context ran its statement');
+	check((await count(sql, 'w')) === 0, 'run on an aborted signal ran its statement');
 }
 
 const SQL_CASES: readonly [string, SqlBody][] = [
@@ -289,7 +285,7 @@ const SQL_CASES: readonly [string, SqlBody][] = [
 	['a refused import is an ok: false outcome, and no statement runs', refusedImportRunsNothing],
 	['a refused statement is an ok: false outcome, and the run stops there', refusedStatement],
 	['every agent reads what another agent wrote', oneDatabaseForEveryAgent],
-	['an aborted context rejects before the first statement runs', abortBeforeRun],
+	['an aborted signal rejects before the first statement runs', abortBeforeRun],
 ];
 
 /** Opens the backend through `fixture`, runs `body`, and disposes it. */

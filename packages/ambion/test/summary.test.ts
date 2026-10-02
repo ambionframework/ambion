@@ -9,7 +9,7 @@ import {
 	awaitingFor,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	defineTool,
 	isSaid,
 	type Message,
@@ -93,20 +93,20 @@ const assistant = defineAgent({
 	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
 });
 
-const priya = defineHuman({
+const priya = definePerson({
 	name: 'priya',
 	identity: 'Project manager. Owns the programme.',
 	preferences: 'Lead with the decision she has to make. Leave out who said what.',
 });
 
-const sam = defineHuman({
+const sam = definePerson({
 	name: 'sam',
 	identity: 'Site foreman.',
 	preferences: 'Lead with what he has to do tomorrow.',
 });
 
 /** A person who has said nothing about how they read. */
-const dan = defineHuman({ name: 'dan', identity: 'Quantity surveyor.' });
+const dan = definePerson({ name: 'dan', identity: 'Quantity surveyor.' });
 
 /** One clock the tests move by hand, and one runtime over it. */
 const clock = fakeClock();
@@ -614,7 +614,7 @@ describe('closing summaries', () => {
 			events.filter((e) => e.type === 'activation_start' && e.seat === 'assistant'),
 		).toHaveLength(0);
 
-		const twin = defineHuman({ name: 'assistant', identity: 'Not the assistant.' });
+		const twin = definePerson({ name: 'assistant', identity: 'Not the assistant.' });
 		await expect(session.visit(twin)).rejects.toThrow(/is an agent in this room/);
 		await session.visit(priya);
 		await waitForRoom(session);
@@ -624,7 +624,7 @@ describe('closing summaries', () => {
 			attention: 'none',
 		});
 		expect(seats.find((s) => s.name === 'priya')).toEqual({
-			kind: 'human',
+			kind: 'person',
 			name: 'priya',
 			identity: 'Project manager. Owns the programme.',
 			presence: 'present',
@@ -1031,7 +1031,7 @@ describe('a summary writer with domain tools', () => {
 	});
 });
 
-describe('defineHuman', () => {
+describe('definePerson', () => {
 	it('keeps how a person reads, and drops a blank', () => {
 		expect(priya.preferences).toBe(
 			'Lead with the decision she has to make. Leave out who said what.',
@@ -1040,7 +1040,7 @@ describe('defineHuman', () => {
 	});
 
 	it.each([
-		['defineHuman', defineHuman],
+		['definePerson', definePerson],
 		['captureHuman', captureHuman],
 	])('%s trims preferences, and drops a blank', (_, capture) => {
 		expect(

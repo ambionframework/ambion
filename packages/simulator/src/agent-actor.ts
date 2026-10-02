@@ -1,6 +1,6 @@
 /**
  * An actor that plays a person as an agent. It takes the options of an agent
- * definition, and it runs on Pi's `AgentHarness` through `runAgent`. Each
+ * definition, and it runs on the Pi harness through `runAgent`. Each
  * move ends with one call to `send` or to `stop`. Before that call, the
  * agent can call its other tools, such as `read` on a file an agent wrote.
  */
@@ -17,7 +17,7 @@ import { actorPrompt, actorSystem } from './render.ts';
 import { deadlineSignal } from './signal.ts';
 import type { Actor, Move } from './types.ts';
 
-/** The default of `timeoutMs`: real milliseconds for one move. */
+/** The default of `moveMs`: real milliseconds for one move. */
 export const DEFAULT_MOVE_MS = 60_000;
 
 /** The routing name of every actor request. A scripted stream routes on it. */
@@ -35,7 +35,7 @@ export interface AgentActorOptions {
 	/** The Pi execution services. The default reads `<PROVIDER>_API_KEY`, with sessions in memory. */
 	readonly services?: ExecutionServices;
 	/** Real milliseconds for one move. The default is 60 000. */
-	readonly timeoutMs?: number;
+	readonly moveMs?: number;
 }
 
 const send = defineTool({
@@ -68,9 +68,9 @@ function moveOf(result: RunAgentResult): Move {
 /** An actor that plays `brief` on a model, with the tools and bundles of any agent. */
 export function agentActor(options: AgentActorOptions): Actor {
 	const services = options.services ?? createExecutionServices({ sessions: 'memory' });
-	const ms = options.timeoutMs ?? DEFAULT_MOVE_MS;
+	const ms = options.moveMs ?? DEFAULT_MOVE_MS;
 	return async (seen) => {
-		const deadline = deadlineSignal(ms, `The move passed its timeout of ${ms} ms.`);
+		const deadline = deadlineSignal(ms, `The move passed its timeout of ${ms} ms.`, 'moveMs');
 		try {
 			const result = await runAgent(services, {
 				model: options.model,

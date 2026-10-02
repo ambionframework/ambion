@@ -7,7 +7,7 @@ with options. The kernel, `@ambionframework/ambion`, imports no model
 library. This package holds the Codex SDK and the MCP SDK.
 
 ```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
@@ -20,7 +20,7 @@ const planner = defineAgent({
   }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 const room = await startRoom({
   name: 'delivery',
@@ -97,7 +97,8 @@ live.** The unit tests read event streams that a real `codex` recorded. They
 also run the real `codex` binary against a local endpoint that plays a script
 of model replies. The executor suite runs in the live tier on a real model.
 Run it with
-`CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`. It
+`CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`, or
+without the key after `codex login` to run on a ChatGPT subscription. It
 costs money.
 
 The [Codex guide](../../docs/codex.md) holds every option, the step

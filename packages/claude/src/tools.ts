@@ -10,7 +10,7 @@
  * the schemas of the agent's tools are TypeBox values, which are JSON
  * Schema, so `shapeOf` reads each property through `z.fromJSONSchema`.
  */
-import { ROOM_SERVER, type RoomTool } from '@ambionframework/ambion/hosting';
+import { type BoundTool, ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import type { SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { TSchema } from 'typebox';
@@ -34,7 +34,7 @@ function shapeOf(schema: TSchema): Record<string, z.ZodType> {
 }
 
 /** An MCP tool from a room tool. Each call takes the id the stream named for it. */
-function mcpTool(one: RoomTool, callId: CallId): SdkMcpToolDefinition {
+function mcpTool(one: BoundTool, callId: CallId): SdkMcpToolDefinition {
 	return tool(one.name, one.description, shapeOf(one.parameters), async (args) => {
 		const result = await one.run(args, callId(one.name));
 		return {
@@ -45,7 +45,7 @@ function mcpTool(one: RoomTool, callId: CallId): SdkMcpToolDefinition {
 }
 
 /** The in-process server for one activation, and the names of its tools as the SDK knows them. */
-export function roomServer(tools: readonly RoomTool[], callId: CallId) {
+export function roomServer(tools: readonly BoundTool[], callId: CallId) {
 	const served = tools.map((one) => mcpTool(one, callId));
 	return {
 		server: createSdkMcpServer({ name: ROOM_SERVER, tools: served }),

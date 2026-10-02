@@ -113,7 +113,7 @@ stand. The error is a `ToolFailure` whose `details` hold the `ComposeResult`. Th
 input or the output of a call.
 
 **The content is the contract.** Claude and Codex host a definition tool as
-a `RoomTool`, and a `RoomTool` keeps the content alone
+a `BoundTool`, and a `BoundTool` keeps the content alone
 ([Executors](executors.md#the-room-tools)). The `ComposeResult` in
 `details` reaches a Pi seat and its trace. On Claude and Codex, the model
 and the trace read the rendered content.
@@ -166,7 +166,7 @@ call helps, and when a direct call is the right call.
 the guidance of `compose` after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the speaking
 policy, as it renders the guidance of every bundle
-([Executors](executors.md#the-prompt-the-core-renders)). The description of
+([Executors](executors.md#the-prompt-the-driver-renders)). The description of
 `compose` holds one sentence and the catalog.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
@@ -346,7 +346,7 @@ and a missing field from a declared tool.
 
 **Existing callers keep compiling.** `fromPiTool` calls
 `defineTool<TSchema>` with one type argument, so only the first overload
-applies. `recordedOnShell` returns a pi-agent-core `AgentToolResult<D>`,
+applies. `recordedOnShell` returns a tool result with typed `details`,
 and its content parts fit `ToolResult<Static<O>>`.
 
 **The schema is the one source of the type.** A workspace tool derives its
@@ -356,7 +356,7 @@ drift. `SqlDetails`, `SnapshotDetails`, `ProcessDetails`, `PsDetails`,
 `WaitDetails`, and `ForkDetails` each become such a type.
 
 **Two details need care.** `ProcessDetails.truncation` holds the
-pi-agent-core type `ShellOutputTruncation`. Its schema lists the fields of
+workspace type `ShellOutputTruncation`. Its schema lists the fields of
 that type, and a type test pins that the two stay assignable. A `Static`
 type holds mutable arrays, so a tool copies a readonly array into its
 details, as `wait` already does with `[...processes]`.
@@ -473,7 +473,7 @@ it joins the vocabulary layer. The file list of that layer in
 
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
-each tool of the definition as a `RoomTool`. The `invoke` of `compose`
+each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition, and calls each
 `AmbionTool` directly.
 

@@ -52,7 +52,7 @@ What is built:
   Absent, it drops them. The seat object runs the execution of its own host:
   it connects the Pi execution of the worker once, and the `AgentRunner` and
   its executor live on the object instance. The executor keeps the Pi harness
-  sessions of the seat in a `MemorySessionRepo` there. An eviction loses the
+  sessions of the seat in memory there. An eviction loses the
   sessions, and the next activation starts fresh. The seat object does not
   create a room.
 - **`configure`** names the complete agent definitions the objects resolve by

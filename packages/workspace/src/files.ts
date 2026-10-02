@@ -19,58 +19,57 @@
  */
 
 import { posix } from 'node:path';
-import {
-	BACKGROUND_CONTEXT,
-	type Context,
-	type ExecutionEnv,
-	type FileError,
-} from '@earendil-works/pi-agent-core';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
 import { formatBytes } from './format-bytes.ts';
+import type { FileError } from './port.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
 import type { WorkspaceFiles, WorkspaceRead } from './sql-backend.ts';
 
 /** `path` as an absolute path on `env`. */
-async function absolutePath(env: ExecutionEnv, path: string, context: Context): Promise<string> {
-	const resolved = await env.absolutePath(path, context);
+async function absolutePath(
+	env: WorkspaceEnv,
+	path: string,
+	signal?: AbortSignal,
+): Promise<string> {
+	const resolved = await env.absolutePath(path, signal);
 	if (!resolved.ok) throw resolved.error;
 	return resolved.value;
 }
 
 /** Append every chunk to `temp`. */
 async function appendAll(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	temp: string,
 	chunks: Iterable<string> | AsyncIterable<string>,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
 	for await (const chunk of chunks) {
-		const appended = await env.appendFile(temp, chunk, context);
+		const appended = await env.appendFile(temp, chunk, signal);
 		if (!appended.ok) throw appended.error;
 	}
 }
 
 /** Write `chunks` to a temporary file beside `path`, and rename it onto `path`. */
 async function writeThrough(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	chunks: Iterable<string> | AsyncIterable<string>,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<string> {
-	const target = await absolutePath(env, path, context);
-	const made = await env.createDir(posix.dirname(target), { recursive: true }, context);
+	const target = await absolutePath(env, path, signal);
+	const made = await env.createDir(posix.dirname(target), { recursive: true }, signal);
 	if (!made.ok) throw made.error;
 	const temp = `${target}.${randomName()}.part`;
 	try {
-		const started = await env.writeFile(temp, '', context);
+		const started = await env.writeFile(temp, '', signal);
 		if (!started.ok) throw started.error;
-		await appendAll(env, temp, chunks, context);
-		const moved = await env.renameFile(temp, target, context);
+		await appendAll(env, temp, chunks, signal);
+		const moved = await env.renameFile(temp, target, signal);
 		if (!moved.ok) throw moved.error;
 	} finally {
-		// The cleanup runs over its own context: an aborted call still removes its temporary file.
-		await env.remove(temp, { force: true }, BACKGROUND_CONTEXT);
+		// The cleanup runs with no signal: an aborted call still removes its temporary file.
+		await env.remove(temp, { force: true });
 	}
 	return target;
 }
@@ -85,23 +84,23 @@ function tooLarge(path: string, bytes: number, maxBytes: number): WorkspaceRead 
 
 /** Read `path` when it is a file of at most `maxBytes` bytes. */
 async function readThrough(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	path: string,
 	maxBytes: number,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<WorkspaceRead> {
-	const target = await absolutePath(env, path, context);
+	const target = await absolutePath(env, path, signal);
 	const failed = (error: FileError): WorkspaceRead => {
 		if (error.code === 'aborted') throw error;
 		return { ok: false, message: `Cannot read ${target}: ${error.message}` };
 	};
-	const canonical = await env.canonicalPath(target, context);
+	const canonical = await env.canonicalPath(target, signal);
 	if (!canonical.ok) return failed(canonical.error);
-	const info = await env.fileInfo(canonical.value, context);
+	const info = await env.fileInfo(canonical.value, signal);
 	if (!info.ok) return failed(info.error);
 	if (info.value.kind !== 'file') return { ok: false, message: `${target} is not a file.` };
 	if (info.value.size > maxBytes) return tooLarge(target, info.value.size, maxBytes);
-	const read = await env.readTextFile(canonical.value, context);
+	const read = await env.readTextFile(canonical.value, signal);
 	if (!read.ok) return failed(read.error);
 	// The file can grow between the check and the read.
 	const bytes = Buffer.byteLength(read.value);
@@ -115,10 +114,10 @@ export function workspaceFiles(
 	agent: WorkspaceAgent,
 ): WorkspaceFiles {
 	const files: WorkspaceFiles = {
-		readFile: (path, maxBytes, context) =>
-			use(agent, (env) => readThrough(env, path, maxBytes, context), context.abortSignal),
-		writeFile: (path, chunks, context) =>
-			use(agent, (env) => writeThrough(env, path, chunks, context), context.abortSignal),
+		readFile: (path, maxBytes, signal) =>
+			use(agent, (env) => readThrough(env, path, maxBytes, signal), signal),
+		writeFile: (path, chunks, signal) =>
+			use(agent, (env) => writeThrough(env, path, chunks, signal), signal),
 	};
 	return Object.freeze(files);
 }

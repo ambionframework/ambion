@@ -18,10 +18,11 @@ import {
 } from './conformance-support.ts';
 import { defineAgent, describeExecutor } from './define.ts';
 import { seatContext } from './execution/connector.ts';
+import type { ActivationOpener } from './execution/contract.ts';
 import { AgentRunner } from './execution/runner.ts';
 import { systemClock } from './host/clock.ts';
 import { DEFAULT_TRACE_LIMITS } from './host/runtime.ts';
-import type { ActivationOpener, AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
+import type { AgentPort, CommitResult, LeaseRequest } from './protocol.ts';
 import {
 	type ActivationEvent,
 	type AgentDefinition,

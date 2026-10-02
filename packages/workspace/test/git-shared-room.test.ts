@@ -4,7 +4,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
-import { BACKGROUND_CONTEXT, openWorkspace } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
 import { agent, run } from './support/room.ts';
 
 describe('shared git in a room', () => {
@@ -66,11 +66,11 @@ describe('shared git in a room', () => {
 		);
 		expect(room).toBeDefined();
 		const read = await workspace.use({ name: 'reviewer' }, (env) =>
-			env.readTextFile('~/peer/contribution.txt', BACKGROUND_CONTEXT),
+			env.readTextFile('~/peer/contribution.txt'),
 		);
 		expect(read.ok && read.value).toBe('analyst\n');
 		const reviewerRead = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('~/notes/reviewer.txt', BACKGROUND_CONTEXT),
+			env.readTextFile('~/notes/reviewer.txt'),
 		);
 		expect(reviewerRead.ok && reviewerRead.value).toBe('reviewer\n');
 	});

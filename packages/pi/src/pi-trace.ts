@@ -1,104 +1,236 @@
 /**
- * Pi harness events as trace steps.
+ * The events of a harness conversation as trace steps.
  *
  * A stream that sends deltas gives a block as it grows: the deltas, then a
  * closing step. A stream that sends none gives the whole block at the end of
- * the message. Both reach the trace as the same block. The sink joins the
- * deltas. The harness reports the spend of each provider request as one
- * `usage` event, and each becomes one usage step.
+ * the message. Both reach the trace as the same block, and the sink joins
+ * the pieces. The assistant entry of each request gives one usage step.
+ * Compaction spends tokens too, and no entry holds that spend. The
+ * conversation reports it in the cumulative usage, and `flush` gives the
+ * spend that no request accounts for as one more usage step.
  */
-
 import type { Step } from '@ambionframework/ambion';
-import type { HarnessEvent } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, AssistantMessageEvent } from '@earendil-works/pi-ai';
+import type { AssistantMessage, Message, ToolCall, Usage } from '@earendil-works/pi-ai';
+import type {
+	AgentEvent,
+	EntryRecord,
+	MessageChange,
+	UsageState,
+} from '@earendil-works/pi-durable';
 
-const isAssistant = (message: { role?: unknown }): message is AssistantMessage =>
-	message.role === 'assistant';
+const isAssistant = (message: Message | undefined): message is AssistantMessage =>
+	message?.role === 'assistant';
 
-/** The text of a tool result, for the `error` field of a failed call. */
-function errorText(result: unknown): string {
-	const content = (result as { content?: unknown } | undefined)?.content;
-	if (!Array.isArray(content)) return 'The tool failed.';
-	const text = content
-		.map((part: { type?: unknown; text?: unknown }) => (part.type === 'text' ? part.text : ''))
-		.join('');
+/** The message of an entry. */
+const messageOf = (entry: EntryRecord | undefined): Message | undefined => entry?.model?.[0];
+
+/** The five numbers of one spend. */
+interface Spend {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number;
+}
+
+const empty = (): Spend => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+
+const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
+
+/** The spend a usage record holds. */
+function spendOf(usage: Partial<Usage> | undefined): Spend {
+	return {
+		input: count(usage?.input),
+		output: count(usage?.output),
+		cacheRead: count(usage?.cacheRead),
+		cacheWrite: count(usage?.cacheWrite),
+		cost: count(usage?.cost?.total),
+	};
+}
+
+/** The spend of every model in the cumulative usage. */
+export function totalOf(state: UsageState): Spend {
+	const total = empty();
+	for (const usage of Object.values(state.models)) {
+		const spend = spendOf(usage as Partial<Usage>);
+		total.input += spend.input;
+		total.output += spend.output;
+		total.cacheRead += spend.cacheRead;
+		total.cacheWrite += spend.cacheWrite;
+		total.cost += spend.cost;
+	}
+	return total;
+}
+
+const spent = (spend: Spend): Step => ({ type: 'usage', ...spend });
+
+const nothing = (spend: Spend): boolean => Object.values(spend).every((value) => value === 0);
+
+/** The text of a tool result message, for the `error` field of a failed call. */
+function errorText(message: Message | undefined): string {
+	if (message?.role !== 'toolResult') return 'The tool failed.';
+	const text = message.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
 	return text === '' ? 'The tool failed.' : text;
 }
 
-/** The blocks of one assistant message that the stream did not send. */
-function finished(message: AssistantMessage, streamed: ReadonlySet<number>): Step[] {
-	return message.content.flatMap((block, index): Step[] => {
-		if (streamed.has(index)) return [];
-		if (block.type === 'text') return [{ type: 'text', text: block.text, final: true }];
-		if (block.type === 'thinking' && block.redacted !== true)
-			return [{ type: 'thinking', text: block.thinking, final: true }];
-		return [];
-	});
-}
+const textOf = (block: { type: string; text?: string; thinking?: string }): string =>
+	(block.type === 'text' ? block.text : block.thinking) ?? '';
 
-type Of<T extends HarnessEvent['type']> = Extract<HarnessEvent, { type: T }>;
-
-/** The spend of one provider request. */
-function spent(event: Of<'usage'>): Step {
-	const { usage } = event.row;
-	return {
-		type: 'usage',
-		input: usage.input,
-		output: usage.output,
-		cacheRead: usage.cacheRead,
-		cacheWrite: usage.cacheWrite,
-		cost: usage.cost.total,
-	};
-}
-
-function toolResult(event: Of<'tool_end'>): Step {
-	return {
-		type: 'tool_result',
-		call: event.toolCallId,
-		output: event.result,
-		...(event.isError ? { error: errorText(event.result) } : {}),
-	};
-}
-
-/** Turns one harness event into the steps it stands for. One instance serves one activation. */
+/** Turns the events of one conversation into the steps they stand for. One instance serves one activation. */
 export class PiSteps {
-	/** The content blocks of the current message that the stream already sent. */
-	private streamed = new Set<number>();
+	/** How many characters of each content block of the current message the stream sent. */
+	private sent = new Map<number, number>();
+	/** The tool calls of the latest assistant message, by id. */
+	private calls = new Map<string, ToolCall>();
+	/** The calls that have a `tool_call` step. */
+	private started = new Set<string>();
+	private readonly baseline: Spend;
+	private latest: Spend;
+	private accounted = empty();
+	/** The last assistant message of the pass that runs. */
+	last: AssistantMessage | undefined;
 
-	steps(event: HarnessEvent): Step[] {
+	/** `usage` is the cumulative usage of the conversation when the activation starts. */
+	constructor(usage: UsageState) {
+		this.baseline = totalOf(usage);
+		this.latest = this.baseline;
+	}
+
+	steps(event: AgentEvent): Step[] {
 		switch (event.type) {
 			case 'message_start':
-				if (isAssistant(event.message)) this.streamed = new Set();
+				if (isAssistant(event.message)) this.sent = new Map();
 				return [];
 			case 'message_update':
-				return this.update(event.event);
+				return event.changes.flatMap((change) => this.change(change));
 			case 'message_end':
-				return isAssistant(event.message) ? finished(event.message, this.streamed) : [];
-			case 'usage':
-				return [spent(event)];
-			case 'tool_start':
-				return [
-					{ type: 'tool_call', call: event.toolCallId, name: event.toolName, input: event.args },
-				];
-			case 'tool_end':
-				return [toolResult(event)];
+				return this.ended(event.entry);
+			case 'tool_execution_start':
+				return this.start(event.toolCallId, event.toolName, event.args);
+			case 'tool_execution_end':
+				return this.finish(event.toolCallId, event.toolName, event.entry);
+			case 'usage_changed':
+				this.latest = totalOf(event.usage);
+				return [];
 			default:
 				return [];
 		}
 	}
 
-	private update(event: AssistantMessageEvent): Step[] {
-		if (!('contentIndex' in event)) return [];
-		const kind = event.type.startsWith('thinking') ? 'thinking' : 'text';
-		if (event.type === 'text_delta' || event.type === 'thinking_delta') {
-			this.streamed.add(event.contentIndex);
-			return [{ type: kind, text: event.delta, final: false }];
+	/** A new pass starts: it has no assistant message yet. */
+	forget(): void {
+		this.last = undefined;
+	}
+
+	/**
+	 * The spend that the conversation reports and no request accounts for:
+	 * compaction. Call it once the events of the pass have arrived.
+	 */
+	flush(): Step[] {
+		const rest: Spend = {
+			input: this.latest.input - this.baseline.input - this.accounted.input,
+			output: this.latest.output - this.baseline.output - this.accounted.output,
+			cacheRead: this.latest.cacheRead - this.baseline.cacheRead - this.accounted.cacheRead,
+			cacheWrite: this.latest.cacheWrite - this.baseline.cacheWrite - this.accounted.cacheWrite,
+			cost: this.latest.cost - this.baseline.cost - this.accounted.cost,
+		};
+		if (nothing(rest) || Object.values(rest).some((value) => value < 0)) return [];
+		this.accounted = {
+			input: this.accounted.input + rest.input,
+			output: this.accounted.output + rest.output,
+			cacheRead: this.accounted.cacheRead + rest.cacheRead,
+			cacheWrite: this.accounted.cacheWrite + rest.cacheWrite,
+			cost: this.accounted.cost + rest.cost,
+		};
+		return [spent(rest)];
+	}
+
+	/** The part of a block that the stream has not sent. */
+	private unsent(index: number, text: string): string {
+		const sent = this.sent.get(index) ?? 0;
+		this.sent.set(index, Math.max(sent, text.length));
+		return text.slice(sent);
+	}
+
+	private change(change: MessageChange): Step[] {
+		switch (change.type) {
+			case 'text_start':
+			case 'thinking_start':
+			case 'block': {
+				const { block } = change;
+				if (block.type === 'text' || (block.type === 'thinking' && block.redacted !== true)) {
+					return this.piece(change.contentIndex, block.type, textOf(block));
+				}
+				return [];
+			}
+			case 'text_delta':
+			case 'thinking_delta': {
+				const kind = change.type === 'text_delta' ? 'text' : 'thinking';
+				this.sent.set(
+					change.contentIndex,
+					(this.sent.get(change.contentIndex) ?? 0) + change.delta.length,
+				);
+				return [{ type: kind, text: change.delta, final: false }];
+			}
+			default:
+				return [];
 		}
-		if (event.type === 'text_end' || event.type === 'thinking_end') {
-			const sent = this.streamed.has(event.contentIndex);
-			this.streamed.add(event.contentIndex);
-			return [{ type: kind, text: sent ? '' : event.content, final: true }];
-		}
-		return [];
+	}
+
+	/** The unsent part of a block, when it has one. */
+	private piece(index: number, type: 'text' | 'thinking', text: string): Step[] {
+		const rest = this.unsent(index, text);
+		return rest === '' ? [] : [{ type, text: rest, final: false }];
+	}
+
+	/** The end of an assistant message: the closing step of each block, and the spend. */
+	private ended(entry: EntryRecord): Step[] {
+		const message = messageOf(entry);
+		if (!isAssistant(message)) return [];
+		this.last = message;
+		this.calls = new Map();
+		const steps: Step[] = [];
+		message.content.forEach((block, index) => {
+			if (block.type === 'toolCall') this.calls.set(block.id, block);
+			else if (block.type === 'text' || (block.type === 'thinking' && block.redacted !== true)) {
+				steps.push({ type: block.type, text: this.unsent(index, textOf(block)), final: true });
+			}
+		});
+		const spend = spendOf(message.usage);
+		this.accounted = {
+			input: this.accounted.input + spend.input,
+			output: this.accounted.output + spend.output,
+			cacheRead: this.accounted.cacheRead + spend.cacheRead,
+			cacheWrite: this.accounted.cacheWrite + spend.cacheWrite,
+			cost: this.accounted.cost + spend.cost,
+		};
+		steps.push(spent(spend));
+		this.sent = new Map();
+		return steps;
+	}
+
+	private start(call: string, name: string, input: unknown): Step[] {
+		this.started.add(call);
+		return [{ type: 'tool_call', call, name, input }];
+	}
+
+	/** The end of a tool call. A call that never started gives its `tool_call` step first. */
+	private finish(call: string, name: string, entry: EntryRecord | undefined): Step[] {
+		const steps = this.started.has(call)
+			? []
+			: this.start(call, name, this.calls.get(call)?.arguments);
+		const message = messageOf(entry);
+		const result = message?.role === 'toolResult' ? message : undefined;
+		const failed = entry === undefined || result?.isError === true;
+		steps.push({
+			type: 'tool_result',
+			call,
+			output: {
+				content: result?.content ?? [],
+				...(result?.details === undefined ? {} : { details: result.details }),
+			},
+			...(failed ? { error: errorText(message) } : {}),
+		});
+		return steps;
 	}
 }

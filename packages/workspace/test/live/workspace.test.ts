@@ -22,7 +22,7 @@ import {
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
-import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { openWorkspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
 
 /** One call of a tool, as the trace holds it: the arguments the model sent, and the error it read. */
@@ -105,7 +105,6 @@ live('the workspace', () => {
 				'CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
 					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)",
 				{ maxRows: 0 },
-				BACKGROUND_CONTEXT,
 			),
 		);
 		if (seeded?.ok !== true) throw new Error('seed failed');

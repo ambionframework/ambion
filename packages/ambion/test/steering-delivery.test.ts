@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import type { Execution, Steer, Wake } from '../src/hosting.ts';
-import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { type Tap, tapped } from './support/core-failure.ts';
 import { pendingOf } from './support/fold.ts';
@@ -36,7 +36,7 @@ import { storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
-const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
+const priya = definePerson({ name: 'priya', identity: 'Asks questions.' });
 
 /**
  * Record every wake and steer. `deferSteers` keeps each steer for the test

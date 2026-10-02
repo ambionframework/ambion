@@ -38,13 +38,13 @@ function lineBody(message: Message): string {
 		const returns = message.returns === undefined ? '' : `, returns #${message.returns}`;
 		return `[posted → ${message.to ?? 'the room'}${returns}] ${message.text}${refsOf(message)}`;
 	}
-	if (isSaid(message) || isSummary(message)) return spokenLine(message);
+	if (isSaid(message) || isSummary(message)) return saidLine(message);
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
 }
 
 /** A said or summary line. A scheduled say names the time it returns. */
-function spokenLine(message: Extract<Message, { kind: 'said' | 'summary' }>): string {
+function saidLine(message: Extract<Message, { kind: 'said' | 'summary' }>): string {
 	const returns =
 		message.kind === 'said' && message.delaySeconds !== undefined
 			? ` (returns at ${new Date(Date.parse(message.at) + message.delaySeconds * 1000).toISOString()})`

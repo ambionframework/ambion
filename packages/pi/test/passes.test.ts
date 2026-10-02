@@ -14,16 +14,18 @@ import type {
 	RunningActivation,
 } from '@ambionframework/ambion/hosting';
 import { callTool, quiet } from '@ambionframework/ambion/testing';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { type Context, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import type { EntryRecord } from '@earendil-works/pi-durable';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createPiOpener } from '../src/executor.ts';
-import { memorySessions, stubModel } from '../src/index.ts';
+import { omittedIn, rangeOf } from '../src/freshness.ts';
+import { memorySessions, type PiSessions, type StreamFn, stubModel } from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
 import { contextText, type PiScript, scriptedStream } from '../src/testing.ts';
 import { roomThatCommits, stateOf, unusedRoom } from './support/activation.ts';
+import { entriesIn } from './support/storage.ts';
 
 const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -66,21 +68,22 @@ function activation(
 		return base(model, context, options);
 	};
 	const definition = scriptedAgent('worker');
+	const store = memorySessions();
 	const piExecutor = createPiOpener({
 		definition,
 		model: stubModel,
 		stream,
 		now: () => 0,
-		sessions: memorySessions(),
+		sessions: store,
 	});
-	const sessions: RunningActivation[] = [];
-	const opener: ActivationOpener = (opened) => {
-		const one = piExecutor(opened);
-		sessions.push(one);
+	const opened: RunningActivation[] = [];
+	const opener: ActivationOpener = (activation) => {
+		const one = piExecutor(activation);
+		opened.push(one);
 		return one;
 	};
 	const raw = (): RunningActivation => {
-		const one = sessions[0];
+		const one = opened[0];
 		if (one === undefined) throw new Error('The core opened no session.');
 		return one;
 	};
@@ -95,7 +98,14 @@ function activation(
 		},
 	});
 	const steers = () => steps.filter((step) => step.type === 'steer');
-	return { session, requests, steps, steers, commits, raw };
+	return { session, requests, steps, steers, commits, raw, store };
+}
+
+/** The entries of the session that the first activation of the run began. */
+async function stored(sessions: PiSessions): Promise<EntryRecord[]> {
+	const storage = await sessions.open({ room: 'passes', seat: 'worker' }, 'message:1:worker:1');
+	if (storage === undefined) throw new Error('The session is gone.');
+	return entriesIn(storage);
 }
 
 const texts = (context: Context) =>
@@ -202,7 +212,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		expect(session.readThrough).toBe(3);
 	});
 
-	it('takes a line that lands as the last answer ends into one more request', async () => {
+	it('leaves a line that lands as the last answer ends to the next delta, and sends it once', async () => {
 		let landed = false;
 		let session: ActivationState | undefined;
 		const run = activation(
@@ -212,15 +222,50 @@ describe('the Pi executor across the passes of one activation', () => {
 				// The line lands as the last answer of the run ends.
 				if (step.type === 'text' && step.final && !landed) {
 					landed = true;
-					session?.steer?.(1, 2, '[priya] And the pump?');
+					session?.steer?.(1, 2, '[andrei] And the pump?');
 				}
 			},
 		);
 		session = run.session;
 		expect(await session.pass({ kind: 'view', view: viewOf(first, 1) })).toEqual({ failed: false });
+		// No request follows the last answer, so no request held the line.
+		expect(run.requests).toHaveLength(1);
+		expect(run.steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
+		expect(session.readThrough).toBe(1);
+
+		// The next pass carries the line in its delta. The model reads it once.
+		await session.pass({ kind: 'delta', after: 1, view: viewOf(both, 2) });
 		expect(run.requests).toHaveLength(2);
-		expect(run.steers()).toEqual([{ type: 'steer', seq: 2, consumed: true }]);
+		const prompts = texts(run.requests[1]?.context as Context);
+		expect(prompts.filter((text) => text.includes('And the pump?'))).toEqual([
+			'[new] #2 [andrei] And the pump?',
+		]);
 		expect(session.readThrough).toBe(2);
+		// The session keeps the placed line, and the context leaves it out.
+		const entries = await stored(run.store);
+		const steered = entries.filter((entry) => rangeOf(entry)?.steer === true);
+		expect(steered).toHaveLength(1);
+		expect(steered.every((entry) => omittedIn(entries).has(entry.id))).toBe(true);
+	});
+
+	it('withdraws a steer that a failed pass never placed, and the next delta carries the line', async () => {
+		const started = deferred();
+		const gate = deferred();
+		const run = activation(async (_context, _agent, request) => {
+			if (request === 1) {
+				started.resolve();
+				await gate.promise;
+				throw new Error('overloaded 529');
+			}
+			return quiet();
+		});
+		const running = run.session.pass({ kind: 'view', view: viewOf(first, 1) });
+		await started.promise;
+		run.session.steer?.(1, 2, '[andrei] And the pump?');
+		gate.resolve();
+		expect(await running).toMatchObject({ failed: true, cause: 'transient' });
+		const entries = await stored(run.store);
+		expect(entries.filter((entry) => rangeOf(entry)?.steer === true)).toEqual([]);
 	});
 
 	it('leaves a steer to the record when the run is cut', async () => {
@@ -236,7 +281,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		session.cut();
 		expect(await running).toEqual({ failed: false });
 		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
-		expect(session.cancelled).toBe(true);
+		expect(session.isCut).toBe(true);
 	});
 
 	it('drops a line held while the model resolves when the activation is cut', async () => {

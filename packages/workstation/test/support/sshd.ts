@@ -6,8 +6,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { WorkspaceEnv } from '@ambionframework/workspace';
-import { BACKGROUND_CONTEXT, type ShellOutputUpdate } from '@earendil-works/pi-agent-core';
+import type { ShellOutputView, WorkspaceEnv } from '@ambionframework/workspace';
 import type { WorkstationOptions, workstationBackend } from '../../src/index.ts';
 
 /** The file that `setup.sh` writes. Without it, every test of the tier skips. */
@@ -76,14 +75,14 @@ export interface Ran {
 /** Run `command` over `env`, and give its exit status and its output. */
 export async function run(env: WorkspaceEnv, command: string): Promise<Ran> {
 	let output = '';
-	const onUpdate = (update: ShellOutputUpdate): void => {
-		if (update.kind === 'replace') output = update.output.text;
+	const onUpdate = (view: ShellOutputView): void => {
+		output = view.text;
 	};
-	const ran = await env.exec(
-		command,
-		{ timeout: 120, capture: { limits: { maxBytes: 100_000, maxLines: 1000 } }, onUpdate },
-		BACKGROUND_CONTEXT,
-	);
+	const ran = await env.exec(command, {
+		timeout: 120,
+		capture: { limits: { maxBytes: 100_000, maxLines: 1000 } },
+		onUpdate,
+	});
 	if (!ran.ok) throw ran.error;
 	return { code: ran.value.exitCode, output };
 }

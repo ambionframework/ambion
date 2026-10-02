@@ -29,7 +29,7 @@
 
 import type { Entry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
-import type { LeaseChange } from '../journal/entries.ts';
+import type { Lease } from '../journal/entries.ts';
 import type { Message, Seq, Usage, VendorSession } from '../types.ts';
 import {
 	applyChange,
@@ -52,7 +52,7 @@ export type LeaseHold = RuleLease & {
  * so a lease's attempt history is reconstructed directly from its changes.
  */
 export function foldLeases(
-	changes: readonly Entry<LeaseChange>[],
+	changes: readonly Entry<Lease>[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
@@ -67,7 +67,7 @@ export function foldLeases(
  */
 export function applyLease(
 	leases: Map<string, LeaseHold>,
-	{ body: change, seq }: Entry<LeaseChange>,
+	{ body: change, seq }: Entry<Lease>,
 ): void {
 	const activation = decodeActivationId(change.id);
 	if (activation === undefined) return;
@@ -107,7 +107,7 @@ export interface DueActivation {
 }
 
 /** A due activation that a message caused, and no lease has answered. */
-export interface DueWake extends DueActivation {
+export interface DueRespond extends DueActivation {
 	/** When the message was written, ISO. */
 	at: string;
 }
@@ -139,7 +139,7 @@ export function dueOf(
 	seat: string,
 	taken: readonly LeaseHold[],
 	options: DueActivationOptions,
-): DueWake | undefined {
+): DueRespond | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
 	if (wakeAnswered(taken, message.seq)) return undefined;

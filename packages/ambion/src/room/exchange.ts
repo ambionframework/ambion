@@ -131,7 +131,7 @@ export function summaryLeasesOf(
 }
 
 /** What one pass over the room shares among its closed exchanges. */
-interface Pass {
+interface ExchangeFacts {
 	/** The people of the room, by name. The outcome and the recipients read them. */
 	readonly people: ReadonlySet<string>;
 	messages: readonly Message[];
@@ -179,7 +179,7 @@ export function recipientsOf(
 }
 
 /**
- * The person the last spoken message of the range asks, when they have said
+ * The person the last said message of the range asks, when they have said
  * nothing since. The author of the opening message asked the question, so a
  * message to them is the answer and asks nothing. A returned say has no
  * author, so in its exchange every message to a person asks.
@@ -201,7 +201,7 @@ function awaitedPerson(
 function exchangeOutcomeOf(
 	close: Close,
 	range: readonly Message[],
-	pass: Pass,
+	pass: ExchangeFacts,
 	exhausted: boolean,
 ): ExchangeOutcome {
 	const person = awaitedPerson(range, pass.people, pass.lastSaid);
@@ -212,7 +212,11 @@ function exchangeOutcomeOf(
 }
 
 /** The summaries of a closed range, one per recipient, in recipient order. */
-function summariesOf(close: Close, range: readonly Message[], pass: Pass): SummaryMessage[] {
+function summariesOf(
+	close: Close,
+	range: readonly Message[],
+	pass: ExchangeFacts,
+): SummaryMessage[] {
 	const recipients = recipientsOf(range, close.from, close.through, pass.people);
 	return recipients.flatMap((person) => {
 		const summary = coveringSummary(pass.summaries, person, close);
@@ -221,7 +225,10 @@ function summariesOf(close: Close, range: readonly Message[], pass: Pass): Summa
 }
 
 /** Build one detached closed `Exchange` from the recorded close. */
-function closedExchangeView(close: Close, pass: Pass): Extract<Exchange, { status: 'closed' }> {
+function closedExchangeOf(
+	close: Close,
+	pass: ExchangeFacts,
+): Extract<Exchange, { status: 'closed' }> {
 	const { usage, exhausted } = workOf(close.from, close.through, pass.leases);
 	const range = rangeOf(pass.messages, close.from, close.through);
 	const summaries = summariesOf(close, range, pass);
@@ -336,7 +343,7 @@ function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): 
 }
 
 /** Build detached `Exchange` values in journal order, including the current open exchange. */
-export function exchangeViews(
+export function exchangesOf(
 	closes: readonly Close[],
 	messages: readonly Message[],
 	open: ExchangeRef | undefined,
@@ -344,7 +351,7 @@ export function exchangeViews(
 	cancelledAt: number | undefined,
 	people: ReadonlySet<string>,
 ): Exchange[] {
-	const pass: Pass = {
+	const pass: ExchangeFacts = {
 		people,
 		messages,
 		summaries: messages.filter(isSummary),
@@ -352,7 +359,7 @@ export function exchangeViews(
 		lastSaid: lastSaidBy(messages, people),
 		cancelledAt,
 	};
-	const closed = closes.map((close) => closedExchangeView(close, pass));
+	const closed = closes.map((close) => closedExchangeOf(close, pass));
 	if (open === undefined) return closed;
 	const activations = [...leases.values()]
 		.filter((lease) => lease.activation.position >= open.from)

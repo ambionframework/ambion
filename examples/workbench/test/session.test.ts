@@ -6,11 +6,11 @@ import { ProcessBrowser, stateText } from '../src/process-browser.ts';
 import { lastPart } from '../src/processes.ts';
 import { scenarios } from '../src/scenarios.ts';
 import { Session } from '../src/session.ts';
-import type { ActivationSteps, OpenOptions, ProcessView, Workbench } from '../src/workbench.ts';
+import type { ActivationSteps, OpenOptions, Process, Workbench } from '../src/workbench.ts';
 import { started, view } from './fake-host.ts';
 import { freshDirectory, idleStream, openHost } from './hosting.ts';
 
-const LOGGED = new Set<string | symbol>(['join', 'leave', 'send', 'control', 'create']);
+const LOGGED = new Set<string | symbol>(['visit', 'leave', 'send', 'control', 'create']);
 
 /**
  * A session on a real host on scripted models. The host records each call the
@@ -84,9 +84,9 @@ describe('Session on the real host', () => {
 		expect(calls).toEqual([]);
 
 		await session.submit('/room power');
-		expect(calls).toEqual(['leave:bringup:mira', 'join:power:mira']);
+		expect(calls).toEqual(['leave:bringup:mira', 'visit:power:mira']);
 		expect(session.room).toBe('power');
-		await workbench.join('power', 'theo');
+		await workbench.visit('power', 'theo');
 		await vi.waitFor(() =>
 			expect(session.view?.participants).toContainEqual(
 				expect.objectContaining({ name: 'theo', presence: 'present' }),
@@ -149,7 +149,7 @@ describe('Session on the real host', () => {
 		session.entered = false;
 		calls.length = 0;
 		await session.submit('Are you there?');
-		expect(calls).toEqual(['join:bringup:mira', 'send:bringup:mira']);
+		expect(calls).toEqual(['visit:bringup:mira', 'send:bringup:mira']);
 		expect((await trail(workbench, 'bringup')).slice(-2)).toEqual([
 			'arrived:mira',
 			'said:mira:Are you there?',
@@ -165,7 +165,7 @@ describe('Session on the real host', () => {
 		expect(session.error).toBe('bringup is stopped. Use /resume first.');
 		expect(calls).toEqual([]);
 		await session.submit('/resume');
-		expect(calls).toEqual(['control:bringup:resume', 'join:bringup:mira']);
+		expect(calls).toEqual(['control:bringup:resume', 'visit:bringup:mira']);
 		expect(session.entered).toBe(true);
 		await vi.waitFor(() => expect(session.view?.status).toBe('running'));
 
@@ -496,7 +496,7 @@ describe('Session awaiting and approval', () => {
 
 describe('Session /ps', () => {
 	const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 12, 0, seconds)).toISOString();
-	const process = (handle: string, extra: Partial<ProcessView> = {}): ProcessView => ({
+	const process = (handle: string, extra: Partial<Process> = {}): Process => ({
 		handle,
 		kind: 'bash',
 		agent: 'design',

@@ -12,13 +12,13 @@
 			"attention": "broadcast"
 		},
 		{
-			"kind": "human",
+			"kind": "person",
 			"name": "sam",
 			"identity": "Site foreman.",
 			"presence": "absent"
 		},
 		{
-			"kind": "human",
+			"kind": "person",
 			"name": "priya",
 			"identity": "Project manager.",
 			"presence": "absent"

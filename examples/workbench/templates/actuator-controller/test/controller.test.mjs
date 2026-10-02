@@ -30,7 +30,7 @@ async function setup(context, overrides = {}) {
 		device: 'sim',
 		lock: join(root, 'bath.lock'),
 		output: { name: 'power', unit: '%', min: 0, max: 100, safe: 0 },
-		law: { kp: 20, ki: 20 },
+		law: { kp: 20, ki: 60 },
 		...overrides,
 		sim: { ambient: 20, tau: 1, gain: 0.6, state: join(root, 'plant.json'), ...overrides.sim },
 	};
@@ -93,7 +93,9 @@ function checkLine(line) {
 const claimsOf = (lines) => lines.filter((line) => line.kind === 'state').map((line) => line.value);
 
 test('the loop reaches the target, holds it, and exits 0 in a safe state at the deadline', async (context) => {
-	const setupResult = await setup(context);
+	// A loaded host can stop the loop for more than a second. A stop at full power overshoots
+	// the target, and the loop needs about a second more to come back. Six seconds hold both.
+	const setupResult = await setup(context, { holdSeconds: 6 });
 	const run = launch(setupResult.env);
 	const end = await run.ended;
 	assert.equal(end.code, 0, end.output);

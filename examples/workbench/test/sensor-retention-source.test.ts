@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { directoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT } from '@ambionframework/workspace';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import type { BashBackend, WorkspaceEnv } from '../../../packages/workspace/src/backend.ts';
 import type { ObjectEnv } from '../../../packages/workspace/src/object-backend.ts';
@@ -21,6 +20,8 @@ const template = fileURLToPath(new URL('../templates/sensor-server/', import.met
 const host = { name: 'workspace-host' };
 
 describe('sensor evidence retention with Git launch provenance', () => {
+	// Twenty seconds. The test starts ten git processes and a Node server, and
+	// a loaded runner takes those past the five-second default.
 	it('retains a dirty launch and restores its observation after later commits and server shutdown', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-source-'));
 		onTestFinished(() => rm(root, { recursive: true, force: true }));
@@ -129,7 +130,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		);
 		const manifestPath = (restored as { details: { path: string } }).details.path;
 		const manifestBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-			const read = await env.readBinaryFile(manifestPath, BACKGROUND_CONTEXT);
+			const read = await env.readBinaryFile(manifestPath);
 			if (!read.ok) throw read.error;
 			return read.value;
 		});
@@ -165,13 +166,13 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		);
 		const imagePath = (restoredFile as { details: { path: string } }).details.path;
 		const restoredBytes = await storeFixture.store.bash({ name: 'reviewer' }, async (env) => {
-			const read = await env.readBinaryFile(imagePath, BACKGROUND_CONTEXT);
+			const read = await env.readBinaryFile(imagePath);
 			if (!read.ok) throw read.error;
 			return read.value;
 		});
 		expect([...restoredBytes]).toEqual([...imageBytes]);
 		expect(createHash('sha256').update(restoredBytes).digest('hex')).toBe(digest);
-	});
+	}, 20_000);
 });
 
 function git(cwd: string, args: string[]): string {
@@ -227,7 +228,7 @@ async function start(cwd: string, dataPath: string) {
 	const port = await new Promise<number>((resolvePort, reject) => {
 		const timeout = setTimeout(
 			() => reject(new Error(`Sensor server did not start: ${output}`)),
-			5000,
+			15_000,
 		);
 		child.stdout.on('data', (part: string) => {
 			const match = part.match(/READY http:\/\/127\.0\.0\.1:(\d+)/);
@@ -271,10 +272,15 @@ async function createStore(root: string): Promise<{
 	const bash = openResource<WorkspaceEnv>({ name: 'source-retention-bash', backend });
 	const objects = openResource<ObjectEnv>({
 		name: 'source-retention-objects',
-		backend: fileObjectBackend({ bash: bash.use, host, root: '/snapshots' }),
+		backend: fileObjectBackend({ bash: bash.use, mirrorAgent: host, root: '/snapshots' }),
 	});
 	return {
-		store: { workspace: 'sensor-source-retention', host, bash: bash.use, objects: objects.use },
+		store: {
+			workspace: 'sensor-source-retention',
+			mirrorAgent: host,
+			bash: bash.use,
+			objects: objects.use,
+		},
 		async dispose() {
 			await objects.dispose();
 			await bash.dispose();

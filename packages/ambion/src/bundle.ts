@@ -40,7 +40,7 @@ export interface AmbionTool {
 	readonly parameters: TSchema;
 	readonly label: string;
 	readonly prepareArguments?: (args: unknown) => unknown;
-	readonly executionMode?: ToolExecutionMode;
+	readonly executionMode?: ToolConcurrency;
 	readonly invoke: (
 		params: unknown,
 		ctx: ToolContext,
@@ -48,7 +48,7 @@ export interface AmbionTool {
 }
 
 /** Whether an executor runs the calls of one activation in turn or together. */
-export type ToolExecutionMode = 'sequential' | 'parallel';
+export type ToolConcurrency = 'sequential' | 'parallel';
 
 /** One part of what a tool hands back to the model. */
 export type ToolContent =
@@ -78,7 +78,7 @@ export interface ToolBundle {
 	/**
 	 * Text for one respond activation of one seat, or undefined for none. The
 	 * executor calls it once, at the start of the activation, and the text
-	 * joins the turn context. A throw, a rejection, or no answer within 5
+	 * joins the context. A throw, a rejection, or no answer within 5
 	 * seconds gives no text. At that bound the executor aborts
 	 * `signal`, so a reminder that records what it showed records nothing.
 	 */

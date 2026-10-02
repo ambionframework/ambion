@@ -60,6 +60,14 @@ export and pack-list correctness, and on `pnpm run test` for the built
 `dist/**` that `check:types` type-checks against; neither installs a
 tarball in an external project the way the two smoke checks do.
 
+**A packed consumer of the workspace installs no Pi package.**
+`scripts/packed-consumer.test.mjs` packs the workspace, the workstation, and
+just-bash as their tarballs. It reads the manifest of each tarball, and it
+lists the production dependencies of the package from the lockfile. The
+check needs no network. It fails on a package of the scope
+`@earendil-works` in either place. Biome refuses the same imports in `src`
+of the three packages.
+
 The core has four published entries:
 
 - `@ambionframework/ambion` for hosts.
@@ -77,14 +85,14 @@ The core imports no platform modules. Biome refuses `node:*`,
 filesystem code owns Node dependencies; Cloudflare code owns Durable Object
 integration.
 
-The core separates collaboration from execution. `room-host/` coordinates
+The core separates collaboration from execution. `room-run/` coordinates
 the journal and pure decisions under `room/`. Its `room.ts` holds the state
-and the phases. `core.ts` holds `RoomHostState`, the view of that state
+and the phases. `core.ts` holds `RoomRunState`, the view of that state
 that every mechanism reads, and the helpers that turn a decision into an
 entry. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
 mechanism each. `core.ts` imports no sibling. The executor contract lives in
-`protocol.ts`, beside `AgentPort`, so `host/` imports no file of
-`execution/`. `execution/` owns the agent runner, the tool bodies, the
+`execution/contract.ts`. It has a layer of its own below `host/`, so
+`host/` imports no other file of `execution/`. `execution/` owns the agent runner, the tool bodies, the
 trace, and rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.
@@ -329,8 +337,9 @@ every other package once, with both keys. Run one harness by hand with
 `AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
 
-`@ambionframework/codex` has a live tier of its own. Its files skip when
-`CODEX_API_KEY` is unset, and they run on the model `gpt-5.6-luna`. Run one
+`@ambionframework/codex` has a live tier of its own. Its files run on
+`CODEX_API_KEY` or on the ChatGPT login of the host, and skip without either.
+They run on the model `gpt-5.6-luna`. Run one
 file with `pnpm --filter @ambionframework/codex run test:live`, which builds
 the package first because Codex spawns the built room tools server. See
 [Codex](codex.md).

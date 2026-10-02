@@ -117,7 +117,7 @@ echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '<dir>/exit.tmp' && mv '<dir>/exit.tm
 ```
 
 The trap keeps the wrapper alive through the `SIGTERM` of a cancel
-([The stop](#the-stop)). The subshell keeps an `exit` in the command from
+([The cancel](#the-cancel)). The subshell keeps an `exit` in the command from
 ending the wrapper. The command stands on lines of its own, so a comment
 or a here-document at its end does not reach the parenthesis. The rename
 makes `exit` whole or absent. The shell can write before the redirect
@@ -262,7 +262,7 @@ bracketed line adds `The text above is the last <n> lines, <size> of the
 most 200 KB, with `head -c <size> | tail -c <count>`. The agent reads the
 rest with `read`, which takes an offset and a limit.
 
-**`details.process` is a `ProcessRecord`.** The host's view gives the
+**`details.process` is a `Process`.** The host's view gives the
 same value.
 
 | Field       | Holds                                                                      |
@@ -330,11 +330,11 @@ writes `stop`, aborts a process of this run, or sends a signal to an
 adopted one. A step opens at most one short channel on the workstation.
 A step never waits for an end, so a cancel with a long grace holds no later
 cancel of the same agent. A cancel, a timeout, a cancel by the host, and
-`dispose()` cancel a process this way ([The stop](#the-stop)). The
+`dispose()` cancel a process this way ([The cancel](#the-cancel)). The
 workstation sends one signal channel at a time for each client
 ([Workstation](workstation.md#the-ssh-client)).
 
-## The stop
+## The cancel
 
 **A cancel sends `SIGTERM` to the process group, waits for the grace, and
 then sends `SIGKILL`.** The `grace` of the `bash` call sets the wait: 1 to
@@ -434,7 +434,7 @@ process record.
 table arms its timeout again from `startedAt` and `timeout` in `spec`. A
 process past its timeout cancels at once. `cancel` and the timeout cancel it
 through its pid: the table writes `stop`, and a script signals the
-process group of the pid ([The stop](#the-stop)). The script signals the
+process group of the pid ([The cancel](#the-cancel)). The script signals the
 group only when the group is not its own, so a backend that runs
 commands in the host's group loses one shell and no more.
 
@@ -486,14 +486,14 @@ that an agent left running. It adds no tool.
 
 ```ts
 export interface WorkspaceProcesses {
-  list(query?: { agent?: string; running?: boolean }): Promise<readonly ProcessRecord[]>;
+  list(query?: { agent?: string; running?: boolean }): Promise<readonly Process[]>;
   subscribe(listener: (event: ProcessEvent) => void): () => void;
-  cancel(handle: string): Promise<ProcessRecord>;
+  cancel(handle: string): Promise<Process>;
 }
 
 export type ProcessEvent =
-  | { readonly type: 'started'; readonly process: ProcessRecord }
-  | { readonly type: 'ended'; readonly process: ProcessRecord };
+  | { readonly type: 'started'; readonly process: Process }
+  | { readonly type: 'ended'; readonly process: Process };
 ```
 
 **`list` reads the tables of the agents that used the workspace in this
@@ -512,7 +512,7 @@ other listeners or the process.
 end as the `cancel` tool does: the grace, up to 10 seconds, and 5 seconds.
 A process that has not ended by then still reads `running`, and its cancel
 goes on. The host reads the output of a process through
-`workspace.use`, as the owner agent, at `ProcessRecord.output`.
+`workspace.use`, as the owner agent, at `Process.output`.
 
 ## Reminders
 
@@ -544,7 +544,7 @@ process to name gets no process reminder. A summarize activation calls none.
 `describeExecutor` collects the reminders of the bundles into
 `Executor.reminders`. The core runs them together when it renders
 the record of the first pass of a respond activation. The text goes in the
-turn context, before the ask line.
+context, before the ask line.
 
 ```ts
 export interface ToolBundle {
@@ -664,7 +664,7 @@ workspace.processes.subscribe((event) => {
   ends calls `workspace.processes.list()` on an interval, so a read sees
   them. `list` reads the agents that acted in this run. A process that
   ended while no host ran gives no event, and the reminder names it.
-- `ProcessRecord.room` names the room of the `bash` call, so a host with
+- `Process.room` names the room of the `bash` call, so a host with
   several rooms posts each end to the room that started the process.
 
 ## Life and disposal
@@ -731,7 +731,7 @@ seat's host.
 
 **`cancel` cancels the process and waits up to 15 seconds for it to end.**
 The state becomes `cancelled`, or `exited` for a command that ended inside
-the grace ([The stop](#the-stop)). A process that has not ended after 15
+the grace ([The cancel](#the-cancel)). A process that has not ended after 15
 seconds still reads `running` with `stopping: true`, for example when its
 grace is 30 seconds. Its cancel goes on, and a later `status` gives its end. A
 `cancel` of a process in a final state gives that state again.
@@ -780,7 +780,7 @@ workstation's Unix accounts.
 bash resource after the call ends. The entry of a `bash` call holds the state at
 the end of the call, which can be `running`. A call that fails on a process
 that ended badly records `error` with the name `ToolFailure` and the `details`
-of its result: the `ProcessRecord`, and for `wait` on several handles, every
+of its result: the `Process`, and for `wait` on several handles, every
 status. A `bash` call that an abort cuts while it waits records an error with
 no handle, and the process keeps running. The reminder and `ps` name it. The
 files of a process are its record.

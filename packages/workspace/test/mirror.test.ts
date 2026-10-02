@@ -5,18 +5,18 @@
  */
 import type {
 	ExchangeHandle,
-	HumanDefinition,
 	Message,
+	PersonDefinition,
 	Room,
 	RoomNotification,
 	RoomRead,
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT, type ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { roomName as name } from '../../ambion/test/support/room.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
+import type { WorkspaceEnv } from '../src/index.ts';
 import { openWorkspace } from '../src/index.ts';
 import type { WorkspaceAgent } from '../src/resource.ts';
 
@@ -63,7 +63,7 @@ function fakeRoom(
 			return () => listeners.delete(listener);
 		},
 		exchange: (_from: Seq): ExchangeHandle | undefined => undefined,
-		visit: (_human: HumanDefinition): Promise<Visit> => {
+		visit: (_human: PersonDefinition): Promise<Visit> => {
 			throw new Error('not implemented in this double');
 		},
 		post: (): Promise<ExchangeHandle> => {
@@ -80,8 +80,8 @@ function fakeRoom(
 	};
 }
 
-async function readLines(env: ExecutionEnv, path: string): Promise<Record<string, unknown>[]> {
-	const read = await env.readTextFile(path, BACKGROUND_CONTEXT);
+async function readLines(env: WorkspaceEnv, path: string): Promise<Record<string, unknown>[]> {
+	const read = await env.readTextFile(path);
 	if (!read.ok) return [];
 	return read.value
 		.split('\n')
@@ -103,7 +103,7 @@ describe('Workspace.mirror', () => {
 		// A file beside the log that no rotation made does not count: its
 		// higher seq would hide message 4 from the resume.
 		await site.use(reader, (env) =>
-			env.writeFile(`${first.path}.bak`, `${JSON.stringify({ seq: 9 })}\n`, BACKGROUND_CONTEXT),
+			env.writeFile(`${first.path}.bak`, `${JSON.stringify({ seq: 9 })}\n`),
 		);
 		// A fresh call, as a restarted host would make: no in-memory state survives.
 		const second = await site.mirror(fakeRoom('lobby', [...backlog, said(4, 'four')]));

@@ -9,8 +9,9 @@
  * skill works the same on every executor. The design contract is
  * `docs/skills.md`.
  */
-import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+
 import { parse } from 'yaml';
+import type { WorkspaceEnv } from './backend.ts';
 import { shellQuote } from './execution-env.ts';
 import { hashesOf, readSource, type SourceFiles, type SourceInput } from './sources.ts';
 
@@ -238,14 +239,14 @@ function must<T>(result: { ok: true; value: T } | { ok: false; error: Error }): 
 
 /** Make each script of `set` executable. The paths are absolute, so none starts with a hyphen. */
 async function markScripts(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	set: SkillSet,
 	root: string,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
 	if (set.scripts.length === 0) return;
 	const paths = set.scripts.map((path) => shellQuote(`${root}/${path}`)).join(' ');
-	const ran = must(await env.exec(`chmod +x ${paths}`, undefined, context));
+	const ran = must(await env.exec(`chmod +x ${paths}`, undefined, signal));
 	if (ran.exitCode !== 0)
 		throw new Error(`chmod of the skill scripts exited with code ${ran.exitCode}.`);
 }
@@ -257,21 +258,21 @@ async function markScripts(
  * no manifest and the next step writes the copy again.
  */
 export async function syncSkills(
-	env: ExecutionEnv,
+	env: WorkspaceEnv,
 	set: SkillSet,
-	context: Context,
+	signal?: AbortSignal,
 ): Promise<void> {
-	const root = must(await env.absolutePath(SKILLS_HOME, context));
-	const held = await env.readTextFile(`${root}/${MANIFEST}`, context);
+	const root = must(await env.absolutePath(SKILLS_HOME, signal));
+	const held = await env.readTextFile(`${root}/${MANIFEST}`, signal);
 	if (held.ok && held.value === set.manifest) return;
-	must(await env.remove(root, { recursive: true, force: true }, context));
+	must(await env.remove(root, { recursive: true, force: true }, signal));
 	const folders = new Set(
 		Object.keys(set.files).map((path) => path.slice(0, path.lastIndexOf('/'))),
 	);
 	for (const folder of folders)
-		must(await env.createDir(`${root}/${folder}`, { recursive: true }, context));
+		must(await env.createDir(`${root}/${folder}`, { recursive: true }, signal));
 	for (const [path, bytes] of Object.entries(set.files))
-		must(await env.writeFile(`${root}/${path}`, bytes, context));
-	await markScripts(env, set, root, context);
-	must(await env.writeFile(`${root}/${MANIFEST}`, set.manifest, context));
+		must(await env.writeFile(`${root}/${path}`, bytes, signal));
+	await markScripts(env, set, root, signal);
+	must(await env.writeFile(`${root}/${MANIFEST}`, set.manifest, signal));
 }

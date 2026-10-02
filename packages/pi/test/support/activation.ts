@@ -3,12 +3,13 @@ import type { AgentDefinition, RoomNotification } from '@ambionframework/ambion'
 import type {
 	ActivationOpener,
 	ActivationView,
+	BoundTool,
 	CommitRequest,
 	CommitResult,
 	RoomProtocol,
-	RoomTool,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
+import type { ToolExecutionApi } from '@earendil-works/pi-durable';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import { noTrace } from './trace.ts';
 
@@ -62,10 +63,10 @@ export async function boundActivation(
 	definition: AgentDefinition,
 	room: RoomProtocol,
 	view: ActivationView,
-): Promise<{ state: ActivationState; tools: readonly RoomTool[] }> {
-	let tools: readonly RoomTool[] = [];
+): Promise<{ state: ActivationState; tools: readonly BoundTool[] }> {
+	let tools: readonly BoundTool[] = [];
 	const opener = () => ({
-		pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
+		pass: async (pass: { readonly tools: readonly BoundTool[] }) => {
 			tools = pass.tools;
 			return { failed: false };
 		},
@@ -91,4 +92,16 @@ export function viewFor(
 		through,
 		context: { name: 'room', now: 0, participants: [], messages: [], reserve: [] },
 	};
+}
+
+/**
+ * The part of the harness api that a tool of the executor reads: the call id
+ * and the output sink. The harness gives every other member to a tool that
+ * runs inside a conversation, and these tools use none of them.
+ */
+export function toolApi(callId: string, output: string[] = []): ToolExecutionApi {
+	return {
+		callId,
+		output: (chunk: string | Uint8Array) => output.push(String(chunk)),
+	} as unknown as ToolExecutionApi;
 }

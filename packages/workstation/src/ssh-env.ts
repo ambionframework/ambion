@@ -1,13 +1,13 @@
 /**
- * `SshEnv`: Pi's `ExecutionEnv` for one agent, over that agent's SSH
+ * `SshEnv`: the `WorkspaceEnv` port for one agent, over that agent's SSH
  * session. A file call goes over SFTP, and `exec` opens one channel for each
  * command (`exec.ts`). `HomeEnv` implements the file members over `files`,
  * the SFTP operations, and `classify`, the error classifier. The workspace's
- * helpers supply the path rule and the temporary names.
+ * helpers supply the path rule.
  *
  * SFTP needs six adjustments:
  *
- * - a coarse SFTP status becomes a Pi code through one `lstat` (`sftp.ts`)
+ * - a coarse SFTP status becomes a code of the port through one `lstat` (`sftp.ts`)
  * - `writeFile` and `appendFile` make each missing parent first
  * - `renameFile` calls `posix-rename@openssh.com`, which replaces the
  *   target, and a server without that extension gets a plain `RENAME`
@@ -25,29 +25,22 @@
  * member answers `invalid`, the override classifies the error again against
  * the destination path.
  *
- * An ordinary file is created with mode `0664`, so a default ACL on a shared
- * folder can give the group write. A temporary file is created with mode
- * `0600` and an exclusive create, and a temporary directory with mode
- * `0700`: every account shares `/tmp`.
+ * A file is created with mode `0664`, so a default ACL on a shared folder
+ * can give the group write.
  */
 
 import { posix } from 'node:path';
 import type {
 	FileExpect,
+	FileInfo,
 	FileOperations,
+	Result,
+	ShellError,
+	ShellExecResult,
 	WorkspaceEnv,
 	WorkspaceExecOptions,
 } from '@ambionframework/workspace';
-import { HomeEnv, shellQuote } from '@ambionframework/workspace';
-import {
-	type Context,
-	type ExecutionError,
-	err,
-	FileError,
-	type FileInfo,
-	type Result,
-	type ShellExecResult,
-} from '@earendil-works/pi-agent-core';
+import { err, FileError, HomeEnv, shellQuote } from '@ambionframework/workspace';
 import type { ClientChannel, Stats } from 'ssh2';
 import { type CommandHost, runCommand } from './exec.ts';
 import { ConnectionClosed, type Session } from './session.ts';
@@ -55,10 +48,6 @@ import { call, isMissing, lstat, readdir, stat, statusOf, toFileError } from './
 
 /** The mode of an ordinary file. A default ACL can then give the group write. */
 const FILE_MODE = 0o664;
-/** The mode of a temporary file, which no other account reads. */
-const PRIVATE_FILE_MODE = 0o600;
-/** The mode of a temporary directory. */
-const PRIVATE_DIR_MODE = 0o700;
 
 function toFileInfo(path: string, stats: Stats): FileInfo {
 	return {
@@ -123,9 +112,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		canonical: (path) => this.guarded(() => call<string>((done) => this.sftp.realpath(path, done))),
 		exists: (path) => this.guarded(() => this.isPresent(path)),
 		makeDir: (path, recursive) => this.guarded(() => this.makeDir(path, recursive)),
-		remove: (path, options, context) => this.guarded(() => this.removeOne(path, options, context)),
-		makeTempDir: (path) => this.guarded(() => this.mkdir(path, PRIVATE_DIR_MODE)),
-		makeTempFile: (path) => this.guarded(() => this.createPrivate(path, '')),
+		remove: (path, options, signal) => this.guarded(() => this.removeOne(path, options, signal)),
 	};
 
 	private readBuffer(path: string): Promise<Buffer> {
@@ -139,7 +126,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		return call<void>((done) => write(path, data, { mode: FILE_MODE, flag }, done));
 	}
 
-	/** Write or append, and make each missing parent, as `NodeExecutionEnv` does. */
+	/** Write or append, and make each missing parent, as a local shell does. */
 	private async putWithParents(
 		path: string,
 		content: string | Uint8Array,
@@ -168,9 +155,9 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	override async renameFile(
 		sourcePath: string,
 		destinationPath: string,
-		context: Context,
+		signal?: AbortSignal,
 	): Promise<Result<void, FileError>> {
-		const moved = await super.renameFile(sourcePath, destinationPath, context);
+		const moved = await super.renameFile(sourcePath, destinationPath, signal);
 		if (moved.ok || moved.error.code !== 'invalid') return moved;
 		// The source exists, so the destination decides the code: a missing parent is `not_found`.
 		const destination = this.resolve(destinationPath);
@@ -198,9 +185,8 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		}
 	}
 
-	private mkdir(path: string, mode?: number): Promise<void> {
-		const attrs = mode === undefined ? {} : { mode };
-		return call<void>((done) => this.sftp.mkdir(path, attrs, done));
+	private mkdir(path: string): Promise<void> {
+		return call<void>((done) => this.sftp.mkdir(path, {}, done));
 	}
 
 	/** Make `path`, and with `recursive`, each missing parent first. An existing directory passes. */
@@ -218,13 +204,13 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	}
 
 	/** Remove a whole tree through the shell: SFTP removes one entry for each request. */
-	private async removeTree(path: string, context: Context): Promise<void> {
+	private async removeTree(path: string, signal: AbortSignal | undefined): Promise<void> {
 		const result = await runCommand(
 			this.host,
 			`rm -rf -- ${shellQuote(path)}`,
 			this.cwd,
 			undefined,
-			context,
+			signal,
 		);
 		if (!result.ok) throw result.error;
 		if (result.value.exitCode !== 0) throw new Error(`rm -rf exited with ${result.value.exitCode}`);
@@ -233,7 +219,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	private async removeOne(
 		path: string,
 		options: { recursive?: boolean; force?: boolean } | undefined,
-		context: Context,
+		signal: AbortSignal | undefined,
 	): Promise<void> {
 		let stats: Stats;
 		try {
@@ -243,16 +229,8 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 			throw error;
 		}
 		if (!stats.isDirectory()) return call<void>((done) => this.sftp.unlink(path, done));
-		if (options?.recursive === true) return this.removeTree(path, context);
+		if (options?.recursive === true) return this.removeTree(path, signal);
 		return call<void>((done) => this.sftp.rmdir(path, done));
-	}
-
-	/** Create an empty file that no other account reads, and refuse one that already exists. */
-	private async createPrivate(path: string, content: string): Promise<void> {
-		const data = Buffer.from(content, 'utf8');
-		await call<void>((done) =>
-			this.sftp.writeFile(path, data, { mode: PRIVATE_FILE_MODE, flag: 'wx' }, done),
-		);
 	}
 
 	private async open(command: string): Promise<ClientChannel> {
@@ -265,10 +243,10 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	exec(
 		command: string,
 		options: WorkspaceExecOptions | undefined,
-		context: Context,
-	): Promise<Result<ShellExecResult, ExecutionError>> {
+		signal?: AbortSignal,
+	): Promise<Result<ShellExecResult, ShellError>> {
 		const cwd = options?.cwd === undefined ? this.cwd : this.resolve(options.cwd);
-		return runCommand(this.host, command, cwd, options, context);
+		return runCommand(this.host, command, cwd, options, signal);
 	}
 
 	/** Close any channel the operation left open, and hand the client back to the backend once. */

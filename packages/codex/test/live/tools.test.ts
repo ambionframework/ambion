@@ -5,7 +5,7 @@
  * the workspace port, and checks that the say carries what the command read.
  */
 import { memoryBackend } from '@ambionframework/just-bash';
-import { BACKGROUND_CONTEXT, openWorkspace } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import { expect, it } from 'vitest';
 import {
 	activationsOf,
@@ -57,7 +57,7 @@ live('workspace tools', () => {
 
 			// The file is in the workspace, in the home of the seat.
 			const note = await workspace.use({ name: 'writer' }, (env) =>
-				env.readTextFile('/home/writer/note.txt', BACKGROUND_CONTEXT),
+				env.readTextFile('/home/writer/note.txt'),
 			);
 			expect(note).toMatchObject({ ok: true, value: expect.stringContaining(CONTENT) });
 

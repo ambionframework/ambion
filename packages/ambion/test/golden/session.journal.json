@@ -211,9 +211,21 @@
 			"phase": "running",
 			"expiresAt": 1767258060000,
 			"at": "2026-01-01T09:00:00.000Z",
-			"readThrough": 12
+			"readThrough": 10
 		},
 		"seq": 15,
+		"run": "run-1"
+	},
+	{
+		"kind": "lease",
+		"body": {
+			"id": "message:6:checker:1",
+			"phase": "running",
+			"expiresAt": 1767258060000,
+			"at": "2026-01-01T09:00:00.000Z",
+			"readThrough": 12
+		},
+		"seq": 16,
 		"run": "run-1"
 	},
 	{
@@ -236,7 +248,7 @@
 				"id": "message:6:checker:1"
 			}
 		},
-		"seq": 16,
+		"seq": 17,
 		"run": "run-1"
 	},
 	{
@@ -247,7 +259,7 @@
 			"through": 12,
 			"at": "2026-01-01T09:00:00.000Z"
 		},
-		"seq": 17,
+		"seq": 18,
 		"run": "run-1"
 	},
 	{
@@ -260,20 +272,20 @@
 			"text": "And Friday?",
 			"wakes": ["worker"]
 		},
-		"seq": 18,
+		"seq": 19,
 		"key": "delivery:key-6",
 		"run": "run-1"
 	},
 	{
 		"kind": "lease",
 		"body": {
-			"id": "message:18:worker:1",
+			"id": "message:19:worker:1",
 			"phase": "running",
 			"expiresAt": 1767258060000,
 			"at": "2026-01-01T09:00:00.000Z",
 			"readThrough": 0
 		},
-		"seq": 19,
+		"seq": 20,
 		"run": "run-1"
 	},
 	{
@@ -282,33 +294,33 @@
 			"kind": "said",
 			"text": "Thursday works.",
 			"at": "2026-01-01T09:00:00.000Z",
-			"activation": "message:18:worker:1",
+			"activation": "message:19:worker:1",
 			"from": "worker"
 		},
-		"seq": 20,
+		"seq": 21,
 		"key": "commit:key-7",
 		"run": "run-1"
 	},
 	{
 		"kind": "lease",
 		"body": {
-			"id": "message:18:worker:1",
+			"id": "message:19:worker:1",
 			"phase": "running",
 			"expiresAt": 1767258060000,
 			"at": "2026-01-01T09:00:00.000Z",
-			"readThrough": 20
+			"readThrough": 21
 		},
-		"seq": 21,
+		"seq": 22,
 		"run": "run-1"
 	},
 	{
 		"kind": "lease",
 		"body": {
-			"id": "message:18:worker:1",
+			"id": "message:19:worker:1",
 			"phase": "ended",
 			"reason": "released",
 			"at": "2026-01-01T09:00:00.000Z",
-			"readThrough": 20,
+			"readThrough": 21,
 			"usage": {
 				"input": 0,
 				"output": 0,
@@ -318,21 +330,21 @@
 			},
 			"session": {
 				"kind": "pi",
-				"id": "message:18:worker:1"
+				"id": "message:19:worker:1"
 			}
 		},
-		"seq": 22,
+		"seq": 23,
 		"run": "run-1"
 	},
 	{
 		"kind": "close",
 		"body": {
 			"person": "priya",
-			"from": 18,
-			"through": 20,
+			"from": 19,
+			"through": 21,
 			"at": "2026-01-01T09:00:00.000Z"
 		},
-		"seq": 23,
+		"seq": 24,
 		"run": "run-1"
 	},
 	{
@@ -343,7 +355,7 @@
 			"subject": "priya",
 			"at": "2026-01-01T09:00:00.000Z"
 		},
-		"seq": 24,
+		"seq": 25,
 		"key": "key-8",
 		"run": "run-1"
 	}

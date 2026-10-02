@@ -4,7 +4,6 @@
  */
 import { type AgentDefinition, type Clock, createRuntime } from '@ambionframework/ambion';
 import {
-	type AgentExecutionContext,
 	AgentRunner,
 	type CommitRequest,
 	type CommitResult,
@@ -12,15 +11,15 @@ import {
 	type LeaseRequest,
 	type LeaseResponse,
 	type RoomProtocol,
+	type SeatContext,
 	type ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { scriptedAgent, tick } from '../../../ambion/test/support/room.ts';
 import { quiet, scriptedStream } from '../../../ambion/test/support/scripted.ts';
 import { createPiOpener } from '../../src/executor.ts';
-import { createExecutionServices, type ModelResolver } from '../../src/index.ts';
+import { createExecutionServices, type ModelResolver, type StreamFn } from '../../src/index.ts';
 import { noTraces } from './trace.ts';
 
 export const worker = scriptedAgent('worker');
@@ -110,7 +109,7 @@ export interface SeatOptions {
 	readonly stream?: StreamFn;
 	readonly model?: ModelResolver;
 	readonly call?: { attempts?: number; timeout?: number };
-	readonly emit?: AgentExecutionContext['emit'];
+	readonly emit?: SeatContext['emit'];
 }
 
 /**

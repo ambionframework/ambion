@@ -20,7 +20,7 @@ import {
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
-import { BACKGROUND_CONTEXT, openWorkspace } from '../../src/index.ts';
+import { openWorkspace } from '../../src/index.ts';
 
 type Rgb = readonly [number, number, number];
 
@@ -85,11 +85,7 @@ live('a workspace picture', () => {
 		const backend = memoryBackend();
 		const store = openWorkspace({ name: roomName('live-image'), backend: { bash: backend } });
 		await store.use({ name: 'seed' }, async (env) => {
-			await env.writeFile(
-				'/home/curator/gallery/swatch.png',
-				twoBandPng(64, MAGENTA, CYAN),
-				BACKGROUND_CONTEXT,
-			);
+			await env.writeFile('/home/curator/gallery/swatch.png', twoBandPng(64, MAGENTA, CYAN));
 		});
 		const curator = agent('curator', {
 			identity: 'Keeps the gallery.',

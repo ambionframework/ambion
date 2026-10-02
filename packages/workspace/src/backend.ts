@@ -1,26 +1,63 @@
-import type {
-	Context,
-	ExecutionEnv,
-	ExecutionError,
-	Result,
-	ShellExecResult,
-} from '@earendil-works/pi-agent-core';
-import type { WorkspaceExecOptions } from './execution-env.ts';
 import type { GitBackend } from './git-backend.ts';
 import type { ObjectBackend } from './object-backend.ts';
+import type {
+	FileInfo,
+	FileResult,
+	Result,
+	ShellError,
+	ShellExecResult,
+	WorkspaceExecOptions,
+} from './port.ts';
 import type { ResourceBackend, ResourceEnv, WorkspaceAgent } from './resource.ts';
 import type { SqlBackend } from './sql-backend.ts';
 
 /**
- * A Pi `ExecutionEnv` whose cleanup the resource calls with no
- * context. Its `exec` also takes the grace of a stop.
+ * The port of a bash backend: the files and the shell of one agent. A path
+ * is absolute, `~` or `~/...` under the home of the agent, or relative to
+ * `cwd`. An operation never throws or rejects: every failure is its
+ * `Result`. An aborted `signal` ends an operation with the code `aborted`.
+ * `cleanup` takes no signal, and the resource calls it once an operation
+ * ends.
  */
-export interface WorkspaceEnv extends Omit<ExecutionEnv, 'cleanup' | 'exec'>, ResourceEnv {
+export interface WorkspaceEnv extends ResourceEnv {
+	/** The home of the agent: the directory of a relative path. */
+	readonly cwd: string;
+	/** The absolute path of `path`. It need not exist, and no link is followed. */
+	absolutePath(path: string, signal?: AbortSignal): FileResult<string>;
+	readTextFile(path: string, signal?: AbortSignal): FileResult<string>;
+	readBinaryFile(path: string, signal?: AbortSignal): FileResult<Uint8Array>;
+	/** Create or replace a file. Missing parent directories are created. */
+	writeFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void>;
+	/** Create a file or append to it. Missing parent directories are created. */
+	appendFile(path: string, content: string | Uint8Array, signal?: AbortSignal): FileResult<void>;
+	/** Rename a file, and replace the destination when it exists. */
+	renameFile(source: string, destination: string, signal?: AbortSignal): FileResult<void>;
+	/** The facts of the addressed path. A symbolic link is not followed. */
+	fileInfo(path: string, signal?: AbortSignal): FileResult<FileInfo>;
+	/** The direct children of a directory. A symbolic link is not followed. */
+	listDir(path: string, signal?: AbortSignal): FileResult<FileInfo[]>;
+	/** The path of an existing file with every link resolved. */
+	canonicalPath(path: string, signal?: AbortSignal): FileResult<string>;
+	/** False for a missing path. Any other failure is an error. */
+	exists(path: string, signal?: AbortSignal): FileResult<boolean>;
+	/** Create a directory. `recursive` defaults to true. */
+	createDir(
+		path: string,
+		options: { readonly recursive?: boolean } | undefined,
+		signal?: AbortSignal,
+	): FileResult<void>;
+	/** Remove a file or a directory. `recursive` and `force` default to false. */
+	remove(
+		path: string,
+		options: { readonly recursive?: boolean; readonly force?: boolean } | undefined,
+		signal?: AbortSignal,
+	): FileResult<void>;
+	/** Run a command in a shell. The result names the exit code, and `onUpdate` gets the output. */
 	exec(
 		command: string,
 		options: WorkspaceExecOptions | undefined,
-		context: Context,
-	): Promise<Result<ShellExecResult, ExecutionError>>;
+		signal?: AbortSignal,
+	): Promise<Result<ShellExecResult, ShellError>>;
 }
 
 /**

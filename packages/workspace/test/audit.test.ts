@@ -5,18 +5,15 @@
  * The entry a call through a running room writes is in `workspace.test.ts`.
  */
 import { type AmbionTool, defineTool } from '@ambionframework/ambion';
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT, err, FileError } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { DEFAULT_AUDIT_LOG, openAuditLog } from '../src/audit.ts';
 import type { BashBackend, WorkspaceEnv } from '../src/backend.ts';
-import { openWorkspace, type Workspace } from '../src/index.ts';
+import { err, FileError, openWorkspace, type Workspace } from '../src/index.ts';
 import { audited } from '../src/tools.ts';
 import { callAs, invokeText, toolOf } from './support/backends.ts';
 
-const ctx = BACKGROUND_CONTEXT;
 const scribe = { name: 'scribe' };
 
 /** The signature and the shortest valid `IHDR` header: enough for image detection to see a PNG. */
@@ -27,8 +24,8 @@ const PNG = new Uint8Array([
 const auditedSite = (bash: BashBackend = memoryBackend()) =>
 	openWorkspace({ name: 'audited', backend: { bash }, audit: {} });
 
-async function readLines(env: ExecutionEnv, path: string): Promise<Record<string, unknown>[]> {
-	const text = await env.readTextFile(path, ctx);
+async function readLines(env: WorkspaceEnv, path: string): Promise<Record<string, unknown>[]> {
+	const text = await env.readTextFile(path);
 	if (!text.ok) throw new Error(text.error.message);
 	return text.value
 		.split('\n')
@@ -63,7 +60,7 @@ async function bareEnv(failures = 0, dirFailures = 0): Promise<WorkspaceEnv> {
 }
 
 async function listNames(env: WorkspaceEnv, path: string): Promise<string[]> {
-	const listed = await env.listDir(path, ctx);
+	const listed = await env.listDir(path);
 	if (!listed.ok) throw new Error(listed.error.message);
 	return listed.value.map((file) => file.name).sort();
 }
@@ -146,7 +143,7 @@ describe('the workspace audit log', () => {
 
 	it('reads an image file as an image content part, and keeps only its byte count in the audit log', async () => {
 		const site = auditedSite();
-		await site.use(scribe, (env) => env.writeFile('/home/scribe/photo.png', PNG, ctx));
+		await site.use(scribe, (env) => env.writeFile('/home/scribe/photo.png', PNG));
 		const result = await toolOf(site, 'read').invoke(
 			{ path: 'photo.png' },
 			callAs('scribe', { room: 'lobby' }),
@@ -291,8 +288,8 @@ describe('audited', () => {
 					async (env) => {
 						started.resolve();
 						await release.promise;
-						await env.writeFile('/home/scribe/late.txt', 'written', ctx);
-						written = await env.readTextFile('/home/scribe/late.txt', ctx);
+						await env.writeFile('/home/scribe/late.txt', 'written');
+						written = await env.readTextFile('/home/scribe/late.txt');
 						return 'done';
 					},
 					call.signal,
@@ -329,18 +326,18 @@ describe('openAuditLog', () => {
 		const oneLine = `${JSON.stringify(entryFor('one'))}\n`;
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', rotateBytes: oneLine.length + 5 });
 
-		await log.append(env, entryFor('one'), ctx);
+		await log.append(env, entryFor('one'));
 		expect(await readLines(env, log.path)).toHaveLength(1);
 		expect(await listNames(env, '/workspace')).toEqual(['audit.jsonl']);
 
-		await log.append(env, entryFor('two'), ctx);
+		await log.append(env, entryFor('two'));
 		const afterSecond = await listNames(env, '/workspace');
 		const [rotated, ...more] = afterSecond.filter((entry) => entry.startsWith('audit.jsonl.'));
 		expect(more).toEqual([]);
 		expect(afterSecond).not.toContain('audit.jsonl');
 		expect(await readLines(env, `/workspace/${rotated}`)).toHaveLength(2);
 
-		await log.append(env, entryFor('three'), ctx);
+		await log.append(env, entryFor('three'));
 		expect(await readLines(env, log.path)).toHaveLength(1);
 	});
 
@@ -349,7 +346,7 @@ describe('openAuditLog', () => {
 		const log = openAuditLog({ path: '/workspace/audit.jsonl' });
 		const circular: Record<string, unknown> = {};
 		circular.self = circular;
-		await log.append(env, { ...entryFor('bad'), arguments: circular }, ctx);
+		await log.append(env, { ...entryFor('bad'), arguments: circular });
 		const entries = await readLines(env, log.path);
 		expect(entries[0]).toMatchObject({ callId: 'bad', error: { name: 'SerializationError' } });
 	});
@@ -361,7 +358,7 @@ describe('openAuditLog', () => {
 			path: '/workspace/audit.jsonl',
 			onError: (error) => errors.push(error),
 		});
-		await log.append(env, { ...entryFor('big'), arguments: { content: 'x'.repeat(1000) } }, ctx);
+		await log.append(env, { ...entryFor('big'), arguments: { content: 'x'.repeat(1000) } });
 		expect(errors).toHaveLength(0);
 		const [entry] = await readLines(env, log.path);
 		expect(entry).toMatchObject({ callId: 'big', error: { name: 'RecordTooLarge' } });
@@ -373,9 +370,9 @@ describe('openAuditLog', () => {
 		const reporting = await bareEnv(2);
 		const path = '/workspace/audit.jsonl';
 		const log = openAuditLog({ path, onError: (error) => errors.push(error) });
-		await expect(log.append(reporting, entryFor('one'), ctx)).resolves.toBeUndefined();
+		await expect(log.append(reporting, entryFor('one'))).resolves.toBeUndefined();
 		expect(errors).toHaveLength(1);
-		expect(await reporting.exists(path, ctx)).toEqual({ ok: true, value: false });
+		expect(await reporting.exists(path)).toEqual({ ok: true, value: false });
 
 		const throwing = openAuditLog({
 			path,
@@ -383,7 +380,7 @@ describe('openAuditLog', () => {
 				throw new Error('a broken onError callback');
 			},
 		});
-		await expect(throwing.append(await bareEnv(2), entryFor('one'), ctx)).resolves.toBeUndefined();
+		await expect(throwing.append(await bareEnv(2), entryFor('one'))).resolves.toBeUndefined();
 	});
 
 	it('reports a directory failure to onError, and never retries it as an entry that is too large', async () => {
@@ -392,8 +389,8 @@ describe('openAuditLog', () => {
 		const env = await bareEnv(0, 1);
 		const errors: Error[] = [];
 		const log = openAuditLog({ path: '/workspace/audit.jsonl', onError: (e) => errors.push(e) });
-		await log.append(env, entryFor('one'), ctx);
+		await log.append(env, entryFor('one'));
 		expect(errors.map((error) => error.message)).toEqual([expect.stringMatching(/EACCES/)]);
-		expect(await env.exists(log.path, ctx)).toEqual({ ok: true, value: false });
+		expect(await env.exists(log.path)).toEqual({ ok: true, value: false });
 	});
 });
