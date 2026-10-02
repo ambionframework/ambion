@@ -157,9 +157,8 @@ function toPiTool(
  * hosts the room tools from it: the tools that the definition does not name.
  * It builds each tool of the definition from its `AmbionTool`, because a
  * `BoundTool` does not carry what the harness does with the tool:
- *
- * - The harness applies `prepareArguments` before it checks the arguments
- *   against the schema. A `BoundTool` applies it after the check.
+ * * - The harness converts a primitive argument to the type of the schema
+ *   before it checks the call. A `BoundTool` converts nothing.
  * - The harness runs a batch in turn when a tool sets `executionMode` to
  *   `sequential`.
  * - The harness gives the tool the update callback, and the abort signal of

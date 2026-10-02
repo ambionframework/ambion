@@ -143,17 +143,18 @@ validates the shared fields. The executor passes `maxBudgetUsd` and `effort`
 to the SDK unchanged. The definition has no field for a tool, a directory, or
 a permission, because a Claude seat has no built-in tool.
 
-| Option                 | Required | Default            | Meaning                                                                          |
-| ---------------------- | -------- | ------------------ | -------------------------------------------------------------------------------- |
-| `instructions`         | Yes      | None               | The private guidance of the agent.                                               |
-| `model`                | Yes      | None               | A Claude model id. The executor passes it as `--model`.                          |
-| `tools`                | No       | None               | The tools of the agent, from `defineTool`. They run in the host process.         |
-| `bundles`              | No       | None               | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                                    |
-| `activationTokenLimit` | No       | The whole record   | The token limit of the record one activation reads. A positive integer.          |
-| `estimateTokens`       | No       | `'length'`         | The name of the estimator in the runtime that counts tokens. It needs the limit. |
-| `maxBudgetUsd`         | No       | None               | The most one activation may spend, in US dollars.                                |
-| `effort`               | No       | The SDK default    | `low`, `medium`, `high`, `xhigh`, or `max`.                                      |
+| Option                 | Required | Default            | Meaning                                                                                    |
+| ---------------------- | -------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None               | The private guidance of the agent.                                                         |
+| `model`                | Yes      | None               | A Claude model id. The executor passes it as `--model`.                                    |
+| `tools`                | No       | None               | The tools of the agent, from `defineTool`. They run in the host process.                   |
+| `bundles`              | No       | None               | Tool bundles. Their guidance joins the prompt after the speaking policy.                   |
+| `compose`              | No       | None               | The `compose` tool of the seat: an evaluator, and optional limits ([Compose](compose.md)). |
+| `speaking`             | No       | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                                              |
+| `activationTokenLimit` | No       | The whole record   | The token limit of the record one activation reads. A positive integer.                    |
+| `estimateTokens`       | No       | `'length'`         | The name of the estimator in the runtime that counts tokens. It needs the limit.           |
+| `maxBudgetUsd`         | No       | None               | The most one activation may spend, in US dollars.                                          |
+| `effort`               | No       | The SDK default    | `low`, `medium`, `high`, `xhigh`, or `max`.                                                |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,
@@ -304,10 +305,10 @@ query, so no model turn runs. The `session` step is already in the trace.
 `MIN_CLAUDE_VERSION` in `src/failure.ts` holds the floor.
 
 The query has no permission callback, so the executor raises no permission
-request and records no `approval` step. The flag tier sits below the managed
-(policy) tier. A managed `attribution` can still add text to a commit or a
-pull request. Auto-memory is off through both the variable and the flag
-setting.
+request. The `approval` step belongs to the `approve` hook of `compose`. The
+flag tier sits below the managed (policy) tier. A managed `attribution` can
+still add text to a commit or a pull request. Auto-memory is off through both
+the variable and the flag setting.
 
 **What the model sees.** The model sees the room tools and the tools of the
 definition and of its bundles. The `session` step lists them, and a live test
@@ -455,7 +456,7 @@ failure does.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds. The
+[Executors](executors.md#the-step-vocabulary) holds the twelve step kinds. The
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 
@@ -467,6 +468,7 @@ table below gives the SDK source of each step. A message from a subagent
 | `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                          |
 | `session`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name. |
 | `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                   |
+| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                          |
 | `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                                   |
 
 ## Usage and cost

@@ -36,7 +36,9 @@ configuration. `pi`, `claude`, and `codex` are the executors that ship; see
 [the Pi guide](pi.md), [the Claude guide](claude.md), and [the Codex
 guide](codex.md). The `instructions`
 are private model guidance. `model` names a model of that executor kind. `tools`
-and `bundles` supply the agent's domain tools. `activationTokenLimit`
+and `bundles` supply the agent's domain tools. `compose` adds the `compose`
+tool, which joins those tools in one call ([Compose](compose.md)).
+`activationTokenLimit`
 bounds the record one activation reads. Without a limit, an activation reads
 the whole record the room serves. See `limits.context.messages` in
 [History and limits](room.md#history-and-limits). `trace` sets what the
@@ -120,7 +122,9 @@ states how the guidance follows the speaking policy.
 **A tool learns where it ran from `ctx`.**
 [Resources](resources.md#references-and-provenance) states what `ctx.room`,
 `ctx.activation`, and `ctx.exchange` hold, and that the value grants no
-authority.
+authority. `ctx.composeCall` holds the call id of the `compose` call that
+made the call, and is absent for a direct call. It changes no permission
+and no effect.
 
 **Said contributions require nonblank text.** The room refuses empty or
 whitespace-only human messages, agent messages, and summaries before writing.
@@ -181,6 +185,60 @@ it is now, and it can change after the message cites it.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
+
+### Declared outputs
+
+**A tool can declare the shape of its `details`.** The field
+`compose: { output }` takes a TypeBox schema. `compose` binds a declared
+tool as its checked `details`, and an undeclared tool as the text of its
+content. The field `compose: false` leaves the tool out of `compose`.
+`defineTool` and the check of a tool refuse any other value, and
+`captureTool` copies the schema. [Compose](compose.md#bindings) states how a
+binding uses the field.
+
+**`ToolResult` takes the type of its details.** `ToolResult<TDetails =
+unknown>` has the shape that it always had when no type is given.
+`AmbionTool` keeps `details` as `unknown`, because a list of tools holds
+tools of many outputs.
+
+**`defineTool` has two overloads.** A tool with `compose: { output }` must
+return a `ToolResult` whose `details` is assignable to `Static` of the
+schema. `tsc` reports the field that breaks it, such as `Property 'status'
+is missing`. A tool with no declared output returns a string or a
+`ToolResult`. The export `DefineToolOptions` no longer exists: the three
+types below replace it.
+
+```ts
+interface BaseToolOptions<P extends TSchema> {
+  name: string;
+  description: string;
+  parameters: P;
+  label?: string;
+  prepareArguments?: (args: unknown) => Static<P>;
+  executionMode?: 'sequential' | 'parallel';
+}
+
+interface PlainToolOptions<P extends TSchema> extends BaseToolOptions<P> {
+  compose?: false;
+  execute: (
+    params: Static<P>,
+    ctx: ToolContext,
+  ) => Promise<string | ToolResult> | string | ToolResult;
+}
+
+interface DeclaredToolOptions<
+  P extends TSchema,
+  O extends TSchema,
+  D extends Static<O> = Static<O>,
+> extends BaseToolOptions<P> {
+  compose: { readonly output: O };
+  execute: (params: Static<P>, ctx: ToolContext) => Promise<ToolResult<D>> | ToolResult<D>;
+}
+```
+
+**The runtime check of a declared output stays.** A tool built by hand as
+an `AmbionTool` gets no help from the compiler, so `compose` checks the
+`details` of every call.
 
 ## Executors
 

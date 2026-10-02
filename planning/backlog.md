@@ -107,7 +107,7 @@ next live run that fails on a provider refusal.
 passkey and a token, and `DEV_BASE` in `dev-release.yml` is a literal. A
 trusted workflow with `id-token: write` publishes with provenance and
 needs no token on a laptop. npmjs then holds a trusted publisher setting
-for each of the eleven packages, and the dev stamp reads its base from the
+for each of the twelve packages, and the dev stamp reads its base from the
 last tag. **Condition:** a release that the owner does not run from the
 owner's machine, or a user who asks for provenance.
 

@@ -51,6 +51,7 @@ newer, the OpenTUI floor.
 | A `rules.verified.ts`                   | `docs/formal.md`                                                 |
 | The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
 | The simulator                           | `docs/simulator.md`                                              |
+| The `compose` tool or an evaluator      | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
 | The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
 | The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
 | Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |

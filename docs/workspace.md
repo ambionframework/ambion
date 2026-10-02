@@ -968,6 +968,46 @@ tests (`packages/workspace/test/support/sql-cases.ts`) until a second SQL
 backend exists. That backend moves them back to the conformance entry
 (see [The conformance suite](#the-conformance-suite)).
 
+## Declared outputs
+
+**Eight tools declare their output for `compose`.** Each sets
+`compose: { output }` with a TypeBox schema. A `compose` call binds the tool
+as its `details` and checks them against the schema at every call
+([Compose](compose.md#bindings)). A tool that is not in the table declares
+none, so `compose` binds it as text.
+
+| Tool               | Declared output                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `sql`              | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them. |
+| `snapshot`         | `refs`: one ref for each path, in order.                                                                |
+| `bash`             | `process`, `read`, and `truncation` when the result cut the output.                                     |
+| `status`, `cancel` | The same facts as `bash`.                                                                               |
+| `ps`               | `processes`: the facts of each process of the caller.                                                   |
+| `wait`             | On one handle, the facts of `status`. On several, `processes` and `ended`.                              |
+| `fork`             | `repository`, `source`, `url`, and `clone` when the call made a working copy.                           |
+
+**The `sql` details hold the rows that the tool already reads.** `count` is
+the count of every row of the last statement. `columns` names its columns.
+`rows` holds the preview rows, up to the limit `rows`, one object for each
+row. A row value is text, a number, or `null`. A blob is its bytes as
+lowercase hex, as the CSV export writes it. A `bigint` is its decimal digits
+as text, and a number that is not finite is its text.
+
+**The process facts come from the process table
+([Processes](processes.md)).** `process` holds the handle, the
+state, the command, and the times of one process. `read` holds the `from`
+and `to` of the bytes that the result shows. `wait` on several
+handles gives `processes`, with every status in the order of the handles,
+and `ended`, with the details of each process that ended
+A call that fails on a process that ended badly throws a `ToolFailure` with
+the same facts in `details`. A binding copies them to `error.details`.
+
+**The schema is the one source of the type.** The details type of each tool is
+`Static` of its schema, so the schema and the type cannot drift. The schema of
+`truncation` lists the fields of `ShellOutputTruncation`, and a type test pins
+that the two stay assignable. A `Static` type holds mutable arrays, so a tool
+copies a readonly array into its details.
+
 ## The resource contract
 
 The contract lives in [Resources](resources.md).

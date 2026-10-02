@@ -22,7 +22,8 @@ else.
 
 ## Status
 
-**In progress. Phase 2 and CP3 are complete.** The compose design passed two design
+**In progress. CP1 to CP5 and CP7 are complete. CP6 is open: it waits for
+a person to approve the spend.** The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
@@ -144,8 +145,9 @@ SQLite file. A skill macro runs by name over the same workspace and file.
 
 - [ ] **1.** The live cases and the token comparison. Needs phase 4.
       (CP6)
-- [ ] **2.** The pages, the changelog, and the status of the design.
-      Needs 1. (CP7)
+- [x] **2.** The pages, the changelog, and the status of the design.
+      Done before 1, because 1 waits for a person to approve the spend.
+      (CP7)
 
 **Evidence:** the live evidence file records acceptance items 1, 6, and
 7, and the token comparison, on Pi, Claude, and Codex.
@@ -308,11 +310,11 @@ for release evidence.
 model, the tools that the seat chose, the input tokens, and the outcome.
 A family with no key is marked skipped.
 
-**CP7. Release documentation.** Update the pages that
-[Changes to other contracts](../docs/compose.md#changes-to-other-contracts)
-names, the changelog, and the package count. Change the status of
-[Compose](../docs/compose.md) from a proposed design to the current
-contract.
+**CP7. Release documentation.** Update the pages that the compose change
+touches, the changelog, and the package count. Each page states its own
+facts, so [Compose](../docs/compose.md) holds no list of changes. Change
+the status of Compose from a proposed design to the current contract, with
+the live token comparison of CP6 as its one pending item.
 
 **Evidence:** the docs checks pass, and no page describes a surface that
 the release does not export.
