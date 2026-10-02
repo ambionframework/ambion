@@ -4,17 +4,16 @@
  *
  * Codex gives a seat native tools that no sandbox setting removes. Code
  * Mode, a JavaScript runtime, read host files under a read-only sandbox
- * with no network on 0.155.1. On 0.158.0 the catalog entry of the model
+ * with no network on 0.155.1. On 0.159.2 the catalog entry of the model
  * still lists the Code Mode tools `exec` and `wait` when every feature is
  * off. The model catalog turns Code Mode on, so a feature flag cannot turn
  * it off. A custom catalog can. This file holds the recipe, and its
- * facts belong to Codex 0.158.0:
+ * facts belong to Codex 0.159.2:
  *
  * 1. `exclusiveEntry` patches the catalog entry of the model.
  * 2. `exclusiveConfig` turns off every feature and tool the config controls,
  *    and the skills block.
- * 3. `Scratch` holds the patched catalog, the instructions file of the seat,
- *    and an empty working directory.
+ * 3. `Scratch` holds the patched catalog and an empty working directory.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -54,7 +53,7 @@ export function exclusiveEntry(entry: CatalogEntry): CatalogEntry {
 }
 
 /**
- * The features of Codex 0.158.0 that give a seat a native tool, or that act
+ * The features of Codex 0.159.2 that give a seat a native tool, or that act
  * on the host or the network. Each is off.
  * `shell_snapshot` runs the shell of the host user at the start of a session
  * and writes its environment to a file in the seat home. `daemon_auto_start`
@@ -168,8 +167,7 @@ const PLATFORMS: Readonly<Record<string, readonly [string, string]>> = {
 /** The binary that the bundled packages hold, or nothing when they are missing. */
 function bundledBinary(platform: string, target: string): string | undefined {
 	try {
-		const sdk = createRequire(import.meta.resolve('@openai/codex-sdk'));
-		const codex = createRequire(sdk.resolve('@openai/codex/package.json'));
+		const codex = createRequire(import.meta.resolve('@openai/codex/package.json'));
 		const root = join(dirname(codex.resolve(`${platform}/package.json`)), 'vendor', target);
 		const name = process.platform === 'win32' ? 'codex.exe' : 'codex';
 		return [join(root, 'bin', name), join(root, 'codex', name)].find((path) => existsSync(path));
@@ -179,11 +177,11 @@ function bundledBinary(platform: string, target: string): string | undefined {
 }
 
 /**
- * The `codex` binary the SDK runs. `codexPath` wins. Otherwise the lookup
- * follows the SDK: `@openai/codex` resolves from the SDK, and the platform
- * package resolves from `@openai/codex`.
+ * The `codex` binary to run. `codexPath` wins. Otherwise `@openai/codex`
+ * resolves from this package, and the platform package resolves from
+ * `@openai/codex`.
  */
-function codexBinary(codexPath?: string): string {
+export function codexBinary(codexPath?: string): string {
 	if (codexPath) return codexPath;
 	const key = `${process.platform}:${process.arch}`;
 	const platform = PLATFORMS[key];
@@ -262,17 +260,15 @@ function removeAll(): void {
 	open.clear();
 }
 
-/** A patched catalog, the instructions file of the seat, and an empty working directory, for one activation. */
+/** A patched catalog and an empty working directory, for one activation. */
 export class Scratch {
 	/** The path of the patched catalog. */
 	readonly catalog: string;
-	/** The path of the file that holds the seat text. Codex reads it in place of its own base prompt. */
-	readonly instructions: string;
 	/** An empty directory, so no host file is the default context. */
 	readonly directory: string;
 	private readonly root: string;
 
-	constructor(entry: CatalogEntry, instructions: string) {
+	constructor(entry: CatalogEntry) {
 		this.root = mkdtempSync(join(tmpdir(), 'ambion-codex-'));
 		open.add(this.root);
 		if (!hooked) {
@@ -280,11 +276,9 @@ export class Scratch {
 			process.once('exit', removeAll);
 		}
 		this.catalog = join(this.root, 'models.json');
-		this.instructions = join(this.root, 'instructions.md');
 		this.directory = join(this.root, 'work');
 		mkdirSync(this.directory);
 		writeFileSync(this.catalog, JSON.stringify({ models: [exclusiveEntry(entry)] }));
-		writeFileSync(this.instructions, instructions);
 	}
 
 	/** Remove both. Safe to call again. */
@@ -294,12 +288,8 @@ export class Scratch {
 	}
 }
 
-/** The scratch for `model`, with the seat text in its instructions file. A model with no catalog entry fails as permanent, so native tools never stay on. */
-export async function scratchFor(
-	model: string,
-	source: CatalogSource,
-	instructions: string,
-): Promise<Scratch> {
+/** The scratch for `model`. A model with no catalog entry fails as permanent, so native tools never stay on. */
+export async function scratchFor(model: string, source: CatalogSource): Promise<Scratch> {
 	const entry = await source(model);
 	if (entry === undefined) {
 		throw new PermanentError(
@@ -307,5 +297,5 @@ export async function scratchFor(
 				`Use a model that 'codex debug models' lists.`,
 		);
 	}
-	return new Scratch(entry, instructions);
+	return new Scratch(entry);
 }

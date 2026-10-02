@@ -193,6 +193,39 @@ the mark. The executor reads the version in the `system` init message and
 fails the pass with a permanent failure when it is below 2.1.248. It then
 closes the query, so no model turn runs.
 
+**The Codex executor runs on `codex app-server`.** This breaks a host that
+read the SDK or the room tools server. `@openai/codex-sdk` and
+`@modelcontextprotocol/sdk` leave the package. It depends on `@openai/codex`
+0.159.2 and resolves the binary from it. The executor speaks JSON-RPC over
+stdio with one process for each activation. The room tools and the tools of
+the agent are dynamic tools of the thread. The files `bridge.ts`,
+`wire.ts`, and `room-tools-server.ts` and the local socket are gone, and the
+build has one entry. `codex()` options keep their names. The thread policy
+is the read-only sandbox, `approvalPolicy: never`, and an empty `cwd`.
+`skipGitRepoCheck` has no use and is gone.
+
+**A Codex seat takes a steer.** A line that lands during a turn goes in with
+`turn/steer`. The core records the `steer` step with `consumed: true` when
+Codex echoes the line. Codex refuses a steer after the turn ends, and the
+next pass then carries the line. A cut sends `turn/interrupt`.
+
+**The Codex executor records the `session` step.** It holds the version of
+the binary, the model, the working directory, the thread id, the sign-in
+kind from `account/read`, the permission mode, the bound tool names, and the
+MCP servers. Freshness rests on the echo of each input. Usage comes from `thread/tokenUsage/updated`.
+
+**A Codex resume counts no earlier usage.** The executor sends
+`excludeTurns: true` with `thread/resume`, and it drops a
+`thread/tokenUsage/updated` note whose turn is not the running turn. A login
+that gets no answer in 30 seconds fails as transient.
+
+**A resumed Codex thread keeps its tools.** The executor resumes a thread
+only when the tools in its rollout file equal the bound tools. Otherwise,
+and when `thread/resume` fails, it starts a fresh thread and records the
+`notice` "Codex thread not resumed". A resumed thread takes the new seat
+text. A process that exits during a pass is a transient failure that holds
+the stderr tail.
+
 **The `approval` step is gone.** No executor writes it. Pi and Codex never
 wrote it, and the Claude executor wrote it only for a permission request,
 which no seat raises now. The step vocabulary has eleven kinds, with `session`
@@ -241,7 +274,8 @@ result or the original error.
 permissionMode?; tools; servers }`.
 The Claude executor records one for each `system` init message. `tools` holds
 the room tools by plain name. `servers` holds each MCP server with its
-status. `auth` names the source of the credential. Pi and Codex record none.
+status. `auth` names the source of the credential. Pi records none. The Codex
+executor records one when a thread opens; see the Codex entries below.
 
 **A bash backend takes its git backend, and the types check the pair.**
 `memoryBackend` takes `git` in its options, and `directoryBackend(root,

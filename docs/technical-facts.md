@@ -35,8 +35,8 @@ positioning and the current capabilities.
   [Summaries](summary.md).
 - **One executor contract.** The kernel drives leases, passes, steering, and
   freshness. A framework supplies one session with passes. Pi, the Claude
-  Agent SDK, and the Codex SDK ship as adapters. Codex reaches the same
-  room tools through an MCP server. A conformance suite proves the Pi
+  Agent SDK, and Codex `app-server` ship as adapters. Codex reaches the
+  same room tools as dynamic tools of its thread. A conformance suite proves the Pi
   and Claude adapters on fakes. The Codex adapter runs the real binary on
   a scripted model, and runs the suite live.
 - **Speech through `say` only; everything else into a trace.** Every
@@ -115,7 +115,7 @@ positioning and the current capabilities.
 | `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing`   |
 | `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                      |
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                           |
-| `@ambionframework/codex`       | The Codex SDK executor                                                                  |
+| `@ambionframework/codex`       | The Codex `app-server` executor                                                         |
 | `@ambionframework/workspace`   | The workspace interface, sensor subpaths, SQLite backend, and conformance suites        |
 | `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`          |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, port forwarding, and Git |

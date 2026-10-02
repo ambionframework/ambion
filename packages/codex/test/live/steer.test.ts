@@ -1,7 +1,7 @@
 /**
- * No steer, on a real `codex`. A message that lands while a turn runs waits.
- * The next pass reads it, and no say commits against a record the seat has
- * not read.
+ * A steer, on a real `codex`. A message that lands while a turn runs goes to
+ * `turn/steer`. The model reads it in the same turn, so the activation needs
+ * one pass, and no say commits against a record the seat has not read.
  */
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -18,7 +18,7 @@ import {
 } from './support.ts';
 
 live('a message during a turn', () => {
-	it('is held, and the next pass reads it', async () => {
+	it('is steered into the live turn, and the same pass reads it', async () => {
 		const {
 			room,
 			steps: stepsOf,
@@ -59,9 +59,10 @@ live('a message during a turn', () => {
 
 			const [activation] = activationsOf(events, 'clerk');
 			const read = stepsOf(activation ?? '');
-			// Codex takes no steer: the core stamps the held line, and the pass does not consume it.
+			// Codex takes the line into the turn: the echo of the line tells the core, and one pass reads it.
 			const steers = read.filter((step) => step.type === 'steer');
-			expect(steers).toEqual([expect.objectContaining({ seq: late?.seq, consumed: false })]);
+			expect(steers).toEqual([expect.objectContaining({ seq: late?.seq, consumed: true })]);
+			expect(read.filter((step) => step.type === 'pass')).toHaveLength(1);
 
 			// Freshness: every say of the seat comes after the message it read, or names no stale record.
 			const said = messages.filter(

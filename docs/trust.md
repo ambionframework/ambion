@@ -66,7 +66,7 @@ does not restrict who may address or steer whom.
 ## What each harness exposes
 
 **Every executor kind reaches the world through the same tools.** The workbench team runs
-one seat on Pi, one on the Claude Agent SDK, and one on the Codex SDK. One
+one seat on Pi, one on the Claude Agent SDK, and one on Codex. One
 list of `bundles` serves every seat, so every seat holds the room tools and
 the workspace tools and no other tool.
 
@@ -86,7 +86,7 @@ Both tiers skip an executor kind with no key, and they run only on request.
 
 **A Codex seat has no native tools, ever.** The Code Mode runtime of Codex
 read the host filesystem outside the sandbox on Codex 0.155.1, and the
-catalog of 0.158.0 still lists its tools. The executor patches it out of
+catalog of 0.158.0 still listed its tools. The executor patches it out of
 every seat. See [Codex](codex.md#the-trust-boundary).
 
 **The `config.toml` of the seat home is the responsibility of the host.**

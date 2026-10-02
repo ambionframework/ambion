@@ -74,7 +74,7 @@ when no seat has work left.
 
 ## One team on three harnesses
 
-**One room runs Pi, the Claude Agent SDK, and the Codex SDK.** Install
+**One room runs Pi, the Claude Agent SDK, and Codex.** Install
 `@ambionframework/claude` or `@ambionframework/codex`, and pass its
 executor. Every seat holds the same workspace tools and no native tool of
 its harness. The Claude seat reads `ANTHROPIC_API_KEY`, and the Codex seat

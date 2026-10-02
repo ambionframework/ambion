@@ -1,10 +1,10 @@
 # @ambionframework/codex
 
-**Run Ambion agents on the Codex SDK.** `codex()` defines the executor of an
+**Run Ambion agents on Codex.** `codex()` defines the executor of an
 agent. A room with no `execution` runs each Codex seat on the default
 execution. `codexExecution()` gives a runtime or a room the same services
 with options. The kernel, `@ambionframework/ambion`, imports no model
-library. This package holds the Codex SDK and the MCP SDK.
+library. This package holds `@openai/codex`.
 
 ```ts
 import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
@@ -31,7 +31,7 @@ await visit.send({ text: 'Is the plan ready?' });
 ```
 
 **Install it next to the kernel.** Run `npm install @ambionframework/ambion
-@ambionframework/codex`. The package needs Node 22.19 or newer. The Codex SDK
+@ambionframework/codex`. The package needs Node 22.19 or newer. The package
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
 or run `codex login`. A ChatGPT sign-in runs the seat on a ChatGPT Plus or
 Pro subscription: leave `CODEX_API_KEY` out. Every seat runs in the Codex
@@ -43,27 +43,27 @@ host user reaches a seat. A login in the OS keyring
 cannot be shared: use the file store, or run `codex login` with
 `CODEX_HOME` set to the seat home.
 
-**Codex owns the loop, and the room owns the record.** One Codex thread
-serves each activation. The seat text, which holds the mechanism and the
-agent instructions, goes in the client config. The first pass sends the whole
-view. A later pass sends the delta.
+**Codex owns the loop, and the room owns the record.** One
+`codex app-server` process serves each activation. The seat text, which
+holds the mechanism and the agent instructions, goes in the thread
+parameters. The first pass sends the whole view. A later pass sends the
+delta.
 
-**Room tools reach Codex through a stdio server.** Codex spawns
-`dist/room-tools-server.mjs`. The server forwards each call over a local
-socket to the host, where the room runs it. The config sets
-`default_tools_approval_mode` to `approve`, because a headless run cannot
-answer an approval.
+**Room tools are dynamic tools of the thread.** The executor lists each tool
+in `thread/start`. Codex sends each call to the host as a request, and the
+room runs it there. No server runs beside the process.
 
-**Freshness rests on `turn.started`.** Codex sends no echo of the input it
-read. The executor tells the core that the model read the prompt when a pass
-starts, and that a tool result reached the model when the tool returns. Codex takes
-no steer: a line that lands during a pass waits for the next pass.
+**Freshness rests on the echo.** Codex echoes each input as a `userMessage`
+item. The executor tells the core that the model read the input on that
+echo, and that a tool result reached the model when the tool returns. Codex
+takes a steer: a line that lands during a pass goes in with `turn/steer`.
 
-**Items become steps.** `mcp_tool_call` items become `tool_call` and
-`tool_result` steps. `agent_message` and `reasoning` items become `text` and
-`thinking` steps. `error` items and `error` events become `notice` steps.
-`turn.completed` becomes a `usage` step. Codex reports no cost. An item of
-any other type becomes a warning `notice` that names the type.
+**Items become steps.** `dynamicToolCall` items become `tool_call` and
+`tool_result` steps. `agentMessage` and `reasoning` items become `text` and
+`thinking` steps. Warnings become `notice` steps. Token usage becomes a
+`usage` step. Codex reports no cost. An item of any other type becomes a
+warning `notice` that names the type. The thread start records a `session`
+step.
 
 **A seat keeps its thread for one exchange.** Each release records the
 thread id. The next activation of the seat in the same exchange resumes
@@ -80,20 +80,16 @@ flag can turn it off. The executor patches the catalog entry of the model,
 turns off every feature and tool that the config controls, and removes the
 skills block. It runs the thread on a read-only sandbox in an empty
 directory with no network. A model with no catalog entry fails as
-permanent. A default seat produces no config warning on 0.158.0.
-
-**Three MCP helper tools remain.** Codex adds `list_mcp_resources`,
-`list_mcp_resource_templates`, and `read_mcp_resource` when an MCP server is
-on. They reach only the room tools server, which offers no resource and
-answers `Method not found`, so they read nothing. A unit test proves it.
+permanent. A default seat produces no config warning on 0.159.2.
 
 **Pin the version, and run the exclusivity test on an upgrade.** The recipe
-belongs to `codex` 0.158.0. The binary tier fails when a default seat
+belongs to `codex` 0.159.2. The binary tier fails when a default seat
 gets a native tool, a skills block, or a config warning. Trust a newer
 version only when that tier and `test/live/exclusive.test.ts` pass on it.
 
 **Test on recorded events and a scripted model, and run the executor suite
-live.** The unit tests read event streams that a real `codex` recorded. They
+live.** The unit tests run a fake `codex app-server`, and they replay
+notifications that a real one recorded. They
 also run the real `codex` binary against a local endpoint that plays a script
 of model replies. The executor suite runs in the live tier on a real model.
 Run it with

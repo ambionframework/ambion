@@ -13,7 +13,7 @@ packages/
   assistant/    default assistant agent and behavioral guidance
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
-  codex/        Codex SDK executor: codex() and codexExecution()
+  codex/        Codex executor: codex() and codexExecution()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
@@ -341,7 +341,7 @@ every other package once, with both keys. Run one harness by hand with
 `CODEX_API_KEY` or on the ChatGPT login of the host, and skip without either.
 They run on the model `gpt-5.6-luna`. Run one
 file with `pnpm --filter @ambionframework/codex run test:live`, which builds
-the package first because Codex spawns the built room tools server. See
+the package first. See
 [Codex](codex.md).
 
 The scripted suite and live tier share invariants. The scripted tier also runs

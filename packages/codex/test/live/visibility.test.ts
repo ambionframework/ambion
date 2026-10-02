@@ -1,13 +1,14 @@
 /**
- * What the trace shows of a real activation: the reasoning of the model, and
- * the notice that names the Codex thread and its rollout file.
+ * What the trace shows of a real activation: the reasoning of the model, the
+ * session step, and the notice that names the Codex thread and its rollout
+ * file.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { live, open, person, seat, untilQuiet } from './support.ts';
 
 live('the trace of an activation', () => {
-	it('holds the reasoning summary, and names the thread and its rollout file', async () => {
+	it('holds the reasoning summary, the session step, and the thread with its rollout file', async () => {
 		const {
 			room,
 			steps: stepsOf,
@@ -46,6 +47,18 @@ live('the trace of an activation', () => {
 			const rollout = data?.rollout ?? '';
 			expect(existsSync(rollout)).toBe(true);
 			expect(readFileSync(rollout, 'utf8')).toContain(data?.thread ?? '-');
+
+			// The session step names what the thread started with, and holds no credential.
+			const [session, ...more] = steps.filter((step) => step.type === 'session');
+			expect(more).toEqual([]);
+			expect(session).toMatchObject({
+				name: 'codex',
+				version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+				model: 'gpt-5.6-luna',
+				session: data?.thread,
+				permissionMode: 'never, readOnly',
+			});
+			expect(JSON.stringify(session)).not.toContain(process.env.CODEX_API_KEY ?? '-');
 		} finally {
 			await room.stop();
 		}
