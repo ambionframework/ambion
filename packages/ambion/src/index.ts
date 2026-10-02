@@ -11,9 +11,9 @@ export type {
 	Reminder,
 	ReminderSeat,
 	ToolBundle,
+	ToolConcurrency,
 	ToolContent,
 	ToolContext,
-	ToolExecutionMode,
 	ToolResult,
 	ToolUpdate,
 } from './bundle.ts';

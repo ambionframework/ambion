@@ -13,8 +13,8 @@ import type {
 	AmbionTool,
 	Reminder,
 	ToolBundle,
+	ToolConcurrency,
 	ToolContext,
-	ToolExecutionMode,
 	ToolResult,
 } from './bundle.ts';
 import { AmbionError } from './errors.ts';
@@ -212,7 +212,7 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	parameters: TParameters;
 	label?: string;
 	prepareArguments?: (args: unknown) => Static<TParameters>;
-	executionMode?: ToolExecutionMode;
+	executionMode?: ToolConcurrency;
 	/**
 	 * Return a string (or the full content shape when needed). Throw on failure.
 	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
@@ -524,7 +524,7 @@ function isToolSchema(value: unknown): value is TSchema {
 	return typeof value === 'boolean' || IsSchema(value);
 }
 
-function isExecutionMode(value: unknown): value is ToolExecutionMode | undefined {
+function isExecutionMode(value: unknown): value is ToolConcurrency | undefined {
 	return value === undefined || value === 'sequential' || value === 'parallel';
 }
 

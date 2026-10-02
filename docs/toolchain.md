@@ -91,8 +91,8 @@ and the phases. `core.ts` holds `RoomRunState`, the view of that state
 that every mechanism reads, and the helpers that turn a decision into an
 entry. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
 mechanism each. `core.ts` imports no sibling. The executor contract lives in
-`protocol.ts`, beside `AgentPort`, so `host/` imports no file of
-`execution/`. `execution/` owns the agent runner, the tool bodies, the
+`execution/contract.ts`. It has a layer of its own below `host/`, so
+`host/` imports no other file of `execution/`. `execution/` owns the agent runner, the tool bodies, the
 trace, and rendering. It imports no model library:
 `@ambionframework/pi` holds Pi and depends on the core. `room.ts` composes
 both behind the public facade.

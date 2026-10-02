@@ -3,10 +3,10 @@ import type { AgentDefinition, RoomNotification } from '@ambionframework/ambion'
 import type {
 	ActivationOpener,
 	ActivationView,
+	BoundTool,
 	CommitRequest,
 	CommitResult,
 	RoomProtocol,
-	RoomTool,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
@@ -62,10 +62,10 @@ export async function boundActivation(
 	definition: AgentDefinition,
 	room: RoomProtocol,
 	view: ActivationView,
-): Promise<{ state: ActivationState; tools: readonly RoomTool[] }> {
-	let tools: readonly RoomTool[] = [];
+): Promise<{ state: ActivationState; tools: readonly BoundTool[] }> {
+	let tools: readonly BoundTool[] = [];
 	const opener = () => ({
-		pass: async (pass: { readonly tools: readonly RoomTool[] }) => {
+		pass: async (pass: { readonly tools: readonly BoundTool[] }) => {
 			tools = pass.tools;
 			return { failed: false };
 		},
