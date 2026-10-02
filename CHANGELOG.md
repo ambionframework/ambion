@@ -64,6 +64,56 @@ limit `rows`, and `columns` names the columns. A blob is lowercase hex, a
 **`wait` declares one union.** A `wait` on one handle gives the details of
 `status`. A `wait` on several handles gives `processes` and `ended`.
 
+### Skill macros
+
+**A skill stores a compose program that the model runs by name.**
+`loadSkills` reads each `<skill>/macros/<name>.js`: a `/*---` YAML header
+with `description`, `uses`, and `args` (a JSON Schema), and then the body.
+It refuses a bad header, a bad `uses`, an `args` schema that the check
+cannot read, and a bad file name, with the error `Skill set:` and the
+path. `SkillSet` gains `macros`. The helper `skill-text.ts` holds the text
+rules that `skills.ts` and the new `skill-macros.ts` share.
+
+**`ToolBundle` gains `macros`.** The field holds `ComposeMacro` values: the
+name `<skill>/<macro>`, the description, `uses`, the `args` schema, the
+code, and the git blob hash of the file. `workspace.tools({ skills })` puts
+the macros of the set on its bundle. The main entry exports the types
+`ComposeMacro` and `ComposeRequest` and the new value `composeMacro`, which
+checks the fields of a macro and gives a frozen copy.
+
+**`describeExecutor` checks the macros of a seat with `compose`.** It
+refuses a macro that names a tool of no catalog entry, one with
+`compose: false` included, and two macros of one name. The error is an
+`AmbionError` with the code `invalid_tool`. A seat without `compose`
+ignores the macros.
+
+**The compose arguments take a macro.** The call is `{ uses, code }` or
+`{ macro, args? }`. The schema of the tool is one object with four optional
+fields, because a provider accepts no `anyOf` at the top of a tool schema.
+`compose` looks the macro up in the frozen set of the definition, and never
+reads `~/.skills`. It checks `args` against the schema of the macro, and
+takes absent `args` as `{}`. A mismatch, an unknown macro, and a mixed call
+are refusals with no ledger.
+
+**`EvaluatorInput` gains `args`.** The evaluator gives the code of a macro
+the global `args`. Free code has none. The test evaluator of the core
+defines it.
+
+**The `approve` request is a union.** `ComposeOptions.approve` reads a
+`ComposeRequest`: `{ uses, code }` for free code, and
+`{ macro, hash, args }` for a macro. A host can allow its own macros and
+deny free code.
+
+**`COMPOSE_GUIDANCE` gains a paragraph.** It tells the model to run a macro
+when a skill names one. A seat with macros also gets one guidance block
+after the text, with one line for each macro: the name and the description.
+
+**`sql` gains `params`.** The optional array binds text, numbers, and
+`null` to the `?` placeholders of one statement. A whole number binds as an
+integer. `SqlRunOptions` gains `params`, and the SQLite backend binds the
+values and fails a run that has `params` and more than one statement. The
+type `SqlParam` is new.
+
 ## 0.5.0 (2026-10-02)
 
 <img alt="Ambion 0.5.0, six things new in this release. Sensors: an agent forks a sensor template, commits it, runs it, and observes through it, and each observation is kept as evidence. Actuators: an actuator is a controller command that the agent starts with bash, and exit 0 means the device is safe. Isolation: Claude, Codex, and Pi seats have no native tools, and files and a shell come only through the workspace. Camera Chat on macOS: an agent forks a camera sensor, launches it, and looks through it with a live preview. Codex runs on app-server, with turn/start, turn/steer, and turn/interrupt. Pi runs on Pi 1.0, on a Claude or ChatGPT subscription. Also new: a clone tool, JSON as the one data rule, a session trace step, steer with a receipt, and one word for each meaning." src="docs/assets/ambion-0.5.0.png" width="800">

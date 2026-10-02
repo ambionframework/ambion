@@ -128,7 +128,9 @@ describe('the tools and the guidance', () => {
 			Set import to read a CSV file with a header from your workspace, up to 32 MiB. Its rows
 			are the table import.rows for that call alone: every value is text, and \\N is NULL. Copy
 			them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the
-			process that writes the file before you import it.
+			process that writes the file before you import it. Give a value that comes from outside, such
+			as a name or a label, in params: write ? in the statement, and list the values in order.
+			params takes one statement.
 
 			The database is SQLite: dates are functions, || joins text, and a column type is an
 			affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;

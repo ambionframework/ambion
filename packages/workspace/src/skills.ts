@@ -10,9 +10,19 @@
  * `docs/skills.md`.
  */
 
-import { parse } from 'yaml';
+import type { ComposeMacro } from '@ambionframework/ambion';
 import type { WorkspaceEnv } from './backend.ts';
 import { shellQuote } from './execution-env.ts';
+import { macrosOf } from './skill-macros.ts';
+import {
+	decodeText,
+	FRONTMATTER,
+	MAX_DESCRIPTION,
+	MAX_NAME,
+	mappingOf,
+	NAME,
+	refuse,
+} from './skill-text.ts';
 import { hashesOf, readSource, type SourceFiles, type SourceInput } from './sources.ts';
 
 /** The folder in each agent's home that holds the copy of its skills. */
@@ -24,12 +34,7 @@ export const MANIFEST = '.manifest';
 /** The folder inside a skill whose files the copy makes executable. */
 const SCRIPTS = 'scripts';
 
-const MAX_NAME = 64;
-const MAX_DESCRIPTION = 1024;
 const MAX_COMPATIBILITY = 500;
-const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-/** The frontmatter: from a first line of `---` to the next line that is `---` alone. */
-const FRONTMATTER = /^---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/;
 
 /** One skill of a set. */
 export interface SkillInfo {
@@ -48,17 +53,17 @@ export interface SkillSet {
 	readonly files: SourceFiles;
 	/** The files that the copy makes executable: each file under `<skill>/scripts/`. */
 	readonly scripts: readonly string[];
+	/**
+	 * The macros of the set, from each `<skill>/macros/<name>.js`. They are
+	 * the frozen text of the files at load, so an edit of the copy changes none.
+	 */
+	readonly macros: readonly ComposeMacro[];
 	/** The text of the manifest of a copy of this set. */
 	readonly manifest: string;
 }
 
 /** The sets that `loadSkills` made. */
 const made = new WeakSet<SkillSet>();
-
-/** Throw the error that names the source. */
-function refuse(message: string): never {
-	throw new Error(`Skill set: ${message}`);
-}
 
 /** The path `path` in segments, when it is relative and names no `.` or `..`. */
 function segmentsOf(path: string): string[] {
@@ -84,24 +89,11 @@ function byFolder(files: SourceFiles): Map<string, string[]> {
 
 /** The frontmatter of a `SKILL.md`, as an object. */
 function frontmatterOf(folder: string, bytes: Uint8Array): Record<string, unknown> {
-	let text: string;
-	try {
-		text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/\r\n?/g, '\n');
-	} catch {
-		return refuse(`the SKILL.md of '${folder}' is not UTF-8 text.`);
-	}
+	const text = decodeText(`the SKILL.md of '${folder}'`, bytes);
 	const yaml = FRONTMATTER.exec(text)?.[1];
 	if (yaml === undefined)
 		refuse(`the SKILL.md of '${folder}' starts with no frontmatter between two '---' lines.`);
-	let data: unknown;
-	try {
-		data = parse(yaml);
-	} catch (error) {
-		refuse(`the frontmatter of '${folder}' is not YAML: ${(error as Error).message}`);
-	}
-	if (typeof data !== 'object' || data === null || Array.isArray(data))
-		refuse(`the frontmatter of '${folder}' is not a YAML mapping.`);
-	return data as Record<string, unknown>;
+	return mappingOf(`the frontmatter of '${folder}'`, yaml);
 }
 
 /** The name of the skill in `folder`, checked against the agentskills.io rules. */
@@ -158,10 +150,12 @@ export async function loadSkills(source: SourceInput): Promise<SkillSet> {
 		Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1))),
 	);
 	const scripts = Object.keys(frozen).filter((path) => path.split('/')[1] === SCRIPTS);
+	const macros = [...folders].flatMap(([folder, paths]) => macrosOf(folder, paths, files));
 	const set: SkillSet = Object.freeze({
 		skills: Object.freeze(skills),
 		files: frozen,
 		scripts: Object.freeze(scripts),
+		macros: Object.freeze(macros),
 		manifest: `${JSON.stringify({ files: [...hashesOf(frozen)], scripts })}\n`,
 	});
 	made.add(set);

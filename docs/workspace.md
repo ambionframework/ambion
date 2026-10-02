@@ -666,7 +666,17 @@ another agent reads at once. The tool takes these parameters:
 | `sql`     | One or more statements. The last query gives the preview.          |
 | `export`  | A path in the workspace for the full result as CSV.                |
 | `import`  | A path in the workspace of a CSV file, as the table `import.rows`. |
+| `params`  | Values for the `?` placeholders of one statement, in order.        |
 | `rows`    | How many rows the preview shows, up to 1000. The default is 50.    |
+
+**`params` binds values to a statement.** Write `?` in the statement and
+list the values in `params`: text, a number, or `null`. The backend binds
+each value, so a quote or a keyword in a value cannot change the statement.
+A whole number binds as an integer. Use `1` or `0` for a boolean. A call with a
+non-empty `params` holds one statement. A call with more fails before it
+runs any.
+A skill [macro](skills.md#macros) passes each argument that came from the
+model through `params`.
 
 **The preview stays in context and writes nothing to disk.** The tool shows
 the last query's result as a Markdown table, capped at `rows`. It keeps
@@ -902,7 +912,10 @@ agent, and each resolves `~` and a relative path under the agent's home.
   over `maxBytes` give `{ ok: false, message }`. An abort rejects.
 
 **`run` takes `maxRows`, an optional `export` path, an optional `import`
-path, and an optional `provenance`.** A backend with provenance writes
+path, optional `params`, and an optional `provenance`.** With `params`, the
+text holds one statement. The backend binds the values to its `?`
+placeholders in order, and fails the run when the text holds more than one
+statement. An empty list binds nothing. A backend with provenance writes
 `provenance` on each row that the run inserts into an append-only table.
 An `ok` outcome holds the last statement's `columns`, its first `maxRows`
 rows, its `rowCount`, the absolute `export` path when the options named

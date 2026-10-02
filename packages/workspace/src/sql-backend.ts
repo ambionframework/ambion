@@ -22,6 +22,9 @@ import type { ResourceEnv, WorkspaceAgent } from './resource.ts';
 /** A value that a SQL database stores. */
 export type SqlValue = string | number | bigint | Uint8Array | null;
 
+/** A value that a caller binds to a `?` placeholder: text, a number, or null. */
+export type SqlParam = string | number | null;
+
 /** One result row, keyed by column name. */
 export type SqlRow = Readonly<Record<string, SqlValue>>;
 
@@ -96,6 +99,13 @@ export interface SqlRunOptions {
 	 */
 	readonly import?: string;
 	/**
+	 * Values for the `?` placeholders of the one statement of `sql`, in
+	 * order. The backend binds them as values, so a quote or a keyword in a
+	 * value cannot change the statement. A run with `params` and more than
+	 * one statement fails. An empty list binds nothing.
+	 */
+	readonly params?: readonly SqlParam[];
+	/**
 	 * Who makes this run. A backend with provenance writes it on each row
 	 * that the run inserts into an append-only table. The `sql` tool sets
 	 * it from the tool call.
@@ -151,7 +161,7 @@ export interface SqlEnv extends ResourceEnv {
 	 * file through `WorkspaceFiles` into the table `import.rows` first, and
 	 * drops the table after the run. The run stops at the first statement
 	 * that fails. An aborted `signal` rejects before the next
-	 * statement runs.
+	 * statement runs. With `options.params`, the text holds one statement.
 	 */
 	run(sql: string, options: SqlRunOptions, signal?: AbortSignal): Promise<SqlOutcome>;
 }

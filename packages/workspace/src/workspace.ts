@@ -264,6 +264,7 @@ function withSkills(
 	return Object.freeze({
 		...bundle,
 		tools: Object.freeze(tools),
+		...(set.macros.length === 0 ? {} : { macros: set.macros }),
 		guidance: joinNotes([bundle.guidance, skillGuidance(set)]),
 		remind: mergeReminders([
 			(seat) => {

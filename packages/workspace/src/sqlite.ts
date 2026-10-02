@@ -55,6 +55,7 @@ import type {
 	SqlEnv,
 	SqlImportTable,
 	SqlOutcome,
+	SqlParam,
 	SqlRow,
 	SqlRunOptions,
 	WorkspaceFiles,
@@ -97,6 +98,9 @@ const ATTACH_LITERAL = /^attach\s+(?:database\s+)?('[^']*')\s+as\s+(?:\w+|"[^"]+
 const LEADING = /^(?:\s+|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/|\/\*[\s\S]*$)+/;
 
 const ATTACH_REFUSED = "ATTACH opens ':memory:' alone. This database cannot open another file.";
+
+const PARAMS_REFUSED =
+	'params bind to one statement, and this text holds more. Send one statement with params, or remove params.';
 
 /** A statement that the backend refuses, reported as an `ok: false` outcome. */
 class Refusal extends Error {}
@@ -213,9 +217,20 @@ function prepare(handle: Handle, text: string): { statement: StatementSync; rest
 	return { statement, rest: text.slice(source.length) };
 }
 
+/**
+ * The values to bind. A whole number binds as an integer, because
+ * `node:sqlite` binds every JS number as a real, and a column with no
+ * affinity would then keep `1.0`.
+ */
+function bindings(options: SqlRunOptions): (SqlParam | bigint)[] {
+	return (options.params ?? []).map((value) =>
+		typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : value,
+	);
+}
+
 /** Run `statement` to its end, and refuse it if it hides an append-only table. */
-function runOne(handle: Handle, statement: StatementSync): void {
-	statement.run();
+function runOne(handle: Handle, statement: StatementSync, options: SqlRunOptions): void {
+	statement.run(...bindings(options));
 	const refused = shadowRefusal(handle.db, handle.guard);
 	if (refused !== undefined) throw new Refusal(refused);
 }
@@ -241,8 +256,9 @@ function lastResult(
 	signal?: AbortSignal,
 ): Promise<SqlOutcome> {
 	const columns = columnsOf(statement);
-	if (columns.length === 0) runOne(handle, statement);
-	const rows = columns.length === 0 ? [] : (statement.iterate() as Iterable<SqlRow>);
+	if (columns.length === 0) runOne(handle, statement, options);
+	const rows =
+		columns.length === 0 ? [] : (statement.iterate(...bindings(options)) as Iterable<SqlRow>);
 	return sqlResult(columns, rows, options, files, signal);
 }
 
@@ -260,7 +276,8 @@ async function runStatements(
 		const next = prepare(handle, rest);
 		rest = next.rest;
 		if (blank(rest)) return lastResult(handle, next.statement, options, files, signal);
-		runOne(handle, next.statement);
+		if ((options.params?.length ?? 0) > 0) throw new Refusal(PARAMS_REFUSED);
+		runOne(handle, next.statement, options);
 	}
 	return sqlResult([], [], options, files, signal);
 }

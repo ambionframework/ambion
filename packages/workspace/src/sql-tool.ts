@@ -44,6 +44,9 @@ const MAX_PREVIEW_ROWS = 1000;
 /** One value of a preview row: text, a number, or null. A blob is hex, and a `bigint` is text. */
 const Cell = Type.Union([Type.String(), Type.Number(), Type.Null()]);
 
+/** One bound value: text, a number, or null. */
+const Param = Type.Union([Type.String(), Type.Number(), Type.Null()]);
+
 /** What the tool declares for `compose`, and reports beside its text. */
 const SqlOutput = Type.Object({
 	database: Type.String({ description: 'The name of the database.' }),
@@ -78,6 +81,12 @@ const sqlSchema = Type.Object({
 			description: `A CSV file path. Its rows are the table ${IMPORT_TABLE} for this call alone, as text, with \\N as NULL.`,
 		}),
 	),
+	params: Type.Optional(
+		Type.Array(Param, {
+			description:
+				'Values for the ? placeholders of one statement, in order. Write ? in the statement and give each value here. A whole number binds as an integer. Use 1 or 0 for a boolean. It needs a single statement.',
+		}),
+	),
 	rows: Type.Optional(
 		Type.Integer({
 			minimum: 0,
@@ -107,7 +116,9 @@ function sqlToolGuidance(database: string): string {
 		`Set import to read a CSV file with a header from your workspace, up to ${formatBytes(MAX_IMPORT_BYTES)}. Its rows`,
 		`are the table ${IMPORT_TABLE} for that call alone: every value is text, and \\N is NULL. Copy`,
 		`them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the`,
-		`process that writes the file before you import it.`,
+		`process that writes the file before you import it. Give a value that comes from outside, such`,
+		`as a name or a label, in params: write ? in the statement, and list the values in order.`,
+		`params takes one statement.`,
 	].join('\n');
 }
 
@@ -146,6 +157,7 @@ async function run(
 		provenance: provenanceOf(ctx),
 		...(params.export === undefined ? {} : { export: params.export }),
 		...(params.import === undefined ? {} : { import: params.import }),
+		...(params.params === undefined ? {} : { params: params.params }),
 	};
 	const outcome = await options.sql(
 		ctx.agent,

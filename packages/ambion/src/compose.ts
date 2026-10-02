@@ -19,6 +19,12 @@ export interface EvaluatorInput {
 	readonly code: string;
 	/** The names of the tools that the code can call as `tools.<name>`. */
 	readonly bindings: readonly string[];
+	/**
+	 * The arguments of a macro, already checked against its schema. The code
+	 * reads them as the global `args`. Absent for free code, where `args` is
+	 * not defined.
+	 */
+	readonly args?: JsonValue;
 	/** Calls one binding. It resolves to the binding value, or rejects with `{ message, details? }`. */
 	call(name: string, args: JsonValue): Promise<JsonValue>;
 }
@@ -43,16 +49,45 @@ export interface ComposeLimits {
 	readonly time: number;
 }
 
+/**
+ * What `approve` reads. Free code gives `uses` and `code`. A macro gives its
+ * name, the blob hash of its file, and its checked `args`, which are `{}`
+ * when the call leaves them out.
+ */
+export type ComposeRequest =
+	| { readonly uses: readonly string[]; readonly code: string }
+	| { readonly macro: string; readonly hash: string; readonly args: JsonValue };
+
+/**
+ * A stored compose program that a skill names. `compose` runs it by name,
+ * under the tools in `uses`, with `args` checked against `args` schema. A
+ * bundle carries macros as data. `composeMacro` makes one.
+ */
+export interface ComposeMacro {
+	/** The name that the model gives `compose`: `<skill>/<macro>`. */
+	readonly name: string;
+	/** One line that the guidance shows beside the name. */
+	readonly description: string;
+	/** The tools that the code binds. */
+	readonly uses: readonly string[];
+	/** A JSON Schema that the `args` of a call must satisfy. */
+	readonly args: { readonly [key: string]: JsonValue };
+	/** The body of an asynchronous function, as `code` of a compose call. */
+	readonly code: string;
+	/** The git blob hash of the file that holds the macro. */
+	readonly hash: string;
+}
+
 /** The `compose` option of the executor options. With no option, the seat has no `compose` tool. */
 export interface ComposeOptions {
 	readonly evaluator: Evaluator;
 	/**
-	 * Called after `compose` checks `uses`, and before it evaluates any code.
-	 * A denial fails the compose call with no ledger and no effect. With no
-	 * hook, `compose` allows every compose call.
+	 * Called after `compose` checks `uses` or the macro and its `args`, and
+	 * before it evaluates any code. A denial fails the compose call with no
+	 * ledger and no effect. With no hook, `compose` allows every compose call.
 	 */
 	readonly approve?: (
-		request: { readonly uses: readonly string[]; readonly code: string },
+		request: ComposeRequest,
 		ctx: ToolContext,
 	) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
 	/** Replaces `COMPOSE_GUIDANCE`. */
@@ -103,7 +138,10 @@ Call a tool directly when:
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call and its outcome. A completed call can have had an
-effect, so read the list before you call a tool again.`;
+effect, so read the list before you call a tool again.
+
+When a skill names a macro, call compose with the macro and its args,
+and write no code. The macro holds the code and names its own tools.`;
 
 /** The limits of a compose call that the option leaves unset. */
 export const DEFAULT_COMPOSE_LIMITS: ComposeLimits = Object.freeze({
