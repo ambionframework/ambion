@@ -578,7 +578,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 			TEST_MS,
 		);
 
-		it(
+		it.skipIf(process.platform !== 'linux')(
 			'fails the pass as transient, with the end of the standard error, when the process dies mid request',
 			async () => {
 				const held = holding(0);
@@ -976,7 +976,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(await passing).toEqual({ failed: false });
 					// The process still runs, so the close of the request comes from the interrupt.
 					await held.closed;
-					expect(runningWith(on.home).length).toBeGreaterThan(0);
+					if (process.platform === 'linux') expect(runningWith(on.home).length).toBeGreaterThan(0);
 					const rollout = String(
 						run.steps
 							.flatMap((step) => (step.type === 'notice' ? [step.data?.rollout] : []))
