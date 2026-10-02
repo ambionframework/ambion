@@ -60,7 +60,7 @@ live('an agent actor and an agent judge on a real model', () => {
 			brief: 'Ask the desk whether Thursday will be dry. Stop as soon as you know.',
 		});
 		// A polite model may thank the desk before it stops, so the bound leaves room for it.
-		evidence.simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		evidence.simulation = await simulate(room, { person: priya, actor, messages: 3 });
 		const { simulation } = evidence;
 		expect(['stopped', 'limit']).toContain(simulation.ended);
 		expect(simulation.moves[0]).toHaveProperty('text');

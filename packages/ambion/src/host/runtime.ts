@@ -23,7 +23,8 @@
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import { AmbionError } from '../errors.ts';
-import type { ActivationOpener, AgentPort, RoomProtocol, TraceOpener } from '../protocol.ts';
+import type { ActivationOpener, TraceOpener } from '../execution/contract.ts';
+import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
 import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
@@ -171,7 +172,7 @@ export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | unde
 	runtimeStateOf(runtime).running.get(name)?.calls;
 
 /** The dependencies that one in-process seat needs for one captured definition. */
-export interface AgentExecutionContext {
+export interface SeatContext {
 	readonly clock: Clock;
 	readonly call: Limits['call'];
 	readonly definition: AgentDefinition;

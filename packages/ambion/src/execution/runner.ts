@@ -9,17 +9,14 @@
  * its seat: the room calls its wake, steer, and cut.
  */
 
-import type { AgentExecutionContext } from '../host/runtime.ts';
+import type { SeatContext } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
 	CommitRequest,
 	CommitResult,
-	PassInput,
-	PassResult,
 	RoomProtocol,
 	Steer,
-	TraceSink,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
@@ -34,6 +31,7 @@ import type {
 	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
+import type { PassInput, PassResult, TraceSink } from './contract.ts';
 import { failedPass } from './failure.ts';
 
 type CallResult<T> =
@@ -62,12 +60,12 @@ interface Current {
  */
 export class AgentRunner implements AgentPort {
 	private readonly room: RoomProtocol;
-	private readonly context: AgentExecutionContext;
+	private readonly context: SeatContext;
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 
-	constructor(room: RoomProtocol, context: AgentExecutionContext) {
+	constructor(room: RoomProtocol, context: SeatContext) {
 		this.room = room;
 		this.context = context;
 	}

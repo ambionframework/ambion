@@ -56,15 +56,15 @@ export class FileError extends Error {
 }
 
 /** Why a command did not run to its end, in terms that no backend changes. */
-export type ExecutionErrorCode = 'aborted' | 'timeout' | 'spawn_error' | 'unknown';
+export type ShellErrorCode = 'aborted' | 'timeout' | 'spawn_error' | 'unknown';
 
 /** The error of a command that did not run to its end. */
-export class ExecutionError extends Error {
-	readonly code: ExecutionErrorCode;
+export class ShellError extends Error {
+	readonly code: ShellErrorCode;
 
-	constructor(code: ExecutionErrorCode, message: string, cause?: Error) {
+	constructor(code: ShellErrorCode, message: string, cause?: Error) {
 		super(message, cause === undefined ? undefined : { cause });
-		this.name = 'ExecutionError';
+		this.name = 'ShellError';
 		this.code = code;
 	}
 }

@@ -31,8 +31,8 @@ import {
 	isHandle,
 	LOST,
 	lostLine,
+	type Process,
 	type ProcessFiles,
-	type ProcessRecord,
 	type ProcessSpec,
 	processesDir,
 	readFiles,
@@ -70,7 +70,7 @@ const CLOSED = 'Workspace is no longer available.';
 /** A process as a read finds it: its files, and the status they give. */
 interface Found {
 	readonly files: ProcessFiles;
-	readonly status: ProcessRecord;
+	readonly status: Process;
 }
 
 const byStart = (a: { startedAt: string }, b: { startedAt: string }): number =>
@@ -129,7 +129,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 	};
 
 	/** A live process has ended: forget it, record the end, and tell the host. */
-	const settle = (process: Live, status: ProcessRecord): void => {
+	const settle = (process: Live, status: Process): void => {
 		clearTimeout(process.timer);
 		live.delete(process.spec.handle);
 		endedKeys.add(`${process.agent}\0${process.spec.handle}`);
@@ -230,7 +230,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		fn(own.env).catch(() => detached(process.agent, fn));
 
 	/** The final status of a process of this run, from its files, once the run ended. */
-	const finalStatus = async (process: Live, own: Own): Promise<ProcessRecord> => {
+	const finalStatus = async (process: Live, own: Own): Promise<Process> => {
 		const { dir, spec } = process;
 		const root = dir.slice(0, dir.lastIndexOf('/'));
 		try {
@@ -364,7 +364,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		agent: WorkspaceAgent,
 		handles: readonly string[],
 		signal?: AbortSignal,
-	): Promise<readonly ProcessRecord[]> => {
+	): Promise<readonly Process[]> => {
 		const [only] = handles;
 		if (handles.length === 1 && only !== undefined) return [await find(agent, only, signal)];
 		const all = await list(agent, signal);

@@ -41,7 +41,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour on Thursday?']),
-			exchanges: 3,
+			messages: 3,
 		});
 		expect(simulation.ended).toBe('stopped');
 		expect(simulation.moves).toEqual([{ text: 'Can we pour on Thursday?' }, { stop: LIST_ENDED }]);
@@ -54,12 +54,12 @@ describe('simulate', () => {
 		expect(simulation.error).toBeUndefined();
 	});
 
-	it('ends with `limit` after `exchanges` messages, one exchange for each, and leaves the room running', async () => {
+	it('ends with `limit` after `messages` messages, one exchange for each, and leaves the room running', async () => {
 		const room = await open(answering, ['desk']);
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['First?', 'Second?', 'Third?']),
-			exchanges: 2,
+			messages: 2,
 		});
 		expect(simulation.ended).toBe('limit');
 		expect(simulation.moves).toHaveLength(2);
@@ -98,7 +98,7 @@ describe('simulate', () => {
 				return { text: question?.text === 'Which day?' ? 'Thursday.' : '?' };
 			return { stop: 'I have my answer.' };
 		};
-		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		const simulation = await simulate(room, { person: priya, actor, messages: 3 });
 		expect(simulation.ended).toBe('stopped');
 		expect(simulation.moves.map((move) => ('text' in move ? move.text : move.stop))).toEqual([
 			'Can we pour?',
@@ -134,7 +134,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?', 'And Friday?']),
-			exchanges: 2,
+			messages: 2,
 			// Long enough for the desk to speak on a loaded runner before the deadline.
 			exchangeMs: 2_000,
 		});
@@ -171,7 +171,7 @@ describe('simulate', () => {
 		const simulation = await simulate(stuck, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: 200,
 		});
 		expect(simulation.ended).toBe('failed');
@@ -186,7 +186,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Priya asks second.']),
-			exchanges: 1,
+			messages: 1,
 		});
 		expect(simulation.ended).toBe('failed');
 		expect(simulation.error).toMatch(/joined the open exchange/);
@@ -214,7 +214,7 @@ describe('simulate', () => {
 		const simulation = await simulate(stopping, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: 2_000,
 		});
 		expect(simulation.ended).toBe('failed');
@@ -226,7 +226,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor([{ text: '   ' }]),
-			exchanges: 1,
+			messages: 1,
 		});
 		expect(simulation.ended).toBe('failed');
 		expect(simulation.error).toMatch(/blank|empty|text/i);
@@ -248,7 +248,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
-			exchanges: 1,
+			messages: 1,
 		});
 		expect(simulation.ended).toBe('failed');
 		expect(simulation.error).toMatch(/stop/i);
@@ -267,7 +267,7 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
-			exchanges: 1,
+			messages: 1,
 		});
 		expect(simulation.ended).toBe('failed');
 		expect(simulation.error).toMatch(/summary/i);
@@ -282,7 +282,7 @@ describe('simulate', () => {
 			return move;
 		};
 		const room = await open(answering, ['desk']);
-		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		const simulation = await simulate(room, { person: priya, actor, messages: 3 });
 		expect(simulation.ended).toBe('failed');
 		expect(simulation.error).toBe('The actor timed out.');
 		expect(simulation.usage.actor).toEqual(usage);
@@ -293,15 +293,15 @@ describe('simulate', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Can we pour?']),
-			exchanges: 1,
+			messages: 1,
 		});
 		expect(structuredClone(simulation)).toEqual(simulation);
 	});
 
 	it.each([
-		[{ exchanges: 0 }, /`exchanges`/],
-		[{ exchanges: 1.5 }, /`exchanges`/],
-		[{ exchanges: 1, exchangeMs: 0 }, /`exchangeMs`/],
+		[{ messages: 0 }, /`messages`/],
+		[{ messages: 1.5 }, /`messages`/],
+		[{ messages: 1, exchangeMs: 0 }, /`exchangeMs`/],
 	])('refuses %o before the person arrives', async (bounds, error) => {
 		const room = await open(answering, ['desk']);
 		await expect(
