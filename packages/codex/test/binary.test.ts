@@ -42,6 +42,7 @@ import {
 	MODEL,
 	runningWith,
 	SKILL_MARKER,
+	seesProcesses,
 } from './binary.ts';
 import { deltaInput, driven, viewInput } from './drive.ts';
 import { type Reply, type ResponsesRequest, toolsOf, USAGE } from './responses.ts';
@@ -364,7 +365,8 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(rollout).toMatch(
 						/\/sessions\/\d{4}\/\d{2}\/\d{2}\/rollout-[\dT-]+-[\w-]+\.jsonl$/,
 					);
-					expect(String(rollout).startsWith(on.home)).toBe(true);
+					// Codex reports the real path of its home. On macOS the temporary directory is a link.
+					expect(String(rollout).startsWith(realpathSync(on.home))).toBe(true);
 					expect(existsSync(String(rollout))).toBe(true);
 					expect(String(rollout)).toContain(`-${String(thread?.data?.thread)}.jsonl`);
 					expect(readFileSync(String(rollout), 'utf8')).toContain(String(thread?.data?.thread));
@@ -578,7 +580,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 			TEST_MS,
 		);
 
-		it.skipIf(process.platform !== 'linux')(
+		it.skipIf(!seesProcesses)(
 			'fails the pass as transient, with the end of the standard error, when the process dies mid request',
 			async () => {
 				const held = holding(0);
@@ -976,7 +978,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(await passing).toEqual({ failed: false });
 					// The process still runs, so the close of the request comes from the interrupt.
 					await held.closed;
-					if (process.platform === 'linux') expect(runningWith(on.home).length).toBeGreaterThan(0);
+					if (seesProcesses) expect(runningWith(on.home).length).toBeGreaterThan(0);
 					const rollout = String(
 						run.steps
 							.flatMap((step) => (step.type === 'notice' ? [step.data?.rollout] : []))
