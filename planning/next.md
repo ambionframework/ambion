@@ -15,7 +15,7 @@
 >   A deliberate change updates the affected guards in the same commit.
 
 **0.6.0 gives a seat the `compose` tool, fixes three defects that 0.5.0
-left open, and removes two concepts that the repository holds twice.**
+left open, and removes one concept that the repository holds twice.**
 [Compose](../docs/compose.md) owns the compose contract. This file owns
 the work and its evidence. [The backlog](backlog.md) holds everything
 else.
@@ -51,8 +51,7 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - **Three fixes** close defects that 0.5.0 left open: a late steer on
   Claude (CS1), the Camera Chat findings (CC1), and Codex on a ChatGPT
   sign-in (CX1).
-- **Two simplifications** give the record line one renderer (K8) and the
-  sensor path one validation (W5).
+- **One simplification** gives the sensor path one validation (W5).
 
 ## Decisions taken
 
@@ -111,14 +110,12 @@ runs beside the compose phases and blocks only the release.
 - [ ] **1.** A late steer on Claude keeps its answer. (CS1)
 - [ ] **2.** The Camera Chat fixes. (CC1)
 - [ ] **3.** Codex on a ChatGPT sign-in. (CX1)
-- [ ] **4.** One renderer of a record line. (K8)
-- [ ] **5.** The sensor path validates once. (W5)
+- [ ] **4.** The sensor path validates once. (W5)
 
 **Evidence:** the `claude` tests steer during the final answer, and the
 answer to the line commits. Each Camera Chat fix has its test or its
 README text. The full Codex live tier passes on the ChatGPT login of the
-owner's Mac. One function writes a record line, and the sensor path checks
-each schema and digest once.
+owner's Mac. The sensor path checks each schema and digest once.
 
 ### Phase 2. The vocabulary and the trace
 
@@ -219,15 +216,6 @@ the run covers.
 
 **Evidence:** the full Codex live tier passes on the ChatGPT login, and
 `docs/codex.md` names the run and what stays untested.
-
-**K8. One renderer of a record line.** Three renderers write one line of
-the record: `renderLine` in `packages/ambion/src/record.ts`,
-`packages/ambion/src/execution/render.ts`, and
-`packages/simulator/src/render.ts`. Keep one. The other two call it.
-
-**Evidence:** one function writes the line. The existing render and
-simulator tests pass unchanged, or the change names them. The export
-snapshot and the changelog name any change to an export.
 
 **W5. The sensor path validates once.** The sensor client
 (`sensor-client.ts`) and the retention (`sensor-retention.ts`) both check

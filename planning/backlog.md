@@ -117,13 +117,14 @@ the concepts removed times the confidence (high 3, medium 2, low 1).
 Twenty-six reductions have landed. The changelog and the git history
 record them.
 
-**K8 and W5 moved to [next.md](next.md).** The rows below are open on
+**W5 moved to [next.md](next.md).** The rows below are open on
 `main` as of 2026-10-02. The K IDs from K9 are rows of this table. K1 to K5
 belong to the known defects.
 
 | ID  | Finding                                                          | Evidence                                                                                                                                                                                         | Rank |
 | --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
 | K9  | The `assistant` option restates `agents`, `seats`, and `summary` | `normalizeAssistant` in `room.ts`; the package is about 70 lines over `pi()`. The owner decides (next.md)                                                                                        | 4    |
+| K10 | Two close shapes still serve one fact                            | `SummaryClose` in `room/exchange.ts` remains; `owed.ts` uses it. `OwedClose` is gone                                                                                                             | 2    |
 | K11 | Three state shapes hold the fold                                 | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                                                                                                         | 2    |
 | K12 | The wakes and the owed summaries are two parallel indexes        | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                                                                                                            | 3    |
 | K13 | The journal keeps a `seq` beside a dense storage position        | `nextSeq`, `advanceSeq`, `scanned` in `rules.verified.ts`. The owner decides (next.md)                                                                                                           | 4    |
@@ -172,6 +173,10 @@ a meaning of its own. A later review does not propose them again.
 - **`sqlite.ts` and `sqlite-guard.ts`.** They are one concept in two files.
 - **The port suite and the executor suite.** Cloudflare runs the port
   suite.
+- **K8, the record line.** The core has one `renderLine`, and
+  `execution/render.ts` calls it. The simulator's `messageLine` writes
+  `[seq]` and quotes the text as JSON, so a newline cannot start a false
+  line in the judge input.
 - **`localExecution`.** A host needs one execution of a kind that is not a
   family.
 - **The scripts in `scripts/`.** Each holds one concern.
@@ -409,6 +414,9 @@ current contract. The items below extend it.
 - **Advanced reads.** Pagination, re-reduction controls, multi-sensor
   requests, and configurable rendering wait for a caller that needs them.
   Span reads use the same `observe` operation as latest reads.
+- **Clock quality.** Clock correction, skew estimation, and
+  synchronization checks. Measurement timestamps stay as the source gives
+  them.
 - **Camera Chat toward a real camera.** The realism review of the example
   found five changes.
   - Detection moves into the sensor server, which emits typed events
