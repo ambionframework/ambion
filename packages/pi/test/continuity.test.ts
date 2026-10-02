@@ -285,7 +285,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		// The driver closes the harness while the abort of the run is still active.
 		session.close();
 		expect(await running).toEqual({ failed: false });
-		expect(session.cancelled).toBe(true);
+		expect(session.isCut).toBe(true);
 		expect(session.shouldRefresh(Number.MAX_SAFE_INTEGER)).toBe(false);
 		expect(session.session).toEqual(began(1));
 	});

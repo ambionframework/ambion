@@ -319,8 +319,8 @@ export type RoomEvent =
 	| { type: 'superseded' }
 	/**
 	 * A person's question opened an exchange: the room has an exchange to work on,
-	 * and one person owns it. A client that folds the working under the
-	 * question it answered starts here, whatever the room makes of it
+	 * and its `person` is the first who spoke. A client that folds the working
+	 * under the question it answered starts here, whatever the room makes of it
 	 * later.
 	 */
 	| { type: 'exchange_opened'; exchange: ExchangeRef }

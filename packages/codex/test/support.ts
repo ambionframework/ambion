@@ -341,7 +341,7 @@ export async function connect(
 		client,
 		bridge,
 		readThrough: () => state.readThrough,
-		aborted: () => state.cancelled,
+		aborted: () => state.isCut,
 		close: async () => {
 			await client.close();
 			bridge.close();

@@ -203,7 +203,7 @@ export function renderActivation(
 	def: AgentDefinition,
 	reminders?: string,
 ): RenderedPrompt {
-	return { ...renderSystem(view, def), context: renderTurnContext(view, def, reminders) };
+	return { ...renderSystem(view, def), context: renderContext(view, def, reminders) };
 }
 
 /** The two parts of the prompt that do not read the record: `mechanism` and `agent`. */
@@ -276,7 +276,7 @@ function renderSetting(view: ActivationView): string[] {
 	return lines;
 }
 
-function renderTurnContext(
+function renderContext(
 	view: ActivationView,
 	def: AgentDefinition,
 	reminders: string | undefined,
@@ -380,7 +380,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	const open = openingLine(view, def.name);
 	return (
 		`${open}Begin your activation, ${def.name}: this is a respond activation. ` +
-		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
+		`Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed ` +
 		`and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +

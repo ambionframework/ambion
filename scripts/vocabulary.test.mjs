@@ -49,6 +49,7 @@ const OLD_NAMES = [
 	['activation event', /\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/],
 	['summarize purpose', /\bisClosing\b|\bpurpose\b[^'\n]{0,8}'summary'/],
 	['cancel', /\broom\.abort\(/],
+	['summarize commit', /\b(?:closingCommit|membershipTool|interface Closing)\b/],
 	['said message', /\b(?:SpokenMessage|isSpoken)\b/],
 	['speaking default', /\bDEFAULT_GUIDANCE\b/],
 	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
@@ -74,6 +75,18 @@ const OLD_NAMES = [
 
 const entries = [
 	entry('member', /\bmember(?:ship)?s?\b/i, PROSE),
+	entry(
+		'seating',
+		/\bmember(?:ship)?s?\b/i,
+		/^packages\/(?:assistant\/src\/|ambion\/src\/execution\/)/,
+	),
+	entry('cut', /\bcancelled\b/, /^packages\/ambion\/src\/execution\//),
+	entry(
+		'exchange person',
+		/\bowns the (?:current )?exchange\b/,
+		/^(?:docs\/.*\.md|README\.md|packages\/[^/]+\/README\.md|(?:packages|examples)\/[^/]+\/src\/.*\.(?:ts|tsx))$/,
+	),
+	entry('context', /\bTurnContext\b|\bturn context\b/i, SOURCE),
 	entry('family', /(?<!font-)\bfamil(?:y|ies)\b/i, PROSE),
 	entry(
 		'turn',

@@ -49,7 +49,7 @@ Stored bodies change field names. The golden journals hold the new names.
 | `composition`  | `agents`, `available`, `summary` | `seated`, `reserve`, `summaryWriter` |
 | `close`        | `summary`                        | `summaryWriter`                      |
 
-The text that a model reads changes in three places. Live cases on Pi,
+The text that a model reads changes in five places. Live cases on Pi,
 Claude, and Codex pass on the new text.
 
 - The prompts and the tool results of `say` say "activation" where they said
@@ -59,6 +59,11 @@ Claude, and Codex pass on the new text.
   activation", and "closing assignment".
 - The `schedule` tool takes `delaySeconds` where it took `after`, and the two
   process texts that name the tool follow.
+- The `schedule` tool text says "the person of the current exchange" where
+  it said "the person who owns the current exchange".
+- The prompt for a respond activation says "seating operations" where it
+  said "membership operations". The assistant guidance says "seating" where
+  it said "membership".
 
 The exported names change as follows.
 

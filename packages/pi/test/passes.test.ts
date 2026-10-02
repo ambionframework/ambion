@@ -236,7 +236,7 @@ describe('the Pi executor across the passes of one activation', () => {
 		session.cut();
 		expect(await running).toEqual({ failed: false });
 		expect(steers()).toEqual([{ type: 'steer', seq: 2, consumed: false }]);
-		expect(session.cancelled).toBe(true);
+		expect(session.isCut).toBe(true);
 	});
 
 	it('drops a line held while the model resolves when the activation is cut', async () => {

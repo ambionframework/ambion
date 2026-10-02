@@ -359,7 +359,7 @@ export function sessionToResume(view: ActivationView, kind: string): string | un
 
 export type { Intent };
 
-/** A membership change or a dismissal that the record already holds. */
+/** A seating change or a dismissal that the record already holds. */
 export type Unchanged =
 	{ kind: 'seated' | 'unseated'; name: string } | { kind: 'dismissed'; message: Seq };
 

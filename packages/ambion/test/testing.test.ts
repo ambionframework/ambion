@@ -294,7 +294,7 @@ describe('scriptedOpener', () => {
 		const session = open(scriptedOpener(() => say('hi'), agent('a')));
 		await session.pass(input(respond));
 		expect(commits).toHaveLength(1);
-		expect(session.cancelled).toBe(true);
+		expect(session.isCut).toBe(true);
 		expect(session.shouldRefresh(99)).toBe(false);
 	});
 
