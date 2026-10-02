@@ -10,8 +10,8 @@
  * (`room/projection.ts`), so a room that resumes over the journal continues where the
  * last run stopped.
  *
- * `RoomHost` holds the state and the phases of the room. Its mechanisms live
- * in the files beside it, as functions over `RoomHostState`:
+ * `RoomRun` holds the state and the phases of the room. Its mechanisms live
+ * in the files beside it, as functions over `RoomRunState`:
  *
  * - `people.ts` — visits, deliveries from a visit, and the roster.
  * - `dispatch.ts` — the reaction to each entry, and the ports that send.
@@ -74,7 +74,7 @@ import {
 	decideAndAppend,
 	type ExchangeHandle,
 	notificationFor,
-	type RoomHostState,
+	type RoomRunState,
 	requireSubmission,
 	submit,
 } from './core.ts';
@@ -145,9 +145,9 @@ export interface Room {
 
 /**
  * The state is public inside the package so the mechanism files can reach it
- * through `RoomHostState`. The public surface of a room is the `Room` interface.
+ * through `RoomRunState`. The public surface of a room is the `Room` interface.
  */
-export class RoomHost implements Room, RunningRoom, RoomHostState {
+export class RoomRun implements Room, RunningRoom, RoomRunState {
 	readonly name: string;
 	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */
@@ -198,8 +198,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		runtime: RuntimeState,
 		cast: CompositionDraft,
 		connector: ExecutionConnector,
-	): RoomHost {
-		return new RoomHost(name, runtime, cast, connector);
+	): RoomRun {
+		return new RoomRun(name, runtime, cast, connector);
 	}
 
 	static resume(
@@ -207,8 +207,8 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 		runtime: RuntimeState,
 		bindings: Map<string, AgentDefinition>,
 		connector: ExecutionConnector,
-	): RoomHost {
-		return new RoomHost(name, runtime, undefined, connector, bindings);
+	): RoomRun {
+		return new RoomRun(name, runtime, undefined, connector, bindings);
 	}
 
 	private constructor(

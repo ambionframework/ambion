@@ -14,7 +14,7 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
-import { RoomHost } from '../src/room-host/room.ts';
+import { RoomRun } from '../src/room-run/room.ts';
 import { priya, sam } from './support/cast.ts';
 import { around } from './support/ports.ts';
 import { andrei, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
@@ -206,7 +206,7 @@ describe('a limit windows the record', () => {
 		await expect(startRoom({ name, runtime, agents: [reader] })).rejects.toMatchObject(refused);
 		const room = await startRoom({ name, runtime, agents: [limited('reader', 10)] });
 		// A name the room defines no seat for sets no token limit.
-		expect(room instanceof RoomHost && room.tokenWindow('nobody')).toBeUndefined();
+		expect(room instanceof RoomRun && room.tokenWindow('nobody')).toBeUndefined();
 		await room.stop();
 		await expect(resumeRoom(name, { runtime, agents: [reader] })).rejects.toMatchObject(refused);
 	});
