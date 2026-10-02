@@ -49,5 +49,6 @@ export async function boundedSensorReminder(
 function stateText(state: SensorDiscovery['state']): string {
 	if (state === 'connected') return 'connected';
 	if (state === 'unavailable') return 'unavailable';
+	if (state === 'disconnected') return 'disconnected';
 	return 'process status unknown';
 }

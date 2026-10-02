@@ -1,0 +1,28 @@
+{
+	"name": "@ambionframework-examples/camera-chat",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "A macOS room chat with an agent-managed camera sensor and floating preview.",
+	"engines": {
+		"node": ">=26.4.0"
+	},
+	"scripts": {
+		"start": "node --experimental-ffi src/main.ts",
+		"demo": "pnpm start --demo",
+		"check:types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@ambionframework-examples/workbench": "workspace:*",
+		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/codex": "workspace:*",
+		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/workspace": "workspace:*",
+		"@opentui/core": "0.5.12"
+	},
+	"devDependencies": {
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}

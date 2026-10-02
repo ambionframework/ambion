@@ -21,6 +21,7 @@ packages/
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
+examples/camera-chat/ Camera Chat: a room chat with an agent-managed camera sensor
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
 planning/       the plan for the next release and the backlog
@@ -125,10 +126,11 @@ table. Add a new layer or file to the table first.
 | Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown   |
 | Dead code              | Knip 6                                                     |
 
-Every library package requires Node `>=22.19.0`. `examples/workbench`
-requires Node `>=26.4.0`, the OpenTUI floor; it also runs on Bun `>=1.3`. CI
-tests both floors: Node `22.19.0` for the library packages, Node `26.4.0`
-for the library packages and `examples/workbench` together.
+Every library package requires Node `>=22.19.0`. `examples/workbench` and
+`examples/camera-chat` require Node `>=26.4.0`, the OpenTUI floor;
+`examples/workbench` also runs on Bun `>=1.3`. CI tests both floors: Node
+`22.19.0` for the library packages, Node `26.4.0` for the library packages
+and the two examples together.
 
 ## 3. Supply chain
 
@@ -277,19 +279,20 @@ repository jobs plus the LemmaScript reusable workflow:
 | Job                  | Checks                                                                    |
 | -------------------- | ------------------------------------------------------------------------- |
 | `check`              | format, types, lint, Knip, Dafny generation, and package hygiene          |
-| `test`               | scripted tests on Node 26.4.0, library packages and `examples/workbench`  |
+| `test`               | scripted tests on Node 26.4.0, library packages and both examples         |
 | `test-library-floor` | scripted tests on Node 22.19.0, library packages only                     |
 | `workstation`        | the workstation integration tier against OpenSSH, with root on the runner |
 | `object-store`       | the S3 object backend against MinIO in Docker, from a pinned image        |
 
-`test-library-floor` removes `examples/workbench` from its checkout before
-`pnpm install`. That package depends on `@opentui/core`, which needs Node
-`>=26.4.0` for its FFI bridge to native Zig. Deleting the directory keeps
-pnpm from building or testing it, but `pnpm-lock.yaml` still lists it as
-an importer, so `--frozen-lockfile` still counts it in the workspace scope
-and still checks `@opentui/core`'s `engines.node` before it installs
-anything. The job installs with `--config.engine-strict=false` to get past
-that one check. No library dependency needs more than Node `22.19.0`, and
+`test-library-floor` removes `examples/workbench` and `examples/camera-chat`
+from its checkout before `pnpm install`. Both packages depend on
+`@opentui/core`, which needs Node `>=26.4.0` for its FFI bridge to native
+Zig. Deleting the directories keeps pnpm from building or testing them, but
+`pnpm-lock.yaml` still lists them as importers, so `--frozen-lockfile` still
+counts them in the workspace scope and still checks `@opentui/core`'s
+`engines.node` before it installs anything. The job installs with
+`--config.engine-strict=false` to get past that one check. No library
+dependency needs more than Node `22.19.0`, and
 the test run below is the real proof of that floor.
 
 The `check` job also runs `pnpm run check:packages` after the build. The check
