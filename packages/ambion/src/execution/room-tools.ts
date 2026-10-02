@@ -8,7 +8,7 @@
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
- * The core binds the tools to one activation, and an executor adapts each
+ * The driver binds the tools to one activation, and an executor adapts each
  * `BoundTool` to its harness: a Pi tool, an MCP tool, or a tool that a bridge
  * serves over a socket. The executor gives each call its id, and the id is
  * the idempotency key of the commit. The rules for what the model reads, and

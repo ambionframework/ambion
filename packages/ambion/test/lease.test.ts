@@ -419,7 +419,7 @@ describe('a lease', () => {
 		};
 		await runner({ ...peer, lease: lost }).recover(activation);
 		expect(events).toEqual([
-			expect.objectContaining({ type: 'delivery_error', activation, operation: 'release' }),
+			expect.objectContaining({ type: 'port_error', activation, operation: 'release' }),
 		]);
 		await runner(peer).recover(activation);
 		expect((await leaseChanges(runtime, session)).at(-1)).toMatchObject({

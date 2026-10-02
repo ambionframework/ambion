@@ -1,5 +1,5 @@
 /**
- * The state of one activation that the core owns.
+ * The state of one activation that the driver owns.
  *
  * The driver opens one `ActivationState` for each activation, over the
  * opener of the seat. The state keeps the read position and the cut, runs
@@ -31,7 +31,7 @@ import type {
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
 import { resolveReminders } from './reminders.ts';
-import { renderActivation, renderDelta, renderPending, renderSystem } from './render.ts';
+import { renderActivation, renderDelta, renderScheduled, renderSystem } from './render.ts';
 import { agentTools, type RoomToolBinding, roomTools } from './room-tools.ts';
 import { ToolCalls } from './tool-calls.ts';
 
@@ -279,7 +279,7 @@ export class ActivationState {
 		if (delta === undefined) return undefined;
 		const first = input.kind === 'view';
 		const reminders = first ? await resolveReminders(view, this.input.definition) : undefined;
-		const pending = first ? renderPending(view) : undefined;
+		const pending = first ? renderScheduled(view) : undefined;
 		const text = [reminders, pending, delta].filter((part) => part !== undefined).join('\n\n');
 		return { text, range: { after: from, through: view.through } };
 	}

@@ -55,7 +55,7 @@ export const returnsAt = (say: ScheduledSay): number => Date.parse(say.due);
 const UNBOUNDED: ScheduleLimits = {
 	minDelaySeconds: 1,
 	maxDelaySeconds: Number.POSITIVE_INFINITY,
-	pending: Number.POSITIVE_INFINITY,
+	waiting: Number.POSITIVE_INFINITY,
 };
 
 /**
@@ -75,8 +75,8 @@ export function scheduleRefusal(
 	if (delaySeconds < schedule.minDelaySeconds || delaySeconds > schedule.maxDelaySeconds)
 		return `\`delaySeconds\` is ${delaySeconds} seconds. This room takes from ${schedule.minDelaySeconds} to ${schedule.maxDelaySeconds} seconds.`;
 	const waiting = list.filter((say) => say.seat === seat).length;
-	if (waiting >= schedule.pending)
-		return `${waiting} of your says wait to return. This room holds at most ${schedule.pending} for one seat.`;
+	if (waiting >= schedule.waiting)
+		return `${waiting} of your says wait to return. This room holds at most ${schedule.waiting} for one seat.`;
 	return undefined;
 }
 

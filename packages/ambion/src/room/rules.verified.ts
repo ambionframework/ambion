@@ -138,7 +138,7 @@ export function leaseExpiry(
 	return Math.min(now + expiry, claimedAt + deadline);
 }
 
-/** What a spoken commit's read position says: off the record, short of it, or at its end. */
+/** What a said commit's read position says: off the record, short of it, or at its end. */
 export type Freshness = 'invalid' | 'missed' | 'fresh';
 
 //@ contract A position is on the record when it is between zero and the last seq.
@@ -148,7 +148,7 @@ export function onRecord(position: number, lastSeq: number): boolean {
 	return position >= 0 && position <= lastSeq;
 }
 
-//@ contract The say lock: a spoken commit lands only at the record's last seq. A position short of it is missed, and one off the record is invalid.
+//@ contract The say lock: a said commit lands only at the record's last seq. A position short of it is missed, and one off the record is invalid.
 export function speechFreshness(readThrough: number | undefined, lastSeq: number): Freshness {
 	//@ requires lastSeq >= 0
 	//@ ensures readThrough == undefined ==> \result == 'invalid'
@@ -580,7 +580,7 @@ export function summarizesClose(id: ActivationFields, through: number, writer: s
 }
 
 /** The verdict on one close's summary work. A pending verdict is owed while the room still has to send a summary. */
-export type Verdict =
+export type SummaryVerdict =
 	| { readonly kind: 'pending'; readonly owed: boolean }
 	| { readonly kind: 'silent' }
 	| { readonly kind: 'failed' };
@@ -625,7 +625,7 @@ export function summaryVerdict(
 	removedAfterClose: boolean,
 	summaries: readonly RuleLease[],
 	cancelledAfterClose: boolean,
-): Verdict {
+): SummaryVerdict {
 	//@ ensures !writerNamed ==> \result.kind == 'silent'
 	//@ ensures writerNamed && removedAfterClose ==> \result.kind == 'failed'
 	//@ ensures writerNamed && !removedAfterClose && !stoodDown(summaries) && !cancelledAfterClose ==> \result.kind == 'pending' && \result.owed

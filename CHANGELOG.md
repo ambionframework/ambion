@@ -87,6 +87,10 @@ journal package names its write `append` in prose, and `positionOf` is
 
 Stored bodies change field names. The golden journals hold the new names.
 
+The glossary now defines record, reconcile, from, commit, presence message,
+and driver. "The driver" replaces "the core" for the code that runs an
+activation.
+
 | Body           | Before                           | After                                |
 | -------------- | -------------------------------- | ------------------------------------ |
 | `said` message | `after`                          | `delaySeconds`                       |
@@ -135,9 +139,11 @@ The exported names change as follows.
 | Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
+| Port and send           | the event `delivery_error`, `DeliveryState`, `Limits.delivery`, `MessageDelivery`, `limits.schedule.pending` | `port_error`, `SendState`, `Limits.port`, `MessageRecipients`, `limits.schedule.waiting` |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Kernel exports | `RoomTool`, `RoomToolResult`, `ToolExecutionMode`, `AgentExecutionContext`; the executor contract in `protocol.ts` | `BoundTool`, `BoundToolResult`, `ToolConcurrency`, `SeatContext`; the contract in `execution/contract.ts` |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
+| Room rules (internal) | `DueWake`, `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `DueRespond`, `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
 
 **The workspace implements its own file tools.** `read`, `write`, and
 `edit` run over the workspace port in place of the factories of Pi. They keep

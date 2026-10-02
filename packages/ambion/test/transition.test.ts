@@ -337,7 +337,7 @@ describe('room transition', () => {
 });
 
 describe('a scheduled say', () => {
-	const schedule = { minDelaySeconds: 60, maxDelaySeconds: 3_600, pending: 1 };
+	const schedule = { minDelaySeconds: 60, maxDelaySeconds: 3_600, waiting: 1 };
 	const say = (
 		state: RoomState,
 		intent: CommitRequest['intent'],

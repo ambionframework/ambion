@@ -25,16 +25,16 @@ import {
 	applyEntry,
 	type BaseFacts,
 	type FoldOptions,
-	older,
+	noFacts,
 	type RoomState,
 	reseat,
 	reserveOf,
 } from './fold.ts';
 import { applyLease, type LeaseHold } from './lease.ts';
-import { judgeOwed, type Owed, type OwedFacts, rejudgeOwed } from './owed.ts';
+import { type DueSummarize, judgeOwed, type OwedFacts, rejudgeOwed } from './owed.ts';
 import { advancePeople, type PersonState } from './presence.ts';
+import { dropSeat, dueRespondsOf, type OpenRespond, rejudgeSeat, respondsOf } from './responds.ts';
 import { changesScheduled, scheduleStep } from './scheduled.ts';
-import { dropSeat, type OpenWake, pendingOf, rejudgeSeat, wakesOf } from './wakes.ts';
 
 /** Leases of one kind of activation, grouped by a key, then by activation id. */
 type LeaseIndex<K> = Map<K, Map<string, LeaseHold>>;
@@ -46,7 +46,7 @@ export interface RoomProjection {
 	readonly exchange: ExchangeRef | undefined;
 	/** The `through` of the last close. */
 	readonly boundary: Seq;
-	/** The spoken messages and posts after the boundary: all that can open an exchange. */
+	/** The said messages and posts after the boundary: all that can open an exchange. */
 	readonly tail: Message[];
 	/** The summary and unseated messages, which the summary rules read. */
 	readonly summaryFacts: Message[];
@@ -56,14 +56,14 @@ export interface RoomProjection {
 	readonly seatLeases: LeaseIndex<string>;
 	/** The leases of summary activations, by the position they name. */
 	readonly closedLeases: LeaseIndex<Seq>;
-	readonly wakes: OpenWake[];
-	readonly owed: Owed[];
+	readonly wakes: OpenRespond[];
+	readonly owed: DueSummarize[];
 	readonly scheduled: ScheduledSay[];
 	readonly lastSeq: Seq;
 }
 
 /** How one step runs: the retry policy, and whether the caller alone holds the projection. */
-interface Step {
+interface FoldStep {
 	options: FoldOptions;
 	/** True while `replay` builds the projection, so a step may change a container in place. */
 	own: boolean;
@@ -71,7 +71,7 @@ interface Step {
 
 export function emptyProjection(): RoomProjection {
 	return {
-		base: older(),
+		base: noFacts(),
 		people: new Map(),
 		roster: [],
 		exchange: undefined,
@@ -109,7 +109,7 @@ export function projectState(projection: RoomProjection): RoomState {
 		cancelledAt: base.cancelledAt,
 		leases: base.leases,
 		deliveries: base.deliveries,
-		due: [...pendingOf(projection.wakes, seated), ...projection.owed],
+		due: [...dueRespondsOf(projection.wakes, seated), ...projection.owed],
 		scheduled: projection.scheduled,
 		messages: base.messages,
 		lastSeq: projection.lastSeq,
@@ -123,7 +123,7 @@ export function advance(
 	options: FoldOptions,
 	own = false,
 ): RoomProjection {
-	const step: Step = { options, own };
+	const step: FoldStep = { options, own };
 	switch (entry.kind) {
 		case 'message':
 			return onMessage(projection, placed(entry), step);
@@ -155,7 +155,7 @@ const factsOf = (projection: RoomProjection): OwedFacts => ({
 
 // -- messages ---------------------------------------------------------------
 
-function onMessage(prev: RoomProjection, message: Message, step: Step): RoomProjection {
+function onMessage(prev: RoomProjection, message: Message, step: FoldStep): RoomProjection {
 	const delivery = messageDelivery(message, prev.running);
 	const deliveries = step.own ? prev.base.deliveries : new Map(prev.base.deliveries);
 	deliveries.set(message.seq, delivery);
@@ -172,7 +172,7 @@ function onMessage(prev: RoomProjection, message: Message, step: Step): RoomProj
 		exchange: exchangeOf(projection, prev.exchange, message),
 		wakes: [
 			...(message.kind === 'unseated' ? dropSeat(prev.wakes, message.subject) : prev.wakes),
-			...wakesOf(message, delivery, prev.seatLeases, step.options),
+			...respondsOf(message, delivery, prev.seatLeases, step.options),
 		],
 		owed: owedAfter(projection, message, step),
 		scheduled: changesScheduled(message) ? scheduleStep(prev.scheduled, message) : prev.scheduled,
@@ -196,7 +196,7 @@ function exchangeOf(
 function notedBy(
 	prev: RoomProjection,
 	message: Message,
-	step: Step,
+	step: FoldStep,
 ): { tail: Message[]; summaryFacts: Message[] } {
 	const opens = message.kind === 'said' || message.kind === 'posted';
 	const speaks = opens && message.seq > prev.boundary;
@@ -217,12 +217,12 @@ function rosterAfter(prev: RoomProjection, message: Message): Seating[] {
 }
 
 /** The owed summaries after a message: a summary or a removal changes the closes it names. */
-function owedAfter(projection: RoomProjection, message: Message, step: Step): Owed[] {
+function owedAfter(projection: RoomProjection, message: Message, step: FoldStep): DueSummarize[] {
 	const { owed } = projection;
 	if (message.kind === 'summary')
 		return rejudgeOwed(owed, () => true, factsOf(projection), step.options);
 	if (message.kind !== 'unseated') return owed;
-	const removed = (entry: Owed) => entry.seat === message.subject;
+	const removed = (entry: DueSummarize) => entry.seat === message.subject;
 	return rejudgeOwed(owed, removed, factsOf(projection), step.options);
 }
 
@@ -240,7 +240,7 @@ function leased<K>(index: LeaseIndex<K>, key: K, hold: LeaseHold, own: boolean):
 function onLease(
 	prev: RoomProjection,
 	entry: Extract<RoomEntry, { kind: 'lease' }>,
-	step: Step,
+	step: FoldStep,
 ): RoomProjection {
 	const leases = step.own ? prev.base.leases : new Map(prev.base.leases);
 	applyLease(leases, entry);
@@ -286,12 +286,12 @@ function indexLeases(
 // -- closes, cancellations, compositions ------------------------------------
 
 /** A close moves the boundary, drops the messages it covers, and may owe a summary. */
-function onClose(prev: RoomProjection, close: Close, step: Step): RoomProjection {
+function onClose(prev: RoomProjection, close: Close, step: FoldStep): RoomProjection {
 	const closes = pushed(prev.base.closes, close, step.own);
 	return closedAt({ ...prev, base: { ...prev.base, closes } }, close, step);
 }
 
-function closedAt(projection: RoomProjection, close: Close, step: Step): RoomProjection {
+function closedAt(projection: RoomProjection, close: Close, step: FoldStep): RoomProjection {
 	const tail = projection.tail.filter((message) => message.seq > close.through);
 	const judged = judgeOwed(close, factsOf(projection), step.options);
 	return {
@@ -309,7 +309,7 @@ type CancelEntry = Extract<RoomEntry, { kind: 'cancel' }>;
  * A cancellation drops every wake and every scheduled say before it, ends
  * the running leases before it, and closes the open exchange.
  */
-function onCancel(prev: RoomProjection, entry: CancelEntry, step: Step): RoomProjection {
+function onCancel(prev: RoomProjection, entry: CancelEntry, step: FoldStep): RoomProjection {
 	const base: BaseFacts = {
 		...prev.base,
 		leases: new Map(prev.base.leases),

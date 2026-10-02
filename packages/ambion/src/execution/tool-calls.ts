@@ -2,7 +2,7 @@
  * The tool calls of one activation, read from the steps its executor records.
  *
  * A `tool_call` step names a call and its tool, and a `tool_result` step with
- * the same call id ends it. The core pairs the two and raises the tool
+ * the same call id ends it. The driver pairs the two and raises the tool
  * events, so no executor raises one. A harness that hosts a tool where it
  * cannot see the id of a call takes the id from the steps.
  */

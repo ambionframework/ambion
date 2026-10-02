@@ -39,7 +39,7 @@ stored field.
    departures do not open one. A question or a post that lands while one is
    open belongs to that exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
-   and pending wakes, then appends a close with the observed `through` boundary.
+   and due wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
 3. Ordinary messages landing while it is open steer eligible active seats and
    do not change its opening message or range. A later human question is
@@ -75,14 +75,14 @@ becomes its `person` and receives its summary. An exchange where no person
 spoke owes no summary.
 
 **The room derives `person` from the record.** `exchangeAfter` reads the
-first spoken message of a person at or after `from`, and the close stamps
+first said message of a person at or after `from`, and the close stamps
 it. A handle and the `exchange_opened` event hold `person` as it was when
 they were made, and no event follows when a person joins. The close and
 the `Exchange` hold the final value.
 
 ## 5. A fold over the journal
 
-`exchangeAfter` finds the first spoken message from a known person, or the
+`exchangeAfter` finds the first said message from a known person, or the
 first post, after the last close. Closes, leases, messages,
 and pending work are all reconstructed from the journal, so a resumed room continues an exchange interrupted by a
 process or host failure. Unexpired leases may continue; unclaimed or expired
@@ -136,8 +136,8 @@ after the close of the same pass.
 - A respond activation schedules, whether an exchange is open or not. A
   summary activation cannot schedule.
 - `limits.schedule` bounds `delaySeconds` from `minDelaySeconds` to
-  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most `pending` says of one seat, 4 by
-  default.
+  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most
+  `waiting` says of one seat, 4 by default.
 
 **The agent sees its scheduled says.** The schedule result names the say by
 its seq, as the record shows it: `scheduled #41: the room wakes you with this
@@ -286,12 +286,12 @@ if (recorded) {
 the record. It adds no entry kind and starts no timer, so a resumed room reads
 the same outcome. The first case that holds wins:
 
-| Outcome     | When it holds                                                                  |
-| ----------- | ------------------------------------------------------------------------------ |
-| `cancelled` | A cancellation wrote the close.                                                |
-| `exhausted` | The room gave up on a respond activation in the range.                         |
-| `awaiting`  | The last spoken message asks a person, and that person has said nothing since. |
-| `complete`  | None of the above.                                                             |
+| Outcome     | When it holds                                                                |
+| ----------- | ---------------------------------------------------------------------------- |
+| `cancelled` | A cancellation wrote the close.                                              |
+| `exhausted` | The room gave up on a respond activation in the range.                       |
+| `awaiting`  | The last said message asks a person, and that person has said nothing since. |
+| `complete`  | None of the above.                                                           |
 
 A message to the author of the opening message is the answer to that
 person's question, so it never makes an exchange `awaiting`. A returned say

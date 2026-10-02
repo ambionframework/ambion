@@ -110,7 +110,7 @@ before it; later deliveries cannot pass the recorded departure.
 ## 5. Arriving is a message
 
 The record has one message stream. Human presence uses `kind: 'arrived'` and
-`kind: 'left'`; agent seating uses `seated` and `unseated`; spoken messages
+`kind: 'left'`; agent seating uses `seated` and `unseated`; said messages
 use `said`; summaries use `summary`. Presence carries no invented text. Its
 `from` and identity come from the live visit, and its routing is stored with the
 message just like routing for speech.

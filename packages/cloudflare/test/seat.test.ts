@@ -296,13 +296,13 @@ async function recovering(
 	});
 	await runDurableObjectAlarm(seat);
 	await until(async () =>
-		events.some((event) => event.event === 'delivery_error' && event.operation === 'release'),
+		events.some((event) => event.event === 'port_error' && event.operation === 'release'),
 	);
 	const read = () => runInDurableObject(seat, (_instance, state) => seatMetadata(state).read());
 	const timedOut = () =>
 		expect(events).toContainEqual(
 			expect.objectContaining({
-				event: 'delivery_error',
+				event: 'port_error',
 				activation,
 				operation: 'release',
 				error: 'Room call timed out.',

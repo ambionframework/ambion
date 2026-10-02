@@ -45,7 +45,7 @@ function seatLine(room: string, seat: string, event: ActivationEvent): SeatEvent
 		seat,
 		activation: event.activation,
 		event: event.type,
-		...(event.type === 'delivery_error' ? { operation: event.operation } : {}),
+		...(event.type === 'port_error' ? { operation: event.operation } : {}),
 		...('name' in event ? { tool: event.name } : {}),
 		...('error' in event ? { error: event.error.message } : {}),
 		at: new Date().toISOString(),

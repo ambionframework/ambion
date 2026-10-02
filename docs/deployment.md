@@ -189,7 +189,7 @@ room host until it ends or expires.
 | ---------------------------------- | ------------------------------------------------------------------------------------ |
 | Room and local runner both died    | Resume the room; the inherited lease expires before the room retries eligible work   |
 | Room died, remote runner survives  | Route its calls to the resumed room; preserve the same activation id and valid lease |
-| A wake had no claim before failure | Let reconciliation deliver the pending wake again                                    |
+| A wake had no claim before failure | Let reconciliation deliver the due wake again                                        |
 | Host deliberately cancels work     | Use `cancel()` or `stop()` and accept their cancellation semantics                   |
 
 A surviving remote runner can renew, commit, and release its activation through
@@ -286,7 +286,7 @@ service across processes.
 follow a successful remote write; the journal still decides which
 contributions were accepted.
 
-Monitor `delivery_error` for failed or uncertain delivery. Unclaimed work stays
+Monitor `port_error` for failed or uncertain delivery. Unclaimed work stays
 pending and retries while eligible, including after a long shutdown. Execution
 retry limits apply after a claim. Use `cancel()` or unseat the affected agent when
 the application must end pending work. See the

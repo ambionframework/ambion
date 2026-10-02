@@ -59,7 +59,9 @@ const OLD_NAMES = [
 	['speaking default', /\bDEFAULT_GUIDANCE\b/],
 	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
 	['read position', /\bwatermark\b/],
-	['scheduled say', /\b(?:PendingSay|pendingFor)\b/],
+	['scheduled say', /\b(?:PendingSay|pendingFor|renderPending)\b/],
+	['port error', /\bdelivery_error\b/],
+	['send state', /\bDeliveryState\b/],
 	[
 		'journal entries',
 		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,
@@ -73,6 +75,7 @@ const OLD_NAMES = [
 	['process cancel', /\b(?:StopCause|process-stop)\b/],
 	['process record', /\b(?:ProcessStatus|ProcessRecord|ProcessView)\b/],
 	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
+	['due respond', /\b(?:Due|Open|Held)Wake\b/],
 	['trace policy', /\bthinking:\s*'summary'/],
 	['simulation', /\bRunExchange\b/],
 	['traced step', /\bTraceRecord\b/],
@@ -90,7 +93,12 @@ const entries = [
 		/\b(?:your turn|mid-turn|this turn|taking a turn|take your turn)\b/i,
 		/^(?:packages|examples)\/[^/]+\/(?:src|test\/live)\/.*\.(?:ts|tsx|mjs)$/,
 	),
-	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
+	entry(
+		'driver',
+		/\bthe core\b/i,
+		/^(?:packages\/ambion\/src\/execution\/.*|docs\/executors\.md)$/,
+	),
+	entry('Spoken', /\w+Spoken\b|\bspoken\w*/i, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
 	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {

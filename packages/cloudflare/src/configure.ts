@@ -26,7 +26,7 @@ export interface SeatEvent {
 	seat: string;
 	activation: string;
 	event: ActivationEvent['type'];
-	operation?: Extract<ActivationEvent, { type: 'delivery_error' }>['operation'];
+	operation?: Extract<ActivationEvent, { type: 'port_error' }>['operation'];
 	tool?: string;
 	error?: string;
 	at: string;

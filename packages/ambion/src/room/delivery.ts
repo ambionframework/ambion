@@ -3,7 +3,7 @@
 import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
 
-export interface MessageDelivery {
+export interface MessageRecipients {
 	/** Seats the message explicitly wakes. */
 	readonly wakes: readonly string[];
 	/** Respond activations that the message steers. */
@@ -19,7 +19,7 @@ interface MessageSteer {
 export function messageDelivery(
 	message: Message,
 	leases: ReadonlyMap<string, LeaseHold>,
-): MessageDelivery {
+): MessageRecipients {
 	const wakes = new Set(message.wakes ?? []);
 	const steered = new Map<string, string>();
 	for (const lease of leases.values()) {
