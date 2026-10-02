@@ -88,6 +88,7 @@ The exported names change as follows.
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
+| Kernel exports | `RoomTool`, `RoomToolResult`, `ToolExecutionMode`, `AgentExecutionContext`; the executor contract in `protocol.ts` | `BoundTool`, `BoundToolResult`, `ToolConcurrency`, `SeatContext`; the contract in `execution/contract.ts` |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
 
 **The workspace implements its own file tools.** `read`, `write`, and

@@ -30,40 +30,37 @@
 
 export type { ExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
-export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
-export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
-export { defineExecution, localExecution } from './execution/route.ts';
-export { AgentRunner } from './execution/runner.ts';
-export type {
-	AgentExecutionContext,
-	ConnectorRequest,
-	Execution,
-	ExecutionHost,
-} from './host/runtime.ts';
-export { hostingOf, runningRoom } from './host/runtime.ts';
 export type {
 	ActivationOpener,
-	ActivationSpec,
-	ActivationView,
-	AgentPort,
-	CommitRequest,
-	CommitResult,
+	BoundTool,
 	ExecutorActivation,
-	Intent,
-	LeaseRequest,
-	LeaseResponse,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
-	RoomProtocol,
-	RoomTool,
 	RunningActivation,
-	Steer,
 	StepSink,
 	TraceOpener,
 	TraceSink,
+} from './execution/contract.ts';
+export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
+export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
+export { defineExecution, localExecution } from './execution/route.ts';
+export { AgentRunner } from './execution/runner.ts';
+export type { ConnectorRequest, Execution, ExecutionHost, SeatContext } from './host/runtime.ts';
+export { hostingOf, runningRoom } from './host/runtime.ts';
+export type {
+	ActivationSpec,
+	ActivationView,
+	AgentPort,
+	CommitRequest,
+	CommitResult,
+	Intent,
+	LeaseRequest,
+	LeaseResponse,
+	RoomProtocol,
+	Steer,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';

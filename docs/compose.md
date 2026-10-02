@@ -113,7 +113,7 @@ stand. The error is a `ToolFailure` whose `details` hold the `ComposeResult`. Th
 input or the output of a call.
 
 **The content is the contract.** Claude and Codex host a definition tool as
-a `RoomTool`, and a `RoomTool` keeps the content alone
+a `BoundTool`, and a `BoundTool` keeps the content alone
 ([Executors](executors.md#the-room-tools)). The `ComposeResult` in
 `details` reaches a Pi seat and its trace. On Claude and Codex, the model
 and the trace read the rendered content.
@@ -473,7 +473,7 @@ it joins the vocabulary layer. The file list of that layer in
 
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
-each tool of the definition as a `RoomTool`. The `invoke` of `compose`
+each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition, and calls each
 `AmbionTool` directly.
 

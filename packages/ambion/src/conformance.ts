@@ -22,14 +22,16 @@ import { type RoomScript, type ScriptedRoom, scriptedRoom } from './conformance-
 import { claims, leases, operations, pause, released, until } from './conformance-support.ts';
 import type {
 	ActivationOpener,
+	ExecutorActivation,
+	Pass,
+	RunningActivation,
+} from './execution/contract.ts';
+import type {
 	AgentPort,
 	CommitRequest,
 	CommitResult,
-	ExecutorActivation,
 	LeaseRequest,
-	Pass,
 	RoomProtocol,
-	RunningActivation,
 } from './protocol.ts';
 
 export {
