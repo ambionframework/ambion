@@ -353,7 +353,11 @@ class Activation implements RunningActivation {
 		// A steer that landed while the input went in takes the same path as every later one.
 		for (const held of this.held.splice(0)) this.send(opened, held);
 		if (this.stopped) await root.abort(CONTEXT);
-		const settled = await opened.trap.race(input.wait(CONTEXT));
+		const settled = await opened.trap.race(input.wait(CONTEXT)).catch(async (error: unknown) => {
+			// The harness goes on from a fault it reports. No tool and no request follows a failed pass.
+			await root.abort(CONTEXT).catch(noop);
+			throw error;
+		});
 		await this.drain();
 		// A cut pass is no failure, whatever the closed harness answers.
 		if (this.stopped) return { failed: false };

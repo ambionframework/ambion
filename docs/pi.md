@@ -291,7 +291,8 @@ tokens.** A scripted room compacts only when its definition sets
 **A fault of the storage fails the pass.** A storage that fails a commit
 poisons the session of the harness. The harness reports the fault and
 settles no submission after it. The executor turns the first report into a
-transient failure of the pass, and the room retries.
+transient failure of the pass. The executor aborts the conversation first,
+so no tool and no request follows the failed pass. The room then retries.
 
 ## How room tools reach the harness
 

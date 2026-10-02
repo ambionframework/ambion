@@ -8,13 +8,16 @@
 import { appendFile, chmod, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ReminderSeat } from '@ambionframework/ambion';
-import { quiet, say } from '@ambionframework/ambion/testing';
+import { defineAgent, defineTool } from '@ambionframework/ambion';
+import { callTool, quiet, say } from '@ambionframework/ambion/testing';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
+import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { Freshness } from '../../ambion/src/execution/freshness.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
-import { createExecutionServices } from '../src/index.ts';
+import { createExecutionServices, pi } from '../src/index.ts';
 import {
 	defaultSessionDir,
 	diskSessions,
@@ -310,6 +313,51 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		expect(retry.session).toEqual({ kind: 'pi', id: 'message:2:product:2' });
 		expect(texts(seen.at(-1) as Context)).toHaveLength(1);
 		expect(texts(seen.at(-1) as Context)[0]).toContain("The record of 'memory' so far:");
+	});
+
+	it('aborts the run when the harness reports a fault it goes on from', async () => {
+		const executions: string[] = [];
+		const book = defineTool({
+			name: 'book',
+			description: 'Book a day.',
+			parameters: Type.Object({}),
+			execute: () => {
+				executions.push('book');
+				return 'booked';
+			},
+		});
+		const definition = defineAgent({
+			name: 'product',
+			identity: 'Product.',
+			executor: pi({ instructions: 'Work.', model: 'scripted/product', tools: [book] }),
+		});
+		// The hook before the second request throws once. The harness reports it and sends the request.
+		const delivered = Freshness.prototype.delivered;
+		let thrown = false;
+		vi.spyOn(Freshness.prototype, 'delivered').mockImplementation(function (this: Freshness, call) {
+			if (thrown) return delivered.call(this, call);
+			thrown = true;
+			throw new Error('The hook failed.');
+		});
+		const room = new TwoQuestions();
+		const { seen, opener } = seatOn(
+			room,
+			await store(),
+			(_context, _agent, request) => (request < 4 ? callTool('book', {}) : quiet()),
+			definition,
+		);
+		const id = 'message:2:product:1';
+		const activation = stateOf(opener, definition, { id, room });
+		// The activation stays open, as it does while the room retries the pass.
+		onTestFinished(() => activation.close?.());
+		const failed = await activation.pass({ kind: 'view', view: await viewOf(id, room) });
+		expect(thrown).toBe(true);
+		expect(failed).toMatchObject({ failed: true, cause: 'transient' });
+		expect(activation.session).toBeUndefined();
+		// No tool and no request follows a pass that the executor reported failed.
+		const after = { requests: seen.length, executions: executions.length };
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect({ requests: seen.length, executions: executions.length }).toEqual(after);
 	});
 
 	it('gives a session a fresh id when the store already holds the id', async () => {
