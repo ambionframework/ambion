@@ -30,8 +30,33 @@ async function woken(room: ReturnType<typeof roomOf>, seat: DurableObjectStub): 
 }
 
 /**
+ * Wait until the room and its seats do nothing: no open exchange, no summary
+ * that waits, no activation that runs, and no seat that holds an activation.
+ * A summary activation starts after its exchange closes. A test that ends
+ * before it ends leaves a model call in flight, and the runner closes its
+ * RPC channel while that call imports a module.
+ */
+async function drained(name: string, room: ReturnType<typeof roomOf>): Promise<void> {
+	await until(async () => {
+		const read = await room.read({ messages: false });
+		if (read.exchange !== undefined) return false;
+		const settled = read.exchanges.every(
+			(one) =>
+				one.activations.every((activation) => activation.outcome.kind !== 'running') &&
+				(one.status === 'open' || one.summary.kind !== 'pending'),
+		);
+		if (!settled) return false;
+		const seats = await Promise.all(
+			['product', 'assistant'].map((seat) => stateOf(seatOf(name, seat))),
+		);
+		return seats.every((state) => state.activation === undefined);
+	});
+}
+
+/**
  * A room whose product seat answers, with priya's first question sent. A seat
- * on hold keeps its wake and claims nothing.
+ * on hold keeps its wake and claims nothing. The room drains when the test
+ * ends.
  */
 async function asked(name: string, hold = false) {
 	const room = roomOf(name);
@@ -48,6 +73,7 @@ async function asked(name: string, hold = false) {
 	// records the activation it ran. How many wakes arrive before the alarm
 	// runs depends on the speed of the runner.
 	expect(await until(() => woken(room, seat))).toBe(true);
+	onTestFinished(() => drained(name, room));
 	return { room, seat, exchange };
 }
 
@@ -162,11 +188,13 @@ it('runs one activation when a second alarm starts while the first runs', async 
 		(m) => m.kind === 'said' && m.from === 'product',
 	);
 	expect(said).toMatchObject([{ activation: 'message:4:product:1' }]);
+	// The leases of the product activation only: the assistant's summary activation takes a
+	// lease of its own after the exchange closes.
 	const leases = await runInDurableObject(room, async (_instance, state) => {
 		const journal = await namespaced(sqlStorage(state), 'ambion/room').open('alarm-twice');
 		return (await journal.read(0)).entries
 			.map((entry) => entry.entry as { kind: string; body: LeaseObservation })
-			.filter((entry) => entry.kind === 'lease')
+			.filter((entry) => entry.kind === 'lease' && entry.body.id === 'message:4:product:1')
 			.map((entry) => entry.body);
 	});
 	expect(leases.map((lease) => lease.reason ?? lease.phase)).toEqual([
