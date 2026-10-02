@@ -50,6 +50,48 @@ describe('the sensor connection registry', () => {
 		return one;
 	};
 
+	it('notifies committed lifecycle changes and isolates listener failures', async () => {
+		const events: string[] = [];
+		registry.subscribe(() => {
+			throw new Error('Broken widget');
+		});
+		const unwatch = registry.subscribe((event) => {
+			expect(Object.isFrozen(event.connection)).toBe(true);
+			events.push(`${event.type}:${event.connection.state}`);
+		});
+		await connect();
+		await connect();
+		await expect(registry.disconnect({ name: 'reader' }, 'bench')).rejects.toThrow("Only 'owner'");
+		await registry.disconnect({ name: 'owner' }, 'bench');
+		await registry.disconnect({ name: 'owner' }, 'bench');
+		expect(await registry.get('bench/bench')).toBeUndefined();
+		expect((await registry.list())[0]?.state).toBe('disconnected');
+		expect(rig.status.state).toBe('running');
+		await connect();
+		rig.end();
+		expect(events).toEqual([
+			'connected:connected',
+			'refreshed:connected',
+			'disconnected:disconnected',
+			'connected:connected',
+			'unavailable:unavailable',
+		]);
+		unwatch();
+	});
+
+	it('disconnect prevents an in-flight refresh from reviving a detached connection', async () => {
+		await connect();
+		const block = rig.blockIndex();
+		const refresh = connect();
+		const rejected = expect(refresh).rejects.toThrow();
+		await block.entered;
+		await registry.disconnect({ name: 'owner' }, 'bench');
+		block.release();
+		await rejected;
+		expect(await registry.get('bench/bench')).toBeUndefined();
+		expect((await registry.list())[0]?.state).toBe('disconnected');
+	});
+
 	it('registers the validated index with immutable launch source and qualified names readable by any agent', async () => {
 		const connection = await connect();
 		expect(connection).toMatchObject({
@@ -144,6 +186,19 @@ describe('the sensor connection registry', () => {
 		expect(connection.client).toBe(client);
 		expect(rig.opens.map(({ closed }) => closed)).toEqual([0, 1]);
 		expect(await registry.get('bench/bench')).toBe(connection);
+	});
+
+	it('preserves captured source across detach and reconnect of the same process', async () => {
+		const connection = await connect();
+		await registry.disconnect({ name: 'owner' }, 'bench');
+		rig.setIndex({ ...index, source: { ...source, commit: 'c'.repeat(40) } });
+		await expect(connect()).rejects.toThrow('launch source changed');
+		expect(connection.source).toEqual(source);
+		expect(await registry.get('bench/bench')).toBeUndefined();
+		// The end of the process turns a detached record from disconnected to unavailable.
+		expect((await registry.list())[0]?.state).toBe('disconnected');
+		rig.end();
+		expect((await registry.list())[0]?.state).toBe('unavailable');
 	});
 
 	it('recovers an explicit retry after a transient process-table read failure', async () => {

@@ -1,7 +1,7 @@
 # Sensors
 
 > **Sensor reads require a backend with endpoints.** Such a workspace exposes
-> `connect` and `observe`. Observation reads use the connected server, retain
+> `connect`, `disconnect`, and `observe`. Observation reads use the connected server, retain
 > verified bytes and the manifest through snapshots, and export the result
 > into the observing agent's home. The version 1 schemas and client are
 > available from `@ambionframework/workspace/sensors`, and the conformance
@@ -77,6 +77,43 @@ flowchart LR
 separate fields in the protocol and connection registry. Each follows
 the existing agent-name grammar, `^[a-z][a-z0-9-]*$`.
 
+## Host lifecycle and disconnect
+
+**The connection registry owns link lifetime.** A workspace with endpoints
+exposes `workspace.sensors` to its host. `subscribe(listener)` returns an
+unsubscribe function. It reports committed `connected`, `refreshed`,
+`disconnected`, and `unavailable` events. Each event holds an immutable
+`connection` discovery record: name, hostname, port, process handle, state,
+and sensor names. It exposes no private transport URL. Subscriptions do not
+replay existing links; `list()` reads current discovery. Callback exceptions
+are isolated and cannot reject or undo a committed connection. Process end
+and workspace disposal make active links unavailable.
+
+`workspace.sensors.get('camera/camera', signal)` rechecks process lifetime and
+returns the active connection and its standard sensor client, or undefined.
+This is a host read surface. It does not perform automatic evidence retention;
+agent evidence reads use standard `observe`. A host can use this surface for a
+live preview and stop it when the link disappears. The backend still owns the
+endpoints. No callback is required in each sensor server implementation.
+
+**`disconnect({ name })` detaches a link without stopping its process.** Only
+the connection owner can disconnect it. The operation makes sensor reads
+unavailable, aborts pending refreshes, closes the transport, and publishes a
+`disconnected` event. A repeated disconnect is harmless. Discovery retains
+the disconnected name and its owner. The owner can reconnect the same running
+server or replace it. Reconnecting the same process preserves its captured
+launch source and rejects changed metadata. An unknown connection or a
+non-owner call fails. Use the existing `cancel` tool to stop acquisition.
+
+```ts
+const unwatch = workspace.sensors?.subscribe((event) => {
+  // Open a preview on connected/refreshed; hide it on disconnected/unavailable.
+  renderSensorLink(event);
+});
+// Later, remove the host callback.
+unwatch?.();
+```
+
 ## Run a server from Git
 
 **Templates are ordinary repositories in the existing Git backend.**
@@ -135,8 +172,8 @@ observe({ sensor: 'bench/room-temperature' });
 // Result: values, measurement times, export paths, and a snapshot ref.
 ```
 
-The `fork` and process commands use existing workspace tools. `connect` and
-`observe` are available on a backend with endpoints.
+The `fork` and process commands use existing workspace tools. `connect`,
+`disconnect`, and `observe` are available on a backend with endpoints.
 
 **Starting this template starts fixture acquisition before readiness.** It
 stores its initial fixture data, then prints `READY` with the bound port.
@@ -281,7 +318,7 @@ that connection unavailable at once, as for a process that ends just after
 registration's transport. A listener that later reuses the port is never
 attached silently.
 
-**Sensor readers use one internal registry boundary.** The source
+**Sensor readers and the host use one registry boundary.** The source
 module `sensor-connections.ts` exposes
 `createSensorConnections(...).get('<connection>/<sensor>', signal)` to
 workspace internals. It checks the captured process owner and handle before
@@ -290,7 +327,8 @@ returns `undefined` for an unknown or unavailable sensor. A reader passes
 its own signal to `get` and to the request. A status-read failure propagates
 without declaring the process ended, so an explicit `connect` can retry the
 process check and renew its transport. A failed observe request is not
-replayed. This boundary adds no public `Workspace` method or package export.
+replayed. A host reads the same boundary through `workspace.sensors`, which
+[Host lifecycle and disconnect](#host-lifecycle-and-disconnect) describes.
 
 ## Workstation endpoints
 

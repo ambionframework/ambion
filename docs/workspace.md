@@ -1,8 +1,9 @@
 # The workspace
 
 > **Sensor tools are available when the bash backend has workstation endpoints.**
-> `connect` discovers a running server, and `observe` reads a qualified sensor
-> and retains its verified evidence through the existing snapshot store.
+> `connect` discovers a running server, `disconnect` detaches it, and `observe`
+> reads a qualified sensor and retains its verified evidence through the
+> existing snapshot store.
 > A frame reaches the model as an image, and the text of the result names its
 > export path.
 
@@ -87,10 +88,10 @@ one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
 A backend with `endpoints` adds `connect` to validate and discover a running
-sensor server owned by the caller, and `observe` to read a qualified sensor
-and retain its returned evidence. Network requests run outside the bash
-resource. Only process checks and export or audit writes use the bash
-resource.
+sensor server owned by the caller, `disconnect` to detach an owned connection
+without stopping its process, and `observe` to read a qualified sensor and
+retain its returned evidence. Network requests run outside the bash resource.
+Only process checks and export or audit writes use the bash resource.
 `observe` returns each frame as an image part and names its export path in
 the text of the result. `read` of an image returns the image part and a text
 part, `Image path: <path>`. A format that the tool does not attach, such as
@@ -1131,7 +1132,7 @@ also provides a private transport for sensor servers.
 | Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
 | Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
 | Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
-| Sensor servers                 | No port transport; no `connect` or `observe` tools                   | Workstation provides loopback forwarding over SSH          |
+| Sensor servers                 | No endpoints; no `connect`, `disconnect`, or `observe` tools         | Workstation provides loopback forwarding over SSH          |
 
 `memoryBackend()` keeps files in process. Its optional seed writes files
 before the first use, and `readFiles()` supports host inspection. Disposal

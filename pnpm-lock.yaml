@@ -39,6 +39,34 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.6.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  examples/camera-chat:
+    dependencies:
+      '@ambionframework-examples/workbench':
+        specifier: workspace:*
+        version: link:../workbench
+      '@ambionframework/ambion':
+        specifier: workspace:*
+        version: link:../../packages/ambion
+      '@ambionframework/codex':
+        specifier: workspace:*
+        version: link:../../packages/codex
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../../packages/journal
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
+      '@opentui/core':
+        specifier: 0.5.12
+        version: 0.5.12(typescript@7.0.2)(web-tree-sitter@0.25.10)
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.6.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   examples/workbench:
     dependencies:
       '@ambionframework/ambion':
