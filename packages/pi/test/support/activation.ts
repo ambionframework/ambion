@@ -9,6 +9,7 @@ import type {
 	RoomProtocol,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
+import type { ToolExecutionApi } from '@earendil-works/pi-durable';
 import { ActivationState } from '../../../ambion/src/execution/activation.ts';
 import { noTrace } from './trace.ts';
 
@@ -91,4 +92,16 @@ export function viewFor(
 		through,
 		context: { name: 'room', now: 0, participants: [], messages: [], reserve: [] },
 	};
+}
+
+/**
+ * The part of the harness api that a tool of the executor reads: the call id
+ * and the output sink. The harness gives every other member to a tool that
+ * runs inside a conversation, and these tools use none of them.
+ */
+export function toolApi(callId: string, output: string[] = []): ToolExecutionApi {
+	return {
+		callId,
+		output: (chunk: string | Uint8Array) => output.push(String(chunk)),
+	} as unknown as ToolExecutionApi;
 }

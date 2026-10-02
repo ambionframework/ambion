@@ -9,7 +9,6 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isSaid, startRoom } from '@ambionframework/ambion';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type AssistantMessageEventStream,
 	createAssistantMessageEventStream,
@@ -19,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'v
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import type { StreamFn } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
 import { defaultSessionDir } from '../src/sessions.ts';
 
@@ -81,8 +81,8 @@ describe('default provider runtime', () => {
 		]);
 		const dir = await defaultSessionDir();
 		expect(dir.startsWith(temporary)).toBe(true);
-		const folders = (await readdir(dir)).filter((folder) => folder.includes(name));
-		expect(folders.some((folder) => folder.includes('worker'))).toBe(true);
+		const [folder] = (await readdir(dir)).filter((entry) => entry.includes(name));
+		expect(await readdir(join(dir, folder ?? ''))).toEqual(['worker']);
 	});
 
 	it('builds one catalog for concurrent first model uses, resolves real ids, and streams through it', async () => {

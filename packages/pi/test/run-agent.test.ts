@@ -188,23 +188,19 @@ describe('runAgent', () => {
 		).rejects.toThrow('The move passed its timeout.');
 	});
 
-	it('rejects a signal that aborts while the run opens, and sends no request', async () => {
+	it('rejects a signal that aborts while the model resolves, and sends no request', async () => {
 		let requests = 0;
-		const script: PiScript = () => {
+		const controller = new AbortController();
+		const base = services(() => {
 			requests += 1;
 			return callTool('finish', { answer: 'dry' });
-		};
-		const controller = new AbortController();
-		const base = services(script);
-		// The abort lands between the first check of the signal and the prompt.
+		});
+		// The abort lands between the first check of the signal and the open of the harness.
 		const opening = {
 			...base,
-			sessions: {
-				open: base.sessions.open,
-				create: (...args: Parameters<typeof base.sessions.create>) => {
-					controller.abort(new Error('The move passed its timeout.'));
-					return base.sessions.create(...args);
-				},
+			model: async (...args: Parameters<typeof base.model>) => {
+				controller.abort(new Error('The move passed its timeout.'));
+				return base.model(...args);
 			},
 		};
 		await expect(runAgent(opening, request({ signal: controller.signal }))).rejects.toThrow(
@@ -213,36 +209,39 @@ describe('runAgent', () => {
 		expect(requests).toBe(0);
 	});
 
-	// The lane ignores an abort that lands before it admits the prompt. The
-	// abort lands at each session write in turn, the admission among them.
-	it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
-		'rejects a signal that aborts at session write %i',
-		async (write) => {
-			const controller = new AbortController();
-			const base = services(() => callTool('finish', { answer: 'dry' }));
-			let writes = 0;
-			const counting: typeof base.sessions = {
-				open: base.sessions.open,
-				create: async (...args) => {
-					const session = await base.sessions.create(...args);
-					return new Proxy(session, {
-						get(target, key) {
-							const value: unknown = Reflect.get(target, key);
-							if (key !== 'mutate' || typeof value !== 'function') return value;
-							return (...call: unknown[]) => {
-								writes += 1;
-								if (writes === write) controller.abort(new Error('The move passed its timeout.'));
-								return value.apply(target, call);
-							};
-						},
-					});
+	// The abort lands at each stage of a run in turn, an end among them.
+	it.each([
+		['a tool runs', 1],
+		['the end tool runs', 2],
+	])('rejects a signal that aborts while %s, even when the end lands', async (_stage, at) => {
+		const controller = new AbortController();
+		const aborting = (name: string, stage: number) =>
+			defineTool({
+				name,
+				description: name,
+				parameters: Type.Object({
+					answer: Type.Optional(Type.String()),
+					key: Type.Optional(Type.String()),
+				}),
+				execute: () => {
+					if (stage === at) controller.abort(new Error('The move passed its timeout.'));
+					return name;
 				},
-			};
-			await expect(
-				runAgent({ ...base, sessions: counting }, request({ signal: controller.signal })),
-			).rejects.toThrow('The move passed its timeout.');
-		},
-	);
+			});
+		const script: PiScript = (_context, _agent, request) =>
+			request === 1
+				? callTool('lookup', { key: 'thursday' })
+				: callTool('finish', { answer: 'dry' });
+		await expect(
+			runAgent(
+				services(script),
+				request({
+					tools: [aborting('lookup', 1), aborting('finish', 2)],
+					signal: controller.signal,
+				}),
+			),
+		).rejects.toThrow('The move passed its timeout.');
+	});
 
 	it.each([
 		[

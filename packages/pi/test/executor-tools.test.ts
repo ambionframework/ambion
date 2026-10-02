@@ -12,7 +12,7 @@ import type {
 	Intent,
 	RoomProtocol,
 } from '@ambionframework/ambion/hosting';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { ROOM_TOOL_NAMES } from '../../ambion/src/define.ts';
@@ -21,8 +21,14 @@ import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { projectState, replay } from '../../ambion/src/room/projection.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
 import { pi } from '../src/index.ts';
-import { type PiTool, toolsFor } from '../src/tools.ts';
-import { boundActivation, roomThatCommits, unusedRoom, viewFor } from './support/activation.ts';
+import { type PiTool, toolsFor, UNBOUNDED } from '../src/tools.ts';
+import {
+	boundActivation,
+	roomThatCommits,
+	toolApi,
+	unusedRoom,
+	viewFor,
+} from './support/activation.ts';
 
 /** What the domain tool received, one context per call. */
 const seen: ToolContext[] = [];
@@ -104,18 +110,14 @@ async function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
 
 const names = (tools: readonly PiTool[]) => tools.map((tool) => tool.name);
 
-/** One call of a harness tool, as the harness makes it. */
-const invocation = {
-	invocationId: 'invocation',
-	operationId: 'operation',
-	turnId: 'turn',
-	getMemo: async () => undefined,
-	setMemo: async () => {},
-};
+/** One call of a tool registration, with the call id and the output sink the harness gives it. */
 const call = (tool: PiTool | undefined, id: string, params: Record<string, unknown>) => {
 	if (tool === undefined) throw new Error('No tool.');
-	return tool.execute(id, params, () => {}, undefined, invocation, BACKGROUND_CONTEXT);
+	return tool.execute(params, toolApi(id), BACKGROUND_CONTEXT);
 };
+
+/** The result of a tool that failed: the text the model reads. */
+const refused = (text: string) => ({ isError: true, content: [{ type: 'text', text }] });
 
 describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', async () => {
@@ -131,8 +133,10 @@ describe('executor tool authority', () => {
 		]);
 		// The room tools are exactly the names that `defineAgent` refuses for a definition tool.
 		expect(new Set(names(tools).slice(0, -1))).toEqual(new Set(ROOM_TOOL_NAMES));
-		// Pi builds the tool of the definition from its `AmbionTool`. A `BoundTool` has neither field.
-		expect(tools.at(-1)).toMatchObject({ label: 'Record decision', executionMode: 'sequential' });
+		// Pi builds the tool of the definition from its `AmbionTool`. A `BoundTool` has no execution mode.
+		expect(tools.at(-1)).toMatchObject({ executionMode: 'sequential' });
+		// Every tool owns the size of its result: pi-durable bounds none of it.
+		for (const tool of tools) expect(tool.outputLimits).toEqual(UNBOUNDED);
 		expect(names((await bound('activation', summarize)).tools)).toEqual(['say']);
 	});
 
@@ -143,7 +147,7 @@ describe('executor tool authority', () => {
 			{ refused: blank },
 			said(1, 'A useful answer.'),
 		);
-		await expect(call(say, 'same-key', { text: '   ' })).rejects.toThrow(blank);
+		await expect(call(say, 'same-key', { text: '   ' })).resolves.toEqual(refused(blank));
 		expect(activation.readThrough).toBe(0);
 		await expect(call(say, 'same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
 			content: [{ text: 'said #1' }],
@@ -163,13 +167,15 @@ describe('executor tool authority', () => {
 			{ refused: blank },
 			said(5, 'The room stamped this.'),
 		);
-		await expect(call(say, 'closing-key', { to: 'priya', text: ' \t' })).rejects.toThrow(blank);
+		await expect(call(say, 'closing-key', { to: 'priya', text: ' \t' })).resolves.toEqual(
+			refused(blank),
+		);
 		const result = await call(say, 'closing-key', {
 			to: ' priya ',
 			text: '  The exchange is complete.  ',
 		});
 		expect(result.content).toEqual([{ type: 'text', text: 'said #5' }]);
-		expect(result.terminate).toBe(true);
+		expect(result.control).toEqual({ terminate: true });
 		const request = (text: string) => ({
 			activation: 'closed:4:worker:1',
 			key: 'closing-key',
@@ -287,19 +293,24 @@ describe('executor tool authority', () => {
 			call(recall, 'misses', {
 				refs: ['2', uri(4), 'ambion://room/elsewhere/message/2', 'ambion://room/room', 'file:///x'],
 			}),
-		).rejects.toThrow(
-			[
-				'#2 [priya] Is the pour on?',
-				`${uri(4)}: no message at #4 on the record you may read. Take the seq from a record line or a ref.`,
-				'ambion://room/elsewhere/message/2: names another room. recall reads this room alone.',
-				'ambion://room/room: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
-				'file:///x: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
-			].join('\n'),
+		).resolves.toEqual(
+			refused(
+				[
+					'#2 [priya] Is the pour on?',
+					`${uri(4)}: no message at #4 on the record you may read. Take the seq from a record line or a ref.`,
+					'ambion://room/elsewhere/message/2: names another room. recall reads this room alone.',
+					'ambion://room/room: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
+					'file:///x: not a message ref. Give the seq as #12, or the URI ambion://room/room/message/<seq>.',
+				].join('\n'),
+			),
 		);
 		// Each distinct seq is one view, and a recalled message is old: nothing moves the position.
 		expect(reads).toEqual([5, 2, 2, 4]);
 		expect(activation.readThrough).toBe(0);
-		await expect(call(recall, 'none', { refs: [] })).rejects.toThrow(/refs must be 1 to 16/);
+		await expect(call(recall, 'none', { refs: [] })).resolves.toMatchObject({
+			isError: true,
+			content: [{ text: expect.stringMatching(/refs must be 1 to 16/) }],
+		});
 	});
 
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {

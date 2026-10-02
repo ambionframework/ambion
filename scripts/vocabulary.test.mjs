@@ -47,7 +47,12 @@ const OLD_NAMES = [
 		'executor',
 		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,
 	],
-	['activation event', /\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/],
+	// pi-durable names its own events `tool_execution_start` and `tool_execution_end`.
+	[
+		'activation event',
+		/\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/,
+		{ exclude: /^(?:packages\/pi\/|docs\/pi\.md$)/ },
+	],
 	['summarize purpose', /\bisClosing\b|\bpurpose\b[^'\n]{0,8}'summary'/],
 	['cancel', /\broom\.abort\(/],
 	['summarize commit', /\b(?:closingCommit|membershipTool|interface Closing)\b/],
@@ -118,7 +123,9 @@ const entries = [
 		],
 	}),
 	entry('harness matrix', /\bmatrix\.harness\b|^\s*harness: \[/, CODE),
-	...OLD_NAMES.map(([concept, pattern]) => entry(`old names of the ${concept}`, pattern, TEXT)),
+	...OLD_NAMES.map(([concept, pattern, options]) =>
+		entry(`old names of the ${concept}`, pattern, TEXT, options),
+	),
 ];
 
 const lines = new Map();

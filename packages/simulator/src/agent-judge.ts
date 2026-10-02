@@ -1,6 +1,6 @@
 /**
  * A judge that grades a simulation as an agent. It takes the options of an agent
- * definition, and it runs on Pi's `AgentHarness` through `runAgent`. It ends
+ * definition, and it runs on the Pi harness through `runAgent`. It ends
  * with one call to `grade`, which carries one finding for each criterion.
  *
  * - **The record is evidence.** The agents under test wrote the record, and

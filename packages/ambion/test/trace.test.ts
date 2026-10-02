@@ -1,4 +1,3 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
@@ -9,7 +8,7 @@ import {
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { createPiOpener } from '../../pi/src/executor.ts';
-import { createExecutionServices, pi, piExecution } from '../../pi/src/index.ts';
+import { createExecutionServices, pi, piExecution, type StreamFn } from '../../pi/src/index.ts';
 import type { TraceOpener } from '../src/execution/contract.ts';
 import { loggedToolResult, openTrace, traceOpener } from '../src/execution/trace.ts';
 import {
@@ -473,7 +472,8 @@ describe('the steps the driver owns', () => {
 		const steers = steps.filter((step) => step.type === 'steer');
 		expect(steers).toEqual([
 			expect.objectContaining({ seq: 2, consumed: true, pass: 1 }),
-			expect.objectContaining({ seq: 3, consumed: true, pass: 1 }),
+			// The answer closed the request before the second line: the delta pass carries it.
+			expect.objectContaining({ seq: 3, consumed: false, pass: 1 }),
 		]);
 		await tick();
 	});

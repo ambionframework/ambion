@@ -138,8 +138,8 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 
 ## Code rules
 
-- **Each concern has one owner.** Pi's AgentHarness
-  (`@earendil-works/pi-agent-core`) owns the model loop, the session, and
+- **Each concern has one owner.** The Pi harness
+  (`@earendil-works/pi-durable`) owns the model loop, the session, and
   compaction. `packages/workspace` owns the workspace port, resource, tools,
   and backend helpers. `packages/just-bash` owns the just-bash filesystem and
   shell. The core composes ordinary tools. `packages/journal` owns the queue, the fence, and the entry

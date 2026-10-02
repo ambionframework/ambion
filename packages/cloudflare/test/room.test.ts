@@ -5,7 +5,7 @@
 import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
 import { namespaced } from '@ambionframework/journal';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { StreamFn } from '@ambionframework/pi';
 import { expect, it, onTestFinished } from 'vitest';
 import { configure } from '../src/configure.ts';
 import { sqlStorage } from '../src/storage.ts';

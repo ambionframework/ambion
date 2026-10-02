@@ -10,12 +10,13 @@ for agents and humans.
 
 ## When to use it
 
-- **The loop runs in the host process.** Pi's `AgentHarness` owns the model
-  loop, the session, its persistence and its compaction.
+- **The loop runs in the host process.** the Pi harness of
+  `@earendil-works/pi-durable` owns the model loop, the session, its
+  persistence and its compaction.
 - **Any provider that the Pi registry lists.** The model id is
   `provider/model-id`.
 - **Steering during a pass.** A line that lands mid-activation reaches the
-  model through the steer queue of the harness lane.
+  model as a write that the harness places before its next request.
 - **Deterministic tests.** A scripted stream replaces the provider.
 
 Use [`@ambionframework/claude`](https://github.com/ambionframework/ambion/blob/main/docs/claude.md)
@@ -95,16 +96,16 @@ room or to `createRuntime`.
 
 ## Options
 
-| Option                 | Default                       | Meaning                                                       |
-| ---------------------- | ----------------------------- | ------------------------------------------------------------- |
-| `instructions`         | Required                      | The private guidance of the agent.                            |
-| `model`                | Required                      | A Pi model id, `provider/model-id`.                           |
-| `tools`, `bundles`     | None                          | The tools of the agent and the bundles that add tools.        |
-| `speaking`             | `DEFAULT_SPEAKING`            | The speaking policy. It replaces the default.                 |
-| `activationTokenLimit` | The whole record              | The token limit of the record one activation reads.           |
-| `estimateTokens`       | `'length'`                    | The name of the estimator in the runtime. It needs the limit. |
-| `compaction`           | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session.                        |
-| `thinking`             | `off`                         | How much the model reasons, a Pi `ThinkingLevel`.             |
+| Option                 | Default             | Meaning                                                       |
+| ---------------------- | ------------------- | ------------------------------------------------------------- |
+| `instructions`         | Required            | The private guidance of the agent.                            |
+| `model`                | Required            | A Pi model id, `provider/model-id`.                           |
+| `tools`, `bundles`     | None                | The tools of the agent and the bundles that add tools.        |
+| `speaking`             | `DEFAULT_SPEAKING`  | The speaking policy. It replaces the default.                 |
+| `activationTokenLimit` | The whole record    | The token limit of the record one activation reads.           |
+| `estimateTokens`       | `'length'`          | The name of the estimator in the runtime. It needs the limit. |
+| `compaction`           | The harness default | When the harness compacts the session.                        |
+| `thinking`             | `off`               | How much the model reasons, a Pi `ThinkingLevel`.             |
 
 `piExecution({ stream, sessions, sessionDir, credentials })` takes four options.
 Without a `stream`, the Pi registry answers. A scripted `stream` makes a
@@ -117,17 +118,17 @@ in memory, two for each room and seat, as a test does. `credentials` is a Pi
 
 ## How an activation runs
 
-**One Pi `AgentHarness` serves each activation.** The first pass opens the
-session and attaches the harness, and prompts it with the whole view. A
-later pass prompts the same harness with the messages that landed beyond
-what it has read.
+**One pi-durable `Harness` serves each activation.** The first pass opens
+the session storage and the harness, and submits the whole view as one
+input. A later pass submits the messages that landed beyond what the session
+has read.
 
 **Freshness follows the exact provider input.** Each range of the record
-goes into the session as a custom message that carries its positions. The
-`toProviderMessages` hook reads them from the messages of each provider
-request, so the room refuses a say against a stale draft with the messages
-it missed. A line that lands mid-activation joins the steer queue of the
-lane, and counts when a provider request holds it.
+goes into the session as an entry that carries its positions. A hook before
+each provider request reports what the request holds, so the room refuses a
+say against a stale draft with the messages it missed. A line that lands
+mid-activation is a queued write, and counts when a provider request holds
+it.
 
 **Room tools are harness tools.** A respond activation receives `say`,
 `seat`, and `unseat`, and then the tools of the agent. A summary activation
@@ -136,9 +137,9 @@ prompt template.
 
 **The room owns the retries, and the harness compacts.** The harness does
 not retry a failed request. It compacts the session when the context nears
-the window of the model. A context-overflow error, or a length stop below
-the output limit, makes the harness compact once and send the request
-again. This happens also when compaction is off.
+the window of the model. A context-overflow error makes the harness compact
+and send the request again. With `compaction.enabled` set to `false`, the
+error fails the pass.
 
 ## Policy and the trust boundary
 
@@ -155,7 +156,7 @@ activation that began the session. The next activation of the seat in the
 same exchange reopens the session and prompts it with the delta. The first
 activation in a new exchange begins a fresh session. A session the store
 cannot open, or that fails a write, gives way to a fresh one, and the
-activation does not fail. On Node the session is a JSONL file under
+activation does not fail. On Node the session is a JSONL storage under
 `sessionDir`, so a restart on the same disk reopens it. A Cloudflare seat keeps its sessions in memory.
 
 ## Steps, usage, and failures

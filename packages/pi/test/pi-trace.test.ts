@@ -1,140 +1,283 @@
-/** Pi harness events as trace steps, over events built by hand. */
-import type { HarnessEvent } from '@earendil-works/pi-agent-core';
-import { type AssistantMessage, fauxAssistantMessage } from '@earendil-works/pi-ai';
+/** The events of a conversation as trace steps: over events built by hand, and over a real pass. */
+import { defineAgent, defineTool, type Step } from '@ambionframework/ambion';
+import { callTool, quiet } from '@ambionframework/ambion/testing';
+import { type AssistantMessage, fauxAssistantMessage, type Message } from '@earendil-works/pi-ai';
+import type { AgentEvent, EntryRecord, UsageState } from '@earendil-works/pi-durable';
+import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { PiSteps } from '../src/pi-trace.ts';
-
-const at = { lane: 'main', runId: 'run' };
+import { createPiOpener } from '../src/executor.ts';
+import { memorySessions, pi, stubModel } from '../src/index.ts';
+import { PiSteps, totalOf } from '../src/pi-trace.ts';
+import { scriptedStream } from '../src/testing.ts';
+import { stateOf } from './support/activation.ts';
+import { viewOf } from './support/two-questions.ts';
 
 const assistant: AssistantMessage = fauxAssistantMessage([
 	{ type: 'thinking', thinking: 'Plan.' },
 	{ type: 'text', text: 'Answer.' },
 ]);
 
-const start = (message = assistant) => ({ type: 'message_start', ...at, message }) as HarnessEvent;
-const end = (message = assistant) => ({ type: 'message_end', ...at, message }) as HarnessEvent;
-const update = (event: object) =>
-	({ type: 'message_update', ...at, message: assistant, event }) as HarnessEvent;
-
-const zero = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
-const usage = {
-	type: 'usage',
-	lane: 'main',
-	row: {
-		usage: {
-			input: 10,
-			output: 4,
-			cacheRead: 2,
-			cacheWrite: 1,
-			totalTokens: 17,
-			cost: { ...zero, total: 0.5 },
-		},
-	},
-	totals: {},
-} as unknown as HarnessEvent;
-
-const toolEnd = (result: unknown, isError: boolean) =>
+const entry = (id: number, kind: string, message?: Message): EntryRecord =>
 	({
-		type: 'tool_end',
-		...at,
-		turnId: 't',
-		toolCallId: 'c1',
-		toolName: 'book',
-		result,
-		isError,
-		terminate: false,
-	}) as HarnessEvent;
+		id,
+		conversationId: 0,
+		kind,
+		...(message === undefined ? {} : { model: [message] }),
+	}) as EntryRecord;
 
-const all = (events: HarnessEvent[]) => {
-	const steps = new PiSteps();
+const start = (message: Message = assistant): AgentEvent => ({ type: 'message_start', message });
+const end = (message: AssistantMessage = assistant): AgentEvent => ({
+	type: 'message_end',
+	entry: entry(1, 'pi.assistant', message),
+});
+const update = (
+	...changes: Extract<AgentEvent, { type: 'message_update' }>['changes']
+): AgentEvent => ({
+	type: 'message_update',
+	usage: assistant.usage,
+	changes,
+});
+
+const zero = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
+const cost = (total: number) => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total });
+const spent = (input: number, output = 0, total = 0): AssistantMessage => ({
+	...fauxAssistantMessage('Done.'),
+	usage: { ...zero, input, output, totalTokens: input + output, cost: cost(total) },
+});
+const totals = (input: number, output: number, total: number): UsageState => ({
+	models: {
+		'scripted/x': { ...zero, input, output, totalTokens: input + output, cost: cost(total) },
+	},
+	tools: {},
+});
+
+const all = (events: AgentEvent[], baseline: UsageState = { models: {}, tools: {} }) => {
+	const steps = new PiSteps(baseline);
 	return events.flatMap((event) => steps.steps(event));
 };
 
-describe('the steps of harness events', () => {
-	it('gives streamed deltas, then a closing step with no text, and adds no block at the end', () => {
+const noUsage = (steps: Step[]) => steps.filter((step) => step.type !== 'usage');
+
+describe('the steps of conversation events', () => {
+	it('gives streamed deltas, then a closing step with the rest of the block', () => {
 		expect(
-			all([
-				start(),
-				update({ type: 'thinking_delta', contentIndex: 0, delta: 'Pl' }),
-				update({ type: 'thinking_end', contentIndex: 0, content: 'Plan.' }),
-				update({ type: 'text_delta', contentIndex: 1, delta: 'Answer.' }),
-				update({ type: 'text_end', contentIndex: 1, content: 'Answer.' }),
-				update({ type: 'text_start', contentIndex: 1 }),
-				update({ type: 'start' }),
-				end(),
-			]),
+			noUsage(
+				all([
+					start(),
+					update({
+						type: 'thinking_start',
+						contentIndex: 0,
+						block: { type: 'thinking', thinking: '' },
+					}),
+					update({ type: 'thinking_delta', contentIndex: 0, delta: 'Pl' }),
+					update({ type: 'text_start', contentIndex: 1, block: { type: 'text', text: '' } }),
+					update({ type: 'text_delta', contentIndex: 1, delta: 'Answer.' }),
+					end(),
+				]),
+			),
 		).toEqual([
 			{ type: 'thinking', text: 'Pl', final: false },
-			{ type: 'thinking', text: '', final: true },
 			{ type: 'text', text: 'Answer.', final: false },
+			{ type: 'thinking', text: 'an.', final: true },
 			{ type: 'text', text: '', final: true },
 		]);
 	});
 
-	it('gives a whole block at its end when the stream sent no delta', () => {
+	it('gives the unsent part of a block that arrives whole, and adds no block at the end', () => {
 		expect(
-			all([start(), update({ type: 'text_end', contentIndex: 1, content: 'Answer.' }), end()]),
+			noUsage(
+				all([
+					start(),
+					update({ type: 'block', contentIndex: 0, block: { type: 'thinking', thinking: 'Pl' } }),
+					update({
+						type: 'block',
+						contentIndex: 0,
+						block: { type: 'thinking', thinking: 'Plan.' },
+					}),
+					update({ type: 'block', contentIndex: 1, block: { type: 'text', text: 'Answer.' } }),
+					update({ type: 'message', message: assistant }),
+					end(),
+				]),
+			),
 		).toEqual([
-			{ type: 'text', text: 'Answer.', final: true },
-			{ type: 'thinking', text: 'Plan.', final: true },
+			{ type: 'thinking', text: 'Pl', final: false },
+			{ type: 'thinking', text: 'an.', final: false },
+			{ type: 'text', text: 'Answer.', final: false },
+			{ type: 'thinking', text: '', final: true },
+			{ type: 'text', text: '', final: true },
 		]);
 	});
 
-	it('gives the blocks of an assistant message that streamed nothing, and no redacted thinking', () => {
+	it('gives the whole message at its end when the stream sent nothing, and no redacted thinking', () => {
 		const redacted = fauxAssistantMessage([
 			{ type: 'thinking', thinking: 'hidden', redacted: true },
 			{ type: 'toolCall', id: 'c', name: 'say', arguments: {} },
 		]);
-		expect(all([start(), end(), start(redacted), end(redacted)])).toEqual([
+		expect(noUsage(all([start(), end(), start(redacted), end(redacted)]))).toEqual([
 			{ type: 'thinking', text: 'Plan.', final: true },
 			{ type: 'text', text: 'Answer.', final: true },
 		]);
 	});
 
-	it('gives nothing for a message that is not the assistant', () => {
-		const user = { role: 'user', content: 'Hi.', timestamp: 0 } as const;
-		expect(all([start(user as never), end(user as never)])).toEqual([]);
-	});
-
-	it('gives one usage step for each provider request', () => {
-		expect(all([usage, usage])).toEqual([
-			{ type: 'usage', input: 10, output: 4, cacheRead: 2, cacheWrite: 1, cost: 0.5 },
-			{ type: 'usage', input: 10, output: 4, cacheRead: 2, cacheWrite: 1, cost: 0.5 },
-		]);
-	});
-
-	it('gives a tool call and its result, and the text of a failed result', () => {
-		const call = {
-			type: 'tool_start',
-			...at,
-			turnId: 't',
-			toolCallId: 'c1',
-			toolName: 'book',
-			args: { day: 'Friday' },
-		} as HarnessEvent;
-		const done = { content: [{ type: 'text', text: 'booked' }], details: {} };
-		const refused = {
-			content: [
-				{ type: 'image', data: 'x', mimeType: 'image/png' },
-				{ type: 'text', text: 'refused' },
-			],
-			details: {},
-		};
+	it('gives nothing for an entry that is not an assistant message', () => {
+		const user: Message = { role: 'user', content: 'Hi.', timestamp: 0 };
 		expect(
 			all([
-				call,
-				toolEnd(done, false),
-				toolEnd(refused, true),
-				toolEnd({ content: [] }, true),
-				toolEnd(undefined, true),
-				{ type: 'turn_end', ...at } as HarnessEvent,
+				start(user),
+				{ type: 'message_end', entry: entry(2, 'pi.user', user) },
+				{ type: 'message_end', entry: entry(3, 'pi.system') },
+				{ type: 'turn_end' },
 			]),
+		).toEqual([]);
+	});
+
+	it('gives one usage step for each assistant message, a message with no spend among them', () => {
+		expect(all([end(spent(10, 4, 0.5)), end(spent(0))])).toEqual([
+			{ type: 'text', text: 'Done.', final: true },
+			{ type: 'usage', input: 10, output: 4, cacheRead: 0, cacheWrite: 0, cost: 0.5 },
+			{ type: 'text', text: 'Done.', final: true },
+			{ type: 'usage', input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+		]);
+	});
+
+	it('gives the spend that no message accounts for once, and only what grew since the activation began', () => {
+		const steps = new PiSteps(totals(100, 10, 1));
+		// A request of 20 tokens is in the total at once, and a summary of 7 joins it.
+		steps.steps(end(spent(20, 0, 0.25)));
+		steps.steps({ type: 'usage_changed', usage: totals(127, 10, 1.3) });
+		expect(steps.flush()).toEqual([
+			{
+				type: 'usage',
+				input: 7,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: expect.closeTo(0.05),
+			},
+		]);
+		expect(steps.flush()).toEqual([]);
+		// A total that does not grow gives nothing, and a total below the baseline is no spend.
+		steps.steps({ type: 'usage_changed', usage: totals(50, 0, 0) });
+		expect(steps.flush()).toEqual([]);
+		expect(totalOf(totals(5, 3, 0.1))).toEqual({
+			input: 5,
+			output: 3,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.1,
+		});
+	});
+
+	it('gives a tool call and its result, the text of a failed result, and the call of a result with no start', () => {
+		const call = fauxAssistantMessage([
+			{ type: 'toolCall', id: 'c2', name: 'book', arguments: { day: 'Monday' } },
+		]);
+		const result = (id: number, content: Message['content'], isError: boolean, details?: unknown) =>
+			entry(id, 'pi.tool-result', {
+				role: 'toolResult',
+				toolCallId: 'c1',
+				toolName: 'book',
+				content,
+				isError,
+				timestamp: 0,
+				...(details === undefined ? {} : { details }),
+			} as Message);
+		const text = [{ type: 'text', text: 'booked' }] as const;
+		const refused = [
+			{ type: 'image', data: 'x', mimeType: 'image/png' },
+			{ type: 'text', text: 'refused' },
+		] as const;
+		expect(
+			all([
+				{
+					type: 'tool_execution_start',
+					toolCallId: 'c1',
+					toolName: 'book',
+					args: { day: 'Friday' },
+				},
+				{
+					type: 'tool_execution_end',
+					toolCallId: 'c1',
+					toolName: 'book',
+					entry: result(2, [...text], false, { n: 1 }),
+				},
+				{
+					type: 'tool_execution_end',
+					toolCallId: 'c1',
+					toolName: 'book',
+					entry: result(3, [...refused], true),
+				},
+				{ type: 'tool_execution_end', toolCallId: 'c1', toolName: 'book' },
+				end(call),
+				{
+					type: 'tool_execution_end',
+					toolCallId: 'c2',
+					toolName: 'book',
+					entry: result(4, [...text], false),
+				},
+			]).filter((step) => step.type !== 'usage'),
 		).toEqual([
 			{ type: 'tool_call', call: 'c1', name: 'book', input: { day: 'Friday' } },
-			{ type: 'tool_result', call: 'c1', output: done },
-			{ type: 'tool_result', call: 'c1', output: refused, error: 'refused' },
+			{ type: 'tool_result', call: 'c1', output: { content: text, details: { n: 1 } } },
+			{ type: 'tool_result', call: 'c1', output: { content: refused }, error: 'refused' },
 			{ type: 'tool_result', call: 'c1', output: { content: [] }, error: 'The tool failed.' },
-			{ type: 'tool_result', call: 'c1', output: undefined, error: 'The tool failed.' },
+			{ type: 'tool_call', call: 'c2', name: 'book', input: { day: 'Monday' } },
+			{ type: 'tool_result', call: 'c2', output: { content: text } },
 		]);
+	});
+
+	it('remembers the last assistant message of the pass, until a new pass forgets it', () => {
+		const steps = new PiSteps({ models: {}, tools: {} });
+		expect(steps.last).toBeUndefined();
+		steps.steps(end(spent(1)));
+		expect(steps.last?.usage.input).toBe(1);
+		steps.forget();
+		expect(steps.last).toBeUndefined();
+	});
+});
+
+describe('the steps of a real pass', () => {
+	it('records the steps of a pass that calls a tool: the call, the result, the text, and the spend of each request', async () => {
+		const book = defineTool({
+			name: 'book',
+			description: 'Book a day.',
+			parameters: Type.Object({ day: Type.String() }),
+			execute: ({ day }) => `booked ${day}`,
+		});
+		const definition = defineAgent({
+			name: 'worker',
+			identity: 'Works.',
+			executor: pi({ instructions: 'Work.', model: 'scripted/worker', tools: [book] }),
+		});
+		const requests: number[] = [];
+		const opener = createPiOpener({
+			definition,
+			model: stubModel,
+			stream: scriptedStream((_context, _agent, request) => {
+				requests.push(request);
+				return request === 1 ? callTool('book', { day: 'Friday' }) : quiet();
+			}),
+			now: () => 0,
+			sessions: memorySessions(),
+		});
+		const steps: Step[] = [];
+		const session = stateOf(opener, definition, {
+			trace: { record: (step) => void steps.push(step) },
+		});
+		const view = await viewOf('message:1:worker:1');
+		await session.pass({ kind: 'view', view: { ...view, spec: { ...view.spec, seat: 'worker' } } });
+		expect(steps.map((step) => step.type)).toEqual([
+			'usage',
+			'tool_call',
+			'tool_result',
+			'text',
+			'usage',
+		]);
+		expect(steps[1]).toMatchObject({ type: 'tool_call', name: 'book', input: { day: 'Friday' } });
+		expect(steps[2]).toMatchObject({
+			type: 'tool_result',
+			output: { content: [{ type: 'text', text: 'booked Friday' }] },
+		});
+		expect(steps[3]).toMatchObject({ type: 'text', text: 'nothing to add', final: true });
 	});
 });

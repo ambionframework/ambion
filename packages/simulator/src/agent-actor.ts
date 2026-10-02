@@ -1,6 +1,6 @@
 /**
  * An actor that plays a person as an agent. It takes the options of an agent
- * definition, and it runs on Pi's `AgentHarness` through `runAgent`. Each
+ * definition, and it runs on the Pi harness through `runAgent`. Each
  * move ends with one call to `send` or to `stop`. Before that call, the
  * agent can call its other tools, such as `read` on a file an agent wrote.
  */

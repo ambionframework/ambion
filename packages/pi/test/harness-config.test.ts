@@ -1,50 +1,47 @@
 /**
  * How the executor sets up the Pi harness: the tools the model holds, the
- * system prompt, one attempt for each provider request, and compaction.
+ * system prompt, one attempt for each provider request, compaction and
+ * overflow recovery, the size of a tool result, and the open and close of
+ * a session.
  */
-import { defineAgent, defineTool, type Message } from '@ambionframework/ambion';
+import { defineAgent, defineTool, type Message, type Step } from '@ambionframework/ambion';
 import type { ActivationView } from '@ambionframework/ambion/hosting';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
-import { quiet } from '@ambionframework/ambion/testing';
-import {
-	type AgentMessage,
-	BACKGROUND_CONTEXT,
-	type CompactionSettings,
-	convertToLlm,
-	DEFAULT_COMPACTION_SETTINGS,
-	type HarnessEvent,
-	MemorySessionRepo,
-	type StreamFn,
-	type ThinkingLevel,
-} from '@earendil-works/pi-agent-core';
-import type { Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
-import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
+import { callTool, quiet } from '@ambionframework/ambion/testing';
+import type { AssistantMessage, Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
+import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { ActivationState } from '../../ambion/src/execution/activation.ts';
 import { renderActivation } from '../../ambion/src/execution/render.ts';
 import { deferred } from '../../ambion/test/support/room.ts';
 import { createPiOpener } from '../src/executor.ts';
-import { openHarness } from '../src/harness.ts';
-import { memorySessions, type PiSessions, pi, stubModel } from '../src/index.ts';
-import { streamModels } from '../src/models.ts';
+import {
+	type CompactionOptions,
+	memorySessions,
+	type PiSessions,
+	pi,
+	type StreamFn,
+	stubModel,
+	type ThinkingLevel,
+} from '../src/index.ts';
 import { scriptContext } from '../src/script-context.ts';
-import { contextText, isClosingContext, type PiScript, scriptedStream } from '../src/testing.ts';
+import {
+	contextText,
+	isClosingContext,
+	type PiScript,
+	scriptedStream,
+	toolNames,
+} from '../src/testing.ts';
 import { stateOf } from './support/activation.ts';
-
-const said = (seq: number, text: string): Message => ({
-	kind: 'said',
-	seq,
-	at: '2026-01-01T09:00:00.000Z',
-	from: 'andrei',
-	text,
-});
+import { failing } from './support/storage.ts';
+import { said } from './support/two-questions.ts';
 
 const tool = (name: string) =>
 	defineTool({ name, description: name, parameters: Type.Object({}), execute: () => name });
 
-/** A worker with a tool of its own and a bundle, on the compaction settings and the thinking level given. */
-const workerWith = (compaction?: CompactionSettings, thinking?: ThinkingLevel) =>
+/** A worker with a tool of its own and a bundle, on the compaction options and the thinking level given. */
+const workerWith = (compaction?: CompactionOptions, thinking?: ThinkingLevel) =>
 	defineAgent({
 		name: 'worker',
 		identity: 'Works.',
@@ -90,30 +87,59 @@ function recording(script: PiScript) {
 	}[] = [];
 	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
-		requests.push({
-			context: scriptContext(context),
-			options,
-			model: model.id,
-		});
+		requests.push({ context: scriptContext(context), options, model: model.id });
 		return base(model, context, options);
 	};
 	return { requests, stream };
 }
 
-function seat(stream: StreamFn, compaction?: CompactionSettings, thinking?: ThinkingLevel) {
+function seat(
+	stream: StreamFn,
+	compaction?: CompactionOptions,
+	thinking?: ThinkingLevel,
+	sessions: PiSessions = memorySessions(),
+) {
 	const definition = workerWith(compaction, thinking);
 	const opener = createPiOpener({
 		definition,
 		model: stubModel,
 		stream,
 		now: () => 0,
-		sessions: memorySessions(),
+		sessions,
 	});
-	const open = (id: string): ActivationState => stateOf(opener, definition, { id });
+	const open = (id: string, trace: (step: Step) => void = () => {}): ActivationState =>
+		stateOf(opener, definition, { id, trace: { record: trace } });
 	return { definition, open };
 }
 
-const names = (context: Context) => (context.tools ?? []).map((one) => one.name);
+/** The request that the harness makes to summarize the session for compaction. */
+const summarizing = (context: Context) =>
+	context.systemPrompt?.startsWith('You are a context summarization assistant') ?? false;
+
+/** An answer that reports the spend of `input` tokens. */
+const spending = (input: number, text = 'nothing to add'): AssistantMessage => {
+	const answer = fauxAssistantMessage(text, { stopReason: 'stop' });
+	return {
+		...answer,
+		usage: {
+			...answer.usage,
+			input,
+			totalTokens: input,
+			cost: { ...answer.usage.cost, total: input / 1000 },
+		},
+	};
+};
+
+/** The compaction options that make a context of a few tokens pass the threshold. */
+const EAGER: CompactionOptions = { enabled: true, reserveTokens: 999_990, keepRecentTokens: 1 };
+
+/** The tool results of one request, as text. */
+const results = (context: Context): string[] =>
+	context.messages.flatMap((message) =>
+		message.role === 'toolResult'
+			? [message.content.map((part) => (part.type === 'text' ? part.text : '')).join('')]
+			: [],
+	);
 
 describe('the harness of an activation', () => {
 	it('tries a provider request once, and leaves the retry to the room', async () => {
@@ -146,7 +172,7 @@ describe('the harness of an activation', () => {
 		last.close?.();
 
 		const [ordinary, closed] = requests;
-		expect(names(ordinary?.context as Context)).toEqual([
+		expect(toolNames(ordinary?.context as Context)).toEqual([
 			'say',
 			'schedule',
 			'seat',
@@ -156,30 +182,23 @@ describe('the harness of an activation', () => {
 			'book',
 			'inspect',
 		]);
+		// The prompt reaches the model as the executor built it: no tag wraps it.
 		const rendered = renderActivation(view, definition);
 		expect(ordinary?.context.systemPrompt).toBe(`${rendered.mechanism}\n\n${rendered.agent}`);
 		// The summary activation continues the session with fewer tools and its own prompt.
-		expect(names(closed?.context as Context)).toEqual(['say']);
+		expect(toolNames(closed?.context as Context)).toEqual(['say']);
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
 		expect(last.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
 	});
 
 	it('compacts the session when the context passes the threshold, and never reads back', async () => {
-		const summarizing = (context: Context) =>
-			context.systemPrompt?.startsWith('You are a context summarization assistant') ?? false;
-		const { requests, stream } = recording((context) => {
-			if (summarizing(context)) {
-				return fauxAssistantMessage('The pump question is open.', { stopReason: 'stop' });
-			}
-			const answer = fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
-			return { ...answer, usage: { ...answer.usage, input: 50, totalTokens: 50 } };
-		});
-		const session = seat(stream, {
-			enabled: true,
-			reserveTokens: 999_990,
-			keepRecentTokens: 1,
-		}).open('message:1:worker:1');
+		const { requests, stream } = recording((context) =>
+			summarizing(context)
+				? fauxAssistantMessage('The pump question is open.', { stopReason: 'stop' })
+				: spending(50),
+		);
+		const session = seat(stream, EAGER).open('message:1:worker:1');
 		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
 		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
 		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
@@ -195,6 +214,114 @@ describe('the harness of an activation', () => {
 		expect(contextText(last)).not.toContain('Can we ship?');
 		expect(contextText(last)).toContain('[new] #3 [andrei] And the hose?');
 		expect(session.readThrough).toBe(3);
+	});
+
+	it('keeps the whole session when compaction is off, whatever the context size', async () => {
+		const { requests, stream } = recording(() => spending(50));
+		const session = seat(stream, { ...EAGER, enabled: false }).open('message:1:worker:1');
+		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
+		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
+		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
+		expect(requests.filter((request) => summarizing(request.context))).toEqual([]);
+		expect(contextText(requests.at(-1)?.context as Context)).toContain('Can we ship?');
+	});
+
+	it('compacts once and sends the request again when the context overflows the window', async () => {
+		const overflow = 'prompt is too long: 213462 tokens > 200000 maximum';
+		let overflowed = false;
+		const { requests, stream } = recording((context) => {
+			if (summarizing(context)) {
+				return fauxAssistantMessage('The ship question is open.', { stopReason: 'stop' });
+			}
+			if (!overflowed && contextText(context).includes('And the pump?')) {
+				overflowed = true;
+				return fauxAssistantMessage('', { stopReason: 'error', errorMessage: overflow });
+			}
+			return spending(50);
+		});
+		// The default policy keeps 20000 tokens, so a session of this size has nothing to compact.
+		const session = seat(stream, { keepRecentTokens: 1 }).open('message:1:worker:1');
+		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
+		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
+		expect(await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) })).toEqual({
+			failed: false,
+		});
+		// The first answer, the overflow, the summary, and the request again.
+		expect(requests.map((request) => summarizing(request.context))).toEqual([
+			false,
+			false,
+			true,
+			false,
+		]);
+		const again = requests.at(-1)?.context as Context;
+		expect(contextText(again)).toContain('The ship question is open.');
+		expect(contextText(again)).toContain('[new] #2 [andrei] And the pump?');
+		expect(session.readThrough).toBe(2);
+	});
+
+	it('fails a pass that overflows the window when compaction is off', async () => {
+		const overflow = 'prompt is too long: 213462 tokens > 200000 maximum';
+		const { requests, stream } = recording(() =>
+			fauxAssistantMessage('', { stopReason: 'error', errorMessage: overflow }),
+		);
+		const session = seat(stream, { enabled: false, keepRecentTokens: 1 }).open(
+			'message:1:worker:1',
+		);
+		const result = await session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+		expect(result).toMatchObject({ failed: true });
+		expect(requests).toHaveLength(1);
+	});
+
+	it('adds the spend of a compaction to the activation', async () => {
+		const steps: Step[] = [];
+		const { stream } = recording((context) =>
+			summarizing(context) ? spending(7, 'The pump question is open.') : spending(50),
+		);
+		const session = seat(stream, EAGER).open('message:1:worker:1', (step) => steps.push(step));
+		await session.pass({ kind: 'view', view: respond([said(1, 'Can we ship?')], 1) });
+		const both = [said(1, 'Can we ship?'), said(2, 'And the pump?')];
+		await session.pass({ kind: 'delta', after: 1, view: respond(both, 2) });
+		const input = steps.reduce((sum, step) => sum + (step.type === 'usage' ? step.input : 0), 0);
+		const cost = steps.reduce(
+			(sum, step) => sum + (step.type === 'usage' ? (step.cost ?? 0) : 0),
+			0,
+		);
+		// Two answers of 50, and one summary of 7: the summary has no entry in the session.
+		expect(input).toBe(107);
+		expect(cost).toBeCloseTo(0.107);
+	});
+
+	it('sends a tool result of any size to the model whole', async () => {
+		const many = Array.from({ length: 5000 }, (_, index) => `line ${index}`).join('\n');
+		const wide = 'x'.repeat(200_000);
+		const dump = defineTool({
+			name: 'dump',
+			description: 'Give a large result.',
+			parameters: Type.Object({ shape: Type.String() }),
+			execute: ({ shape }) => (shape === 'lines' ? many : wide),
+		});
+		const definition = defineAgent({
+			name: 'worker',
+			identity: 'Works.',
+			executor: pi({ instructions: 'Work.', model: 'scripted/worker', tools: [dump] }),
+		});
+		const { requests, stream } = recording((context, _agent, request) => {
+			if (request === 1) return callTool('dump', { shape: 'lines' });
+			return request === 2 && results(context).length === 1
+				? callTool('dump', { shape: 'wide' })
+				: quiet();
+		});
+		const opener = createPiOpener({
+			definition,
+			model: stubModel,
+			stream,
+			now: () => 0,
+			sessions: memorySessions(),
+		});
+		await stateOf(opener, definition).pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+		const [, one, two] = requests;
+		expect(results(one?.context as Context)).toEqual([many]);
+		expect(results(two?.context as Context)).toEqual([many, wide]);
 	});
 
 	it.each([
@@ -220,76 +347,58 @@ describe('the harness of an activation', () => {
 
 	it('writes compaction on the executor only when the definition gives it', () => {
 		expect(workerWith().executor).not.toHaveProperty('compaction');
-		const settings = { enabled: false, reserveTokens: 1, keepRecentTokens: 2 };
-		expect(workerWith(settings).executor).toMatchObject({ compaction: settings });
+		const options = { enabled: false, reserveTokens: 1, keepRecentTokens: 2, backgroundTokens: 3 };
+		expect(workerWith(options).executor).toMatchObject({ compaction: options });
+		// A field that is absent keeps the default of pi-durable.
+		expect(workerWith({ enabled: false }).executor).toMatchObject({
+			compaction: { enabled: false },
+		});
 	});
 
 	it.each([
-		['a negative reserve', { enabled: true, reserveTokens: -1, keepRecentTokens: 2 }],
-		['a fractional recent count', { enabled: true, reserveTokens: 1, keepRecentTokens: 0.5 }],
-	])('refuses compaction settings with %s when the agent is defined', (_name, settings) => {
-		expect(() => workerWith(settings)).toThrow(
+		['a negative reserve', { reserveTokens: -1 }],
+		['a fractional recent count', { keepRecentTokens: 0.5 }],
+		['a negative background count', { backgroundTokens: -2 }],
+	])('refuses compaction options with %s when the agent is defined', (_name, options) => {
+		expect(() => workerWith(options)).toThrow(
 			'Compaction token counts must be non-negative safe integers.',
 		);
 	});
 
-	it.each([
-		['the settings it is given', { enabled: false, reserveTokens: 1, keepRecentTokens: 2 }],
-		["Pi's defaults", DEFAULT_COMPACTION_SETTINGS],
-	] as const)('sets the harness up with %s, and with retries off', async (_name, settings) => {
-		const repo = new MemorySessionRepo();
-		const model = await stubModel('scripted/worker', 'worker');
-		const { harness } = await openHarness({
-			session: await repo.create({}, BACKGROUND_CONTEXT),
-			models: streamModels(
-				model,
-				scriptedStream(() => quiet()),
-			),
-			model,
-			tools: [],
-			systemPrompt: () => '',
-			compaction: settings,
-			thinking: 'off',
-			toProviderMessages: () => [],
-			onEvent: () => {},
-		});
-		expect(await harness.getCompactionSettings(BACKGROUND_CONTEXT)).toEqual(settings);
-		expect(await harness.getRetryPolicy(BACKGROUND_CONTEXT)).toMatchObject({ enabled: false });
-		expect(await harness.getStreamOptions(BACKGROUND_CONTEXT)).toEqual({ maxRetries: 0 });
-		await harness.close(BACKGROUND_CONTEXT);
+	it('refuses a compaction switch that is no boolean when the agent is defined', () => {
+		expect(() => workerWith({ enabled: 'yes' as unknown as boolean })).toThrow(
+			'Compaction `enabled` must be a boolean.',
+		);
 	});
 
-	it('closes the harness and its session when the lane cannot be set up', async () => {
-		const repo = new MemorySessionRepo();
-		const session = await repo.create({}, BACKGROUND_CONTEXT);
-		const model = await stubModel('scripted/worker', 'worker');
-		// The harness restores the session, and then the session refuses every write.
-		let writes = 0;
-		const refusing = new Proxy(session, {
-			get: (target, key, receiver) => {
-				const value = Reflect.get(target, key, receiver);
-				if (key !== 'mutate' || ++writes === 1) return value;
-				return () => Promise.reject(new Error('The disk is full.'));
+	it('closes the storage and fails as transient when the harness cannot open it', async () => {
+		let closed = 0;
+		const store = memorySessions();
+		const sessions: PiSessions = {
+			create: async (scope, id) => {
+				const created = await store.create(scope, id);
+				const storage = failing(created.storage, ['commit'], () => true);
+				return {
+					...created,
+					storage: new Proxy(storage, {
+						get: (target, key) =>
+							key === 'close'
+								? async () => {
+										closed += 1;
+									}
+								: Reflect.get(target, key),
+					}),
+				};
 			},
-		});
-		await expect(
-			openHarness({
-				session: refusing,
-				models: streamModels(
-					model,
-					scriptedStream(() => quiet()),
-				),
-				model,
-				tools: [],
-				systemPrompt: () => '',
-				compaction: DEFAULT_COMPACTION_SETTINGS,
-				thinking: 'off',
-				toProviderMessages: () => [],
-				onEvent: () => {},
-			}),
-		).rejects.toThrow();
-		// A closed session opens again.
-		await expect(repo.open(session.metadata, BACKGROUND_CONTEXT)).resolves.toBeDefined();
+			open: (scope, id) => store.open(scope, id),
+		};
+		const { requests, stream } = recording(() => quiet());
+		const session = seat(stream, undefined, undefined, sessions).open('message:1:worker:1');
+		const result = await session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+		expect(result).toMatchObject({ failed: true, cause: 'transient' });
+		expect(requests).toHaveLength(0);
+		expect(closed).toBeGreaterThan(0);
+		expect(session.session).toBeUndefined();
 	});
 
 	it.each([
@@ -366,12 +475,12 @@ describe('the harness of an activation', () => {
 		const opening = deferred();
 		const created = deferred();
 		const sessions: PiSessions = {
-			create: async (scope, id, context) => {
+			create: async (scope, id) => {
 				created.resolve();
 				await opening.promise;
-				return store.create(scope, id, context);
+				return store.create(scope, id);
 			},
-			open: (scope, id, context) => store.open(scope, id, context),
+			open: (scope, id) => store.open(scope, id),
 		};
 		const definition = workerWith();
 		const opener = createPiOpener({
@@ -417,52 +526,45 @@ describe('the harness of an activation', () => {
 		expect(await running).toEqual({ failed: false });
 	});
 
-	it('cuts a run that a lost process left open before the lane takes a new one', async () => {
-		const session = await new MemorySessionRepo().create({}, BACKGROUND_CONTEXT);
-		const model = await stubModel('scripted/worker', 'worker');
-		const started = deferred();
-		const setup = (stream: StreamFn, onEvent: (event: HarnessEvent) => void = () => {}) => ({
-			session,
-			models: streamModels(model, stream),
-			model,
-			tools: [],
-			systemPrompt: () => '',
-			compaction: DEFAULT_COMPACTION_SETTINGS,
-			thinking: 'off' as const,
-			toProviderMessages: (messages: AgentMessage[]) => convertToLlm(messages),
-			onEvent,
+	it('aborts a running tool with the signal when the activation is cut', async () => {
+		const running = deferred();
+		const aborted: boolean[] = [];
+		const slow = defineAgent({
+			name: 'worker',
+			identity: 'Works.',
+			executor: pi({
+				instructions: 'Work.',
+				model: 'scripted/worker',
+				tools: [
+					defineTool({
+						name: 'wait',
+						description: 'Wait for the cut.',
+						parameters: Type.Object({}),
+						execute: async (_params, context) => {
+							running.resolve();
+							await new Promise<void>((resolve) =>
+								context.signal?.addEventListener('abort', () => resolve(), { once: true }),
+							);
+							aborted.push(context.signal?.aborted === true);
+							throw new Error('cut');
+						},
+					}),
+				],
+			}),
 		});
-		// The lost run streams part of its answer, and then the process is gone.
-		const partial: StreamFn = () => {
-			const stream = createAssistantMessageEventStream();
-			const message = fauxAssistantMessage('partial words', { stopReason: 'stop' });
-			stream.push({ type: 'start', partial: message });
-			stream.push({ type: 'text_start', contentIndex: 0, partial: message });
-			stream.push({
-				type: 'text_delta',
-				contentIndex: 0,
-				delta: 'partial words',
-				partial: message,
-			});
-			started.resolve();
-			return stream;
-		};
-		const lost = await openHarness(setup(partial));
-		void lost.lane.prompt('Go.', undefined, BACKGROUND_CONTEXT);
-		await started.promise;
-		// A second harness on the same session: the process that ran the first is gone.
-		const events: HarnessEvent[] = [];
-		const next = await openHarness(
-			setup(
-				scriptedStream(() => quiet()),
-				(event) => events.push(event),
-			),
-		);
-		expect((await next.lane.inspectExecution(BACKGROUND_CONTEXT)).current).toBeNull();
-		// No event of the lost run reaches the activation that cut it.
-		expect(events).toEqual([]);
-		const result = await next.lane.prompt('Again.', undefined, BACKGROUND_CONTEXT);
-		expect(result.ok && result.value.status).toBe('completed');
-		expect(events.some((event) => 'recovery' in event && event.recovery === true)).toBe(false);
+		const { stream } = recording(() => callTool('wait', {}));
+		const opener = createPiOpener({
+			definition: slow,
+			model: stubModel,
+			stream,
+			now: () => 0,
+			sessions: memorySessions(),
+		});
+		const session = stateOf(opener, slow, { id: 'message:1:worker:1' });
+		const pass = session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
+		await running.promise;
+		session.cut();
+		expect(await pass).toEqual({ failed: false });
+		expect(aborted).toEqual([true]);
 	});
 });

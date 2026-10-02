@@ -38,5 +38,5 @@ The test stops the room.
 
 **`agentActor` plays a brief on a model, and `agentJudge` grades a simulation.**
 Both take the options of an agent definition, such as `workspace.tools()`,
-and run on Pi's `AgentHarness`. An eval with either one is a live test,
+and run on the Pi harness. An eval with either one is a live test,
 and it costs money on each run.

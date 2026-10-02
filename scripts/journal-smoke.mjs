@@ -73,7 +73,7 @@ const journal = new Journal(memoryJournals().open('test'), vocabulary);
 const result = await journal.append('note', { decide: () => ({ body: { text: 'hello' } }) });
 assert.ok('entry' in result);
 assert.equal(result.entry.kind, 'note');
-for (const name of ['@earendil-works/pi-agent-core', '@ambionframework/ambion']) {
+for (const name of ['@earendil-works/pi-durable', '@ambionframework/ambion']) {
   assert.throws(() => import.meta.resolve(name), { code: 'ERR_MODULE_NOT_FOUND' });
 }
 await assert.rejects(import('@ambionframework/journal/' + 'pi'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });

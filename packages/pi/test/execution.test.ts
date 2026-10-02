@@ -90,6 +90,8 @@ describe('piExecution', () => {
 		expect((await ask(room)).map((message) => message.text)).toContain('42');
 		const [folder] = await readdir(sessionDir);
 		expect(folder).toContain(name);
-		expect(await readdir(join(sessionDir, folder as string))).toHaveLength(1);
+		// A folder for the seat, and a storage folder for each session of the seat.
+		expect(await readdir(join(sessionDir, folder as string))).toEqual(['worker']);
+		expect(await readdir(join(sessionDir, folder as string, 'worker'))).toHaveLength(1);
 	});
 });

@@ -1,28 +1,23 @@
 /**
- * Where a seat keeps its Pi harness sessions.
+ * Where a seat keeps its Pi sessions.
  *
- * A session holds the transcript of one exchange for one seat. The executor
- * creates it under the id of the activation that began it, and reopens it
- * by that id when the room names it in `spec.resume`. A session that the
- * store does not hold, or cannot read, opens as nothing, and the activation
- * begins a fresh one.
+ * A session holds the transcript of one exchange for one seat. It is one
+ * pi-durable `Storage` with one root conversation. The executor creates it
+ * under the id of the activation that began it, and reopens it by that id
+ * when the room names it in `spec.resume`. A session that the store does not
+ * hold, or cannot read, opens as nothing, and the activation begins a fresh
+ * one.
  *
- * - **Memory.** `memorySessions()` keeps each session in a Pi
- *   `MemorySessionRepo`. It keeps the two newest sessions of each room and
- *   seat, as long as the store lives.
- * - **Disk.** `diskSessions(dir)` keeps each session as a JSONL file under
- *   `dir`, in a folder for each room and seat. A restart on the same disk
- *   reopens it. A session the disk refuses stays in memory. The store loads
- *   the Node file system on first use, so the entry of this package loads
- *   on a host with no disk.
+ * - **Memory.** `memorySessions()` keeps each session in a `MemoryStorage`.
+ *   It keeps the two newest sessions of each room and seat, as long as the
+ *   store lives.
+ * - **Disk.** `diskSessions(dir)` keeps each session as a JSONL storage in
+ *   the folder `dir/<room>/<seat>/<id>`. A restart on the same disk reopens
+ *   it. A session the disk refuses stays in memory. The store loads the Node
+ *   file system on first use, so the entry of this package loads on a host
+ *   with no disk.
  */
-import type {
-	Context,
-	JsonlSessionMetadata,
-	Session,
-	SessionMetadata,
-} from '@earendil-works/pi-agent-core';
-import { JsonlSessionRepo, MemorySessionRepo } from '@earendil-works/pi-agent-core';
+import { MemoryStorage, type Storage } from '@earendil-works/pi-durable';
 
 /** The seat a session belongs to. */
 export interface SessionScope {
@@ -30,41 +25,37 @@ export interface SessionScope {
 	readonly seat: string;
 }
 
-/** A seat's store of Pi harness sessions. */
+/** A new session, and the id it holds. */
+export interface CreatedSession {
+	readonly id: string;
+	readonly storage: Storage;
+}
+
+/** A seat's store of Pi sessions. */
 export interface PiSessions {
 	/**
 	 * Create a session under `id`. When the store already holds that id, the
-	 * harness gives the session a fresh id.
+	 * session gets a fresh id, and `created.id` names it.
 	 */
-	create(scope: SessionScope, id: string, context: Context): Promise<Session>;
+	create(scope: SessionScope, id: string): Promise<CreatedSession>;
 	/** Open the session `id`. Nothing, when the store does not hold it or cannot read it. */
-	open(scope: SessionScope, id: string, context: Context): Promise<Session | undefined>;
+	open(scope: SessionScope, id: string): Promise<Storage | undefined>;
 }
 
-/** Create under `id`, or under a fresh id when the store refuses `id`. */
-async function createWithFallback(
-	create: (id: string | undefined) => Promise<Session>,
-	id: string,
-): Promise<Session> {
-	try {
-		return await create(id);
-	} catch {
-		return create(undefined);
+/**
+ * A memory storage that outlives the close of its harness. The harness
+ * closes its storage with itself, and the next activation of the exchange
+ * reopens the same session.
+ */
+class KeptMemory extends MemoryStorage {
+	override close(): Promise<void> {
+		return Promise.resolve();
 	}
 }
 
-/** Open the listed session with the id `id`, or nothing when it is absent or unreadable. */
-async function openListed<T extends SessionMetadata>(
-	listed: () => Promise<readonly T[]>,
-	open: (metadata: T) => Promise<Session>,
-	id: string,
-): Promise<Session | undefined> {
-	try {
-		const metadata = (await listed()).find((candidate) => candidate.id === id);
-		return metadata === undefined ? undefined : await open(metadata);
-	} catch {
-		return undefined;
-	}
+/** A storage in memory that a harness close leaves open. */
+export function memoryStorage(): Storage {
+	return new KeptMemory();
 }
 
 /**
@@ -74,63 +65,32 @@ async function openListed<T extends SessionMetadata>(
  */
 const KEPT_IN_MEMORY = 2;
 
-/** The sessions of one room and seat in memory, newest last. */
-interface MemorySeat {
-	readonly repo: MemorySessionRepo;
-	readonly created: SessionMetadata[];
-}
-
 /**
- * Delete each session older than the newest `KEPT_IN_MEMORY`. A session that
- * is still open stays, and the next create deletes it.
- */
-async function prune(seat: MemorySeat, context: Context): Promise<void> {
-	const old = seat.created.slice(0, -KEPT_IN_MEMORY);
-	for (const metadata of old) {
-		try {
-			await seat.repo.delete(metadata, context);
-			seat.created.splice(seat.created.indexOf(metadata), 1);
-		} catch {
-			// The session is still open. The next create tries again.
-		}
-	}
-}
-
-/**
- * Sessions in memory, one Pi repository for each room and seat. The store
- * keeps the two newest sessions of each room and seat, and deletes the
- * rest: no later activation continues them.
+ * Sessions in memory. The store keeps the two newest sessions of each room
+ * and seat, and deletes the rest: no later activation continues them.
  */
 export function memorySessions(): PiSessions {
-	const seats = new Map<string, MemorySeat>();
-	const seatOf = (scope: SessionScope): MemorySeat => {
+	const seats = new Map<string, Map<string, Storage>>();
+	const seatOf = (scope: SessionScope): Map<string, Storage> => {
 		const key = `${scope.room}\u0000${scope.seat}`;
 		let seat = seats.get(key);
 		if (seat === undefined) {
-			seat = { repo: new MemorySessionRepo(), created: [] };
+			seat = new Map();
 			seats.set(key, seat);
 		}
 		return seat;
 	};
 	return {
-		create: async (scope, id, context) => {
+		create: (scope, id) => {
 			const seat = seatOf(scope);
-			const session = await createWithFallback(
-				(wanted) => seat.repo.create(wanted === undefined ? {} : { id: wanted }, context),
-				id,
-			);
-			seat.created.push(session.metadata);
-			await prune(seat, context);
-			return session;
+			const storage = memoryStorage();
+			const held = seat.has(id) ? `${id}-${crypto.randomUUID()}` : id;
+			seat.set(held, storage);
+			// A map keeps insertion order: the oldest session comes first.
+			for (const old of [...seat.keys()].slice(0, -KEPT_IN_MEMORY)) seat.delete(old);
+			return Promise.resolve({ id: held, storage });
 		},
-		open: (scope, id, context) => {
-			const { repo } = seatOf(scope);
-			return openListed(
-				() => repo.list(undefined, context),
-				(metadata) => repo.open(metadata, context),
-				id,
-			);
-		},
+		open: (scope, id) => Promise.resolve(seatOf(scope).get(id)),
 	};
 }
 
@@ -174,68 +134,65 @@ export async function privateDirectory(path: string): Promise<string> {
 	return path;
 }
 
-/** One file store for each directory in this process. A session file opens once. */
-const stores = new Map<string, Promise<DiskStore>>();
-
-interface DiskStore {
-	readonly repo: JsonlSessionRepo;
-	/** The folder label for one room and seat. */
-	cwd(scope: SessionScope): string;
+/** The folder of one session, and nothing else the Node modules give. */
+async function folderOf(dir: string, scope: SessionScope, id: string): Promise<string> {
+	const { join } = await import('node:path');
+	return join(
+		dir,
+		encodeURIComponent(scope.room),
+		encodeURIComponent(scope.seat),
+		encodeURIComponent(id),
+	);
 }
 
-async function storeFor(dir: string): Promise<DiskStore> {
-	const [{ NodeExecutionEnv }, { join }] = await Promise.all([
-		import('@earendil-works/pi-agent-core/node'),
-		import('node:path'),
+/** The Node JSONL storage on `folder`. The module loads on first use. */
+async function jsonlStorage(folder: string): Promise<Storage> {
+	const [{ openNodeJsonlStorage }, { BACKGROUND_CONTEXT }] = await Promise.all([
+		import('@earendil-works/pi-durable/storage/jsonl/node'),
+		import('@earendil-works/chord/context'),
 	]);
-	const repo = new JsonlSessionRepo({
-		fileSystem: new NodeExecutionEnv({ cwd: dir }),
-		sessionsRoot: dir,
-	});
-	return {
-		repo,
-		cwd: (scope) => join(dir, encodeURIComponent(scope.room), encodeURIComponent(scope.seat)),
-	};
+	return openNodeJsonlStorage(folder, BACKGROUND_CONTEXT);
+}
+
+/** Whether `folder` is a directory. */
+async function isDirectory(folder: string): Promise<boolean> {
+	const { stat } = await import('node:fs/promises');
+	return stat(folder).then(
+		(stats) => stats.isDirectory(),
+		() => false,
+	);
 }
 
 /**
- * Sessions as JSONL files under `dir`, a folder for each room and seat. A
- * function names the directory on first use. The store is a cache: when
- * the disk refuses a session, the store keeps it in memory, and the
- * activation runs on.
+ * Sessions as JSONL storages under `dir`, a folder for each room, seat, and
+ * session. A function names the directory on first use. The store is a
+ * cache: when the disk refuses a session, the store keeps it in memory, and
+ * the activation runs on.
  */
 export function diskSessions(dir: string | (() => Promise<string>)): PiSessions {
 	const fallback = memorySessions();
-	const store = async (): Promise<DiskStore> => {
-		const resolved = typeof dir === 'string' ? dir : await dir();
-		let found = stores.get(resolved);
-		if (found === undefined) {
-			found = storeFor(resolved);
-			stores.set(resolved, found);
-		}
-		return found;
-	};
-	const onDisk = async (scope: SessionScope, id: string, context: Context): Promise<Session> => {
-		const { repo, cwd } = await store();
-		return createWithFallback(
-			(wanted) =>
-				repo.create({ cwd: cwd(scope), ...(wanted === undefined ? {} : { id: wanted }) }, context),
-			id,
-		);
-	};
+	const root = async (): Promise<string> => (typeof dir === 'string' ? dir : dir());
 	return {
-		create: (scope, id, context) =>
-			onDisk(scope, id, context).catch(() => fallback.create(scope, id, context)),
-		open: async (scope, id, context) => {
-			const found = await openListed<JsonlSessionMetadata>(
-				async () => {
-					const { repo, cwd } = await store();
-					return repo.list({ cwd: cwd(scope) }, context);
-				},
-				async (metadata) => (await store()).repo.open(metadata, context),
-				id,
-			);
-			return found ?? fallback.open(scope, id, context);
+		create: async (scope, id) => {
+			try {
+				const base = await root();
+				const held = (await isDirectory(await folderOf(base, scope, id)))
+					? `${id}-${crypto.randomUUID()}`
+					: id;
+				return { id: held, storage: await jsonlStorage(await folderOf(base, scope, held)) };
+			} catch {
+				return fallback.create(scope, id);
+			}
+		},
+		open: async (scope, id) => {
+			try {
+				const folder = await folderOf(await root(), scope, id);
+				// The storage creates a missing folder: a session the disk does not hold opens as nothing.
+				if (await isDirectory(folder)) return await jsonlStorage(folder);
+			} catch {
+				// A session the disk cannot read opens as nothing.
+			}
+			return fallback.open(scope, id);
 		},
 	};
 }

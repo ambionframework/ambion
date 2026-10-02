@@ -80,7 +80,7 @@ describe('agentActor', () => {
 		expect(first?.systemPrompt).toContain('Do not quote or mention your goal.');
 		expect(contextText(first as Context)).toContain('You have sent nothing yet.');
 		expect(contextText(second as Context)).toMatch(/Exchange 1\. You sent: Can we pour\?/);
-		expect(contextText(second as Context)).toMatch(/\[\d+\] desk to priya: \\"Which day\?\\"/);
+		expect(contextText(second as Context)).toMatch(/\[\d+\] desk to priya: "Which day\?"/);
 		// The move carries the usage of its requests.
 		expect(simulation.moves[0]).toHaveProperty('usage');
 	});

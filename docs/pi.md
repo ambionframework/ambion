@@ -10,11 +10,12 @@ README](../README.md) holds the positioning.
 
 ## What it is and when to use it
 
-**Pi's `AgentHarness` owns the model loop, the session, its persistence and
-its compaction. The caller owns the process.** `pi()` defines the executor
-of one agent. `piExecution()` gives a room or a runtime the services that
-run it. The executor adapts the harness to the contract of the room. The
-package holds Pi and the model registry. The kernel names no model library.
+**The Pi harness of `@earendil-works/pi-durable` owns the model loop, the
+session, its persistence and its compaction. The caller owns the process.**
+`pi()` defines the executor of one agent. `piExecution()` gives a room or a
+runtime the services that run it. The executor adapts the harness to the
+contract of the room. The package holds Pi and the model registry. The
+kernel names no model library.
 
 Use Pi when the loop runs in the host process and the agent needs:
 
@@ -22,7 +23,7 @@ Use Pi when the loop runs in the host process and the agent needs:
   `provider/model-id`.
 - **Tools that run in process.** A tool is a function of the host.
 - **Steering during a pass.** A line that lands mid-activation reaches the
-  model through the steer queue of the harness lane.
+  model as a write that the harness places before its next request.
 - **A host that runs seats apart from the room.** The Cloudflare adapter
   builds its seats on `piExecution`.
 - **A deterministic test.** A scripted stream replaces the provider.
@@ -113,21 +114,24 @@ room resolves an execution.
 **`pi(options)` returns a frozen executor of kind `pi`.** The kernel
 validates the shared fields. Pi adds `model` and `compaction`.
 
-| Option                 | Required | Default                       | Meaning                                                                          |
-| ---------------------- | -------- | ----------------------------- | -------------------------------------------------------------------------------- |
-| `instructions`         | Yes      | None                          | The private guidance of the agent.                                               |
-| `model`                | Yes      | None                          | A Pi model id, `provider/model-id`.                                              |
-| `tools`                | No       | None                          | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
-| `bundles`              | No       | None                          | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_SPEAKING`            | The speaking policy. It replaces the default.                                    |
-| `activationTokenLimit` | No       | The whole record              | The token limit of the record one activation reads. A positive integer.          |
-| `estimateTokens`       | No       | `'length'`                    | The name of the estimator in the runtime that counts tokens. It needs the limit. |
-| `compaction`           | No       | `DEFAULT_COMPACTION_SETTINGS` | When the harness compacts the session. Pi's `CompactionSettings`.                |
+| Option                 | Required | Default             | Meaning                                                                          |
+| ---------------------- | -------- | ------------------- | -------------------------------------------------------------------------------- |
+| `instructions`         | Yes      | None                | The private guidance of the agent.                                               |
+| `model`                | Yes      | None                | A Pi model id, `provider/model-id`.                                              |
+| `tools`                | No       | None                | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
+| `bundles`              | No       | None                | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
+| `speaking`             | No       | `DEFAULT_SPEAKING`  | The speaking policy. It replaces the default.                                    |
+| `activationTokenLimit` | No       | The whole record    | The token limit of the record one activation reads. A positive integer.          |
+| `estimateTokens`       | No       | `'length'`          | The name of the estimator in the runtime that counts tokens. It needs the limit. |
+| `compaction`           | No       | The harness default | When the harness compacts the session. A partial Pi `CompactionPolicy`.          |
+| `thinking`             | No       | `'off'`             | How much the model reasons before it answers. A Pi thinking level.               |
 
-**Pi's default compaction is on.** `DEFAULT_COMPACTION_SETTINGS` is
-`{ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }`. The
-executor writes `compaction` only when the definition gives it. `pi()`
-throws when a token count is negative or not a safe integer.
+**Compaction is on by default.** The harness holds the default policy. The
+executor passes `compaction` to the harness as it is, and a field that the
+definition omits keeps the default. The policy has `enabled`,
+`reserveTokens`, `keepRecentTokens`, and `trigger`. `pi()` throws when a
+count is negative or not a safe integer, and when `enabled` is not a
+boolean. The harness does not check the policy.
 
 **`piExecution(options)` takes four options.**
 
@@ -218,38 +222,44 @@ of the person who owns the account.
 read position and the record window. Pi adds these facts.
 
 **One harness serves one activation.** The first pass resolves the model,
-opens the session, binds the tools, and attaches one Pi `AgentHarness` to
-the session. Every pass of the activation prompts the lane `main` of that
-harness once, and resolves when the pass ends. Pi calls one such prompt a
-run. The harness runs with `thinkingLevel: 'off'`, and no option changes it.
+opens or creates the session storage, binds the tools, and opens one
+pi-durable `Harness` over the storage. The harness holds one root
+conversation. Every pass of the activation submits one input to that
+conversation, and resolves when the submission settles. The harness runs
+with the `thinking` level of the definition.
 
-**The system prompt is the mechanism and the agent part.** The executor
-gives the harness `pass.mechanism` and `pass.agent` as the system prompt.
-The text of `pass.record()` is the first prompt. Each later pass replaces
-the system prompt with the one of the view in hand.
+**The system prompt is the mechanism and the agent part.** A prompt section
+of the harness renders `pass.mechanism` and `pass.agent` before each
+request. The section has no tag, so the model reads the text as the executor
+built it. A later pass changes the prompt with the view in hand. The text
+of `pass.record()` is the first input.
 
-**Each range of the record goes into the session as a custom message.** A
-view, a delta, and a steered line each become a Pi `CustomMessage` of type
-`ambion.record`. Its details hold `after` and `through`: the position the
-range starts after and the position it runs through. The session keeps the
-details on the disk and in memory. The provider receives the text alone, as
-a user message.
+**Each range of the record goes into the session as a marker.** A view, a
+delta, and a steered line each write an entry of kind `ambion.record`. Its
+data hold `after` and `through`: the position the range starts after and
+the position it runs through. A range of a view or a delta carries no model
+message. Its text joins the user input of the pass. A steered line carries
+its text as a user message of its own entry. The provider receives the text
+alone, as a user message.
 
-**`readThrough` follows the exact provider input.** The harness calls the
-`toProviderMessages` hook of the executor with the messages of each
-provider request. The executor reads the ranges and the tool results from
-those messages, and calls `read` and `delivered` for each. The core joins
-the ranges into the highest contiguous position they reach. A user message
-with the same text never counts. The room tool answers also move the
+**`readThrough` follows the exact provider input.** A hook of the harness
+runs before each provider request. The executor reports the ranges that the
+pass holds, the steered lines that the harness placed, and the tool results
+that the request holds. The core joins the ranges into the highest
+contiguous position they reach. The room tool answers also move the
 position; see [Executors](executors.md#how-an-activation-runs).
 
-**A steer goes to the steer queue of the lane.** A line that lands during a
-pass joins the queue as a `[new]` range, and the harness delivers it with
-the next provider request. The executor calls `read` for the line when a
-provider request holds it. A line that lands while the pass prepares its
-prompt joins that prompt. A line that no request holds by the end of the
-pass leaves the queue. The core records the `steer` step; see
-[Executors](executors.md#how-an-activation-runs).
+**A steer is a write to the conversation.** A line that lands during a pass
+becomes a write that the harness queues. The harness places it before the
+next provider request that follows a tool result. The executor calls `read`
+for the line when that request holds it. A line that lands while the pass
+prepares its input joins that input.
+
+**A line that the answer outruns stays unread.** The model can answer with
+no tool call, and the harness then places the queued line after the answer.
+No request holds the line. The executor withdraws the write when it can,
+and the `steer` step reports `consumed: false`. The next pass carries the
+line once in its delta.
 
 **A line that lands between passes waits for the record.** The core runs a
 pass with the delta when the last position of the room is past
@@ -257,27 +267,32 @@ pass with the delta when the last position of the room is past
 takes the view as read.
 
 **The harness does not retry a failed request.** The executor sets the
-retry policy of the harness to `{ enabled: false }` and the stream option
-`maxRetries` to `0`, so the provider client does not retry either. A failed
-request fails the pass, and the room owns every retry.
+retry policy of the harness to `{ enabled: false, maxRetries: 0 }`, and the
+stream option `maxRetries` to `0`, so the provider client does not retry
+either. A failed request fails the pass, and the room owns every retry.
 
 **The harness compacts the session.** When the context of a request passes
-the context window less `reserveTokens`, the harness asks the same model
-for a summary. The summary replaces the older messages, and the latest
-`keepRecentTokens` stay whole. The summary request costs tokens, and its
-usage joins the activation. `readThrough` never moves back.
+the threshold of the policy, the harness asks the same model for a summary.
+The summary replaces the older entries, and the latest `keepRecentTokens`
+stay whole. A session with fewer tokens than `keepRecentTokens` has nothing
+to compact. The summary request costs tokens. Its usage joins the activation
+as a `usage` step at the end of the pass. `readThrough` never moves back.
 
-**The harness recovers from an overflow once.** A context-overflow error,
-or a `length` stop below the output limit of the model, makes the harness
-compact once and send the request again. This happens also when compaction
-is off, and no setting turns it off. The second request costs tokens, and
-its usage joins the activation. When the second request overflows too, the
-pass fails, and the room classifies the error. A `length` stop at the
-output limit ends the pass with `stop: 'length'`.
+**The harness recovers from an overflow once, when compaction is on.** A
+context-overflow error makes the harness compact and send the request
+again. With `compaction.enabled` set to `false`, the error fails the pass,
+and the room classifies it. A `length` stop below the output limit of the
+model ends the pass with `stop: 'length'`.
 
 **The stub model of a scripted stream reports a window of one million
 tokens.** A scripted room compacts only when its definition sets
 `compaction.reserveTokens` close to the window of one million tokens.
+
+**A fault of the storage fails the pass.** A storage that fails a commit
+poisons the session of the harness. The harness reports the fault and
+settles no submission after it. The executor turns the first report into a
+transient failure of the pass. The executor aborts the conversation first,
+so no tool and no request follows the failed pass. The room then retries.
 
 ## How room tools reach the harness
 
@@ -285,21 +300,27 @@ tokens.** A scripted room compacts only when its definition sets
 key, and the room answers.
 
 **The room tools are harness tools bound to the activation.** The harness
-calls them in the same process, so it needs no transport.
+calls them in the same process, so it needs no transport. A room tool that
+fails answers with an error result, so the model reads the text.
 
 **The executor builds the tools of the definition from each `AmbionTool`.**
 It hosts only the room tools of `pass.tools`.
 [Executors](executors.md#the-room-tools) states the fields of a tool that
 the harness reads and a `BoundTool` does not carry.
 
-**The model holds exactly the tools of the activation.** The executor
-passes the room tools, the tools of the definition, and the tools of its
-bundles as the harness `tools`, and names each one in `activeToolNames`.
-The harness adds no built-in tool, no skill, and no prompt template. The
+**The model holds exactly the tools of the activation.** One extension of
+the harness holds the room tools, the tools of the definition, and the tools
+of its bundles. The harness adds no built-in tool, no skill, and no prompt
+template. The
 skills of an agent come from its workspace bundle ([Skills](skills.md)). A
 call to a tool the model does not hold gets an error result, and the pass
 continues. A continued session takes the tools of the activation that
 continues it: a summary activation holds `say` alone.
+
+**A tool result reaches the model whole.** The harness bounds a tool result
+to 2000 lines and 50 KiB unless the tool sets `outputLimits`. Every tool of
+the executor sets the limits to the largest safe integer. The tool owns the
+size of its result.
 
 **An `unknown` or `stale` answer ends the pass.** The executor cuts the activation
 and stands the seat down. The tool result names why the pass ended, and no
@@ -313,14 +334,16 @@ and how a bundle adds tools and guidance. Pi adds these facts.
 **The executor wraps a tool as a harness tool.** Its context carries
 `agent`, `signal`, `callId`, `onUpdate`, `room`, `activation`, and
 `exchange`. The signal is the abort signal of the pass. A string result
-becomes text content. A thrown error becomes a tool error.
+becomes text content. A thrown error becomes a tool error. An abort of the pass throws on, so
+the harness records the abort.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
 `prepareArguments`, and `executionMode`, and passes the call id, the signal,
 and the update callback through.
 
 **The `details` of a tool result must be JSON.** The session writes every
-tool result to its store, and the disk store writes JSON.
+tool result to its storage. The executor drops `details` that JSON cannot
+hold.
 
 ## Policy and the trust boundary
 
@@ -345,8 +368,8 @@ a seat that runs on a subscription, and name a file that the host user
 alone reads.
 
 **The session files hold the whole transcript.** On Node, the harness
-writes each session to a JSONL file under `sessionDir`: every prompt, every
-answer, and every tool result. The executor deletes no file. A host that
+writes each session to a JSONL storage under `sessionDir`: every input,
+every answer, and every tool result. The executor deletes no file. A host that
 keeps secrets out of the disk names a managed `sessionDir` and removes old
 files itself.
 
@@ -363,50 +386,53 @@ session, and the fresh start.
 
 **A session carries the id of the activation that began it.** The release
 records `{ kind: 'pi', id }`. An activation reopens the session only
-when `pass.resumeId` names that id. Its first prompt is `pass.record(after)`,
+when `pass.resumeId` names that id. Its first input is `pass.record(after)`,
 with `after` the position the session read through: the delta, after the
 reminders of the tool bundles ([Processes](processes.md#reminders)). A
 delta with no message starts no pass. A summary activation reads the whole
 view. `readThrough` starts at the position the session read through.
 
-**A custom entry holds the position the session read through.** After each
-pass that did not fail, the executor appends an `ambion.read` entry with
-`readThrough`. The entry never reaches the model. When the write fails,
-the activation runs on, and the next activation reads the whole view.
+**The ranges in the session hold the position it read through.** The
+position is the largest `through` of the `ambion.record` entries that the
+context still holds. The executor writes no other entry for it.
 
 **A session that cannot open starts fresh.** A session the store does not
 hold, cannot read, or that the harness cannot restore, closes and gives way
 to a fresh session under the id of the activation. The activation does not
-fail, and it reads the whole view. A session the disk refuses to create
-stays in memory. When the harness refuses the setup of a fresh session too,
-the session closes and the activation fails as transient.
+fail, and it reads the whole view. A JSONL file with a corrupt line is such
+a session. A session the disk refuses to create stays in memory. A new
+session whose id the store already holds takes a new id.
 
-**A session that fails after it opens gives way too.** When the session
-fails as the lane goes back to its position, the harness closes, and a
-fresh session takes its place. When the store fails a write during a
-pass, the harness throws a fault, and the pass fails as transient. The
-release then records a fresh, empty session, so the retry of the room does
-not continue the failed one. The retry reads the whole view.
+**A session that fails gives way too.** When the store fails a write during
+a pass, the pass fails as transient. The release then records no session, so
+the retry of the room does not continue the failed one. The retry reads the
+whole view.
 
-**A continued session goes back to the last position it read.** The lane
-tip moves back to the newest `ambion.read` entry, or to the root when there
-is none. A pass that failed or was cut after that entry leaves the provider
-input. A retry of a failed activation therefore gives the model each range
-of the record once.
+**A crash leaves no work behind.** A process that dies mid-pass leaves a
+generation, a tool call, or a placed input in the storage. The harness does
+not run them on open, and a later submit would resume them. Before any
+submit, the executor aborts every submission and task that the storage
+holds. The resumed pass sends one request, and it runs no tool again.
+
+**A continued session omits what the last pass left unanswered.** A pass
+that failed, was cut, or ended before a steered line leaves entries after
+its last answer. The executor writes one `ambion.omit` entry with omit edits
+for them. The model does not read them, and the delta gives it each range of
+the record once. The entries stay in the storage.
 
 **The sessions of a seat stay apart.** The open exchange can run beside
 the summary of the exchange before it, and each continues its own session.
 
 **Where the session lives.**
 
-- **Node.** The harness writes each session to a JSONL file under
-  `sessionDir`, through Pi's `JsonlSessionRepo`, in a folder for each room
-  and seat. A restart on the same disk reopens it. A session the disk
-  refuses stays in memory.
-- **`sessions: 'memory'`.** Pi's `MemorySessionRepo` keeps the two newest
-  sessions of each room and seat in memory. A restart loses them.
-- **Cloudflare.** The seat object keeps its sessions in a
-  `MemorySessionRepo` on the object instance. An eviction loses them.
+- **Node.** The harness writes each session to a JSONL storage under
+  `sessionDir`, in a folder for each room, seat, and session id:
+  `<sessionDir>/<room>/<seat>/<id>`. A restart on the same disk reopens it.
+  A session the disk refuses stays in memory.
+- **`sessions: 'memory'`.** A `MemoryStorage` of pi-durable keeps the two
+  newest sessions of each room and seat in memory. A restart loses them.
+- **Cloudflare.** The seat object keeps its sessions in memory on the
+  object instance. An eviction loses them.
 
 [The trace](executors.md#the-trace-log) shows the host's logger what the
 model did.
@@ -417,14 +443,14 @@ model did.
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 
-| Step          | Source in Pi                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------- |
-| `thinking`    | `thinking_delta` updates, then `thinking_end`. A block the stream did not send arrives whole. |
-| `text`        | `text_delta` updates, then `text_end`. A block the stream did not send arrives whole.         |
-| `tool_call`   | `tool_start`, with the call id, the tool name, and the arguments.                             |
-| `tool_result` | `tool_end`, with the result. A failed call adds `error` with the text of the result.          |
-| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line. |
-| `usage`       | The harness `usage` event, one for each provider request.                                     |
+| Step          | Source in Pi                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `thinking`    | `message_update` thinking deltas, then `message_end`. A block the stream did not send arrives whole. |
+| `text`        | `message_update` text deltas, then `message_end`. A block the stream did not send arrives whole.     |
+| `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                          |
+| `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.       |
+| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.        |
+| `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.             |
 
 A redacted thinking block adds no step. The trace policy of the definition
 sets how much of `thinking` and tool output the journal keeps.

@@ -7,9 +7,8 @@
  * and the room does not wake it again. Stub executions stand in for an
  * executor kind, because the kernel imports no executor package.
  */
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
-import { pi, piExecution } from '../../pi/src/index.ts';
+import { pi, piExecution, type StreamFn } from '../../pi/src/index.ts';
 import {
 	type ActivationOpener,
 	defineExecution,

@@ -1,6 +1,5 @@
 /** A native Pi tool adapted by `fromPiTool`, and the argument checks of `defineTool`. */
-import { defineTool, startRoom, type ToolContext } from '@ambionframework/ambion';
-import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import { defineTool, startRoom, type ToolContext, type ToolResult } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
@@ -11,7 +10,7 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { fromPiTool, piExecution } from '../src/index.ts';
+import { fromPiTool, type NativePiTool, piExecution } from '../src/index.ts';
 
 const parameters = Type.Object({ count: Type.Number() });
 const context: ToolContext = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'call-1' };
@@ -21,7 +20,7 @@ type Details = { count: number };
 it('preserves native execution metadata, context, updates, and full results', async () => {
 	const calls: unknown[][] = [];
 	let fail = false;
-	const native: AgentTool<typeof parameters, Details> = {
+	const native: NativePiTool<typeof parameters, Details> = {
 		name: 'count',
 		label: 'Count items',
 		description: 'Count items.',
@@ -35,12 +34,13 @@ it('preserves native execution metadata, context, updates, and full results', as
 		},
 	};
 	const adapted = fromPiTool(native);
-	native.execute = async () => {
+	const mutable: { execute: unknown; label: string } = native;
+	mutable.execute = async () => {
 		throw new Error('mutated native callback');
 	};
-	native.label = 'Changed label';
+	mutable.label = 'Changed label';
 	const signal = new AbortController().signal;
-	const updates: AgentToolResult<unknown>[] = [];
+	const updates: ToolResult[] = [];
 	const result = await adapted.invoke(
 		{ count: 2 },
 		{ ...context, signal, onUpdate: (update) => updates.push(update) },

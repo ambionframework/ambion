@@ -5,10 +5,15 @@
  * guidance; the core does not know what the bundle reaches. A running tool
  * reads its agent, the room, the activation, and the open exchange.
  */
-import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { fromPiTool, type PiOptions, pi, piExecution } from '../../pi/src/index.ts';
+import {
+	fromPiTool,
+	type NativePiTool,
+	type PiOptions,
+	pi,
+	piExecution,
+} from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -144,7 +149,7 @@ describe('the definition of agent tools', () => {
 
 	it('preserves schema inference while composing heterogeneous tools', () => {
 		const parameters = Type.Object({ count: Type.Number() });
-		const native: AgentTool<typeof parameters, { count: number }> = {
+		const native: NativePiTool<typeof parameters, { count: number }> = {
 			name: 'count',
 			label: 'Count',
 			description: 'Count items.',

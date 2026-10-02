@@ -7,7 +7,6 @@
  * from the environment, or a scripted stream, so the provider resolves no
  * credential itself.
  */
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type {
 	Api,
 	AssistantMessage,
@@ -22,6 +21,16 @@ import {
 	createModels,
 	createProvider,
 } from '@earendil-works/pi-ai';
+
+/**
+ * The model call: the stream function of the room. The registry stream and a
+ * scripted stream both have this shape.
+ */
+export type StreamFn = (
+	model: Model<Api>,
+	context: TranscriptContext,
+	options?: SimpleStreamOptions,
+) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
 
 /** The assistant message that ends a stream that could not start. */
 function failed(model: Model<Api>, error: unknown): AssistantMessage {

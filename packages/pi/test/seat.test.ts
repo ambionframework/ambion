@@ -15,7 +15,6 @@ import {
 	type Wake,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	type Api,
 	type Context,
@@ -25,6 +24,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
+import type { StreamFn } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
 import { deaf, ok, playSeat, until, worker } from './support/runner.ts';
 

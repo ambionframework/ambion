@@ -579,7 +579,7 @@ anticipated executor kind. No package for it exists yet.
 
 | Kind                      | Package                   | Loop owner | Steer during a pass                 | Status      |
 | ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
-| Pi `AgentHarness`         | `@ambionframework/pi`     | Harness    | Yes, through `lane.steer`           | Shipped     |
+| Pi harness                | `@ambionframework/pi`     | Harness    | Yes, as a queued write              | Shipped     |
 | Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
 | Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
 | Anthropic SDK tool runner | None                      | Caller     | Between passes                      | Anticipated |
