@@ -409,8 +409,9 @@ export type Step =
 	| { type: 'thinking'; text: string; final: boolean }
 	/** A block of the model's text. `final` closes the block. */
 	| { type: 'text'; text: string; final: boolean }
-	| { type: 'tool_call'; call: string; name: string; input: unknown }
-	| { type: 'tool_result'; call: string; output: unknown; error?: string }
+	/** `parent` names the `compose` call that made a nested call. A direct call has none. */
+	| { type: 'tool_call'; call: string; name: string; input: unknown; parent?: string }
+	| { type: 'tool_result'; call: string; output: unknown; error?: string; parent?: string }
 	/** What the room answered to a commit the seat made. */
 	| {
 			type: 'room';

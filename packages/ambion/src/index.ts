@@ -8,6 +8,9 @@
 
 export type {
 	AmbionTool,
+	BaseToolOptions,
+	DeclaredToolOptions,
+	PlainToolOptions,
 	Reminder,
 	ReminderSeat,
 	ToolBundle,
@@ -18,7 +21,16 @@ export type {
 	ToolUpdate,
 } from './bundle.ts';
 export { contentText } from './bundle.ts';
-export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
+export type {
+	ComposeLimits,
+	ComposeOptions,
+	ComposeResult,
+	Evaluator,
+	EvaluatorInput,
+	JsonValue,
+	LedgerEntry,
+} from './compose.ts';
+export type { DefineAgentOptions, DefineHumanOptions } from './define.ts';
 export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';

@@ -15,6 +15,8 @@ import {
 	piExecution,
 } from '../../pi/src/index.ts';
 import {
+	type AmbionTool,
+	type ComposeOptions,
 	createRuntime,
 	defineAgent,
 	definePerson,
@@ -92,6 +94,12 @@ describe('the definition of agent tools', () => {
 		['seat', { tools: [tool('seat')] }, /room supplies it for an activation/],
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
 		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
+		['compose', { tools: [tool('compose')] }, /the compose option reserves the name/],
+		[
+			'compose in a bundle',
+			{ bundles: [{ tools: [tool('compose')] }] },
+			/A tool of the agent bundle is named 'compose'/,
+		],
 		[
 			'a duplicate after a bundle',
 			{ tools: [tool('read')], bundles: [{ tools: [tool('read')] }] },
@@ -100,6 +108,87 @@ describe('the definition of agent tools', () => {
 	])('refuses a tool named %s', (_name, options: Partial<PiOptions>, message) => {
 		expect(() => worker(options)).toThrow(message);
 		expect(() => worker(options)).toThrow(refusal('invalid_tool'));
+	});
+
+	it.each([
+		['true', true],
+		['an empty object', {}],
+		['an output that is not a schema', { output: 'x' }],
+		['a string', 'yes'],
+		['an output that is an array', { output: [] }],
+	])('refuses a compose value of %s on a tool and on its options', (_name, compose) => {
+		const options = {
+			name: 'bad',
+			description: 'Bad.',
+			parameters: Type.Object({}),
+			compose,
+			execute: () => 'bad',
+		};
+		expect(() => Reflect.apply(defineTool, undefined, [options])).toThrow(
+			'Tool compose must be false or an object with an output schema.',
+		);
+		const built = { ...tool('built'), compose };
+		expect(() => worker({ tools: [built as never] })).toThrow(
+			'Tool compose must be false or an object with an output schema.',
+		);
+	});
+
+	it('keeps the compose field of a tool, and captures the output schema', () => {
+		const output = Type.Object({ count: Type.Number() });
+		const declared = defineTool({
+			name: 'counted',
+			description: 'Counts.',
+			parameters: Type.Object({}),
+			compose: { output },
+			execute: () => ({ content: [], details: { count: 1 } }),
+		});
+		const hidden = defineTool({
+			name: 'hidden',
+			description: 'Stays out of compose.',
+			parameters: Type.Object({}),
+			compose: false,
+			execute: () => 'hidden',
+		});
+		const [kept, left, plain] = worker({ tools: [declared, hidden, tool('plain')] }).executor.tools;
+		(output.properties as Record<string, unknown>).count = Type.String();
+
+		expect(declared.compose).toEqual({ output: expect.objectContaining({ type: 'object' }) });
+		expect(kept?.compose).toEqual({
+			output: expect.objectContaining({
+				properties: { count: expect.objectContaining({ type: 'number' }) },
+			}),
+		});
+		expect(kept?.compose).not.toBe(declared.compose);
+		expect(Object.isFrozen(kept?.compose)).toBe(true);
+		expect(left?.compose).toBe(false);
+		expect(plain).not.toHaveProperty('compose');
+	});
+
+	const ok = { evaluate: async () => undefined };
+
+	it.each([
+		['an option with no evaluator', {}],
+		['an evaluator with no evaluate', { evaluator: {} }],
+		['an approve that is not a function', { evaluator: ok, approve: 'yes' }],
+		['guidance that is not a string', { evaluator: ok, guidance: 1 }],
+		['limits that are not an object', { evaluator: ok, limits: 3 }],
+		['limits that are an array', { evaluator: ok, limits: [] }],
+		['a limit of zero', { evaluator: ok, limits: { calls: 0 } }],
+		['a limit of a fraction', { evaluator: ok, limits: { time: 1.5 } }],
+		['a limit that has no name', { evaluator: ok, limits: { speed: 2 } }],
+	])('refuses a compose option with %s', (_name, compose) => {
+		expect(() => worker({ compose: compose as never })).toThrow(/Agent compose/);
+	});
+
+	it('accepts a compose option and keeps it off the frozen executor', () => {
+		const compose: ComposeOptions = {
+			evaluator: { evaluate: async () => undefined },
+			approve: () => 'allow',
+			guidance: 'Compose.',
+			limits: { calls: 8 },
+		};
+		const agent = worker({ compose });
+		expect(agent.executor).not.toHaveProperty('compose');
 	});
 
 	it('captures caller-owned tool arrays, records, and schemas', () => {
@@ -210,10 +299,80 @@ describe('the definition of agent tools', () => {
 				parameters,
 				// @ts-expect-error Prepared arguments must match the schema.
 				prepareArguments: () => ({ count: 'wrong' }),
-				execute: () => 'wrong',
+				execute: () => ({ content: [], details: undefined }),
 			});
 		};
 		expectTypeOf(rejectedInputs).returns.toBeVoid();
+	});
+
+	it('ties the details of a declared tool to its output schema', () => {
+		const Order = Type.Object({
+			id: Type.String(),
+			status: Type.Union([Type.Literal('open'), Type.Literal('delayed'), Type.Literal('shipped')]),
+			eta: Type.Optional(Type.String()),
+		});
+		const parameters = Type.Object({ id: Type.String() });
+		const text = (value: string) => [{ type: 'text' as const, text: value }];
+
+		// These calls are checked by tsc but deliberately never executed.
+		const declarations = () => {
+			const matching = defineTool({
+				name: 'find_order',
+				description: 'Fetch an order by id, as data.',
+				parameters,
+				compose: { output: Order },
+				execute: ({ id }) => ({ content: text(id), details: { id, status: 'open' } }),
+			});
+			expectTypeOf(matching).toEqualTypeOf<AmbionTool>();
+			defineTool({
+				name: 'async_order',
+				description: 'Fetch an order by id, as data, later.',
+				parameters,
+				compose: { output: Order },
+				execute: async ({ id }) => ({
+					content: text(id),
+					details: { id, status: 'delayed', eta: 'soon' },
+				}),
+			});
+			defineTool({
+				name: 'string_order',
+				description: 'Returns a string.',
+				parameters,
+				compose: { output: Order },
+				// @ts-expect-error A declared tool returns a tool result, not a string.
+				execute: () => 'open',
+			});
+			defineTool({
+				name: 'wrong_literal',
+				description: 'Returns a wrong literal.',
+				parameters,
+				compose: { output: Order },
+				// @ts-expect-error The status is not one of the literals.
+				execute: ({ id }) => ({ content: text(id), details: { id, status: 'lost' } }),
+			});
+			defineTool({
+				name: 'missing_field',
+				description: 'Returns no status.',
+				parameters,
+				compose: { output: Order },
+				// @ts-expect-error The status is missing.
+				execute: ({ id }) => ({ content: text(id), details: { id } }),
+			});
+			defineTool({
+				name: 'undeclared',
+				description: 'Returns a string.',
+				parameters,
+				execute: () => 'open',
+			});
+			defineTool({
+				name: 'hidden',
+				description: 'Stays out of compose.',
+				parameters,
+				compose: false,
+				execute: () => 'open',
+			});
+		};
+		expectTypeOf(declarations).returns.toBeVoid();
 	});
 
 	it.each([null, 12, {}, { name: 'missing-execute' }, { tools: [] }])(

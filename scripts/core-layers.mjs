@@ -17,6 +17,7 @@ export const CORE_LAYERS = [
 			'activation-id.ts',
 			'bodies.ts',
 			'bundle.ts',
+			'compose.ts',
 			'define.ts',
 			'errors.ts',
 			'record.ts',
