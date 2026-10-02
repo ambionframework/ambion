@@ -84,6 +84,7 @@ export type Scenario = FakeScenario & {
 	initTools?: string[];
 	rejectResume?: boolean;
 	rejectResumeResult?: boolean;
+	echoOnTurn?: boolean;
 };
 
 /** An executor of `definition` over the fake, and a room that records what the seat commits. */

@@ -5,7 +5,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, isSaid } from '../../../ambion/src/index.ts';
+import { defineTool, isSaid, type TraceStep } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
@@ -62,4 +62,58 @@ live('steer', () => {
 			await session.stop();
 		}
 	});
+
+	it('a message sent during the final answer runs as a turn of its own, and its say commits', async () => {
+		const clerk = seat('clerk', 'Site clerk. Answers scheduling questions.', {
+			instructions: `
+				Answer a question with one say, in one sentence. After that say, close
+				with a note in plain text: several paragraphs on how
+				you reached the date. When a person adds a line, answer it with one
+				more say, in one sentence.
+			`,
+		});
+		const { session, events, steps: stepsOf } = await open('steer-final', [clerk]);
+		try {
+			const visit = await enter(session, person);
+			const started = new Promise<string>((resolve) => {
+				session.subscribe((e) => {
+					if (e.type === 'activation_start') resolve(e.activation);
+				});
+			});
+			await visit.send({ text: 'When can we pour the slab? Explain the cure times first.' });
+			const activation = await started;
+			// The final answer streams when a text step is open after the first say.
+			const deadline = Date.now() + 60_000;
+			while (!closingNoteStreams(stepsOf(activation))) {
+				if (Date.now() > deadline) throw new Error('The answer did not start streaming.');
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			}
+			await visit.send({ text: 'Also: the inspector visits on Friday.' });
+			await untilQuiet(session);
+
+			const messages = await messagesOf(session);
+			const second = messages.filter(isSaid).filter((m) => m.from === person.name)[1];
+			expect(second).toBeDefined();
+			const steps = stepsOf(activation);
+			expect(stepsOfType(steps, 'steer')).toContainEqual(
+				expect.objectContaining({ seq: second?.seq, consumed: true }),
+			);
+			// A say landed after the steered line: the turn that answers it was not cut.
+			const says = stepsOfType(steps, 'room').filter((s) => s.intent.kind === 'said');
+			expect(says.some((s) => s.result === 'committed' && (s.seq ?? 0) > (second?.seq ?? 0))).toBe(
+				true,
+			);
+			expect(events.filter((e) => e.type === 'error')).toEqual([]);
+		} finally {
+			await session.stop();
+		}
+	});
 });
+
+/** Whether a text step is open after the first committed say: the model streams its closing note. */
+function closingNoteStreams(steps: readonly TraceStep[]): boolean {
+	const said = steps.findIndex(
+		(step) => step.type === 'room' && step.intent.kind === 'said' && step.result === 'committed',
+	);
+	return said >= 0 && steps.slice(said).some((step) => step.type === 'text' && !step.final);
+}

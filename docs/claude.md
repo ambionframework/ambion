@@ -189,7 +189,10 @@ delta into the streaming input and waits for the `result` message that
 answers it. A `result` that arrives while a sent message still waits for its
 echo, or while `queued_turn_count` stands above zero, does not end the pass. The pass
 waits for the next `result`, and it ends with the earlier one after a grace
-period of 5 seconds.
+period of 5 seconds. An echo that arrives in that period cancels it. A line
+that lands during the final answer runs as a turn of its own, and its echo
+comes with that turn. The pass then ends with the `result` of that turn. A
+failed `result` keeps its grace period.
 
 **The SDK echo is the signal that the model read a message.** The SDK
 sends each user message back with `isReplay` set. The executor asks the

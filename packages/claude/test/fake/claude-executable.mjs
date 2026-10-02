@@ -11,6 +11,11 @@
  * environment.
  *
  * `rejectResume` makes a resumed start exit before it says anything.
+ * `echoOnTurn` makes the fake echo a user message as the real executable does
+ * for a steer. A message that arrives while a pass runs gets no echo on
+ * receipt. The fake holds it, and echoes it when the next pass starts, after
+ * the `result` of the current pass. A message that arrives while the fake is
+ * idle starts a pass and gets its echo at once. `queued_turn_count` stays 0.
  * `rejectResumeResult` makes a resumed start answer as the real SDK does: a
  * system init, then an error result that says the session is missing. It
  * echoes no user message.
@@ -24,6 +29,7 @@
  * - `{ sayUntilLanded }`: call `say`, and call it again when the room answers an error.
  * - `{ call: { tool, args } }`: call one tool of the room server.
  * - `{ text, stream }` and `{ thinking, stream }`: one block, sent whole or as deltas.
+ * - `{ wait }`: wait this many milliseconds. An interrupt ends the wait.
  * - `{ awaitUser }`: wait until this many user messages have arrived.
  * - `{ usage }`: add to the running totals the next result carries.
  * - `{ fail: { status, text, exit?, stderr? } }`: end the pass with an error result. `stderr`
@@ -61,6 +67,8 @@ let running = false;
 let cut = false;
 let mcpReady = false;
 let introduced = false;
+/** The messages that `echoOnTurn` holds until the next pass starts. */
+const held = [];
 const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 const waiters = new Set();
 const answers = new Map();
@@ -197,6 +205,11 @@ const actions = {
 	call: ({ tool, args }) => callRoom(tool, args),
 	text: (value, action) => block('text', value, action.stream === true),
 	thinking: (value, action) => block('thinking', value, action.stream === true),
+	wait: async (ms) => {
+		const end = Date.now() + ms;
+		while (!cut && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 20));
+		if (cut) throw new Error('interrupted');
+	},
 	awaitUser: (n) => until(() => users.length >= n),
 	usage: (added) => {
 		for (const key of Object.keys(totals)) totals[key] += added[key] ?? 0;
@@ -287,9 +300,12 @@ async function play(list) {
 	return result({});
 }
 
+const echo = (message) => out({ ...message, isReplay: true, session_id: session });
+
 async function run() {
 	running = true;
 	consumed = users.length;
+	for (const message of held.splice(0)) echo(message);
 	try {
 		if (!introduced && !unresumable()) out(init());
 		introduced = true;
@@ -332,7 +348,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 	if (message.type !== 'user') return;
 	users.push(message);
 	log({ user: message.message.content, composed: message.client_composed === true });
-	if (!unresumable()) out({ ...message, isReplay: true, session_id: session });
+	if (!unresumable()) {
+		if (config.echoOnTurn === true && running) held.push(message);
+		else echo(message);
+	}
 	wake();
 	if (!running) void run();
 });
