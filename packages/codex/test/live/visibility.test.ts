@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { live, open, person, seat, untilQuiet } from './support.ts';
+import { KEY_VAR, live, open, person, seat, untilQuiet } from './support.ts';
 
 live('the trace of an activation', () => {
 	it('holds the reasoning summary, the session step, and the thread with its rollout file', async () => {
@@ -58,7 +58,9 @@ live('the trace of an activation', () => {
 				session: data?.thread,
 				permissionMode: 'never, readOnly',
 			});
-			expect(JSON.stringify(session)).not.toContain(process.env.CODEX_API_KEY ?? '-');
+			// A seat on the ChatGPT login has no key to leak.
+			const key = process.env[KEY_VAR];
+			if (key) expect(JSON.stringify(session)).not.toContain(key);
 		} finally {
 			await room.stop();
 		}

@@ -456,7 +456,7 @@ live('the default assistant, driven by the simulator', () => {
 			for (const exchange of simulation.exchanges)
 				expect(saidBy(exchange, 'assistant')).toEqual([]);
 			const verdict = await judge(simulation, [
-				'The second summary to priya says that inventory left the room.',
+				'The second summary to priya says that inventory is no longer in the room.',
 			]);
 			evidence.verdict = verdict;
 			expect(verdict.pass, JSON.stringify(verdict.findings)).toBe(true);
