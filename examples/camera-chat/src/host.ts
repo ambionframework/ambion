@@ -24,13 +24,15 @@ export const DEFAULT_MODEL = 'gpt-5.6-luna';
 
 /**
  * The Codex home and login of the seat. The seat runs on the login of the
- * host, and no key of the host reaches the binary.
+ * host. The allowlist of the executor admits the keys of the host, so `env`
+ * removes them from the binary.
  */
-export function seatOptions(directory: string, login: string) {
+function seatOptions(directory: string, login: string, codexPath?: string) {
 	return {
 		home: `${directory}/codex`,
 		login,
 		env: { CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined, CODEX_ACCESS_TOKEN: undefined },
+		...(codexPath === undefined ? {} : { codexPath }),
 	};
 }
 
@@ -46,6 +48,8 @@ export async function openHost(options: {
 	model: string;
 	/** The Codex login file to link into the seat. Absent, the login of the host. */
 	login?: string;
+	/** A `codex` executable to run. Absent, the one that `@openai/codex` ships. */
+	codexPath?: string;
 }) {
 	const directory = resolve(options.directory);
 	await mkdir(directory, { recursive: true });
@@ -91,7 +95,7 @@ export async function openHost(options: {
 		storage,
 		execution: options.demo
 			? demoExecution()
-			: codexExecution(seatOptions(directory, options.login ?? hostLogin())),
+			: codexExecution(seatOptions(directory, options.login ?? hostLogin(), options.codexPath)),
 	});
 	let started: { stop(): Promise<void> } | undefined;
 	try {

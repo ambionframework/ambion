@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
@@ -6,7 +6,7 @@ import { sensorConformance, workspaceConformance } from '@ambionframework/worksp
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_MODEL, openHost, seatOptions } from '../src/host.ts';
+import { DEFAULT_MODEL, openHost } from '../src/host.ts';
 import { localBashBackend } from '../src/local-bash.ts';
 import { localGitBackend } from '../src/local-git.ts';
 import { hostLogin, requireLogin } from '../src/login.ts';
@@ -39,7 +39,7 @@ it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async ()
 	expect(rows.subarray(1, WIDTH * 3 + 1).equals(frame.rgb.subarray(0, WIDTH * 3))).toBe(true);
 });
 
-it('finds the Codex login of the host and names the fix when it is missing', async () => {
+it('runs the seat on the login of the host, and the binary gets no key of the host', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'camera-chat-login-'));
 	try {
 		const env = { CODEX_HOME: join(directory, 'codex') };
@@ -49,19 +49,36 @@ it('finds the Codex login of the host and names the fix when it is missing', asy
 		await mkdir(env.CODEX_HOME);
 		await writeFile(hostLogin(env), '{}');
 		await requireLogin(hostLogin(env));
-		const live = await openHost({
-			directory: join(directory, 'live'),
+		// The seat runs a fake executable that records its environment and exits.
+		const live = join(directory, 'live');
+		const seen = join(directory, 'seen.env');
+		const fake = join(directory, 'codex-fake.sh');
+		await writeFile(fake, `#!/bin/sh\nenv > '${seen}'\nexit 1\n`, { mode: 0o755 });
+		vi.stubEnv('CODEX_API_KEY', 'host-codex-key');
+		vi.stubEnv('CODEX_ACCESS_TOKEN', 'host-codex-token');
+		vi.stubEnv('OPENAI_API_KEY', 'host-openai-key');
+		const host = await openHost({
+			directory: live,
 			model: DEFAULT_MODEL,
 			login: hostLogin(env),
+			codexPath: fake,
 		});
-		await live.close();
-		// The seat links the file that startup checked, and the binary gets no key of the host.
-		expect(seatOptions(join(directory, 'live'), hostLogin(env))).toEqual({
-			home: join(directory, 'live', 'codex'),
-			login: hostLogin(env),
-			env: { CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined, CODEX_ACCESS_TOKEN: undefined },
-		});
+		try {
+			await host.visit.send({ text: 'Hello.', to: 'observer' });
+			await expect
+				.poll(() => readFile(seen, 'utf8').catch(() => ''), { timeout: 10000 })
+				.not.toBe('');
+		} finally {
+			await host.close();
+		}
+		const variables = (await readFile(seen, 'utf8')).split('\n');
+		// The binary gets no key of the host, and the seat keeps its own home.
+		expect(variables.filter((line) => /API_KEY|ACCESS_TOKEN/.test(line))).toEqual([]);
+		expect(variables).toContain(`CODEX_HOME=${join(live, 'codex')}`);
+		// The seat links the file that startup checked.
+		expect(await readlink(join(live, 'codex', 'auth.json'))).toBe(hostLogin(env));
 	} finally {
+		vi.unstubAllEnvs();
 		await rm(directory, { recursive: true, force: true });
 	}
 });
