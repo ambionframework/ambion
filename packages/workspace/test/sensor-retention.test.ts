@@ -352,7 +352,7 @@ describe('sensor evidence retention', () => {
 		}
 	});
 
-	it('rejects missing and changed evidence before any object write', async () => {
+	it('rejects missing evidence and a bad request before any object write', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-invalid-'));
 		const storeFixture = await defaultStore(root);
 		const server = await startSensorServer();
@@ -394,18 +394,6 @@ describe('sensor evidence retention', () => {
 					]),
 				),
 			).rejects.toThrow(/request fails/);
-			await expect(
-				retainSensorObservation(
-					storeFixture.store,
-					{ name: 'observer' },
-					metadata,
-					response,
-					new Map([
-						[frameDigest, new Uint8Array([0])],
-						[fileDigest, fileBytes],
-					]),
-				),
-			).rejects.toMatchObject({ name: 'SensorDigestError', expected: frameDigest });
 			const noObjects = await storeFixture.store.bash(owner, (env) => env.exists('/snapshots'));
 			expect(noObjects).toMatchObject({ ok: true, value: false });
 		} finally {

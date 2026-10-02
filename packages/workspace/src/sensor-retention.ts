@@ -1,16 +1,17 @@
-/** Internal automatic retention for already validated sensor observations. */
+/**
+ * Internal automatic retention for sensor observations. The sensor client
+ * owns the schema and digest checks. This file trusts a client result.
+ */
 
 import { posix } from 'node:path';
 import { Check } from 'typebox/value';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
 import { unwrap } from './object-files.ts';
-import { sha256Hex } from './object-rules.ts';
 import { isHandle } from './process-files.ts';
 import type { WorkspaceAgent } from './resource.ts';
 import type { ObserveRequest, ObserveResponse, SensorSource } from './sensor-api.ts';
-import { isValidObserveRequest, ObserveResponseSchema, SensorSourceSchema } from './sensor-api.ts';
-import { SensorDigestError } from './sensor-client.ts';
+import { isValidObserveRequest, SensorSourceSchema } from './sensor-api.ts';
 import type { SnapshotStore } from './snapshots.ts';
 import { retainSnapshotBuffer } from './snapshots.ts';
 
@@ -128,27 +129,20 @@ function captureInput(
 		bytes: new Uint8Array(bytes),
 	}));
 	validateMetadata(metadata);
-	if (!Check(ObserveResponseSchema, response))
-		throw new Error('The retained response fails the sensor API version 1 schema.');
-	verifyReceived(response, files);
+	checkReceived(response, files);
 	return { metadata, response, files };
 }
 
-function verifyReceived(response: ObserveResponse, files: readonly ReceivedFile[]): void {
+function checkReceived(response: ObserveResponse, files: readonly ReceivedFile[]): void {
 	const needed = fileDigests(response.observations);
-	const byDigest = new Map(files.map((file) => [file.digest, file]));
+	const received = new Set(files.map((file) => file.digest));
 	for (const digest of needed) {
-		const file = byDigest.get(digest);
-		if (!file)
+		if (!received.has(digest))
 			throw new Error(
 				`The observation references file ${digest}, but its bytes were not received.`,
 			);
-		const actual = sha256Hex(file.bytes);
-		if (actual !== digest) throw new SensorDigestError(digest, actual);
 	}
 	for (const file of files) {
-		if (!/^[0-9a-f]{64}$/.test(file.digest))
-			throw new Error(`Invalid sensor file digest: ${file.digest}.`);
 		if (!needed.has(file.digest))
 			throw new Error(`Received file ${file.digest} is not referenced by the observation.`);
 	}
@@ -216,7 +210,7 @@ async function publishExport(
 }
 
 /**
- * Keep a verified observation in the workspace object store, then publish a
+ * Keep a client-verified observation in the workspace object store, then publish a
  * complete export into the observing agent's home. No object operation
  * runs from inside the callback of the bash resource.
  */
