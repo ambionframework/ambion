@@ -29,20 +29,27 @@ cd examples/camera-chat
 pnpm start
 ```
 
-The default model is `openai/gpt-6-luna` with medium reasoning. The app reads
-its raw API key from `~/.openai/dev-key` and keeps it in the host process. The
-agent shell receives a fixed set of variables and no host credential. The
-shell runs as the signed-in user, so it can read the key file. `--model <provider/model>` or `AMBION_MODEL` selects another model.
-Other providers use their usual environment credentials. macOS may ask for
-camera permission when the agent starts the server. Approve access for the
-terminal application that runs it.
+The seat runs on [Codex](../../docs/codex.md) and reuses the Codex login of
+your Mac. Run `codex login` once, and sign in with ChatGPT or an API key. The
+app needs no key of its own, reads no key file, and sets no environment
+variable. Startup exits with a message when `~/.codex/auth.json` (or
+`auth.json` in `CODEX_HOME`) does not exist. Codex must store the login in
+that file, because a login in the macOS keyring does not reach the seat.
+The seat keeps its own Codex home in `<directory>/codex` and links that
+login file. It reads no `config.toml` from `~/.codex`.
+
+The default model is `gpt-5.6-luna` with medium reasoning. `--model <id>`
+selects another Codex model. The agent shell receives a fixed set of variables
+and no host credential. The shell runs as the signed-in user, so it can read
+`~/.codex/auth.json`. macOS may ask for camera permission when the agent
+starts the server. Approve access for the terminal application that runs it.
 
 The terminal must advertise Kitty graphics or Sixel support (and pixel
 dimensions for Sixel). Startup exits with an error if native images are not
 available. There is no text-cell fallback. Capture and model observations use
 1280 × 720 PNG frames. Acquisition and preview polling target five frames per second with no audio.
 Preview polling alone makes no model requests. Scene questions send a sampled
-frame to the model provider; they do not send a continuous video stream.
+frame to Codex; they do not send a continuous video stream.
 
 `pnpm start --list-cameras` lists AVFoundation devices without starting the room.
 `pnpm start --device <index>` tells the agent which device to use. Without that
@@ -54,10 +61,11 @@ option, the template selects the built-in Mac camera.
 pnpm demo
 ```
 
-Send a message to start the scripted agent. It executes the actual Git,
-process, connect, and observe tools against a clone of the camera template.
-The cloned server runs with `--demo` and produces a synthetic image. It opens
-no physical device and makes no provider request. Its reply does not perform
+Send a message to start the scripted agent. A script in `src/demo.ts` runs
+the seat in place of Codex and needs no Codex login. It executes the actual
+Git, process, connect, and observe tools against a clone of the camera
+template. The cloned server runs with `--demo` and produces a synthetic image.
+It opens no physical device and makes no model request. Its reply does not perform
 visual inference. The demo also requires macOS. Demo state uses `.data/demo`; live state uses `.data/live`.
 `--directory <path>` selects another directory.
 
@@ -106,20 +114,23 @@ supplies `templates/camera` and `templates/camera-notes`. It checks names at its
 API boundary, but filesystem access does not enforce per-agent Git push
 permissions. The backend seeds a template repository when it is absent. A
 `pre-receive` hook refuses a push into a template; the shell can remove it. The room SQLite
-journal, model sessions, audit, checkouts, and snapshots stay under the selected
-data directory. Model sessions and snapshots can contain image data.
+journal, Codex home, audit, checkouts, and snapshots stay under the selected
+data directory. The Codex home and snapshots can contain image data.
 
 ## Code and validation
 
 | File                      | Responsibility                                          |
 | ------------------------- | ------------------------------------------------------- |
-| `src/main.ts`             | CLI, credentials, room startup, cleanup                 |
-| `src/host.ts`             | Durable room and ordinary workspace tool bundle         |
+| `src/main.ts`             | CLI, Codex login check, room startup, cleanup           |
+| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle         |
+| `src/login.ts`            | Find the Codex login of the host                        |
+| `src/demo.ts`             | Scripted seat for `--demo`                              |
 | `src/preview.ts`          | Connection callbacks and standard sensor-client polling |
 | `src/reference-images.ts` | Resolve retained images cited by messages               |
 | `src/tui.ts`              | Workbench transcript and floating preview               |
 | `src/terminal.ts`         | Native graphics requirement                             |
-| `src/local-bash.ts`       | Local shell and loopback ports                          |
+| `src/local-bash.ts`       | Local shell backend and loopback ports                  |
+| `src/local-env.ts`        | Local files and `bash` on the workspace port            |
 | `src/local-git.ts`        | Template seeding and local repositories                 |
 | `templates/camera/`       | Independently runnable, forkable camera server          |
 

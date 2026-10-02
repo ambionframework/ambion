@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
@@ -6,7 +6,8 @@ import { sensorConformance } from '@ambionframework/workspace/conformance';
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
 import { expect, it, vi } from 'vitest';
-import { demoStream, openHost } from '../src/host.ts';
+import { DEFAULT_MODEL, openHost } from '../src/host.ts';
+import { hostLogin, requireLogin } from '../src/login.ts';
 import { nativeProtocol } from '../src/terminal.ts';
 import { cameraView } from '../src/tui.ts';
 import { parseCameras } from '../templates/camera/camera.ts';
@@ -36,6 +37,23 @@ it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async ()
 	expect(rows.subarray(1, WIDTH * 3 + 1).equals(frame.rgb.subarray(0, WIDTH * 3))).toBe(true);
 });
 
+it('finds the Codex login of the host and names the fix when it is missing', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'camera-chat-login-'));
+	try {
+		const env = { CODEX_HOME: join(directory, 'codex') };
+		expect(hostLogin(env)).toBe(join(directory, 'codex', 'auth.json'));
+		expect(hostLogin({ HOME: directory })).toBe(join(directory, '.codex', 'auth.json'));
+		await expect(requireLogin(env)).rejects.toThrow(`Run 'codex login'`);
+		await mkdir(env.CODEX_HOME);
+		await writeFile(hostLogin(env), '{}');
+		await requireLogin(env);
+		const live = await openHost({ directory: join(directory, 'live'), model: DEFAULT_MODEL });
+		await live.close();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 it('lists video inputs separately from audio', () => {
 	expect(
 		parseCameras(
@@ -46,7 +64,7 @@ it('lists video inputs separately from audio', () => {
 
 it('clones and launches the actual template, connects through standard tools, and drives the preview lifecycle', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'camera-chat-lifecycle-'));
-	const options = { directory, model: 'demo/observer', demo: true, stream: demoStream() };
+	const options = { directory, model: DEFAULT_MODEL, demo: true };
 	const host = await openHost(options);
 	const setup = await createTestRenderer({ width: 120, height: 35 });
 	expect(() => cameraView(setup.renderer, host, true)).toThrow('Native images are unavailable');
@@ -168,7 +186,7 @@ it('clones and launches the actual template, connects through standard tools, an
 		capabilities.mockRestore();
 		await host.close();
 	}
-	const reopened = await openHost({ ...options, stream: demoStream() });
+	const reopened = await openHost(options);
 	try {
 		expect(reopened.preview.sensor).toBeUndefined();
 		expect(
