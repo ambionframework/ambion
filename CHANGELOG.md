@@ -34,8 +34,9 @@ Ambion supports no downgrade before 1.0.0.
 ### Packages
 
 **The eleven packages of 0.4.0 ship at 0.5.0.** No package joins or leaves.
-The sensor work adds no sensors package, and `examples/workbench` stays
-private. Every library package needs Node 22.19 or newer.
+The sensor work adds no sensors package. `examples/workbench` stays
+private, and the new example `examples/camera-chat` is private too. Every
+library package needs Node 22.19 or newer.
 
 - **Entry points.** `@ambionframework/workspace` adds the `./sensors` entry
   and the `./sensor-api.schema.json` file. No other package adds or removes
@@ -50,6 +51,10 @@ private. Every library package needs Node 22.19 or newer.
   `@ambionframework/cloudflare`, `@ambionframework/workspace`,
   `@ambionframework/workstation`, and `@ambionframework/just-bash` drop
   `@earendil-works/pi-agent-core`.
+- **Claude.** `@ambionframework/claude` depends on
+  `@anthropic-ai/claude-agent-sdk` 0.3.284.
+- **Just-bash.** `@ambionframework/just-bash` pins `just-git` to exactly
+  1.8.2.
 - **Workspace.** `@ambionframework/workspace` depends on `diff` for the
   `edit` patch.
 
@@ -79,17 +84,16 @@ is `gpt-5.6-luna` at medium reasoning, and `--model` selects another. The demo
 runs a script in place of Codex and exercises the same lifecycle with
 synthetic frames.
 
-**Ports-enabled workspaces can observe and retain sensor evidence.** The
+**A workspace with endpoints can observe and retain sensor evidence.** The
 `observe({ sensor, span? })` tool reads one connected sensor, fetches and
 verifies every referenced file, and stores the full response and file refs in
 the existing snapshot object store before returning. The result includes
 measurement values and times, export paths, and a manifest snapshot ref.
-`workspace.tools({ images: false })` returns frame paths for `observe` and
-`read`. `observe` still retains frame bytes in its exports and snapshots;
-`read` leaves its source file unchanged. The option `images` is later removed,
-and every result then states the path of an image in text.
+`observe` retains frame bytes in its exports and snapshots, and each result
+states the path of a frame in text. The option `images` is removed; see
+[The workspace](#the-workspace).
 
-**A ports-enabled workspace connects running sensor servers.** The
+**A workspace with endpoints connects running sensor servers.** The
 `connect({ name, process, port })` tool checks process ownership and
 readiness, validates the version 1 index, and registers qualified sensor
 names in memory for the host run. Equal retries refresh discovery and the
@@ -120,8 +124,9 @@ and span support, observation replies, measurement spans, and file digests.
 The Workbench lifecycle test runs the cases against the landed template.
 
 **The workstation forwards private loopback ports over SSH.** The workspace
-root exports `WorkspacePort` and `WorkspacePorts`, and `BashBackend` accepts
-the optional `ports` capability. `workstationBackend` forwards a remote
+root exports `WorkspaceEndpoint` and `WorkspaceEndpoints`, and `BashBackend`
+accepts the optional `endpoints` capability. `workstationBackend` forwards a
+remote
 `127.0.0.1` service port to an automatically assigned host loopback port.
 The caller closes each transport. The URL is private and temporary.
 
@@ -139,8 +144,8 @@ sensor evidence store is added.
 **The Workbench adds a forkable sensor-server template.** It serves
 deterministic numeric, frame, and text fixtures, captures Git source
 metadata at launch, and keeps acquisition files outside its checkout. The
-template imports the workspace schemas from a locally built and packed
-workspace package because npmjs 0.4.0 does not contain SN1. Its README
+template imports the workspace schemas from a workspace package that the
+agent builds and packs from a pinned commit. Its README
 documents its setup, customization, validation, process lifecycle, data
 retention, and rollback. The Workbench lifecycle test runs SN4 conformance
 against a fresh clone.
@@ -180,7 +185,7 @@ The git tools remain `repos`, `clone`, and `fork`, with updated guidance.
 is a number of seconds from 1 to 300, 10 by default. A value outside the
 range fails the call with `Invalid`. The table writes `grace` to `spec`,
 so an adopted process keeps the grace of its own call. A `spec` with no
-`grace` is no spec: a read skips it. `ProcessStatus` gains
+`grace` is no spec: a read skips it. `Process` gains
 `grace: number`. `cancel` and `workspace.processes.cancel` wait for the end up to the grace, at most 10
 seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
 they give the status `running` with `stopping: true`, and the stop goes on.
@@ -204,7 +209,7 @@ and 5 seconds. On just-bash a stop still ends the command at once.
 `@ambionframework/workspace` exports the type `WorkspaceExecOptions`: the
 exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
 workstation sends the two signals for an abort with a grace, and refuses
-a grace outside 0 to 2,147,483 seconds. `ProcessStatus` gains `stopping`,
+a grace outside 0 to 2,147,483 seconds. `Process` gains `stopping`,
 which is `true` while a process that the table stopped still runs. The
 workstation's command script adds `trap : TERM`. A channel that a signal
 ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
@@ -332,8 +337,8 @@ patch. No export changes.
 Before, a type and a schema each stated the body, and the two drifted.
 `SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
 `DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
-`FailureCause`, `Usage`, `VendorSession`, `LeaseChange`, `Close`,
-`Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
+`FailureCause`, `Usage`, `VendorSession`, `Lease`, `Close`,
+`Cancel`, `Run`, `Seating`, and `Composition` now derive from the
 schemas with `Static`.
 
 **Each derived type keeps its name and its fields.** The fields, the
@@ -422,7 +427,7 @@ failed claim, the line is `consumed: false`, and its step comes before the
 runner calls it.
 
 The executor records no `steer` step. The `steer` member of
-`ExecutorSession` only delivers the line. The core calls it at any moment
+`RunningActivation` only delivers the line. The core calls it at any moment
 after it calls `pass` and before that pass settles, also before the body of
 `pass` reaches its first `await`. The executor holds a line that its harness
 cannot take yet, delivers it when the harness can, and drops what it holds
@@ -605,16 +610,17 @@ request and proves that the process goes away within seconds.
 - **Rename `audit: { maxBytes }` to `audit: { rotateBytes }`.**
 - **Rename `TemplateRegistration` to `RepositoryRegistration`.** `shared` is a
   reserved agent name.
-- **Read pending says from the room read.** Use `pendingFor(read, person)`
+- **Read pending says from the room read.** Use `awaitingFor(read, person)`
   and `read.scheduled`. `Room.pendingFor`, `Room.scheduled`, and
   `RoomObject.scheduledSays` are gone.
 - **Update executor and hosting imports.** Names left the hosting entry,
-  `Executor` is a function, `ExecutionServices` holds three fields, and
+  `ActivationOpener` is a function of the activation, `Executor` names the
+  value in a definition, `ExecutionServices` holds three fields, and
   `createPiExecutor`, `createClaudeExecutor`, and `createCodexExecutor` are
   gone. See [The core exports and tests](#the-core-exports-and-tests).
 - **Update tests that script a room.** `Turn` is `Reply`, and the verbs come
-  from `@ambionframework/ambion/testing`. The conformance harness types are
-  one `ConformanceHarness`.
+  from `@ambionframework/ambion/testing`. The conformance fixture types are
+  one `ConformanceFixture`.
 
 #### The vocabulary
 
@@ -915,7 +921,7 @@ workspace tools in `bundles`. The trace maps the items that a seat can
 produce: `agentMessage`, `reasoning`, `dynamicToolCall`, the warnings and
 errors that Codex reports, and the usage of a turn. An item of any other
 type becomes a warning `notice` that names the type. A say no longer cites the
-paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
+paths that Codex changed. The core drops `RunningActivation.roomTools` and the
 type `RoomToolOptions`, because only the Codex executor used them.
 
 **Breaking: the seat text of a Codex seat leaves the first user message.**
@@ -1049,14 +1055,14 @@ Pi executor, and twice in the workspace.
 **One scripted test language serves the core and Pi.**
 `@ambionframework/ambion/testing` renames the type `Turn` to `Reply`,
 because `turn` means one request to a provider in Pi. `seat(name)` joins the verbs `callTool`,
-`speak`, `later`, `spend`, and `quiet` in that entry. `byAgent` is generic:
-`byAgent<Input, Out>` routes a script that reads a `Step` and a script that
+`say`, `schedule`, `spend`, and `quiet` in that entry. `byAgent` is generic:
+`byAgent<Input, Out>` routes a script that reads a `ScriptStep` and a script that
 reads a Pi `Context` with one function. `@ambionframework/pi/testing` drops
-`callTool`, `speak`, `later`, `quiet`, `seat`, and `byAgent`. A Pi script
+`callTool`, `say`, `schedule`, `quiet`, `seat`, and `byAgent`. A Pi script
 reads these verbs from the core entry. The Pi type `Script` is now
 `PiScript`, and a `PiScript` answers with a `Reply` or an
-`AssistantMessage`. `isClosing` in the Pi entry is now `isClosingContext`,
-so the name `isClosing` means only the view check of the core. The Pi
+`AssistantMessage`. `isClosingContext` is the Pi check of a context,
+and the view check of the core is `isSummarizing`. The Pi
 `scripted` stream turns a reply into a message: one tool call for each call,
 or a text that ends the run for an empty reply. It turns a `spend` reply
 into an error message. `quiet` takes no text. A test that reads the text
@@ -1088,9 +1094,10 @@ no code read them. The executor takes its clock from the host.
 services. `ExecutionServicesOptions` and `SessionPlace` leave the entry of
 `@ambionframework/pi`.
 
-**`Executor` is a function of the activation.**
-`@ambionframework/ambion/hosting` exports `Executor` as
-`(activation: ExecutorActivation) => ExecutorSession`. Before, it was an
+**`ActivationOpener` is a function of the activation.**
+`@ambionframework/ambion/hosting` exports `ActivationOpener` as
+`(activation: ExecutorActivation) => RunningActivation`. Before, `Executor`
+was an
 object with an `open` method and an optional `harness` string. The
 `harness` field is gone. The core records the session of a seat, and
 resumes it, under the executor kind of the seat: `definition.executor.kind`.
@@ -1102,8 +1109,7 @@ report no session, so a release records none and no pass gets a `resume`.
 `@ambionframework/pi`. `createClaudeExecutor` and `ClaudeExecutorOptions`
 leave the entry of `@ambionframework/claude`. `createCodexExecutor` and
 `CodexExecutorOptions` leave the entry of `@ambionframework/codex`. Use
-`piExecution`, `claudeExecution`, and `codexExecution`. The rename tables
-later name the function type `ActivationOpener`.
+`piExecution`, `claudeExecution`, and `codexExecution`.
 
 **An executor family is one call.** `defineExecution(kind, build)` in
 `@ambionframework/ambion/hosting` now returns the function that gives an
@@ -1111,35 +1117,34 @@ execution for a set of options, and it registers the execution with no
 options as the default of the kind. `build` takes the host and the
 options. `piExecution`, `claudeExecution`, and `codexExecution` are the
 results of that call, with unchanged signatures. `localExecution` stays for an execution that is not a
-family. `@ambionframework/claude` drops the `ClaudeExecutionOptions` alias
-and `@ambionframework/codex` drops `CodexExecutionOptions`; use
-`ClaudeRuntime` and `CodexRuntime`. The rename tables later name them
-`ClaudeExecutionOptions` and `CodexExecutionOptions`.
+family. `@ambionframework/claude` exports one option type,
+`ClaudeExecutionOptions`,
+and `@ambionframework/codex` exports `CodexExecutionOptions`.
 
 **A room read is the one read of pending says and waits.** `Room` drops
 `pendingFor(person)` and `scheduled()`, and the Cloudflare `RoomObject`
 drops `scheduledSays()`. Read `scheduled` from `room.read()`, and call
-`pendingFor(read, person)` on the read. Journal bodies and stored formats do
+`awaitingFor(read, person)` on the read. Journal bodies and stored formats do
 not change.
 
-**One harness type, one `check`, and one case runner serve the conformance
+**One fixture type, one `check`, and one case runner serve the conformance
 suites.** `@ambionframework/journal/conformance` exports three new parts:
-`check(condition, what)`, `ConformanceHarness<Subject>`, and
-`conformanceSuite(harness, cases)`. `ConformanceHarness<Subject>` has a
+`check(condition, what)`, `ConformanceFixture<Subject>`, and
+`conformanceSuite(fixture, cases)`. `ConformanceFixture<Subject>` has a
 `name` and an `open()` that returns the subject. `conformanceSuite` opens the
 subject for each case, runs the body, and disposes the subject after it.
 `@ambionframework/ambion/conformance` and
-`@ambionframework/workspace/conformance` export the same three. The harness
+`@ambionframework/workspace/conformance` export the same three. The fixture
 type replaces four names, and each suite keeps its subject type:
-`StorageBackend` is now `ConformanceHarness<OpenedBackend>`,
-`ConformanceBackend` is now `ConformanceHarness<WorkspaceConformanceStore>`,
-`ObjectConformanceBackend` is now `ConformanceHarness<ObjectConformanceStore>`,
+`StorageBackend` is now `ConformanceFixture<OpenedBackend>`,
+`ConformanceBackend` is now `ConformanceFixture<WorkspaceConformanceStore>`,
+`ObjectConformanceBackend` is now `ConformanceFixture<ObjectConformanceStore>`,
 and `SensorConformanceHarness` is now
-`ConformanceHarness<SensorConformanceProbe>`. A storage harness now needs a
-`name`, as the three other harnesses had. `@ambionframework/workspace/conformance`
+`ConformanceFixture<SensorConformanceProbe>`. A storage fixture now needs a
+`name`, as the three other fixtures had. `@ambionframework/workspace/conformance`
 also exports `WorkspaceConformanceStore`, the subject of
 `workspaceConformance`. `GitConformanceBackend` extends
-`ConformanceHarness<GitConformanceStore>`. The case names and messages do not
+`ConformanceFixture<GitConformanceStore>`. The case names and messages do not
 change.
 
 ## 0.4.0 (2026-09-29)
@@ -1164,7 +1169,7 @@ entry. Every library package needs Node 22.19 or newer.
 ### What is simpler
 
 **A concept that had two paths has one.** The sections
-[Simplification](#simplification) and [Breaking changes](#breaking-changes)
+[Simplification](#simplification-1) and [Breaking changes](#breaking-changes-1)
 hold the detail of each.
 
 - **The room state has one derivation.** The projection that a live room
