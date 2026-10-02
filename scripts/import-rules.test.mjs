@@ -293,8 +293,10 @@ function sourceFiles(folder, base = folder) {
 
 test('every file of the core belongs to exactly one layer', () => {
 	const bad = sourceFiles(join(root, coreSource)).flatMap((file) => {
-		const layers = CORE_LAYERS.filter((layer) =>
-			layer.files.some((glob) => path.matchesGlob(file, glob)),
+		const layers = CORE_LAYERS.filter(
+			(layer) =>
+				layer.files.some((glob) => path.matchesGlob(file, glob)) &&
+				!(layer.exclude ?? []).includes(file),
 		);
 		return layers.length === 1
 			? []

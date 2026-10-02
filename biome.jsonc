@@ -97,7 +97,8 @@
 		// the layer holds:
 		//
 		//   activation-id.ts, bodies.ts, bundle.ts, define.ts, errors.ts, record.ts, refs.ts, scheduling.ts, session-facts.ts, types.ts  the public shapes, the stored bodies, the record lines, the session facts, and the identity codec
-		//   protocol.ts  the wire shapes between the room and a seat, and the executor contract
+		//   protocol.ts  the wire shapes between the room and a seat
+		//   execution/contract.ts  the executor contract: the types between the driver and one running activation
 		//   host/**  what a host owns: the runtime value
 		//   journal/**  the room's kinds, over @ambionframework/journal
 		//   room/**  every fact and every decision, pure over the journal
@@ -188,6 +189,7 @@
 											"../journal/*",
 											"../room/*",
 											"../execution/*",
+											"!../execution/contract.ts",
 											"../room.ts",
 											"../room-host/*",
 											"../answers.ts",
@@ -349,7 +351,10 @@
 			}
 		},
 		{
-			"includes": ["packages/ambion/src/execution/**"],
+			"includes": [
+				"packages/ambion/src/execution/**",
+				"!packages/ambion/src/execution/contract.ts"
+			],
 			"linter": {
 				"rules": {
 					"style": {
@@ -371,6 +376,54 @@
 											"../hosting.ts"
 										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
+									},
+									{
+										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									},
+									{
+										"group": [
+											"@earendil-works/**",
+											"@ambionframework/pi",
+											"@ambionframework/pi/**"
+										],
+										"message": "The core names no model library. An executor package, such as @ambionframework/pi, depends on the core."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The executor contract holds types over the vocabulary and the protocol.
+			// It sits in `execution/` and below `host/`, so it imports no other file
+			// of that folder.
+			"includes": ["packages/ambion/src/execution/contract.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"./*",
+											"../host/*",
+											"../journal/*",
+											"../room/*",
+											"../room.ts",
+											"../room-host/*",
+											"../answers.ts",
+											"../conformance*",
+											"../testing/*",
+											"../testing.ts",
+											"../index.ts",
+											"../hosting.ts"
+										],
+										"message": "The executor contract names types over the vocabulary and the protocol, and nothing that does anything."
 									},
 									{
 										"group": ["cloudflare:*", "cloudflare:*/**", "node:*", "node:*/**"],

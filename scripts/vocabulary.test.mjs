@@ -70,6 +70,9 @@ const OLD_NAMES = [
 	['simulation', /\bRunExchange\b/],
 	['traced step', /\bTraceRecord\b/],
 	['trace policy default', /\bDEFAULT_TRACE\b/],
+	['bound tool', /\bRoomTool(?:Result)?\b/],
+	['tool concurrency', /\bToolExecutionMode\b/],
+	['seat context', /\bAgentExecutionContext\b/],
 ];
 
 const entries = [
