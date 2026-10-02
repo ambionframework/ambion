@@ -804,12 +804,20 @@ holds the smallest room that proves one claim.
 | `test/live/visibility.test.ts`  | The trace holds the reasoning summary, and one notice names the thread and its rollout file         |
 | `test/live/conformance.test.ts` | The executor suite of `@ambionframework/ambion/conformance`, with no steer and no usage plan        |
 
-**Run the live tier with a key.** Every definition sets the model
-`gpt-5.6-luna` and `modelReasoningEffort: 'medium'`. A file skips when
-`CODEX_API_KEY` is unset.
+**Run the live tier in one of two modes.** Every definition sets the model
+`gpt-5.6-luna` and `modelReasoningEffort: 'medium'`.
+
+| Mode    | Sign-in                         | Pays                     |
+| ------- | ------------------------------- | ------------------------ |
+| `key`   | `CODEX_API_KEY` is set          | The API account          |
+| `login` | `codex login` wrote `auth.json` | The ChatGPT subscription |
+
+The key wins when the host has both. A file skips when the host has
+neither. Unset `CODEX_API_KEY` to run on the login.
 
 ```sh
 CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live
+pnpm --filter @ambionframework/codex run test:live   # on the login
 ```
 
 The script builds the package first, because Codex spawns the built server.
