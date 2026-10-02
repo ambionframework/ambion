@@ -5,8 +5,9 @@
 > verified bytes and the manifest through snapshots, and export the result
 > into the observing agent's home. The version 1 schemas and client are
 > available from `@ambionframework/workspace/sensors`, and the conformance
-> runner is available from `@ambionframework/workspace/conformance`. See the
-> [release plan](../planning/next.md) for scope and acceptance evidence.
+> runner is available from `@ambionframework/workspace/conformance`. See
+> the [backlog](../planning/backlog.md#for-sensors) for the capabilities
+> that remain.
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working
@@ -126,7 +127,7 @@ An agent needs no new sensor installation or configuration tool.
 
 - Runtime and dependency installation, with pinned dependencies where used.
 - The source files to customize and any required device permissions.
-- A validation command. The host can run the reusable SN4 conformance
+- A validation command. The host can run the reusable conformance
   cases against the server.
 - A foreground launch command, loopback binding, and readiness output.
 - The acquisition-data directory and its behavior on restart or rollback.
@@ -596,11 +597,11 @@ that the result was retained. Content-addressed objects already written
 can remain for retry. A partial local export must not appear complete.
 The workspace generates a separate export directory for each call.
 
-**The internal SN34 boundary is `retainSensorObservation`.** `observe` passes
+**The internal retention boundary is `retainSensorObservation`.** `observe` passes
 the existing `SnapshotStore`, the observing `WorkspaceAgent`, captured
 metadata (`sensor`, `process`, `connection`, `request`, and `source`), the
 validated `ObserveResponse`, a `Map<string, Uint8Array>` of verified bytes
-keyed by digest (the SN3 adapter supplies each `SensorFile.bytes`), and an
+keyed by digest (the client adapter supplies each `SensorFile.bytes`), and an
 optional `AbortSignal`. It receives the manifest object and snapshot ref,
 the published export directory and manifest path, and each file's digest,
 snapshot ref, and export path. The observe tool is responsible for acquiring and

@@ -11,7 +11,6 @@ const pages = [
 	'docs/sensors.md',
 	'planning/next.md',
 	'planning/backlog.md',
-	'planning/review-0.5.0.md',
 ];
 
 const slug = (heading) =>

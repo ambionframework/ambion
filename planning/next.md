@@ -1,7 +1,7 @@
-# Next: the scope for 0.5.0
+# Next: the scope for 0.6.0
 
-> **No compatibility promise before 1.0.0.** 0.4.0 shipped on 2026-09-29
-> from commit 98ab056, with eleven packages on npmjs. Until 1.0.0, any
+> **No compatibility promise before 1.0.0.** 0.5.0 shipped on 2026-10-02
+> from commit bd813ce, with eleven packages on npmjs. Until 1.0.0, any
 > release may change any export, entry point, journal body, stored format,
 > or package API.
 >
@@ -14,572 +14,278 @@
 >   golden journals, and body validation catch unintended changes.
 >   A deliberate change updates the affected guards in the same commit.
 
-**0.5.0 gives sensors a Git-template lifecycle.** The agent forks a
-template, customizes and validates its code, and saves a working branch.
-It starts acquisition as a workstation process, connects, observes, and
-cites retained evidence. Replacement and rollback use the same tools.
-[Sensors](../docs/sensors.md) owns the contract. This file owns the work
-and its acceptance. [0.6.0.md](0.6.0.md) lines up the release after it,
-the `compose` tool. [The backlog](backlog.md) holds everything else.
+**0.6.0 gives a seat the `compose` tool, fixes three defects that 0.5.0
+left open, and removes one concept that the repository holds twice.**
+[Compose](../docs/compose.md) owns the compose contract. This file owns
+the work and its evidence. [The backlog](backlog.md) holds everything
+else.
 
 ## Status
 
-**0.4.0 shipped. SN1, SN3, SN4, SN5, SN6, SN8, SN27, SN32, SN33, SN34,
-and SN35 are implemented and validated. SN31's release documentation and
-required checks are complete.** The wire schemas, HTTP client,
-conformance runner, template, workstation ports, connection registry,
-discovery reminder, `connect` and `observe` tools, snapshot retention, and
-the OpenSSH lifecycle acceptance exist. SN33's focused Linux checks passed;
-SN35 separately validates the complete path on the provisioned OpenSSH tier.
-This scope incorporates the owner's response to the review of `origin/main`
-`0f9ef1e27eed0f27c3ec47aef09071d54b044ff8` on 2026-09-29.
-[The review disposition](review-0.5.0.md) records the changed decisions.
-
-**0.5.0 also holds the layer boundaries that a review of `main` found
-open on 2026-10-01.** The review read the import graph of every source file and
-probed every import rule of `biome.jsonc`. LB1 to LB3 are done. LB4 to
-LB9 remain, in [Phase 4](#phase-4-the-layer-boundaries).
+**Lined up. No item has started.** The compose design passed two design
+reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
+run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
+0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
+the `--allow-net` test of `processEvaluator`.
 
 ## The scope
 
-**The release follows the sensor from template to retained evidence.**
+**The release follows one compose call from the definition to the
+model.**
 
 ```text
-fork -> branch -> customize -> validate -> commit and push
-                                             |
-                                      bash -> connect -> observe -> cite
-                                             |
-                              cancel -> revise or select an earlier commit
+executor options -> describeExecutor appends compose -> catalog and guidance
+                                                            |
+            model -> compose({ uses, code }) -> approve -> evaluator
+                                                            |
+                         nested calls -> declared outputs -> ledger -> value
 ```
 
-**Git is the sensor definition and version store.** A template supplies
-source code, tests, and lifecycle instructions. The fork holds saved
-customizations. A process activates one version. The workspace adds two
-tools to connect that process and read its evidence.
-
-- **`connect({ name, process, port })`** attaches a running process of
-  the caller to the workspace. It discovers every sensor of that server.
-- **`observe({ sensor, span? })`** reads a sensor and automatically retains
-  its result through the existing snapshot object store.
-- **The workstation backend carries HTTP through SSH.** The server binds
-  to workstation loopback. Guidance names the workstation and remote port.
-- **One template proves the full lifecycle.** The agent changes its code,
-  saves a branch, runs it, replaces it, and rolls back. It serves numeric,
-  frame, and text evidence through the same API.
-
-**The server implementation owns its internals.** It can use stateful
-reducers and any durable store. Ambion requires the wire contract alone.
-Source timestamps are authoritative. Host time governs host interactions.
-
-**Snapshot refs are the evidence contract.** A successful observation
-returns a manifest snapshot that names the retained parts. Existing
-`restore` reads them after the server stops. No sensor ref form is added.
-
-**Two packages and one example carry the sensor changes.**
-
-| Location                       | Change                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `@ambionframework/workspace`   | Protocol, client, port interface, connections, tools, reminder, automatic snapshots |
-| `@ambionframework/workstation` | Hostname guidance and SSH transport for workstation loopback ports                  |
-| `examples/workbench`           | Git sensor-server template and workstation acceptance scenario                      |
-
-**The kernel surface stays as implemented.** This release adds no
-exchange limit, journal body, sensor URI, or scheduling rule. It adds no
-`@ambionframework/sensors` package and no new model dependency.
-
-**The layer boundaries hold by rule and by test.** A package or a core
-layer imports only what its place in the layers allows, and an import rule
-refuses every other import. A rule that matches nothing fails a test.
-
-| Location                                                     | Change                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------- |
-| `biome.jsonc`, `scripts/`                                    | One table of the core layers; complete rules and probes  |
-| `@ambionframework/ambion`                                    | The executor contract types move into the vocabulary     |
-| `@ambionframework/workspace`                                 | Its own port; the sensor schemas leave the client cycle  |
-| `@ambionframework/just-bash`, `@ambionframework/workstation` | Build on the workspace port with no Pi import            |
-| `examples/workbench`                                         | Uses the workspace port in place of `BACKGROUND_CONTEXT` |
+- **`compose({ uses, code })`** joins the tools of the definition. The
+  model reads only the returned value, or the error and the ledger.
+- **Declared outputs** give the code typed `details`. `defineTool` checks
+  them at compile time, and `compose` checks them at every call.
+- **`@ambionframework/evaluator`** holds `quickjsEvaluator` and
+  `processEvaluator`. Both pass `evaluatorConformance`.
+- **Pi, Claude, and Codex** host `compose` as one more definition tool.
+- **Three fixes** close defects that 0.5.0 left open: a late steer on
+  Claude (CS1), the Camera Chat findings (CC1), and Codex on a ChatGPT
+  sign-in (CX1).
+- **One simplification** gives the sensor path one validation (W5).
 
 ## Decisions taken
 
-- Sensor implementations start as Git templates and become agent-owned forks.
-- The agent customizes code, validates, commits, and pushes working versions.
-- A branch holds ongoing work. A commit identifies a saved version.
-- Each run reports its launch source; uncommitted runs remain marked dirty.
-- Stop before changing a running checkout. Replacement starts a new process.
-- Acquisition data lives outside the checkout. Code rollback does not roll
-  back data; the template owns data compatibility.
-- The server uses its owner's filesystem. Observers get exports in their
-  own homes. Automatic snapshots retain the bytes returned by the API.
-- Reducer state and recovery belong inside the supplied sensor server.
-- Measurement timestamps stay unchanged through rendering and retention.
-- Spend, quotas, exchange limits, and rate-limit policies are outside scope.
-- The server runs as an ordinary workspace process in its owning account.
-- The agent connects by process handle and workstation port.
-- The backend manages the tunnel; the agent sees no SSH credential.
-- Connection registrations last for one host run. Reconnect explicitly
-  after restart; reuse a surviving process through existing adoption.
-- All agents of the workspace can read connected sensors. Only the process
-  owner manages that process and replaces its connection.
-- Retention happens automatically when `observe` succeeds.
-- Server acquisition and unobserved history remain server responsibilities.
-- Existing process timeout and disposal behavior remain unchanged.
-- The initial transport supports workstation loopback through SSH.
-- The workspace owns its port in 0.5.0, and a workspace tool is a core
-  tool (W1). The owner moved this item from phase 3 of
-  [the simplification](simplification.md) on 2026-10-01.
-- The core imports no Node built-in, no Cloudflare module, and no model
-  library, in every layer (LB2).
+- The tool is `compose`. One run is a compose call. The page never uses
+  `composition`, which names the roster entry of the journal.
+- `uses` is required. `compose` checks it, then asks `approve`, then
+  evaluates the code.
+- A declared tool gives its `details`. An undeclared tool gives its text.
+- The room tools do not bind. A compose call computes a value, and the
+  agent decides what to say.
+- The code has no clock, no random source, no timer, and no I/O except
+  through its bindings.
+- A failed or cancelled compose call throws, and its message holds the
+  ledger. A call that outlives the code keeps the result.
+- The limits and the guidance live on the `compose` option.
+- The live token comparison is evidence of the release (CP6). It gates no
+  phase before phase 5.
 
 ## Out of scope
 
-**D21 holds later sensor work.** The initial release does not require:
-
-- A framework daemon, reducer library, annotation service, or driver suite.
-- `followAndPost`, detection subscriptions, and unattended monitoring policy.
-- New sensor refs or a sensor-specific evidence store in the workspace.
-- Live streaming, clips, audio playback, browser views, or public tunnels.
-- Clock correction, skew estimation, or synchronization checks.
-- Automatic service restart or persistent connection discovery.
-- A second bench or a catalog of instrument scenarios.
-
-**The layer work leaves four known facts as they are.**
-
-- The import rules and the review read `src` only. The core's tests read
-  the Pi source by relative path, and the core lists Pi as a
-  devDependency. `packages/ambion/test/package.test.ts` keeps a model
-  import out of the core source.
-- `@ambionframework/cloudflare`, `@ambionframework/assistant`, and
-  `@ambionframework/simulator` depend on the Pi executor.
-  `docs/toolchain.md` §1 documents these edges, and simplification K9
-  holds the assistant.
-- `examples/workbench/src/brand.ts` reads `brand/tokens` at the
-  repository root. The example is private.
-
-**SK1 and SK2 leave the release.** D1 holds exchange bounds. Snapshot refs
-remove the need for SK2. D22 remains deferred. No deferred limit is used
-as an acceptance condition for this release.
+- **An evaluator for workerd.** A seat on `@ambionframework/cloudflare`
+  has no `compose` option in 0.6.0.
+- **Replay of a compose call from its trace.** The trace caps can cut a
+  nested output.
+- **Room tools in a compose call.** `say`, `schedule`, `seat`, `unseat`,
+  `dismiss`, and `recall` stay direct calls.
+- **Concurrent operations in one workspace.** Parallel calls of file tools
+  still run one operation at a time. D9 holds concurrent operations.
+- **A compose call inside a compose call.**
+- **Every backlog item.**
 
 ## The order of work
 
-**Each phase has one observable result.** Existing SN identifiers retain
-their concern where it still applies. New concerns use SN32-SN35. All
-other old SN identifiers are deferred or superseded in D21.
-Complete each phase and its evidence before starting the next phase.
-Within a phase, items can proceed together when their dependencies allow.
+**The compose phases run in order.** Each compose phase has one
+observable result. Complete each phase and its evidence before starting
+the next phase. Within a phase, items can proceed together when their
+dependencies allow. Phases 2 to 4 need no provider and no key. Phase 1
+runs beside the compose phases and blocks only the release.
 
-### Phase 1. The template, wire, and workstation transport
+### Phase 1. The fixes and the simplification
 
-- [x] **1.** The minimal schema and launch source metadata. (SN1)
-- [x] **2.** The forkable template and its lifecycle contract. Needs 1. (SN27)
-- [x] **3.** The client and conformance cases. Needs 1 and 2. (SN3, SN4)
-- [x] **4.** The workspace port contract and workstation forwarding. (SN32)
+- [ ] **1.** A late steer on Claude keeps its answer. (CS1)
+- [ ] **2.** The Camera Chat fixes. (CC1)
+- [ ] **3.** Codex on a ChatGPT sign-in. (CX1)
+- [ ] **4.** The sensor path validates once. (W5)
 
-**Evidence:** the template can be forked, customized, validated, committed,
-and pushed. Template tests validate its responses against SN1 schemas and
-run SN4 conformance against the cloned server. The SN3 client and SN4 raw
-HTTP runner both pass against the template. A real loopback HTTP fixture is
-readable through SSH on a workstation. A refused forward leaves no transport
-resources behind.
+**Evidence:** the `claude` tests steer during the final answer, and the
+answer to the line commits. Each Camera Chat fix has its test or its
+README text. The full Codex live tier passes on the ChatGPT login of the
+owner's Mac. The sensor path checks each schema and digest once.
 
-### Phase 2. Connect, observe, and retain
+### Phase 2. The vocabulary and the trace
 
-- [x] **1.** The connection registry and `connect` tool. (SN33)
-- [x] **2.** Discovery and the reminder. Needs 1. (SN5)
-- [x] **3.** Retain received evidence through snapshots. (SN34)
-- [x] **4.** The observe tool and text-only rendering. Needs 1 and 3. (SN6, SN8, superseded: the text-only bundle is gone)
+- [ ] **1.** The tool vocabulary and the typed `defineTool`. (CP1)
+- [ ] **2.** The step sink, parented steps, and the scripted executor.
+      Needs 1. (CP2)
 
-**Evidence:** focused workspace acceptance passes twelve cases. A real room
-observes numeric, text, frame, and file parts, cites the manifest ref, and
-records it in the audit result. A separate cross-agent restore case stops the
-fixture server before restoring the manifest and exact frame and file bytes.
-Other cases cover supported and unavailable spans, image paths and fixed
-schema, continued shell work while HTTP is blocked, process end before
-verification and during file fetch, connection replacement during an in-flight
-request, cancellation during observation and file fetch, and retention failure
-without a replay.
-Manifest timestamps and series boundaries remain exact. Adapter checks pass
-for Pi (1/1) and Claude (1/1) image-delivery fixtures. Workspace checks
-separately verify image paths in text and restored bytes.
+**Evidence:** a definition refuses a user tool named `compose`. A type
+test refuses a declared tool that returns a string, a wrong literal, or a
+missing field. A parented step raises tool events and gives its id to no
+direct call. The scripted executor gives a tool call a signal, the
+deadline, and a step sink.
 
-### Phase 3. The complete lifecycle and release
+### Phase 3. Compose on the scripted executor
 
-- [x] **1.** The workstation lifecycle acceptance scenario. (SN35)
-- [x] **2.** Documentation and release checks. Needs 1. (SN31)
+- [ ] **1.** The `compose` tool with an evaluator for tests alone. Needs
+      phase 2. (CP3)
+- [ ] **2.** The declared outputs of the workspace tools. Needs phase 2.
+      (CP4)
 
-**Evidence:** fork, customization, validation, commit, push, start,
-connection, observation, citation, replacement, rollback, and restore
-all run through real room tools. The host-crash case reconnects to an adopted
-process after a separate checkout advances its branch. `pnpm check` passes.
-The focused lifecycle passes 2/2, and `pnpm test:live-local-workstation`
-passes 48/48 across four OpenSSH files, including the actual template,
-host-staged runtime, crash recovery, and orphan cleanup after a timed-out
-startup response.
+**Evidence:** acceptance items 1, 2, 4, and 5 of
+[Compose](../docs/compose.md#acceptance) pass on the scripted executor.
+A compose call binds `sql` and `snapshot` over a real workspace and a real
+SQLite file.
 
-SN31 updates current sensor capability, backend requirements, exports, and
-the 0.5.0 JSON manifest format. Release packaging validates all eleven
-packages, version agreement, package hygiene, and the packed sensor schema.
-The final Linux `pnpm format && pnpm check` passes all 23 Turbo tasks;
-`pnpm test:reports` passes 79/79. The final OpenSSH target passes 48/48.
-An optional Pi live run with `openai/gpt-6-luna` at medium reasoning completed
-all 38 cases once with no skips or provider errors: 35 passed and 3 failed.
-The findings are the `corrects-3` judge rejecting "referenced withdrawn
-limit" where the criterion expected explicit "planned" wording, an extra
-`override` scheduled self-message
-that was later dismissed, and a `direct-question` answer broadcast instead
-of sent to Priya. The ignored run evidence is under
-`packages/assistant/test/live/runs/openai-gpt-6-luna/`.
+### Phase 4. The evaluators
 
-### Phase 4. The layer boundaries
+- [ ] **1.** `evaluatorConformance`, `quickjsEvaluator`, and
+      `processEvaluator`. Needs phase 3. (CP5)
 
-- [x] **1.** Hold the neutral and published-surface rules. (LB1, #417)
-- [x] **2.** Refuse model libraries and platform modules in every core
-      layer. (LB2, #419)
-- [x] **3.** One table of the core layers drives the probes. (LB3)
-- [x] **4.** The overrides outside the core refuse subpaths. (LB4)
-- [x] **5.** The host layer imports no execution file. Needs 3. (LB5)
-- [x] **6.** The room-host core imports none of its mechanisms. Needs 3.
-      (LB6)
-- [x] **7.** No cycle of value imports. (LB7)
-- [x] **8.** The workspace owns its port. Needs 4. (LB8)
-- [x] **9.** The tests pass under full parallel load. (LB9, #472)
+**Evidence:** both evaluators pass `evaluatorConformance` on Node 26.
+`quickjsEvaluator` passes on Node 22.19. `processEvaluator` refuses Node
+22 at construction.
 
-**Evidence:** `scripts/import-rules.test.mjs` derives its core cases from
-one layer table and probes every pair of layers. A test fails on any cycle
-of value imports in `packages/*/src`. No source file and no `dependencies`
-field of the workspace, the workstation, or just-bash names
-`@earendil-works/*`. Five Biome overrides refuse `@earendil-works` in those
-packages, with a probe each. `scripts/packed-consumer.test.mjs` packs the
-three packages and finds no Pi package in their tarball manifests or their
-dependency closure. `pnpm check` passes, and `turbo run test --force`
-passes five runs in a row on Linux.
+### Phase 5. Live evidence and release
+
+- [ ] **1.** The live cases and the token comparison. Needs phase 4.
+      (CP6)
+- [ ] **2.** The pages, the changelog, and the status of the design.
+      Needs 1. (CP7)
+
+**Evidence:** the live evidence file records acceptance items 1, 6, and
+7, and the token comparison, on Pi, Claude, and Codex.
 
 ## The items
 
-**SN1. The wire contract.** Implement the types and schemas of
-[The sensor API](../docs/sensors.md#the-sensor-api). Export the schema
-from `@ambionframework/workspace/sensor-api.schema.json`. Export client
-types through `@ambionframework/workspace/sensors`. Update package
-entries, build configuration, and export snapshots together.
+**CS1. A late steer on Claude keeps its answer.** A line that lands while
+a Claude seat streams its final answer runs as a separate turn after the
+first `result`, which reports `queued_turn_count: 0`. The executor parks
+that result behind `ECHO_GRACE` (5 seconds). The echo arrives with the
+request of the next turn and calls `read`, but it does not restart the
+timer. The pass settles on the first result, and `close` stops the turn
+that answers the line. The fix: an echo that arrives while a result waits
+on the grace timer cancels the timer, and the pass settles on the result
+of the next turn. The code is in `answered`, `settleWith`, and `echoed` of
+`packages/claude/src/executor.ts`.
 
-**Evidence:** exact sample requests, responses, and errors validate.
-Bad names, source metadata, digests, times, sample periods, and part
-shapes fail. The generated schema matches the published file. Deferred features add no
-required type, endpoint, or fixture.
+**Evidence:** the fake executable
+(`packages/claude/test/fake/claude-executable.mjs`) gains a mode that
+echoes a held message with the next request after the `result`. A test in
+`packages/claude/test/steer-echo.test.ts` steers during the final text,
+with a second turn longer than `ECHO_GRACE`, and the say of that turn
+commits after the line. The live steer test gains one final-answer case
+that runs only when a person asks for release evidence.
 
-**SN3. The client.** `createSensorClient(root)` implements index, observe,
-and file reads. It preserves transport-root path prefixes, validates version
-1 request and response bodies, verifies file digests, propagates cancellation
-and transport failures, and does not follow redirects or retry requests. The
-entry imports no device or model implementation.
+**CC1. The Camera Chat fixes.** An adversarial review of
+`examples/camera-chat` (merged in #393) left six small findings open.
 
-**Evidence:** focused real HTTP tests exercise the three operations, the
-SN27 server template, wrong versions and malformed bodies, missing files,
-digest mismatch, disconnects, aborts, prefix resolution, and no observe
-replay. Measurement timestamps and returned bytes are checked exactly.
+1. `README.md` says that the seat never bills an API account. That is
+   false when `codex login --api-key` wrote `auth.json`. State that the
+   login in `auth.json` decides billing.
+2. `disconnect` in `packages/workspace/src/sensor-connections.ts` marks a
+   link whose process ended as `disconnected`. Make it a no-op on an
+   unavailable link.
+3. The instruction in `src/host.ts` to ensure `fps=5` and commit any edits
+   invites an edit and a push on every connect, and the template already
+   sets `fps=5`. Delete the instruction.
+4. A `refreshed` event clears the preview in `src/preview.ts` for one
+   poll, so the preview flickers on a reconnect. Keep the frame on
+   `refreshed` for the same sensor.
+5. `src/preview.ts` downloads a frame again when the digest is unchanged.
+   Skip the download.
+6. `templates/camera/camera.ts` fixes the input at 30 frames per second.
+   Add `--framerate`. State the CPU cost, the frame size, and the 24 hour
+   timeout of `bash` in the READMEs.
 
-**SN4. Conformance.** Export `sensorConformance` from the existing
-conformance entry. Its fixture contract covers numeric, text, frame, and file
-parts with a fixed span. The cases check the declared `spans` capability.
-Fixtures and the raw HTTP probe stay in test support. The runner starts no
-framework daemon.
+**Evidence:** findings 2, 4, and 5 have a test where the code has tests.
+The README states the billing rule, the costs, and the timeout.
 
-**Evidence:** a conforming server passes. A server with a deliberately
-wrong index or observation version, digest, span response, or name fails its
-case. The four-part HTTP fixture tests supported spans and sample boundaries.
-The landed template passes with its three parts and unsupported spans. No
-test needs ffmpeg, instruments, or a model provider.
+**CX1. Codex on a ChatGPT sign-in.** The 0.5.0 release run on the owner's
+Mac passed the Codex visibility and mixed-room live files on the ChatGPT
+login. The rest of the Codex live tier ran only on a key. The binary tier
+runs no ChatGPT sign-in, and no test covers the token refresh
+(`account/chatgptAuthTokens/refresh`). Run the full Codex live tier once
+on the ChatGPT login of the owner's Mac. The run uses the subscription and
+bills no API account. Fix what fails, and state in `docs/codex.md` what
+the run covers.
 
-**SN32. Workstation ports.** Add the optional `BashBackend.ports`
-contract from [Workstation ports](../docs/sensors.md#workstation-endpoints).
-Implement it through the existing workstation SSH session machinery.
-Expose the configured hostname in guidance. Reuse account credentials
-and host-key verification. Keep the destination at remote loopback.
+**Evidence:** the full Codex live tier passes on the ChatGPT login, and
+`docs/codex.md` names the run and what stays untested.
 
-**Evidence:** the in-process SSH and rootless OpenSSH tiers reach a real
-loopback HTTP server. Tests cover disabled forwarding, a destination outside
-loopback, invalid ports, establishment cancellation, disconnect, close, and
-backend disposal. They verify release of session leases, channels, and local
-listeners. Forwarding refusal is explicit. just-bash has no port capability.
-The import rules and their probe cover the neutral transport types.
+**W5. The sensor path validates once.** The sensor client
+(`sensor-client.ts`) and the retention (`sensor-retention.ts`) both check
+the schema and the digest of a response. The client owns the check. The
+retention trusts a verified result.
 
-**SN33. Connections.** Add `connect` only when the backend has ports.
-Implement ownership checks, readiness validation, qualified sensor names,
-idempotence, name conflicts, and captured launch source. Commit
-registration atomically after validation. Concurrent claims on one name have one winner. Dispose a
-losing transport. Keep the registry in memory for the host run.
+**Evidence:** the path holds one schema check and one digest check. The
+client tests for a bad digest and a malformed body still fail at the
+client. The retention tests still refuse a missing file and a failed
+write.
 
-**Evidence:** two agents can read one connection, but cannot register
-each other's processes. Equal retries reuse a registration. Conflicting
-calls do not replace it. A stopped process cannot be connected. A failed
-handshake leaves no registration. Replacing an ended process requires an
-explicit owner call. A request after process end cannot reuse its port.
-The focused Linux tests cover the registry and the real process-to-HTTP path
-through the in-process SSH workstation fixture; `pnpm check` passes. SN33
-was not run against the provisioned OpenSSH tier. SN6 implements the
-observe flow.
+**CP1. The vocabulary.** Add `compose` to `AmbionTool`, `defineTool`,
+`captureTool`, and `assertTool`, and capture its `output` schema. Give
+`defineTool` its two overloads, and `ToolResult` its type parameter. Add
+`ToolContext.composeCall` and `ToolContext.record`, and `parent` to the
+`tool_call` and `tool_result` steps. Add the `compose` option to the
+executor options, and reserve the name in `appendTools`. Add
+`packages/ambion/src/compose.ts` to the vocabulary layer of
+`biome.jsonc`.
 
-**SN5. The reminder.** Show the workstation, connected process and port,
-and qualified sensor names with descriptions. Use the index captured at
-connection. Refresh it on an explicit repeated `connect`; dynamic
-hot-plug discovery is outside the initial release. Read process state
-through the existing process table. Keep media out of the reminder.
+**Evidence:** `define` tests refuse a bad `compose` value and a user tool
+named `compose`, and a capture keeps the `output` schema. A type test
+holds the `@ts-expect-error` cases of
+[Typing a declared output](../docs/compose.md#typing-a-declared-output).
+`fromPiTool` and every existing `defineTool` caller compile unchanged.
 
-**Evidence:** a reminder shows names from two servers without clashes.
-The captured index refreshes only on explicit `connect`. An ended process
-shows an unavailable connection. Another agent reads discovery without the
-owner's process paths or the private transport URL. Existing process
-reminders still work when a sensor status read fails or exceeds its bound.
-Focused tests use a real room, a running process table, and a real local HTTP
-index server. The workspace suite passes 469 tests and skips 11. The
-workstation SSH test is skipped on macOS. The ten MinIO tests skip without a
-configured endpoint. The full `pnpm check` passes. SN35 still covers the full
-workstation lifecycle.
+**CP2. The trace.** The hosting export `toolContext` takes the step sink
+of the activation. `agentTools` and the Pi `toolsFor` pass it. `callId`
+and the record of unclaimed calls skip a step with a `parent`. The
+scripted executor gives each tool call a signal, the deadline of the view,
+and the step sink.
 
-**SN34. Retained evidence.** The internal retention operation reuses the
-existing snapshot object store for verified received bytes and an
-observation manifest. The manifest preserves exact observations, request,
-qualified sensor, process handle, connection facts, and launch source
-metadata including its dirty marker. Received bytes are independent of the
-server owner's acquisition files and the observer's mutable exports. The
-snapshot buffer helper stays internal; no public snapshot variant is added.
-Object and bash owner operations remain separate. The operation writes safe
-generated filenames into a per-call directory under the observing agent's
-home and reports success only after the complete export is published.
+**Evidence:** a test records a nested `bash` step during a direct `bash`
+call of the same batch, and the direct call keeps its own id. A nested
+step closes an open text block. `settled(room)` waits for a scripted
+tool call that reads its deadline.
 
-**Evidence:** `restore` retrieves the manifest and its referenced files
-after HTTP server shutdown, including for another agent. Tests cover the
-default directory-backed store and the existing object conformance
-backends. Modified exports do not modify evidence. Missing files, changed
-digests, object-write failures, reversed requests, and cancelled partial
-exports never report a successful retained observation. A real Git-template
-test retains a dirty launch before stopping the server, advances the checkout
-to a later commit, and restores the original launch source and bytes afterward.
+**CP3. The `compose` tool.** `compose.ts` builds the catalog, the
+guidance, the approval, the ledger, the limits, the nested context, the
+output check, and the rendering of the result and the error. A test
+evaluator in `test/support` runs the code as an `AsyncFunction`, and only
+tests import it.
 
-**SN6. Observe.** The `observe` tool implements the input, rendering, audit
-details, and snapshot result of
-[Observe](../docs/sensors.md#observe-and-retain-evidence). It uses host time
-for request lifecycle and source time for measurements, and supports latest
-and explicitly supported spans through the same call.
+**Evidence:** acceptance items 1, 2, 4, and 5 pass on the scripted Pi
+stream and on the fake Claude executable. A room test reads the status
+and the ledger from the rendered content. A unit test of `invoke` reads
+the `ComposeResult`. `COMPOSE_GUIDANCE` joins the export snapshot.
 
-**Evidence:** a real room observes numeric, text, frame, and file results.
-The audit result carries the manifest ref. A message can cite it through
-the existing ref validator. The initial call works without a prior
-activation reminder. Unavailable spans fail explicitly.
+**CP4. The declared outputs.** `sql` gives `count`, the columns, the
+preview rows, and the export or import facts. A blob is lowercase hex, and
+a `bigint` is decimal text. `snapshot`, `bash`, `ps`, `wait`, and `fork`
+declare their outputs. Each details type becomes `Static` of its schema.
 
-**SN8. Text-only rendering. Superseded.** `WorkspaceToolsOptions.images`
-is removed. Every executor kind carries image parts, so a bundle has one
-form. Each image result also states its path as text: `observe` names the
-export path of a frame, and `read` adds `Image path: <path>`. The observe
-schema stays the same for every executor.
+**Evidence:** workspace tests read the declared output of each tool
+through `compose`, and the runtime check passes. A type test pins that
+`ShellOutputTruncation` stays assignable to its schema. The `sql` tests
+assert `count` in place of `details.rows`.
 
-**Evidence:** Pi passes 1/1 adapter case and Claude passes 1/1 image-delivery
-fixture. Workspace checks verify that an image result names its path in text
-and that restoring the manifest returns the exact retained image bytes.
-Adapter checks use no paid model call.
+**CP5. The evaluators.** `@ambionframework/ambion/conformance` exports
+`evaluatorConformance`. `@ambionframework/evaluator` holds
+`quickjsEvaluator`, on the synchronous QuickJS build, and
+`processEvaluator`, with a bundled child entry that speaks JSON lines over
+stdio. `scripts/import-rules.test.mjs` gains the cases of the new package.
 
-**SN27. The sensor template.** Add `templates/sensor-server` beside the
-existing workbench templates. Its standalone Node program serves
-deterministic numeric, frame, and text fixtures. Its README defines how to
-build and pack the workspace package from the checkout that contains SN1,
-install that tarball without saving a machine-local path, customize and
-validate the server, start it in the foreground, read readiness, preserve
-data, stop, replace, and roll back. It imports schemas from
-`@ambionframework/workspace/sensors` rather than copying the contract, and
-pins its direct `typebox` dependency. It reads its Git source once at
-startup and exposes that metadata in the index. Its data directory lives
-outside its checkout.
+**Evidence:** the suite covers the globals table, a memory limit, a cut,
+concurrent binding calls, errors with `details`, and JSON at each
+crossing. `quickjsEvaluator` disposes every handle, so a runtime frees
+clean. `processEvaluator` kills its child at the signal, and a relative
+import in the child fails.
 
-**Evidence:** a fork accepts a code change on a branch. Its tests detect
-an incorrect change. A corrected change can be committed, pushed, and
-cloned again. The launch command starts fixture acquisition and prints its
-bound port only after writing initial acquisition data. Clean, dirty, and
-detached runs report their launch metadata correctly. The template tests
-cover schema and HTTP behavior, error cases, digest and data-path safety,
-and clean/dirty/detached metadata. The Workbench lifecycle test proves an
-invalid fixture is rejected, a corrected change is committed and pushed,
-and a fresh clone runs the saved commit and returns the changed value. The
-Workbench lifecycle test runs `sensorConformance` against the fresh clone.
-The template requires no framework daemon, ffmpeg, or model provider.
+**CP6. Live evidence.** Run acceptance items 1, 6, and 7 once on each
+family, and the token comparison of one task with and without `compose`,
+the catalog included. A run costs money, so it runs when a person asks
+for release evidence.
 
-**SN35. Lifecycle acceptance.** Run the template through a real room,
-the Git backend, workstation process tools, port transport, and snapshots.
-Use the workstation placement; the default just-bash example does not
-claim server support.
+**Evidence:** a live evidence file beside this one records each run: the
+model, the tools that the seat chose, the input tokens, and the outcome.
+A family with no key is marked skipped.
 
-**Evidence:** the agent forks, customizes, validates, commits, and pushes.
-It launches the saved version, reads its port, connects, observes the
-changed result, and cites the manifest. Another agent restores that
-manifest and its files into its own home without reading the owner's home.
+**CP7. Release documentation.** Update the pages that
+[Changes to other contracts](../docs/compose.md#changes-to-other-contracts)
+names, the changelog, and the package count. Change the status of
+[Compose](../docs/compose.md) from a proposed design to the current
+contract.
 
-Stop the process, change and save another version, then start and connect
-it. Its result and launch commit differ. Roll back to the earlier commit
-and verify the earlier behavior. Retained evidence from both runs stays
-readable after shutdown. A dirty run remains dirty in its manifest even
-after the edits are committed and pushed. Export edits change no snapshot.
-
-After a host crash, an adopted server can be connected again. Its launch
-source remains the earlier value even if the branch moved. If startup fails
-after the remote server is ready, a fresh workspace adopts and cancels the
-orphan, then verifies its port closed. A clean workspace disposal follows the
-existing process stop rules.
-
-**SN31. Release documentation.** Update workspace, workstation, process,
-example, trust, and package docs as their pending changes land. Remove
-pending labels only for implemented behavior. Record exports and formats
-in the changelog. Keep the current package count at eleven.
-
-**Evidence:** the plan's identifiers and relative links validate.
-`pnpm check` and the OpenSSH scenario pass. A live model run is optional
-confirmation, not a prerequisite for protocol or transport correctness.
-
-**LB1. The neutral and published-surface rules.** #417 closed it. The
-two neutral backend files, `git-backend.ts` and `object-backend.ts`, keep
-their own rule. `packages/assistant` reaches the core through its
-published entries. The dead `tools/` rules are gone, and every core layer
-override has probe cases. Backlog K6 is closed.
-
-**LB2. The core-wide ban in every layer.** #419 closed it. Biome replaces
-the options of a rule for overlapping overrides, so most core layers lost
-the core-wide ban. Each layer override now repeats it. The ban refuses
-`node:*`, `cloudflare:*`, `@earendil-works/**`, and `@ambionframework/pi`,
-with their subpaths.
-
-**LB3. One table of the core layers.** The `biome.jsonc` comment writes
-the core layer order, and the overrides repeat it by hand. The comment
-omits `conformance*.ts`, and `docs/toolchain.md` §1 names four of the
-layers. No override names `answers.ts`, `testing/`, `testing.ts`, or
-`conformance*.ts` as a target. So `room/` can import `../answers.ts`, and
-`execution/` can import `../testing/scripted.ts`, with no lint error. LB2
-wrote the core-wide ban in ten copies.
-
-Write the layer order once, as a table in `scripts/`. The table names a
-layer by a glob, so one file such as `answers.ts` or `room-host/core.ts`
-is a layer. The probe test derives a case for every pair of layers from
-the table, and fails when `biome.jsonc` disagrees. Add probe cases for the
-neutral files `resource.ts` and `resource-entry.ts`, which have none.
-
-A case with `null` for its refusal must list pairs only. A bare specifier
-in such a case always fails, so make the test refuse that form. Add a pass
-case for the override of `packages/ambion/src/**` alone, in a file that no
-layer override matches.
-
-**Evidence:** the rules refuse every forbidden pair of layers and pass
-every allowed pair. Delete one pattern from one layer override, and the
-test fails on that pair. The `biome.jsonc` comment lists every layer of
-the table.
-
-**LB4. Subpaths outside the core.** A Biome group reads as a gitignore
-pattern, and `*` does not cross `/`. Three overrides refuse a package root
-and pass its subpaths. The journal override passes
-`@earendil-works/pi-ai/providers/all` and
-`@ambionframework/workspace/resource`. The workstation and just-bash/git
-overrides pass `just-bash/browser` and `@ambionframework/just-bash/git`.
-No package declares these dependencies, so no such import resolves today.
-Add the `/**` form beside each root in the three groups.
-
-**Evidence:** each of the three overrides refuses one subpath probe for
-each group.
-
-**LB5. The host layer imports no execution file.** `host/runtime.ts`
-imports the types `Executor` from `execution/executor.ts` and
-`TraceOpener` from `execution/trace.ts`. Four execution files import
-`host/runtime.ts`. The host layer sits below execution, and its rule
-refuses only `../execution/runner*`.
-
-Move the executor contract into the vocabulary, beside `AgentPort` in
-`protocol.ts`. The types are `Executor`, `ExecutorActivation`,
-`ExecutorSession`, `Pass`, `PassInput`, `PassRecord`, `PassResult`,
-`RoomTool`, `StepSink`, `TraceSink`, and `TraceOpener`.
-`execution/` keeps the driver, the room tool bodies, and the sink. Then
-make the host rule refuse `../execution/*`.
-
-**Evidence:** no file of `host/` imports `execution/`. The rules refuse a
-probe from `host/` to `../execution/executor.ts`. The export snapshot is
-unchanged, or the changelog names each change.
-
-**LB6. The room-host core imports none of its mechanisms.**
-`room-host/core.ts` holds the view that every mechanism shares. It imports
-the types `DeliveryState` from `dispatch.ts`, `ExchangeHandle` from
-`waits.ts`, and `CompositionDraft` from `room.ts`. Those files import
-`core.ts`, so the six room-host files form one cycle. Declare the three
-types in `core.ts`.
-
-**Evidence:** `core.ts` imports no other room-host file. An override
-refuses an import of a room-host sibling from `core.ts`, with a probe.
-
-**LB7. No cycle of value imports.** `workspace/src/sensors.ts` is the
-`/sensors` entry and defines the wire schemas. It re-exports the client
-from `sensor-client.ts`, which imports the schemas back. This is the only
-cycle of value imports in `src`. It works because the client reads the
-schemas inside functions only. Move the schemas into their own module,
-which both files import.
-
-Add `scripts/import-cycles.test.mjs`. It reads the relative `import` and
-`export … from` lines of `packages/*/src` and `examples/*/src`, drops
-`import type` and lists of `type` specifiers, and fails on any cycle.
-
-**Evidence:** the test finds no cycle. A probe pair of modules that import
-each other fails it. Type-only cycles stay allowed. The review found seven
-besides LB5 and LB6: the vocabulary, `journal/`, the Cloudflare objects,
-the workstation git files, the workspace git conformance files, and two in
-the Workbench.
-
-**LB8. The workspace owns its port.** This is simplification W1. 36 source
-files of the workspace, the workstation, and just-bash import
-`@earendil-works/pi-agent-core`. The backend contract `WorkspaceEnv`
-extends Pi's `ExecutionEnv`. The file and shell results and errors, the
-context, and `withAbortSignal` come from Pi. The default read, write, and
-edit tools are Pi's own factories, and `bindTools` wraps a Pi tool into a
-core tool. The root entry re-exports `BACKGROUND_CONTEXT`. So a host with
-only Claude or Codex seats installs and loads Pi to use a workspace.
-
-The item takes these decisions:
-
-- **The port takes an `AbortSignal` in place of Pi's `Context`.** The
-  root entry stops exporting `BACKGROUND_CONTEXT`.
-- **The workspace declares its own file and shell types.** These replace
-  `ExecutionEnv`, `Result`, `ok`, `err`, `FileError`, `FileErrorCode`,
-  `FileInfo`, `ExecutionError`, the `ShellExec` and `ShellOutput` types,
-  `JsonValue`, and `AgentToolResult`.
-- **The workspace copies the helpers that it uses.** These are
-  `applyShellOutputUpdate`, `truncateHead`, `truncateTail`,
-  `DEFAULT_MAX_BYTES`, `DEFAULT_MAX_LINES`, `formatSize`, and
-  `formatSkillsForSystemPrompt`.
-- **The workspace implements `read`, `write`, and `edit` over its port.**
-  They keep the parameters and output of Pi's factories.
-  `packages/workspace/test/matrix.test.ts` pins them on every executor.
-- **A workspace tool is a core `AmbionTool`.** `bindTools` and the Pi
-  invocation stub go. The Pi executor needs no adapter.
-- **The consumers move with the port.** The workstation, just-bash, and
-  `examples/workbench/src/files.ts` use the new port.
-- **The docs name the port.** `docs/workspace.md`, `docs/resources.md`,
-  `docs/workstation.md`, and `docs/compose.md` drop the Pi binding.
-
-The export snapshots and the changelog name every changed export.
-
-**Evidence:** no source file and no `dependencies` field of the
-workspace, the workstation, or just-bash names `@earendil-works/*`. Their
-tests may reach Pi through devDependencies. The five overrides of the
-workspace, the workstation, and just-bash refuse `@earendil-works/**`,
-with a probe each. A new packed-consumer check packs the workspace tarball,
-reads its manifest and its production closure, and finds no
-`@earendil-works` package. The
-workspace conformance, the backend suites, the matrix cases, and the SN35
-lifecycle on OpenSSH pass.
-
-**LB9. The tests pass under full parallel load.** #472 closed it. Five
-tests failed in full parallel test runs on 2026-10-01 and passed alone.
-Each fix names its cause:
-
-| Test                                                                                                        | Cause                                                                                                                                                                  | Fix                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/workspace/test/sensor-workstation.test.ts`                                                        | Fixed sleeps took 10.5 s of 11.2 s: a 1.8 s hold on each of four index requests and a 1 s `wait` on each of three server starts. The 20 s limit failed under load.     | A file releases the first index request. Each server writes a file when it listens. The test takes 1.7 s.                         |
-| `examples/workbench/test/sensor-retention-source.test.ts`                                                   | Ten git processes and a Node server. The package has no test timeout, and a loaded runner took the test to 5.4 s.                                                      | The work needs the time. The test now has 20 s.                                                                                   |
-| `packages/cloudflare/test/seat.test.ts` ("cancels an unclaimed wake")                                       | A race. The wake sets the alarm of the seat at once, and the activation sometimes answered before the cancellation.                                                    | A hold keeps the wake unclaimed until the cancellation. The lift of the hold then runs the alarm, and the room refuses its claim. |
-| `examples/workbench/templates/actuator-controller/test/controller.test.mjs` ("the loop reaches the target") | A stop of the process at full power overshot the target. The loop then missed its 3 s deadline, or ended outside the tolerance. A stop with `SIGSTOP` reproduces both. | A stronger integral: the loop settles in 0.8 s. A deadline of 6 s holds a stop of 2 s.                                            |
-| `packages/just-bash/test/just-bash.test.ts` ("ends a change that the host asks for")                        | A shell loop wrote 300 files through the interpreter before the copy. It took three quarters of the test, and a loaded run passed 20 s.                                | The host writes the 300 files. The test takes 0.6 s alone, half of before.                                                        |
-
-**Evidence:** on `main` at #468 with this change, `turbo run test --force`
-passed five runs in a row on Linux at the default concurrency. Runs with
-busy processes, on one or two cores, and with `SIGSTOP` reproduced each
-failure before its fix. The test jobs of `.github/workflows/ci.yml` pass.
+**Evidence:** the docs checks pass, and no page describes a surface that
+the release does not export.

@@ -1,7 +1,7 @@
 # Compose
 
 **Status: proposed design.** No package exports these interfaces yet.
-[The 0.6.0 plan](../planning/0.6.0.md) holds the work.
+[The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
 calls `compose` with the tools that it uses and short code. The code passes
