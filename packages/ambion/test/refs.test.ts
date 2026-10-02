@@ -8,7 +8,7 @@ import {
 	AmbionError,
 	commitUri,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Message,
@@ -205,7 +205,7 @@ describe('refs', () => {
 	});
 });
 
-const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 const product = scriptedAgent('product');
 
 const answerRefs = ['https://x/a', 'ambion://room/other'];

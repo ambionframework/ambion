@@ -5,7 +5,7 @@ import { runningRoom } from '../src/host/runtime.ts';
 import {
 	type Attention,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Message,
 	type Room,
@@ -195,11 +195,11 @@ describe('startRoom', () => {
 		expect(roster).toContain('Founder. Owns the room.');
 
 		// one name is one participant, and one name is one person
-		await expect(session.visit(defineHuman({ name: 'liar', identity: 'x' }))).rejects.toThrow(
+		await expect(session.visit(definePerson({ name: 'liar', identity: 'x' }))).rejects.toThrow(
 			/is an agent/,
 		);
 		await expect(
-			session.visit(defineHuman({ name: 'andrei', identity: 'a different andrei' })),
+			session.visit(definePerson({ name: 'andrei', identity: 'a different andrei' })),
 		).rejects.toThrow(/different identity/);
 	});
 
@@ -230,9 +230,9 @@ describe('startRoom', () => {
 		const view = await readRoom(name);
 		expect(spoken(view.messages).map((m) => m.text)).toContain('for the record');
 		expect(view.participants.map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
-		expect(view.participants.every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(
-			true,
-		);
+		expect(
+			view.participants.every((seat) => seat.kind === 'person' || seat.status === 'idle'),
+		).toBe(true);
 
 		expect(await messagesOf(await open('identity', { scribe: 'broadcast' }))).toHaveLength(0);
 	});

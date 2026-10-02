@@ -19,7 +19,7 @@ import {
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Executor,
 	isSaid,
 	type Message,
@@ -315,7 +315,7 @@ describe('execution composition', () => {
 			}),
 		);
 		const replacement = await (
-			await resumed.visit(defineHuman({ name: 'replacement-person', identity: 'A new visitor.' }))
+			await resumed.visit(definePerson({ name: 'replacement-person', identity: 'A new visitor.' }))
 		).send({ text: 'Replacement question?' });
 		const other = await (await second.visit(andrei)).send({ text: 'Other question?' });
 		await Promise.all([replacement.waitForClose(), other.waitForClose()]);

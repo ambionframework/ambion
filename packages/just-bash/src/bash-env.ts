@@ -16,11 +16,11 @@
 
 import { posix } from 'node:path';
 import type {
-	ExecutionError,
 	FileErrorCode,
 	FileInfo,
 	FileOperations,
 	Result,
+	ShellError,
 	ShellExecResult,
 	WorkspaceEnv,
 	WorkspaceExecOptions,
@@ -126,7 +126,7 @@ export class BashEnv extends HomeEnv implements WorkspaceEnv {
 		command: string,
 		options: WorkspaceExecOptions | undefined,
 		signal?: AbortSignal,
-	): Promise<Result<ShellExecResult, ExecutionError>> {
+	): Promise<Result<ShellExecResult, ShellError>> {
 		const timeout = options?.timeout ?? this.timeout;
 		return withDeadline(signal, timeout, async (deadline) => {
 			const result = await this.bash.exec(command, {

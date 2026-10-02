@@ -11,15 +11,15 @@ export type {
 	Reminder,
 	ReminderSeat,
 	ToolBundle,
+	ToolConcurrency,
 	ToolContent,
 	ToolContext,
-	ToolExecutionMode,
 	ToolResult,
 	ToolUpdate,
 } from './bundle.ts';
 export { contentText } from './bundle.ts';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { defineAgent, defineHuman, defineTool } from './define.ts';
+export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
 export { DEFAULT_SPEAKING } from './execution/render.ts';
@@ -66,10 +66,10 @@ export type {
 	ExchangeRange,
 	ExchangeRef,
 	Executor,
-	HumanDefinition,
-	HumanParticipant,
 	Message,
 	Participant,
+	PersonDefinition,
+	PersonParticipant,
 	PostedMessage,
 	PresenceChange,
 	PresenceMessage,

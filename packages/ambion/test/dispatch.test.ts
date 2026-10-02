@@ -9,7 +9,7 @@ import { type Execution, hostingOf, type Wake } from '../src/hosting.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -35,7 +35,7 @@ import { type Storage, storages } from './support/storage.ts';
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const worker = scriptedAgent('worker');
-const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
+const priya = definePerson({ name: 'priya', identity: 'Asks questions.' });
 const quietly = () => piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 /** Record every wake, and deliver it only when `deliver` says so. */

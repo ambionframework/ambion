@@ -133,7 +133,7 @@ describe('executor tool authority', () => {
 		]);
 		// The room tools are exactly the names that `defineAgent` refuses for a definition tool.
 		expect(new Set(names(tools).slice(0, -1))).toEqual(new Set(ROOM_TOOL_NAMES));
-		// Pi builds the tool of the definition from its `AmbionTool`. A `RoomTool` has no execution mode.
+		// Pi builds the tool of the definition from its `AmbionTool`. A `BoundTool` has no execution mode.
 		expect(tools.at(-1)).toMatchObject({ executionMode: 'sequential' });
 		// Every tool owns the size of its result: pi-durable bounds none of it.
 		for (const tool of tools) expect(tool.outputLimits).toEqual(UNBOUNDED);

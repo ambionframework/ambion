@@ -10,7 +10,7 @@ import { hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -48,8 +48,8 @@ const assistant = defineAgent({
 	identity: 'Writes a closing summary.',
 	executor: pi({ instructions: 'summarise the discussion', model: 'scripted/assistant' }),
 });
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
+const sam = definePerson({ name: 'sam', identity: 'Site foreman.' });
 
 /** What a scenario hands the driver: the room, and the clock that the room runs on. */
 type Drive = (room: Room, clock: FakeClock) => Promise<void>;

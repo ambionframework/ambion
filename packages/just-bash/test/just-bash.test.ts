@@ -6,6 +6,7 @@
  * seed function and `readFiles`.
  */
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -161,7 +162,12 @@ describe('the just-bash adapter', () => {
 		onTestFinished(dispose);
 		const backend = directoryBackend(dir);
 		const alpha = await backend.connect({ name: 'alpha' });
-		await sh(alpha, 'mkdir src && for i in $(seq 1 300); do echo $i > src/f$i; done');
+		// The host writes the 300 files. A shell loop spends most of the test on them.
+		const src = join(dir, 'home', 'alpha', 'src');
+		await mkdir(src);
+		await Promise.all(
+			Array.from({ length: 300 }, (_, i) => writeFile(join(src, `f${i + 1}`), `${i + 1}\n`)),
+		);
 		// `cp -r` is one change for the whole copy, and it is the last command of the script.
 		const copy = sh(alpha, 'cp -r src dst');
 		while (!existsSync(join(dir, 'home', 'alpha', 'dst'))) {

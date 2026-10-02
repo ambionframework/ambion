@@ -107,7 +107,7 @@ home: `CODEX_HOME=~/.ambion/codex codex login`.
 ## A complete example
 
 ```ts
-import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, isSaid, startRoom } from '@ambionframework/ambion';
 import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
@@ -120,7 +120,7 @@ const planner = defineAgent({
   }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 const room = await startRoom({
   name: 'delivery',

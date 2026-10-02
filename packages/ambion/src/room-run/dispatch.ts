@@ -5,7 +5,7 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { Close, LeaseChange } from '../journal/entries.ts';
+import type { Close, Lease } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
@@ -13,19 +13,19 @@ import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
 import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { DeliveryState, RoomHostState } from './core.ts';
+import type { DeliveryState, RoomRunState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
-export function hearEntry(host: RoomHostState, entry: RoomEntry): void {
-	if (entry.kind === 'message') queueMessage(host, entry);
-	else if (entry.kind === 'close') queueCloses(host);
-	else if (entry.kind === 'lease') queueLease(host, entry.body, opens(host, entry.body.id));
-	else if (entry.kind === 'cancel') queueCancellation(host, entry.seq);
+export function hearEntry(run: RoomRunState, entry: RoomEntry): void {
+	if (entry.kind === 'message') queueMessage(run, entry);
+	else if (entry.kind === 'close') queueCloses(run);
+	else if (entry.kind === 'lease') queueLease(run, entry.body, opens(run, entry.body.id));
+	else if (entry.kind === 'cancel') queueCancellation(run, entry.seq);
 	// Membership, cancellation, and lease entries can make an earlier
 	// delivery obsolete without dispatching another message immediately.
-	pruneDeliveryErrors(host);
+	pruneDeliveryErrors(run);
 }
 
 /**
@@ -33,15 +33,15 @@ export function hearEntry(host: RoomHostState, entry: RoomEntry): void {
  * listeners or transport. Each caller that waits on an exchange hears it after
  * the effect, since each entry the room hears can change what a waiter looks for.
  */
-function publish(host: RoomHostState, effect: () => void): void {
-	host.publications = host.publications.then(() => {
-		if (host.evicted()) return;
+function publish(run: RoomRunState, effect: () => void): void {
+	run.publications = run.publications.then(() => {
+		if (run.evicted()) return;
 		try {
 			effect();
 		} catch {
 			// External publication is best effort after the durable fact is confirmed.
 		}
-		host.notifyExchangeWaiters();
+		run.notifyExchangeWaiters();
 	});
 }
 
@@ -51,17 +51,17 @@ function publish(host: RoomHostState, effect: () => void): void {
  * it says `activation_start` once. The replay seeds it from the fold, so a
  * resumed room starts no activation the last run already started.
  */
-function opens(host: RoomHostState, id: string): boolean {
-	const first = !host.heardLeases.has(id);
-	host.heardLeases.add(id);
+function opens(run: RoomRunState, id: string): boolean {
+	const first = !run.heardLeases.has(id);
+	run.heardLeases.add(id);
 	return first;
 }
 
 /** Every lease id and every close the room has heard, seeded by the replay. */
-export function seedHeard(host: RoomHostState): void {
-	const state = host.state();
-	for (const id of state.leases.keys()) host.heardLeases.add(id);
-	host.heardCloses = state.closes.length;
+export function seedHeard(run: RoomRunState): void {
+	const state = run.state();
+	for (const id of state.leases.keys()) run.heardLeases.add(id);
+	run.heardCloses = state.closes.length;
 }
 
 /**
@@ -70,29 +70,29 @@ export function seedHeard(host: RoomHostState): void {
  * the pending activations the projection derives. One message, one entry,
  * one order.
  */
-function queueMessage(host: RoomHostState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
+function queueMessage(run: RoomRunState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
 	const message = copyMessage(placed(entry));
-	const state = host.state();
+	const state = run.state();
 	const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;
 	const delivery = state.deliveries.get(message.seq);
 	const after = state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
 	const steers: Steer[] = [];
 	for (const target of delivery?.steers ?? []) {
 		const lease = state.leases.get(target.activation);
-		if (lease === undefined || !isLive(lease, host.now())) continue;
+		if (lease === undefined || !isLive(lease, run.now())) continue;
 		steers.push({
-			room: host.name,
+			room: run.name,
 			seat: target.seat,
 			activation: target.activation,
 			after,
 			message: copyMessage(message),
 		});
 	}
-	publish(host, () => {
-		host.emit({ type: 'message', message });
-		if (exchange !== undefined) host.emit({ type: 'exchange_opened', exchange });
-		for (const steer of steers) steerTarget(host, steer);
-		void host.reconcile();
+	publish(run, () => {
+		run.emit({ type: 'message', message });
+		if (exchange !== undefined) run.emit({ type: 'exchange_opened', exchange });
+		for (const steer of steers) steerTarget(run, steer);
+		void run.reconcile();
 	});
 }
 
@@ -100,10 +100,10 @@ function queueMessage(host: RoomHostState, entry: Extract<RoomEntry, { kind: 'me
  * Every close the room has not heard yet. A close entry adds one to the
  * state, and a cancellation adds one when it finds an exchange open.
  */
-function queueCloses(host: RoomHostState): void {
-	const { closes } = host.state();
-	for (const close of closes.slice(host.heardCloses)) queueClose(host, close);
-	host.heardCloses = closes.length;
+function queueCloses(run: RoomRunState): void {
+	const { closes } = run.state();
+	for (const close of closes.slice(run.heardCloses)) queueClose(run, close);
+	run.heardCloses = closes.length;
 }
 
 /**
@@ -111,37 +111,37 @@ function queueCloses(host: RoomHostState): void {
  * before any closing summary. A question that landed
  * ahead of the close opens the next exchange, and the room says so.
  */
-function queueClose(host: RoomHostState, close: Close): void {
-	const question = host.state().messages.find((m) => m.seq === close.from);
+function queueClose(run: RoomRunState, close: Close): void {
+	const question = run.state().messages.find((m) => m.seq === close.from);
 	const exchange: ExchangeRange = {
 		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,
 		through: close.through,
 	};
-	const next = host.state().exchange;
+	const next = run.state().exchange;
 	const opened = next === undefined ? undefined : { ...next };
-	publish(host, () => {
-		host.emit({ type: 'exchange_closed', exchange });
-		if (opened !== undefined) host.emit({ type: 'exchange_opened', exchange: opened });
+	publish(run, () => {
+		run.emit({ type: 'exchange_closed', exchange });
+		if (opened !== undefined) run.emit({ type: 'exchange_opened', exchange: opened });
 	});
 }
 
 /** A cancellation closes its current exchange and cuts every lease it superseded. */
-function queueCancellation(host: RoomHostState, seq: Seq): void {
-	const state = host.state();
+function queueCancellation(run: RoomRunState, seq: Seq): void {
+	const state = run.state();
 	const revoked = [...state.leases.values()].filter(
 		(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.until === seq,
 	);
-	host.sentAt.clear();
-	queueCloses(host);
-	publish(host, () => {
+	run.sentAt.clear();
+	queueCloses(run);
+	publish(run, () => {
 		for (const lease of revoked) {
 			const seat = seatOf(lease.id);
 			if (seat === undefined) continue;
-			cutPort(host, seat, lease.id);
-			if (host.heardLeases.has(lease.id))
-				host.emit({
+			cutPort(run, seat, lease.id);
+			if (run.heardLeases.has(lease.id))
+				run.emit({
 					type: 'activation_end',
 					seat,
 					activation: lease.id,
@@ -156,37 +156,37 @@ function queueCancellation(host: RoomHostState, seq: Seq): void {
  * end ends one. A change that ends a lease the journal never held is a
  * wake written off, and starts nothing.
  */
-function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): void {
+function queueLease(run: RoomRunState, lease: Lease, first: boolean): void {
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
-		publish(host, () => {
-			if (first) host.emit({ type: 'activation_start', seat, activation: lease.id });
+		publish(run, () => {
+			if (first) run.emit({ type: 'activation_start', seat, activation: lease.id });
 			// A claim that lost its confirmation never armed the expiry: this pass does.
-			void host.reconcile();
+			void run.reconcile();
 		});
 		return;
 	}
 	const revoked = lease.reason === 'revoked';
 	if (first) {
 		// A change that ends a lease the journal never held is an attempt nobody made.
-		publish(host, () => {
-			if (revoked) cutPort(host, seat, lease.id);
+		publish(run, () => {
+			if (revoked) cutPort(run, seat, lease.id);
 			if (lease.reason === 'abandoned') {
-				host.emit({
+				run.emit({
 					type: 'abandoned',
 					seat,
 					activation: lease.id,
 					cause: lease.cause ?? 'transient',
 				});
-				void host.reconcile();
+				void run.reconcile();
 			}
 		});
 		return;
 	}
-	const said = host.state().messages.some((m) => m.activation === lease.id);
-	publish(host, () => {
-		if (revoked) cutPort(host, seat, lease.id);
-		host.emit({
+	const said = run.state().messages.some((m) => m.activation === lease.id);
+	publish(run, () => {
+		if (revoked) cutPort(run, seat, lease.id);
+		run.emit({
 			type: 'activation_end',
 			seat,
 			activation: lease.id,
@@ -194,7 +194,7 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
 			...(lease.usage === undefined ? {} : { usage: lease.usage }),
 		});
 		if (lease.reason === 'expired')
-			host.emit({
+			run.emit({
 				type: 'error',
 				seat,
 				activation: lease.id,
@@ -207,38 +207,38 @@ function queueLease(host: RoomHostState, lease: LeaseChange, first: boolean): vo
  * Send projected ordinary targets when their recorded lease is live now.
  * The delivery projection excludes authors and context-bound activations.
  */
-function steerTarget(host: RoomHostState, steer: Steer): void {
-	if (activationSpec(steer.activation, host.state()) === undefined) return;
-	dispatch(host, steer.seat, 'steer', steer.activation, (port) => port.steer(steer));
+function steerTarget(run: RoomRunState, steer: Steer): void {
+	if (activationSpec(steer.activation, run.state()) === undefined) return;
+	dispatch(run, steer.seat, 'steer', steer.activation, (port) => port.steer(steer));
 }
 
 /** One activation wake over the wire. */
-export function sendWake(host: RoomHostState, id: string, seat: string): void {
-	if (activationSpec(id, host.state()) === undefined) return;
-	host.sentAt.set(id, host.now());
-	dispatch(host, seat, 'wake', id, (port) => port.wake({ room: host.name, seat, activation: id }));
+export function sendWake(run: RoomRunState, id: string, seat: string): void {
+	if (activationSpec(id, run.state()) === undefined) return;
+	run.sentAt.set(id, run.now());
+	dispatch(run, seat, 'wake', id, (port) => port.wake({ room: run.name, seat, activation: id }));
 }
 
-function cutPort(host: RoomHostState, seat: string, activation: string): void {
-	dispatch(host, seat, 'cut', activation, (port) => port.cut(activation));
+function cutPort(run: RoomRunState, seat: string, activation: string): void {
+	dispatch(run, seat, 'cut', activation, (port) => port.cut(activation));
 }
 
 /** Contain synchronous connector faults and asynchronous port rejection independently. */
 function dispatch(
-	host: RoomHostState,
+	run: RoomRunState,
 	seat: string,
 	operation: DeliveryOperation,
 	activation: string,
 	send: (port: AgentPort) => Promise<void>,
 ): void {
-	if (host.evicted()) return;
-	pruneDeliveryErrors(host);
+	if (run.evicted()) return;
+	pruneDeliveryErrors(run);
 	const key = JSON.stringify([seat, operation, activation]);
-	const previous = host.deliveryStates.get(key);
+	const previous = run.deliveryStates.get(key);
 	if (previous?.pending && !previous.failed) {
 		previous.failed = true;
 		emitDeliveryError(
-			host,
+			run,
 			seat,
 			operation,
 			activation,
@@ -254,24 +254,24 @@ function dispatch(
 	const token = state.token + 1;
 	state.token = token;
 	state.pending = true;
-	host.deliveryStates.set(key, state);
+	run.deliveryStates.set(key, state);
 	const report = (error: unknown) => {
-		const current = host.deliveryStates.get(key);
+		const current = run.deliveryStates.get(key);
 		if (
-			host.gone() ||
+			run.gone() ||
 			current?.token !== token ||
-			(operation !== 'cut' && !deliveryActive(host, activation))
+			(operation !== 'cut' && !deliveryActive(run, activation))
 		)
 			return;
 		current.pending = false;
 		if (current.failed) return;
 		current.failed = true;
-		emitDeliveryError(host, seat, operation, activation, error);
+		emitDeliveryError(run, seat, operation, activation, error);
 	};
 	try {
-		const result = send(portFor(host, seat));
+		const result = send(portFor(run, seat));
 		void result.then(() => {
-			const current = host.deliveryStates.get(key);
+			const current = run.deliveryStates.get(key);
 			if (current?.token !== token) return;
 			current.pending = false;
 			current.failed = false;
@@ -281,34 +281,34 @@ function dispatch(
 	}
 }
 
-function deliveryActive(host: RoomHostState, activation: string): boolean {
+function deliveryActive(run: RoomRunState, activation: string): boolean {
 	return (
-		host.state().due.some((work) => work.id === activation) ||
-		host.state().leases.get(activation)?.phase === 'running'
+		run.state().due.some((work) => work.id === activation) ||
+		run.state().leases.get(activation)?.phase === 'running'
 	);
 }
 
 /** Remove failures for activations that are no longer pending or live. */
-function pruneDeliveryErrors(host: RoomHostState): void {
+function pruneDeliveryErrors(run: RoomRunState): void {
 	const active = new Set([
-		...host.state().due.map((work) => work.id),
-		...[...host.state().leases.values()]
+		...run.state().due.map((work) => work.id),
+		...[...run.state().leases.values()]
 			.filter((lease) => lease.phase === 'running')
 			.map((lease) => lease.id),
 	]);
-	for (const [key, state] of host.deliveryStates)
-		if (!active.has(state.activation)) host.deliveryStates.delete(key);
+	for (const [key, state] of run.deliveryStates)
+		if (!active.has(state.activation)) run.deliveryStates.delete(key);
 }
 
 /** Report a failed or unknown delivery without changing the journal result. */
 function emitDeliveryError(
-	host: RoomHostState,
+	run: RoomRunState,
 	seat: string,
 	operation: DeliveryOperation,
 	activation: string,
 	error: unknown,
 ): void {
-	host.emit({
+	run.emit({
 		type: 'delivery_error',
 		seat,
 		activation,
@@ -317,19 +317,19 @@ function emitDeliveryError(
 	});
 }
 
-function portFor(host: RoomHostState, seat: string): AgentPort {
-	let port = host.ports.get(seat);
+function portFor(run: RoomRunState, seat: string): AgentPort {
+	let port = run.ports.get(seat);
 	if (port === undefined) {
-		const definition = host.defs.get(seat);
+		const definition = run.defs.get(seat);
 		if (definition === undefined)
-			throw new Error(`Room '${host.name}' has no binding for '${seat}'.`);
-		port = host.connector.connect(host.calls, {
-			room: host.name,
+			throw new Error(`Room '${run.name}' has no binding for '${seat}'.`);
+		port = run.connector.connect(run.calls, {
+			room: run.name,
 			seat,
 			definition,
-			emit: (event) => host.emit(event),
+			emit: (event) => run.emit(event),
 		});
-		host.ports.set(seat, port);
+		run.ports.set(seat, port);
 	}
 	return port;
 }

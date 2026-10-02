@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/entries.ts';
+import type { Close, Lease } from '../src/journal/entries.ts';
 import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
@@ -39,7 +39,7 @@ const said = (seq = 3, from = 'priya', extra: Partial<Message> = {}): RoomEntry 
 });
 
 const sourcePosition = (id: string): number => decodeActivationId(id)?.position ?? 0;
-const lease = (body: LeaseChange, seq = sourcePosition(body.id)): RoomEntry => ({
+const lease = (body: Lease, seq = sourcePosition(body.id)): RoomEntry => ({
 	kind: 'lease',
 	body,
 	seq,

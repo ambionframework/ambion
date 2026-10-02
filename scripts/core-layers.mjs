@@ -1,7 +1,8 @@
 /**
  * The layers of `packages/ambion/src`, from the bottom layer up.
  *
- * `files` holds globs relative to `packages/ambion/src`. `imports` names the
+ * `files` holds globs relative to `packages/ambion/src`. `exclude` holds the
+ * files of those globs that belong to another layer. `imports` names the
  * other layers that this layer may import. A layer may always import its own
  * layer, and every pair that no entry lists is refused. `about` is the line
  * that the layer comment of `biome.jsonc` shows.
@@ -32,12 +33,18 @@ export const CORE_LAYERS = [
 		name: 'protocol',
 		files: ['protocol.ts'],
 		imports: ['vocabulary'],
-		about: 'the wire shapes between the room and a seat, and the executor contract',
+		about: 'the wire shapes between the room and a seat',
+	},
+	{
+		name: 'contract',
+		files: ['execution/contract.ts'],
+		imports: ['vocabulary', 'protocol'],
+		about: 'the executor contract: the types between the driver and one running activation',
 	},
 	{
 		name: 'host',
 		files: ['host/**'],
-		imports: ['vocabulary', 'protocol'],
+		imports: ['vocabulary', 'protocol', 'contract'],
 		about: 'what a host owns: the runtime value',
 	},
 	{
@@ -61,24 +68,25 @@ export const CORE_LAYERS = [
 	{
 		name: 'execution',
 		files: ['execution/**'],
-		imports: ['vocabulary', 'protocol', 'host'],
+		exclude: ['execution/contract.ts'],
+		imports: ['vocabulary', 'protocol', 'contract', 'host'],
 		about: 'the execution side of the wire: driver, rendering, tool bodies, trace',
 	},
 	{
 		name: 'conformance',
 		files: ['conformance*.ts'],
-		imports: ['vocabulary', 'protocol', 'host', 'execution'],
+		imports: ['vocabulary', 'protocol', 'contract', 'host', 'execution'],
 		about: 'the suites that play the room from outside the wire',
 	},
 	{
 		name: 'testing',
 		files: ['testing/**'],
-		imports: ['vocabulary', 'protocol', 'host', 'execution'],
+		imports: ['vocabulary', 'protocol', 'contract', 'host', 'execution'],
 		about: 'the deterministic test tools, over the vocabulary and the execution side',
 	},
 	{
-		name: 'room-host',
-		files: ['room-host/**'],
+		name: 'room-run',
+		files: ['room-run/**'],
 		imports: ['vocabulary', 'protocol', 'host', 'journal', 'room', 'answers'],
 		about: 'room.ts (state, phases), core.ts (shared view, no sibling), one file per mechanism',
 	},
@@ -88,12 +96,13 @@ export const CORE_LAYERS = [
 		imports: [
 			'vocabulary',
 			'protocol',
+			'contract',
 			'host',
 			'journal',
 			'room',
 			'answers',
 			'execution',
-			'room-host',
+			'room-run',
 		],
 		about: 'the room facade, which composes the layers below it',
 	},
@@ -103,6 +112,7 @@ export const CORE_LAYERS = [
 		imports: [
 			'vocabulary',
 			'protocol',
+			'contract',
 			'host',
 			'journal',
 			'room',
@@ -110,7 +120,7 @@ export const CORE_LAYERS = [
 			'execution',
 			'conformance',
 			'testing',
-			'room-host',
+			'room-run',
 			'facade',
 		],
 		about: 'the published entry files, which reach every layer',

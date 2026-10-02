@@ -20,6 +20,8 @@ const template = fileURLToPath(new URL('../templates/sensor-server/', import.met
 const host = { name: 'workspace-host' };
 
 describe('sensor evidence retention with Git launch provenance', () => {
+	// Twenty seconds. The test starts ten git processes and a Node server, and
+	// a loaded runner takes those past the five-second default.
 	it('retains a dirty launch and restores its observation after later commits and server shutdown', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'ambion-retention-source-'));
 		onTestFinished(() => rm(root, { recursive: true, force: true }));
@@ -170,7 +172,7 @@ describe('sensor evidence retention with Git launch provenance', () => {
 		});
 		expect([...restoredBytes]).toEqual([...imageBytes]);
 		expect(createHash('sha256').update(restoredBytes).digest('hex')).toBe(digest);
-	});
+	}, 20_000);
 });
 
 function git(cwd: string, args: string[]): string {
@@ -226,7 +228,7 @@ async function start(cwd: string, dataPath: string) {
 	const port = await new Promise<number>((resolvePort, reject) => {
 		const timeout = setTimeout(
 			() => reject(new Error(`Sensor server did not start: ${output}`)),
-			5000,
+			15_000,
 		);
 		child.stdout.on('data', (part: string) => {
 			const match = part.match(/READY http:\/\/127\.0\.0\.1:(\d+)/);

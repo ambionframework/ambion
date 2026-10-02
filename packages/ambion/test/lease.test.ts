@@ -21,7 +21,7 @@ import {
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -29,7 +29,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import type { LeaseChange } from '../src/journal/entries.ts';
+import type { Lease } from '../src/journal/entries.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
 import { type Fault, faulty, portExecution } from './support/ports.ts';
 import {
@@ -63,7 +63,7 @@ import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 
 const solo = scriptedAgent('solo', 'Speaks once.');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 interface Options {
 	faults?: Fault[];
@@ -105,7 +105,7 @@ const speakers = async (session: Room) =>
 	(await messagesOf(session)).filter(isSaid).map((m) => m.from);
 const leaseChanges = async (runtime: Runtime, session: Room) =>
 	(await storedOf(hostingOf(runtime).journals, session.name)).flatMap((entry) =>
-		entry.kind === 'lease' ? [entry.body as LeaseChange] : [],
+		entry.kind === 'lease' ? [entry.body as Lease] : [],
 	);
 const operation = (name: string) => (l: unknown) => (l as { operation: string }).operation === name;
 
@@ -439,7 +439,7 @@ describe('a lease judged where its change is written', () => {
 		let runningRows = 0;
 		// the claim lands at once; the first renewal is held on the storage
 		const journals = gatedJournals(base.storage, (type, data) => {
-			const entry = (data as { body: LeaseChange }).body;
+			const entry = (data as { body: Lease }).body;
 			if (
 				type !== 'lease' ||
 				entry.phase !== 'running' ||

@@ -16,7 +16,7 @@
  */
 import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import { contentText } from '@ambionframework/ambion';
-import type { ActivationView, AgentDefinition, RoomTool } from '@ambionframework/ambion/hosting';
+import type { ActivationView, AgentDefinition, BoundTool } from '@ambionframework/ambion/hosting';
 import { toolContext } from '@ambionframework/ambion/hosting';
 import type { ToolExecutionResult, ToolRegistration } from '@earendil-works/pi-durable';
 
@@ -39,7 +39,7 @@ const messageOf = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
 /** A tool registration from a room tool. */
-function fromRoomTool(tool: RoomTool): PiTool {
+function fromRoomTool(tool: BoundTool): PiTool {
 	return {
 		name: tool.name,
 		description: tool.description,
@@ -134,15 +134,15 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
  * `pass.tools` holds the room tools and the tools of the definition. Pi
  * hosts the room tools from it: the tools that the definition does not name.
  * It builds each tool of the definition from its `AmbionTool`, because a
- * `RoomTool` does not carry what the harness does with the tool:
+ * `BoundTool` does not carry what the harness does with the tool:
  *
  * - The harness applies `prepareArguments` before it checks the arguments
- *   against the schema. A `RoomTool` applies it after the check.
+ *   against the schema. A `BoundTool` applies it after the check.
  * - The harness runs a batch in turn when a tool sets `executionMode` to
  *   `sequential`.
  * - The harness gives the tool the update callback, and the abort signal of
  *   the pass.
- * - The harness keeps `details` and `terminate` of the result. A `RoomTool`
+ * - The harness keeps `details` and `terminate` of the result. A `BoundTool`
  *   gives the content alone.
  *
  * The context of each call comes from `toolContext`, as it does in the core.
@@ -150,7 +150,7 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
 export function toolsFor(
 	view: ActivationView,
 	def: AgentDefinition,
-	tools: readonly RoomTool[],
+	tools: readonly BoundTool[],
 	current: () => ActivationView = () => view,
 ): PiTool[] {
 	const own = new Set(def.executor.tools.map((tool) => tool.name));

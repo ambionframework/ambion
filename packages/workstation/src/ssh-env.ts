@@ -31,11 +31,11 @@
 
 import { posix } from 'node:path';
 import type {
-	ExecutionError,
 	FileExpect,
 	FileInfo,
 	FileOperations,
 	Result,
+	ShellError,
 	ShellExecResult,
 	WorkspaceEnv,
 	WorkspaceExecOptions,
@@ -244,7 +244,7 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		command: string,
 		options: WorkspaceExecOptions | undefined,
 		signal?: AbortSignal,
-	): Promise<Result<ShellExecResult, ExecutionError>> {
+	): Promise<Result<ShellExecResult, ShellError>> {
 		const cwd = options?.cwd === undefined ? this.cwd : this.resolve(options.cwd);
 		return runCommand(this.host, command, cwd, options, signal);
 	}

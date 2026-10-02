@@ -2,6 +2,7 @@ import { access, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { PiExecutionOptions } from '@ambionframework/pi';
+import type { Process } from '@ambionframework/workspace';
 import type { Approval } from './approvals.ts';
 import { type Person, people } from './definitions.ts';
 import {
@@ -16,7 +17,7 @@ import {
 } from './files.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { readCommitFile, readSnapshotFile } from './previews.ts';
-import { byRecency, type ProcessOutput, type ProcessView, readOutput } from './processes.ts';
+import { byRecency, type ProcessOutput, readOutput } from './processes.ts';
 import {
 	fail,
 	liveRoom,
@@ -28,10 +29,11 @@ import {
 import { scenarios } from './scenarios.ts';
 import type { ActivationSteps } from './steps.ts';
 
+export type { Process } from '@ambionframework/workspace';
 export type { Approval } from './approvals.ts';
 export type { Person } from './definitions.ts';
 export type { FileContent, FileEntry, ImageContent, TableView } from './files.ts';
-export type { ProcessOutput, ProcessView } from './processes.ts';
+export type { ProcessOutput } from './processes.ts';
 export type { RoomAction, RoomView } from './rooms.ts';
 export type { ActivationSteps } from './steps.ts';
 
@@ -53,7 +55,7 @@ export interface Workbench {
 	 */
 	watch(room: string, changed: () => void): () => void;
 	/** Enter a room as a person. Entering twice records one arrival. */
-	join(room: string, person: string): Promise<void>;
+	visit(room: string, person: string): Promise<void>;
 	/** Leave a room. A person who is not present has nothing to leave. */
 	leave(room: string, person: string): Promise<void>;
 	/** Send a message. The same key and text return the first exchange and add no message. */
@@ -82,7 +84,7 @@ export interface Workbench {
 	 * The background processes of the agents that used the workspace in this
 	 * run: the running processes first, then the newest start first.
 	 */
-	processes(): Promise<ProcessView[]>;
+	processes(): Promise<Process[]>;
 	/**
 	 * The end of the output of the process `handle` of `agent`: the last 64 K
 	 * characters. An output over 1 MiB gives its size and no text.
@@ -92,7 +94,7 @@ export interface Workbench {
 	 * Stop one process. It waits for the end up to the wait of the stop, 15 seconds
 	 * at most, then gives the state. It runs outside the queue of the host's file reads.
 	 */
-	cancelProcess(handle: string): Promise<ProcessView>;
+	cancelProcess(handle: string): Promise<Process>;
 	/** Call `changed` when a process starts and when one ends. The return value ends the watch. */
 	watchProcesses(changed: () => void): () => void;
 	/** The names of the tables of the lab database. */
@@ -157,7 +159,7 @@ function present(
 	return snapshot.participants.some(
 		(seat) =>
 			seat.name === name &&
-			seat.kind === 'human' &&
+			seat.kind === 'person' &&
 			'presence' in seat &&
 			seat.presence === 'present',
 	);
@@ -172,7 +174,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		rooms: () => rooms.list(),
 		read: (room, after) => rooms.read(room, after),
 		watch: (room, changed) => rooms.watch(room, changed),
-		async join(room, person) {
+		async visit(room, person) {
 			const who = personNamed(person);
 			await inRoom(room, async (live) => void (await live.visit(who)));
 		},

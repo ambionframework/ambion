@@ -10,14 +10,8 @@
 
 import type { WorkspaceEnv } from './backend.ts';
 import { runScript } from './execution-env.ts';
-import type { ExecutionError, Result, ShellExecResult } from './port.ts';
-import {
-	type ProcessRecord,
-	type ProcessSpec,
-	statusOf,
-	stopLine,
-	wrapped,
-} from './process-files.ts';
+import type { Result, ShellError, ShellExecResult } from './port.ts';
+import { type Process, type ProcessSpec, statusOf, stopLine, wrapped } from './process-files.ts';
 
 /**
  * Seconds past its own timeout and its grace that the table gives the
@@ -65,7 +59,7 @@ export function pause(ms: number, signal?: AbortSignal): Promise<void> {
 	return within(new Promise<void>(() => undefined), ms, signal);
 }
 
-export type Run = Result<ShellExecResult, ExecutionError> | { thrown: unknown };
+export type Run = Result<ShellExecResult, ShellError> | { thrown: unknown };
 
 /**
  * Run one bash process on its own environment. An abort of `signal` cancels
@@ -112,7 +106,7 @@ export function endOfRun(run: Exclude<Run, { ok: true }>): string {
 }
 
 /** The status of a process whose files could not be read: a failure, from its spec. */
-export function unreadable(spec: ProcessSpec, dir: string, error: unknown): ProcessRecord {
+export function unreadable(spec: ProcessSpec, dir: string, error: unknown): Process {
 	const message = error instanceof Error ? error.message : String(error);
 	const lost = statusOf({ dir, spec, seen: false, pid: false, alive: false }, false);
 	return Object.freeze({

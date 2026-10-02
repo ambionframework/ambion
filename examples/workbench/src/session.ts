@@ -210,7 +210,7 @@ export class Session {
 			open: view.exchange,
 			humans: new Set(
 				view.participants
-					.filter((participant) => participant.kind === 'human')
+					.filter((participant) => participant.kind === 'person')
 					.map((participant) => participant.name),
 			),
 			working: workingAgents(view),
@@ -355,7 +355,7 @@ export class Session {
 	private async join(): Promise<void> {
 		if (!this.identity || !this.room) return;
 		try {
-			await this.host.join(this.room, this.identity.name);
+			await this.host.visit(this.room, this.identity.name);
 			this.entered = true;
 		} catch (error) {
 			this.fail(error);

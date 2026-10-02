@@ -313,7 +313,7 @@ harness.** Each executor kind adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
   grants, then the tools of the definition. A summary activation gets the
-  room tools alone. Each `RoomTool` has a `name`, a `description`, TypeBox
+  room tools alone. Each `BoundTool` has a `name`, a `description`, TypeBox
   `parameters`, and `run(args, call)`. `call` is the id of the tool call,
   and the commit takes it as its key. The core binds each room tool to the
   read position and the cut of the activation. A call of a tool of the
@@ -395,15 +395,15 @@ the transport.
 
 **Pi hosts the room tools of `pass.tools`, and builds the tools of the
 definition itself.** Claude and Codex host all of `pass.tools`. A
-`RoomTool` does not carry what the Pi harness does with a tool of the
+`BoundTool` does not carry what the Pi harness does with a tool of the
 definition:
 
 - The harness applies `prepareArguments` before it checks the arguments
-  against the schema. A `RoomTool` applies it after the check.
+  against the schema. A `BoundTool` applies it after the check.
 - The harness runs a batch in turn when a tool sets `executionMode` to
   `sequential`.
 - The harness gives the tool `onUpdate`, and the abort signal of the pass.
-- The harness keeps `details` and `terminate` of the result. A `RoomTool`
+- The harness keeps `details` and `terminate` of the result. A `BoundTool`
   gives the content alone.
 
 Pi builds each tool from its `AmbionTool`, and `toolContext` gives each call

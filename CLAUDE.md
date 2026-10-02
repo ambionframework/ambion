@@ -14,11 +14,11 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `packages/ambion`: the runtime. One file per concern, in layers that Biome
   holds. `room.ts` composes them.
 - `packages/journal`: the append-only journal. One queue, fenced by run, with
-  conditional commits.
+  conditional appends.
 - `packages/assistant`: the default assistant definition. Membership guidance
   and closing summaries over the core.
 - `packages/simulator`: evals. `simulate()` drives a room as a person and
-  returns the run that checks read.
+  returns the simulation that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run

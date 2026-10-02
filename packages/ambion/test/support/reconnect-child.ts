@@ -8,7 +8,7 @@ import { pi, piExecution } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -24,7 +24,7 @@ if (directory === undefined || (phase !== 'start' && phase !== 'resume')) {
 }
 const database = new DatabaseSync(join(directory, 'room.db'));
 const name = 'process-reconnect';
-const human = defineHuman({ name: 'owner', identity: 'Owns the request.' });
+const human = definePerson({ name: 'owner', identity: 'Owns the request.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers the request.',
@@ -77,7 +77,7 @@ async function resume(): Promise<void> {
 		false,
 	);
 	assert.ok(
-		before.participants.some((person) => person.kind === 'human' && person.presence === 'present'),
+		before.participants.some((person) => person.kind === 'person' && person.presence === 'present'),
 	);
 
 	const room = await resumeRoom(name, { runtime, agents: [worker] });

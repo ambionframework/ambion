@@ -15,10 +15,10 @@ import {
 	type Attention,
 	createRuntime,
 	defineAgent,
-	defineHuman,
-	type HumanDefinition,
+	definePerson,
 	isSaid,
 	type Message,
+	type PersonDefinition,
 	type Room,
 	type SaidMessage,
 	startRoom,
@@ -48,7 +48,7 @@ export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(
 /** Real milliseconds for one exchange and its summary. */
 export const EXCHANGE_MS = 90_000;
 
-export const priya = defineHuman({ name: 'priya', identity: 'Owns the request.' });
+export const priya = definePerson({ name: 'priya', identity: 'Owns the request.' });
 
 const inventory = defineAgent({
 	name: 'inventory',
@@ -69,7 +69,7 @@ export interface RoomOptions {
 	 * The person who leaves after the first question, before the first
 	 * activation of the assistant starts. Absent, nobody leaves early.
 	 */
-	readonly leaves?: HumanDefinition;
+	readonly leaves?: PersonDefinition;
 }
 
 /**

@@ -131,8 +131,8 @@ describe('structured activation context', () => {
 		message.text = 'Changed outside the room.';
 		if (message.wakes === undefined) throw new Error('Expected wake metadata.');
 		message.wakes.push('changed-outside-the-room');
-		const person = mutable.participants.find((item) => item.kind === 'human');
-		if (person === undefined || person.kind !== 'human') throw new Error('Expected a person.');
+		const person = mutable.participants.find((item) => item.kind === 'person');
+		if (person === undefined || person.kind !== 'person') throw new Error('Expected a person.');
 		person.identity = 'Changed outside the room.';
 		const reserve = mutable.reserve[0];
 		if (reserve === undefined) throw new Error('Expected a reserve agent.');
