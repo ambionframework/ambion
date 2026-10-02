@@ -8,10 +8,7 @@ export function hostLogin(env: Readonly<Record<string, string | undefined>> = pr
 }
 
 /** Fail at startup when the host has no Codex login. The seat runs on that login and uses no key. */
-export async function requireLogin(
-	env: Readonly<Record<string, string | undefined>> = process.env,
-): Promise<void> {
-	const file = hostLogin(env);
+export async function requireLogin(file: string = hostLogin()): Promise<void> {
 	try {
 		await access(file);
 	} catch {

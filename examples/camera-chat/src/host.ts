@@ -16,6 +16,7 @@ import { openWorkspace } from '@ambionframework/workspace';
 import { demoExecution } from './demo.ts';
 import { localBashBackend } from './local-bash.ts';
 import { localGitBackend } from './local-git.ts';
+import { hostLogin } from './login.ts';
 import { cameraPreview } from './preview.ts';
 
 /** The Codex model of the seat. `--model` selects another. */
@@ -31,6 +32,8 @@ export async function openHost(options: {
 	demo?: boolean;
 	device?: string;
 	model: string;
+	/** The Codex login file to link into the seat. Absent, the login of the host. */
+	login?: string;
 }) {
 	const directory = resolve(options.directory);
 	await mkdir(directory, { recursive: true });
@@ -74,7 +77,18 @@ export async function openHost(options: {
 	});
 	const runtime = createRuntime({
 		storage,
-		execution: options.demo ? demoExecution() : codexExecution({ home: `${directory}/codex` }),
+		execution: options.demo
+			? demoExecution()
+			: codexExecution({
+					home: `${directory}/codex`,
+					login: options.login ?? hostLogin(),
+					// The seat runs on the login of the host. A key of the host stays out.
+					env: {
+						CODEX_API_KEY: undefined,
+						OPENAI_API_KEY: undefined,
+						CODEX_ACCESS_TOKEN: undefined,
+					},
+				}),
 	});
 	try {
 		const saved = await readRoom('camera', { runtime, messages: false });

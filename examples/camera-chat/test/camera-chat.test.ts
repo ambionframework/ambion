@@ -2,11 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
-import { sensorConformance } from '@ambionframework/workspace/conformance';
+import { sensorConformance, workspaceConformance } from '@ambionframework/workspace/conformance';
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL, openHost } from '../src/host.ts';
+import { localBashBackend } from '../src/local-bash.ts';
+import { localGitBackend } from '../src/local-git.ts';
 import { hostLogin, requireLogin } from '../src/login.ts';
 import { nativeProtocol } from '../src/terminal.ts';
 import { cameraView } from '../src/tui.ts';
@@ -20,6 +22,19 @@ import {
 	WIDTH,
 } from '../templates/camera/frame.ts';
 import { openSensor } from '../templates/camera/server.ts';
+
+const execution = vi.hoisted(() => ({ calls: [] as unknown[] }));
+
+vi.mock('@ambionframework/codex', async (importOriginal) => {
+	const original = await importOriginal<typeof import('@ambionframework/codex')>();
+	return {
+		...original,
+		codexExecution: (options: Parameters<typeof original.codexExecution>[0]) => {
+			execution.calls.push(options);
+			return original.codexExecution(options);
+		},
+	};
+});
 
 it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async () => {
 	const frame = demoFrame();
@@ -43,12 +58,22 @@ it('finds the Codex login of the host and names the fix when it is missing', asy
 		const env = { CODEX_HOME: join(directory, 'codex') };
 		expect(hostLogin(env)).toBe(join(directory, 'codex', 'auth.json'));
 		expect(hostLogin({ HOME: directory })).toBe(join(directory, '.codex', 'auth.json'));
-		await expect(requireLogin(env)).rejects.toThrow(`Run 'codex login'`);
+		await expect(requireLogin(hostLogin(env))).rejects.toThrow(`Run 'codex login'`);
 		await mkdir(env.CODEX_HOME);
 		await writeFile(hostLogin(env), '{}');
-		await requireLogin(env);
-		const live = await openHost({ directory: join(directory, 'live'), model: DEFAULT_MODEL });
+		await requireLogin(hostLogin(env));
+		const live = await openHost({
+			directory: join(directory, 'live'),
+			model: DEFAULT_MODEL,
+			login: hostLogin(env),
+		});
 		await live.close();
+		// The seat links the file that startup checked, and the binary gets no key of the host.
+		expect(execution.calls.at(-1)).toEqual({
+			home: join(directory, 'live', 'codex'),
+			login: hostLogin(env),
+			env: { CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined, CODEX_ACCESS_TOKEN: undefined },
+		});
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -289,4 +314,25 @@ it('passes the standard sensor conformance cases with the standalone camera serv
 		},
 	);
 	for (const item of cases) await item.run();
+});
+
+describe('local bash backend', () => {
+	for (const c of workspaceConformance({
+		name: 'local',
+		async open() {
+			const directory = await mkdtemp(join(tmpdir(), 'camera-chat-conformance-'));
+			const backend = localBashBackend(
+				`${directory}/workspace`,
+				await localGitBackend(`${directory}/git`),
+			);
+			return {
+				backend,
+				dispose: async () => {
+					await backend.dispose?.();
+					await rm(directory, { recursive: true, force: true });
+				},
+			};
+		},
+	}))
+		it(c.name, c.run);
 });
