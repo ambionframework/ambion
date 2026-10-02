@@ -39,6 +39,11 @@ the terms, and `scripts/vocabulary.test.mjs` refuses the old names in
 `pnpm check`. No old name stays as an alias. The kernel does not read a
 journal of an earlier release.
 
+The entry body types in `journal/entries.ts` match their kind: `Fence` is
+`Run`, `Cancellation` is `Cancel`, and `LeaseChange` is `Lease`. The
+journal package names its write `append` in prose, and `positionOf` is
+`seqOf`.
+
 Stored bodies change field names. The golden journals hold the new names.
 
 | Body           | Before                           | After                                |

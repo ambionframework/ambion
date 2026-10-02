@@ -82,6 +82,7 @@ const entries = [
 	),
 	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
+	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
 		exclude: /^packages\/pi\//,
 		allow: [

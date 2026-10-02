@@ -18,7 +18,7 @@ import {
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message, Without } from '../types.ts';
-import type { Cancellation, Close, Composition, Fence, LeaseChange } from './entries.ts';
+import type { Cancel, Close, Composition, Lease, Run } from './entries.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The entry kinds the room writes to its journal. */
@@ -39,12 +39,12 @@ export type Body<T> = Without<T, 'seq' | 'key'>;
 /** The body each kind carries. The journal reads none of them. */
 export interface Bodies {
 	message: Body<Message>;
-	lease: LeaseChange;
+	lease: Lease;
 	/** A close entry is the room's own close. The close a cancellation derives is not an entry. */
 	close: Without<Close, 'cancelled'>;
 	composition: Body<Composition>;
-	run: Fence;
-	cancel: Cancellation;
+	run: Run;
+	cancel: Cancel;
 }
 
 /** The room validates bodies. The journal orders and fences entries. */

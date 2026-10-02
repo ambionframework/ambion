@@ -14,7 +14,7 @@ import type {
 	Wake,
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
-import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
+import type { Close, Composition, Lease } from '../src/journal/entries.ts';
 import { assertWire, roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
@@ -24,7 +24,7 @@ import { sqlite } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
-const stored: Record<string, LeaseChange | Close | Composition> = {
+const stored: Record<string, Lease | Close | Composition> = {
 	claim: {
 		id: 'message:2:product:1',
 		seq: 2,
