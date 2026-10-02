@@ -4,7 +4,7 @@ import {
 	type AgentDefinition,
 	type Attention,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isPresence,
 	type Message,
 	type Room,
@@ -42,7 +42,7 @@ const surveyor = scriptedAgent('surveyor', 'Quantity surveyor. Holds the tonnage
 const architect = scriptedAgent('architect', 'Architect. Holds the drawings.');
 const greeter = scriptedAgent('greeter', 'Meets people at the door.');
 const writer = scriptedAgent('writer', 'Writes the one message a person reads at the close.');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 const runtime = createRuntime({ clock: fakeClock() });
 

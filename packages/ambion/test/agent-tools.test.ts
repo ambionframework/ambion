@@ -12,7 +12,7 @@ import { fromPiTool, type PiOptions, pi, piExecution } from '../../pi/src/index.
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	defineTool,
 	type ReminderSeat,
 	startRoom,
@@ -67,7 +67,7 @@ describe('the definition of agent tools', () => {
 				/Invalid participant name/,
 			);
 			expect(() => Reflect.apply(defineAgent, undefined, [agent])).toThrow(refusal('invalid_name'));
-			expect(() => Reflect.apply(defineHuman, undefined, [human])).toThrow(
+			expect(() => Reflect.apply(definePerson, undefined, [human])).toThrow(
 				/Invalid participant name/,
 			);
 		},

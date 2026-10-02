@@ -16,10 +16,10 @@ import type { Seq } from '../types.ts';
  * failed or abandoned end carries `cause`, so a resumed room reads why the
  * activation failed and whether to try it again.
  */
-export type LeaseChange = Static<typeof leaseSchema>;
+export type Lease = Static<typeof leaseSchema>;
 
 /** A run took the name and fenced earlier runs. */
-export interface Fence extends Static<typeof runSchema> {}
+export interface Run extends Static<typeof runSchema> {}
 
 /** The room went quiet with an exchange open, and closed it. */
 export type Close = Static<typeof closeSchema> & Cancelled & (OwedSummary | NoSummary);
@@ -45,7 +45,7 @@ interface NoSummary {
 }
 
 /** A room-wide cancellation marker. It closes the open exchange, when there is one. */
-export interface Cancellation extends Static<typeof cancelSchema> {}
+export interface Cancel extends Static<typeof cancelSchema> {}
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */
 export interface Seating extends Static<typeof seatingSchema> {}

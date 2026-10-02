@@ -9,7 +9,7 @@ import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { VisitRuntime } from '../room/presence.ts';
 import type { RoomCommand } from '../room/transition.ts';
-import type { HumanDefinition, Message, PresenceMessage, SeatOptions, Seq } from '../types.ts';
+import type { Message, PersonDefinition, PresenceMessage, SeatOptions, Seq } from '../types.ts';
 import {
 	decideAndAppend,
 	type ExchangeHandle,
@@ -20,7 +20,7 @@ import {
 } from './core.ts';
 
 export interface Visit {
-	readonly human: HumanDefinition;
+	readonly person: PersonDefinition;
 	/** The seq of this person's last `left`, or undefined the first time. A live read. */
 	readonly lastDeparture: Seq | undefined;
 	/**
@@ -62,9 +62,9 @@ function deliveryMatches(
 }
 
 /** Puts a person in the room. A second visit while they are here is the same visit. */
-export async function visit(run: RoomRunState, human: HumanDefinition): Promise<Visit> {
+export async function visit(run: RoomRunState, person: PersonDefinition): Promise<Visit> {
 	run.assertRunning();
-	const captured = captureHuman(human);
+	const captured = captureHuman(person);
 	const pending = run.arrivals.get(captured.name);
 	if (pending !== undefined) {
 		if (pending.identity !== captured.identity)
@@ -96,20 +96,20 @@ export function presentVisit(run: RoomRunState, name: string): Visit | undefined
 	if (run.gone()) return undefined;
 	const known = run.visits.get(name);
 	if (known !== undefined) return handle(run, known);
-	const person = run.state().people.get(name);
-	if (person?.presence !== 'present') return undefined;
-	const human = captureHuman({
+	const recorded = run.state().people.get(name);
+	if (recorded?.presence !== 'present') return undefined;
+	const person = captureHuman({
 		name,
-		identity: person.identity,
-		...(person.preferences === undefined ? {} : { preferences: person.preferences }),
+		identity: recorded.identity,
+		...(recorded.preferences === undefined ? {} : { preferences: recorded.preferences }),
 	});
-	const runtime: VisitRuntime = { human, gone: false };
+	const runtime: VisitRuntime = { person, gone: false };
 	run.visits.set(name, runtime);
 	return handle(run, runtime);
 }
 
 /** Complete one arrival and cache the handle only after its presence is durable. */
-async function arrive(run: RoomRunState, captured: HumanDefinition): Promise<VisitRuntime> {
+async function arrive(run: RoomRunState, captured: PersonDefinition): Promise<VisitRuntime> {
 	await run.ready;
 	run.assertRunning();
 	await run.journal.settled();
@@ -129,14 +129,14 @@ async function arrive(run: RoomRunState, captured: HumanDefinition): Promise<Vis
 	if (current?.gone) return retryKnown(run, captured, current);
 	if (committed === undefined && current !== undefined) return current;
 	if (current !== undefined) current.gone = true;
-	const runtime: VisitRuntime = { human: captured, gone: false };
+	const runtime: VisitRuntime = { person: captured, gone: false };
 	run.visits.set(captured.name, runtime);
 	return runtime;
 }
 
 async function retryKnown(
 	run: RoomRunState,
-	captured: HumanDefinition,
+	captured: PersonDefinition,
 	known: VisitRuntime,
 ): Promise<VisitRuntime> {
 	if (known.departure !== undefined) await known.departure.catch(() => {});
@@ -144,25 +144,25 @@ async function retryKnown(
 	return arrive(run, captured);
 }
 
-function assertVisitable(run: RoomRunState, human: HumanDefinition): void {
-	if (run.defs.has(human.name))
+function assertVisitable(run: RoomRunState, person: PersonDefinition): void {
+	if (run.defs.has(person.name))
 		throw new AmbionError(
 			'duplicate_name',
-			`'${human.name}' is an agent in this room: one name names one participant.`,
+			`'${person.name}' is an agent in this room: one name names one participant.`,
 		);
 }
 
 function handle(run: RoomRunState, runtime: VisitRuntime): Visit {
 	return {
-		human: runtime.human,
+		person: runtime.person,
 		get lastDeparture() {
-			return run.state().people.get(runtime.human.name)?.lastDeparture;
+			return run.state().people.get(runtime.person.name)?.lastDeparture;
 		},
 		async send(input) {
 			if (runtime.gone)
-				throw new AmbionError('visit_ended', `${runtime.human.name}'s visit has ended.`);
+				throw new AmbionError('visit_ended', `${runtime.person.name}'s visit has ended.`);
 			run.assertRunning();
-			return deliverFrom(run, runtime.human.name, input);
+			return deliverFrom(run, runtime.person.name, input);
 		},
 		leave() {
 			return endVisit(run, runtime);
@@ -193,20 +193,20 @@ async function endVisit(run: RoomRunState, runtime: VisitRuntime): Promise<void>
 async function leaveVisit(run: RoomRunState, runtime: VisitRuntime, key: string): Promise<void> {
 	await run.ready;
 	await run.journal.settled();
-	if (run.state().people.get(runtime.human.name)?.presence === 'present') {
-		const current = run.visits.get(runtime.human.name);
+	if (run.state().people.get(runtime.person.name)?.presence === 'present') {
+		const current = run.visits.get(runtime.person.name);
 		if (current !== undefined && current !== runtime) {
 			return;
 		}
 		await commitPresence(
 			run,
-			{ kind: 'left', from: runtime.human.name, subject: runtime.human.name },
+			{ kind: 'left', from: runtime.person.name, subject: runtime.person.name },
 			true,
 			key,
 		);
 	}
 	runtime.gone = true;
-	if (run.visits.get(runtime.human.name) === runtime) run.visits.delete(runtime.human.name);
+	if (run.visits.get(runtime.person.name) === runtime) run.visits.delete(runtime.person.name);
 }
 
 async function deliverFrom(

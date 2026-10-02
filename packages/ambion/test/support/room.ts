@@ -4,7 +4,7 @@ import { hostingOf } from '../../src/hosting.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Message,
 	type Participant,
 	type Room,
@@ -21,7 +21,7 @@ export const assistant = defineAgent({
 	executor: pi({ instructions: 'stay quiet', model: 'scripted/assistant' }),
 });
 
-export const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
+export const andrei = definePerson({ name: 'andrei', identity: 'Founder. Owns the room.' });
 
 /**
  * A Pi agent on the scripted model `scripted/<name>`. A scripted stream

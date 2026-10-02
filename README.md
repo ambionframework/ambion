@@ -33,7 +33,7 @@ export ANTHROPIC_API_KEY=...
 **Save a room with two agents as `room.mts`.**
 
 ```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { pi } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -54,7 +54,7 @@ const design = defineAgent({
   executor: pi({ model, instructions: 'Name one part and give the reason.', bundles }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Designs the test bench.' });
+const priya = definePerson({ name: 'priya', identity: 'Designs the test bench.' });
 const room = await startRoom({ name: 'lab', goal: 'Choose a part.', agents: [datasheets, design] });
 
 try {

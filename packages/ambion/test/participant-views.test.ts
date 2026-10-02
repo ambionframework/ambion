@@ -4,8 +4,8 @@ import type { ActivationSpec } from '../src/hosting.ts';
 import {
 	type AgentParticipant,
 	createRuntime,
-	defineHuman,
-	type HumanParticipant,
+	definePerson,
+	type PersonParticipant,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -18,7 +18,7 @@ import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const writer = scriptedAgent('writer', 'Writes room answers.');
-const reader = { kind: 'human', name: 'reader', identity: 'Reads the room.' } as const;
+const reader = { kind: 'person', name: 'reader', identity: 'Reads the room.' } as const;
 
 describe('participant views', () => {
 	it.each(storages)(
@@ -44,7 +44,7 @@ describe('participant views', () => {
 				}),
 			);
 			const visit = await room.visit(
-				defineHuman({
+				definePerson({
 					name: 'reader',
 					identity: 'Reads the room.',
 					preferences: 'private reading preferences',
@@ -59,14 +59,14 @@ describe('participant views', () => {
 				if (participant.kind === 'agent') {
 					expectTypeOf(participant).toEqualTypeOf<AgentParticipant>();
 				} else {
-					expectTypeOf(participant).toEqualTypeOf<HumanParticipant>();
+					expectTypeOf(participant).toEqualTypeOf<PersonParticipant>();
 				}
 			}
 			expectTypeOf<Extract<'sessionId', keyof AgentParticipant>>().toEqualTypeOf<never>();
 			expectTypeOf<
 				Extract<
 					'changedAt' | 'lastDeparture' | 'messagesSinceDeparture' | 'preferences',
-					keyof HumanParticipant
+					keyof PersonParticipant
 				>
 			>().toEqualTypeOf<never>();
 			const agent = {
@@ -135,7 +135,7 @@ describe('participant views', () => {
 			messagesSince: (seq) =>
 				entries.filter((entry) => entry.kind === 'message' && entry.seq > seq).length,
 		});
-		const people = view.context.participants.filter((participant) => participant.kind === 'human');
+		const people = view.context.participants.filter((participant) => participant.kind === 'person');
 		const priya = people.find((person) => person.name === 'priya');
 		const sam = people.find((person) => person.name === 'sam');
 		expect(priya).toMatchObject({ lastDeparture: 5, messagesSinceDeparture: 2 });

@@ -54,7 +54,7 @@ const refusesImpostor = (stub: ReturnType<typeof roomOf>) =>
 
 async function presenceOf(stub: ReturnType<typeof roomOf>, name: string) {
 	const participants = (await stub.read({ messages: false })).participants;
-	const found = participants.find((one) => one.kind === 'human' && one.name === name);
+	const found = participants.find((one) => one.kind === 'person' && one.name === name);
 	return found && 'presence' in found ? found.presence : undefined;
 }
 

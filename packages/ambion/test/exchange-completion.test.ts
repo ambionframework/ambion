@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	type ExchangeHandle,
 	type Room,
 	type Runtime,
@@ -42,7 +42,7 @@ import { faultyJournals, memory, storages } from './support/storage.ts';
 const assistant = scriptedAgent('assistant');
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 /** A room where each named specialist answers at `broadcast` and the assistant writes the summary. */
 const summaryRoom = async (runtime: Runtime, script: PiScript, specialists = [alpha]) =>

@@ -5,7 +5,7 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { Close, LeaseChange } from '../journal/entries.ts';
+import type { Close, Lease } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
@@ -13,7 +13,7 @@ import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
 import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { DeliveryState, RoomRunState } from './core.ts';
+import type { RoomRunState, SendState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
@@ -67,7 +67,7 @@ export function seedHeard(run: RoomRunState): void {
 /**
  * A message on the record: the host hears about it, then what it opened,
  * steers every active ordinary seat, and asks reconciliation to dispatch
- * the pending activations the projection derives. One message, one entry,
+ * the due activations the projection derives. One message, one entry,
  * one order.
  */
 function queueMessage(run: RoomRunState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
@@ -156,7 +156,7 @@ function queueCancellation(run: RoomRunState, seq: Seq): void {
  * end ends one. A change that ends a lease the journal never held is a
  * wake written off, and starts nothing.
  */
-function queueLease(run: RoomRunState, lease: LeaseChange, first: boolean): void {
+function queueLease(run: RoomRunState, lease: Lease, first: boolean): void {
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(run, () => {
@@ -245,7 +245,7 @@ function dispatch(
 			new Error('The previous delivery result is still pending; its outcome is unknown.'),
 		);
 	}
-	const state: DeliveryState = previous ?? {
+	const state: SendState = previous ?? {
 		activation,
 		token: 0,
 		pending: false,
@@ -309,7 +309,7 @@ function emitDeliveryError(
 	error: unknown,
 ): void {
 	run.emit({
-		type: 'delivery_error',
+		type: 'port_error',
 		seat,
 		activation,
 		operation,

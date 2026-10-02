@@ -176,7 +176,7 @@ lemma WritableIsKeptByEveryReader(closed: bool, state: Fence, own: Option<string
 const LAST_SEQ: int := 9007199254740990
 
 // The seq counter over a cache, folded the way `remember` runs `advanceSeq`.
-// Every cached seq is at most LAST_SEQ, because `positionOf` takes no other.
+// Every cached seq is at most LAST_SEQ, because `seqOf` takes no other.
 function counterFrom(start: int, seqs: seq<int>): int
   requires 0 <= start <= LAST_SEQ
   requires forall k :: 0 <= k < |seqs| ==> 0 <= seqs[k] <= LAST_SEQ

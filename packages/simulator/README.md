@@ -9,7 +9,7 @@ npm install @ambionframework/ambion @ambionframework/pi @ambionframework/simulat
 ```
 
 ```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 
@@ -18,7 +18,7 @@ const weather = defineAgent({
   identity: 'Site weather desk.',
   executor: pi({ model: 'anthropic/claude-sonnet-5', instructions: 'Answer with the forecast.' }),
 });
-const priya = defineHuman({ name: 'priya', identity: 'Site manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Site manager.' });
 const room = await startRoom({ name: 'pour', agents: [weather] });
 
 const simulation = await simulate(room, {

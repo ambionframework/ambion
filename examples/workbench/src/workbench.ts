@@ -55,7 +55,7 @@ export interface Workbench {
 	 */
 	watch(room: string, changed: () => void): () => void;
 	/** Enter a room as a person. Entering twice records one arrival. */
-	join(room: string, person: string): Promise<void>;
+	visit(room: string, person: string): Promise<void>;
 	/** Leave a room. A person who is not present has nothing to leave. */
 	leave(room: string, person: string): Promise<void>;
 	/** Send a message. The same key and text return the first exchange and add no message. */
@@ -159,7 +159,7 @@ function present(
 	return snapshot.participants.some(
 		(seat) =>
 			seat.name === name &&
-			seat.kind === 'human' &&
+			seat.kind === 'person' &&
 			'presence' in seat &&
 			seat.presence === 'present',
 	);
@@ -174,7 +174,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		rooms: () => rooms.list(),
 		read: (room, after) => rooms.read(room, after),
 		watch: (room, changed) => rooms.watch(room, changed),
-		async join(room, person) {
+		async visit(room, person) {
 			const who = personNamed(person);
 			await inRoom(room, async (live) => void (await live.visit(who)));
 		},

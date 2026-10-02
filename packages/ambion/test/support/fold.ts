@@ -11,7 +11,7 @@
 import { type ActivationId, decodeActivationId } from '../../src/activation-id.ts';
 import type { Close, Composition, Seating } from '../../src/journal/entries.ts';
 import type { RoomEntry } from '../../src/journal/journal.ts';
-import type { MessageDelivery } from '../../src/room/delivery.ts';
+import type { MessageRecipients } from '../../src/room/delivery.ts';
 import { exchangeAfter, summaryCompletion } from '../../src/room/exchange.ts';
 import {
 	applyEntry,
@@ -141,7 +141,7 @@ const after = (messages: readonly Message[], cancelledAt: Seq | undefined): Mess
  */
 export function pendingWakes(
 	messages: readonly Message[],
-	deliveries: ReadonlyMap<Seq, MessageDelivery>,
+	deliveries: ReadonlyMap<Seq, MessageRecipients>,
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: FoldOptions,
@@ -178,7 +178,7 @@ function leasesBySeat(
 }
 
 /** The recorded recipients of a message that are on the roster. */
-function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<string> {
+function reached(delivery: MessageRecipients, roster: ReadonlySet<string>): Set<string> {
 	return new Set(
 		[...delivery.wakes, ...delivery.steers.map((steer) => steer.seat)].filter((seat) =>
 			roster.has(seat),

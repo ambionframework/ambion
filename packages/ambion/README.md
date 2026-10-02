@@ -34,10 +34,10 @@ The optional `summaryWriter` field names an ordinary agent that may write a clos
 summary.
 
 ```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 
-const you = defineHuman({
+const you = definePerson({
   name: 'you',
   identity: 'Coordinates customer deliveries.',
   preferences: 'Lead with the constraint. Four sentences at most.',

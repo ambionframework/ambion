@@ -5,8 +5,8 @@
  */
 import type {
 	ExchangeHandle,
-	HumanDefinition,
 	Message,
+	PersonDefinition,
 	Room,
 	RoomNotification,
 	RoomRead,
@@ -63,7 +63,7 @@ function fakeRoom(
 			return () => listeners.delete(listener);
 		},
 		exchange: (_from: Seq): ExchangeHandle | undefined => undefined,
-		visit: (_human: HumanDefinition): Promise<Visit> => {
+		visit: (_human: PersonDefinition): Promise<Visit> => {
 			throw new Error('not implemented in this double');
 		},
 		post: (): Promise<ExchangeHandle> => {

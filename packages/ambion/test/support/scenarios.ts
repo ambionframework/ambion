@@ -11,7 +11,7 @@ import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -61,12 +61,12 @@ export const assistant = defineAgent({
 	}),
 });
 
-export const priya = defineHuman({
+export const priya = definePerson({
 	name: 'priya',
 	identity: 'Project manager.',
 	preferences: 'Lead with the decision.',
 });
-const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+const sam = definePerson({ name: 'sam', identity: 'Site foreman.' });
 
 export const agent = (name: string, identity: string, extra: Partial<PiOptions> = {}) =>
 	defineAgent({

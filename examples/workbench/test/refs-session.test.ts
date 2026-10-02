@@ -36,14 +36,14 @@ function room(host: FakeHost, cite = true): void {
 	host.table.set(
 		'power',
 		view('power', {
-			participants: [{ name: 'mira', kind: 'human' }],
+			participants: [{ name: 'mira', kind: 'person' }],
 			messages: [said(1, 'mira'), said(2, 'design')],
 		}),
 	);
 	host.table.set(
 		'bringup',
 		view('bringup', {
-			participants: [{ name: 'mira', kind: 'human' }],
+			participants: [{ name: 'mira', kind: 'person' }],
 			messages: [
 				said(1, 'mira'),
 				said(2, 'design', cite ? [FILE, 'lab:///runs', SNAPSHOT] : undefined),
@@ -225,7 +225,7 @@ describe('the ref keys', () => {
 			host.table.set(
 				'bringup',
 				view('bringup', {
-					participants: [{ name: 'mira', kind: 'human' }],
+					participants: [{ name: 'mira', kind: 'person' }],
 					messages: [said(1, 'mira'), said(2, 'design', refs)],
 					exchanges: [{ ...exchange, through: 2 }],
 				}),

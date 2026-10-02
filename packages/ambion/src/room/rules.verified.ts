@@ -222,7 +222,7 @@ export function survivesCancellation(position: number, cancelledAt: number | und
 	return !beforeCancellation(position, cancelledAt);
 }
 
-/** One lease entry, as the journal records it. The same shape as `LeaseChange` in `entries.ts`. */
+/** One lease entry, as the journal records it. The same shape as `Lease` in `entries.ts`. */
 export type Change =
 	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: number }
 	| {

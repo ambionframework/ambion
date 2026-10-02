@@ -39,6 +39,11 @@ the terms, and `scripts/vocabulary.test.mjs` refuses the old names in
 `pnpm check`. No old name stays as an alias. The kernel does not read a
 journal of an earlier release.
 
+The entry body types in `journal/entries.ts` match their kind: `Fence` is
+`Run`, `Cancellation` is `Cancel`, and `LeaseChange` is `Lease`. The
+journal package names its write `append` in prose, and `positionOf` is
+`seqOf`.
+
 Stored bodies change field names. The golden journals hold the new names.
 
 | Body           | Before                           | After                                |
@@ -74,7 +79,9 @@ The exported names change as follows.
 | Read positions          | `watermark`, the lease `lastSeq`, the selection `since`, the delta `since`                                                       | `through`, `through`, `after`, `after`                                                                      |
 | Scheduled says          | `PendingSay`, `pendingFor`, `Intent.after`, `schedule.minAfter`, `schedule.maxAfter`                                             | `ScheduledSay`, `awaitingFor`, `delaySeconds`, `minDelaySeconds`, `maxDelaySeconds`                         |
 | Activations             | the purpose `'summary'`, `ActivationOutcome.status`, `SummaryOutcome.status`                                                     | `'summarize'`, `kind`, `kind`                                                                               |
-| Participants            | `ParticipantInfo`, `AgentParticipantInfo`, `HumanParticipantInfo`                                                                | `Participant`, `AgentParticipant`, `HumanParticipant`                                                       |
+| Participants            | `ParticipantInfo`, `AgentParticipantInfo`, `HumanParticipantInfo`                                                                | `Participant`, `AgentParticipant`, `PersonParticipant`                                                      |
+| People                  | `HumanDefinition`, `defineHuman`, `HumanParticipant`, `kind: 'human'`, `Visit.human`                                              | `PersonDefinition`, `definePerson`, `PersonParticipant`, `kind: 'person'`, `Visit.person`                    |
+| Visitors                | the Cloudflare `Person`, `Workbench.join`                                                                                          | `Visitor`, `Workbench.visit`                                                                                |
 | Ending work             | `Room.abort()`, `AgentRunner.abort()`, `ActivationState.cancel()`, `RoomToolBinding.abort()`, the stop `'aborted'`               | `Room.cancel()`, `cutAll()`, `cut()`, `cut()`, `'cut'`                                                      |
 | Entries                 | the journal `JournalEntry`, the core union `Entry`                                                                               | `Entry`, `RoomEntry`                                                                                        |
 | Stored-field types      | `Landed.activationId`, `HarnessSession`, `Pass.resume`, `Composition.agents`, `Composition.available`                            | `activation`, `VendorSession`, `resumeId`, `seated`, `reserve`                                              |
@@ -87,6 +94,7 @@ The exported names change as follows.
 | Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
+| Port and send           | the event `delivery_error`, `DeliveryState`, `Limits.delivery`, `MessageDelivery`, `limits.schedule.pending` | `port_error`, `SendState`, `Limits.port`, `MessageRecipients`, `limits.schedule.waiting` |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Kernel exports | `RoomTool`, `RoomToolResult`, `ToolExecutionMode`, `AgentExecutionContext`; the executor contract in `protocol.ts` | `BoundTool`, `BoundToolResult`, `ToolConcurrency`, `SeatContext`; the contract in `execution/contract.ts` |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |

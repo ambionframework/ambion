@@ -268,7 +268,7 @@ assigns the closing summary to the `person` of the exchange, the assistant
 writes it, and the person reads it on return. The seating guidance of the package states this
 rule.
 
-Unseating can interrupt active work and settle pending activations. Do not
+Unseating can interrupt active work and settle due activations. Do not
 use it as routine cleanup after each contribution. Avoid repeated seating
 and unseating. The assistant's seat is fixed as the summary writer: no
 agent, including the assistant itself, can unseat it through the room's

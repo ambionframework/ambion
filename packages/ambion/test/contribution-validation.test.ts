@@ -8,7 +8,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	messageUri,
 	readRoom,
 	type StartRoomOptions,
@@ -29,7 +29,7 @@ import { quiet, say, scriptedStream, toolResultTexts } from './support/scripted.
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { faultyJournals, memory, type Storage, storages } from './support/storage.ts';
 
-const secondPerson = defineHuman({ name: 'sam', identity: 'Engineer.' });
+const secondPerson = definePerson({ name: 'sam', identity: 'Engineer.' });
 const worker = scriptedAgent('worker');
 const writer = scriptedAgent('writer');
 const reserveAgent = scriptedAgent('reserve');

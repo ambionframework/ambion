@@ -39,7 +39,7 @@ stored field.
    departures do not open one. A question or a post that lands while one is
    open belongs to that exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
-   and pending wakes, then appends a close with the observed `through` boundary.
+   and due wakes, then appends a close with the observed `through` boundary.
    Work that reaches a terminal state is handled the same way.
 3. Ordinary messages landing while it is open steer eligible active seats and
    do not change its opening message or range. A later human question is
@@ -136,8 +136,8 @@ after the close of the same pass.
 - A respond activation schedules, whether an exchange is open or not. A
   summary activation cannot schedule.
 - `limits.schedule` bounds `delaySeconds` from `minDelaySeconds` to
-  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most `pending` says of one seat, 4 by
-  default.
+  `maxDelaySeconds`, 60 to 604,800 seconds by default, and holds at most
+  `waiting` says of one seat, 4 by default.
 
 **The agent sees its scheduled says.** The schedule result names the say by
 its seq, as the record shows it: `scheduled #41: the room wakes you with this

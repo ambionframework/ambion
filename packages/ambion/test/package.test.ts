@@ -53,7 +53,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'createRuntime',
 		'defaultRuntime',
 		'defineAgent',
-		'defineHuman',
+		'definePerson',
 		'defineTool',
 		'isPosted',
 		'isPresence',
@@ -116,7 +116,7 @@ it('names the ports, the reads, and the visit by their final names', () => {
 	expectTypeOf<
 		Extract<
 			hosting.ActivationView['context']['participants'][number],
-			{ kind: 'human' }
+			{ kind: 'person' }
 		>['messagesSinceDeparture']
 	>().toEqualTypeOf<number>();
 	expectTypeOf<Awaited<ReturnType<typeof main.readExchange>>>().toEqualTypeOf<

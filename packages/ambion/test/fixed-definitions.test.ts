@@ -3,7 +3,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	defineTool,
 	readRoom,
 	resumeRoom,
@@ -27,7 +27,7 @@ import { storages } from './support/storage.ts';
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const gamma = scriptedAgent('gamma');
-const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
+const priya = definePerson({ name: 'priya', identity: 'Asks questions.' });
 const silent = () => piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 type Options = Omit<Parameters<typeof startRoom>[0], 'name' | 'runtime'>;

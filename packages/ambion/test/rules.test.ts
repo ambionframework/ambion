@@ -1,7 +1,7 @@
 import type { Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/entries.ts';
+import type { Close, Lease } from '../src/journal/entries.ts';
 import type { ActivationPurpose } from '../src/protocol.ts';
 import { foldLeases, type LeaseHold } from '../src/room/lease.ts';
 import {
@@ -35,12 +35,12 @@ type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : ne
 const at = '2026-01-01T09:00:00.000Z';
 const id = 'message:2:solo:1';
 const activation = { source: 'message', position: 2, seat: 'solo', attempt: 1 } as const;
-const running = (seq: number, readThrough: number): Entry<LeaseChange> => ({
+const running = (seq: number, readThrough: number): Entry<Lease> => ({
 	kind: 'lease',
 	seq,
 	body: { id, phase: 'running', expiresAt: 60_000, at, readThrough },
 });
-const ended = (seq: number, reason: EndReason, readThrough: number): Entry<LeaseChange> => ({
+const ended = (seq: number, reason: EndReason, readThrough: number): Entry<Lease> => ({
 	kind: 'lease',
 	seq,
 	body: { id, phase: 'ended', reason, at, readThrough },
@@ -54,7 +54,7 @@ const said = (seq: number): Message => ({
 	wakes: ['solo'],
 });
 /** The wakes the room still owes for these messages, after these lease entries. */
-const pending = (messages: Message[], leases: Entry<LeaseChange>[]) =>
+const pending = (messages: Message[], leases: Entry<Lease>[]) =>
 	pendingWakes(
 		messages,
 		new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }])),
@@ -69,7 +69,7 @@ describe('verified rules', () => {
 		expectTypeOf<FailureCause>().toEqualTypeOf<PublicFailureCause>();
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
 		// Usage and session are facts of the record the rules never read, so the rules omit them.
-		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<LeaseChange, 'usage' | 'session'>>();
+		expectTypeOf<Change>().toEqualTypeOf<DistributiveOmit<Lease, 'usage' | 'session'>>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
 		// The room adds the people a summary activation addresses to the rule's grant.

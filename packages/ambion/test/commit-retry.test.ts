@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, startRoom } from '../src/index.ts';
 import { type Tap, tapped } from './support/core-failure.ts';
 import { collect, messagesOf, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { quiet, say, scriptedStream, toolResultTexts } from './support/scripted.ts';
@@ -14,7 +14,7 @@ import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
-const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 describe.each(storages)('commit retry on $name storage', (storage) => {
 	it.each([
@@ -63,7 +63,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		expect(answers.map((message) => message.kind === 'said' && message.text)).toEqual(['answer']);
 		expect(commits).toBeGreaterThan(1);
 		const commitErrors = events.filter(
-			(event) => event.type === 'delivery_error' && event.operation === 'commit',
+			(event) => event.type === 'port_error' && event.operation === 'commit',
 		);
 		expect(commitErrors.length > 0).toBe(lose === 'all');
 	});

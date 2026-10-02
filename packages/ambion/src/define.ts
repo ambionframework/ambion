@@ -18,7 +18,7 @@ import type {
 	ToolResult,
 } from './bundle.ts';
 import { AmbionError } from './errors.ts';
-import type { AgentDefinition, Executor, HumanDefinition, TracePolicy } from './types.ts';
+import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a room and on the record. */
@@ -191,12 +191,12 @@ export interface DefineHumanOptions {
 }
 
 /** Define a person. The room captures the definition the same way, so both check and trim alike. */
-export function defineHuman(options: DefineHumanOptions): HumanDefinition {
+export function definePerson(options: DefineHumanOptions): PersonDefinition {
 	return captureHuman(options);
 }
 
 /** Capture a person at a room boundary. Blank preferences are no preferences. */
-export function captureHuman(human: HumanDefinition): HumanDefinition {
+export function captureHuman(human: PersonDefinition): PersonDefinition {
 	assertName(human.name);
 	const preferences = human.preferences?.trim() || undefined;
 	return Object.freeze({

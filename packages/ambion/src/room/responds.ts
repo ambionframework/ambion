@@ -10,7 +10,7 @@
  */
 
 import type { Seq } from '../types.ts';
-import type { MessageDelivery } from './delivery.ts';
+import type { MessageRecipients } from './delivery.ts';
 import { type DueActivationOptions, type DueRespond, dueOf, type LeaseHold } from './lease.ts';
 import { coversAttempt, wakeAnswered } from './rules.verified.ts';
 
@@ -43,7 +43,7 @@ function judgeWake(
 /** The wakes one message opens, in the order of its recipients. */
 export function respondsOf(
 	message: { seq: Seq; at: string },
-	delivery: MessageDelivery,
+	delivery: MessageRecipients,
 	seatLeases: ReadonlyMap<string, SeatLeases>,
 	options: DueActivationOptions,
 ): OpenRespond[] {

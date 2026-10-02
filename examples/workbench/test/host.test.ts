@@ -95,7 +95,7 @@ describe('Workbench host', () => {
 			['power', 'running'],
 			['firmware', 'running'],
 		]);
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'summary-1', 'Pick the LED resistor.');
 		await untilSummary(workbench, 'bringup');
 		const plan = '/home/design/shared/plan.md';
@@ -144,14 +144,14 @@ describe('Workbench host', () => {
 		const before = await messagesOf(workbench, 'bringup');
 		await workbench.leave('bringup', 'sol');
 		expect(await messagesOf(workbench, 'bringup')).toEqual(before);
-		await expect(workbench.join('bringup', 'nobody')).rejects.toThrow(/Unknown person/);
-		await expect(workbench.join('nowhere', 'mira')).rejects.toThrow(/Unknown room/);
+		await expect(workbench.visit('bringup', 'nobody')).rejects.toThrow(/Unknown person/);
+		await expect(workbench.visit('nowhere', 'mira')).rejects.toThrow(/Unknown room/);
 		await expect(workbench.send('bringup', 'mira', 'k0', 'Hello?')).rejects.toThrow(
 			/Enter this room/,
 		);
 
-		await workbench.join('bringup', 'mira');
-		await workbench.join('sensing', 'theo');
+		await workbench.visit('bringup', 'mira');
+		await workbench.visit('sensing', 'theo');
 		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
 		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
 		await workbench.send('sensing', 'theo', 'k2', 'Which pins?');
@@ -159,7 +159,7 @@ describe('Workbench host', () => {
 		await expect(workbench.send('bringup', 'mira', 'k1', 'Which resistor?')).rejects.toThrow(
 			/Enter this room/,
 		);
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'k1', 'Which resistor?');
 
 		const bringup = await messagesOf(workbench, 'bringup');
@@ -261,7 +261,7 @@ describe('Workbench host', () => {
 
 	it('cancels an open exchange and keeps the room available', async () => {
 		const workbench = await openHost({ stream: idleStream });
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'pending-1', 'Wait for work.');
 		expect((await workbench.read('bringup', 0)).exchange).toBeDefined();
 		const cancelled = await workbench.control('bringup', 'cancel');
@@ -281,7 +281,7 @@ describe('Workbench host', () => {
 				return fauxAssistantMessage([fauxToolCall('schedule', later)], { stopReason: 'toolUse' });
 			}),
 		});
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'later-1', 'Check the supply later.');
 		const waiting = await vi.waitFor(async () => {
 			const [say] = (await workbench.read('bringup', 0)).scheduled;
@@ -311,11 +311,11 @@ describe('Workbench host', () => {
 			counts.sensing += 1;
 		});
 		expect(() => workbench.watch('nowhere', () => {})).toThrow(/Unknown room/);
-		await workbench.join('sensing', 'theo');
+		await workbench.visit('sensing', 'theo');
 		await vi.waitFor(() => expect(counts.sensing).toBeGreaterThan(0));
 		expect(counts.bringup).toBe(0);
 
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await vi.waitFor(() => expect(counts.ended).toBeGreaterThan(0));
 		end();
 		const ended = counts.ended;
@@ -323,7 +323,7 @@ describe('Workbench host', () => {
 		await workbench.control('bringup', 'resume');
 		await new Promise<void>((resolve) => setTimeout(resolve, 50));
 		const settled = counts.bringup;
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await vi.waitFor(() => expect(counts.bringup).toBeGreaterThan(settled));
 		expect(counts.ended).toBe(ended);
 	}, 20_000);
@@ -346,7 +346,7 @@ describe('Workbench host', () => {
 			events += 1;
 		});
 		expect(await workbench.processes()).toEqual([]);
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'ps-1', 'Start the soak.');
 		await vi.waitFor(async () => expect(await workbench.processes()).toHaveLength(2), {
 			timeout: 5_000,

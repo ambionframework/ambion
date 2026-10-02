@@ -42,6 +42,7 @@ const entry = (id, pattern, paths, options = {}) => ({
 // Old names that a rename removed. A name has a word boundary and no false
 // positive in the current tree. One entry holds one concept.
 const OLD_NAMES = [
+	['person', /\b(?:defineHuman|HumanDefinition|HumanParticipant)\b/],
 	[
 		'executor',
 		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,
@@ -53,7 +54,9 @@ const OLD_NAMES = [
 	['speaking default', /\bDEFAULT_GUIDANCE\b/],
 	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
 	['read position', /\bwatermark\b/],
-	['scheduled say', /\b(?:PendingSay|pendingFor)\b/],
+	['scheduled say', /\b(?:PendingSay|pendingFor|renderPending)\b/],
+	['port error', /\bdelivery_error\b/],
+	['send state', /\bDeliveryState\b/],
 	[
 		'journal entries',
 		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,
@@ -87,6 +90,7 @@ const entries = [
 	),
 	entry('Spoken', /\w+Spoken\b|\bspoken\w*/i, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
+	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
 		exclude: /^packages\/pi\//,
 		allow: [

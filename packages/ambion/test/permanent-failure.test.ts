@@ -7,14 +7,14 @@
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf, providerMessage } from '../src/hosting.ts';
-import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, startRoom } from '../src/index.ts';
 import { collect, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { scriptedStream } from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
-const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 describe.each(storages)('provider failure classification on $name storage', (storage) => {
 	it.each([

@@ -17,7 +17,7 @@
 import type { Entry } from '@ambionframework/journal';
 import { decodeActivationId } from '../../src/activation-id.ts';
 import type { Clock, Message, Seq } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/entries.ts';
+import type { Lease } from '../../src/journal/entries.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { owedOf, pendingOf } from './fold.ts';
 
@@ -264,7 +264,7 @@ function exclusion(stored: Checked['stored']): string[] {
 	const running = new Map<string, string>();
 	for (const entry of standing(stored)) {
 		if (entry.kind !== 'lease') continue;
-		const lease = entry.body as LeaseChange;
+		const lease = entry.body as Lease;
 		const attempt = owedBy(lease.id);
 		if (attempt === undefined) continue;
 		const held = running.get(attempt);
