@@ -23,7 +23,7 @@ import {
 	conformanceSuite,
 } from '@ambionframework/ambion/conformance';
 import type { BashBackend, WorkspaceEnv } from './backend.ts';
-import { ExecutionError, FileError, type ShellOutputView } from './port.ts';
+import { FileError, ShellError, type ShellOutputView } from './port.ts';
 
 export type {
 	GitConformanceBackend,
@@ -122,13 +122,13 @@ async function abortApartFromTimeout(env: WorkspaceEnv): Promise<void> {
 	controller.abort();
 	const aborted = await aborting;
 	check(
-		!aborted.ok && aborted.error instanceof ExecutionError && aborted.error.code === 'aborted',
-		'an aborted signal did not answer ExecutionError code aborted',
+		!aborted.ok && aborted.error instanceof ShellError && aborted.error.code === 'aborted',
+		'an aborted signal did not answer ShellError code aborted',
 	);
 	const timedOut = await env.exec('sleep 5', { timeout: 0.05 });
 	check(
-		!timedOut.ok && timedOut.error instanceof ExecutionError && timedOut.error.code === 'timeout',
-		'a timeout did not answer ExecutionError code timeout',
+		!timedOut.ok && timedOut.error instanceof ShellError && timedOut.error.code === 'timeout',
+		'a timeout did not answer ShellError code timeout',
 	);
 }
 

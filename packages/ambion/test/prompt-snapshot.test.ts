@@ -25,7 +25,7 @@ const context = {
 	now: Date.parse(at) + 5 * 60_000,
 	participants: [
 		{
-			kind: 'human' as const,
+			kind: 'person' as const,
 			name: 'priya',
 			identity: 'Project manager.',
 			presence: 'present' as const,

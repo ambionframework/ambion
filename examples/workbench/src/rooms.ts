@@ -424,7 +424,7 @@ function recordActivity(entry: HostedRoom, event: RoomNotification): void {
 function describeEvent(event: RoomNotification): Omit<Activity, 'at'> | undefined {
 	switch (event.type) {
 		case 'error':
-		case 'delivery_error':
+		case 'port_error':
 			return { type: event.type, seat: event.seat, text: event.error.message };
 		case 'activation_start':
 			return { type: event.type, seat: event.seat, text: 'Reading and working' };

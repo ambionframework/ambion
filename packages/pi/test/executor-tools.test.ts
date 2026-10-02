@@ -131,7 +131,7 @@ describe('executor tool authority', () => {
 		]);
 		// The room tools are exactly the names that `defineAgent` refuses for a definition tool.
 		expect(new Set(names(tools).slice(0, -1))).toEqual(new Set(ROOM_TOOL_NAMES));
-		// Pi builds the tool of the definition from its `AmbionTool`. A `RoomTool` has neither field.
+		// Pi builds the tool of the definition from its `AmbionTool`. A `BoundTool` has neither field.
 		expect(tools.at(-1)).toMatchObject({ label: 'Record decision', executionMode: 'sequential' });
 		expect(names((await bound('activation', summarize)).tools)).toEqual(['say']);
 	});

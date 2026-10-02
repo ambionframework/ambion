@@ -14,7 +14,7 @@ import {
 	type Room,
 	type RoomNotification,
 } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/journal/entries.ts';
+import type { Lease } from '../../src/journal/entries.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 
@@ -139,7 +139,7 @@ async function leased(session: Room, journals: JournalOpener): Promise<void> {
 	const running = new Set<string>();
 	for (const entry of stored) {
 		if (entry.kind === 'lease') {
-			const lease = entry.body as LeaseChange;
+			const lease = entry.body as Lease;
 			if (lease.phase === 'running') running.add(lease.id);
 			else running.delete(lease.id);
 		}

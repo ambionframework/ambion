@@ -69,7 +69,7 @@ test('a grandfathered file is still over the default budget', () => {
 
 test('the room host is split by mechanism and each file fits the budget', () => {
 	for (const file of ROOM_HOST) {
-		const count = lines(join(root, 'packages/ambion/src/room-host', file));
-		assert.ok(count <= BUDGET, `room-host/${file} has ${count} lines, budget ${BUDGET}`);
+		const count = lines(join(root, 'packages/ambion/src/room-run', file));
+		assert.ok(count <= BUDGET, `room-run/${file} has ${count} lines, budget ${BUDGET}`);
 	}
 });

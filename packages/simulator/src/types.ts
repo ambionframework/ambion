@@ -4,8 +4,8 @@
  */
 import type {
 	Exchange,
-	HumanDefinition,
 	Message,
+	PersonDefinition,
 	RoomNotification,
 	RoomRead,
 	SummaryMessage,
@@ -37,7 +37,7 @@ export interface SeenExchange {
 
 /** What the person has seen: one entry for each exchange the loop ran. */
 export interface Seen {
-	readonly person: HumanDefinition;
+	readonly person: PersonDefinition;
 	readonly exchanges: readonly SeenExchange[];
 }
 
@@ -54,7 +54,7 @@ export type Ended = 'stopped' | 'limit' | 'timeout' | 'failed';
 
 /** A detached record of one simulation, for checks and for a judge. */
 export interface Simulation {
-	readonly person: HumanDefinition;
+	readonly person: PersonDefinition;
 	/** Every move the actor made, in order, the last `stop` included. */
 	readonly moves: readonly Move[];
 	/** One entry for each message the actor sent, in order. */
@@ -70,10 +70,10 @@ export interface Simulation {
 }
 
 export interface SimulateOptions {
-	readonly person: HumanDefinition;
+	readonly person: PersonDefinition;
 	readonly actor: Actor;
 	/** The most messages the actor sends. Required, so that every eval states its bound. */
-	readonly exchanges: number;
+	readonly messages: number;
 	/** Real milliseconds for one exchange: its close and its summary. The default is 150 000. */
 	readonly exchangeMs?: number;
 }

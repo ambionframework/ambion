@@ -1,7 +1,7 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import { createRuntime, defineHuman, defineTool, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, defineTool, resumeRoom, startRoom } from '../src/index.ts';
 import {
 	messagesOf,
 	participantsOf,
@@ -18,7 +18,7 @@ describe('room bindings', () => {
 		const calls: string[] = [];
 		const prompts: string[] = [];
 		const runtime = createRuntime();
-		const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+		const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 		const rooms = await Promise.all(
 			['first', 'second'].map(async (label) => {
 				const own = defineTool({
@@ -74,7 +74,7 @@ describe('room bindings', () => {
 			resumeRoom(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
 		).rejects.toThrow(/has no binding/);
 		await (
-			await first.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }))
+			await first.visit(definePerson({ name: 'priya', identity: 'Project manager.' }))
 		).send({ text: 'Still mine?' });
 		await waitForRoom(first);
 		expect(

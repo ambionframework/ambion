@@ -14,7 +14,7 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
-import type { Close, Composition, LeaseChange } from '../src/journal/entries.ts';
+import type { Close, Composition, Lease } from '../src/journal/entries.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { toRoomRead } from '../src/room/read.ts';
@@ -168,7 +168,7 @@ class Walk {
 		});
 	}
 
-	private change(): LeaseChange {
+	private change(): Lease {
 		const id = this.chance(0.6) && this.leases.length ? this.pick(this.leases) : this.newId();
 		const readThrough = Math.floor(this.random() * this.seq);
 		const at = this.at();

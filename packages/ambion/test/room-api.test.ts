@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -38,8 +38,8 @@ import { memory, type Storage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
-const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
+const sam = definePerson({ name: 'sam', identity: 'Site foreman.' });
 
 const answer: PiScript = (_context, _agent, request) =>
 	request === 2 ? say('The answer.') : quiet();

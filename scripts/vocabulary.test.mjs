@@ -42,6 +42,7 @@ const entry = (id, pattern, paths, options = {}) => ({
 // Old names that a rename removed. A name has a word boundary and no false
 // positive in the current tree. One entry holds one concept.
 const OLD_NAMES = [
+	['person', /\b(?:defineHuman|HumanDefinition|HumanParticipant)\b/],
 	[
 		'executor',
 		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,
@@ -54,7 +55,9 @@ const OLD_NAMES = [
 	['speaking default', /\bDEFAULT_GUIDANCE\b/],
 	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
 	['read position', /\bwatermark\b/],
-	['scheduled say', /\b(?:PendingSay|pendingFor)\b/],
+	['scheduled say', /\b(?:PendingSay|pendingFor|renderPending)\b/],
+	['port error', /\bdelivery_error\b/],
+	['send state', /\bDeliveryState\b/],
 	[
 		'journal entries',
 		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,
@@ -62,15 +65,19 @@ const OLD_NAMES = [
 	['journal entry type', /\bJournalEntry\b/],
 	['execution options', /\b(?:ClaudeRuntime|CodexRuntime)\b/],
 	['executor kind', /\b(?:seatFamilies|scriptedFamilies)\b/],
-	['workspace endpoint', /\bWorkspacePorts?\b/],
+	['workspace endpoint', /\bWorkspacePorts?\b|workstation\/src\/ports\.ts/],
+	['shell error', /\bExecutionError(?:Code)?\b/],
 	['credential lifetime', /\b(?:tokenTtl|keyTtl)\b/],
 	['process cancel', /\b(?:StopCause|process-stop)\b/],
-	['process record', /\bProcessStatus\b/],
+	['process record', /\b(?:ProcessStatus|ProcessRecord|ProcessView)\b/],
 	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
 	['trace policy', /\bthinking:\s*'summary'/],
 	['simulation', /\bRunExchange\b/],
 	['traced step', /\bTraceRecord\b/],
 	['trace policy default', /\bDEFAULT_TRACE\b/],
+	['bound tool', /\bRoomTool(?:Result)?\b/],
+	['tool concurrency', /\bToolExecutionMode\b/],
+	['seat context', /\bAgentExecutionContext\b/],
 ];
 
 const entries = [
@@ -79,6 +86,8 @@ const entries = [
 		'seating',
 		/\bmember(?:ship)?s?\b/i,
 		/^packages\/(?:assistant\/src\/|ambion\/src\/execution\/)/,
+		// The contract says "member" for a field of an interface.
+		{ exclude: /^packages\/ambion\/src\/execution\/contract\.ts$/ },
 	),
 	entry('cut', /\bcancelled\b/, /^packages\/ambion\/src\/execution\//),
 	entry(
@@ -93,8 +102,14 @@ const entries = [
 		/\b(?:your turn|mid-turn|this turn|taking a turn|take your turn)\b/i,
 		/^(?:packages|examples)\/[^/]+\/(?:src|test\/live)\/.*\.(?:ts|tsx|mjs)$/,
 	),
+	entry(
+		'driver',
+		/\bthe core\b/i,
+		/^(?:packages\/ambion\/src\/execution\/.*|docs\/executors\.md)$/,
+	),
 	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
+	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
 		exclude: /^packages\/pi\//,
 		allow: [

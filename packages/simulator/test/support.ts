@@ -5,14 +5,14 @@
 import {
 	type AgentDefinition,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Room,
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Script, scripted } from '@ambionframework/ambion/testing';
 import { onTestFinished } from 'vitest';
 
-export const priya = defineHuman({ name: 'priya', identity: 'Site manager. Pours concrete.' });
+export const priya = definePerson({ name: 'priya', identity: 'Site manager. Pours concrete.' });
 
 /** A seat that runs on the room's script. */
 export function agent(name: string): AgentDefinition {

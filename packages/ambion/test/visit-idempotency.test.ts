@@ -8,7 +8,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { visitOf } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -20,9 +20,9 @@ import { deferred, messagesOf, roomName, scriptedAgent } from './support/room.ts
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { gatedJournals, type Storage, storages, tappedJournals } from './support/storage.ts';
 
-const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
-const returnedPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });
-const reader = defineHuman({ name: 'mira', identity: 'Reader.', preferences: 'Short answers.' });
+const person = definePerson({ name: 'andrei', identity: 'Founder.' });
+const returnedPerson = definePerson({ name: 'andrei', identity: 'Founder, returned.' });
+const reader = definePerson({ name: 'mira', identity: 'Reader.', preferences: 'Short answers.' });
 
 it('types visit as an idempotent definite handle', () => {
 	const checkTypes = (room: Room) => {
@@ -127,7 +127,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		expect(await Promise.race([settled, pending])).toBe(false);
 		release.resolve();
 		for (const visit of await Promise.all([first, second, third])) {
-			expect(visit.human).toEqual(person);
+			expect(visit.person).toEqual(person);
 		}
 		expect(await count(room, 'arrived')).toBe(1);
 
@@ -149,7 +149,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 
 		unreadable.fail(false);
 		const existing = await room.visit(person);
-		expect(existing.human).toEqual(first.human);
+		expect(existing.person).toEqual(first.person);
 		expect(await count(room, 'arrived')).toBe(1);
 		await existing.leave();
 	});
@@ -168,12 +168,12 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		await expect(observed(first.visit(person))).rejects.toThrow(/stopped|evicted|gone|superseded/);
 		// The resumed room takes each visit from the record, with the preferences, and writes nothing.
 		expect(visitOf(first, person.name)).toBeUndefined();
-		expect(visitOf(resumed, person.name)?.human).toEqual(person);
-		expect(visitOf(resumed, reader.name)?.human).toEqual(reader);
+		expect(visitOf(resumed, person.name)?.person).toEqual(person);
+		expect(visitOf(resumed, reader.name)?.person).toEqual(reader);
 		expect(visitOf(resumed, 'nobody')).toBeUndefined();
 		expect(() => visitOf({} as Room, person.name)).toThrow(TypeError);
 		const [one, two] = await Promise.all([resumed.visit(person), resumed.visit(person)]);
-		expect(one.human).toEqual(person);
+		expect(one.person).toEqual(person);
 		// After a visit, visitOf shares it: its send lands as the person.
 		const shared = visitOf(resumed, person.name);
 		if (shared === undefined) throw new Error('The visit is not shared.');

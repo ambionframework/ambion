@@ -1,10 +1,10 @@
 import type { GitBackend } from './git-backend.ts';
 import type { ObjectBackend } from './object-backend.ts';
 import type {
-	ExecutionError,
 	FileInfo,
 	FileResult,
 	Result,
+	ShellError,
 	ShellExecResult,
 	WorkspaceExecOptions,
 } from './port.ts';
@@ -57,7 +57,7 @@ export interface WorkspaceEnv extends ResourceEnv {
 		command: string,
 		options: WorkspaceExecOptions | undefined,
 		signal?: AbortSignal,
-	): Promise<Result<ShellExecResult, ExecutionError>>;
+	): Promise<Result<ShellExecResult, ShellError>>;
 }
 
 /**

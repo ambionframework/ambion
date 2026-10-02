@@ -9,17 +9,14 @@
  * its seat: the room calls its wake, steer, and cut.
  */
 
-import type { AgentExecutionContext } from '../host/runtime.ts';
+import type { SeatContext } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
 	CommitRequest,
 	CommitResult,
-	PassInput,
-	PassResult,
 	RoomProtocol,
 	Steer,
-	TraceSink,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
@@ -34,6 +31,7 @@ import type {
 	VendorSession,
 } from '../types.ts';
 import { type ActivationInput, ActivationState } from './activation.ts';
+import type { PassInput, PassResult, TraceSink } from './contract.ts';
 import { failedPass } from './failure.ts';
 
 type CallResult<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cut' };
@@ -61,12 +59,12 @@ interface Current {
  */
 export class AgentRunner implements AgentPort {
 	private readonly room: RoomProtocol;
-	private readonly context: AgentExecutionContext;
+	private readonly context: SeatContext;
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 
-	constructor(room: RoomProtocol, context: AgentExecutionContext) {
+	constructor(room: RoomProtocol, context: SeatContext) {
 		this.room = room;
 		this.context = context;
 	}
@@ -123,7 +121,7 @@ export class AgentRunner implements AgentPort {
 	 * Release, as failed, an activation whose run this process lost. A host
 	 * that dropped a run with its memory calls this when it comes back. The
 	 * release makes the attempts of one room call, and a release that none
-	 * of them confirms raises a `delivery_error`.
+	 * of them confirms raises a `port_error`.
 	 */
 	async recover(activation: string): Promise<void> {
 		await this.release(activation, 'failed', 0, undefined, undefined, undefined);
@@ -457,7 +455,7 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
+		this.emit({ type: 'port_error', seat: this.context.seat, activation, operation, error });
 	}
 
 	private emit(event: ActivationEvent): void {

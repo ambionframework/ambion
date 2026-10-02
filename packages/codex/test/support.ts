@@ -65,7 +65,7 @@ export function viewOf(
 			now: 0,
 			participants: [
 				{
-					kind: 'human',
+					kind: 'person',
 					name: 'priya',
 					identity: 'Project manager.',
 					presence: 'present',

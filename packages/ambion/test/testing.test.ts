@@ -6,19 +6,17 @@
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import { ActivationState } from '../src/execution/activation.ts';
-import { PermanentError } from '../src/execution/failure.ts';
-import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
 import type {
 	ActivationOpener,
-	ActivationView,
-	CommitRequest,
-	CommitResult,
 	ExecutorActivation,
 	Pass,
 	PassInput,
 	PassResult,
 	RunningActivation,
-} from '../src/protocol.ts';
+} from '../src/execution/contract.ts';
+import { PermanentError } from '../src/execution/failure.ts';
+import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
+import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
 	byAgent,
 	callTool,

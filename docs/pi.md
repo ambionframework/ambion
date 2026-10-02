@@ -60,7 +60,7 @@ never loads it and needs no key.
 ## A complete example
 
 ```ts
-import { defineAgent, defineHuman, defineTool, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
 import { pi } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
@@ -82,7 +82,7 @@ const inventory = defineAgent({
   }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Coordinates deliveries.' });
+const priya = definePerson({ name: 'priya', identity: 'Coordinates deliveries.' });
 
 const room = await startRoom({
   name: 'delivery',
@@ -290,7 +290,7 @@ calls them in the same process, so it needs no transport.
 **The executor builds the tools of the definition from each `AmbionTool`.**
 It hosts only the room tools of `pass.tools`.
 [Executors](executors.md#the-room-tools) states the fields of a tool that
-the harness reads and a `RoomTool` does not carry.
+the harness reads and a `BoundTool` does not carry.
 
 **The model holds exactly the tools of the activation.** The executor
 passes the room tools, the tools of the definition, and the tools of its
@@ -471,7 +471,7 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 and id.
 
 ```ts
-import { defineAgent, defineHuman, isSaid, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, isSaid, startRoom } from '@ambionframework/ambion';
 import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream } from '@ambionframework/pi/testing';
@@ -495,7 +495,7 @@ const room = await startRoom({
 });
 
 try {
-  const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Asks.' }));
+  const visit = await room.visit(definePerson({ name: 'priya', identity: 'Asks.' }));
   const exchange = await visit.send({ text: 'How many units?' });
   const said = (await exchange.waitForClose()).filter(isSaid);
   console.log(said.map((message) => message.text));

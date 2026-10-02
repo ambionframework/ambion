@@ -26,7 +26,7 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-type HumanContextParticipant = Extract<ContextParticipant, { kind: 'human' }>;
+type PersonContextParticipant = Extract<ContextParticipant, { kind: 'person' }>;
 
 /** A gap a person can read, not a duration a machine can parse. */
 function ago(at: string, now: number): string {
@@ -53,7 +53,7 @@ function plural(n: number, unit: string): string {
  */
 export function renderRecord(
 	record: readonly Message[],
-	people: readonly HumanContextParticipant[],
+	people: readonly PersonContextParticipant[],
 	now: number,
 	exchangeFrom?: Seq,
 	omitted = 0,
@@ -86,7 +86,7 @@ function divide(block: Block, dividers: Map<Seq, string[]>): string[] {
 }
 
 /** Seq to the people whose divider sits right after it. */
-function departureDividers(people: readonly HumanContextParticipant[]): Map<Seq, string[]> {
+function departureDividers(people: readonly PersonContextParticipant[]): Map<Seq, string[]> {
 	const dividers = new Map<Seq, string[]>();
 	for (const person of people) {
 		if (
@@ -126,14 +126,14 @@ function seatNotes(seat: Extract<ContextParticipant, { kind: 'agent' }>): string
 }
 
 /** Who the room knows, how they are reading, and what they have not read. */
-function renderPeople(people: readonly HumanContextParticipant[], now: number): string {
+function renderPeople(people: readonly PersonContextParticipant[], now: number): string {
 	if (people.length === 0) return 'Nobody has been in this room.';
 	return people
 		.map((person) => `- ${person.name} (${notes(person, now)}): ${person.identity}`)
 		.join('\n');
 }
 
-function notes(person: HumanContextParticipant, now: number): string {
+function notes(person: PersonContextParticipant, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
 	if (person.messagesSinceDeparture > 0)
@@ -283,7 +283,7 @@ function renderContext(
 ): string {
 	const { context } = view;
 	const people = context.participants.filter(
-		(participant): participant is HumanContextParticipant => participant.kind === 'human',
+		(participant): participant is PersonContextParticipant => participant.kind === 'person',
 	);
 	return [
 		renderClock(context.now),
@@ -312,7 +312,7 @@ function renderContext(
 			context.omitted,
 		),
 		``,
-		...paragraph(renderPending(view)),
+		...paragraph(renderScheduled(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -328,7 +328,7 @@ function paragraph(text: string | undefined): string[] {
  * waits. A seat that continues its session reads it beside the delta, so the
  * list is current at every response activation.
  */
-export function renderPending(view: ActivationView): string | undefined {
+export function renderScheduled(view: ActivationView): string | undefined {
 	const { scheduled } = view.context;
 	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
 	if (scheduled.length === 0) return undefined;

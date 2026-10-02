@@ -14,11 +14,11 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `packages/ambion`: the runtime. One file per concern, in layers that Biome
   holds. `room.ts` composes them.
 - `packages/journal`: the append-only journal. One queue, fenced by run, with
-  conditional commits.
+  conditional appends.
 - `packages/assistant`: the default assistant definition. Membership guidance
   and closing summaries over the core.
 - `packages/simulator`: evals. `simulate()` drives a room as a person and
-  returns the run that checks read.
+  returns the simulation that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
@@ -203,8 +203,8 @@ sentence. `README.md` and `docs/` follow these rules.
 4. **One word, one meaning.** An **activation** is the room waking one seat.
    An **exchange** is a person's question and every activation until the
    room goes quiet. What the journal holds is an **entry**. `turn` belongs to
-   Pi (one request to a provider). `row` belongs to SQL. `round` belongs to
-   nobody. An activation is never a `trigger`, a `call`, or a `wake`.
+   a vendor loop (one request to a provider). `row` belongs to SQL. `round`
+   belongs to nobody. An activation is never a `trigger`, a `call`, or a `wake`.
 5. **Simple tenses.** Present for how things work, imperative for
    instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits".

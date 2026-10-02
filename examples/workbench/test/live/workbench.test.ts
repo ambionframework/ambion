@@ -66,7 +66,7 @@ for (const scenario of scenarios) {
 			const directory = await mkdtemp(join(tmpdir(), `ambion-workbench-${scenario.name}-live-`));
 			const workbench = await openWorkbench({ directory: join(directory, 'run') });
 			try {
-				await workbench.join(scenario.name, scenario.person);
+				await workbench.visit(scenario.name, scenario.person);
 				await workbench.send(
 					scenario.name,
 					scenario.person,
@@ -188,7 +188,7 @@ describe.skipIf(!hasKey('pi') || !hasKey('claude'))('Workbench sweep', () => {
 		const workbench = await openWorkbench({ directory: run });
 		try {
 			await workbench.create('sweep', 'Sweep the series resistor of the LED.');
-			await workbench.join('sweep', 'mira');
+			await workbench.visit('sweep', 'mira');
 			await workbench.send(
 				'sweep',
 				'mira',

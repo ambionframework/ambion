@@ -18,8 +18,8 @@ import { discussionMessages } from './room/exchange.ts';
 import { projectState, replay } from './room/projection.ts';
 import type { MessageSelection } from './room/read.ts';
 import { captureMessageSelection, toRoomRead } from './room/read.ts';
-import type { CompositionDraft } from './room-host/core.ts';
-import { type Room, RoomHost, type Visit } from './room-host/room.ts';
+import type { CompositionDraft } from './room-run/core.ts';
+import { type Room, RoomRun, type Visit } from './room-run/room.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -30,7 +30,7 @@ import type {
 	Seq,
 } from './types.ts';
 
-export type { ExchangeHandle, PostInput, Room, RoomRead, Visit } from './room-host/room.ts';
+export type { ExchangeHandle, PostInput, Room, RoomRead, Visit } from './room-run/room.ts';
 
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */
@@ -92,7 +92,7 @@ export function startRoom(options: StartRoomOptions): Promise<Room> {
 	return acquire(options.name, options, (state, connector) => {
 		const cast = composeFrom(options);
 		assertEstimators(cast.definitions, state);
-		return RoomHost.start(options.name, state, cast, connector);
+		return RoomRun.start(options.name, state, cast, connector);
 	});
 }
 
@@ -100,7 +100,7 @@ export function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Ro
 	return acquire(name, options, (state, connector) => {
 		const bindings = definitionsOf(options.agents);
 		assertEstimators(bindings.values(), state);
-		return RoomHost.resume(name, state, bindings, connector);
+		return RoomRun.resume(name, state, bindings, connector);
 	});
 }
 
@@ -113,7 +113,7 @@ export function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Ro
 async function acquire(
 	name: string,
 	options: Pick<StartRoomOptions, 'runtime' | 'execution'>,
-	open: (state: RuntimeState, connector: ExecutionConnector) => RoomHost,
+	open: (state: RuntimeState, connector: ExecutionConnector) => RoomRun,
 ): Promise<Room> {
 	assertRoomName(name);
 	const state = runtimeStateOf(options.runtime ?? defaultRuntime());
@@ -135,7 +135,7 @@ async function acquire(
  * people who stayed without a second arrival.
  */
 export function visitOf(room: Room, name: string): Visit | undefined {
-	if (!(room instanceof RoomHost))
+	if (!(room instanceof RoomRun))
 		throw new TypeError('The room must come from startRoom or resumeRoom.');
 	return room.presentVisit(name);
 }
@@ -147,7 +147,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	const messages = captureMessageSelection(options.messages);
 	const state = runtimeStateOf(runtime);
 	const live = state.running.get(name);
-	if (live instanceof RoomHost) return live.read({ messages });
+	if (live instanceof RoomRun) return live.read({ messages });
 	const journal = roomJournal(state.journals.open(name));
 	await journal.ready;
 	await journal.settled();

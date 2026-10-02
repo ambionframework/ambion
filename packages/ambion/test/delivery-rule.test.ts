@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
-import type { LeaseChange } from '../src/journal/entries.ts';
+import type { Lease } from '../src/journal/entries.ts';
 import type { Body, RoomEntry } from '../src/journal/journal.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
@@ -151,13 +151,13 @@ const presence = (seq: number, kind: 'seated' | 'unseated', subject: string): Ro
 });
 
 type LeaseDraft =
-	| Omit<Extract<LeaseChange, { phase: 'running' }>, 'id' | 'at'>
-	| Omit<Extract<LeaseChange, { phase: 'ended' }>, 'id' | 'at'>;
+	| Omit<Extract<Lease, { phase: 'running' }>, 'id' | 'at'>
+	| Omit<Extract<Lease, { phase: 'ended' }>, 'id' | 'at'>;
 
 const lease = (seq: number, id: string, change: LeaseDraft): RoomEntry => ({
 	kind: 'lease',
 	seq,
-	body: { ...change, id, at } as LeaseChange,
+	body: { ...change, id, at } as Lease,
 });
 
 const entries: RoomEntry[] = [

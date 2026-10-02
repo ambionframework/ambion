@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	type Message,
 	type Room,
 	type Runtime,
@@ -34,7 +34,7 @@ import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
 const worker = scriptedAgent('worker');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 const DELAY_SECONDS = 600;
 
 /**

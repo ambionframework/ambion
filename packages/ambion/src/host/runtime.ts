@@ -23,7 +23,8 @@
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import { AmbionError } from '../errors.ts';
-import type { ActivationOpener, AgentPort, RoomProtocol, TraceOpener } from '../protocol.ts';
+import type { ActivationOpener, TraceOpener } from '../execution/contract.ts';
+import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { ScheduleLimits } from '../scheduling.ts';
 import type { ActivationEvent, AgentDefinition, Clock, TraceLogger } from '../types.ts';
 import { systemClock } from './clock.ts';
@@ -82,7 +83,7 @@ export interface Execution<Port extends AgentPort = AgentPort> {
 /** Every bound the runtime sets, by what it bounds. One value for every room in the runtime. */
 export interface Limits {
 	/** How long a wake stays unanswered before the room sends it again. */
-	readonly delivery: { readonly resend: number };
+	readonly port: { readonly resend: number };
 	/**
 	 * How long a lease lasts from each claim or renewal (`ttl`), and how long
 	 * an activation may run from its first claim (`deadline`): the room renews
@@ -111,8 +112,8 @@ export interface Limits {
 	readonly message: { readonly bytes: number };
 	/**
 	 * The bounds on a scheduled say: `delaySeconds` from `minDelaySeconds` to
-	 * `maxDelaySeconds`, and at most `pending` says of one seat that wait to
-	 * return. `maxDelaySeconds` and `pending` may be `Infinity`.
+	 * `maxDelaySeconds`, and at most `waiting` says of one seat that wait to
+	 * return. `maxDelaySeconds` and `waiting` may be `Infinity`.
 	 */
 	readonly schedule: ScheduleLimits;
 	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
@@ -171,7 +172,7 @@ export const runningRoom = (runtime: Runtime, name: string): RoomProtocol | unde
 	runtimeStateOf(runtime).running.get(name)?.calls;
 
 /** The dependencies that one in-process seat needs for one captured definition. */
-export interface AgentExecutionContext {
+export interface SeatContext {
 	readonly clock: Clock;
 	readonly call: Limits['call'];
 	readonly definition: AgentDefinition;
@@ -246,7 +247,7 @@ function validateCaps(limits: Limits): void {
 		['message.bytes', limits.message.bytes],
 		['schedule.minDelaySeconds', limits.schedule.minDelaySeconds],
 		['schedule.maxDelaySeconds', limits.schedule.maxDelaySeconds],
-		['schedule.pending', limits.schedule.pending],
+		['schedule.waiting', limits.schedule.waiting],
 	] as const) {
 		if (value !== Number.POSITIVE_INFINITY && !(Number.isSafeInteger(value) && value > 0)) {
 			throw new Error(`Runtime limits.${name} must be a positive integer or Infinity.`);
@@ -271,7 +272,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const clock = options.clock ?? systemClock();
 	const given = options.limits ?? {};
 	const limits: Limits = {
-		delivery: { resend: 5_000, ...given.delivery },
+		port: { resend: 5_000, ...given.port },
 		lease: { ttl: 60_000, deadline: 600_000, ...given.lease },
 		activation: {
 			attempts: 3,
@@ -281,7 +282,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: callLimits(given.call),
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
-		schedule: { minDelaySeconds: 60, maxDelaySeconds: 604_800, pending: 4, ...given.schedule },
+		schedule: { minDelaySeconds: 60, maxDelaySeconds: 604_800, waiting: 4, ...given.schedule },
 		trace: { ...DEFAULT_TRACE_LIMITS, ...given.trace },
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.
@@ -297,7 +298,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	validateCaps(limits);
 	validateSchedule(limits.schedule);
 	const intervals = {
-		'delivery.resend': limits.delivery.resend,
+		'port.resend': limits.port.resend,
 		'lease.ttl': limits.lease.ttl,
 		'lease.deadline': limits.lease.deadline,
 	};

@@ -67,7 +67,7 @@ describe('agentActor', () => {
 		});
 		const room = await open(desk, ['desk']);
 		const actor = agentActor({ model: MODEL, brief: BRIEF, services: services(script) });
-		const simulation = await simulate(room, { person: priya, actor, exchanges: 3 });
+		const simulation = await simulate(room, { person: priya, actor, messages: 3 });
 		expect(simulation.ended).toBe('stopped');
 		expect(simulation.moves.map((move) => ('text' in move ? move.text : move.stop))).toEqual([
 			'Can we pour?',
@@ -126,15 +126,15 @@ describe('agentActor', () => {
 		['passes its timeout', () => forever(), 50, /The move passed its timeout of 50 ms/],
 	] as const)(
 		'rejects a move that %s, and the loop ends failed',
-		async (_case, answer, timeoutMs, error) => {
+		async (_case, answer, moveMs, error) => {
 			const actor = agentActor({
 				model: MODEL,
 				brief: BRIEF,
 				services: services(answer as PiScript),
-				...(timeoutMs === undefined ? {} : { timeoutMs }),
+				...(moveMs === undefined ? {} : { moveMs }),
 			});
 			const room = await open(desk, ['desk']);
-			const simulation = await simulate(room, { person: priya, actor, exchanges: 1 });
+			const simulation = await simulate(room, { person: priya, actor, messages: 1 });
 			expect(simulation.ended).toBe('failed');
 			expect(simulation.error).toMatch(error);
 		},
@@ -157,7 +157,7 @@ async function injectedSimulation() {
 	return simulate(room, {
 		person: priya,
 		actor: scriptedActor(['Can we pour?', { stop: 'SECRET BRIEF: pour on Thursday.' }]),
-		exchanges: 3,
+		messages: 3,
 	});
 }
 

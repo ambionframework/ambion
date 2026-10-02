@@ -11,11 +11,11 @@
  */
 import {
 	type ExchangeActivation,
-	type HumanDefinition,
 	isPosted,
 	isSaid,
 	isSummary,
 	type Message,
+	type PersonDefinition,
 	type PostedMessage,
 	type RoomNotification,
 } from '@ambionframework/ambion';
@@ -68,7 +68,7 @@ export function actorPrompt(exchanges: readonly SeenExchange[]): string {
 }
 
 /** The system prompt of the actor: the person, the brief, and the rules. */
-export function actorSystem(person: HumanDefinition, brief: string): string {
+export function actorSystem(person: PersonDefinition, brief: string): string {
 	return [
 		`You play ${person.name}, a person in a room of agents. ${person.identity}`,
 		`Your goal, which only you know:\n${brief}`,

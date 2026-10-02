@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Room,
 	readRoom,
@@ -39,7 +39,7 @@ const recording = scriptedStream((context) => {
 });
 
 const watcher = scriptedAgent('watcher', 'Watches the room.');
-const mara = defineHuman({ name: 'mara', identity: 'Design lead.' });
+const mara = definePerson({ name: 'mara', identity: 'Design lead.' });
 
 const roomName = () => name('presence');
 
@@ -60,7 +60,7 @@ const kinds = async (session: Pick<Room, 'read'>) => (await messagesOf(session))
 
 const presenceOf = async (session: Room, name: string) => {
 	const seat = (await participantsOf(session)).find((s) => s.name === name);
-	return seat?.kind === 'human' ? seat.presence : undefined;
+	return seat?.kind === 'person' ? seat.presence : undefined;
 };
 
 beforeEach(() => {
@@ -73,7 +73,7 @@ describe('presence', () => {
 		const session = await open();
 		await waitForRoom(session);
 		expect(await messagesOf(session)).toHaveLength(0);
-		expect((await participantsOf(session)).filter((s) => s.kind === 'human')).toHaveLength(0);
+		expect((await participantsOf(session)).filter((s) => s.kind === 'person')).toHaveLength(0);
 
 		const seen = collect(session);
 		await session.visit(andrei);
@@ -154,7 +154,7 @@ describe('presence', () => {
 		const terminal = await session.visit(andrei);
 		const browser = await session.visit(andrei);
 		await waitForRoom(session);
-		expect(browser.human).toBe(terminal.human); // one person is in the room once, or not at all
+		expect(browser.person).toBe(terminal.person); // one person is in the room once, or not at all
 		expect(await kinds(session)).toEqual(['arrived']); // the second visit committed nothing
 		expect(await presenceOf(session, 'andrei')).toBe('present');
 

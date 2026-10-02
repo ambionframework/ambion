@@ -10,7 +10,7 @@ import { pi, piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	defineTool,
 	type Room,
 	resumeRoom,
@@ -29,8 +29,8 @@ import {
 	tappedJournals,
 } from './support/storage.ts';
 
-const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
-const otherPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });
+const person = definePerson({ name: 'andrei', identity: 'Founder.' });
+const otherPerson = definePerson({ name: 'andrei', identity: 'Founder, returned.' });
 
 type Options = Omit<StartRoomOptions, 'name' | 'runtime'>;
 
@@ -183,7 +183,7 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 
 		release();
 		const [one, two] = await Promise.all([first, second]);
-		expect(one.human).toEqual(two.human);
+		expect(one.person).toEqual(two.person);
 		await expect(other).rejects.toThrow(/different identity/);
 		await expect(room.visit(otherPerson)).rejects.toEqual(refusal('duplicate_name'));
 		expect(await kinds(room, 'arrived')).toHaveLength(1);
@@ -267,7 +267,7 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 			await expect(visit.leave()).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
 			await visit.leave();
-			expect(await presenceOf(room)).toMatchObject({ kind: 'human', presence: 'absent' });
+			expect(await presenceOf(room)).toMatchObject({ kind: 'person', presence: 'absent' });
 			expect(await kinds(room, 'left')).toHaveLength(1);
 		},
 	);
@@ -283,7 +283,7 @@ describe.each(storages)('durable visits on $name storage', (storage) => {
 		faulty.fail(false);
 
 		const freshVisit = await room.visit(who);
-		expect(freshVisit.human).toEqual(who);
+		expect(freshVisit.person).toEqual(who);
 		expect(await kinds(room, 'arrived')).toHaveLength(2);
 		await expect(oldVisit.send({ text: 'old handle', key: 'old-handle' })).rejects.toThrow(
 			/ended|leaving/,
