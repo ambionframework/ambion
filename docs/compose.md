@@ -2,7 +2,7 @@
 
 **Status: implemented, with the live evidence and the final pages open.**
 The `compose` option adds the `compose` tool, and the main entry exports its
-types and `COMPOSE_GUIDANCE`. Skill [macros](#macros) run by name. The
+types and `COMPOSE_GUIDANCE`. Skill [macros](macros.md) run by name. The
 package `@ambionframework/evaluator` holds `quickjsEvaluator` and
 `processEvaluator`, and both pass `evaluatorConformance`. The live
 comparison of the token cost and the update of the other pages stay open.
@@ -245,93 +245,12 @@ follows it.
 
 ## Macros
 
-**A macro is a compose program that a skill stores.** The skill holds the
-code once, and the model runs it by name. The code never passes through
-the model, so it costs no output tokens, and it cannot change between
-runs. The model writes a name and the arguments.
-
-```js
-/*---
-description: Snapshot the files of every run with a label. Returns the count and the refs.
-uses: [sql, snapshot]
-args:
-  type: object
-  properties: { label: { type: string } }
-  required: [label]
----*/
-const runs = await tools.sql({
-  sql: 'SELECT path FROM runs WHERE label = ?',
-  params: [args.label],
-  rows: 500,
-});
-const { refs } = await tools.snapshot({ paths: runs.rows.map((row) => row.path) });
-return { runs: runs.count, refs };
-```
-
-```js
-// compose({ macro: 'lab-drift/snapshot-drift', args: { label: 'drift' } })
-```
-
-**A macro is data on a bundle.** `ToolBundle.macros` holds
-`ComposeMacro` values: the `name`, the `description`, `uses`, the `args`
-schema, the `code`, and the blob `hash` of the file. `composeMacro(fields)`
-checks the fields and gives a frozen copy. `workspace.tools({ skills })`
-puts the macros of a skill set on its bundle. [Skills](skills.md#macros)
-states how a skill holds them.
-
-**`describeExecutor` checks the macros of a seat that has `compose`.** It
-collects the macros of every bundle. It refuses a macro that names a tool
-that the catalog lacks, and a tool with `compose: false` is not in the
-catalog. It refuses two macros with one name. The error is an
-`AmbionError` with the code `invalid_tool`. A seat with no `compose` option
-ignores the macros, so one skill set fits every seat.
-
-**`compose` finds the macro in the frozen set of the definition.** It never
-reads `~/.skills`. The steps of a macro call are these:
-
-1. Refuse a call that mixes a macro with `uses`, `code`, or free `args`.
-2. Refuse a name that no macro holds. The error lists the names.
-3. Take absent `args` as `{}`. Refuse `args` that are not JSON.
-4. Check `args` against the `args` schema of the macro. Refuse a mismatch
-   with the path and the rule of each fault.
-5. Ask the [approval](#approval) with the name, the hash, and the `args`.
-6. Evaluate the stored code under the stored `uses`, with the global `args`.
-
-A refusal at steps 1 to 4 has no ledger, no approval, and no effect. From
-step 6 the call is an ordinary compose call: the nested calls, the ledger,
-the limits, and the result.
-
-**The `args` schema is JSON Schema, checked at load.** The schema must
-satisfy the meta-schema of draft 2020-12. `Check` ignores a keyword that it
-does not know, so a schema with one would accept every value. The
-check of a macro refuses every keyword that the table below omits. These
-include `$ref`, `$defs`, `$id`, `$anchor`, and `format`.
-
-| Kind              | Keywords                                                                                              |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| Types and values  | `type`, `enum`, `const`, `required`, `dependentRequired`                                              |
-| Numbers           | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`                            |
-| Text              | `minLength`, `maxLength`, `pattern`                                                                   |
-| Lists and objects | `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, `minContains`, `maxContains` |
-| Schemas inside    | `properties`, `patternProperties`, `additionalProperties`, `items`, `prefixItems`, `contains`         |
-| Combinations      | `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`, `propertyNames`           |
-| Open objects      | `unevaluatedProperties`, `unevaluatedItems`                                                           |
-| Notes             | `title`, `description`, `default`, `examples`, `$comment`                                             |
-
-**`approve` can allow a macro and deny free code.** A host that denies
-free code runs only code that it wrote. The in-process evaluator is not a
-security boundary, so this limits what it runs. The authority stays the
-same: `compose` binds only tools that the seat already holds.
-
-**Macros have these limits.**
-
-- **A macro cannot call a macro.** `tools` binds native tools alone.
-- **The integrity covers the body, `uses`, and `args`.** A macro that runs
-  a script from `~/.skills` through `bash` runs the editable copy.
-  [Skills](skills.md#macros) states the rest.
-- **The free `code` form stays.** The guidance asks the model to run a
-  macro when a skill names one. The model can still write code.
-- **A seat on Cloudflare has no macro.** It has no evaluator.
+**`compose` runs a macro by name.** A call that gives `macro` and `args`
+runs the code that a skill stores, under the `uses` of that file. The call
+checks `args` against the schema of the macro, and asks `approve` with the
+name, the hash, and the `args`. From the evaluation on, it is an ordinary
+compose call. [Macros](macros.md) states the format, the steps, and the
+limits.
 
 ## Bindings
 
@@ -683,8 +602,8 @@ a `ComposeRequest` and the `ToolContext` of the `compose` call. Free code
 gives `{ uses, code }`. A macro gives `{ macro, hash, args }`: the name, the
 blob hash of its file, and its checked arguments. The hook cannot record a
 step. `compose` calls the hook after it checks `uses`, or the macro and its
-`args`, and before it evaluates any code. The step that records the answer is part of this proposal. The
-step vocabulary has no such kind today. A denial fails the
+`args`, and before it evaluates any code. The `approval` step records the answer, with the call id and `allow` or
+`deny`. A denial fails the
 compose call with no ledger and no effect. With no hook, `compose` allows
 every compose call of the catalog.
 
@@ -928,7 +847,7 @@ each page states the current surface.
 | [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                                                                  |
 | `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                                                                 |
 | [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal and the deadline, and runs it through `invokeTool`.                                                                                                                                                                                                                 |
-| [Skills](skills.md)                                                    | The `macros/` folder of a skill, and the macros of a skill set.                                                                                                                                                                                                                                                                       |
+| [Skills](skills.md) and [Macros](macros.md)                            | The `macros/` folder of a skill, and the macros of a skill set.                                                                                                                                                                                                                                                                       |
 | Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeRequest`, `ComposeMacro`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the values `COMPOSE_GUIDANCE` and `composeMacro`. The snapshot lists values only, so those two and `evaluatorConformance` from `/conformance` change it. |
 | Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                                                                        |
 
