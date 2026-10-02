@@ -414,7 +414,7 @@ call adds network round trips to every tool call.
   the channel closes, and keeps a request made after that pending forever.
   So every call races the end of its client. A connection that dies with
   no sign ends after three keepalives with no answer, about 45 seconds. A
-  file call answers `unknown`, and a command answers `ExecutionError`
+  file call answers `unknown`, and a command answers `ShellError`
   `unknown` with no exit code. An append that the connection lost can have
   landed or not, and the caller cannot tell which.
 - **`idleTimeout` closes an unused client.** A client with no open

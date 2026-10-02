@@ -67,19 +67,19 @@ export { openLog } from './log.ts';
 export type { RoomMessageEntry, RoomMirror, RoomMirrorOptions } from './mirror.ts';
 export type { ObjectBackend, ObjectDigest, ObjectEnv } from './object-backend.ts';
 export type {
-	ExecutionErrorCode,
 	FileErrorCode,
 	FileInfo,
 	FileResult,
 	Result,
+	ShellErrorCode,
 	ShellExecResult,
 	ShellOutputLimits,
 	ShellOutputTruncation,
 	ShellOutputView,
 	WorkspaceExecOptions,
 } from './port.ts';
-export { ExecutionError, err, FileError, ok } from './port.ts';
-export type { ProcessKind, ProcessRecord, ProcessState } from './process-files.ts';
+export { err, FileError, ok, ShellError } from './port.ts';
+export type { Process, ProcessKind, ProcessState } from './process-files.ts';
 export { MAX_TIMER_SECONDS } from './process-run.ts';
 export type { ProcessEvent, ProcessQuery } from './process-table.ts';
 export type { SkillInfo, SkillSet } from './skills.ts';

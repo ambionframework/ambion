@@ -76,7 +76,7 @@ live('the default assistant, driven by the simulator', () => {
 				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
 				]),
-				exchanges: 1,
+				messages: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -117,7 +117,7 @@ live('the default assistant, driven by the simulator', () => {
 				actor: scriptedActor([
 					'How many units of SKU A can the warehouse dispatch today? Use current stock evidence.',
 				]),
-				exchanges: 1,
+				messages: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -157,7 +157,7 @@ live('the default assistant, driven by the simulator', () => {
 				actor: scriptedActor([
 					'Prepare a warehouse dispatch plan. Correction: the approved limit is now 8 units; the old 10-unit limit is withdrawn. Do not dispatch anything.',
 				]),
-				exchanges: 1,
+				messages: 1,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -188,7 +188,7 @@ live('the default assistant, driven by the simulator', () => {
 			actor: scriptedActor([
 				'Check whether the warehouse can dispatch 8 units today. Do not dispatch anything.',
 			]),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -212,7 +212,7 @@ live('the default assistant, driven by the simulator', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['Check warehouse stock for SKU A.']),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -237,7 +237,7 @@ live('the default assistant, driven by the simulator', () => {
 			actor: scriptedActor([
 				'Report what was verified about the warehouse dispatch prototype. Do not change files or release anything.',
 			]),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -273,7 +273,7 @@ live('the default assistant, driven by the simulator', () => {
 					'How many units of SKU A can the warehouse dispatch today?',
 					'Correction: I need the count for SKU B, not SKU A.',
 				]),
-				exchanges: 2,
+				messages: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -310,7 +310,7 @@ live('the default assistant, driven by the simulator', () => {
 					'Report the stock of SKU A. Do not dispatch anything this week.',
 					'Now prepare a dispatch plan for SKU A.',
 				]),
-				exchanges: 2,
+				messages: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -348,7 +348,7 @@ live('the default assistant, driven by the simulator', () => {
 					brief:
 						'You want to know how many units the warehouse can dispatch today. The SKU is A-100. Give the SKU only when someone asks for it. Stop when you know the count.',
 				}),
-				exchanges: 3,
+				messages: 3,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -389,7 +389,7 @@ live('the default assistant, driven by the simulator', () => {
 					to: 'assistant',
 				},
 			]),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -416,7 +416,7 @@ live('the default assistant, driven by the simulator', () => {
 			actor: scriptedActor([
 				{ text: 'How many units of SKU A can you dispatch today?', to: 'inventory' },
 			]),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -443,7 +443,7 @@ live('the default assistant, driven by the simulator', () => {
 					'Report the stock of SKU A.',
 					'Thanks. Inventory is no longer needed here; remove it from the room.',
 				]),
-				exchanges: 2,
+				messages: 2,
 				exchangeMs: EXCHANGE_MS,
 			});
 			evidence.simulation = simulation;
@@ -472,7 +472,7 @@ live('the default assistant, driven by the simulator', () => {
 			actor: scriptedActor([
 				'For the record: the dispatch review is on Friday. No stock check is needed.',
 			]),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;
@@ -514,7 +514,7 @@ live('the default assistant, driven by the simulator', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['How many units of SKU A are in the north warehouse today?']),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: EXCHANGE_MS,
 		});
 		evidence.simulation = simulation;

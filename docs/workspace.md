@@ -1020,10 +1020,10 @@ Codex seat installs no Pi package to use a workspace.
 
 **Every operation returns a `Result` and never throws.** A file operation
 gives `Result<T, FileError>`, and `exec` gives
-`Result<ShellExecResult, ExecutionError>`. `ok` and `err` build a `Result`.
+`Result<ShellExecResult, ShellError>`. `ok` and `err` build a `Result`.
 `FileError` has a `code`: `aborted`, `not_found`, `permission_denied`,
 `not_directory`, `is_directory`, `invalid`, `not_supported`, or `unknown`.
-`ExecutionError` has the code `aborted`, `timeout`, `spawn_error`, or
+`ShellError` has the code `aborted`, `timeout`, `spawn_error`, or
 `unknown`.
 
 **Every operation takes an optional `AbortSignal` as its last argument.** An

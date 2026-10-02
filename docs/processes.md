@@ -262,7 +262,7 @@ bracketed line adds `The text above is the last <n> lines, <size> of the
 most 200 KB, with `head -c <size> | tail -c <count>`. The agent reads the
 rest with `read`, which takes an offset and a limit.
 
-**`details.process` is a `ProcessRecord`.** The host's view gives the
+**`details.process` is a `Process`.** The host's view gives the
 same value.
 
 | Field       | Holds                                                                      |
@@ -486,14 +486,14 @@ that an agent left running. It adds no tool.
 
 ```ts
 export interface WorkspaceProcesses {
-  list(query?: { agent?: string; running?: boolean }): Promise<readonly ProcessRecord[]>;
+  list(query?: { agent?: string; running?: boolean }): Promise<readonly Process[]>;
   subscribe(listener: (event: ProcessEvent) => void): () => void;
-  cancel(handle: string): Promise<ProcessRecord>;
+  cancel(handle: string): Promise<Process>;
 }
 
 export type ProcessEvent =
-  | { readonly type: 'started'; readonly process: ProcessRecord }
-  | { readonly type: 'ended'; readonly process: ProcessRecord };
+  | { readonly type: 'started'; readonly process: Process }
+  | { readonly type: 'ended'; readonly process: Process };
 ```
 
 **`list` reads the tables of the agents that used the workspace in this
@@ -512,7 +512,7 @@ other listeners or the process.
 end as the `cancel` tool does: the grace, up to 10 seconds, and 5 seconds.
 A process that has not ended by then still reads `running`, and its cancel
 goes on. The host reads the output of a process through
-`workspace.use`, as the owner agent, at `ProcessRecord.output`.
+`workspace.use`, as the owner agent, at `Process.output`.
 
 ## Reminders
 
@@ -664,7 +664,7 @@ workspace.processes.subscribe((event) => {
   ends calls `workspace.processes.list()` on an interval, so a read sees
   them. `list` reads the agents that acted in this run. A process that
   ended while no host ran gives no event, and the reminder names it.
-- `ProcessRecord.room` names the room of the `bash` call, so a host with
+- `Process.room` names the room of the `bash` call, so a host with
   several rooms posts each end to the room that started the process.
 
 ## Life and disposal
@@ -780,7 +780,7 @@ workstation's Unix accounts.
 bash resource after the call ends. The entry of a `bash` call holds the state at
 the end of the call, which can be `running`. A call that fails on a process
 that ended badly records `error` with the name `ToolFailure` and the `details`
-of its result: the `ProcessRecord`, and for `wait` on several handles, every
+of its result: the `Process`, and for `wait` on several handles, every
 status. A `bash` call that an abort cuts while it waits records an error with
 no handle, and the process keeps running. The reminder and `ps` name it. The
 files of a process are its record.
