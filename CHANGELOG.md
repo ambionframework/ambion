@@ -248,26 +248,26 @@ that gets no answer in 30 seconds fails as transient.
 only when the tools in its rollout file equal the bound tools. Otherwise,
 and when `thread/resume` fails, it starts a fresh thread and records the
 `notice` "Codex thread not resumed". A resumed thread takes the new seat
-text. A process that exits during a pass is a transient failure that holds
+text from `baseInstructions`, and its first prompt holds the view alone. A
+process that exits during a pass is a transient failure that holds
 the stderr tail.
 
-**An image from a tool reaches a default Codex seat.** The catalog patch of
-`nativeTools: 'none'` no longer sets `input_modalities` and
+**An image from a tool reaches a Codex seat.** The catalog patch no longer
+sets `input_modalities` and
 `supports_image_detail_original`. The model keeps its own modalities, so a
 workspace `read` of a picture and the frames of `observe` reach it as images.
 The tool list does not change, because `view_image` stays off. A model with
 no image input stays text-only, and Codex shows a placeholder.
 
-**The Codex package tests the real `codex` binary on a scripted model.**
+**The Codex package tests the real `codex app-server` on a scripted model.**
 `codex` accepts a custom model provider through its config. A local endpoint
 in `packages/codex/test/responses.ts` speaks the Responses API and plays a
 script of replies. `test/binary.test.ts` runs the bundled binary against it,
 in a temporary Codex home, with a minimal environment. It proves that a seat
 speaks through `say`, that the activation reports the usage of the endpoint,
-that the model sees the room tools, the tools of the seat, and the three
-MCP resource tools and no native tool, and that a second pass resumes the
-same thread. This tier runs in the unit tier and needs no key. The executor
-does not change.
+that the model sees the room tools and the tools of the seat and no native
+tool, and that a second pass resumes the same thread. This tier runs in the
+unit tier and needs no key.
 
 #### Trace output
 
@@ -278,18 +278,17 @@ permissionMode?; tools; servers }`.
 The Claude executor records one for each `system` init message. `tools` holds
 the room tools by plain name. `servers` holds each MCP server with its
 status. `auth` names the source of the credential. Pi records none. The Codex
-executor records one when a thread opens; see the Codex entries below.
+executor records one when a thread opens.
 
-**A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
-Codex 0.158 shows no reasoning unless the request asks for a summary, and
-the catalog of some models turns the summary off. The new option
+**A Codex activation shows its reasoning and diagnostics in the trace.**
+Codex shows no reasoning unless the request asks for a summary, and the
+catalog of some models turns the summary off. The new option
 `reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
 `none`. The default is `auto`. The executor passes it as
-`model_reasoning_summary` in both modes of `nativeTools`, and the summary
-arrives as `thinking` steps. The default trace policy keeps 280 characters of
-each thinking block. `defineAgent({ trace: { thinking: 'full', toolOutput:
-'full' } })` keeps all of it. A `todo_list` item now gives a `tool_call`
-named `update_plan` and its `tool_result`.
+`model_reasoning_summary`, and the summary arrives as `thinking` steps. The
+default trace policy keeps 280 characters of each thinking block.
+`defineAgent({ trace: { thinking: 'full', toolOutput: 'full' } })` keeps all
+of it.
 
 **A Codex trace names the thread and the rollout file.** The executor
 records one `notice` at level `info`, with the text "Codex thread", for each
@@ -485,9 +484,9 @@ did not name `cause`, so any value passed. The schema now holds `permanent`
 or `transient`. A journal that holds another value stops at replay with an
 error that names `body.cause`.
 
-**The Codex recipe matches `codex` 0.158.0.** `exclusiveConfig` no longer
-sets `tools.view_image`. Codex 0.158.0 does not know the key, and it
-reported two warnings for every run. The `view_image` feature still turns the
+**The Codex recipe matches `codex` 0.159.2.** `exclusiveConfig` no longer
+sets `tools.view_image`. Codex does not know the key, and it reported two
+warnings for every run. The `view_image` feature still turns the
 tool off. The config sets `skills.include_instructions` and
 `skills.bundled.enabled` to `false`, so no `skills_instructions` message
 reaches the model and Codex installs no system skill in the seat home. The
@@ -495,16 +494,15 @@ catalog flag `include_skills_usage_instructions` did not remove that message.
 The config also sets `check_for_update_on_startup`, `analytics.enabled`,
 `feedback.enabled`, `memories.generate_memories`, and
 `memories.use_memories` to `false`, so a seat sends no analytics or
-feedback and keeps no memory. `codex exec` starts no update check, and the
-update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
+feedback and keeps no memory. `codex app-server` starts no update check, and
+the update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
 `shell_snapshot`, `daemon_auto_start`,
 `workspace_dependencies`, `worktrees`, `realtime_conversation`, and
 `memories`. Each acts on the host or the network, or writes state outside
 the journal. `shell_snapshot` ran the shell of the host
 user and wrote its environment into the seat home. The binary tier now
 asserts that a default seat produces no warning `notice` and no skills
-block. The catalog fixture is `catalog-0.158.0.json`. The recorded event
-streams stay as recorded on 0.155.1. Docs state that the `config.toml` of
+block. The catalog fixture is `catalog-0.159.2.json`. Docs state that the `config.toml` of
 the seat home is the responsibility of the host, because a key that the
 recipe does not name survives from it.
 
@@ -515,33 +513,20 @@ content parts with no record, so their images went into the log whole. The
 function now takes the array as well, and an image in the shape of the
 Anthropic API, with its bytes in `source.data`.
 
-**Three Codex fixes name `codex exec` and the room tools server.** They
-landed before the executor moved to `codex app-server`. See the note in
-[The Codex executor](#the-codex-executor).
+**A Codex seat has the room tools on its first model request.** The room
+tools are dynamic tools of the thread, so the first request lists them. In
+0.4.0 Codex started an MCP server in the background and waited one second
+for it. A loaded host started the room tools server in more time, so the
+first request listed no room tool. A real model could not call `say` on that
+request and could answer in text that the room never hears. The binary tier
+asserts that every request lists the room tools.
 
-**A Codex seat has the room tools on its first model request.** Codex
-starts an MCP server in the background and waits one second for an optional
-server. A loaded host starts the room tools server in more time, so the first
-request of a turn listed no `mcp__ambion` tool. A real model could not call
-`say` on that request and could answer in text that the room never hears.
-The executor now sets `required = true` on the room tools server. Codex waits
-for it, up to 30 seconds, before the first model request. A server that
-cannot start now ends `codex exec` with "required MCP servers failed to
-initialize" before any model request, and the activation fails as transient.
-The test endpoint no longer answers a request that lacks a tool with a probe.
-A request without `say` now fails the test.
-
-**A Codex seat stops when its host dies.** The SDK closes the input of
-`codex exec` at once. A host that died by SIGKILL or out of memory left
-`codex exec` running, with the model request in flight. The process ran its
-turn to the end, spent on the model, and under `nativeTools: 'codex'` ran
-native commands and wrote the thread in the seat home. The room tools server
-now sends SIGTERM to its parent `codex exec` when the host socket closes or
-fails. On Linux and macOS it sends nothing when `codex exec` has exited
-first, because `ppid` is then another process. On Windows, Node cannot tell
-that the parent is gone. `codex exec` ends its native commands on SIGTERM. A test
-kills a real host in the middle of a model request and in the middle of a
-native command.
+**A Codex seat stops when its host dies.** `codex app-server` reads the input
+of the host. When the host dies, the OS closes the pipe and the process ends.
+In 0.4.0 a host that died by SIGKILL or out of memory left the Codex process
+running, with the model request in flight, and the process spent on the model
+until its turn ended. A test kills a real host in the middle of a model
+request and proves that the process goes away within seconds.
 
 ### Breaking changes
 
@@ -586,6 +571,8 @@ native command.
 - **Remove the Codex options that grant native tools.** `nativeTools`, the
   policy options, and `skipGitRepoCheck` are gone. Use the workspace tools in
   `bundles`. `env` now lays over an allowlist.
+- **Read the Codex seat text as instructions.** It is the `baseInstructions`
+  of the thread. The first user message holds the view alone.
 - **Handle the `notice` step, and drop the `approval` step.** See
   [The trace](#the-trace).
 - **Implement the workspace port with an `AbortSignal`.** Every member takes
@@ -824,11 +811,6 @@ user.
 
 #### The Codex executor
 
-**An entry that names the SDK, `codex exec`, or the room tools server
-describes a change that landed before the move to `codex app-server`.** That
-move removes the SDK and the room tools server, and the executor no longer
-runs `codex exec`.
-
 **The Codex executor runs on `codex app-server`.** This breaks a host that
 read the SDK or the room tools server. `@openai/codex-sdk` and
 `@modelcontextprotocol/sdk` leave the package. It depends on `@openai/codex`
@@ -836,7 +818,7 @@ read the SDK or the room tools server. `@openai/codex-sdk` and
 stdio with one process for each activation. The room tools and the tools of
 the agent are dynamic tools of the thread. The files `bridge.ts`,
 `wire.ts`, and `room-tools-server.ts` and the local socket are gone, and the
-build has one entry. `codex()` options keep their names. The thread policy
+build has one entry. The `codex()` options that remain keep their names. The thread policy
 is the read-only sandbox, `approvalPolicy: never`, and an empty `cwd`.
 `skipGitRepoCheck` has no use and is gone.
 
@@ -880,8 +862,8 @@ fails as permanent.
   seat home.
 
 **The Codex binary runs with an allowlisted environment and a private
-`HOME`.** Before, `codexExecution` passed the whole environment of the host to
-`codex exec` and to `codex debug models`, with only `CODEX_HOME` replaced. The
+`HOME`.** Before, `codexExecution` passed the whole environment of the host to the
+binary and to `codex debug models`, with only `CODEX_HOME` replaced. The
 `env` option of `codexExecution` and `HomeOptions` changes meaning. It no
 longer replaces the environment. It lays over the allowlisted variables of
 `process.env`: a value adds or replaces a variable, and `undefined` removes
@@ -889,7 +871,7 @@ one. The base holds the path, locale, temporary directory, proxy, and
 certificate variables, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`,
 `CODEX_CA_CERTIFICATE`, and the variables with the prefixes `OPENAI_` and
 `LC_`. On Windows the names compare without case. A secret of the host, such as a cloud key or a
-token, reaches neither the binary nor the room tools server. A provider with
+token, does not reach the binary. A provider with
 another `env_key` needs its variable in `env`.
 
 **The seat sets `HOME` and `USERPROFILE`.** Both name `home/home`, a private
@@ -909,35 +891,22 @@ gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
 `reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
 runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
 no network, no approval, an empty working directory, and the seat text in
-`model_instructions_file`. The seat no longer uses `developer_instructions`,
-and a seat text has no size limit from a command argument. A seat that needed
-a shell or file edits now takes the workspace tools in `bundles`. The trace
-maps only the items that a seat can produce: `agent_message`, `reasoning`,
-`mcp_tool_call`, `error`, and the usage of a turn. An item of any other type
-becomes a warning `notice` that names the type. A say no longer cites the
+`baseInstructions`. A seat that needed a shell or file edits now takes the
+workspace tools in `bundles`. The trace maps the items that a seat can
+produce: `agentMessage`, `reasoning`, `dynamicToolCall`, the warnings and
+errors that Codex reports, and the usage of a turn. An item of any other
+type becomes a warning `notice` that names the type. A say no longer cites the
 paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
 type `RoomToolOptions`, because only the Codex executor used them.
 
 **Breaking: the seat text of a Codex seat leaves the first user message.**
-The Codex SDK has no system prompt option, so the executor put the harness
-note, the mechanism, and the agent instructions in front of the view in the
-first user message, under the base prompt of Codex, about 18 KB. The executor now
-passes that text in the config of the client, fixed for the activation. The
-first user message holds the view alone. A seat with `nativeTools: 'none'`
-gets the text in a file in the scratch directory, named by
-`model_instructions_file`. The file replaces the base prompt of Codex, so the
-first developer message is the seat text and no message starts with "You are
-Codex". A seat with `nativeTools: 'codex'` gets the text as
-`developer_instructions` after the base prompt, which teaches its native
-tools.
-
-**A resumed `codex` thread keeps its developer message.** Codex 0.158.0
-keeps the `developer_instructions` that a thread started with, and ignores a
-new value on resume. The seat text depends on the purpose of the activation.
-The first prompt of a `nativeTools: 'codex'` activation that resumes a thread
-therefore carries the seat text, then the view. A fresh thread and every
-`nativeTools: 'none'` activation send the view alone. A resumed `'none'`
-activation uses its own instructions file.
+In 0.4.0 the executor put the harness note, the mechanism, and the agent
+instructions in front of the view in the first user message, under the base
+prompt of Codex, about 18 KB. The executor now passes that text as
+`baseInstructions` of `thread/start` and `thread/resume`, fixed for the
+activation. It replaces the base prompt of Codex, so the first developer
+message is the seat text and no message starts with "You are Codex". The
+first user message holds the view alone.
 
 **The binary tier proves the isolation and the link.** The host home of
 `test/binary.ts` holds a `config.toml` that reroutes the provider and starts
@@ -957,8 +926,9 @@ is a non-fatal diagnostic of the harness:
 `{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
 gates an activation. A consumer that switches on the step type must handle
 the new kind. The Codex executor records a `notice` at level `warning` for
-each `error` item and each `error` event, such as an unknown setting in the
-config or a reconnect. `turn.failed` stays in the `end` step.
+each `warning`, `configWarning`, and `deprecationNotice` and for each `error`
+that will retry, such as an unknown setting in the config or a reconnect.
+A failed turn stays in the `end` step.
 
 #### The workspace
 
