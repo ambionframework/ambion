@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type Runtime, runningRoom } from '../src/host/runtime.ts';
-import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, resumeRoom, startRoom } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { portExecution } from './support/ports.ts';
@@ -11,7 +11,7 @@ import { storages } from './support/storage.ts';
 const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const reserve = scriptedAgent('reserve');
-const person = defineHuman({ name: 'priya', identity: 'Asks.' });
+const person = definePerson({ name: 'priya', identity: 'Asks.' });
 
 function protocol(runtime: Runtime, name: string) {
 	const peer = runningRoom(runtime, name);

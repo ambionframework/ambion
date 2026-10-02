@@ -8,7 +8,7 @@ import type { Execution, RoomProtocol } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Room,
 	type RoomNotification,
@@ -28,7 +28,7 @@ if (directory === undefined || (phase !== 'start' && phase !== 'resume')) {
 const name = 'live-restart';
 const checkpointPath = join(directory, 'checkpoint.json');
 const request = { key: 'live-restart-question', text: 'State the key fact for this restart.' };
-const person = defineHuman({ name: 'andrei', identity: 'Founder. Asks the question.' });
+const person = definePerson({ name: 'andrei', identity: 'Founder. Asks the question.' });
 const fast = defineAgent({
 	name: 'fast',
 	identity: 'Answers the key fact in one short sentence.',

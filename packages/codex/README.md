@@ -7,7 +7,7 @@ with options. The kernel, `@ambionframework/ambion`, imports no model
 library. This package holds the Codex SDK and the MCP SDK.
 
 ```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { codex } from '@ambionframework/codex';
 
 const planner = defineAgent({
@@ -20,7 +20,7 @@ const planner = defineAgent({
   }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 const room = await startRoom({
   name: 'delivery',

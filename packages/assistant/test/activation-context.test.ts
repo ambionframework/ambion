@@ -3,7 +3,7 @@
  * models make the decisions, so these tests check the context the room builds
  * and do not evaluate model judgment.
  */
-import { defineAgent, defineHuman, type Room, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, type Room, startRoom } from '@ambionframework/ambion';
 import { quiet, say, seat } from '@ambionframework/ambion/testing';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream, toolNames } from '@ambionframework/pi/testing';
@@ -82,7 +82,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 		}),
 	);
 	const visit = await room.visit(
-		defineHuman({ name: 'cara', identity: 'Customer lead.', preferences }),
+		definePerson({ name: 'cara', identity: 'Customer lead.', preferences }),
 	);
 	await (await visit.send({ text: request })).waitForSummary();
 	phase = 1;
@@ -183,7 +183,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 		}),
 	);
 	const exchange = await (
-		await room.visit(defineHuman({ name: 'priya', identity: 'Owns the request.' }))
+		await room.visit(definePerson({ name: 'priya', identity: 'Owns the request.' }))
 	).send({ text: 'How many units of SKU A can we dispatch?' });
 	await exchange.waitForSummary();
 	if (!captured) throw new Error('The assistant never received the steered result.');

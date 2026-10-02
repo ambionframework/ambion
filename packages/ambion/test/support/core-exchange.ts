@@ -3,10 +3,10 @@
  */
 import { pi } from '../../../pi/src/index.ts';
 import { type Execution, type RoomProtocol, runningRoom, type Wake } from '../../src/hosting.ts';
-import { defineAgent, defineHuman, type Runtime } from '../../src/index.ts';
+import { defineAgent, definePerson, type Runtime } from '../../src/index.ts';
 import { portExecution } from './ports.ts';
 
-export const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+export const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 export const worker = defineAgent({
 	name: 'worker',

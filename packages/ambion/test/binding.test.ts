@@ -8,7 +8,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/hosting.ts';
-import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, definePerson, startRoom } from '../src/index.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { toRoomRead } from '../src/room/read.ts';
@@ -378,7 +378,7 @@ describe('the room runs the verified rules', () => {
 				agents: [scriptedAgent('product', 'Product.')],
 			}),
 		);
-		const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
+		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Person.' }));
 		const first = await visit.send({ text: 'Question.' });
 		const peer = runningRoom(runtime, room.name);
 		if (peer === undefined) throw new Error('The room is absent.');

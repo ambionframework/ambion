@@ -292,14 +292,14 @@ export interface AgentParticipant {
 	attention: Attention;
 }
 
-export interface HumanParticipant {
-	kind: 'human';
+export interface PersonParticipant {
+	kind: 'person';
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
 }
 
-export type Participant = AgentParticipant | HumanParticipant;
+export type Participant = AgentParticipant | PersonParticipant;
 
 /** A room-level fact: what landed on the record, or what happened to this run. */
 export type RoomEvent =
@@ -509,7 +509,7 @@ export interface AgentDefinition {
 	readonly trace?: TracePolicy;
 }
 
-export interface HumanDefinition {
+export interface PersonDefinition {
 	readonly name: string;
 	readonly identity: string;
 	/**

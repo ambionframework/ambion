@@ -42,6 +42,7 @@ const entry = (id, pattern, paths, options = {}) => ({
 // Old names that a rename removed. A name has a word boundary and no false
 // positive in the current tree. One entry holds one concept.
 const OLD_NAMES = [
+	['person', /\b(?:defineHuman|HumanDefinition|HumanParticipant)\b/],
 	[
 		'executor',
 		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,

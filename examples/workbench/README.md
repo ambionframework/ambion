@@ -333,7 +333,7 @@ transaction.
 2. While an agent works, quit with `/quit`, or stop the process.
 3. Run `pnpm start` with the same directory.
 
-A crash writes no departure. A reconnecting join restores the visit without
+A crash writes no departure. A reconnecting visit restores the visit without
 another arrival. The default lease expiry is 60 seconds, so lost local work
 can pause before it continues.
 

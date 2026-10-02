@@ -19,9 +19,9 @@ import type { leaseEndedSchema } from './bodies.ts';
 import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipant,
-	HumanParticipant,
 	Intent,
 	Message,
+	PersonParticipant,
 	Seq,
 	VendorSession,
 	Without,
@@ -85,7 +85,7 @@ export interface AgentPort {
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
 	| AgentParticipant
-	| (HumanParticipant & {
+	| (PersonParticipant & {
 			readonly changedAt?: string;
 			readonly lastDeparture?: Seq;
 			readonly messagesSinceDeparture: number;

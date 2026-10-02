@@ -64,7 +64,7 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
 - `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
-- An unknown name or a human name is refused.
+- An unknown name or a person name is refused.
 - Agent tool commits return `unchanged` when the requested seating already holds.
 - A host `room.seat` / `room.unseat` call that repeats an already-satisfied
   request resolves without writing a new entry. A host `seat` that asks for
@@ -92,7 +92,7 @@ later seating creates new work only when the journal derives it.
 ## Views and resume
 
 The `participants` field of `await room.read({ messages: false })` contains
-current agents and human visitors. Reserve agents
+current agents and people. Reserve agents
 do not appear. Views contain identity, seating status, and attention. They
 do not contain executable definitions or authority.
 

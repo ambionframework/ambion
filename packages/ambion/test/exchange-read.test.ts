@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	type ExchangeRead,
 	readExchange,
 	startRoom,
@@ -121,7 +121,7 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 				}),
 			}),
 		);
-		const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }));
+		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Project manager.' }));
 		await waitForRoom(room, 'settled');
 		const handle = await visit.send({ text: 'What is open?' });
 		await started.promise;

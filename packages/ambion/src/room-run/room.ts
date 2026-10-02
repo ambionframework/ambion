@@ -57,8 +57,8 @@ import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts
 import type { TokenWindow } from '../room/view.ts';
 import type {
 	AgentDefinition,
-	HumanDefinition,
 	Message,
+	PersonDefinition,
 	RoomNotification,
 	RoomRead,
 	SeatOptions,
@@ -112,7 +112,7 @@ export interface Room {
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
-	visit(human: HumanDefinition): Promise<people.Visit>;
+	visit(person: PersonDefinition): Promise<people.Visit>;
 	/**
 	 * Post a message as the system: to a seat, a person, or the room. The post
 	 * has no author, wakes and steers as the room routes it, and opens an
@@ -454,8 +454,8 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	// -- people -----------------------------------------------------------------
 
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
-	visit(human: HumanDefinition): Promise<people.Visit> {
-		return people.visit(this, human);
+	visit(person: PersonDefinition): Promise<people.Visit> {
+		return people.visit(this, person);
 	}
 
 	/** The visit of a person whom the record holds present, or undefined. It writes nothing. */

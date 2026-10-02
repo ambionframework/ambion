@@ -11,7 +11,7 @@ import {
 	type AgentDefinition,
 	type AmbionErrorCode,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -50,7 +50,7 @@ import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
 const alpha = scriptedAgent('alpha', 'Alpha.');
 const beta = scriptedAgent('beta', 'Beta.');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 const agents = [alpha, beta, assistant];
 
 /** The assistant writes once when it holds `summarise`, or fails when told to. */

@@ -3,7 +3,7 @@
  * and the simulation it returns. Every room is a real room on the scripted
  * execution, and every person is a `scriptedActor` or a plain function.
  */
-import { defineHuman, isSaid, type Message } from '@ambionframework/ambion';
+import { definePerson, isSaid, type Message } from '@ambionframework/ambion';
 import {
 	byAgent,
 	isSummarizing,
@@ -181,7 +181,7 @@ describe('simulate', () => {
 
 	it('ends with `failed` when the message joins an exchange that was already open', async () => {
 		const room = await open(byAgent({ desk: () => forever() }), ['desk']);
-		const sam = defineHuman({ name: 'sam', identity: 'Another manager.' });
+		const sam = definePerson({ name: 'sam', identity: 'Another manager.' });
 		await (await room.visit(sam)).send({ text: 'Sam asks first.' });
 		const simulation = await simulate(room, {
 			person: priya,

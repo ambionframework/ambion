@@ -47,7 +47,7 @@ describe('provider loading', () => {
 		'loads neither the provider catalog nor the Node harness file system while importing the Pi entry, reading a room, or running a scripted room',
 		async () => {
 			const result = await runFreshProcess(
-				`const { readRoom, startRoom, defineAgent, defineHuman } = await import('@ambionframework/ambion');
+				`const { readRoom, startRoom, defineAgent, definePerson } = await import('@ambionframework/ambion');
 			const { pi, piExecution } = await import(${JSON.stringify(entry)});
 			const { quiet } = await import('@ambionframework/ambion/testing');
 			const { scriptedStream } = await import(${JSON.stringify(testing)});
@@ -64,7 +64,7 @@ describe('provider loading', () => {
 				summaryWriter: 'assistant',
 				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			});
-			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
+			const visit = await room.visit(definePerson({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });
 			await exchange.waitForSummary();
 			await room.stop();`,

@@ -21,10 +21,10 @@ import { piExecution } from '../../../pi/src/index.ts';
 import { type Execution, hostingOf } from '../../src/hosting.ts';
 import {
 	createRuntime,
-	type HumanDefinition,
 	isSaid,
 	isSummary,
 	type Message,
+	type PersonDefinition,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -146,7 +146,7 @@ export class World {
 	private session!: Room;
 	private off: () => void = () => {};
 	private dead = false;
-	private readonly present = new Map<string, HumanDefinition>();
+	private readonly present = new Map<string, PersonDefinition>();
 	private readonly journals: JournalOpener;
 
 	constructor(
@@ -269,7 +269,7 @@ export class World {
 		throw new Error('the action never landed');
 	}
 
-	async visit(person: HumanDefinition): Promise<void> {
+	async visit(person: PersonDefinition): Promise<void> {
 		this.present.set(person.name, person);
 		await this.retrying(async () => {
 			await this.session.visit(person);
@@ -287,7 +287,7 @@ export class World {
 		});
 	}
 
-	async leave(person: HumanDefinition): Promise<void> {
+	async leave(person: PersonDefinition): Promise<void> {
 		await this.retrying(async () => {
 			const visit = await this.session.visit(person);
 			await visit.leave();

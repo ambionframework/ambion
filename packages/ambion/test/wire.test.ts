@@ -88,7 +88,7 @@ const departed: ActivationView = {
 		...view.context,
 		participants: [
 			{
-				kind: 'human',
+				kind: 'person',
 				name: 'priya',
 				identity: 'Reads the room.',
 				presence: 'absent',

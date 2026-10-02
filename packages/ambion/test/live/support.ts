@@ -19,7 +19,7 @@ import {
 	type CreateRuntimeOptions,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Message,
 	type Room,
@@ -72,7 +72,7 @@ export const assistant = defineAgent({
 	}),
 });
 
-export const person = defineHuman({
+export const person = definePerson({
 	name: 'andrei',
 	identity: 'Founder. Asks the questions.',
 });

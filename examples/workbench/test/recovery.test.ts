@@ -96,17 +96,17 @@ describe('Workbench host stop recovery', () => {
 		const armed = faults();
 		const counter = { calls: 0 };
 		const workbench = await openHost({ stream: quietStream(counter) });
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		armed.departure = 'after';
 		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/acknowledgement loss/);
 		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
 		expect(departures(await workbench.read('bringup', 0))).toBe(1);
 
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		armed.departure = 'before';
 		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/write failure/);
-		await expect(workbench.join('bringup', 'mira')).rejects.toThrow(/Resume this room first/);
+		await expect(workbench.visit('bringup', 'mira')).rejects.toThrow(/Resume this room first/);
 		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
 		const retries = await Promise.all([
 			workbench.control('bringup', 'stop'),
@@ -116,7 +116,7 @@ describe('Workbench host stop recovery', () => {
 		expect(departures(await workbench.read('bringup', 0))).toBe(2);
 
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		armed.departure = 'before';
 		await expect(workbench.close()).rejects.toThrow(/write failure/);
 		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
@@ -129,7 +129,7 @@ describe('Workbench host stop recovery', () => {
 		const directory = await freshDirectory();
 		const counter = { calls: 0 };
 		const workbench = await openHost({ directory, stream: quietStream(counter) });
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		armed.catalog = true;
 		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/catalog save failure/);
 		expect(await statusOf(workbench, 'bringup')).toBe('stopped');
@@ -165,7 +165,7 @@ describe('Workbench room reads and recovery', () => {
 	it('returns one coherent stopped room read and its recorded exchange', async () => {
 		const counter = { calls: 0 };
 		const workbench = await openHost({ stream: quietStream(counter) });
-		await workbench.join('bringup', 'mira');
+		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'read-1', 'Read this room.');
 		const closedExchange = async () => {
 			const exchange = (await workbench.read('bringup', 0)).exchanges[0];

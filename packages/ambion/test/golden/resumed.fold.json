@@ -12,7 +12,7 @@
 			"attention": "broadcast"
 		},
 		{
-			"kind": "human",
+			"kind": "person",
 			"name": "priya",
 			"identity": "Project manager.",
 			"presence": "absent"

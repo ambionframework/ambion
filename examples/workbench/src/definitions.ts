@@ -1,4 +1,4 @@
-import { defineAgent, defineHuman, type ToolBundle } from '@ambionframework/ambion';
+import { defineAgent, definePerson, type ToolBundle } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
 import { claude } from '@ambionframework/claude';
 import { codex } from '@ambionframework/codex';
@@ -25,7 +25,7 @@ export const people = [
 		preferences: 'Lead with the wiring steps in order, and one thing to check at each step.',
 	},
 ].map(({ name, role, preferences }) => ({
-	...defineHuman({
+	...definePerson({
 		name,
 		identity: `${name}, ${role.toLowerCase()} on the Workbench lab team.`,
 		preferences,

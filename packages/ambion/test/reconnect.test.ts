@@ -8,7 +8,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	type Message,
 	type Room,
@@ -29,13 +29,13 @@ import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, type Storage, storages } from './support/storage.ts';
 
 const watcher = scriptedAgent('watcher', 'Records room activity.');
-const priya = defineHuman({
+const priya = definePerson({
 	name: 'priya',
 	identity: 'Project manager.',
 	preferences: 'Lead with the decision.',
 });
-const alternatePriya = defineHuman({ name: priya.name, identity: 'A different person.' });
-const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
+const alternatePriya = definePerson({ name: priya.name, identity: 'A different person.' });
+const sam = definePerson({ name: 'sam', identity: 'Site foreman.' });
 const execution = piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 
 /** A storage and a clock that stay open until the test ends. */
@@ -90,16 +90,16 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			}),
 		);
 		const humans = async () =>
-			(await participantsOf(resumed)).filter((participant) => participant.kind === 'human');
+			(await participantsOf(resumed)).filter((participant) => participant.kind === 'person');
 		expect(await humans()).toEqual([
-			{ kind: 'human', name: priya.name, identity: priya.identity, presence: 'present' },
-			{ kind: 'human', name: sam.name, identity: sam.identity, presence: 'present' },
+			{ kind: 'person', name: priya.name, identity: priya.identity, presence: 'present' },
+			{ kind: 'person', name: sam.name, identity: sam.identity, presence: 'present' },
 		]);
 		await expect(resumed.visit(alternatePriya)).rejects.toThrow(/different identity/);
 		const reconnected = await resumed.visit(priya);
 		const secondHandle = await resumed.visit(priya);
 		expect(reconnected.lastDeparture).toBeUndefined();
-		expect(secondHandle.human).toEqual(priya);
+		expect(secondHandle.person).toEqual(priya);
 		expect((await messagesOf(resumed)).map((message) => message.kind)).toEqual([
 			'arrived',
 			'arrived',
@@ -107,13 +107,13 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 
 		await reconnected.leave();
 		expect(await humans()).toContainEqual({
-			kind: 'human',
+			kind: 'person',
 			name: priya.name,
 			identity: priya.identity,
 			presence: 'absent',
 		});
 		const back = await resumed.visit(alternatePriya);
-		expect(back.human.identity).toBe(alternatePriya.identity);
+		expect(back.person.identity).toBe(alternatePriya.identity);
 		expect((await messagesOf(resumed)).map((message) => message.kind)).toEqual([
 			'arrived',
 			'arrived',

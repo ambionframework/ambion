@@ -47,7 +47,7 @@ export function viewOf(through = 1): ActivationView {
 			now: 0,
 			participants: [
 				{
-					kind: 'human',
+					kind: 'person',
 					name: 'priya',
 					identity: 'Project manager.',
 					presence: 'present',
