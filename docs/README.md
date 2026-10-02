@@ -14,7 +14,7 @@ each page.
 | Document                              | Use it for                                                                   |
 | ------------------------------------- | ---------------------------------------------------------------------------- |
 | [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                             |
-| [Technical facts](technical-facts.md) | Key facts, the 0.5.0 sensor work, eleven packages, and system limits         |
+| [Technical facts](technical-facts.md) | Key facts, the 0.5.0 sensor work, twelve packages, and system limits         |
 | [Definitions and tools](agent.md)     | Definitions and tools                                                        |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                        |
 | [Compose](compose.md)                 | Proposed `compose` tool: join tools in one call through short code           |

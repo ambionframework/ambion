@@ -92,7 +92,7 @@ export function fakeRoom(
 	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
-	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'query' | 'room' | 'seat'> = {},
 ) {
 	const file = join(mkdtempSync(join(tmpdir(), 'ambion-claude-')), 'fake.log');
 	const steps: Step[] = [];
@@ -185,7 +185,7 @@ export function open(
 	scenario: Scenario,
 	definition: AgentDefinition = seat(),
 	env: Readonly<Record<string, string>> = {},
-	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'room' | 'seat'> = {},
+	extra: Pick<ClaudeOpenerOptions, 'configRoot' | 'query' | 'room' | 'seat'> = {},
 ) {
 	const room = fakeRoom(scenario, definition, env, extra);
 	return { ...room, session: room.activate('message:1:sonnet:1') };

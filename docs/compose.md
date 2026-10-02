@@ -1,9 +1,11 @@
 # Compose
 
-**Status: proposed design, in progress.** The `compose` option adds the
-`compose` tool, and the main entry exports its types and
-`COMPOSE_GUIDANCE`. Skill [macros](#macros) run by name. The package
-`@ambionframework/evaluator` does not exist yet.
+**Status: implemented, with the live evidence and the final pages open.**
+The `compose` option adds the `compose` tool, and the main entry exports its
+types and `COMPOSE_GUIDANCE`. Skill [macros](#macros) run by name. The
+package `@ambionframework/evaluator` holds `quickjsEvaluator` and
+`processEvaluator`, and both pass `evaluatorConformance`. The live
+comparison of the token cost and the update of the other pages stay open.
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
@@ -803,10 +805,10 @@ one conformance suite, `evaluatorConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
 the kernel.
 
-| Evaluator            | Runs the code                                           | Memory and CPU                                                         | Isolation                                                                                                  |
-| -------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap. An interrupt handler at the signal | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
-| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the child. The host kills it at the signal   | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
+| Evaluator            | Runs the code                                           | Memory and CPU                                                                                                                          | Isolation                                                                                                  |
+| -------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap, and a CPU limit for each stretch of code. A cut ends the run between stretches                      | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
+| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap. An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
 
 **`quickjsEvaluator` uses the synchronous QuickJS build.** The asyncify
 build of `quickjs-emscripten` runs one host call at a time, so
@@ -814,7 +816,10 @@ build of `quickjs-emscripten` runs one host call at a time, so
 build binds each tool as a host function that returns `ctx.newPromise()`.
 The host settles that promise when the nested call settles, then runs
 `runtime.executePendingJobs()`. Several nested calls then run together.
-`setMemoryLimit` and `setInterruptHandler` give the limits in the table.
+`setMemoryLimit` and a WebAssembly memory of its own bound the heap. The
+interrupt handler ends code that runs past the CPU limit. The host thread
+cannot see the signal while code runs, so a cut takes effect between two
+stretches of code.
 The evaluator disposes each promise and each value handle that it makes.
 QuickJS aborts the process when it frees a runtime that still holds one.
 The package is MIT, it has no native part, and the lockfile already holds

@@ -1,5 +1,5 @@
 /** How a result of the SDK maps to a pass result. */
-import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it } from 'vitest';
 import { STDERR_TAIL } from '../src/executor.ts';
 import { MIN_CLAUDE_VERSION, meetsFloor, passResultOf } from '../src/failure.ts';
@@ -146,11 +146,34 @@ it.each([
 );
 
 it('settles a parked result when close runs inside the drain, and settles once', async () => {
-	const run = open({ passes: [[{ fail: PERMANENT }]] });
+	// The test learns when the result reaches the host. The host parks a failed result at once
+	// and settles it after the drain of the standard error, so a close after this point is
+	// inside the drain. A close before it finds nothing parked, and the pass ends transient.
+	let delivered = false;
+	const run = open(
+		{ passes: [[{ fail: PERMANENT }]] },
+		undefined,
+		{},
+		{
+			query: (params) => {
+				const stream = query(params);
+				const iterate = stream[Symbol.asyncIterator].bind(stream);
+				stream[Symbol.asyncIterator] = () => {
+					const messages = iterate();
+					const next = messages.next.bind(messages);
+					messages.next = async (...args) => {
+						const step = await next(...args);
+						if (step.done !== true && step.value.type === 'result') delivered = true;
+						return step;
+					};
+					return messages;
+				};
+				return stream;
+			},
+		},
+	);
 	const pass = run.session.pass({ kind: 'view', view: viewOf() });
-	// The result arrives, and the pass waits for the end of the stderr. Closing now must not hang it.
-	await until(() => run.log().some((line) => 'user' in line), 'the fake reading the prompt');
-	await new Promise((resolve) => setTimeout(resolve, 20));
+	await until(() => delivered, 'the result of the fake reaching the host');
 	run.session.close?.();
 	expect(await pass).toMatchObject({ failed: true, cause: 'permanent' });
 });

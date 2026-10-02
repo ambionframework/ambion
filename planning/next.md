@@ -133,7 +133,7 @@ SQLite file. A skill macro runs by name over the same workspace and file.
 
 ### Phase 4. The evaluators
 
-- [ ] **1.** `evaluatorConformance`, `quickjsEvaluator`, and
+- [x] **1.** `evaluatorConformance`, `quickjsEvaluator`, and
       `processEvaluator`. Needs phase 3. (CP5)
 
 **Evidence:** both evaluators pass `evaluatorConformance` on Node 26.

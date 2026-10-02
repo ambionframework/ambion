@@ -24,6 +24,9 @@ newer, the OpenTUI floor.
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
   the real binary on a scripted model, and its live tier runs a real model.
+- `packages/evaluator`: the evaluators of the `compose` tool. `quickjsEvaluator`
+  runs the code in QuickJS, and `processEvaluator` runs it in a child Node
+  process under `--permission`. Both pass `evaluatorConformance`.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of
