@@ -33,12 +33,13 @@ The seat runs on [Codex](../../docs/codex.md) and reuses the Codex login of
 your Mac. Run `codex login` once, and sign in with ChatGPT or an API key. The
 app needs no key of its own, reads no key file, and sets no environment
 variable. The seat ignores `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, and
-`OPENAI_API_KEY` in your shell, so it never bills an API account. Startup exits with a message when `~/.codex/auth.json` (or
-`auth.json` in `CODEX_HOME`) does not exist. Codex must store the login in
-that file, because a login in the macOS keyring does not reach the seat.
-Startup computes that login path once, checks it, and passes the same path
-to the seat. The seat keeps its own Codex home in `<directory>/codex` and
-links that login file. It reads no `config.toml` from `~/.codex`.
+`OPENAI_API_KEY` in your shell, so it never bills an API account. Startup
+exits with a message when `~/.codex/auth.json` (or `auth.json` in
+`CODEX_HOME`) does not exist. Codex must store the login in that file, because
+a login in the macOS keyring does not reach the seat. Startup computes that
+login path once, checks it, and passes the same path to the seat. The seat
+keeps its own Codex home in `<directory>/codex` and links that login file. It
+reads no `config.toml` from `~/.codex`.
 
 The default model is `gpt-5.6-luna` with medium reasoning. `--model <id>`
 selects another Codex model. The agent shell receives a fixed set of variables
@@ -49,13 +50,14 @@ starts the server. Approve access for the terminal application that runs it.
 The terminal must advertise Kitty graphics or Sixel support (and pixel
 dimensions for Sixel). Startup exits with an error if native images are not
 available. There is no text-cell fallback. Capture and model observations use
-1280 × 720 PNG frames. Acquisition and preview polling target five frames per second with no audio.
-Preview polling alone makes no model requests. Scene questions send a sampled
-frame to Codex; they do not send a continuous video stream.
+1280 × 720 PNG frames. Acquisition and preview polling target five frames per
+second with no audio. Preview polling alone makes no model requests. Scene
+questions send a sampled frame to Codex; they do not send a continuous video
+stream.
 
-`pnpm start --list-cameras` lists AVFoundation devices without starting the room.
-`pnpm start --device <index>` tells the agent which device to use. Without that
-option, the template selects the built-in Mac camera.
+`pnpm start --list-cameras` lists AVFoundation devices without starting the
+room. `pnpm start --device <index>` tells the agent which device to use.
+Without that option, the template selects the built-in Mac camera.
 
 ## Demo
 
@@ -63,13 +65,13 @@ option, the template selects the built-in Mac camera.
 pnpm demo
 ```
 
-Send a message to start the scripted agent. A script in `src/demo.ts` runs
-the seat in place of Codex and needs no Codex login. It executes the actual
-Git, process, connect, and observe tools against a clone of the camera
-template. The cloned server runs with `--demo` and produces a synthetic image.
-It opens no physical device and makes no model request. Its reply does not perform
-visual inference. The demo also requires macOS. Demo state uses `.data/demo`; live state uses `.data/live`.
-`--directory <path>` selects another directory.
+Send a message to start the scripted agent. A script in `src/demo.ts` runs the
+seat in place of Codex and needs no Codex login. It executes the actual Git,
+process, connect, and observe tools against a clone of the camera template.
+The cloned server runs with `--demo` and produces a synthetic image. It opens
+no physical device and makes no model request. Its reply does not perform
+visual inference. The demo also requires macOS. Demo state uses `.data/demo`;
+live state uses `.data/live`. `--directory <path>` selects another directory.
 
 ## Preview and connection lifetime
 
@@ -112,12 +114,13 @@ organize files; they are not an OS sandbox. Shell and network access use the
 host's permissions. Use this example with trusted agents.
 
 Git uses local bare repositories and filesystem clone URLs. The backend
-supplies `templates/camera` and `templates/camera-notes`. It checks names at its
-API boundary, but filesystem access does not enforce per-agent Git push
+supplies `templates/camera` and `templates/camera-notes`. It checks names at
+its API boundary, but filesystem access does not enforce per-agent Git push
 permissions. The backend seeds a template repository when it is absent. A
-`pre-receive` hook refuses a push into a template; the shell can remove it. The room SQLite
-journal, Codex home, audit, checkouts, and snapshots stay under the selected
-data directory. The Codex home and snapshots can contain image data.
+`pre-receive` hook refuses a push into a template; the shell can remove it.
+The room SQLite journal, Codex home, audit, checkouts, and snapshots stay
+under the selected data directory. The Codex home and snapshots can contain
+image data.
 
 ## Code and validation
 

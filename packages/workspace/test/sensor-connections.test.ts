@@ -195,6 +195,10 @@ describe('the sensor connection registry', () => {
 		await expect(connect()).rejects.toThrow('launch source changed');
 		expect(connection.source).toEqual(source);
 		expect(await registry.get('bench/bench')).toBeUndefined();
+		// The end of the process turns a detached record from disconnected to unavailable.
+		expect((await registry.list())[0]?.state).toBe('disconnected');
+		rig.end();
+		expect((await registry.list())[0]?.state).toBe('unavailable');
 	});
 
 	it('recovers an explicit retry after a transient process-table read failure', async () => {

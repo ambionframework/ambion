@@ -6,7 +6,7 @@ import { sensorConformance, workspaceConformance } from '@ambionframework/worksp
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_MODEL, openHost } from '../src/host.ts';
+import { DEFAULT_MODEL, openHost, seatOptions } from '../src/host.ts';
 import { localBashBackend } from '../src/local-bash.ts';
 import { localGitBackend } from '../src/local-git.ts';
 import { hostLogin, requireLogin } from '../src/login.ts';
@@ -22,19 +22,6 @@ import {
 	WIDTH,
 } from '../templates/camera/frame.ts';
 import { openSensor } from '../templates/camera/server.ts';
-
-const execution = vi.hoisted(() => ({ calls: [] as unknown[] }));
-
-vi.mock('@ambionframework/codex', async (importOriginal) => {
-	const original = await importOriginal<typeof import('@ambionframework/codex')>();
-	return {
-		...original,
-		codexExecution: (options: Parameters<typeof original.codexExecution>[0]) => {
-			execution.calls.push(options);
-			return original.codexExecution(options);
-		},
-	};
-});
 
 it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async () => {
 	const frame = demoFrame();
@@ -69,7 +56,7 @@ it('finds the Codex login of the host and names the fix when it is missing', asy
 		});
 		await live.close();
 		// The seat links the file that startup checked, and the binary gets no key of the host.
-		expect(execution.calls.at(-1)).toEqual({
+		expect(seatOptions(join(directory, 'live'), hostLogin(env))).toEqual({
 			home: join(directory, 'live', 'codex'),
 			login: hostLogin(env),
 			env: { CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined, CODEX_ACCESS_TOKEN: undefined },

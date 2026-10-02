@@ -150,11 +150,15 @@ export function createSensorConnections(
 		return connection;
 	};
 
+	const endable = (connection: MutableConnection, process: Process): boolean =>
+		(connection.available || connection.detached === true) && belongsToEnded(connection, process);
+
 	const ended = (event: ProcessEvent): void => {
 		if (event.type !== 'ended') return;
 		for (const connection of byName.values()) {
-			if (!belongsToEnded(connection, event.process)) continue;
+			if (!endable(connection, event.process)) continue;
 			connection.available = false;
+			connection.detached = false;
 			notify('unavailable', connection);
 			void disposeTransport(connection).catch(() => undefined);
 		}

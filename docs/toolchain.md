@@ -290,8 +290,9 @@ from its checkout before `pnpm install`. Both packages depend on
 Zig. Deleting the directories keeps pnpm from building or testing them, but
 `pnpm-lock.yaml` still lists them as importers, so `--frozen-lockfile` still
 counts them in the workspace scope and still checks `@opentui/core`'s
-`engines.node` before it installs anything. The job installs with `--config.engine-strict=false` to get past
-that one check. No library dependency needs more than Node `22.19.0`, and
+`engines.node` before it installs anything. The job installs with
+`--config.engine-strict=false` to get past that one check. No library
+dependency needs more than Node `22.19.0`, and
 the test run below is the real proof of that floor.
 
 The `check` job also runs `pnpm run check:packages` after the build. The check

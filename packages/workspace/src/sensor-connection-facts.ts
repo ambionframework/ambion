@@ -64,9 +64,5 @@ export function discovery(
 }
 
 export function belongsToEnded(connection: RegisteredSensorConnection, process: Process): boolean {
-	return (
-		connection.available &&
-		connection.process.handle === process.handle &&
-		connection.owner === process.agent
-	);
+	return connection.process.handle === process.handle && connection.owner === process.agent;
 }

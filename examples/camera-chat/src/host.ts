@@ -23,6 +23,18 @@ import { cameraPreview } from './preview.ts';
 export const DEFAULT_MODEL = 'gpt-5.6-luna';
 
 /**
+ * The Codex home and login of the seat. The seat runs on the login of the
+ * host, and no key of the host reaches the binary.
+ */
+export function seatOptions(directory: string, login: string) {
+	return {
+		home: `${directory}/codex`,
+		login,
+		env: { CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined, CODEX_ACCESS_TOKEN: undefined },
+	};
+}
+
+/**
  * Host one durable room and its localhost workspace. The seat runs on Codex
  * and the login of the host. With `demo`, a script runs the seat and no model
  * is involved.
@@ -79,17 +91,9 @@ export async function openHost(options: {
 		storage,
 		execution: options.demo
 			? demoExecution()
-			: codexExecution({
-					home: `${directory}/codex`,
-					login: options.login ?? hostLogin(),
-					// The seat runs on the login of the host. A key of the host stays out.
-					env: {
-						CODEX_API_KEY: undefined,
-						OPENAI_API_KEY: undefined,
-						CODEX_ACCESS_TOKEN: undefined,
-					},
-				}),
+			: codexExecution(seatOptions(directory, options.login ?? hostLogin())),
 	});
+	let started: { stop(): Promise<void> } | undefined;
 	try {
 		const saved = await readRoom('camera', { runtime, messages: false });
 		const room = saved.initialized
@@ -100,6 +104,7 @@ export async function openHost(options: {
 					runtime,
 					agents: [agent],
 				});
+		started = room;
 		const visit = await room.visit(
 			definePerson({ name: 'you', identity: 'The person using this Mac.' }),
 		);
@@ -132,6 +137,7 @@ export async function openHost(options: {
 		};
 	} catch (error) {
 		preview.close();
+		await started?.stop();
 		await workspace.dispose();
 		database.close();
 		throw error;

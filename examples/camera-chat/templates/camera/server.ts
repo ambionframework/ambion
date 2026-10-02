@@ -109,7 +109,7 @@ export async function openSensor(source: SensorSource) {
 			latest = frame;
 			failure = undefined;
 			frames.set(frame.digest, frame.png);
-			if (frames.size > 60) frames.delete(frames.keys().next().value ?? '');
+			if (frames.size > 10) frames.delete(frames.keys().next().value ?? '');
 		},
 		fail(message: string) {
 			failure = message;
