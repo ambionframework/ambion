@@ -4,20 +4,45 @@ Everything that is not in [next.md](next.md). Each item names the
 condition that brings it into a release. Nothing here blocks a release
 until the item moves to that file.
 
-**The sections come in the order of their priority.** Known defects come
-first, then the release and CI, then the rules and proofs, then the
-simplification findings, then the designs. Inside a section, the first
+**The sections come in the order of their priority.** The decisions of
+the owner come first, then the known defects, the release and CI, the
+rules and proofs, the simplification findings, and the designs. Inside a section, the first
 item comes first. An item whose condition holds moves to the top of its
 section.
 
-| Section                                       | Items                              | First item                               |
-| --------------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| [Known defects](#known-defects)               | K1–K5                              | K2, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | L3, R1                             | L3, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1–P6                              | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | K9–K18, X1, W8, W10, C2, DOC1–DOC4 | K9, the `assistant` option               |
-| [Designs with a shape](#designs-with-a-shape) | D1–D25                             | D1, exchange bounds                      |
-| [Deferred by decision](#deferred-by-decision) | None                               | None                                     |
+| Section                                       | Items                               | First item                               |
+| --------------------------------------------- | ----------------------------------- | ---------------------------------------- |
+| [Pending decisions](#pending-decisions)       | K9, K13, K14                        | K9, the `assistant` option               |
+| [Known defects](#known-defects)               | K1–K5                               | K2, the allow-list of the SQL guard      |
+| [Release and CI](#release-and-ci)             | L3, R1                              | L3, a billing failure reads as one       |
+| [Rules and proofs](#rules-and-proofs)         | P1–P6                               | P1, `returnable` into the verified rules |
+| [Simplification](#simplification)             | K10–K18, X1, W8, W10, C2, DOC1–DOC4 | K10, the summary close                   |
+| [Designs with a shape](#designs-with-a-shape) | D1–D25                              | D1, exchange bounds                      |
+| [Deferred by decision](#deferred-by-decision) | None                                | None                                     |
+
+## Pending decisions
+
+**Each item waits on a decision of the owner.** It joins a release only
+when the owner says yes. Each is a simplification row with a design
+choice in it.
+
+- **K9. The `assistant` room option.** `normalizeAssistant` in
+  `packages/ambion/src/room.ts` turns the option into an `agents` entry, a
+  `broadcast` seat, and the `summaryWriter`. The kernel then holds a role
+  that it otherwise treats as ordinary. The question: does the option go,
+  with a helper in `@ambionframework/assistant` that returns the three
+  options? A second question: does the assistant stay on Pi alone?
+- **K13. One counter for the journal.** Both storages append at the head
+  plus one, so each `seq` equals its storage position. The journal keeps
+  `nextSeq`, `advanceSeq`, and the cursor, which always agree. The
+  question: does the seq become the position? The stored format, the
+  golden journals, and the verified rules change. Refs and `readThrough`
+  keep their meaning.
+- **K14. The journal generics.** Only the core imports
+  `Journal<TKind, TBodies>`. The question: does the class move into the
+  core, do the generics go, or does the package stay as it is? The
+  package owns the queue and the fence, and its proofs read no meaning of
+  the room.
 
 ## Known defects
 
@@ -117,25 +142,23 @@ the concepts removed times the confidence (high 3, medium 2, low 1).
 Twenty-six reductions have landed. The changelog and the git history
 record them.
 
-**W5 moved to [next.md](next.md).** The rows below are open on
-`main` as of 2026-10-02. The K IDs from K9 are rows of this table. K1 to K5
+**W5 moved to [next.md](next.md). K9, K13, and K14 wait in
+[Pending decisions](#pending-decisions).** The rows below are open on
+`main` as of 2026-10-02. The K IDs from K10 are rows of this table. K1 to K5
 belong to the known defects.
 
-| ID  | Finding                                                          | Evidence                                                                                                                                                                                         | Rank |
-| --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
-| K9  | The `assistant` option restates `agents`, `seats`, and `summary` | `normalizeAssistant` in `room.ts`; the package is about 70 lines over `pi()`. The owner decides (next.md)                                                                                        | 4    |
-| K10 | Two close shapes still serve one fact                            | `SummaryClose` in `room/exchange.ts` remains; `owed.ts` uses it. `OwedClose` is gone                                                                                                             | 2    |
-| K11 | Three state shapes hold the fold                                 | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                                                                                                         | 2    |
-| K12 | The wakes and the owed summaries are two parallel indexes        | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                                                                                                            | 3    |
-| K13 | The journal keeps a `seq` beside a dense storage position        | `nextSeq`, `advanceSeq`, `scanned` in `rules.verified.ts`. The owner decides (next.md)                                                                                                           | 4    |
-| K14 | The journal package generics have one consumer                   | Outside the core, only the storage names are imported. The owner decides (next.md)                                                                                                               | 4    |
-| K15 | The roster has two stored sources                                | This is D7. The row stays as a pointer                                                                                                                                                           | 2    |
-| K17 | Five names describe one exchange                                 | `Exchange`, `ExchangeRef`, `ExchangeRange`, `ExchangeRead`, `ExchangeHandle`                                                                                                                     | 4    |
-| K18 | Three shapes describe one trace sink                             | `TraceSink`, `StepSink`, `TraceOpener` in `trace.ts`                                                                                                                                             | 2    |
-| X1  | One name rule is written fourteen times                          | Core: `NAME_PATTERN`, `SEAT`. Workspace: nine literals in seven sensor files, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 12   |
-| W8  | The backends label themselves under three names                  | `server`, `hostname`, `database`                                                                                                                                                                 | 4    |
-| W10 | `ProcessKind` has one value                                      | `process-files.ts`. D5 holds the question                                                                                                                                                        | 2    |
-| C2  | `RoomObject` forwards three methods of the exchange handle       | `room-object.ts`                                                                                                                                                                                 | 2    |
+| ID  | Finding                                                    | Evidence                                                                                                                                                                                         | Rank |
+| --- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| K10 | Two close shapes still serve one fact                      | `SummaryClose` in `room/exchange.ts` remains; `owed.ts` uses it. `OwedClose` is gone                                                                                                             | 2    |
+| K11 | Three state shapes hold the fold                           | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                                                                                                         | 2    |
+| K12 | The wakes and the owed summaries are two parallel indexes  | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                                                                                                            | 3    |
+| K15 | The roster has two stored sources                          | This is D7. The row stays as a pointer                                                                                                                                                           | 2    |
+| K17 | Five names describe one exchange                           | `Exchange`, `ExchangeRef`, `ExchangeRange`, `ExchangeRead`, `ExchangeHandle`                                                                                                                     | 4    |
+| K18 | Three shapes describe one trace sink                       | `TraceSink`, `StepSink`, `TraceOpener` in `trace.ts`                                                                                                                                             | 2    |
+| X1  | One name rule is written fourteen times                    | Core: `NAME_PATTERN`, `SEAT`. Workspace: nine literals in seven sensor files, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 12   |
+| W8  | The backends label themselves under three names            | `server`, `hostname`, `database`                                                                                                                                                                 | 4    |
+| W10 | `ProcessKind` has one value                                | `process-files.ts`. D5 holds the question                                                                                                                                                        | 2    |
+| C2  | `RoomObject` forwards three methods of the exchange handle | `room-object.ts`                                                                                                                                                                                 | 2    |
 
 **The documentation holds four findings.** They carry the IDs DOC1 to
 DOC4, so they do not collide with the designs.

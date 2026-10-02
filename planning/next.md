@@ -70,20 +70,6 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - The live token comparison is evidence of the release (CP6). It gates no
   phase before phase 5.
 
-## Open questions
-
-**Each question needs a decision of the owner.** An item joins 0.6.0 only
-when the owner says yes. Otherwise it stays in [the backlog](backlog.md).
-
-- **K9.** Does the assistant move beside Pi, and does the `assistant` room
-  option go? `normalizeAssistant` in `packages/ambion/src/room.ts` restates
-  `agents`, `seats`, and `summary`. The package is about 70 lines over
-  `pi()`.
-- **K13.** Does the journal drop `seq` and use the dense storage position?
-  The change touches the verified rules and the stored format.
-- **K14.** Do the generics of the journal package move into the core?
-  Outside the core, only the storage names are imported.
-
 ## Out of scope
 
 - **An evaluator for workerd.** A seat on `@ambionframework/cloudflare`
