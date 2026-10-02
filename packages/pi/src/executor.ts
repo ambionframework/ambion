@@ -311,7 +311,7 @@ class Activation implements RunningActivation {
 				storage,
 				models: streamModels(model, this.options.stream),
 				model,
-				tools: toolsFor(view, def, pass.tools, () => this.view ?? view),
+				tools: toolsFor(view, def, pass.tools, this.trace, () => this.view ?? view),
 				systemPrompt: () => this.systemPrompt,
 				compaction: compactionOf(def.executor),
 				thinking: thinkingOf(def.executor),

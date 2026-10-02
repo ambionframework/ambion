@@ -22,7 +22,7 @@ else.
 
 ## Status
 
-**Lined up. No item has started.** The compose design passed two design
+**In progress. Phase 2 is complete.** The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
@@ -105,8 +105,8 @@ owner's Mac. The sensor path checks each schema and digest once.
 
 ### Phase 2. The vocabulary and the trace
 
-- [ ] **1.** The tool vocabulary and the typed `defineTool`. (CP1)
-- [ ] **2.** The step sink, parented steps, and the scripted executor.
+- [x] **1.** The tool vocabulary and the typed `defineTool`. (CP1)
+- [x] **2.** The step sink, parented steps, and the scripted executor.
       Needs 1. (CP2)
 
 **Evidence:** a definition refuses a user tool named `compose`. A type

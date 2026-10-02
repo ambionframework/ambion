@@ -11,7 +11,7 @@ import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
-import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
+import type { AgentDefinition, FailureCause, Step, Usage } from '../types.ts';
 
 /** One tool call of a scripted reply. */
 export interface ScriptCall {
@@ -224,14 +224,17 @@ class ScriptedActivation implements RunningActivation {
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
 		const id = this.callId();
 		const exchange = view.context.exchange;
+		const { trace, signal } = this.activation;
 		const context: ToolContext = Object.freeze({
 			agent: { name: this.definition.name, identity: this.definition.identity },
+			signal,
 			callId: id,
+			record: (step: Step) => trace.record(step),
 			room: view.context.name,
 			activation: this.activation.id,
 			...(exchange === undefined ? {} : { exchange: { ...exchange } }),
+			...(view.deadline === undefined ? {} : { deadline: view.deadline }),
 		});
-		const { trace } = this.activation;
 		trace.record({ type: 'tool_call', call: id, name: tool.name, input: call.args });
 		try {
 			const text = textOf(await tool.invoke(call.args, context));

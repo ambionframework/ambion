@@ -74,3 +74,22 @@ it('drops the id of a call its result ends, so a harness that never takes one ho
 	expect(tools.callId('lookup')).toBe('t4');
 	expect(tools.callId('lookup')).toBe('act-1:lookup:0');
 });
+
+it('gives a nested step no id to claim, and raises its tool events', () => {
+	const { tools, trace, raised } = calls();
+	// A direct bash call and a nested bash step of one batch, in either order.
+	trace.record({ type: 'tool_call', call: 'n1', name: 'bash', input: {}, parent: 'c0' });
+	trace.record(call('d1', 'bash'));
+	trace.record({ type: 'tool_call', call: 'n2', name: 'bash', input: {}, parent: 'c0' });
+	expect(tools.callId('bash')).toBe('d1');
+	expect(tools.callId('bash')).toBe('act-1:bash:0');
+	trace.record({ type: 'tool_result', call: 'n1', output: 'ok', parent: 'c0' });
+	trace.record({ type: 'tool_result', call: 'n2', output: 'ok', parent: 'c0' });
+	expect(raised).toEqual([
+		'tool_call:bash',
+		'tool_call:bash',
+		'tool_call:bash',
+		'tool_result:bash',
+		'tool_result:bash',
+	]);
+});
