@@ -63,7 +63,7 @@ describe('the eval support', () => {
 			const simulation = await simulate(room, {
 				person: priya,
 				actor: scriptedActor(questions),
-				exchanges: questions.length,
+				messages: questions.length,
 				exchangeMs: 10_000,
 			});
 			expect(simulation.ended).toBe('limit');
@@ -98,7 +98,7 @@ describe('the eval support', () => {
 		const simulation = await simulate(room, {
 			person: priya,
 			actor: scriptedActor(['How many units of SKU A?']),
-			exchanges: 1,
+			messages: 1,
 			exchangeMs: 10_000,
 		});
 		expect(simulation.ended, simulation.error).toBe('limit');
