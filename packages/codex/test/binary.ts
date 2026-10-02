@@ -267,7 +267,10 @@ function procsWith(entry: string): number[] {
 
 /** The pids on macOS whose `ps -E` line holds `entry` as a whole word. A binary under SIP shows no environment. */
 function psWith(entry: string): number[] {
-	const lines = execFileSync('ps', ['-Eww', '-x', '-o', 'pid=,command='], { encoding: 'utf8' });
+	const lines = execFileSync('ps', ['-Eww', '-x', '-o', 'pid=,command='], {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+	});
 	return lines
 		.split('\n')
 		.filter((line) => line.split(/\s+/).includes(entry))
