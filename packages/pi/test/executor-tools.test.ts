@@ -3,7 +3,13 @@
  * purpose gets, what a say or a membership tool commits, and what a domain
  * tool receives.
  */
-import { defineAgent, defineTool, type Message, type ToolContext } from '@ambionframework/ambion';
+import {
+	defineAgent,
+	defineTool,
+	type Message,
+	type Step,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -29,6 +35,7 @@ import {
 	unusedRoom,
 	viewFor,
 } from './support/activation.ts';
+import { noTrace } from './support/trace.ts';
 
 /** What the domain tool received, one context per call. */
 const seen: ToolContext[] = [];
@@ -48,6 +55,7 @@ const worker = defineAgent({
 				parameters: Type.Object({}),
 				execute: (_params, context) => {
 					seen.push(context);
+					context.record?.({ type: 'notice', level: 'info', text: `nested ${context.callId}` });
 					return 'recorded';
 				},
 			}),
@@ -99,7 +107,7 @@ async function bound(id: string, purpose: Purpose, ...answers: CommitResult[]) {
 	});
 	const view = viewFor(purpose);
 	const { state: activation, tools: bound } = await boundActivation(id, worker, room, view);
-	const tools = toolsFor(view, worker, bound);
+	const tools = toolsFor(view, worker, bound, noTrace);
 	const tool = (index: number): PiTool => {
 		const found = tools[index];
 		if (found === undefined) throw new Error(`The purpose has no tool at ${index}.`);
@@ -280,7 +288,7 @@ describe('executor tool authority', () => {
 			room,
 			view,
 		);
-		const recall = toolsFor(view, worker, tools).find((tool) => tool.name === 'recall');
+		const recall = toolsFor(view, worker, tools, noTrace).find((tool) => tool.name === 'recall');
 		const uri = (seq: number) => `ambion://room/room/message/${seq}`;
 		// Every ref finds its message: a success, one line for each distinct ref. A seq as the
 		// record shows it names a message of this room.
@@ -404,9 +412,11 @@ describe('executor tool authority', () => {
 			spec: { ...base.spec, id: 'message:4:worker:1' },
 			context: { ...base.context, exchange: { person: 'priya', from: 4 } },
 		};
-		await call(toolsFor(open, worker, []).at(-1), 'call-1', {});
+		const recorded: Step[] = [];
+		const sink = { record: (step: Step) => void recorded.push(step) };
+		await call(toolsFor(open, worker, [], sink).at(-1), 'call-1', {});
 		await call(
-			toolsFor({ ...open, context: { ...base.context } }, worker, []).at(-1),
+			toolsFor({ ...open, context: { ...base.context } }, worker, [], sink).at(-1),
 			'call-2',
 			{},
 		);
@@ -422,5 +432,10 @@ describe('executor tool authority', () => {
 		expect(Object.isFrozen(first?.exchange)).toBe(true);
 		expect(second).toMatchObject({ room: 'room', activation: 'message:4:worker:1' });
 		expect(second).not.toHaveProperty('exchange');
+		// The record of the context reaches the sink of the activation.
+		expect(recorded).toEqual([
+			{ type: 'notice', level: 'info', text: 'nested call-1' },
+			{ type: 'notice', level: 'info', text: 'nested call-2' },
+		]);
 	});
 });

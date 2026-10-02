@@ -281,6 +281,32 @@ describe('the trace limits and policy', () => {
 		await costless.close();
 	});
 
+	it('closes an open text block at a nested step, and keeps the text in two blocks', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'nested',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			policy: { thinking: 'full', toolOutput: 'full' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.startPass('view', 1);
+		sink.record({ type: 'text', text: 'before ', final: false });
+		sink.record({ type: 'tool_call', call: 'n1', name: 'bash', input: {}, parent: 'c1' });
+		sink.record({ type: 'text', text: 'after', final: false });
+		sink.record({ type: 'tool_result', call: 'n1', output: 'ok', parent: 'c1' });
+		await sink.close();
+		const steps = log.of('message:2:product:1');
+		expect(sorted(steps)).toEqual(['pass', 'text', 'tool_call', 'text', 'tool_result']);
+		expect(steps.filter((step) => step.type === 'text')).toEqual([
+			expect.objectContaining({ text: 'before ', final: true }),
+			expect.objectContaining({ text: 'after', final: true }),
+		]);
+		expect(steps[2]).toMatchObject({ call: 'n1', parent: 'c1' });
+	});
+
 	it('logs a notice in order under the strictest policy, with its data as plain JSON', async () => {
 		const log = collectSteps();
 		const sink = openTrace({

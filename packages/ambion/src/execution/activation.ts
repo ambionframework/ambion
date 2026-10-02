@@ -59,6 +59,8 @@ export class ActivationState {
 	private readonly freshness = new Freshness();
 	private readonly controller = new AbortController();
 	private readonly opened: RunningActivation;
+	/** The sink the executor records into: the trace, read for the tool calls. */
+	private readonly steps: StepSink;
 	private tools: readonly BoundTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
@@ -76,9 +78,10 @@ export class ActivationState {
 			input.emit({ type, seat: input.definition.name, activation: input.id, name }),
 		);
 		const freshness = this.freshness;
+		this.steps = calls.watching(input.trace);
 		this.opened = opener({
 			id: input.id,
-			trace: calls.watching(input.trace),
+			trace: this.steps,
 			signal: this.controller.signal,
 			get readThrough() {
 				return freshness.readThrough;
@@ -308,7 +311,13 @@ export class ActivationState {
 		};
 		this.tools = [
 			...roomTools(view, binding),
-			...agentTools(view, this.input.definition, this.controller.signal, () => this.view ?? view),
+			...agentTools(
+				view,
+				this.input.definition,
+				this.controller.signal,
+				this.steps,
+				() => this.view ?? view,
+			),
 		];
 		return this.tools;
 	}

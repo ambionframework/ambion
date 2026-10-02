@@ -94,6 +94,7 @@ describe('the tool list and domain tools', () => {
 				params: { id: 'r1' },
 				agent: { name: 'gpt', identity: 'Answers what is asked.' },
 				signal: expect.any(AbortSignal),
+				record: expect.any(Function),
 				callId: expect.stringMatching(/^message:1:gpt:1:turn-1:call_1$/),
 				room: 'lab',
 				activation: 'message:1:gpt:1',

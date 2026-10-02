@@ -18,6 +18,12 @@ the export `DefineToolOptions`.
 gains `composeCall` and `record`. The `tool_call` and `tool_result` steps
 gain `parent`.
 
+**A tool records steps into the trace of its activation.** The hosting
+export `toolContext` takes the step sink of the activation as its fifth
+argument, and `toolsFor` of `@ambionframework/pi` takes it as its fourth.
+`callId` skips a step with a `parent`. The scripted executor gives each
+tool call a signal, the deadline, and the step sink.
+
 **The executor options take `compose`.** The main entry exports the types
 `ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
 `Evaluator`, `EvaluatorInput`, and `JsonValue`. A definition refuses a user

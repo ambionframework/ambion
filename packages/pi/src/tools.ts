@@ -16,7 +16,12 @@
  */
 import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import { contentText } from '@ambionframework/ambion';
-import type { ActivationView, AgentDefinition, BoundTool } from '@ambionframework/ambion/hosting';
+import type {
+	ActivationView,
+	AgentDefinition,
+	BoundTool,
+	StepSink,
+} from '@ambionframework/ambion/hosting';
 import { toolContext } from '@ambionframework/ambion/hosting';
 import type { ToolExecutionResult, ToolRegistration } from '@earendil-works/pi-durable';
 
@@ -120,9 +125,14 @@ export function fromAmbionTool(tool: AmbionTool, contextOf: ContextOf): PiTool {
  * A tool registration from a normalized tool. The tool reads the view of the
  * pass that runs it, so the room and the open exchange it names are current.
  */
-function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => ActivationView): PiTool {
+function toPiTool(
+	tool: AmbionTool,
+	agent: AgentDefinition,
+	sink: StepSink,
+	current: () => ActivationView,
+): PiTool {
 	return fromAmbionTool(tool, (call, signal, onUpdate) =>
-		toolContext(agent, current(), call, signal, onUpdate),
+		toolContext(agent, current(), call, signal, sink, onUpdate),
 	);
 }
 
@@ -146,15 +156,17 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition, current: () => Activ
  *   gives the content alone.
  *
  * The context of each call comes from `toolContext`, as it does in the core.
+ * `sink` is the step sink of the activation, which a tool records into.
  */
 export function toolsFor(
 	view: ActivationView,
 	def: AgentDefinition,
 	tools: readonly BoundTool[],
+	sink: StepSink,
 	current: () => ActivationView = () => view,
 ): PiTool[] {
 	const own = new Set(def.executor.tools.map((tool) => tool.name));
 	const room = tools.filter((tool) => !own.has(tool.name)).map(fromRoomTool);
 	if (view.spec.purpose.kind === 'summarize') return room;
-	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, current))];
+	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, sink, current))];
 }

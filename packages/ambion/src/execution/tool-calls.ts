@@ -31,8 +31,10 @@ export class ToolCalls {
 	/** The tool of each call in flight, by call id. */
 	private readonly named = new Map<string, string>();
 	/**
-	 * The calls in flight that no hosted tool took yet, in the order the steps
-	 * named them. A result ends a call, so the result step drops its entry.
+	 * The direct calls in flight that no hosted tool took yet, in the order the
+	 * steps named them. A step with a `parent` is a nested call that `compose`
+	 * runs, so no hosted tool takes it. A result ends a call, so the result
+	 * step drops its entry.
 	 */
 	private readonly unclaimed: { readonly call: string; readonly name: string }[] = [];
 	private serial = 0;
@@ -69,7 +71,7 @@ export class ToolCalls {
 	private note(step: Step): void {
 		if (step.type === 'tool_call') {
 			this.named.set(step.call, step.name);
-			this.unclaimed.push({ call: step.call, name: step.name });
+			if (step.parent === undefined) this.unclaimed.push({ call: step.call, name: step.name });
 			if (!COMMITS.has(step.name)) this.raise('tool_call', step.name);
 		} else if (step.type === 'tool_result') {
 			const name = this.named.get(step.call);

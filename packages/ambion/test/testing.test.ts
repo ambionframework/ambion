@@ -90,6 +90,52 @@ describe('scripted', () => {
 		expect(results).toContainEqual(['echoed', 'delivered']);
 	});
 
+	it('gives a tool call a signal, the deadline, and the step sink, and settled waits for it', async () => {
+		const seen: { signal?: AbortSignal; deadline?: number } = {};
+		let finished = false;
+		const probe = defineTool({
+			name: 'probe',
+			description: 'Reads its context.',
+			parameters: Type.Object({}),
+			execute: async (_params, ctx) => {
+				seen.signal = ctx.signal;
+				if (ctx.deadline !== undefined) seen.deadline = ctx.deadline;
+				ctx.record?.({
+					type: 'tool_call',
+					call: 'nested-1',
+					name: 'bash',
+					input: {},
+					parent: ctx.callId,
+				});
+				// The tool runs on after its nested step, so settled must wait for the call itself.
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				ctx.record?.({ type: 'tool_result', call: 'nested-1', output: 'ok', parent: ctx.callId });
+				finished = true;
+				return 'probed';
+			},
+		});
+		const logged: Step[] = [];
+		const room = await open({
+			name: roomName('testing-context'),
+			agents: [agent('a', [probe])],
+			runtime: createRuntime({
+				logger: (traced) => void logged.push(traced.step),
+			}),
+			execution: scripted((_step, _seat, request) => (request === 1 ? callTool('probe') : quiet())),
+		});
+		const events = collect(room);
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		expect(finished).toBe(true);
+		expect(seen.signal).toBeInstanceOf(AbortSignal);
+		expect(seen.deadline).toBeGreaterThan(0);
+		expect(logged).toContainEqual(
+			expect.objectContaining({ type: 'tool_call', call: 'nested-1', parent: expect.any(String) }),
+		);
+		// The nested step raises tool events beside the call of the tool.
+		expect(events.filter((event) => event.type === 'tool_call')).toHaveLength(2);
+	});
+
 	it('turns a script that throws into a transient error and writes no message', async () => {
 		const clock = fakeClock();
 		const room = await open({
