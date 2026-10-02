@@ -40,7 +40,7 @@ function handleFor(host: RoomHostState, found: ExchangeRef, opened: boolean): Ex
 /** The handle for the exchange a committed delivery belongs to. */
 export function handleForMessage(host: RoomHostState, message: Message): ExchangeHandle {
 	if (message.kind !== 'said' && message.kind !== 'posted')
-		throw new Error('A delivery did not commit a spoken message or a post.');
+		throw new Error('A delivery did not commit a said message or a post.');
 	const state = host.state();
 	const close = state.closes.find(
 		(candidate) => message.seq >= candidate.from && message.seq <= candidate.through,

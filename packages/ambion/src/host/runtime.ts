@@ -105,7 +105,7 @@ export interface Limits {
 	 */
 	readonly context: { readonly messages: number };
 	/**
-	 * The most UTF-8 bytes one spoken message or summary text carries. The room
+	 * The most UTF-8 bytes one said message or summary text carries. The room
 	 * refuses a longer text with `message_too_large`. `Infinity` is unbounded.
 	 */
 	readonly message: { readonly bytes: number };

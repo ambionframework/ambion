@@ -87,6 +87,7 @@ The exported names change as follows.
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `ProcessRecord`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
+| Room rules (internal) | `DueWake`, `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `DueRespond`, `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
 
 **The workspace implements its own file tools.** `read`, `write`, and
 `edit` run over the workspace port in place of the factories of Pi. They keep

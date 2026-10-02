@@ -3,7 +3,7 @@
  * values, and both are pure.
  *
  * - **The actor** reads what the person saw: the text the person sent, each
- *   spoken message with its author and recipient, and the summary.
+ *   said message with its author and recipient, and the summary.
  * - **The judge** reads the record: the goal, the person, every message in
  *   seq order, and each exchange with its range, its outcome, and its
  *   activations. It reads no move and no usage, because the reason of a

@@ -11,16 +11,16 @@
 
 import type { Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
-import { type DueActivationOptions, type DueWake, dueOf, type LeaseHold } from './lease.ts';
+import { type DueActivationOptions, type DueRespond, dueOf, type LeaseHold } from './lease.ts';
 import { coversAttempt, wakeAnswered } from './rules.verified.ts';
 
 /** A wake that a running lease answers while it runs. It is pending again when that lease comes to nothing. */
-type HeldWake = Pick<DueWake, 'seat' | 'position' | 'at'>;
+type HeldRespond = Pick<DueRespond, 'seat' | 'position' | 'at'>;
 
 /** A wake still open: pending now, or held by a running lease. */
-export type OpenWake = DueWake | HeldWake;
+export type OpenRespond = DueRespond | HeldRespond;
 
-const isPending = (wake: OpenWake): wake is DueWake => 'id' in wake;
+const isPending = (wake: OpenRespond): wake is DueRespond => 'id' in wake;
 
 /** The leases of one seat that a wake claims, by activation id. */
 export type SeatLeases = ReadonlyMap<string, LeaseHold>;
@@ -31,7 +31,7 @@ function judgeWake(
 	message: { seq: Seq; at: string },
 	leases: SeatLeases | undefined,
 	options: DueActivationOptions,
-): OpenWake | undefined {
+): OpenRespond | undefined {
 	const taken = [...(leases?.values() ?? [])].filter((lease) => coversAttempt(lease, message.seq));
 	const wake = dueOf(message, seat, taken, options);
 	if (wake !== undefined) return wake;
@@ -41,12 +41,12 @@ function judgeWake(
 }
 
 /** The wakes one message opens, in the order of its recipients. */
-export function wakesOf(
+export function respondsOf(
 	message: { seq: Seq; at: string },
 	delivery: MessageDelivery,
 	seatLeases: ReadonlyMap<string, SeatLeases>,
 	options: DueActivationOptions,
-): OpenWake[] {
+): OpenRespond[] {
 	const seats = new Set([...delivery.wakes, ...delivery.steers.map((steer) => steer.seat)]);
 	return [...seats].flatMap((seat) => {
 		const wake = judgeWake(seat, message, seatLeases.get(seat), options);
@@ -56,11 +56,11 @@ export function wakesOf(
 
 /** Read every wake of one seat again after its leases changed. */
 export function rejudgeSeat(
-	wakes: readonly OpenWake[],
+	wakes: readonly OpenRespond[],
 	seat: string,
 	leases: SeatLeases | undefined,
 	options: DueActivationOptions,
-): OpenWake[] {
+): OpenRespond[] {
 	return wakes.flatMap((wake) => {
 		if (wake.seat !== seat) return [wake];
 		const next = judgeWake(seat, { seq: wake.position, at: wake.at }, leases, options);
@@ -69,9 +69,12 @@ export function rejudgeSeat(
 }
 
 /** A removal of the seat makes every wake open before it stale. */
-export const dropSeat = (wakes: readonly OpenWake[], seat: string): OpenWake[] =>
+export const dropSeat = (wakes: readonly OpenRespond[], seat: string): OpenRespond[] =>
 	wakes.filter((wake) => wake.seat !== seat);
 
 /** The wakes still pending for the seats on the roster, in the order they opened. */
-export const pendingOf = (wakes: readonly OpenWake[], roster: ReadonlySet<string>): DueWake[] =>
-	wakes.filter((wake): wake is DueWake => isPending(wake) && roster.has(wake.seat));
+export const dueRespondsOf = (
+	wakes: readonly OpenRespond[],
+	roster: ReadonlySet<string>,
+): DueRespond[] =>
+	wakes.filter((wake): wake is DueRespond => isPending(wake) && roster.has(wake.seat));
