@@ -3,7 +3,7 @@ import { aliases } from './vitest.config.ts';
 
 /**
  * The live tier: a room with a Codex seat, on a real `codex` and a real
- * model, with a real key. Each file holds the room to one claim that a
+ * model, with a real sign-in. Each file holds the room to one claim that a
  * recorded stream cannot prove. It costs money, so it never runs on a
  * pull request. Without `CODEX_API_KEY` or a host login every file skips.
  *
