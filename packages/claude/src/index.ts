@@ -5,7 +5,7 @@
  * names no model library. This package holds the Claude Agent SDK.
  */
 
-export { claudeExecution } from './compose.ts';
+export { claudeExecution } from './execution.ts';
 export { type ClaudeExecutor, type ClaudeOptions, type ClaudePolicy, claude } from './define.ts';
 export type { ClaudeExecutionOptions } from './options.ts';
 

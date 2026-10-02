@@ -5,6 +5,6 @@
  * `README.md` describes the path.
  */
 
-export { codexExecution } from './compose.ts';
+export { codexExecution } from './execution.ts';
 export { type CodexExecutor, type CodexOptions, codex } from './define.ts';
 export type { CodexExecutionOptions } from './options.ts';
