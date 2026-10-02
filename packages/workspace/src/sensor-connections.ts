@@ -52,7 +52,7 @@ export interface SensorConnections {
 		input: { readonly name: string; readonly process: string; readonly port: number },
 		signal?: AbortSignal,
 	): Promise<RegisteredSensorConnection>;
-	/** Detach an owned link without stopping its process. Repeated calls are harmless. */
+	/** Detach an owned link without stopping its process. Repeated calls are harmless. A link whose process ended stays unavailable. */
 	disconnect(agent: WorkspaceAgent, name: string, signal?: AbortSignal): Promise<void>;
 	/** Subscribe to committed link changes. Returns an unsubscribe function. */
 	subscribe(listener: (event: SensorConnectionEvent) => void): () => void;
@@ -505,6 +505,13 @@ export function createSensorConnections(
 		}
 	};
 
+	const detachLink = (connection: MutableConnection) => {
+		if (connection.detached) return;
+		connection.available = false;
+		connection.detached = true;
+		notify('disconnected', connection);
+	};
+
 	const disconnect = async (
 		agent: WorkspaceAgent,
 		name: string,
@@ -516,12 +523,10 @@ export function createSensorConnections(
 		if (!connection) throw new Error(`Unknown sensor connection '${name}'.`);
 		if (connection.owner !== agent.name)
 			throw new Error(`Only '${connection.owner}' can disconnect '${name}'.`);
+		// A link whose process ended keeps its unavailable state.
+		if (!connection.available && !connection.detached) return;
 		abortRefreshes(agent, name);
-		if (!connection.detached) {
-			connection.available = false;
-			connection.detached = true;
-			notify('disconnected', connection);
-		}
+		detachLink(connection);
 		await disposeTransport(connection);
 	};
 

@@ -61,11 +61,15 @@ function latestEncoder(receive: (frame: Frame) => void, fail: (error: unknown) =
 	};
 }
 
-/** Acquire five frames each second. Audio capture stays disabled. */
+/** The device capture rate when the caller names none. */
+export const DEFAULT_FRAMERATE = 30;
+
+/** Acquire five frames each second from a device at `framerate`. Audio capture stays disabled. */
 export function startCamera(
 	device: string,
 	receive: (frame: Frame) => void,
 	fail: (message: string) => void,
+	framerate = DEFAULT_FRAMERATE,
 ) {
 	const child = spawn(
 		executable(),
@@ -77,7 +81,7 @@ export function startCamera(
 			'-f',
 			'avfoundation',
 			'-framerate',
-			'30',
+			String(framerate),
 			'-video_size',
 			`${WIDTH}x${HEIGHT}`,
 			'-i',

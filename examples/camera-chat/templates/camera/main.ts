@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { SensorSource } from '@ambionframework/workspace/sensors';
-import { builtInCamera, startCamera } from './camera.ts';
+import { builtInCamera, DEFAULT_FRAMERATE, startCamera } from './camera.ts';
 import { demoFrame, type Frame } from './frame.ts';
 import { openSensor } from './server.ts';
 
@@ -27,10 +27,17 @@ function launchSource(): SensorSource {
 
 async function main() {
 	const { values } = parseArgs({
-		options: { demo: { type: 'boolean' }, device: { type: 'string' } },
+		options: {
+			demo: { type: 'boolean' },
+			device: { type: 'string' },
+			framerate: { type: 'string' },
+		},
 	});
 	if (process.platform !== 'darwin' && !values.demo)
 		throw new Error('Camera capture requires macOS.');
+	const framerate = Number(values.framerate ?? DEFAULT_FRAMERATE);
+	if (!Number.isFinite(framerate) || framerate <= 0)
+		throw new Error('--framerate must be a positive number.');
 	const source = launchSource();
 	const sensor = await openSensor(source);
 	let ready = false;
@@ -44,12 +51,17 @@ async function main() {
 	try {
 		if (values.demo) receive(demoFrame());
 		else
-			stopCamera = startCamera(values.device ?? (await builtInCamera()), receive, (message) => {
-				sensor.fail(message);
-				console.error(message);
-				process.exitCode = 1;
-				process.emit('SIGTERM');
-			});
+			stopCamera = startCamera(
+				values.device ?? (await builtInCamera()),
+				receive,
+				(message) => {
+					sensor.fail(message);
+					console.error(message);
+					process.exitCode = 1;
+					process.emit('SIGTERM');
+				},
+				framerate,
+			);
 		await new Promise<void>((resolve) => {
 			process.once('SIGINT', resolve);
 			process.once('SIGTERM', resolve);

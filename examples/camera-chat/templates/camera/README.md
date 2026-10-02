@@ -30,10 +30,18 @@ A successful camera connection also opens the host's preview.
 `node main.ts --demo` serves a synthetic frame without opening any device. Use
 this flag only for a demonstration. `--device <index>` selects a specific
 AVFoundation video device; without it, the server selects the built-in camera.
+`--framerate <n>` sets the rate of the AVFoundation input; the default is 30.
+The server keeps five frames each second from that input.
 `CAMERA_FFMPEG` can name the FFmpeg executable. Capture is 1280 × 720, five
 frames per second, with no audio. Timestamps record receipt of the captured
 frame. The server compresses one frame at a time on the thread pool. A newer
 frame replaces a frame that waits for compression.
+
+**Capture costs CPU and bandwidth.** On the owner's Mac at 1280 × 720, Node
+uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
+frame is a PNG of about 700 KB. The `bash` timeout of the launch command
+(86400 seconds above) ends the process after 24 hours. Capture stops then,
+and the agent must start the server and connect again.
 
 The server binds only to 127.0.0.1 on a random port. It supports `GET /`,
 `POST /camera/observe`, and `GET /files/<sha256>`. The last 10 distinct PNG

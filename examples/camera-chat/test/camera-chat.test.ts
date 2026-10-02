@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
+import type { SensorConnectionEvent, Workspace } from '@ambionframework/workspace';
 import { sensorConformance, workspaceConformance } from '@ambionframework/workspace/conformance';
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
@@ -10,6 +11,7 @@ import { DEFAULT_MODEL, openHost } from '../src/host.ts';
 import { localBashBackend } from '../src/local-bash.ts';
 import { localGitBackend } from '../src/local-git.ts';
 import { hostLogin, requireLogin } from '../src/login.ts';
+import { cameraPreview } from '../src/preview.ts';
 import { nativeProtocol } from '../src/terminal.ts';
 import { cameraView } from '../src/tui.ts';
 import { parseCameras } from '../templates/camera/camera.ts';
@@ -228,6 +230,58 @@ it('clones and launches the actual template, connects through standard tools, an
 		await rm(directory, { recursive: true, force: true });
 	}
 }, 30000);
+
+it('keeps the frame on a refreshed link and downloads a frame once for one digest', async () => {
+	const listeners: ((event: SensorConnectionEvent) => void)[] = [];
+	let downloads = 0;
+	const client = {
+		observe: async () => ({
+			observations: [
+				{ at: new Date().toISOString(), parts: [{ kind: 'frame', file: 'digest-a' }] },
+			],
+		}),
+		file: async () => {
+			downloads++;
+			return { bytes: new Uint8Array([1]) };
+		},
+	};
+	const workspace = {
+		sensors: {
+			subscribe: (listener: (event: SensorConnectionEvent) => void) => {
+				listeners.push(listener);
+				return () => {};
+			},
+			get: async () => ({ available: true, client }),
+		},
+	} as unknown as Workspace;
+	const preview = cameraPreview(workspace, () => {});
+	const link = (type: SensorConnectionEvent['type']) =>
+		listeners[0]?.({
+			type,
+			connection: {
+				name: 'camera',
+				hostname: 'host',
+				port: 1,
+				process: 'p',
+				state: 'connected',
+				sensors: [{ name: 'camera', description: 'Camera.', spans: false }],
+			},
+		});
+	try {
+		link('connected');
+		await expect.poll(() => preview.latest?.digest).toBe('digest-a');
+		await expect.poll(() => downloads).toBe(1);
+		await new Promise((resolve) => setTimeout(resolve, 700));
+		expect(downloads).toBe(1);
+		link('refreshed');
+		expect(preview.sensor).toBe('camera/camera');
+		expect(preview.latest?.digest).toBe('digest-a');
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		expect(downloads).toBe(1);
+	} finally {
+		preview.close();
+	}
+});
 
 /** A simulated terminal advertising native Kitty graphics. */
 const kittyTerminal: TerminalCapabilities = {

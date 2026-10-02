@@ -69,6 +69,8 @@ describe('the sensor connection registry', () => {
 		expect(rig.status.state).toBe('running');
 		await connect();
 		rig.end();
+		await registry.disconnect({ name: 'owner' }, 'bench');
+		expect((await registry.list())[0]?.state).toBe('unavailable');
 		expect(events).toEqual([
 			'connected:connected',
 			'refreshed:connected',

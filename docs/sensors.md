@@ -100,8 +100,9 @@ endpoints. No callback is required in each sensor server implementation.
 **`disconnect({ name })` detaches a link without stopping its process.** Only
 the connection owner can disconnect it. The operation makes sensor reads
 unavailable, aborts pending refreshes, closes the transport, and publishes a
-`disconnected` event. A repeated disconnect is harmless. Discovery retains
-the disconnected name and its owner. The owner can reconnect the same running
+`disconnected` event. A repeated disconnect is harmless. A disconnect of a
+link whose process ended changes nothing, and the link stays `unavailable`.
+Discovery retains the disconnected name and its owner. The owner can reconnect the same running
 server or replace it. Reconnecting the same process preserves its captured
 launch source and rejects changed metadata. An unknown connection or a
 non-owner call fails. Use the existing `cancel` tool to stop acquisition.
