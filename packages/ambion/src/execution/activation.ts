@@ -14,20 +14,20 @@
  * its step says so. The executor delivers a line when its harness can take
  * it, and records no `steer` step.
  */
+import type { ActivationView } from '../protocol.ts';
+import { sessionToResume } from '../protocol.ts';
+import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
 import type {
 	ActivationOpener,
-	ActivationView,
+	BoundTool,
 	Pass,
 	PassInput,
 	PassRecord,
 	PassResult,
 	ReadRange,
-	RoomTool,
 	RunningActivation,
 	StepSink,
-} from '../protocol.ts';
-import { sessionToResume } from '../protocol.ts';
-import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
+} from './contract.ts';
 import { failedPass } from './failure.ts';
 import { Freshness } from './freshness.ts';
 import { resolveReminders } from './reminders.ts';
@@ -59,7 +59,7 @@ export class ActivationState {
 	private readonly freshness = new Freshness();
 	private readonly controller = new AbortController();
 	private readonly opened: RunningActivation;
-	private tools: readonly RoomTool[] | undefined;
+	private tools: readonly BoundTool[] | undefined;
 	/** The view of the latest pass. The tools of the definition read it. */
 	private view: ActivationView | undefined;
 	/** The pass in flight. Absent between passes. */
@@ -293,7 +293,7 @@ export class ActivationState {
 	}
 
 	/** The tools of the activation, bound on its first pass: the room tools, then the tools of the definition. */
-	private toolsOf(view: ActivationView): readonly RoomTool[] {
+	private toolsOf(view: ActivationView): readonly BoundTool[] {
 		if (this.tools !== undefined) return this.tools;
 		const freshness = this.freshness;
 		const binding: RoomToolBinding = {

@@ -30,13 +30,7 @@ import {
 } from '../src/catalog.ts';
 import { codex } from '../src/define.ts';
 import { seatHome } from '../src/home.ts';
-import {
-	clientOptions,
-	RESUMED_NOTE,
-	seatText,
-	serverPath,
-	threadOptions,
-} from '../src/options.ts';
+import { clientOptions, SEAT_NOTE, seatText, serverPath, threadOptions } from '../src/options.ts';
 import { catalogFixture, recordedCatalog } from './support.ts';
 
 const luna = catalogFixture.models.find((entry) => entry.slug === 'gpt-5.6-luna');
@@ -45,7 +39,7 @@ if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');
 describe('seatText', () => {
 	it('joins the harness note, the mechanism, and the agent part, in that order', () => {
 		expect(seatText({ mechanism: 'How a room works.', agent: 'Who the seat is.' })).toBe(
-			`${RESUMED_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
+			`${SEAT_NOTE}\n\nHow a room works.\n\nWho the seat is.`,
 		);
 	});
 });

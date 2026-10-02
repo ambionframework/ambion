@@ -7,7 +7,7 @@
  */
 
 import { markdownTable } from './markdown-table.ts';
-import type { ProcessRecord } from './process-files.ts';
+import type { Process } from './process-files.ts';
 
 /** The most finished processes one reminder names. It names the newest. */
 export const FINISHED_IN_REMINDER = 10;
@@ -35,12 +35,12 @@ function shortCommand(command: string): string {
 }
 
 /** The handle, and the name in brackets when the process has one. */
-function labelled(process: ProcessRecord): string {
+function labelled(process: Process): string {
 	return process.name === undefined ? process.handle : `${process.handle} (${process.name})`;
 }
 
 /** One sentence for the state of a process, with its handle, its name, and its output file. */
-export function stateLine(process: ProcessRecord): string {
+export function stateLine(process: Process): string {
 	const who = `Process ${labelled(process)}`;
 	const where = `Output: ${process.output}.`;
 	switch (process.state) {
@@ -84,7 +84,7 @@ export function deadlineNote(left: number, cut: boolean, later: readonly string[
 }
 
 /** The end of a finished process, for the reminder. */
-function endedAs(process: ProcessRecord): string {
+function endedAs(process: Process): string {
 	const at = process.endedAt === undefined ? '' : ` at ${process.endedAt.slice(11, 19)} UTC`;
 	switch (process.state) {
 		case 'exited':
@@ -99,7 +99,7 @@ function endedAs(process: ProcessRecord): string {
 }
 
 /** One line of the reminder: the name first when the process has one, then the handle. */
-function reminderLine(process: ProcessRecord, room: string, now: number): string {
+function reminderLine(process: Process, room: string, now: number): string {
 	const who = process.name === undefined ? process.handle : `${process.name}, ${process.handle},`;
 	const elsewhere =
 		process.room !== undefined && process.room !== room ? ` in the room ${process.room}` : '';
@@ -116,8 +116,8 @@ function reminderLine(process: ProcessRecord, room: string, now: number): string
  * nothing to name. `room` is the room of the activation.
  */
 export function reminderText(
-	running: readonly ProcessRecord[],
-	unseen: readonly ProcessRecord[],
+	running: readonly Process[],
+	unseen: readonly Process[],
 	room: string,
 	now: number,
 ): string | undefined {
@@ -133,7 +133,7 @@ export function reminderText(
 }
 
 /** The `ps` table of the caller's running processes. */
-export function psTable(processes: readonly ProcessRecord[], now: number): string {
+export function psTable(processes: readonly Process[], now: number): string {
 	const rows = processes.map((process) => ({
 		Handle: process.handle,
 		Name: process.name ?? '',

@@ -61,15 +61,19 @@ const OLD_NAMES = [
 	['journal entry type', /\bJournalEntry\b/],
 	['execution options', /\b(?:ClaudeRuntime|CodexRuntime)\b/],
 	['executor kind', /\b(?:seatFamilies|scriptedFamilies)\b/],
-	['workspace endpoint', /\bWorkspacePorts?\b/],
+	['workspace endpoint', /\bWorkspacePorts?\b|workstation\/src\/ports\.ts/],
+	['shell error', /\bExecutionError(?:Code)?\b/],
 	['credential lifetime', /\b(?:tokenTtl|keyTtl)\b/],
 	['process cancel', /\b(?:StopCause|process-stop)\b/],
-	['process record', /\bProcessStatus\b/],
+	['process record', /\b(?:ProcessStatus|ProcessRecord|ProcessView)\b/],
 	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
 	['trace policy', /\bthinking:\s*'summary'/],
 	['simulation', /\bRunExchange\b/],
 	['traced step', /\bTraceRecord\b/],
 	['trace policy default', /\bDEFAULT_TRACE\b/],
+	['bound tool', /\bRoomTool(?:Result)?\b/],
+	['tool concurrency', /\bToolExecutionMode\b/],
+	['seat context', /\bAgentExecutionContext\b/],
 ];
 
 const entries = [

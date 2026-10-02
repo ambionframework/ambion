@@ -25,7 +25,7 @@ export type ProcessKind = 'bash';
 export type ProcessState = 'running' | 'exited' | 'timed_out' | 'cancelled' | 'failed';
 
 /** What the files of one process say about it. A caller gets a frozen value. */
-export interface ProcessRecord {
+export interface Process {
 	/** The key of the process. */
 	readonly handle: string;
 	/** The label the agent gave the process, when it gave one. */
@@ -336,7 +336,7 @@ export async function readFiles(
 	);
 }
 
-type Ending = Pick<ProcessRecord, 'state' | 'endedAt' | 'exitCode' | 'error' | 'stopping'>;
+type Ending = Pick<Process, 'state' | 'endedAt' | 'exitCode' | 'error' | 'stopping'>;
 
 /**
  * The end that `stop` names: its cause, its time, and for a failure its
@@ -409,7 +409,7 @@ function endingOf(files: ProcessFiles, live: boolean): Ending {
 }
 
 /** The status that the files give. `owned` says that this run of the host runs the process now. */
-export function statusOf(files: ProcessFiles, owned: boolean): ProcessRecord {
+export function statusOf(files: ProcessFiles, owned: boolean): Process {
 	const { spec } = files;
 	const ending = endingOf(files, owned || files.alive);
 	return Object.freeze({
