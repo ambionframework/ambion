@@ -1,18 +1,18 @@
 /**
  * One room, two executor kinds: a Pi seat and a Codex seat. Both speak.
- * The file needs the Codex key and the key of the Pi model: `AMBION_MODEL`,
+ * The file needs a Codex sign-in and the key of the Pi model: `AMBION_MODEL`,
  * `anthropic/claude-sonnet-5` when unset.
  */
 import { defineAgent } from '@ambionframework/ambion';
 import { pi, piExecution } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
 import { codexExecution } from '../../src/index.ts';
-import { errorsIn, KEY_VAR, open, person, saidBy, seat, untilQuiet } from './support.ts';
+import { errorsIn, open, person, SIGN_IN, saidBy, seat, untilQuiet } from './support.ts';
 
 const PI_MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 const PI_KEY = `${PI_MODEL.slice(0, PI_MODEL.indexOf('/')).toUpperCase().replace(/-/g, '_')}_API_KEY`;
 
-describe.skipIf(!process.env[KEY_VAR] || !process.env[PI_KEY])('a mixed room', () => {
+describe.skipIf(SIGN_IN === undefined || !process.env[PI_KEY])('a mixed room', () => {
 	it('lets a Pi seat and a Codex seat both speak', async () => {
 		const pilot = defineAgent({
 			name: 'pilot',

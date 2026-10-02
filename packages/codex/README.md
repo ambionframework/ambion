@@ -97,7 +97,8 @@ live.** The unit tests read event streams that a real `codex` recorded. They
 also run the real `codex` binary against a local endpoint that plays a script
 of model replies. The executor suite runs in the live tier on a real model.
 Run it with
-`CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`. It
+`CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live`, or
+without the key after `codex login` to run on a ChatGPT subscription. It
 costs money.
 
 The [Codex guide](../../docs/codex.md) holds every option, the step

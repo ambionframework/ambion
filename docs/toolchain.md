@@ -337,8 +337,9 @@ every other package once, with both keys. Run one harness by hand with
 `AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
 
-`@ambionframework/codex` has a live tier of its own. Its files skip when
-`CODEX_API_KEY` is unset, and they run on the model `gpt-5.6-luna`. Run one
+`@ambionframework/codex` has a live tier of its own. Its files run on
+`CODEX_API_KEY` or on the ChatGPT login of the host, and skip without either.
+They run on the model `gpt-5.6-luna`. Run one
 file with `pnpm --filter @ambionframework/codex run test:live`, which builds
 the package first because Codex spawns the built room tools server. See
 [Codex](codex.md).

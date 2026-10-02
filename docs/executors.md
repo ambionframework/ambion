@@ -692,7 +692,7 @@ real model, in `packages/codex/test/live/conformance.test.ts`, through
 `codexExecutorFixture` in its live support. The model follows each plan
 from its instructions. It declares no steer and no usage, because Codex
 takes no steer and a real model spends no planned usage. The run needs
-`CODEX_API_KEY` and skips without it. A fake `codex` proves only that the
+`CODEX_API_KEY` or a ChatGPT login, and skips without either. A fake `codex` proves only that the
 adapter agrees with its own guess about the SDK, so the package tests its
 mapping on events that a real `codex` recorded. See [Codex](codex.md).
 
