@@ -1,87 +1,633 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-02)
 
-**JSON is the one rule of plain data.** `CloneableJournal` is removed from
-`@ambionframework/journal`, with its helper types. `RoomJournal` is
-`Journal<Kind, Bodies>`. The package exports `assertJson`, the one check that
-a value is JSON: plain objects and arrays, finite numbers, and no `undefined`
-field. `assertWire` is removed from the protocol of the core. `append` refuses
-a body that is not JSON, with the path of the fault, before storage sees it.
-A `Date`, a `bigint`, and a field that holds `undefined` are refused on every
-storage. The memory journal copies a value through JSON, as SQLite does.
+<img alt="Ambion 0.5.0, six things new in this release. Sensors: an agent forks a sensor template, commits it, runs it, and observes through it, and each observation is kept as evidence. Actuators: an actuator is a controller command that the agent starts with bash, and exit 0 means the device is safe. Isolation: Claude, Codex, and Pi seats have no native tools, and files and a shell come only through the workspace. Camera Chat on macOS: an agent forks a camera sensor, launches it, and looks through it with a live preview. Codex runs on app-server, with turn/start, turn/steer, and turn/interrupt. Pi runs on Pi 1.0, on a Claude or ChatGPT subscription. Also new: a clone tool, JSON as the one data rule, a session trace step, steer with a receipt, and one word for each meaning." src="docs/assets/ambion-0.5.0.png" width="800">
 
-**Breaking: the Pi executor runs on `@earendil-works/pi-durable` 1.0.0.**
-`@ambionframework/pi` drops `@earendil-works/pi-agent-core` and its
-`AgentHarness`. It depends on `@earendil-works/pi-durable` pinned to exactly
-`1.0.0`, on `@earendil-works/chord` `^1.0.0`, and on `@earendil-works/pi-ai`
-`^1.0.0`. Every other package that names `pi-ai` takes `^1.0.0`, and
-`@ambionframework/ambion` and `@ambionframework/cloudflare` drop
-`pi-agent-core`. The pin is exact because the executor reads the storage
-format and the failure reasons of pi-durable. These changes break:
-
-- **The `compaction` option.** It takes a partial Pi `CompactionPolicy` in
-  place of the `CompactionSettings` of `pi-agent-core`. The harness holds the
-  default, and `DEFAULT_COMPACTION_SETTINGS` is gone. `pi()` throws when a
-  count is negative or not a safe integer, and when `enabled` is not a
-  boolean.
-- **Overflow recovery needs compaction on.** A context-overflow error fails
-  the pass when `compaction.enabled` is `false`. Before, the harness
-  compacted once whatever the setting.
-- **The disk session format.** A session is a pi-durable JSONL storage at
-  `<sessionDir>/<room>/<seat>/<id>`. A session of an earlier release does not
-  open, and the activation starts a fresh one. A JSONL file with a corrupt
-  line also starts a fresh session.
-- **Exports.** `@ambionframework/pi` exports `StreamFn`, `NativePiTool`,
-  `CreatedSession`, `CompactionOptions`, and `ThinkingLevel`. It defines them
-  itself, because `pi-agent-core` no longer supplies them. `PiSessions` takes
-  `create(scope, id)` and `open(scope, id)` over a pi-durable `Storage`.
-- **Tool results reach the model whole.** The executor sets the output
-  limits of every tool to the largest safe integer. The harness would bound
-  a result to 2000 lines and 50 KiB otherwise.
-- **The system prompt has no tag.** The model reads the prompt as the
-  executor built it.
-- **`runAgent`** keeps its session in a private memory storage and ignores
-  `services.sessions`.
-
-The executor aborts the work that a lost process left in a session before
-the next submit, because a submit would resume it. A pass that failed, was
-cut, or ended before a steered line leaves its entries after the last answer.
-The executor omits them with one `ambion.omit` entry, and the delta gives the
-model each range of the record once. A steered line that the answer outruns
-reports `consumed: false`, and the next pass carries it. A storage that fails a
-commit fails the pass as transient.
+**0.5.0 gives sensors a Git-template lifecycle.** The agent forks a
+template, customizes it, validates it, commits, and pushes. It runs the saved
+version as a workstation process, connects to it, and observes it. Each
+observation lands in the snapshots as retained evidence. The agent rolls back
+with the Git and process tools. See [Sensors](docs/sensors.md).
 
 **The workspace owns its port.** `@ambionframework/workspace`,
 `@ambionframework/workstation`, and `@ambionframework/just-bash` import no
-Pi package and declare no dependency on `@earendil-works/pi-agent-core`. A
-host with Claude or Codex seats installs no Pi package to use a workspace.
-`WorkspaceEnv` no longer extends the `ExecutionEnv` of Pi. Every member takes
-an optional `signal?: AbortSignal` in place of a Pi `Context`, and `onUpdate`
-receives one `ShellOutputView` in place of a `ShellOutputUpdate`.
-The port drops the members that nothing calls: `joinPath`, `readTextLines`,
-`openTextLineReader`, `createTempDir`, and `createTempFile`. `ShellExecResult`
-and `ShellOutputView` drop `spillPath` and `lastLineBytes`, and `capture`
-drops `spill`. These exports change on the root entry of the workspace:
+Pi package. A host with Claude or Codex seats installs no Pi package to use
+a workspace.
 
-- Removed: `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and `tempFilePath`.
-- Added values: `ok`, `err`, `FileError`, and `ShellError`.
-- Added types: `Result`, `FileResult`, `FileErrorCode`, `ShellErrorCode`,
-  `FileInfo`, `ShellExecResult`, `ShellOutputLimits`, `ShellOutputTruncation`,
-  and `ShellOutputView`.
-- Changed: `WorkspaceExecOptions` is declared in full and no longer extends a
-  Pi type. `FileOperations.remove` takes a signal, and `makeTempDir` and
-  `makeTempFile` are removed. `deliverView` loses its `context` argument.
-  `runScript`, `SqlEnv.run`, `WorkspaceFiles`, `WorkspaceLog.append`,
-  `AuditLog.append`, `sqlImport`, and `sqlResult` take a signal in place of
-  a `Context`. `HomeEnv` drops `joinPath`, `readTextLines`, and
-  `openTextLineReader`. The `record` of `WorkspaceLog.append` is an `object`
-  in place of the `JsonValue` of Pi.
+**The layer boundaries hold by rule and by test.** An import rule refuses
+each import that the layers do not allow, and a rule that matches nothing
+fails a test. See [Toolchain](docs/toolchain.md).
 
-`workspaceConformance` drops the case for temporary names. A new check packs
-the three packages and finds no Pi package in their manifests or in their
-dependency closure.
+**Each word of the vocabulary has one meaning.** The release renames
+exports, stored fields, and the text that a model reads. No old name stays as
+an alias. The section [The vocabulary](#the-vocabulary) lists each change.
 
+**The executors changed.** A Claude seat is hermetic and reaches files and a
+shell only through the workspace tools. A Codex seat runs on `codex
+app-server` and takes a steer. The Pi executor runs on
+`@earendil-works/pi-durable` 1.0.0.
+
+**No journal of 0.4.0 opens on 0.5.0.** Stored bodies change field names, and
+the kernel reads only the format that its release writes. The section
+[Journal and stored data](#journal-and-stored-data) lists the changes.
+Ambion supports no downgrade before 1.0.0.
+
+### Packages
+
+**The eleven packages of 0.4.0 ship at 0.5.0.** No package joins or leaves.
+The sensor work adds no sensors package. `examples/workbench` stays
+private, and the new example `examples/camera-chat` is private too. Every
+library package needs Node 22.19 or newer.
+
+- **Entry points.** `@ambionframework/workspace` adds the `./sensors` entry
+  and the `./sensor-api.schema.json` file. No other package adds or removes
+  an entry point.
+- **Pi.** `@ambionframework/pi` drops `@earendil-works/pi-agent-core`. It
+  depends on `@earendil-works/pi-durable` 1.0.0, pinned exactly, on
+  `@earendil-works/chord` `^1.0.0`, and on `@earendil-works/pi-ai` `^1.0.0`.
+  Every other package that names `pi-ai` takes `^1.0.0`.
+- **Codex.** `@ambionframework/codex` drops `@openai/codex-sdk` and
+  `@modelcontextprotocol/sdk`. It depends on `@openai/codex` 0.159.2.
+- **`pi-agent-core`.** `@ambionframework/ambion`,
+  `@ambionframework/cloudflare`, `@ambionframework/workspace`,
+  `@ambionframework/workstation`, and `@ambionframework/just-bash` drop
+  `@earendil-works/pi-agent-core`.
+- **Claude.** `@ambionframework/claude` depends on
+  `@anthropic-ai/claude-agent-sdk` 0.3.284.
+- **Just-bash.** `@ambionframework/just-bash` pins `just-git` to exactly
+  1.8.2.
+- **Workspace.** `@ambionframework/workspace` depends on `diff` for the
+  `edit` patch.
+
+### New
+
+#### Sensors
+
+**Sensor connections expose host lifecycle callbacks and a disconnect tool.**
+A workspace with endpoints exposes `workspace.sensors.get`, `list`, and
+`subscribe`. The workspace root exports the types `SensorDiscovery`,
+`RegisteredSensorConnection`, and `SensorConnectionEvent`. An event has the
+`type` `connected`, `refreshed`, `disconnected`, or `unavailable`. Events
+report committed connection, refresh, disconnect, and
+process-unavailability changes. Listener failures do not undo registry changes.
+`disconnect({ name })` detaches an owned link and closes its transport without
+stopping its process; `cancel` remains responsible for acquisition lifetime.
+
+**Camera Chat runs an agent-owned camera template on macOS.** The agent can
+fork and clone the supplied template, launch it through Bash, and use standard
+`connect` and `observe`. A successful connection opens a small native-image
+preview above a Workbench-style transcript. Disconnect or process exit hides
+it. Retained observation images render inline beneath the messages that cite
+them, at the preview size. The seat runs on the Codex executor and reuses the
+Codex login of the host: it needs no API key, and startup exits with an
+instruction to run `codex login` when the host has no login. The default model
+is `gpt-5.6-luna` at medium reasoning, and `--model` selects another. The demo
+runs a script in place of Codex and exercises the same lifecycle with
+synthetic frames.
+
+**A workspace with endpoints can observe and retain sensor evidence.** The
+`observe({ sensor, span? })` tool reads one connected sensor, fetches and
+verifies every referenced file, and stores the full response and file refs in
+the existing snapshot object store before returning. The result includes
+measurement values and times, export paths, and a manifest snapshot ref.
+`observe` retains frame bytes in its exports and snapshots, and each result
+states the path of a frame in text.
+
+**Every workspace tool bundle carries image parts.** Every executor kind
+carries image parts, so a workspace has one tool bundle. `observe` returns
+each frame as an image part, and `read` of an image returns the image part.
+Each result also states the path of the image in text: the export path in
+`observe`, and `Image path: <path>` in `read`. A model that cannot read
+images still learns where the file is.
+
+**A workspace with endpoints connects running sensor servers.** The
+`connect({ name, process, port })` tool checks process ownership and
+readiness, validates the version 1 index, and registers qualified sensor
+names in memory for the host run. Equal retries refresh discovery and the
+private transport while preserving captured launch source metadata. Process
+end makes the connection unavailable, and only its owner can replace it
+with a new process.
+
+**The activation reminder shows connected sensor discovery.** It reads the
+captured index and checks process state through the existing process table.
+It names the workstation hostname, remote sensor port, handle, and qualified
+sensor names with descriptions. An ended process shows as unavailable.
+Another agent can read the discovery without seeing the owner's process
+files or the private transport URL. An explicit repeated `connect` refreshes
+discovery.
+
+**The workspace defines the sensor wire contract.**
+`@ambionframework/workspace/sensors` exports the version 1 body schemas,
+client types, and `createSensorClient(root)` for index, observe, and verified
+file reads over a private HTTP transport. The client validates wire bodies,
+preserves transport-root prefixes and measurement timestamps, propagates
+cancellation, and does not follow redirects or retry requests.
+`@ambionframework/workspace/sensor-api.schema.json` publishes the generated
+JSON Schema.
+
+**The workspace checks sensor servers.** The existing conformance entry
+exports `sensorConformance`. Its cases check server versions, declared names
+and span support, observation replies, measurement spans, and file digests.
+The Workbench lifecycle test runs the cases against the landed template.
+
+**The workstation forwards private loopback ports over SSH.** The workspace
+root exports `WorkspaceEndpoint` and `WorkspaceEndpoints`, and `BashBackend`
+accepts the optional `endpoints` capability. `workstationBackend` forwards a
+remote `127.0.0.1` service port to an automatically assigned host loopback port.
+The caller closes each transport. The URL is private and temporary.
+
+**The workspace retains received sensor evidence in snapshots.** An internal
+operation stores verified file buffers and a JSON manifest through the
+existing object store. The manifest has `api: 1`, `sensor`, `process`,
+`connection`, `request`, `source`, `observations`, and `files`; each file
+records its digest and snapshot ref. The source captures launch metadata,
+including the dirty marker. Exports use generated filenames in a per-call
+directory in the observing agent's home; a complete directory appears only
+after the files and manifest are written. The manifest is a regular snapshot
+object. The snapshot and journal formats do not change, and no separate
+sensor evidence store is added.
+
+**The Workbench adds a forkable sensor-server template.** It serves
+deterministic numeric, frame, and text fixtures, captures Git source
+metadata at launch, and keeps acquisition files outside its checkout. The
+template imports the workspace schemas from a workspace package that the
+agent builds and packs from a pinned commit. Its README
+documents its setup, customization, validation, process lifecycle, data
+retention, and rollback. The Workbench lifecycle test runs the sensor conformance
+cases against a fresh clone.
+
+#### Git, processes, and actuators
+
+**A `clone` tool checks out a repository with no fork.**
+`clone({ source, path })` in the optional Git tool bundle checks out a
+registered template or an agent repository into `path`. It creates no
+server-side fork. `origin` stays the source, with the push permissions that
+the source already has. The tool resolves the source on the git owner, and it
+clones on the shell owner. `fork` does not change. A workspace with a git
+backend has the tools `repos`, `clone`, and `fork`. See
+[Git](docs/git.md).
+
+**An actuator is a controller command that an agent starts with `bash`.**
+Ambion adds no actuator tool, API, or server. The agent reads the command
+with `status` and stops it with `cancel`. [Actuators](docs/actuators.md)
+states the pattern and a controller contract of seven rules: a command
+handles `TERM` first, and exit code 0 means that the device is safe. The
+template `examples/workbench/templates/actuator-controller` is a Node
+controller over a simulated plant. Its tests send real signals, and a
+Workbench test guards them.
+
+**Git backends support shared repositories.** Both `justGitBackend` and
+`workstationGitBackend` accept `shared` registrations. Every workspace
+agent can push to `shared/<name>`; templates stay read-only and agent forks
+keep their owner. Registration seeds `main` once as `ambion`, then updates
+only the description without reading the source. Removing a registration
+preserves the repository and its push rights. Shared default branches
+refuse deletion and non-fast-forward pushes; other branches remain mutable.
+The git tools remain `repos`, `clone`, and `fork`, with updated guidance.
+`gitConformance` covers shared repositories; its fixture options add
+`shared` and the conformance entry exports `GitConformanceShared`.
+
+**`bash` takes a `grace` for each call.** The new optional parameter `grace`
+is a number of seconds from 1 to 300, 10 by default. A value outside the
+range fails the call with `Invalid`. The table writes `grace` to `spec`,
+so an adopted process keeps the grace of its own call. A `spec` with no
+`grace` is no spec: a read skips it. `Process` gains
+`grace: number`. `cancel` and `workspace.processes.cancel` wait for the end up to the grace, at most 10
+seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
+they give the status `running` with `stopping: true`, and the stop goes on.
+No stop holds the chain of its agent while it waits for the grace, so a
+later cancel or timeout of the agent does not wait for it. `dispose()` still
+waits for the full grace and 5 seconds of each process. The message of the
+workbench for a cancel that did not end now reads `did not end within the
+wait of the stop.` The workstation backend sends one signal channel at a
+time for each SSH client, so overlapping stops stay inside the 10 sessions
+of OpenSSH. No journal body changes.
+
+**A stop gives a process time to clean up.** `cancel`, the timeout, a
+cancel by the host, and `dispose()` now send `SIGTERM` to the process
+group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a
+stop sent `SIGKILL` at once. The wrapper of a process installs
+`trap : TERM`, so it writes `exit` when the command ends inside the grace.
+A command that traps `TERM` and exits 0 reads `exited` with code 0 after
+a cancel or a timeout. A command that the `SIGTERM` ends, with code 143,
+reads the cause of the stop. `cancel` waits up to 15 seconds, the grace
+and 5 seconds. On just-bash a stop still ends the command at once.
+`@ambionframework/workspace` exports the type `WorkspaceExecOptions`: the
+exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
+workstation sends the two signals for an abort with a grace, and refuses
+a grace outside 0 to 2,147,483 seconds. `Process` gains `stopping`,
+which is `true` while a process that the table stopped still runs. The
+workstation's command script adds `trap : TERM`. A channel that a signal
+ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
+prefix gave 128. No journal body changes.
+
+**`dispose()` stops the processes of one agent at the same time.** Before,
+an agent with 4 processes that ignore `SIGTERM` took about 60 seconds to
+stop. Now the processes of this run stop in about one grace and 5 seconds.
+An adopted process takes one chain step for each signal, and waits for the
+end outside the chain.
+
+#### Executors
+
+**Pi runs on a Claude or a ChatGPT subscription.**
+`@ambionframework/pi` exports `fileCredentials`, `loginPi`, and
+`terminalInteraction`, and `piExecution` and `createExecutionServices` take
+a `credentials` option: a Pi `CredentialStore`. `loginPi('anthropic', store)`
+signs in with a Claude Pro or Max account, and `loginPi('openai-codex',
+store)` signs in with a ChatGPT Plus or Pro account. `fileCredentials(path)`
+keeps the sign-ins in one file of mode `0600`, and writes each refresh
+through a lock file and a rename, so no seat loses a rotated refresh token. Each lock names its owner, and
+a process removes only its own lock.
+A provider with a stored sign-in no longer reads its `<PROVIDER>_API_KEY`.
+A host with no `credentials` reads the environment, as before. The shared
+classifier now reads `invalid_grant` and `provider is not configured` as
+permanent. The Claude and Codex guides state how to run those seats on a
+subscription: `claude login` or `CLAUDE_CODE_OAUTH_TOKEN`, and `codex
+login`. Neither package changes.
+
+**A Claude query passes a settings overlay.** The flag tier turns auto-memory
+off and empties the commit, pull request, and session-link attribution.
+`settingSources` stays empty, and the query passes `skills: []`. The executor
+also sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, which holds before any
+settings tier, and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. A managed
+`attribution` can still add text.
+
+**A failed Claude pass carries the end of the process stderr.** Every failed
+pass adds the last 2,000 characters of the stderr to the message. This holds
+for a failed result, a query that ends early, and a query that throws. A
+failed result waits 50 milliseconds for the stderr, and it settles at once
+when the process ends or `close` runs. The failure class still comes from the
+result or the original error.
+
+**A Codex seat takes a steer.** A line that lands during a turn goes in with
+`turn/steer`. The core records the `steer` step with `consumed: true` when
+Codex echoes the line. Codex refuses a steer after the turn ends, and the
+next pass then carries the line. A cut sends `turn/interrupt`.
+
+**The Codex executor records the `session` step.** It holds the version of
+the binary, the model, the working directory, the thread id, the sign-in
+kind from `account/read`, the permission mode, the bound tool names, and the
+MCP servers. Freshness rests on the echo of each input. Usage comes from `thread/tokenUsage/updated`.
+
+**A Codex resume counts no earlier usage.** The executor sends
+`excludeTurns: true` with `thread/resume`, and it drops a
+`thread/tokenUsage/updated` note whose turn is not the running turn. A login
+that gets no answer in 30 seconds fails as transient.
+
+**A resumed Codex thread keeps its tools.** The executor resumes a thread
+only when the tools in its rollout file equal the bound tools. Otherwise,
+and when `thread/resume` fails, it starts a fresh thread and records the
+`notice` "Codex thread not resumed". A resumed thread takes the new seat
+text from `baseInstructions`, and its first prompt holds the view alone. A
+process that exits during a pass is a transient failure that holds
+the stderr tail.
+
+**An image from a tool reaches a Codex seat.** The catalog patch no longer
+sets `input_modalities` and
+`supports_image_detail_original`. The model keeps its own modalities, so a
+workspace `read` of a picture and the frames of `observe` reach it as images.
+The tool list does not change, because `view_image` stays off. A model with
+no image input stays text-only, and Codex shows a placeholder.
+
+**The Codex package tests the real `codex app-server` on a scripted model.**
+`codex` accepts a custom model provider through its config. A local endpoint
+in `packages/codex/test/responses.ts` speaks the Responses API and plays a
+script of replies. `test/binary.test.ts` runs the bundled binary against it,
+in a temporary Codex home, with a minimal environment. It proves that a seat
+speaks through `say`, that the activation reports the usage of the endpoint,
+that the model sees the room tools and the tools of the seat and no native
+tool, and that a second pass resumes the same thread. This tier runs in the
+unit tier and needs no key.
+
+#### Trace output
+
+**The trace has a `session` step.** It records what the vendor session opened with.
+`Step` gains
+`{ type: 'session'; name; version?; model?; cwd?; session?; auth?;
+permissionMode?; tools; servers }`.
+The Claude executor records one for each `system` init message. `tools` holds
+the room tools by plain name. `servers` holds each MCP server with its
+status. `auth` names the source of the credential. Pi records none. The Codex
+executor records one when a thread opens.
+
+**A Codex activation shows its reasoning and diagnostics in the trace.**
+Codex shows no reasoning unless the request asks for a summary, and the
+catalog of some models turns the summary off. The new option
+`reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
+`none`. The default is `auto`. The executor passes it as
+`model_reasoning_summary`, and the summary arrives as `thinking` steps. The
+default trace policy keeps 280 characters of each thinking block.
+`defineAgent({ trace: { thinking: 'full', toolOutput: 'full' } })` keeps all
+of it.
+
+**A Codex trace names the thread and the rollout file.** The executor
+records one `notice` at level `info`, with the text "Codex thread", for each
+thread of an activation. Its `data` holds the `thread` id, the `home` of the
+seat, and the `rollout` path, `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`.
+Codex writes the instructions, every item, the reasoning, and the tool calls
+there. The binary tier proves the path and the notice.
+
+### Simplification
+
+**The workspace implements its own file tools.** `read`, `write`, and
+`edit` run over the workspace port in place of the factories of Pi. They keep
+the names, the parameters, and the results of the Pi tools. A `read` of a BMP file
+tells the model to convert the file with bash. A workspace tool
+is a core `AmbionTool`, so the workspace needs no wrapper for a Pi tool.
+The workspace copies the truncation helpers, the shell output update, and
+the skill list that it used from Pi. It depends on `diff` for the `edit`
+patch. No export changes.
+
+**The body schemas are the one source of the body types.** The new file
+`packages/ambion/src/bodies.ts` holds the schema of each stored body.
+Before, a type and a schema each stated the body, and the two drifted.
+`SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
+`DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
+`FailureCause`, `Usage`, `VendorSession`, `Lease`, `Close`,
+`Cancel`, `Run`, `Seating`, and `Composition` now derive from the
+schemas with `Static`.
+
+**Each derived type keeps its name and its fields.** The fields, the
+optional keys, and the `readonly` marks stay the same. An interface stays an
+interface, and an alias stays an alias. The `.d.ts` of a type refers to its
+schema, and the schema carries the doc comment of each field.
+
+**The release request takes its fields from the ended lease.** The
+`release` variant of `LeaseRequest` takes `reason`, `readThrough`, `cause`,
+`usage`, and `session` from the schema of the ended lease. It lists them
+once.
+
+**`addUsage` joins the main entry.** `@ambionframework/ambion` exports
+`addUsage(total, step)`, which adds a step to a total, which may be absent.
+The core already held this function. The Pi executor held a second copy as
+`sum`. The simulator held a third as `total`. Both now call `addUsage`.
+
+**The hosting entry holds the helpers that executor families shared.**
+`@ambionframework/ambion/hosting` adds `present`, `pickPresent`, and
+`ROOM_SERVER`. The Claude and Codex packages each held a copy of
+`ROOM_SERVER`. They each held a copy of `present`. They each held a copy of
+the policy pick, which `pickPresent` replaces.
+
+**`@ambionframework/workspace/git` exports `DEFAULT_BRANCH` and
+`BACKEND_AUTHOR`.** The just-bash and workstation backends import them.
+Each backend wrote its own copy before.
+
+**`hostingOf` returns the state of the runtime.** `hostingOf(runtime)`
+returns the runtime's own state, as an `ExecutionHost` that also holds
+`journals`, `executions`, and `evict`. Before, it built a copy with
+`journals`, `executions`, `limits`, and `evict`. The value now also holds
+`clock`, `storage`, and `logger`, so a host passes `hostingOf(runtime)` to
+`Execution.connector`. Nothing else in the public surface changes.
+
+**`@ambionframework/workspace` exports `MAX_TIMER_SECONDS`.**
+The constant is 2,147,483, the most seconds that a Node timer holds. The
+bash timeout, the SQLite timeout, the process table, and the workstation
+checks of `idleTimeout`, `timeout`, and `grace` read this one value. No
+limit changes, and no message changes.
+
+**One formatter writes the sizes in refusals and guidance.**
+A size prints in the largest unit that fits: GiB, MiB, or KiB. It prints
+whole when the unit divides it evenly, and with one decimal otherwise. A
+value that rounds to 1024 of a unit prints in the next unit, so 1 MiB
+less 1 byte reads `1.0 MiB`. A size below 1 KiB prints in bytes. The
+import refusal of a file reads `40 MiB` where it read `40.0 MiB`, and it
+names a size from 1 KiB to 1 MiB in KiB where it named bytes. The audit
+guidance names a threshold in the same way. Before, it named bytes for a
+threshold that was not a whole KiB, and MiB for 1 GiB and above, so
+10,000,000 bytes now reads `9.5 MiB` where it read `10000000 bytes`, and
+1 GiB reads `1 GiB` where it read `1024 MiB`. The guidance for the default
+5 MiB and the SQL guidance of 32 MiB do not change.
+
+**The object-size refusal names the limit once.**
+The refusal of an object over 5 GiB now reads `/big holds 5.0 GiB, more
+than the 5 GiB that an object holds.` Before, it read `/big holds 5.0 GiB,
+and an object holds at most 5.0 GiB.`
+
+**One rule turns a thrown error into a failed pass.**
+`@ambionframework/ambion/hosting` exports `PermanentError` and `failedPass`.
+`PermanentError` names an executor fault that a retry cannot clear, because
+the retry runs the same configuration. `failedPass(thrown)` gives the failed
+`PassResult` of a thrown value: the cause is `permanent` for a
+`PermanentError` and `transient` for every other value, and `error` is
+always set. The rule reads the name of the error, so a second copy of the
+package gives the same cause. The core, the scripted executor, and the Pi,
+Claude, and Codex executors call it. Before, each of the six wrote the
+conversion. The Pi executor and the Codex catalog
+throw `PermanentError`. The internal `UnknownModel` of Pi and the internal
+`PermanentError` of Codex are gone. A Claude pass that throws
+`PermanentError` now fails as permanent. A Codex pass that throws a value
+that is no `Error` now carries an `error` in its result.
+
+**The core records every `steer` step.** `ActivationState` records the
+`steer` step of each steered line, with one rule for every family. A line
+that lands between passes is `consumed: false`. A line that the view of the
+pass in flight holds is `consumed: true`. A line that lands in a pass whose
+executor has no `steer` is `consumed: false`. A line that the executor
+delivers is `consumed: true` when the executor calls `read` for its range,
+`{ after, through: seq }`, and `consumed: false` when the pass ends first.
+A `steer` that throws leaves the line `consumed: false`. A line that lands
+before the first pass waits for that pass, and then follows the same rule.
+When no first pass runs, because of a cut, a view of another seat, or a
+failed claim, the line is `consumed: false`, and its step comes before the
+`end` step. `ActivationState` has a new public method, `dropEarly`, and the
+runner calls it.
+
+The executor records no `steer` step. The `steer` member of
+`RunningActivation` only delivers the line. The core calls it at any moment
+after it calls `pass` and before that pass settles, also before the body of
+`pass` reaches its first `await`. The executor holds a line that its harness
+cannot take yet, delivers it when the harness can, and drops what it holds
+when `pass` settles. The Pi and Claude executors lose their own stamps.
+The Claude executor now holds a line from the start of a pass until the
+pass sends its prompt, on every pass.
+
+Four steps change. A Codex seat and a scripted seat now record a `steer`
+step with `consumed: false`. Before, they recorded none. A Pi line that
+lands before the first pass is now `consumed: true` when the first view
+holds it, as a Claude line was before. A Pi line past the first view now
+joins the first prompt, and it is `consumed: true` when the first request
+holds it. Before, Pi dropped it with `consumed: false`. A Claude steer that
+finds no echo when its pass ends now records `consumed: false`. Before, it
+recorded no step. The conformance case `holds a steer for the record when
+the executor cannot steer` now requires a `steer` step with
+`consumed: false` for the line.
+
+**`HomeEnv` implements the file members of `ExecutionEnv`.**
+`@ambionframework/workspace` exports two new types: `FileOperations` and
+`FileExpect`. `FileOperations` holds one throwing storage operation for each
+file member. `FileExpect` is `'file' | 'directory' | 'any'`: what a failed
+call expected at the path. A backend that extends `HomeEnv` now supplies two
+abstract members: `files`, a `FileOperations`, and `classify`, which turns
+what an operation threw into a `FileError`. `HomeEnv` resolves the path,
+checks the abort signal, runs the operation, and classifies a throw. Before,
+each backend wrote that skeleton for every member. `readTextFile` is no
+longer abstract. `BashEnv` and `SshEnv` now supply operations and a
+classifier, and `SshEnv` overrides `renameFile` alone. No behaviour
+changes.
+
+**One function holds the decisions of repository registration.**
+`@ambionframework/workspace/git` exports two new names:
+`registerRepositories(steps, { templates, shared })` and the type
+`RegistrationSteps`. The function registers the templates, then the shared
+repositories, each in name order. It checks each name and each source path,
+chooses create, update, or no write, and reads each repository after a
+write. A backend supplies five storage steps: `template`, `createTemplate`,
+`updateTemplate`, `shared`, and `seedShared`. `justGitBackend` and
+`workstationGitBackend` now implement only those steps. Two behaviours of
+`justGitBackend` change. It now refuses a source path with an empty part,
+`.`, `..`, or `.git`, as `workstationGitBackend` did. Before, it stored such
+a path in the tree. It also reads each repository after its registration
+writes it, so a repository that did not land fails with its name. When an
+update step throws, the function reads the tip again. If the tip holds the
+source, another host process landed the same files, and the registration
+succeeds. Otherwise the function throws the error of the step. The
+refusal of a moved `main` in `workstationGitBackend` now reads
+`The template '<name>' did not move to its new source: git update-ref failed:
+<message>`. It is the same text as in `justGitBackend`, with the git message
+after it. The path error of a shared repository now reads
+`The shared repository '<name>' holds the path ...`.
+
+**One rule records every tool call.** `workspaceTools` passes each tool of
+the bundle through one function, `audited`, when the workspace has an audit
+log. The entry is one more operation on the bash owner after the call ends.
+Another operation can run between the call and its entry. The file tools
+`read`, `write`, and `edit` now follow this rule. Before, their entry ran
+inside the operation of the call. A call with invalid arguments now has an
+entry, as `docs/workspace.md` states. A call that ends after `dispose`
+starts has no entry, because the bash owner refuses the record. The `onError`
+of the audit log, now also a field of `AuditLog`, receives an error that
+names the tool and the call id. The tool factories drop their `audit`
+option. No journal body changes.
+
+**One shape holds each workspace capability.** `workspaceTools` builds the
+bundle from six capabilities in a fixed order: the file tools, the
+processes, the snapshots, `sql`, git, and the sensors. Each capability gives
+its tools, its guidance notes, and its reminder. The bundle merges the
+reminders, and `withSkills` uses the same merge. The tool line of the
+guidance reads the names of the tools, so it no longer keeps name lists. The
+text the model reads does not change. No export changes.
+
+### Fixes
+
+**The ended lease refuses an invalid `cause`.** The schema of an ended lease
+did not name `cause`, so any value passed. The schema now holds `permanent`
+or `transient`. A journal that holds another value stops at replay with an
+error that names `body.cause`.
+
+**The Codex recipe matches `codex` 0.159.2.** `exclusiveConfig` no longer
+sets `tools.view_image`. Codex does not know the key, and it reported two
+warnings for every run. The `view_image` feature still turns the
+tool off. The config sets `skills.include_instructions` and
+`skills.bundled.enabled` to `false`, so no `skills_instructions` message
+reaches the model and Codex installs no system skill in the seat home. The
+catalog flag `include_skills_usage_instructions` did not remove that message.
+The config also sets `check_for_update_on_startup`, `analytics.enabled`,
+`feedback.enabled`, `memories.generate_memories`, and
+`memories.use_memories` to `false`, so a seat sends no analytics or
+feedback and keeps no memory. `codex app-server` starts no update check, and
+the update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
+`shell_snapshot`, `daemon_auto_start`,
+`workspace_dependencies`, `worktrees`, `realtime_conversation`, and
+`memories`. Each acts on the host or the network, or writes state outside
+the journal. `shell_snapshot` ran the shell of the host
+user and wrote its environment into the seat home. The binary tier now
+asserts that a default seat produces no warning `notice` and no skills
+block. The catalog fixture is `catalog-0.159.2.json`. Docs state that the `config.toml` of
+the seat home is the responsibility of the host, because a key that the
+recipe does not name survives from it.
+
+**The trace logs the size of an image in a tool result of every executor.**
+`loggedToolResult` replaced the bytes of an image with their count only in
+the `content` array of a record. The Claude and Codex executors log the
+content parts with no record, so their images went into the log whole. The
+function now takes the array as well, and an image in the shape of the
+Anthropic API, with its bytes in `source.data`.
+
+**A Codex seat has the room tools on its first model request.** The room
+tools are dynamic tools of the thread, so the first request lists them. In
+0.4.0 Codex started an MCP server in the background and waited one second
+for it. A loaded host started the room tools server in more time, so the
+first request listed no room tool. A real model could not call `say` on that
+request and could answer in text that the room never hears. The binary tier
+asserts that every request lists the room tools.
+
+**A Codex seat stops when its host dies.** `codex app-server` reads the input
+of the host. When the host dies, the OS closes the pipe and the process ends.
+In 0.4.0 a host that died by SIGKILL or out of memory left the Codex process
+running, with the model request in flight, and the process spent on the model
+until its turn ended. A test kills a real host in the middle of a model
+request and proves that the process goes away within seconds.
+
+### Breaking changes
+
+#### What to change
+
+**Each bullet names an action. The section that it links holds the detail.**
+
+- **Rename every old name.** Use the tables in
+  [The vocabulary](#the-vocabulary). The `schedule` tool takes
+  `delaySeconds`.
+- **Start from a new journal.** No journal of 0.4.0 opens. See
+  [Journal and stored data](#journal-and-stored-data).
+- **Append JSON bodies only.** A `Date`, a `bigint`, and a field that holds
+  `undefined` fail at `append`. Replace `CloneableJournal` with `Journal`, and
+  `assertWire` with `assertJson`.
+- **Start a Cloudflare room with no `name`.** `StartOptions.name` is gone,
+  and `RoomMetadata` and `SeatMetadata` lose fields. See
+  [Journal and stored data](#journal-and-stored-data).
+- **Move the Pi `compaction` option to a Pi `CompactionPolicy`.** Set
+  `compaction.enabled` for overflow recovery. A session of 0.4.0 does not
+  open, and a seat starts a fresh one. See [The Pi executor](#the-pi-executor).
+- **Remove the Claude policy options that grant tools.** `permissionMode`,
+  `allowedTools`, `disallowedTools`, `canUseTool`, `cwd`, and
+  `additionalDirectories` are gone. Give the seat the workspace tools in
+  `bundles`.
+- **Sign a Claude seat in with a key or a token.** `claude login` cannot
+  reach a seat. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`, and set
+  `claudeExecution({ configRoot })` to keep sessions across a restart. See
+  [The Claude executor](#the-claude-executor).
+- **Pass only additions in the Claude `env` option.** A host on Bedrock,
+  Vertex, or Foundry passes the variables that its provider needs.
+- **Use a Claude executable 2.1.248 or newer.** An older one fails the pass
+  as permanent.
+- **Drop the Codex SDK and the room tools server.** The executor runs on
+  `@openai/codex` 0.159.2 and `codex app-server`. See
+  [The Codex executor](#the-codex-executor).
+- **Sign a Codex seat in again.** With `CODEX_API_KEY`, the executor signs in
+  through `account/login/start`. Otherwise link a file login, because a
+  keyring login cannot be shared. Seats no longer read `~/.codex`, and a
+  thread in `~/.codex/sessions` starts fresh. Pass `home` to place the seat
+  home.
+- **Remove the Codex options that grant native tools.** `nativeTools`, the
+  policy options, and `skipGitRepoCheck` are gone. Use the workspace tools in
+  `bundles`. `env` now lays over an allowlist.
+- **Read the Codex seat text as instructions.** It is the `baseInstructions`
+  of the thread. The first user message holds the view alone.
+- **Handle the `notice` step, and drop the `approval` step.** See
+  [The trace](#the-trace).
+- **Implement the workspace port with an `AbortSignal`.** Every member takes
+  `signal?: AbortSignal`. `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and
+  `tempFilePath` are gone. See [The workspace](#the-workspace).
+- **Pass `git` to the bash backend.** `memoryBackend`, `directoryBackend`, and
+  `WorkstationOptions` take a git backend of their own package.
+  `GitConformanceStore.bash` is a function.
+- **Rename `audit: { maxBytes }` to `audit: { rotateBytes }`.**
+- **Rename `TemplateRegistration` to `RepositoryRegistration`.** `shared` is a
+  reserved agent name.
+- **Read pending says from the room read.** Use `awaitingFor(read, person)`
+  and `read.scheduled`. `Room.pendingFor`, `Room.scheduled`, and
+  `RoomObject.scheduledSays` are gone.
+- **Update executor and hosting imports.** Names left the hosting entry,
+  `ActivationOpener` is a function of the activation, `Executor` names the
+  value in a definition, `ExecutionServices` holds three fields, and
+  `createPiExecutor`, `createClaudeExecutor`, and `createCodexExecutor` are
+  gone. See [The core exports and tests](#the-core-exports-and-tests).
+- **Update tests that script a room.** `Turn` is `Reply`, and the verbs come
+  from `@ambionframework/ambion/testing`. The conformance fixture types are
+  one `ConformanceFixture`.
+
+#### The vocabulary
 
 **Breaking: each word of the vocabulary has one meaning.** A rename pass
 gave each overloaded term one meaning. The glossary in `docs/room.md` lists
@@ -139,7 +685,7 @@ The exported names change as follows.
 | Scheduled says          | `PendingSay`, `pendingFor`, `Intent.after`, `schedule.minAfter`, `schedule.maxAfter`                                             | `ScheduledSay`, `awaitingFor`, `delaySeconds`, `minDelaySeconds`, `maxDelaySeconds`                         |
 | Activations             | the purpose `'summary'`, `ActivationOutcome.status`, `SummaryOutcome.status`                                                     | `'summarize'`, `kind`, `kind`                                                                               |
 | Participants            | `ParticipantInfo`, `AgentParticipantInfo`, `HumanParticipantInfo`                                                                | `Participant`, `AgentParticipant`, `PersonParticipant`                                                      |
-| People                  | `HumanDefinition`, `defineHuman`, `HumanParticipant`, `kind: 'human'`, `Visit.human`                                              | `PersonDefinition`, `definePerson`, `PersonParticipant`, `kind: 'person'`, `Visit.person`                    |
+| People                  | `HumanDefinition`, `defineHuman`, `kind: 'human'`, `Visit.human`                                              | `PersonDefinition`, `definePerson`, `kind: 'person'`, `Visit.person`                    |
 | Visitors                | the Cloudflare `Person`, `Workbench.join`                                                                                          | `Visitor`, `Workbench.visit`                                                                                |
 | Ending work             | `Room.abort()`, `AgentRunner.abort()`, `ActivationState.cancel()`, `RoomToolBinding.abort()`, the stop `'aborted'`               | `Room.cancel()`, `cutAll()`, `cut()`, `cut()`, `'cut'`                                                      |
 | Entries                 | the journal `JournalEntry`, the core union `Entry`                                                                               | `Entry`, `RoomEntry`                                                                                        |
@@ -147,37 +693,104 @@ The exported names change as follows.
 | Summary writer          | `summary` on `StartRoomOptions`, `Composition`, `Close`, and the Cloudflare `StartOptions`                                       | `summaryWriter`                                                                                             |
 | Trace                   | `TraceRecord`, `RoomProjection.record`, `OwedFacts.record`, `TracePolicy.thinking: 'summary'`                                    | `TracedStep`, `summaryFacts`, `summaryFacts`, `'start'`                                                     |
 | `/testing`              | `scriptedExecutor`, `speak`, `later`, `isClosing`, `Step`, `Call`, `Result`, the script parameter `call`                         | `scriptedOpener`, `say`, `schedule`, `isSummarizing`, `ScriptStep`, `ScriptCall`, `ScriptResult`, `request` |
-| Conformance             | `ExecutorHarness`, `PortHarness`, `ConformanceHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `ConformanceFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
+| Conformance             | `ExecutorHarness`, `PortHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
 | Simulator               | `Run`, `RunExchange`, `SimulateOptions.exchanges`, `AgentActorOptions.timeoutMs`, `AgentJudgeOptions.timeoutMs`                 | `Simulation`, `SimulationExchange`, `messages`, `moveMs`, `gradeMs`                                         |
 | Executor packages       | `ClaudeRuntime`, `CodexRuntime`, `ClaudeHarnessOptions`, Pi testing `scripted`, Claude `FakeScenario.turns`                      | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `ClaudeFixtureOptions`, `scriptedStream`, `passes`       |
-| Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Port and send           | the event `delivery_error`, `DeliveryState`, `Limits.delivery`, `MessageDelivery`, `limits.schedule.pending` | `port_error`, `SendState`, `Limits.port`, `MessageRecipients`, `limits.schedule.waiting` |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Kernel exports | `RoomTool`, `RoomToolResult`, `ToolExecutionMode`, `AgentExecutionContext`; the executor contract in `protocol.ts` | `BoundTool`, `BoundToolResult`, `ToolConcurrency`, `SeatContext`; the contract in `execution/contract.ts` |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
-| Room rules (internal) | `DueWake`, `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `DueRespond`, `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
+| Room rules (internal) | `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
 
-**The workspace implements its own file tools.** `read`, `write`, and
-`edit` run over the workspace port in place of the factories of Pi. They keep
-the names, the parameters, and the results of the Pi tools. A `read` of a BMP file
-tells the model to convert the file with bash. A workspace tool
-is a core `AmbionTool`, so the workspace needs no wrapper for a Pi tool.
-The workspace copies the truncation helpers, the shell output update, and
-the skill list that it used from Pi. It depends on `diff` for the `edit`
-patch. No export changes.
+#### Journal and stored data
+
+**Breaking: JSON is the one rule of plain data.** `CloneableJournal` is removed from
+`@ambionframework/journal`, with its helper types. `RoomJournal` is
+`Journal<Kind, Bodies>`. The package exports `assertJson`, the one check that
+a value is JSON: plain objects and arrays, finite numbers, and no `undefined`
+field. `assertWire` is removed from the protocol of the core. `append` refuses
+a body that is not JSON, with the path of the fault, before storage sees it.
+A `Date`, a `bigint`, and a field that holds `undefined` are refused on every
+storage. The memory journal copies a value through JSON, as SQLite does.
+
+**The journal reads only the format this release writes.**
+A journal that an earlier release wrote is not supported, and the journal
+adds no reader for it. Two promises of `docs/durability.md` go, and a host
+with an older journal sees no error from either:
+
+- **The body schemas no longer refuse the fields of earlier releases.**
+  `said.owner`, `close.owner`, `close.cancelled`, `run.format`, and
+  `cancel.close` met the refusal `expected no such field; an earlier
+  release wrote it`. A body schema now accepts them as any extra field.
+  The room does not read `close.owner`, `run.format`, or `cancel.close`. A
+  `said` entry keeps `owner` as an extra field of its message. A `close`
+  entry with `cancelled: true` reads as a cancelled close, because the
+  fold takes a `close` body as written.
+- **The journal no longer promises to read a key with no prefix from an
+  older journal.** A delivery key starts with `delivery:`, a commit key
+  with `commit:`, and a post key with `post:`. A presence key and a cancel
+  key carry no prefix, and the room reads them as written.
+
+A stored entry with no `run` stays readable. A journal that opens with no
+run reads and writes such entries.
 
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,
 and `RoomObject` takes the name from its id. `RoomMetadata` holds
-`stopped` alone, without `name` and `definitions`. A resumed room takes the
+`stopped` alone, without `name` and `agents`. A resumed room takes the
 definitions of the agents on its record from `configure`. `RoomRead` gains
 `reserve`, the agents that no seat holds.
 `SeatMetadata` holds `activation`, `phase`, and `hold`, without `room` and
 `seat`: the seat object reads both from its name, which `seatName` builds.
-`SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
+`SeatMetadata.wakes` and `cuts` are removed, with `SeatObject.wakes()`
 and `SeatObject.cuts()`. A room object that no name reaches throws.
+
+#### The Pi executor
+
+**Breaking: the Pi executor runs on `@earendil-works/pi-durable` 1.0.0.**
+`@ambionframework/pi` drops `@earendil-works/pi-agent-core` and its
+`AgentHarness`. It depends on `@earendil-works/pi-durable` pinned to exactly
+`1.0.0`, on `@earendil-works/chord` `^1.0.0`, and on `@earendil-works/pi-ai`
+`^1.0.0`. Every other package that names `pi-ai` takes `^1.0.0`, and
+`@ambionframework/ambion` and `@ambionframework/cloudflare` drop
+`pi-agent-core`. The pin is exact because the executor reads the storage
+format and the failure reasons of pi-durable. These changes break:
+
+- **The `compaction` option.** It takes a partial Pi `CompactionPolicy` in
+  place of the `CompactionSettings` of `pi-agent-core`. The harness holds the
+  default, and `DEFAULT_COMPACTION_SETTINGS` is gone. `pi()` throws when a
+  count is negative or not a safe integer, and when `enabled` is not a
+  boolean.
+- **Overflow recovery needs compaction on.** A context-overflow error fails
+  the pass when `compaction.enabled` is `false`. Before, the harness
+  compacted once whatever the setting.
+- **The disk session format.** A session is a pi-durable JSONL storage at
+  `<sessionDir>/<room>/<seat>/<id>`. A session of an earlier release does not
+  open, and the activation starts a fresh one. A JSONL file with a corrupt
+  line also starts a fresh session.
+- **Exports.** `@ambionframework/pi` exports `StreamFn`, `NativePiTool`,
+  `CreatedSession`, `CompactionOptions`, and `ThinkingLevel`. It defines them
+  itself, because `pi-agent-core` no longer supplies them. `PiSessions` takes
+  `create(scope, id)` and `open(scope, id)` over a pi-durable `Storage`.
+- **Tool results reach the model whole.** The executor sets the output
+  limits of every tool to the largest safe integer. The harness would bound
+  a result to 2000 lines and 50 KiB otherwise.
+- **The system prompt has no tag.** The model reads the prompt as the
+  executor built it.
+- **`runAgent`** keeps its session in a private memory storage and ignores
+  `services.sessions`.
+
+The executor aborts the work that a lost process left in a session before
+the next submit, because a submit would resume it. A pass that failed, was
+cut, or ended before a steered line leaves its entries after the last answer.
+The executor omits them with one `ambion.omit` entry, and the delta gives the
+model each range of the record once. A steered line that the answer outruns
+reports `consumed: false`, and the next pass carries it. A storage that fails a
+commit fails the pass as transient.
+
+#### The Claude executor
 
 **A Claude seat has no built-in tool.** This breaks a host that set a Claude
 policy option. `ClaudePolicy` keeps `effort` and `maxBudgetUsd`. The options
@@ -202,44 +815,6 @@ the mark. The executor reads the version in the `system` init message and
 fails the pass with a permanent failure when it is below 2.1.248. It then
 closes the query, so no model turn runs.
 
-**The Codex executor runs on `codex app-server`.** This breaks a host that
-read the SDK or the room tools server. `@openai/codex-sdk` and
-`@modelcontextprotocol/sdk` leave the package. It depends on `@openai/codex`
-0.159.2 and resolves the binary from it. The executor speaks JSON-RPC over
-stdio with one process for each activation. The room tools and the tools of
-the agent are dynamic tools of the thread. The files `bridge.ts`,
-`wire.ts`, and `room-tools-server.ts` and the local socket are gone, and the
-build has one entry. `codex()` options keep their names. The thread policy
-is the read-only sandbox, `approvalPolicy: never`, and an empty `cwd`.
-`skipGitRepoCheck` has no use and is gone.
-
-**A Codex seat takes a steer.** A line that lands during a turn goes in with
-`turn/steer`. The core records the `steer` step with `consumed: true` when
-Codex echoes the line. Codex refuses a steer after the turn ends, and the
-next pass then carries the line. A cut sends `turn/interrupt`.
-
-**The Codex executor records the `session` step.** It holds the version of
-the binary, the model, the working directory, the thread id, the sign-in
-kind from `account/read`, the permission mode, the bound tool names, and the
-MCP servers. Freshness rests on the echo of each input. Usage comes from `thread/tokenUsage/updated`.
-
-**A Codex resume counts no earlier usage.** The executor sends
-`excludeTurns: true` with `thread/resume`, and it drops a
-`thread/tokenUsage/updated` note whose turn is not the running turn. A login
-that gets no answer in 30 seconds fails as transient.
-
-**A resumed Codex thread keeps its tools.** The executor resumes a thread
-only when the tools in its rollout file equal the bound tools. Otherwise,
-and when `thread/resume` fails, it starts a fresh thread and records the
-`notice` "Codex thread not resumed". A resumed thread takes the new seat
-text. A process that exits during a pass is a transient failure that holds
-the stderr tail.
-
-**The `approval` step is gone.** No executor writes it. Pi and Codex never
-wrote it, and the Claude executor wrote it only for a permission request,
-which no seat raises now. The step vocabulary has eleven kinds, with `session`
-in the place of `approval`. The Workbench no longer draws an `approval` line.
-
 **A Claude seat has its own config home, home directory, and environment.**
 This breaks a host that relied on `claude login`. The executor sets
 `CLAUDE_CONFIG_DIR`, `HOME`, and `USERPROFILE` to directories of the seat.
@@ -263,240 +838,26 @@ cover must pass the variables that provider needs. The allowlist holds no
 `AWS_` or `GOOGLE_` prefix. The shell of the seat reads no file of the host
 user.
 
-**A Claude query passes a settings overlay.** The flag tier turns auto-memory
-off and empties the commit, pull request, and session-link attribution.
-`settingSources` stays empty, and the query passes `skills: []`. The executor
-also sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, which holds before any
-settings tier, and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. A managed
-`attribution` can still add text.
+#### The Codex executor
 
-**A failed Claude pass carries the end of the process stderr.** Every failed
-pass adds the last 2,000 characters of the stderr to the message. This holds
-for a failed result, a query that ends early, and a query that throws. A
-failed result waits 50 milliseconds for the stderr, and it settles at once
-when the process ends or `close` runs. The failure class still comes from the
-result or the original error.
+**The Codex executor runs on `codex app-server`.** This breaks a host that
+read the SDK or the room tools server. `@openai/codex-sdk` and
+`@modelcontextprotocol/sdk` leave the package. It depends on `@openai/codex`
+0.159.2 and resolves the binary from it. The executor speaks JSON-RPC over
+stdio with one process for each activation. The room tools and the tools of
+the agent are dynamic tools of the thread. The files `bridge.ts`,
+`wire.ts`, and `room-tools-server.ts` and the local socket are gone, and the
+build has one entry. The `codex()` options that remain keep their names. The thread policy
+is the read-only sandbox, `approvalPolicy: never`, and an empty `cwd`.
+`skipGitRepoCheck` has no use and is gone.
 
-**The trace has a `session` step.** It records what the vendor session opened with.
-`Step` gains
-`{ type: 'session'; name; version?; model?; cwd?; session?; auth?;
-permissionMode?; tools; servers }`.
-The Claude executor records one for each `system` init message. `tools` holds
-the room tools by plain name. `servers` holds each MCP server with its
-status. `auth` names the source of the credential. Pi records none. The Codex
-executor records one when a thread opens; see the Codex entries below.
-
-**A bash backend takes its git backend, and the types check the pair.**
-`memoryBackend` takes `git` in its options, and `directoryBackend(root,
-options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
-`WorkstationOptions` gets `git`, of the new exported type
-`WorkstationGitBackend`. `BashBackend` gets `readonly git?: GitBackend`, and
-`openWorkspace` opens `bash.git` under its own owner. A git backend of
-another package is now a compile error. Each bash backend reads the access
-of its git backend with no cast. Every tool text, guidance text, and
-credential flow stays the same.
-
-**The pairing checks are gone.** `WorkspaceBackends.git`, `BashServices`,
-the third parameter `services` of `BashBackend.connect`,
-`BashBackend.gitTransports`, `GitAccess`, `GitBackend.access`, and the field
-`transport` of `JustGitAccess` and `WorkstationGitAccess` no longer exist.
-`openWorkspace` no longer throws for a git backend whose transport the bash
-backend does not carry. `justGitBackend` still has `access: JustGitAccess`,
-and `workstationGitBackend` still has `access: WorkstationGitAccess`, on the
-types of their own packages. `@ambionframework/just-bash` exports the new
-type `DirectoryBackendOptions`.
-
-**`GitConformanceStore.bash` is a function.** `bash(git)` opens a bash
-backend for one git backend, in place of the field `bash`. The registration
-cases open a new bash backend for each workspace, so the suite no longer
-borrows one bash backend with a disposal that does nothing.
-
-**The body schemas are the one source of the body types.** The new file
-`packages/ambion/src/bodies.ts` holds the schema of each stored body.
-Before, a type and a schema each stated the body, and the two drifted.
-`SaidMessage`, `PostedMessage`, `PresenceMessage`, `SummaryMessage`,
-`DismissedMessage`, `PresenceChange`, `Attention`, `EndReason`,
-`FailureCause`, `Usage`, `VendorSession`, `LeaseChange`, `Close`,
-`Cancellation`, `Fence`, `Seating`, and `Composition` now derive from the
-schemas with `Static`.
-
-**Each derived type keeps its name and its fields.** The fields, the
-optional keys, and the `readonly` marks stay the same. An interface stays an
-interface, and an alias stays an alias. The `.d.ts` of a type refers to its
-schema, and the schema carries the doc comment of each field.
-
-**The release request takes its fields from the ended lease.** The
-`release` variant of `LeaseRequest` takes `reason`, `readThrough`, `cause`,
-`usage`, and `session` from the schema of the ended lease. It lists them
-once.
-
-**The ended lease refuses an invalid `cause`.** The schema of an ended lease
-did not name `cause`, so any value passed. The schema now holds `permanent`
-or `transient`. A journal that holds another value stops at replay with an
-error that names `body.cause`.
-
-**The Codex binary runs with an allowlisted environment and a private
-`HOME`.** Before, `codexExecution` passed the whole environment of the host to
-`codex exec` and to `codex debug models`, with only `CODEX_HOME` replaced. The
-`env` option of `codexExecution` and `HomeOptions` changes meaning. It no
-longer replaces the environment. It lays over the allowlisted variables of
-`process.env`: a value adds or replaces a variable, and `undefined` removes
-one. The base holds the path, locale, temporary directory, proxy, and
-certificate variables, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`,
-`CODEX_CA_CERTIFICATE`, and the variables with the prefixes `OPENAI_` and
-`LC_`. On Windows the names compare without case. A secret of the host, such as a cloud key or a
-token, reaches neither the binary nor the room tools server. A provider with
-another `env_key` needs its variable in `env`.
-
-**The seat sets `HOME` and `USERPROFILE`.** Both name `home/home`, a private
-directory that `openHome` creates with the mode `0700`. `CODEX_HOME` stays
-`home`. Codex finds skills under `$HOME/.agents/skills`, so a skill of the
-host user no longer reaches the prompt of a seat. The defaults of `home` and
-`login` still read the `HOME` and the `CODEX_HOME` of the host, which are
-`process.env` with `env` laid over it. `SeatHome` gains `privateHome`.
-
-**A Codex seat has no native tools, ever.** Files and a shell come only from
-the workspace tools, behind the workspace port, so it makes no difference
-whether the workspace is in memory, a directory, or a remote workstation.
-The option `nativeTools` of `codex()` is gone, and so is the mode
-`'codex'`. The policy options `sandboxMode`, `approvalPolicy`,
-`networkAccessEnabled`, `workingDirectory`, and `additionalDirectories` are
-gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
-`reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
-runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
-no network, no approval, an empty working directory, and the seat text in
-`model_instructions_file`. The seat no longer uses `developer_instructions`,
-and a seat text has no size limit from a command argument. A seat that needed
-a shell or file edits now takes the workspace tools in `bundles`. The trace
-maps only the items that a seat can produce: `agent_message`, `reasoning`,
-`mcp_tool_call`, `error`, and the usage of a turn. An item of any other type
-becomes a warning `notice` that names the type. A say no longer cites the
-paths that Codex changed. The core drops `ExecutorSession.roomTools` and the
-type `RoomToolOptions`, because only the Codex executor used them.
-
-**`workspace.tools({ images: false })` is removed.** Every executor kind
-carries image parts, so a workspace has one tool bundle. `observe` returns
-each frame as an image part, and `read` of an image returns the image part.
-Each result also states the path of the image in text: the export path in
-`observe`, and `Image path: <path>` in `read`. A model that cannot read
-images still learns where the file is. This is a breaking change for a
-caller that passes `images`. Remove the option. `WorkspaceToolsOptions`
-keeps `skills`.
-
-**An image from a tool reaches a default Codex seat.** The catalog patch of
-`nativeTools: 'none'` no longer sets `input_modalities` and
-`supports_image_detail_original`. The model keeps its own modalities, so a
-workspace `read` of a picture and the frames of `observe` reach it as images.
-The tool list does not change, because `view_image` stays off. A model with
-no image input stays text-only, and Codex shows a placeholder.
-
-**The Codex recipe matches `codex` 0.158.0.** `exclusiveConfig` no longer
-sets `tools.view_image`. Codex 0.158.0 does not know the key, and it
-reported two warnings for every run. The `view_image` feature still turns the
-tool off. The config sets `skills.include_instructions` and
-`skills.bundled.enabled` to `false`, so no `skills_instructions` message
-reaches the model and Codex installs no system skill in the seat home. The
-catalog flag `include_skills_usage_instructions` did not remove that message.
-The config also sets `check_for_update_on_startup`, `analytics.enabled`,
-`feedback.enabled`, `memories.generate_memories`, and
-`memories.use_memories` to `false`, so a seat sends no analytics or
-feedback and keeps no memory. `codex exec` starts no update check, and the
-update key keeps it so on a later version. `EXCLUSIVE_FEATURES` gains
-`shell_snapshot`, `daemon_auto_start`,
-`workspace_dependencies`, `worktrees`, `realtime_conversation`, and
-`memories`. Each acts on the host or the network, or writes state outside
-the journal. `shell_snapshot` ran the shell of the host
-user and wrote its environment into the seat home. The binary tier now
-asserts that a default seat produces no warning `notice` and no skills
-block. The catalog fixture is `catalog-0.158.0.json`. The recorded event
-streams stay as recorded on 0.155.1. Docs state that the `config.toml` of
-the seat home is the responsibility of the host, because a key that the
-recipe does not name survives from it.
-
-**The trace logs the size of an image in a tool result of every executor.**
-`loggedToolResult` replaced the bytes of an image with their count only in
-the `content` array of a record. The Claude and Codex executors log the
-content parts with no record, so their images went into the log whole. The
-function now takes the array as well, and an image in the shape of the
-Anthropic API, with its bytes in `source.data`.
-
-**A Codex activation shows its reasoning, plan, and diagnostics in the trace.**
-Codex 0.158 shows no reasoning unless the request asks for a summary, and
-the catalog of some models turns the summary off. The new option
-`reasoningSummary` of `codex()` takes `auto`, `concise`, `detailed`, or
-`none`. The default is `auto`. The executor passes it as
-`model_reasoning_summary` in both modes of `nativeTools`, and the summary
-arrives as `thinking` steps. The default trace policy keeps 280 characters of
-each thinking block. `defineAgent({ trace: { thinking: 'full', toolOutput:
-'full' } })` keeps all of it. A `todo_list` item now gives a `tool_call`
-named `update_plan` and its `tool_result`.
-
-**Breaking: the step vocabulary has an eleventh kind, `notice`.** A `notice`
-is a non-fatal diagnostic of the harness:
-`{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
-gates an activation. A consumer that switches on the step type must handle
-the new kind. The Codex executor records a `notice` at level `warning` for
-each `error` item and each `error` event, such as an unknown setting in the
-config or a reconnect. `turn.failed` stays in the `end` step.
-
-**A Codex trace names the thread and the rollout file.** The executor
-records one `notice` at level `info`, with the text "Codex thread", for each
-thread of an activation. Its `data` holds the `thread` id, the `home` of the
-seat, and the `rollout` path, `<home>/sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl`.
-Codex writes the instructions, every item, the reasoning, and the tool calls
-there. The binary tier proves the path and the notice.
-
-**A Codex seat has the room tools on its first model request.** Codex
-starts an MCP server in the background and waits one second for an optional
-server. A loaded host starts the room tools server in more time, so the first
-request of a turn listed no `mcp__ambion` tool. A real model could not call
-`say` on that request and could answer in text that the room never hears.
-The executor now sets `required = true` on the room tools server. Codex waits
-for it, up to 30 seconds, before the first model request. A server that
-cannot start now ends `codex exec` with "required MCP servers failed to
-initialize" before any model request, and the activation fails as transient.
-The test endpoint no longer answers a request that lacks a tool with a probe.
-A request without `say` now fails the test.
-
-**A Codex seat stops when its host dies.** The SDK closes the input of
-`codex exec` at once. A host that died by SIGKILL or out of memory left
-`codex exec` running, with the model request in flight. The process ran its
-turn to the end, spent on the model, and under `nativeTools: 'codex'` ran
-native commands and wrote the thread in the seat home. The room tools server
-now sends SIGTERM to its parent `codex exec` when the host socket closes or
-fails. On Linux and macOS it sends nothing when `codex exec` has exited
-first, because `ppid` is then another process. On Windows, Node cannot tell
-that the parent is gone. `codex exec` ends its native commands on SIGTERM. A test
-kills a real host in the middle of a model request and in the middle of a
-native command.
-
-**Breaking: the seat text of a Codex seat leaves the first user message.**
-The Codex SDK has no system prompt option, so the executor put the harness
-note, the mechanism, and the agent instructions in front of the view in the
-first user message, under the base prompt of Codex, about 18 KB. The executor now
-passes that text in the config of the client, fixed for the activation. The
-first user message holds the view alone. A seat with `nativeTools: 'none'`
-gets the text in a file in the scratch directory, named by
-`model_instructions_file`. The file replaces the base prompt of Codex, so the
-first developer message is the seat text and no message starts with "You are
-Codex". A seat with `nativeTools: 'codex'` gets the text as
-`developer_instructions` after the base prompt, which teaches its native
-tools.
-
-**A resumed `codex` thread keeps its developer message.** Codex 0.158.0
-keeps the `developer_instructions` that a thread started with, and ignores a
-new value on resume. The seat text depends on the purpose of the activation.
-The first prompt of a `nativeTools: 'codex'` activation that resumes a thread
-therefore carries the seat text, then the view. A fresh thread and every
-`nativeTools: 'none'` activation send the view alone. A resumed `'none'`
-activation uses its own instructions file.
-
-**`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
-purpose grants, then the tools of the definition. A closing activation gets
-the room tools alone. Claude and Codex joined the two lists at once, and
-they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
-tools that the definition does not name, and builds the tools of the
-definition from their `AmbionTool`s as before.
+**A Codex seat signs in with `CODEX_API_KEY` through the app-server.** The
+app-server ignores the `CODEX_API_KEY` variable. When the seat environment
+holds the key, the executor signs in with `account/login/start` of type
+`apiKey`, and it sets the ephemeral credential store. Codex keeps the key in
+memory and writes no `auth.json`. The key wins over a linked `auth.json`. A
+seat with no key reads the linked `auth.json`, a ChatGPT sign-in, as before.
+A failed login names the cause and never the key.
 
 **Breaking: a Codex seat no longer reads `~/.codex`.** The executor never
 set `CODEX_HOME`, so every seat ran in the Codex home of the host user. The
@@ -529,27 +890,151 @@ fails as permanent.
   sets the default `login`. The binary never gets it. Pass `home` to place the
   seat home.
 
+**The Codex binary runs with an allowlisted environment and a private
+`HOME`.** Before, `codexExecution` passed the whole environment of the host to the
+binary and to `codex debug models`, with only `CODEX_HOME` replaced. The
+`env` option of `codexExecution` and `HomeOptions` changes meaning. It no
+longer replaces the environment. It lays over the allowlisted variables of
+`process.env`: a value adds or replaces a variable, and `undefined` removes
+one. The base holds the path, locale, temporary directory, proxy, and
+certificate variables, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`,
+`CODEX_CA_CERTIFICATE`, and the variables with the prefixes `OPENAI_` and
+`LC_`. On Windows the names compare without case. A secret of the host, such as a cloud key or a
+token, does not reach the binary. A provider with
+another `env_key` needs its variable in `env`.
+
+**The seat sets `HOME` and `USERPROFILE`.** Both name `home/home`, a private
+directory that `openHome` creates with the mode `0700`. `CODEX_HOME` stays
+`home`. Codex finds skills under `$HOME/.agents/skills`, so a skill of the
+host user no longer reaches the prompt of a seat. The defaults of `home` and
+`login` still read the `HOME` and the `CODEX_HOME` of the host, which are
+`process.env` with `env` laid over it. `SeatHome` gains `privateHome`.
+
+**A Codex seat has no native tools, ever.** Files and a shell come only from
+the workspace tools, behind the workspace port, so it makes no difference
+whether the workspace is in memory, a directory, or a remote workstation.
+The option `nativeTools` of `codex()` is gone, and so is the mode
+`'codex'`. The policy options `sandboxMode`, `approvalPolicy`,
+`networkAccessEnabled`, `workingDirectory`, and `additionalDirectories` are
+gone, and the type `CodexPolicy` with them. `modelReasoningEffort` and
+`reasoningSummary` stay on `CodexOptions` and `CodexExecutor`. Every seat
+runs the exclusive recipe: the patched catalog entry, a read-only sandbox,
+no network, no approval, an empty working directory, and the seat text in
+`baseInstructions`. A seat that needed a shell or file edits now takes the
+workspace tools in `bundles`. The trace maps the items that a seat can
+produce: `agentMessage`, `reasoning`, `dynamicToolCall`, the warnings and
+errors that Codex reports, and the usage of a turn. An item of any other
+type becomes a warning `notice` that names the type. A say no longer cites the
+paths that Codex changed. The core drops `RunningActivation.roomTools` and the
+type `RoomToolOptions`, because only the Codex executor used them.
+
+**Breaking: the seat text of a Codex seat leaves the first user message.**
+In 0.4.0 the executor put the harness note, the mechanism, and the agent
+instructions in front of the view in the first user message, under the base
+prompt of Codex, about 18 KB. The executor now passes that text as
+`baseInstructions` of `thread/start` and `thread/resume`, fixed for the
+activation. It replaces the base prompt of Codex, so the first developer
+message is the seat text and no message starts with "You are Codex". The
+first user message holds the view alone.
+
 **The binary tier proves the isolation and the link.** The host home of
 `test/binary.ts` holds a `config.toml` that reroutes the provider and starts
 an MCP server, and an `AGENTS.md` with a marker. A test asserts that none of
 them reaches a seat. Another test runs a provider on the linked login, with a
 proxy that refuses every outbound connection.
 
-**The Codex package tests the real `codex` binary on a scripted model.**
-`codex` accepts a custom model provider through its config. A local endpoint
-in `packages/codex/test/responses.ts` speaks the Responses API and plays a
-script of replies. `test/binary.test.ts` runs the bundled binary against it,
-in a temporary Codex home, with a minimal environment. It proves that a seat
-speaks through `say`, that the activation reports the usage of the endpoint,
-that the model sees the room tools, the tools of the seat, and the three
-MCP resource tools and no native tool, and that a second pass resumes the
-same thread. This tier runs in the unit tier and needs no key. The executor
-does not change.
+#### The trace
 
-**`addUsage` joins the main entry.** `@ambionframework/ambion` exports
-`addUsage(total, step)`, which adds a step to a total, which may be absent.
-The core already held this function. The Pi executor held a second copy as
-`sum`. The simulator held a third as `total`. Both now call `addUsage`.
+**The `approval` step is gone.** No executor writes it. Pi and Codex never
+wrote it, and the Claude executor wrote it only for a permission request,
+which no seat raises now. The step vocabulary has eleven kinds, with `session`
+in the place of `approval`. The Workbench no longer draws an `approval` line.
+
+**Breaking: the step vocabulary has an eleventh kind, `notice`.** A `notice`
+is a non-fatal diagnostic of the harness:
+`{ type: 'notice', level: 'info' | 'warning', text, data? }`. A notice never
+gates an activation. A consumer that switches on the step type must handle
+the new kind. The Codex executor records a `notice` at level `warning` for
+each `warning`, `configWarning`, and `deprecationNotice` and for each `error`
+that will retry, such as an unknown setting in the config or a reconnect.
+A failed turn stays in the `end` step.
+
+#### The workspace
+
+**The workspace owns its port.** `@ambionframework/workspace`,
+`@ambionframework/workstation`, and `@ambionframework/just-bash` import no
+Pi package and declare no dependency on `@earendil-works/pi-agent-core`. A
+host with Claude or Codex seats installs no Pi package to use a workspace.
+`WorkspaceEnv` no longer extends the `ExecutionEnv` of Pi. Every member takes
+an optional `signal?: AbortSignal` in place of a Pi `Context`, and `onUpdate`
+receives one `ShellOutputView` in place of a `ShellOutputUpdate`.
+The port drops the members that nothing calls: `joinPath`, `readTextLines`,
+`openTextLineReader`, `createTempDir`, and `createTempFile`. `ShellExecResult`
+and `ShellOutputView` drop `spillPath` and `lastLineBytes`, and `capture`
+drops `spill`. These exports change on the root entry of the workspace:
+
+- Removed: `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and `tempFilePath`.
+- Added values: `ok`, `err`, `FileError`, and `ShellError`.
+- Added types: `Result`, `FileResult`, `FileErrorCode`, `ShellErrorCode`,
+  `FileInfo`, `ShellExecResult`, `ShellOutputLimits`, `ShellOutputTruncation`,
+  and `ShellOutputView`.
+- Changed: `deliverView` loses its `context` argument.
+  `runScript`, `SqlEnv.run`, `WorkspaceFiles`, `WorkspaceLog.append`,
+  `AuditLog.append`, `sqlImport`, and `sqlResult` take a signal in place of
+  a `Context`. `HomeEnv` drops `joinPath`, `readTextLines`, and
+  `openTextLineReader`. The `record` of `WorkspaceLog.append` is an `object`
+  in place of the `JsonValue` of Pi.
+
+`workspaceConformance` drops the case for temporary names. A new check packs
+the three packages and finds no Pi package in their manifests or in their
+dependency closure.
+
+**A bash backend takes its git backend, and the types check the pair.**
+`memoryBackend` takes `git` in its options, and `directoryBackend(root,
+options)` takes `git` in a second parameter. Both take a `JustGitBackend`.
+`WorkstationOptions` gets `git`, of the new exported type
+`WorkstationGitBackend`. `BashBackend` gets `readonly git?: GitBackend`, and
+`openWorkspace` opens `bash.git` under its own owner. A git backend of
+another package is now a compile error. Each bash backend reads the access
+of its git backend with no cast. Every tool text, guidance text, and
+credential flow stays the same.
+
+**The pairing checks are gone.** `WorkspaceBackends.git`, `BashServices`,
+the third parameter `services` of `BashBackend.connect`,
+`BashBackend.gitTransports`, `GitAccess`, `GitBackend.access`, and the field
+`transport` of `JustGitAccess` and `WorkstationGitAccess` no longer exist.
+`openWorkspace` no longer throws for a git backend whose transport the bash
+backend does not carry. `justGitBackend` still has `access: JustGitAccess`,
+and `workstationGitBackend` still has `access: WorkstationGitAccess`, on the
+types of their own packages. `@ambionframework/just-bash` exports the new
+type `DirectoryBackendOptions`.
+
+**`GitConformanceStore.bash` is a function.** `bash(git)` opens a bash
+backend for one git backend, in place of the field `bash`. The registration
+cases open a new bash backend for each workspace, so the suite no longer
+borrows one bash backend with a disposal that does nothing.
+
+**The audit log names its threshold `rotateBytes`.**
+`AuditLogOptions.maxBytes` and `AuditLog.maxBytes` of
+`@ambionframework/workspace` are now `rotateBytes`, the name that
+`openLog` and the room mirror use. The default stays 5 MiB. The refusal of
+a threshold that is not positive and finite now starts with `rotateBytes`.
+Before, it started with `maxBytes`. A host that sets `audit: { maxBytes }`
+sets `audit: { rotateBytes }`.
+
+**The git registration type is renamed.** The workspace git entry replaces
+`TemplateRegistration` with `RepositoryRegistration`, exports `SHARED` and
+`writableBy`, and reserves `shared` as an agent name. There is no alias or
+migration. Journal bodies and stored schemas do not change.
+
+#### The core exports and tests
+
+**`Pass.agentTools` is gone.** `Pass.tools` holds the room tools that the
+purpose grants, then the tools of the definition. A closing activation gets
+the room tools alone. Claude and Codex joined the two lists at once, and
+they now host `pass.tools`. Pi hosts the room tools from `pass.tools`, the
+tools that the definition does not name, and builds the tools of the
+definition from their `AmbionTool`s as before.
 
 **The main entry exports `ToolContent` and `contentText`.** `ToolContent` is
 one part of what a tool hands back to the model, and `ToolResult.content`
@@ -560,103 +1045,17 @@ written in `bundle.ts`, in `room-tools.ts`, and in `wire.ts` of the Codex
 package. The text join was written in the core test language, twice in the
 Pi executor, and twice in the workspace.
 
-**The hosting entry holds the helpers that executor families shared.**
-`@ambionframework/ambion/hosting` adds `present`, `pickPresent`, and
-`ROOM_SERVER`. The Claude and Codex packages each held a copy of
-`ROOM_SERVER`. They each held a copy of `present`. They each held a copy of
-the policy pick, which `pickPresent` replaces.
-
-**`@ambionframework/workspace/git` exports `DEFAULT_BRANCH` and
-`BACKEND_AUTHOR`.** The just-bash and workstation backends import them.
-Each backend wrote its own copy before.
-
-**`hostingOf` returns the state of the runtime.** `hostingOf(runtime)`
-returns the runtime's own state, as an `ExecutionHost` that also holds
-`journals`, `executions`, and `evict`. Before, it built a copy with
-`journals`, `executions`, `limits`, and `evict`. The value now also holds
-`clock`, `storage`, and `logger`, so a host passes `hostingOf(runtime)` to
-`Execution.connector`. Nothing else in the public surface changes.
-
-**The journal reads only the format this release writes.**
-A journal that an earlier release wrote is not supported, and the journal
-adds no reader for it. Two promises of `docs/durability.md` go, and a host
-with an older journal sees no error from either:
-
-- **The body schemas no longer refuse the fields of earlier releases.**
-  `said.owner`, `close.owner`, `close.cancelled`, `run.format`, and
-  `cancel.close` met the refusal `expected no such field; an earlier
-  release wrote it`. A body schema now accepts them as any extra field.
-  The room does not read `close.owner`, `run.format`, or `cancel.close`. A
-  `said` entry keeps `owner` as an extra field of its message. A `close`
-  entry with `cancelled: true` reads as a cancelled close, because the
-  fold takes a `close` body as written.
-- **The journal no longer promises to read a key with no prefix from an
-  older journal.** A delivery key starts with `delivery:`, a commit key
-  with `commit:`, and a post key with `post:`. A presence key and a cancel
-  key carry no prefix, and the room reads them as written.
-
-A stored entry with no `run` stays readable. A journal that opens with no
-run reads and writes such entries.
-
-**The audit log names its threshold `rotateBytes`.**
-`AuditLogOptions.maxBytes` and `AuditLog.maxBytes` of
-`@ambionframework/workspace` are now `rotateBytes`, the name that
-`openLog` and the room mirror use. The default stays 5 MiB. The refusal of
-a threshold that is not positive and finite now starts with `rotateBytes`.
-Before, it started with `maxBytes`. A host that sets `audit: { maxBytes }`
-sets `audit: { rotateBytes }`.
-
-**One formatter writes the sizes in refusals and guidance.**
-A size prints in the largest unit that fits: GiB, MiB, or KiB. It prints
-whole when the unit divides it evenly, and with one decimal otherwise. A
-value that rounds to 1024 of a unit prints in the next unit, so 1 MiB
-less 1 byte reads `1.0 MiB`. A size below 1 KiB prints in bytes. The
-import refusal of a file reads `40 MiB` where it read `40.0 MiB`, and it
-names a size from 1 KiB to 1 MiB in KiB where it named bytes. The audit
-guidance names a threshold in the same way. Before, it named bytes for a
-threshold that was not a whole KiB, and MiB for 1 GiB and above, so
-10,000,000 bytes now reads `9.5 MiB` where it read `10000000 bytes`, and
-1 GiB reads `1 GiB` where it read `1024 MiB`. The guidance for the default
-5 MiB and the SQL guidance of 32 MiB do not change.
-
-**The object-size refusal names the limit once.**
-The refusal of an object over 5 GiB now reads `/big holds 5.0 GiB, more
-than the 5 GiB that an object holds.` Before, it read `/big holds 5.0 GiB,
-and an object holds at most 5.0 GiB.`
-
-**`@ambionframework/workspace` exports `MAX_TIMER_SECONDS`.**
-The constant is 2,147,483, the most seconds that a Node timer holds. The
-bash timeout, the SQLite timeout, the process table, and the workstation
-checks of `idleTimeout`, `timeout`, and `grace` read this one value. No
-limit changes, and no message changes.
-
-**Pi runs on a Claude or a ChatGPT subscription.**
-`@ambionframework/pi` exports `fileCredentials`, `loginPi`, and
-`terminalInteraction`, and `piExecution` and `createExecutionServices` take
-a `credentials` option: a Pi `CredentialStore`. `loginPi('anthropic', store)`
-signs in with a Claude Pro or Max account, and `loginPi('openai-codex',
-store)` signs in with a ChatGPT Plus or Pro account. `fileCredentials(path)`
-keeps the sign-ins in one file of mode `0600`, and writes each refresh
-through a lock file and a rename, so no seat loses a rotated refresh token. Each lock names its owner, and
-a process removes only its own lock.
-A provider with a stored sign-in no longer reads its `<PROVIDER>_API_KEY`.
-A host with no `credentials` reads the environment, as before. The shared
-classifier now reads `invalid_grant` and `provider is not configured` as
-permanent. The Claude and Codex guides state how to run those seats on a
-subscription: `claude login` or `CLAUDE_CODE_OAUTH_TOKEN`, and `codex
-login`. Neither package changes.
-
 **One scripted test language serves the core and Pi.**
 `@ambionframework/ambion/testing` renames the type `Turn` to `Reply`,
 because `turn` means one request to a provider in Pi. `seat(name)` joins the verbs `callTool`,
-`speak`, `later`, `spend`, and `quiet` in that entry. `byAgent` is generic:
-`byAgent<Input, Out>` routes a script that reads a `Step` and a script that
+`say`, `schedule`, `spend`, and `quiet` in that entry. `byAgent` is generic:
+`byAgent<Input, Out>` routes a script that reads a `ScriptStep` and a script that
 reads a Pi `Context` with one function. `@ambionframework/pi/testing` drops
-`callTool`, `speak`, `later`, `quiet`, `seat`, and `byAgent`. A Pi script
+`callTool`, `say`, `schedule`, `quiet`, `seat`, and `byAgent`. A Pi script
 reads these verbs from the core entry. The Pi type `Script` is now
 `PiScript`, and a `PiScript` answers with a `Reply` or an
-`AssistantMessage`. `isClosing` in the Pi entry is now `isClosingContext`,
-so the name `isClosing` means only the view check of the core. The Pi
+`AssistantMessage`. `isClosingContext` is the Pi check of a context,
+and the view check of the core is `isSummarizing`. The Pi
 `scripted` stream turns a reply into a message: one tool call for each call,
 or a text that ends the run for an empty reply. It turns a `spend` reply
 into an error message. `quiet` takes no text. A test that reads the text
@@ -688,9 +1087,10 @@ no code read them. The executor takes its clock from the host.
 services. `ExecutionServicesOptions` and `SessionPlace` leave the entry of
 `@ambionframework/pi`.
 
-**`Executor` is a function of the activation.**
-`@ambionframework/ambion/hosting` exports `Executor` as
-`(activation: ExecutorActivation) => ExecutorSession`. Before, it was an
+**`ActivationOpener` is a function of the activation.**
+`@ambionframework/ambion/hosting` exports `ActivationOpener` as
+`(activation: ExecutorActivation) => RunningActivation`. Before, `Executor`
+was an
 object with an `open` method and an optional `harness` string. The
 `harness` field is gone. The core records the session of a seat, and
 resumes it, under the executor kind of the seat: `definition.executor.kind`.
@@ -704,288 +1104,40 @@ leave the entry of `@ambionframework/claude`. `createCodexExecutor` and
 `CodexExecutorOptions` leave the entry of `@ambionframework/codex`. Use
 `piExecution`, `claudeExecution`, and `codexExecution`.
 
-**One rule turns a thrown error into a failed pass.**
-`@ambionframework/ambion/hosting` exports `PermanentError` and `failedPass`.
-`PermanentError` names an executor fault that a retry cannot clear, because
-the retry runs the same configuration. `failedPass(thrown)` gives the failed
-`PassResult` of a thrown value: the cause is `permanent` for a
-`PermanentError` and `transient` for every other value, and `error` is
-always set. The rule reads the name of the error, so a second copy of the
-package gives the same cause. The core, the scripted executor, and the Pi,
-Claude, and Codex executors call it. Before, each of the six wrote the
-conversion. The Pi executor and the Codex catalog
-throw `PermanentError`. The internal `UnknownModel` of Pi and the internal
-`PermanentError` of Codex are gone. A Claude pass that throws
-`PermanentError` now fails as permanent. A Codex pass that throws a value
-that is no `Error` now carries an `error` in its result.
-
-**The core records every `steer` step.** `ActivationState` records the
-`steer` step of each steered line, with one rule for every family. A line
-that lands between passes is `consumed: false`. A line that the view of the
-pass in flight holds is `consumed: true`. A line that lands in a pass whose
-executor has no `steer` is `consumed: false`. A line that the executor
-delivers is `consumed: true` when the executor calls `read` for its range,
-`{ after, through: seq }`, and `consumed: false` when the pass ends first.
-A `steer` that throws leaves the line `consumed: false`. A line that lands
-before the first pass waits for that pass, and then follows the same rule.
-When no first pass runs, because of a cut, a view of another seat, or a
-failed claim, the line is `consumed: false`, and its step comes before the
-`end` step. `ActivationState` has a new public method, `dropEarly`, and the
-runner calls it.
-
-The executor records no `steer` step. The `steer` member of
-`ExecutorSession` only delivers the line. The core calls it at any moment
-after it calls `pass` and before that pass settles, also before the body of
-`pass` reaches its first `await`. The executor holds a line that its harness
-cannot take yet, delivers it when the harness can, and drops what it holds
-when `pass` settles. The Pi and Claude executors lose their own stamps.
-The Claude executor now holds a line from the start of a pass until the
-pass sends its prompt, on every pass.
-
-Four steps change. A Codex seat and a scripted seat now record a `steer`
-step with `consumed: false`. Before, they recorded none. A Pi line that
-lands before the first pass is now `consumed: true` when the first view
-holds it, as a Claude line was before. A Pi line past the first view now
-joins the first prompt, and it is `consumed: true` when the first request
-holds it. Before, Pi dropped it with `consumed: false`. A Claude steer that
-finds no echo when its pass ends now records `consumed: false`. Before, it
-recorded no step. The conformance case `holds a steer for the record when
-the executor cannot steer` now requires a `steer` step with
-`consumed: false` for the line.
-
-**`HomeEnv` implements the file members of `ExecutionEnv`.**
-`@ambionframework/workspace` exports two new types: `FileOperations` and
-`FileExpect`. `FileOperations` holds one throwing storage operation for each
-file member. `FileExpect` is `'file' | 'directory' | 'any'`: what a failed
-call expected at the path. A backend that extends `HomeEnv` now supplies two
-abstract members: `files`, a `FileOperations`, and `classify`, which turns
-what an operation threw into a `FileError`. `HomeEnv` resolves the path,
-checks the abort signal, runs the operation, and classifies a throw. Before,
-each backend wrote that skeleton for every member. `readTextFile` is no
-longer abstract. `BashEnv` and `SshEnv` now supply operations and a
-classifier, and `SshEnv` overrides `renameFile` alone. No behaviour
-changes.
-
-**`bash` takes a `grace` for each call.** The new optional parameter `grace`
-is a number of seconds from 1 to 300, 10 by default. A value outside the
-range fails the call with `Invalid`. The table writes `grace` to `spec`,
-so an adopted process keeps the grace of its own call. A `spec` with no
-`grace` is no spec: a read skips it. `ProcessStatus` gains
-`grace: number`. `cancel` and `workspace.processes.cancel` wait for the end up to the grace, at most 10
-seconds, and 5 seconds more: 15 seconds at most. When the wait ends first,
-they give the status `running` with `stopping: true`, and the stop goes on.
-No stop holds the chain of its agent while it waits for the grace, so a
-later cancel or timeout of the agent does not wait for it. `dispose()` still
-waits for the full grace and 5 seconds of each process. The message of the
-workbench for a cancel that did not end now reads `did not end within the
-wait of the stop.` The workstation backend sends one signal channel at a
-time for each SSH client, so overlapping stops stay inside the 10 sessions
-of OpenSSH. No journal body changes.
-
-**`dispose()` stops the processes of one agent at the same time.** Before,
-an agent with 4 processes that ignore `SIGTERM` took about 60 seconds to
-stop. Now the processes of this run stop in about one grace and 5 seconds.
-An adopted process takes one chain step for each signal, and waits for the
-end outside the chain.
-
-**One function holds the decisions of repository registration.**
-`@ambionframework/workspace/git` exports two new names:
-`registerRepositories(steps, { templates, shared })` and the type
-`RegistrationSteps`. The function registers the templates, then the shared
-repositories, each in name order. It checks each name and each source path,
-chooses create, update, or no write, and reads each repository after a
-write. A backend supplies five storage steps: `template`, `createTemplate`,
-`updateTemplate`, `shared`, and `seedShared`. `justGitBackend` and
-`workstationGitBackend` now implement only those steps. Two behaviours of
-`justGitBackend` change. It now refuses a source path with an empty part,
-`.`, `..`, or `.git`, as `workstationGitBackend` did. Before, it stored such
-a path in the tree. It also reads each repository after its registration
-writes it, so a repository that did not land fails with its name. When an
-update step throws, the function reads the tip again. If the tip holds the
-source, another host process landed the same files, and the registration
-succeeds. Otherwise the function throws the error of the step. The
-refusal of a moved `main` in `workstationGitBackend` now reads
-`The template '<name>' did not move to its new source: git update-ref failed:
-<message>`. It is the same text as in `justGitBackend`, with the git message
-after it. The path error of a shared repository now reads
-`The shared repository '<name>' holds the path ...`.
-
-**A stop gives a process time to clean up.** `cancel`, the timeout, a
-cancel by the host, and `dispose()` now send `SIGTERM` to the process
-group, wait a grace of 10 seconds, and then send `SIGKILL`. Before, a
-stop sent `SIGKILL` at once. The wrapper of a process installs
-`trap : TERM`, so it writes `exit` when the command ends inside the grace.
-A command that traps `TERM` and exits 0 reads `exited` with code 0 after
-a cancel or a timeout. A command that the `SIGTERM` ends, with code 143,
-reads the cause of the stop. `cancel` waits up to 15 seconds, the grace
-and 5 seconds. On just-bash a stop still ends the command at once.
-`@ambionframework/workspace` exports the type `WorkspaceExecOptions`: the
-exec options with a `grace` in seconds. `WorkspaceEnv.exec` takes it. The
-workstation sends the two signals for an abort with a grace, and refuses
-a grace outside 0 to 2,147,483 seconds. `ProcessStatus` gains `stopping`,
-which is `true` while a process that the table stopped still runs. The
-workstation's command script adds `trap : TERM`. A channel that a signal
-ends now reports 128 plus the signal number: before, `ssh2`'s `SIG`
-prefix gave 128. No journal body changes.
-
-**One harness type, one `check`, and one case runner serve the conformance
-suites.** `@ambionframework/journal/conformance` exports three new parts:
-`check(condition, what)`, `ConformanceHarness<Subject>`, and
-`conformanceSuite(harness, cases)`. `ConformanceHarness<Subject>` has a
-`name` and an `open()` that returns the subject. `conformanceSuite` opens the
-subject for each case, runs the body, and disposes the subject after it.
-`@ambionframework/ambion/conformance` and
-`@ambionframework/workspace/conformance` export the same three. The harness
-type replaces four names, and each suite keeps its subject type:
-`StorageBackend` is now `ConformanceHarness<OpenedBackend>`,
-`ConformanceBackend` is now `ConformanceHarness<WorkspaceConformanceStore>`,
-`ObjectConformanceBackend` is now `ConformanceHarness<ObjectConformanceStore>`,
-and `SensorConformanceHarness` is now
-`ConformanceHarness<SensorConformanceProbe>`. A storage harness now needs a
-`name`, as the three other harnesses had. `@ambionframework/workspace/conformance`
-also exports `WorkspaceConformanceStore`, the subject of
-`workspaceConformance`. `GitConformanceBackend` extends
-`ConformanceHarness<GitConformanceStore>`. The case names and messages do not
-change.
-
-**One rule records every tool call.** `workspaceTools` passes each tool of
-the bundle through one function, `audited`, when the workspace has an audit
-log. The entry is one more operation on the bash owner after the call ends.
-Another operation can run between the call and its entry. The file tools
-`read`, `write`, and `edit` now follow this rule. Before, their entry ran
-inside the operation of the call. A call with invalid arguments now has an
-entry, as `docs/workspace.md` states. A call that ends after `dispose`
-starts has no entry, because the bash owner refuses the record. The `onError`
-of the audit log, now also a field of `AuditLog`, receives an error that
-names the tool and the call id. The tool factories drop their `audit`
-option. No journal body changes.
-
-**One shape holds each workspace capability.** `workspaceTools` builds the
-bundle from six capabilities in a fixed order: the file tools, the
-processes, the snapshots, `sql`, git, and the sensors. Each capability gives
-its tools, its guidance notes, and its reminder. The bundle merges the
-reminders, and `withSkills` uses the same merge. The tool line of the
-guidance reads the names of the tools, so it no longer keeps name lists. The
-text the model reads does not change. No export changes.
-
 **An executor family is one call.** `defineExecution(kind, build)` in
 `@ambionframework/ambion/hosting` now returns the function that gives an
 execution for a set of options, and it registers the execution with no
 options as the default of the kind. `build` takes the host and the
 options. `piExecution`, `claudeExecution`, and `codexExecution` are the
 results of that call, with unchanged signatures. `localExecution` stays for an execution that is not a
-family. `@ambionframework/claude` drops the `ClaudeExecutionOptions` alias
-and `@ambionframework/codex` drops `CodexExecutionOptions`; use
-`ClaudeRuntime` and `CodexRuntime`.
+family. `@ambionframework/claude` exports one option type,
+`ClaudeExecutionOptions`,
+and `@ambionframework/codex` exports `CodexExecutionOptions`.
 
 **A room read is the one read of pending says and waits.** `Room` drops
 `pendingFor(person)` and `scheduled()`, and the Cloudflare `RoomObject`
 drops `scheduledSays()`. Read `scheduled` from `room.read()`, and call
-`pendingFor(read, person)` on the read. Journal bodies and stored formats do
+`awaitingFor(read, person)` on the read. Journal bodies and stored formats do
 not change.
 
-**Git backends support shared repositories.** Both `justGitBackend` and
-`workstationGitBackend` accept `shared` registrations. Every workspace
-agent can push to `shared/<name>`; templates stay read-only and agent forks
-keep their owner. Registration seeds `main` once as `ambion`, then updates
-only the description without reading the source. Removing a registration
-preserves the repository and its push rights. Shared default branches
-refuse deletion and non-fast-forward pushes; other branches remain mutable.
-The git tools remain `repos`, `clone`, and `fork`, with updated guidance.
-`gitConformance` covers shared repositories; its fixture options add
-`shared` and the conformance entry exports `GitConformanceShared`.
-
-**The git registration type is renamed.** The workspace git entry replaces
-`TemplateRegistration` with `RepositoryRegistration`, exports `SHARED` and
-`writableBy`, and reserves `shared` as an agent name. There is no alias or
-migration. Journal bodies and stored schemas do not change.
-
-**The 0.5.0 sensor work keeps the eleven-package workspace.** It adds no
-separate sensors package.
-
-**Sensor connections expose host lifecycle callbacks and a disconnect tool.**
-A workspace with endpoints exposes `workspace.sensors.get`, `list`, and
-`subscribe`. Events report committed connection, refresh, disconnect, and
-process-unavailability changes. Listener failures do not undo registry changes.
-`disconnect({ name })` detaches an owned link and closes its transport without
-stopping its process; `cancel` remains responsible for acquisition lifetime.
-
-**Camera Chat runs an agent-owned camera template on macOS.** The agent can
-fork and clone the supplied template, launch it through Bash, and use standard
-`connect` and `observe`. A successful connection opens a small native-image
-preview above a Workbench-style transcript. Disconnect or process exit hides
-it. Retained observation images render inline beneath the messages that cite
-them, at the preview size. The seat runs on the Codex executor and reuses the
-Codex login of the host: it needs no API key, and startup exits with an
-instruction to run `codex login` when the host has no login. The default model
-is `gpt-5.6-luna` at medium reasoning, and `--model` selects another. The demo
-runs a script in place of Codex and exercises the same lifecycle with
-synthetic frames.
-
-**Ports-enabled workspaces can observe and retain sensor evidence.** The
-`observe({ sensor, span? })` tool reads one connected sensor, fetches and
-verifies every referenced file, and stores the full response and file refs in
-the existing snapshot object store before returning. The result includes
-measurement values and times, export paths, and a manifest snapshot ref.
-`workspace.tools({ images: false })` returns frame paths for `observe` and
-`read`. `observe` still retains frame bytes in its exports and snapshots;
-`read` leaves its source file unchanged.
-
-**A ports-enabled workspace connects running sensor servers.** The
-`connect({ name, process, port })` tool checks process ownership and
-readiness, validates the version 1 index, and registers qualified sensor
-names in memory for the host run. Equal retries refresh discovery and the
-private transport while preserving captured launch source metadata. Process
-end makes the connection unavailable, and only its owner can replace it
-with a new process.
-
-**The activation reminder shows connected sensor discovery.** It reads the
-captured index and checks process state through the existing process table.
-It names the workstation hostname, remote sensor port, handle, and qualified
-sensor names with descriptions. An ended process shows as unavailable.
-Another agent can read the discovery without seeing the owner's process
-files or the private transport URL. An explicit repeated `connect` refreshes
-discovery.
-
-**The workspace defines the sensor wire contract.**
-`@ambionframework/workspace/sensors` exports the version 1 body schemas,
-client types, and `createSensorClient(root)` for index, observe, and verified
-file reads over a private HTTP transport. The client validates wire bodies,
-preserves transport-root prefixes and measurement timestamps, propagates
-cancellation, and does not follow redirects or retry requests.
-`@ambionframework/workspace/sensor-api.schema.json` publishes the generated
-JSON Schema.
-
-**The workspace checks sensor servers.** The existing conformance entry
-exports `sensorConformance`. Its cases check server versions, declared names
-and span support, observation replies, measurement spans, and file digests.
-The Workbench lifecycle test runs the cases against the landed template.
-
-**The workstation forwards private loopback ports over SSH.** The workspace
-root exports `WorkspacePort` and `WorkspacePorts`, and `BashBackend` accepts
-the optional `ports` capability. `workstationBackend` forwards a remote
-`127.0.0.1` service port to an automatically assigned host loopback port.
-The caller closes each transport. The URL is private and temporary.
-
-**The workspace retains received sensor evidence in snapshots.** An internal
-operation stores verified file buffers and a JSON manifest through the
-existing object store. The manifest has `api: 1`, `sensor`, `process`,
-`connection`, `request`, `source`, `observations`, and `files`; each file
-records its digest and snapshot ref. The source captures launch metadata,
-including the dirty marker. Exports use generated filenames in a per-call
-directory in the observing agent's home; a complete directory appears only
-after the files and manifest are written. The manifest is a regular snapshot
-object. The snapshot and journal formats do not change, and no separate
-sensor evidence store is added.
-
-**The Workbench adds a forkable sensor-server template.** It serves
-deterministic numeric, frame, and text fixtures, captures Git source
-metadata at launch, and keeps acquisition files outside its checkout. The
-template imports the workspace schemas from a locally built and packed
-workspace package because npmjs 0.4.0 does not contain SN1. Its README
-documents its setup, customization, validation, process lifecycle, data
-retention, and rollback. The Workbench lifecycle test runs SN4 conformance
-against a fresh clone.
+**One fixture type, one `check`, and one case runner serve the conformance
+suites.** `@ambionframework/journal/conformance` exports three new parts:
+`check(condition, what)`, `ConformanceFixture<Subject>`, and
+`conformanceSuite(fixture, cases)`. `ConformanceFixture<Subject>` has a
+`name` and an `open()` that returns the subject. `conformanceSuite` opens the
+subject for each case, runs the body, and disposes the subject after it.
+`@ambionframework/ambion/conformance` and
+`@ambionframework/workspace/conformance` export the same three. The fixture
+type replaces three names, and each suite keeps its subject type:
+`StorageBackend` is now `ConformanceFixture<OpenedBackend>`,
+`ConformanceBackend` is now `ConformanceFixture<WorkspaceConformanceStore>`, and
+`ObjectConformanceBackend` is now `ConformanceFixture<ObjectConformanceStore>`.
+A storage fixture now needs a `name`, as the other fixtures had.
+`@ambionframework/workspace/conformance`
+also exports `WorkspaceConformanceStore`, the subject of
+`workspaceConformance`. `GitConformanceBackend` extends
+`ConformanceFixture<GitConformanceStore>`. The case names and messages do not
+change.
 
 ## 0.4.0 (2026-09-29)
 
@@ -1009,7 +1161,7 @@ entry. Every library package needs Node 22.19 or newer.
 ### What is simpler
 
 **A concept that had two paths has one.** The sections
-[Simplification](#simplification) and [Breaking changes](#breaking-changes)
+[Simplification](#simplification-1) and [Breaking changes](#breaking-changes-1)
 hold the detail of each.
 
 - **The room state has one derivation.** The projection that a live room
