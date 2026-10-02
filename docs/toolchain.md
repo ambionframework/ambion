@@ -85,9 +85,9 @@ The core imports no platform modules. Biome refuses `node:*`,
 filesystem code owns Node dependencies; Cloudflare code owns Durable Object
 integration.
 
-The core separates collaboration from execution. `room-host/` coordinates
+The core separates collaboration from execution. `room-run/` coordinates
 the journal and pure decisions under `room/`. Its `room.ts` holds the state
-and the phases. `core.ts` holds `RoomHostState`, the view of that state
+and the phases. `core.ts` holds `RoomRunState`, the view of that state
 that every mechanism reads, and the helpers that turn a decision into an
 entry. `people.ts`, `dispatch.ts`, `waits.ts`, and `control.ts` hold one
 mechanism each. `core.ts` imports no sibling. The executor contract lives in

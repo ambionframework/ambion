@@ -2,8 +2,8 @@
  * What every mechanism of the room host shares: the state of the room each
  * one reads, and the way a decision becomes an entry on the journal.
  *
- * `RoomHost` in `room.ts` holds all state. A mechanism module exports
- * functions that take it as `RoomHostState`.
+ * `RoomRun` in `room.ts` holds all state. A mechanism module exports
+ * functions that take it as `RoomRunState`.
  */
 
 import { AmbionError } from '../errors.ts';
@@ -33,10 +33,10 @@ import type {
 import { copyMessage } from '../types.ts';
 
 /**
- * What the mechanism files read and write of the room. `RoomHost`
+ * What the mechanism files read and write of the room. `RoomRun`
  * implements it, and every mechanism function takes it.
  */
-export interface RoomHostState {
+export interface RoomRunState {
 	readonly name: string;
 	readonly runtime: RuntimeState;
 	/** The configured execution owner for this room's seats. */
@@ -128,18 +128,18 @@ export function submit<K extends Kind>(
  * since the stop still writes its revocations and departures.
  */
 export function decideAndAppend<K extends DecidedKind>(
-	host: Pick<RoomHostState, 'journal' | 'state' | 'now' | 'gone'>,
+	run: Pick<RoomRunState, 'journal' | 'state' | 'now' | 'gone'>,
 	kind: K,
 	command: CommandFor[K],
 	options: { key?: string; whileRunning?: boolean } = {},
 ) {
 	return submit(
-		host.journal,
+		run.journal,
 		kind,
 		() =>
-			options.whileRunning === true && host.gone()
+			options.whileRunning === true && run.gone()
 				? { entry: undefined }
-				: decide<K>(host.state(), command, host.now()),
+				: decide<K>(run.state(), command, run.now()),
 		options.key,
 	);
 }
