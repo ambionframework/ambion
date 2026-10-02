@@ -95,7 +95,7 @@ export class ActivationState {
 	}
 
 	/** Whether the activation was cut. A cut activation earns no further room call. */
-	get cancelled(): boolean {
+	get isCut(): boolean {
 		return this.controller.signal.aborted;
 	}
 
@@ -107,7 +107,7 @@ export class ActivationState {
 
 	/** Whether the record stands past what the model read. A cut activation answers no. */
 	shouldRefresh(lastSeq: Seq): boolean {
-		return !this.cancelled && lastSeq > this.readThrough;
+		return !this.isCut && lastSeq > this.readThrough;
 	}
 
 	/**
@@ -115,7 +115,7 @@ export class ActivationState {
 	 * A line that lands before the first pass waits for that pass.
 	 */
 	steer(after: Seq, seq: Seq, line: string): void {
-		if (this.cancelled) return;
+		if (this.isCut) return;
 		if (this.early === undefined) this.place({ after, seq, line });
 		else this.early.push({ after, seq, line });
 	}
@@ -136,7 +136,7 @@ export class ActivationState {
 
 	/** One pass over the record. A pass that throws is a failed pass: `failedPass` sets its cause. */
 	async pass(input: PassInput): Promise<PassResult> {
-		if (this.cancelled) {
+		if (this.isCut) {
 			this.dropEarly();
 			return { failed: false };
 		}

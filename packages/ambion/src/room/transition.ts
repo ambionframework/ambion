@@ -369,11 +369,11 @@ function commit(state: RoomState, command: CommitCommand, now: number): RoomDeci
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
-		return closingCommit(state, request, live, purpose, now, bytes);
+		return summaryCommit(state, request, live, purpose, now, bytes);
 	return ordinaryCommit(state, command, live, now);
 }
 
-function closingCommit(
+function summaryCommit(
 	state: RoomState,
 	request: CommitRequest,
 	live: ActivationSpec,

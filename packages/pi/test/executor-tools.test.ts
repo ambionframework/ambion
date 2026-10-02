@@ -148,7 +148,7 @@ describe('executor tool authority', () => {
 		await expect(call(say, 'same-key', { text: '  A useful answer.  ' })).resolves.toMatchObject({
 			content: [{ text: 'said #1' }],
 		});
-		expect(activation.cancelled).toBe(false);
+		expect(activation.isCut).toBe(false);
 		expect(activation.readThrough).toBe(1);
 		expect(commits.map(({ key, intent }) => ({ key, intent }))).toEqual([
 			{ key: 'same-key', intent: { kind: 'said', text: '' } },
@@ -176,7 +176,7 @@ describe('executor tool authority', () => {
 			intent: { kind: 'said', to: 'priya', text },
 		});
 		expect(commits).toEqual([request(''), request('The exchange is complete.')]);
-		expect(activation.cancelled).toBe(false);
+		expect(activation.isCut).toBe(false);
 		expect(activation.readThrough).toBe(0);
 	});
 

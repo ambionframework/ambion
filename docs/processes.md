@@ -544,7 +544,7 @@ process to name gets no process reminder. A summarize activation calls none.
 `describeExecutor` collects the reminders of the bundles into
 `Executor.reminders`. The core runs them together when it renders
 the record of the first pass of a respond activation. The text goes in the
-turn context, before the ask line.
+context, before the ask line.
 
 ```ts
 export interface ToolBundle {

@@ -22,7 +22,7 @@ it('keeps application instructions after and alongside maintained defaults', () 
 
 	expect(assistant.name).toBe('guide');
 	expect(assistant.identity).toBe('A local guide.');
-	expect(assistant.executor.instructions).toContain("Keep the room's membership fit");
+	expect(assistant.executor.instructions).toContain("Keep the room's seating fit");
 	expect(assistant.executor.instructions).toContain('Application instructions:');
 	expect(assistant.executor.instructions).toContain('Prefer small changes.');
 });

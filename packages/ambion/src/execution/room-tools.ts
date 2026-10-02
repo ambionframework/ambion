@@ -43,7 +43,7 @@ export interface RoomToolBinding {
 }
 
 /** A summary activation: its person, everyone it addresses, and how many it has answered. */
-interface Closing {
+interface Summarizing {
 	readonly person: string;
 	readonly people: readonly string[];
 	answered: number;
@@ -99,8 +99,8 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 	return [
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
-		membershipTool(binding, 'seated'),
-		membershipTool(binding, 'unseated'),
+		seatingTool(binding, 'seated'),
+		seatingTool(binding, 'unseated'),
 		dismissTool(binding),
 		recallTool(view.context.name, binding),
 	];
@@ -179,7 +179,7 @@ function landed(binding: RoomToolBinding, response: CommitResult): BoundToolResu
 
 /**
  * What the model reads for a commit the room took: what landed, and its seq,
- * so the agent can cite its own message. A membership change the record
+ * so the agent can cite its own message. A seating change the record
  * already holds says so.
  */
 function landedLine(response: { committed: Message } | { unchanged: Unchanged }): string {
@@ -238,7 +238,7 @@ function scheduledBy(seat: string, args: ScheduleArgs): Intent {
 }
 
 /** The tool that speaks for a respond activation or publishes its close. */
-function sayTool(binding: RoomToolBinding, closing?: Closing): BoundTool {
+function sayTool(binding: RoomToolBinding, closing?: Summarizing): BoundTool {
 	return {
 		name: SAY.name,
 		description:
@@ -254,7 +254,7 @@ async function say(
 	binding: RoomToolBinding,
 	args: SayArgs,
 	call: string,
-	closing: Closing | undefined,
+	closing: Summarizing | undefined,
 ): Promise<BoundToolResult> {
 	const response = await binding.room.commit({
 		activation: binding.id,
@@ -270,7 +270,7 @@ function sayResult(
 	binding: RoomToolBinding,
 	call: string,
 	response: CommitResult,
-	closing: Closing | undefined,
+	closing: Summarizing | undefined,
 ): BoundToolResult {
 	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
 	if ('committed' in response) accepted(binding, response.committed, closing);
@@ -326,7 +326,11 @@ function scheduleResult(
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */
-function accepted(binding: RoomToolBinding, message: Message, closing: Closing | undefined): void {
+function accepted(
+	binding: RoomToolBinding,
+	message: Message,
+	closing: Summarizing | undefined,
+): void {
 	if (closing !== undefined) {
 		closing.answered += 1;
 	} else if (message.kind === 'said') {
@@ -339,7 +343,7 @@ function missedSay(
 	binding: RoomToolBinding,
 	call: string,
 	missed: readonly Message[],
-	closing: Closing | undefined,
+	closing: Summarizing | undefined,
 ): BoundToolResult {
 	if (closing === undefined) {
 		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
@@ -355,7 +359,7 @@ function missedSay(
 }
 
 /** The tool that seats or removes one agent. */
-function membershipTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): BoundTool {
+function seatingTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): BoundTool {
 	const spec = kind === 'seated' ? SEAT : UNSEAT;
 	return {
 		name: spec.name,
