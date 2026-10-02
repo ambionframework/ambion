@@ -7,6 +7,7 @@
  * the host home shows it.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
 	chmodSync,
 	existsSync,
@@ -241,21 +242,22 @@ export async function codexOn(
 			await proxy.close();
 			// The close of the app-server sends a signal and returns. The binary can still write to
 			// its home as it exits, so wait for it, stop one that remains, and then remove the files.
-			if (process.platform === 'linux') await gone(home);
+			if (seesProcesses) await gone(home);
 			rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 		},
 	};
 }
 
-/** The processes that run with `home` as their `CODEX_HOME`: the app-server of a seat. Linux only. */
-export function runningWith(home: string): number[] {
+/** Whether `runningWith` can see the environment of a process. Linux reads /proc. macOS reads `ps -E`. */
+export const seesProcesses = process.platform === 'linux' || process.platform === 'darwin';
+
+/** The pids on Linux whose environment holds `entry`. */
+function procsWith(entry: string): number[] {
 	return readdirSync('/proc')
 		.filter((name) => /^\d+$/.test(name))
 		.filter((pid) => {
 			try {
-				return readFileSync(`/proc/${pid}/environ`, 'utf8')
-					.split('\0')
-					.includes(`CODEX_HOME=${home}`);
+				return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').includes(entry);
 			} catch {
 				return false;
 			}
@@ -263,7 +265,27 @@ export function runningWith(home: string): number[] {
 		.map(Number);
 }
 
-/** Wait until no process runs with `home`. A process that remains after the deadline is killed. Linux only. */
+/** The pids on macOS whose `ps -E` line holds `entry` as a whole word. A binary under SIP shows no environment. */
+function psWith(entry: string): number[] {
+	const lines = execFileSync('ps', ['-Eww', '-x', '-o', 'pid=,command='], { encoding: 'utf8' });
+	return lines
+		.split('\n')
+		.filter((line) => line.split(/\s+/).includes(entry))
+		.map((line) => Number(line.trim().split(/\s+/)[0]));
+}
+
+/**
+ * The processes that run with `home` as their `CODEX_HOME`: the app-server of a seat. It returns
+ * nothing on a platform that `seesProcesses` excludes.
+ */
+export function runningWith(home: string): number[] {
+	const entry = `CODEX_HOME=${home}`;
+	if (process.platform === 'linux') return procsWith(entry);
+	if (process.platform === 'darwin') return psWith(entry);
+	return [];
+}
+
+/** Wait until no process runs with `home`. A process that remains after the deadline is killed. */
 async function gone(home: string, deadlineMs = 5_000): Promise<void> {
 	const end = Date.now() + deadlineMs;
 	while (runningWith(home).length > 0 && Date.now() < end) await sleep(50);
