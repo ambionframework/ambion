@@ -415,7 +415,7 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing/*",
