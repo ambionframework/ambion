@@ -12,7 +12,7 @@
 import { parseSnapshotUri, type ToolContext } from '@ambionframework/ambion';
 import {
 	openWorkspace,
-	type ProcessRecord,
+	type Process,
 	type Workspace,
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
@@ -307,7 +307,7 @@ async function call(workspace: Workspace, name: string, params: unknown) {
 	const result = await tool.invoke(params, context(OWNER));
 	if (typeof result === 'string') throw new Error('A process tool gives a structured result.');
 	const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-	const details = result.details as { process?: ProcessRecord; processes?: ProcessRecord[] };
+	const details = result.details as { process?: Process; processes?: Process[] };
 	return { process: details.process, processes: details.processes ?? [], text };
 }
 

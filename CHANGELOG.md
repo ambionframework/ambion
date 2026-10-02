@@ -15,8 +15,8 @@ and `ShellOutputView` drop `spillPath` and `lastLineBytes`, and `capture`
 drops `spill`. These exports change on the root entry of the workspace:
 
 - Removed: `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and `tempFilePath`.
-- Added values: `ok`, `err`, `FileError`, and `ExecutionError`.
-- Added types: `Result`, `FileResult`, `FileErrorCode`, `ExecutionErrorCode`,
+- Added values: `ok`, `err`, `FileError`, and `ShellError`.
+- Added types: `Result`, `FileResult`, `FileErrorCode`, `ShellErrorCode`,
   `FileInfo`, `ShellExecResult`, `ShellOutputLimits`, `ShellOutputTruncation`,
   and `ShellOutputView`.
 - Changed: `WorkspaceExecOptions` is declared in full and no longer extends a
@@ -84,7 +84,7 @@ The exported names change as follows.
 | Executor packages       | `ClaudeRuntime`, `CodexRuntime`, `ClaudeHarnessOptions`, Pi testing `scripted`, Claude `FakeScenario.turns`                      | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `ClaudeFixtureOptions`, `scriptedStream`, `passes`       |
 | Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
-| Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `ProcessRecord`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
+| Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
 
