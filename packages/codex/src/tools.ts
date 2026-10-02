@@ -11,7 +11,7 @@
  * was delivered: a `missed` answer carries the missed lines to the model in
  * the same result.
  */
-import type { ExecutorActivation, RoomTool } from '@ambionframework/ambion/hosting';
+import type { BoundTool, ExecutorActivation } from '@ambionframework/ambion/hosting';
 import type { TSchema } from 'typebox';
 import type { Result, ToolSpec } from './wire.ts';
 
@@ -30,7 +30,7 @@ function schemaOf(schema: TSchema): Record<string, unknown> {
 }
 
 /** A tool the bridge serves, from a tool the core bound. Each call takes the id the stream named for it. */
-function served(one: RoomTool, host: Host): CodexTool {
+function served(one: BoundTool, host: Host): CodexTool {
 	return {
 		spec: { name: one.name, description: one.description, inputSchema: schemaOf(one.parameters) },
 		run: async (args) => {
@@ -46,6 +46,6 @@ function served(one: RoomTool, host: Host): CodexTool {
 }
 
 /** The tools the bridge serves for one activation. */
-export function servedTools(tools: readonly RoomTool[], host: Host): CodexTool[] {
+export function servedTools(tools: readonly BoundTool[], host: Host): CodexTool[] {
 	return tools.map((one) => served(one, host));
 }

@@ -27,11 +27,11 @@ import {
 	DEFAULT_TIMEOUT_SECONDS,
 	type Deadline,
 	deliverView,
-	ExecutionError,
 	err,
 	MAX_TIMER_SECONDS,
 	ok,
 	type Result,
+	ShellError,
 	type ShellExecResult,
 	type WorkspaceExecOptions,
 	withDeadline,
@@ -290,10 +290,10 @@ function stopWhenAborted(
 }
 
 /** A grace that no timer can hold. */
-function invalidGrace(grace: number | undefined): ExecutionError | undefined {
+function invalidGrace(grace: number | undefined): ShellError | undefined {
 	if (grace === undefined) return undefined;
 	if (!Number.isFinite(grace) || grace < 0 || grace > MAX_TIMER_SECONDS) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Invalid grace: must be 0 to ${MAX_TIMER_SECONDS} seconds`,
 		);
@@ -302,16 +302,13 @@ function invalidGrace(grace: number | undefined): ExecutionError | undefined {
 }
 
 /** A timeout that no timer can hold, is refused. */
-function invalidTimeout(timeout: number | undefined): ExecutionError | undefined {
+function invalidTimeout(timeout: number | undefined): ShellError | undefined {
 	if (timeout === undefined) return undefined;
 	if (!Number.isFinite(timeout) || timeout <= 0) {
-		return new ExecutionError('timeout', 'Invalid timeout: must be a finite number of seconds');
+		return new ShellError('timeout', 'Invalid timeout: must be a finite number of seconds');
 	}
 	if (timeout > MAX_TIMER_SECONDS) {
-		return new ExecutionError(
-			'timeout',
-			`Invalid timeout: maximum is ${MAX_TIMER_SECONDS} seconds`,
-		);
+		return new ShellError('timeout', `Invalid timeout: maximum is ${MAX_TIMER_SECONDS} seconds`);
 	}
 	return undefined;
 }
@@ -320,13 +317,13 @@ function invalidTimeout(timeout: number | undefined): ExecutionError | undefined
 async function refusal(host: CommandHost, cwd: string, options: WorkspaceExecOptions | undefined) {
 	const invalid = invalidNames(options?.env);
 	if (invalid.length > 0) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Invalid environment variable names: ${invalid.join(', ')}`,
 		);
 	}
 	if (!(await host.isDirectory(cwd))) {
-		return new ExecutionError(
+		return new ShellError(
 			'spawn_error',
 			`Working directory does not exist: ${cwd}\nCannot execute bash commands.`,
 		);
@@ -358,22 +355,22 @@ async function run(
 function settled(
 	ran: Awaited<ReturnType<typeof run>>,
 	options: WorkspaceExecOptions | undefined,
-): Result<ShellExecResult, ExecutionError> {
+): Result<ShellExecResult, ShellError> {
 	if (!ran.ending.exited) {
-		return err(new ExecutionError('unknown', 'The channel closed before the command ended.'));
+		return err(new ShellError('unknown', 'The channel closed before the command ended.'));
 	}
 	const exitCode = exitCodeOf(ran.ending.code, ran.ending.signal);
 	return ok(deliverView(ran.output.view(), exitCode, options));
 }
 
-/** Run `command` in `cwd` on the workstation under its deadline, and turn what it throws into an `ExecutionError`. */
+/** Run `command` in `cwd` on the workstation under its deadline, and turn what it throws into an `ShellError`. */
 export async function runCommand(
 	host: CommandHost,
 	command: string,
 	cwd: string,
 	options: WorkspaceExecOptions | undefined,
 	signal?: AbortSignal,
-): Promise<Result<ShellExecResult, ExecutionError>> {
+): Promise<Result<ShellExecResult, ShellError>> {
 	const invalid = invalidTimeout(options?.timeout) ?? invalidGrace(options?.grace);
 	if (invalid) return err(invalid);
 	const timeout = options?.timeout ?? DEFAULT_TIMEOUT_SECONDS;

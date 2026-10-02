@@ -29,9 +29,9 @@ import {
 	type WorkspaceLayout,
 } from '@ambionframework/workspace';
 import type { WorkspaceAgent } from '@ambionframework/workspace/resource';
+import { forwardWorkspaceEndpoint } from './endpoints.ts';
 import { writeGitFiles } from './git-agent.ts';
 import type { WorkstationGitBackend } from './git-backend.ts';
-import { forwardWorkspaceEndpoint } from './ports.ts';
 import { Session, type WorkstationCredential } from './session.ts';
 import { SshEnv } from './ssh-env.ts';
 

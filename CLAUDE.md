@@ -18,7 +18,7 @@ newer. `examples/workbench` needs Node 26.4 or newer, the OpenTUI floor.
 - `packages/assistant`: the default assistant definition. Membership guidance
   and closing summaries over the core.
 - `packages/simulator`: evals. `simulate()` drives a room as a person and
-  returns the run that checks read.
+  returns the simulation that checks read.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
