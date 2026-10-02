@@ -6,7 +6,7 @@
 > into the observing agent's home. The version 1 schemas and client are
 > available from `@ambionframework/workspace/sensors`, and the conformance
 > runner is available from `@ambionframework/workspace/conformance`. See the
-> [release plan](../planning/next.md) for scope and acceptance evidence.
+> [backlog](../planning/backlog.md#for-sensors) for the capabilities that remain.
 
 **A forked Git repository defines a sensor server.** The agent customizes
 its acquisition and reduction code, validates it, and saves working

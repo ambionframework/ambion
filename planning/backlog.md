@@ -1,21 +1,23 @@
 # Backlog
 
-Everything that is not in [next.md](next.md) or [0.6.0.md](0.6.0.md).
-Each item names the condition that brings it into a release. Nothing here
-blocks a release until the item moves to one of those files.
+Everything that is not in [next.md](next.md). Each item names the
+condition that brings it into a release. Nothing here blocks a release
+until the item moves to that file.
 
 **The sections come in the order of their priority.** Known defects come
-first, then the release and CI, then the rules and proofs, then
-the designs. Inside a section, the first item comes first. An item whose
-condition holds moves to the top of its section.
+first, then the release and CI, then the rules and proofs, then the
+simplification findings, then the designs. Inside a section, the first
+item comes first. An item whose condition holds moves to the top of its
+section.
 
-| Section                                       | Items  | First item                               |
-| --------------------------------------------- | ------ | ---------------------------------------- |
-| [Known defects](#known-defects)               | K1–K5  | K2, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | L3, R1 | L3, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1–P6  | P1, `returnable` into the verified rules |
-| [Designs with a shape](#designs-with-a-shape) | D1–D24 | D1, exchange bounds                      |
-| [Deferred by decision](#deferred-by-decision) | None   | None                                     |
+| Section                                       | Items                              | First item                               |
+| --------------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| [Known defects](#known-defects)               | K1–K5                              | K2, the allow-list of the SQL guard      |
+| [Release and CI](#release-and-ci)             | L3, R1                             | L3, a billing failure reads as one       |
+| [Rules and proofs](#rules-and-proofs)         | P1–P6                              | P1, `returnable` into the verified rules |
+| [Simplification](#simplification)             | K9–K18, X1, W8, W10, C2, DOC1–DOC4 | K9, the `assistant` option               |
+| [Designs with a shape](#designs-with-a-shape) | D1–D25                             | D1, exchange bounds                      |
+| [Deferred by decision](#deferred-by-decision) | None                               | None                                     |
 
 ## Known defects
 
@@ -107,6 +109,73 @@ them would have caught.
 | P5   | `seatLive`            | The seats that are live now, as a rule beside `exchangeLive`                                      |
 | P6   | `storedIdAccepted`    | The kinds on which `validate.ts` reads an activation id; a refusal on others is a schema change   |
 
+## Simplification
+
+**This section lists the concepts that the repository holds twice.** A
+concept goes when another concept already carries its meaning. The rank is
+the concepts removed times the confidence (high 3, medium 2, low 1).
+Twenty-six reductions have landed. The changelog and the git history
+record them.
+
+**K8 and W5 moved to [next.md](next.md).** The rows below are open on
+`main` as of 2026-10-02. The K IDs from K9 are rows of this table. K1 to K5
+belong to the known defects.
+
+| ID  | Finding                                                          | Evidence                                                                                                                                                                                         | Rank |
+| --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| K9  | The `assistant` option restates `agents`, `seats`, and `summary` | `normalizeAssistant` in `room.ts`; the package is about 70 lines over `pi()`. The owner decides (next.md)                                                                                        | 4    |
+| K11 | Three state shapes hold the fold                                 | `RoomState`, `RoomProjection`, `BaseFacts`; `applyEvent` has two callers                                                                                                                         | 2    |
+| K12 | The wakes and the owed summaries are two parallel indexes        | `wakes.ts`, `owed.ts`, `seatLeases`, `closedLeases`; the rules differ                                                                                                                            | 3    |
+| K13 | The journal keeps a `seq` beside a dense storage position        | `nextSeq`, `advanceSeq`, `scanned` in `rules.verified.ts`. The owner decides (next.md)                                                                                                           | 4    |
+| K14 | The journal package generics have one consumer                   | Outside the core, only the storage names are imported. The owner decides (next.md)                                                                                                               | 4    |
+| K15 | The roster has two stored sources                                | This is D7. The row stays as a pointer                                                                                                                                                           | 2    |
+| K17 | Five names describe one exchange                                 | `Exchange`, `ExchangeRef`, `ExchangeRange`, `ExchangeRead`, `ExchangeHandle`                                                                                                                     | 4    |
+| K18 | Three shapes describe one trace sink                             | `TraceSink`, `StepSink`, `TraceOpener` in `trace.ts`                                                                                                                                             | 2    |
+| X1  | One name rule is written fourteen times                          | Core: `NAME_PATTERN`, `SEAT`. Workspace: nine literals in seven sensor files, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 12   |
+| W8  | The backends label themselves under three names                  | `server`, `hostname`, `database`                                                                                                                                                                 | 4    |
+| W10 | `ProcessKind` has one value                                      | `process-files.ts`. D5 holds the question                                                                                                                                                        | 2    |
+| C2  | `RoomObject` forwards three methods of the exchange handle       | `room-object.ts`                                                                                                                                                                                 | 2    |
+
+**The documentation holds four findings.** They carry the IDs DOC1 to
+DOC4, so they do not collide with the designs.
+
+| ID   | Finding                                                                | Evidence                                                                   |
+| ---- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| DOC1 | About eight paragraphs repeat across pages                             | Shared option rows and troubleshooting in `pi.md`, `claude.md`, `codex.md` |
+| DOC2 | `resources.md` overlaps `workspace.md`                                 | `resources.md` says "two bindings"; seven backend factories exist          |
+| DOC3 | "Envelope" has three meanings                                          | `envelope.md`, `durability.md`, `formal.md`                                |
+| DOC4 | `durability.md` and `deployment.md` both describe leases and reconnect | The two pages each state the lease, alarm, and SQLite rules                |
+
+**The deepest kernel option is a close as a message.** A close that
+routes to the summary writer makes the summary an ordinary respond
+activation. The `closed` activation source, `owed.ts`, `closedLeases`,
+`closeFor`, and the second purpose then go. The verified rules, the golden
+journals, and the authority of a summary change with it. **Condition:** a
+second reason for it appears.
+
+**Considered and kept.** Each of these looks like a duplicate and carries
+a meaning of its own. A later review does not propose them again.
+
+- **W7.** Two owners close the sensor connections. The close in `dispose`
+  stops pending connects at once. The close in `withProcesses` waits for
+  the processes.
+- **S1.** The simulator keeps `deadlineSignal`, and the workbench keeps its
+  usage formatter. A test pins the reason of the timeout.
+- **`pi()` and `piExecution()`.** One definition runs on different
+  executions.
+- **The unions that `rules.verified.ts` declares again.** LemmaScript
+  lowers only the types of its own file.
+- **`startRoom` and `resumeRoom`.** A start writes a composition, and a
+  resume keeps the recorded one.
+- **`visit.send` and `room.post`.** A send has an author, and a post is a
+  message of the system.
+- **`sqlite.ts` and `sqlite-guard.ts`.** They are one concept in two files.
+- **The port suite and the executor suite.** Cloudflare runs the port
+  suite.
+- **`localExecution`.** A host needs one execution of a kind that is not a
+  family.
+- **The scripts in `scripts/`.** Each holds one concern.
+
 ## Designs with a shape
 
 **Rooms that run unattended come first.** A room that stays available
@@ -116,9 +185,8 @@ for scale.
 
 ### For rooms that run unattended
 
-**D1. Exchange limits, spend, and quotas.** These are outside the
-initial sensor implementation. The former SK1 proposal did not define
-its accounting or admission contract. A future design must state what
+**D1. Exchange limits, spend, and quotas.** The former SK1 proposal did
+not define its accounting or admission contract. A design must state what
 it bounds, how concurrent work counts, and what happens at the boundary.
 **Condition:** an application requires a kernel-enforced work bound.
 
@@ -152,30 +220,18 @@ runs of the host over one account adopt the same processes.
 **Condition:** a process that must stop with its exchange, or a second
 kind of work that outlives its call.
 
-**D6. Three process changes from a comparison with Codex unified exec.**
+**D6. Two process changes from a comparison with Codex unified exec.**
 Codex gives a model `exec_command` and `write_stdin` over a PTY, with
-sessions in memory. Three of its mechanisms fit the process table and keep
-the five tools.
+sessions in memory. Two of its mechanisms fit the process table and keep
+the five tools. The graceful cancel is implemented
+([Processes](../docs/processes.md#the-cancel)).
 
 1. **An interactive kind of process.** A `pty-<random>` handle runs its
    command on a PTY, and an `input` tool writes to it, Ctrl-C included.
    The workstation gives the PTY. just-bash has none, so it refuses the
    kind. Today stdin is `/dev/null`, so a command that prompts waits until
    its timeout.
-2. **A graceful cancel.** Implemented: `cancel`, the timeout, a cancel by
-   the host, and `dispose()` send `SIGTERM` to the group, and `SIGKILL`
-   after a grace of 10 seconds. The grace goes to the backend in the
-   options of `exec`. [Processes](../docs/processes.md#the-cancel) states
-   the contract. Implemented: `dispose()` aborts the processes of this run
-   of one agent at once and waits for them together, so 4 processes that
-   ignore `TERM` take about 15 seconds. Implemented: a grace for each call.
-   `bash` takes `grace`, 1 to 300 seconds, and `cancel` waits at most 15
-   seconds ([Processes](../docs/processes.md#the-cancel)). No stop holds the
-   chain of its agent for the grace, and the workstation opens one signal
-   channel at a time for each client
-   ([Workstation](../docs/workstation.md#the-ssh-client)). D24 builds on
-   this stop.
-3. **The head and the tail in a result.** The result shows the first
+2. **The head and the tail in a result.** The result shows the first
    lines of the output beside the last ones. The first lines often hold
    the error that the last lines report.
 
@@ -192,18 +248,14 @@ seating that a seat made.
 
 **D22. A bound on a chain of scheduled says.** A returned say can lead
 to another scheduled say. Existing schedule limits bound one delay and
-the pending count, not the full chain. This is outside 0.5.0.
+the pending count, not the full chain.
 **Condition:** an application needs a finite chain enforced by the room.
 
-**D23. Shared git repositories.** Implemented: both backends accept
-create-once `shared` registrations, and every workspace agent can push.
-Only the shared default branch refuses deletion and non-fast-forward
-updates. [Git](../docs/git.md#shared-repositories) states the contract.
-**Condition:** an application needs several agents to write one repository;
-Workbench team notes meet it. The [live acceptance evidence](shared-git-live.json)
-records the rejected push, rebase, and retry on Luna with high reasoning.
-Push notifications, activation reminders,
-per-seat grants, and per-room repositories remain outside this change.
+**D23. More of the shared git repositories.** Shared repositories are
+implemented ([Git](../docs/git.md#shared-repositories)). Four parts remain
+open: push notifications, activation reminders, per-seat grants, and
+per-room repositories. **Condition:** an application whose agents write one
+repository and miss a push of another agent, or need a grant for one seat.
 
 ### For labs at scale
 
@@ -265,7 +317,7 @@ snapshot of a folder, a file at a commit, and the result of a SQL query
 have no ref of their own. A message names them in its text. The kernel
 owns each form, and a resource makes the thing it names.
 
-Sensor evidence in 0.5.0 uses existing snapshot refs. **Condition:** an
+Sensor evidence uses existing snapshot refs. **Condition:** an
 agent needs a reference whose meaning an existing snapshot cannot carry.
 
 **D15. Objects past 5 GiB, and a stream through the ports.** One object is
@@ -331,41 +383,51 @@ turns to the failure.
 
 ### For sensors
 
-**D21. Sensor capabilities after the functional core.** 0.5.0 uses Git
-templates for the fork, customize, validate, save, run, and rollback
-lifecycle. Connected processes supply observations retained as snapshots. [Sensors](../docs/sensors.md) is the current contract.
-The previous broad daemon design is superseded by that boundary.
+**D21. Sensor capabilities after the functional core.** The sensor
+contract uses Git templates for the fork, customize, validate, save, run,
+and rollback lifecycle. Connected processes supply observations that the
+workspace retains as snapshots. [Sensors](../docs/sensors.md) is the
+current contract. The items below extend it.
 
-- **A framework server and SDK.** The old SN9-SN25 daemon work belongs
-  here only if several server repositories need a shared implementation.
-  Reducer state remains internal to those implementations. Instrument
-  drivers, SCPI, serial helpers, ffmpeg, annotation, and model captions
-  require no framework commitment in 0.5.0.
-- **Automatic event delivery.** SN26 and SN28 become an optional host
-  integration. A later design must define delivery, cursor recovery, and
-  policy changes. Host time governs host interaction. Measurement times
-  remain the source of truth. Existing `room.post` needs no change.
+- **A framework server and SDK.** A shared implementation is useful only
+  if several server repositories need one. Reducer state remains internal
+  to those implementations. Instrument drivers, SCPI, serial helpers,
+  ffmpeg, annotation, and model captions require no framework commitment.
+- **Automatic event delivery.** An optional host integration. A design must
+  define delivery, cursor recovery, and policy changes. Host time governs
+  host interaction. Measurement times remain the source of truth. Existing
+  `room.post` needs no change.
 - **Additional sensor views.** Live streams, clips, audio playback, browser
   views, CORS, public endpoints, and public tunnels require an application
-  that needs them. They add no required API or client code to 0.5.0.
+  that needs them. They add no required API or client code.
 - **Service automation.** Persistent connections, automatic restart,
   upgrades, external URL connections, and hot-plug discovery wait for
   experience with explicit process management and `connect`.
-- **Additional scenarios.** SN29 and the old multi-instrument bench
-  become use cases for server repositories. The initial release has one
-  small workstation example. SN30's paid live case is optional evidence.
+- **Additional scenarios.** A multi-instrument bench is a use case for a
+  server repository. The template has one small workstation example, and a
+  paid live case is optional evidence.
 - **Advanced reads.** Pagination, re-reduction controls, multi-sensor
   requests, and configurable rendering wait for a caller that needs them.
-  Initial span reads use the same `observe` operation as latest reads.
+  Span reads use the same `observe` operation as latest reads.
+- **Camera Chat toward a real camera.** The realism review of the example
+  found five changes.
+  - Detection moves into the sensor server, which emits typed events
+    through a ring that supports spans.
+  - A host policy reads those events and calls `room.post`.
+  - JPEG and a smaller model copy cut the bytes about ten times.
+  - Capture timestamps come from the ffmpeg PTS with a frame counter. Today
+    the `at` of a frame is the time that Node received it.
+  - Retention needs a TTL for snapshots and rollouts.
 
-**Superseded items add no future obligation.** SN2's full scripted daemon
-is replaced by a small conformance fixture. SN7's separate history export
-is replaced by span reads and snapshots. SK2's sensor URI forms are
-replaced by existing snapshot refs. SN32-SN35 cover workstation ports,
-connections, automatic retention, and lifecycle acceptance in the plan.
+  **Condition:** an application that must watch the scene and react to
+  events. A question such as "what do you see now" needs none of this.
 
-**Condition:** the core workflow has shipped, and an application needs
-one of these capabilities. No order between these items is promised.
+- **Camera Chat demo off macOS.** `main.ts` refuses `--demo` on a platform
+  other than macOS, though the demo needs nothing from macOS. Gate only the
+  live path. This item is optional.
+
+**Condition:** an application needs one of these capabilities. No order
+between these items is promised.
 
 ### For actuators
 

@@ -36,9 +36,8 @@ newer, the OpenTUI floor.
 - `examples/workbench`: rooms and an OpenTUI terminal in one process.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   sensor and a preview.
-- `planning/`: `next.md` is the 0.5.0 scope and plan, `0.6.0.md` is the next
-  release, `simplification.md` is the concepts that the repository holds twice,
-  `backlog.md` is everything else.
+- `planning/`: `next.md` is the 0.6.0 scope and plan, and `backlog.md` is
+  everything else, the open simplification findings included.
 
 ## Read before you change
 
