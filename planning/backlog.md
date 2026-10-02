@@ -16,7 +16,7 @@ section.
 | [Known defects](#known-defects)               | K1–K5                               | K2, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | L3, R1                              | L3, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1–P6                               | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | K10–K18, X1, W8, W10, C2, DOC1–DOC4 | K10, the summary close                   |
+| [Simplification](#simplification)             | K10–K27, X1, W8, W10, C2, DOC1–DOC4 | K10, the summary close                   |
 | [Designs with a shape](#designs-with-a-shape) | D1–D25                              | D1, exchange bounds                      |
 | [Deferred by decision](#deferred-by-decision) | None                                | None                                     |
 
@@ -170,12 +170,49 @@ DOC4, so they do not collide with the designs.
 | DOC3 | "Envelope" has three meanings                                          | `envelope.md`, `durability.md`, `formal.md`                                |
 | DOC4 | `durability.md` and `deployment.md` both describe leases and reconnect | The two pages each state the lease, alarm, and SQLite rules                |
 
+**A review of conceptual integrity on 2026-10-02 adds nine rows.** Opus
+and Fable read `main` at df2aad8 and asked of each concept what breaks
+without it. The core holds: the journal and its fence, the derived
+activation ids, `readThrough` freshness, the exchange, and the pass
+contract. The rows below sit at the edges of that core. None is in
+0.6.0. The owner revisits them after the release.
+
+| ID  | Finding                                                            | Evidence                                                                                                                                                                           | Rank |
+| --- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| K19 | The close rule is written three times                              | `reconcile.ts` plans it with `admitsClose`, `transition.ts` checks it again, and `room-run/control.ts` writes its complement. `decide` can return written, not owed, or plan again | 6    |
+| K20 | The room records who a message wakes and infers who it steers      | `wakes` is on the body. `steers` comes from the leases at fold time, through a test of seven conditions in `room/delivery.ts`. Record `steers` beside `wakes`                      | 2    |
+| K21 | Due work is three lists                                            | `wakes`, `owed`, and `scheduled` in `room/projection.ts`, each with its own rule. The activation id already names every item. K12 holds two of the three                           | 4    |
+| K22 | The publication tail keeps caches because it lacks the prior state | `heardLeases`, `heardCloses`, and `seedHeard` in `room-run/`. A step that hands the hearer the state before the entry derives both                                                 | 6    |
+| K23 | The view has two windows that count a summary differently          | `capOf` counts raw messages and `tokensOf` counts rendered blocks, in `room/view.ts`. One walk over the blocks, or drop `limits.context.messages`                                  | 4    |
+| K24 | One in-doubt append is written four times                          | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                  | 6    |
+| K25 | A package import sets the default execution of its kind            | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                         | 6    |
+| K26 | A scheduled say is a flag on `said`, and a dismissal is a message  | `delaySeconds` on `said` and the `dismissed` kind, which every message reader excludes. One `scheduled` entry with an optional `from` also serves D3                               | 4    |
+| K27 | Sensors fail the test that the actuator page states                | `connect`, `disconnect`, `observe`, and a versioned wire API, about 2,100 lines of `packages/workspace`. `curl` and `snapshot` give the same bytes. A product decision             | 8    |
+
+**K19, K22, and K24 change nothing that a host sees.** They stay inside
+`room-run/` and `reconcile`, and one change can carry all three. K20,
+K23, and K25 each change one contract: a body field, a limit, or the
+quickstart. K21 and K26 reshape the kernel, with the close as a message
+below.
+
 **The deepest kernel option is a close as a message.** A close that
 routes to the summary writer makes the summary an ordinary respond
 activation. The `closed` activation source, `owed.ts`, `closedLeases`,
-`closeFor`, and the second purpose then go. The verified rules, the golden
-journals, and the authority of a summary change with it. **Condition:** a
-second reason for it appears.
+`closeFor`, and `summaryWriter` on the close then go, and K9 goes with
+them. The review of 2026-10-02 prices it higher than this row did:
+
+- **The purpose moves into a rule.** A summary reads to its close, reads
+  the preferences of the person, and writes one summary for each person.
+  These become rules on the kind of the message that woke the writer.
+- **A close must not wake the writer in a loop.** A close routes to the
+  writer only when a person spoke in its range, as `summaryVerdict` says
+  today.
+- **The tools still branch.** A summary `say` drops `readThrough`, holds no
+  agent tools, and ends after the last recipient.
+- **`fixed` stays** unless a close can reach a writer that has no seat.
+
+**Condition:** the second step of D2, a seat that writes a summary over
+its own range, is scheduled. The change then takes K21 and K26 with it.
 
 **Considered and kept.** Each of these looks like a duplicate and carries
 a meaning of its own. A later review does not propose them again.
@@ -203,6 +240,14 @@ a meaning of its own. A later review does not propose them again.
 - **`localExecution`.** A host needs one execution of a kind that is not a
   family.
 - **The scripts in `scripts/`.** Each holds one concern.
+- **Presence and the roster.** Two folds of a like shape carry two
+  meanings. A person opens an exchange and receives a summary, and a seat
+  does neither.
+- **The journal package.** Its proofs read no meaning of the room, and
+  SQLite and Durable Objects satisfy its port.
+- **The `compose` tool in the core.** It uses what the core owns: the
+  signal, the deadline, the `parent` step, `callId`, and `ToolContext`. A
+  separate package would import all of them.
 
 ## Designs with a shape
 
