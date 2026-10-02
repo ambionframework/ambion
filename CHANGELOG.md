@@ -64,12 +64,12 @@ library package needs Node 22.19 or newer.
 
 #### Sensors
 
-**The 0.5.0 sensor work keeps the eleven-package workspace.** It adds no
-separate sensors package.
-
 **Sensor connections expose host lifecycle callbacks and a disconnect tool.**
 A workspace with endpoints exposes `workspace.sensors.get`, `list`, and
-`subscribe`. Events report committed connection, refresh, disconnect, and
+`subscribe`. The workspace root exports the types `SensorDiscovery`,
+`RegisteredSensorConnection`, and `SensorConnectionEvent`. An event has the
+`type` `connected`, `refreshed`, `disconnected`, or `unavailable`. Events
+report committed connection, refresh, disconnect, and
 process-unavailability changes. Listener failures do not undo registry changes.
 `disconnect({ name })` detaches an owned link and closes its transport without
 stopping its process; `cancel` remains responsible for acquisition lifetime.
@@ -92,8 +92,14 @@ verifies every referenced file, and stores the full response and file refs in
 the existing snapshot object store before returning. The result includes
 measurement values and times, export paths, and a manifest snapshot ref.
 `observe` retains frame bytes in its exports and snapshots, and each result
-states the path of a frame in text. The option `images` is removed; see
-[The workspace](#the-workspace).
+states the path of a frame in text.
+
+**Every workspace tool bundle carries image parts.** Every executor kind
+carries image parts, so a workspace has one tool bundle. `observe` returns
+each frame as an image part, and `read` of an image returns the image part.
+Each result also states the path of the image in text: the export path in
+`observe`, and `Image path: <path>` in `read`. A model that cannot read
+images still learns where the file is.
 
 **A workspace with endpoints connects running sensor servers.** The
 `connect({ name, process, port })` tool checks process ownership and
@@ -128,8 +134,7 @@ The Workbench lifecycle test runs the cases against the landed template.
 **The workstation forwards private loopback ports over SSH.** The workspace
 root exports `WorkspaceEndpoint` and `WorkspaceEndpoints`, and `BashBackend`
 accepts the optional `endpoints` capability. `workstationBackend` forwards a
-remote
-`127.0.0.1` service port to an automatically assigned host loopback port.
+remote `127.0.0.1` service port to an automatically assigned host loopback port.
 The caller closes each transport. The URL is private and temporary.
 
 **The workspace retains received sensor evidence in snapshots.** An internal
@@ -149,8 +154,8 @@ metadata at launch, and keeps acquisition files outside its checkout. The
 template imports the workspace schemas from a workspace package that the
 agent builds and packs from a pinned commit. Its README
 documents its setup, customization, validation, process lifecycle, data
-retention, and rollback. The Workbench lifecycle test runs SN4 conformance
-against a fresh clone.
+retention, and rollback. The Workbench lifecycle test runs the sensor conformance
+cases against a fresh clone.
 
 #### Git, processes, and actuators
 
@@ -604,8 +609,6 @@ request and proves that the process goes away within seconds.
 - **Implement the workspace port with an `AbortSignal`.** Every member takes
   `signal?: AbortSignal`. `BACKGROUND_CONTEXT`, `TMP`, `tempDirPath`, and
   `tempFilePath` are gone. See [The workspace](#the-workspace).
-- **Remove `images` from `workspace.tools`.** Every bundle carries image
-  parts.
 - **Pass `git` to the bash backend.** `memoryBackend`, `directoryBackend`, and
   `WorkstationOptions` take a git backend of their own package.
   `GitConformanceStore.bash` is a function.
@@ -682,7 +685,7 @@ The exported names change as follows.
 | Scheduled says          | `PendingSay`, `pendingFor`, `Intent.after`, `schedule.minAfter`, `schedule.maxAfter`                                             | `ScheduledSay`, `awaitingFor`, `delaySeconds`, `minDelaySeconds`, `maxDelaySeconds`                         |
 | Activations             | the purpose `'summary'`, `ActivationOutcome.status`, `SummaryOutcome.status`                                                     | `'summarize'`, `kind`, `kind`                                                                               |
 | Participants            | `ParticipantInfo`, `AgentParticipantInfo`, `HumanParticipantInfo`                                                                | `Participant`, `AgentParticipant`, `PersonParticipant`                                                      |
-| People                  | `HumanDefinition`, `defineHuman`, `HumanParticipant`, `kind: 'human'`, `Visit.human`                                              | `PersonDefinition`, `definePerson`, `PersonParticipant`, `kind: 'person'`, `Visit.person`                    |
+| People                  | `HumanDefinition`, `defineHuman`, `kind: 'human'`, `Visit.human`                                              | `PersonDefinition`, `definePerson`, `kind: 'person'`, `Visit.person`                    |
 | Visitors                | the Cloudflare `Person`, `Workbench.join`                                                                                          | `Visitor`, `Workbench.visit`                                                                                |
 | Ending work             | `Room.abort()`, `AgentRunner.abort()`, `ActivationState.cancel()`, `RoomToolBinding.abort()`, the stop `'aborted'`               | `Room.cancel()`, `cutAll()`, `cut()`, `cut()`, `'cut'`                                                      |
 | Entries                 | the journal `JournalEntry`, the core union `Entry`                                                                               | `Entry`, `RoomEntry`                                                                                        |
@@ -690,17 +693,16 @@ The exported names change as follows.
 | Summary writer          | `summary` on `StartRoomOptions`, `Composition`, `Close`, and the Cloudflare `StartOptions`                                       | `summaryWriter`                                                                                             |
 | Trace                   | `TraceRecord`, `RoomProjection.record`, `OwedFacts.record`, `TracePolicy.thinking: 'summary'`                                    | `TracedStep`, `summaryFacts`, `summaryFacts`, `'start'`                                                     |
 | `/testing`              | `scriptedExecutor`, `speak`, `later`, `isClosing`, `Step`, `Call`, `Result`, the script parameter `call`                         | `scriptedOpener`, `say`, `schedule`, `isSummarizing`, `ScriptStep`, `ScriptCall`, `ScriptResult`, `request` |
-| Conformance             | `ExecutorHarness`, `PortHarness`, `ConformanceHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `ConformanceFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
+| Conformance             | `ExecutorHarness`, `PortHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
 | Simulator               | `Run`, `RunExchange`, `SimulateOptions.exchanges`, `AgentActorOptions.timeoutMs`, `AgentJudgeOptions.timeoutMs`                 | `Simulation`, `SimulationExchange`, `messages`, `moveMs`, `gradeMs`                                         |
 | Executor packages       | `ClaudeRuntime`, `CodexRuntime`, `ClaudeHarnessOptions`, Pi testing `scripted`, Claude `FakeScenario.turns`                      | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `ClaudeFixtureOptions`, `scriptedStream`, `passes`       |
-| Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
 | Processes and keys      | `ProcessStatus`, the cancel result `stopped`, `tokenTtl`, `keyTtl`, `WorkstationOptions.host`, `WorkstationGitOptions.host`      | `Process`, `cancelled`, `credentialTtl`, `credentialTtl`, `server`, `server`                          |
 | Port and send           | the event `delivery_error`, `DeliveryState`, `Limits.delivery`, `MessageDelivery`, `limits.schedule.pending` | `port_error`, `SendState`, `Limits.port`, `MessageRecipients`, `limits.schedule.waiting` |
 | Cloudflare              | `RoomObject.abort()`, `StartOptions.agents`                                                                                      | `cancel()`, `definitions`                                                                                   |
 | Kernel exports | `RoomTool`, `RoomToolResult`, `ToolExecutionMode`, `AgentExecutionContext`; the executor contract in `protocol.ts` | `BoundTool`, `BoundToolResult`, `ToolConcurrency`, `SeatContext`; the contract in `execution/contract.ts` |
 | Workbench and live tier | `/abort`, `AMBION_HARNESS`                                                                                                       | `/cancel`, `AMBION_EXECUTOR`                                                                                |
-| Room rules (internal) | `DueWake`, `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `DueRespond`, `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
+| Room rules (internal) | `OpenWake`, `HeldWake`, `wakesOf`, `pendingOf`, `room/wakes.ts`, `Owed`, `older()`, `spokenLine`, `spoken()`, the exchange `Pass`, the fold `Step`, the transition `PresenceChange`, the reconcile `Ending`, the rules `Verdict` | `OpenRespond`, `HeldRespond`, `respondsOf`, `dueRespondsOf`, `room/responds.ts`, `DueSummarize`, `noFacts()`, `saidLine`, `isText()`, `ExchangeFacts`, `FoldStep`, `PresenceDraft`, `LeaseEnd`, `SummaryVerdict` |
 
 #### Journal and stored data
 
@@ -737,12 +739,12 @@ run reads and writes such entries.
 **The name of a Cloudflare object is its identity, and the objects keep
 no second copy.** `StartOptions.name` is removed: the stub names the room,
 and `RoomObject` takes the name from its id. `RoomMetadata` holds
-`stopped` alone, without `name` and `definitions`. A resumed room takes the
+`stopped` alone, without `name` and `agents`. A resumed room takes the
 definitions of the agents on its record from `configure`. `RoomRead` gains
 `reserve`, the agents that no seat holds.
 `SeatMetadata` holds `activation`, `phase`, and `hold`, without `room` and
 `seat`: the seat object reads both from its name, which `seatName` builds.
-`SeatMetadata.wakeCount` and `cuts` are removed, with `SeatObject.wakeCount()`
+`SeatMetadata.wakes` and `cuts` are removed, with `SeatObject.wakes()`
 and `SeatObject.cuts()`. A room object that no name reaches throws.
 
 #### The Pi executor
@@ -976,9 +978,7 @@ drops `spill`. These exports change on the root entry of the workspace:
 - Added types: `Result`, `FileResult`, `FileErrorCode`, `ShellErrorCode`,
   `FileInfo`, `ShellExecResult`, `ShellOutputLimits`, `ShellOutputTruncation`,
   and `ShellOutputView`.
-- Changed: `WorkspaceExecOptions` is declared in full and no longer extends a
-  Pi type. `FileOperations.remove` takes a signal, and `makeTempDir` and
-  `makeTempFile` are removed. `deliverView` loses its `context` argument.
+- Changed: `deliverView` loses its `context` argument.
   `runScript`, `SqlEnv.run`, `WorkspaceFiles`, `WorkspaceLog.append`,
   `AuditLog.append`, `sqlImport`, and `sqlResult` take a signal in place of
   a `Context`. `HomeEnv` drops `joinPath`, `readTextLines`, and
@@ -988,15 +988,6 @@ drops `spill`. These exports change on the root entry of the workspace:
 `workspaceConformance` drops the case for temporary names. A new check packs
 the three packages and finds no Pi package in their manifests or in their
 dependency closure.
-
-**`workspace.tools({ images: false })` is removed.** Every executor kind
-carries image parts, so a workspace has one tool bundle. `observe` returns
-each frame as an image part, and `read` of an image returns the image part.
-Each result also states the path of the image in text: the export path in
-`observe`, and `Image path: <path>` in `read`. A model that cannot read
-images still learns where the file is. This is a breaking change for a
-caller that passes `images`. Remove the option. `WorkspaceToolsOptions`
-keeps `skills`.
 
 **A bash backend takes its git backend, and the types check the pair.**
 `memoryBackend` takes `git` in its options, and `directoryBackend(root,
@@ -1137,13 +1128,12 @@ suites.** `@ambionframework/journal/conformance` exports three new parts:
 subject for each case, runs the body, and disposes the subject after it.
 `@ambionframework/ambion/conformance` and
 `@ambionframework/workspace/conformance` export the same three. The fixture
-type replaces four names, and each suite keeps its subject type:
+type replaces three names, and each suite keeps its subject type:
 `StorageBackend` is now `ConformanceFixture<OpenedBackend>`,
-`ConformanceBackend` is now `ConformanceFixture<WorkspaceConformanceStore>`,
-`ObjectConformanceBackend` is now `ConformanceFixture<ObjectConformanceStore>`,
-and `SensorConformanceHarness` is now
-`ConformanceFixture<SensorConformanceProbe>`. A storage fixture now needs a
-`name`, as the three other fixtures had. `@ambionframework/workspace/conformance`
+`ConformanceBackend` is now `ConformanceFixture<WorkspaceConformanceStore>`, and
+`ObjectConformanceBackend` is now `ConformanceFixture<ObjectConformanceStore>`.
+A storage fixture now needs a `name`, as the other fixtures had.
+`@ambionframework/workspace/conformance`
 also exports `WorkspaceConformanceStore`, the subject of
 `workspaceConformance`. `GitConformanceBackend` extends
 `ConformanceFixture<GitConformanceStore>`. The case names and messages do not
