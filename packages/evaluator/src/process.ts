@@ -34,6 +34,9 @@ export interface ProcessOptions {
 const DEFAULT_MEMORY = 64 * 1024 * 1024;
 const STDERR_TAIL = 2_000;
 
+/** The text that V8 prints to stderr when the heap reaches its limit. */
+const OUT_OF_MEMORY = 'heap out of memory';
+
 /** The report of the code, as `child.ts` sends it. */
 interface Report {
 	readonly ok: boolean;
@@ -106,6 +109,9 @@ class ProcessRun {
 		this.child.stderr.setEncoding('utf8');
 		this.child.stderr.on('data', (chunk: string) => {
 			this.tail = (this.tail + chunk).slice(-STDERR_TAIL);
+			// V8 prints this line before it aborts. The abort can write a core dump
+			// for seconds, so the evaluation fails at the line.
+			if (this.tail.includes(OUT_OF_MEMORY)) this.fail(this.memoryError());
 		});
 		this.child.on('error', (error) => this.fail(error));
 		this.child.on('close', (code, by) => this.fail(this.closed(code, by)));
@@ -168,10 +174,13 @@ class ProcessRun {
 		settle();
 	}
 
+	private memoryError(): Error {
+		return new Error(`The code passed the memory limit of ${this.memoryLimit} bytes.`);
+	}
+
 	/** The error of a child that ends before the code returns. */
 	private closed(code: number | null, by: NodeJS.Signals | null): Error {
-		if (this.tail.includes('heap out of memory'))
-			return new Error(`The code passed the memory limit of ${this.memoryLimit} bytes.`);
+		if (this.tail.includes(OUT_OF_MEMORY)) return this.memoryError();
 		const how = by === null ? `exit code ${code}` : `signal ${by}`;
 		return new Error(`The evaluator process ended before the code returned (${how}).`, {
 			cause: this.tail,
