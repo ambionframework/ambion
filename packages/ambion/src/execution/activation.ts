@@ -1,5 +1,5 @@
 /**
- * The state of one activation that the core owns.
+ * The state of one activation that the driver owns.
  *
  * The driver opens one `ActivationState` for each activation, over the
  * opener of the seat. The state keeps the read position and the cut, runs

@@ -46,6 +46,10 @@ journal package names its write `append` in prose, and `positionOf` is
 
 Stored bodies change field names. The golden journals hold the new names.
 
+The glossary now defines record, reconcile, from, commit, presence message,
+and driver. "The driver" replaces "the core" for the code that runs an
+activation.
+
 | Body           | Before                           | After                                |
 | -------------- | -------------------------------- | ------------------------------------ |
 | `said` message | `after`                          | `delaySeconds`                       |
