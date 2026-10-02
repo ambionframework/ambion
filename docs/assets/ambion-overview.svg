@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="628" viewBox="0 0 1000 628" role="img" aria-labelledby="title desc">
+  <title id="title">A room, its agents, and the workspace</title>
+  <desc id="desc">One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A summary of entries 1 to 4 follows, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and a process outlives the activation. Optional capabilities add tables, repositories, sensors, and skills. Each agent has a home of its own. A message cites a file with a ref.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#666d6b"/></marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2f817a"/></marker>
+    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12"><path d="M2 2 10 10 M10 2 2 10" stroke="#c0503a" stroke-width="2.4" stroke-linecap="round"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#232a2b" flood-opacity="0.08"/></filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #232a2b; } .dim { fill: #666d6b; } .teal { fill: #2f817a; } .red { fill: #c0503a; } .code { fill: #3f5bb5; }
+      .n { font-size: 16px; font-weight: 700; } .s { font-size: 14px; } .x { font-size: 13px; } .c { font-size: 13px; } .lab { font-size: 13px; font-weight: 700; }
+      .flow { fill: none; stroke: #666d6b; stroke-width: 2; }
+      .flow-red { fill: none; stroke: #c0503a; stroke-width: 2; stroke-dasharray: 5 4; }
+      .flow-teal { fill: none; stroke: #2f817a; stroke-width: 2; stroke-dasharray: 6 5; }
+      .guide { stroke: #e2e0d8; stroke-width: 1.5; stroke-dasharray: 2 6; }
+    </style>
+  </defs>
+  <rect width="1000" height="628" rx="20" fill="#f4f3ee"/>
+  <text x="24" y="80" text-anchor="start" class="sans ink n">Person</text>
+  <text x="24" y="100" text-anchor="start" class="sans dim s">asks, reads</text>
+  <text x="24" y="132" text-anchor="start" class="sans ink n">Host</text>
+  <text x="24" y="152" text-anchor="start" class="sans dim s">application code</text>
+  <text x="24" y="198" text-anchor="start" class="sans ink n">Room</text>
+  <text x="24" y="218" text-anchor="start" class="sans dim s">the journal</text>
+  <text x="24" y="322" text-anchor="start" class="sans ink n">Agent A</text>
+  <text x="24" y="342" text-anchor="start" class="sans dim s">Pi</text>
+  <text x="24" y="402" text-anchor="start" class="sans ink n">Agent B</text>
+  <text x="24" y="422" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
+  <text x="24" y="536" text-anchor="start" class="sans ink n">Workspace</text>
+  <text x="24" y="556" text-anchor="start" class="sans dim s">shared</text>
+  <line x1="170" y1="80" x2="976" y2="80" class="guide"/>
+  <line x1="170" y1="132" x2="976" y2="132" class="guide"/>
+  <line x1="170" y1="320" x2="976" y2="320" class="guide"/>
+  <line x1="170" y1="400" x2="976" y2="400" class="guide"/>
+  <text x="180" y="40" text-anchor="start" class="sans dim lab" letter-spacing="1.2">ONE EXCHANGE</text>
+  <text x="976" y="40" text-anchor="end" class="sans dim s">time →</text>
+  <circle cx="196" cy="80" r="7" fill="#cf8b6b"/>
+  <circle cx="640" cy="80" r="7" fill="#cf8b6b"/>
+  <text x="210" y="64" text-anchor="start" class="mono code c">visit.send()</text>
+  <text x="640" y="64" text-anchor="middle" class="mono code c">waitForClose()</text>
+  <path d="M196 88 V156" class="flow" marker-end="url(#arrow)"/>
+  <path d="M640 160 V90" class="flow" marker-end="url(#arrow)"/>
+  <text x="240" y="136" text-anchor="start" class="sans dim s">seats the agents, passes a logger, and posts events with <tspan class="mono code c">room.post</tspan></text>
+  <g filter="url(#shadow)">
+    <rect x="170" y="160" width="806" height="88" rx="12" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
+  </g>
+  <circle cx="196" cy="184" r="11" fill="#232a2b"/>
+  <text x="196" y="188.5" text-anchor="middle" class="sans x" fill="#fbfaf6" font-weight="700">1</text>
+  <text x="196" y="218" text-anchor="middle" class="sans ink s">ask</text>
+  <circle cx="300" cy="184" r="11" fill="#232a2b"/>
+  <text x="300" y="188.5" text-anchor="middle" class="sans x" fill="#fbfaf6" font-weight="700">2</text>
+  <text x="300" y="218" text-anchor="middle" class="sans ink s">A says</text>
+  <text x="300" y="238" text-anchor="middle" class="sans teal s">ref: a file</text>
+  <circle cx="548" cy="184" r="11" fill="#232a2b"/>
+  <text x="548" y="188.5" text-anchor="middle" class="sans x" fill="#fbfaf6" font-weight="700">3</text>
+  <text x="548" y="218" text-anchor="middle" class="sans ink s">B says</text>
+  <text x="548" y="238" text-anchor="middle" class="sans teal s">ref: a new file</text>
+  <circle cx="640" cy="184" r="11" fill="#232a2b"/>
+  <text x="640" y="188.5" text-anchor="middle" class="sans x" fill="#fbfaf6" font-weight="700">4</text>
+  <text x="640" y="218" text-anchor="middle" class="sans ink s">close</text>
+  <text x="640" y="238" text-anchor="middle" class="sans dim s">quiet</text>
+  <circle cx="730" cy="184" r="11" fill="#232a2b"/>
+  <text x="730" y="188.5" text-anchor="middle" class="sans x" fill="#fbfaf6" font-weight="700">5</text>
+  <text x="730" y="218" text-anchor="middle" class="sans ink s">summary</text>
+  <text x="730" y="238" text-anchor="middle" class="sans dim s">of 1–4</text>
+  <text x="956" y="218" text-anchor="end" class="sans dim s">A restart</text>
+  <text x="956" y="238" text-anchor="end" class="sans dim s">replays the entries.</text>
+  <path d="M186 248 V382" class="flow" marker-end="url(#arrow)"/>
+  <path d="M206 248 V302" class="flow" marker-end="url(#arrow)"/>
+  <text x="218" y="272" text-anchor="start" class="sans dim s">activates</text>
+  <text x="218" y="290" text-anchor="start" class="sans dim s">in parallel</text>
+  <path d="M300 345 V252" class="flow" marker-end="url(#arrow)"/>
+  <path d="M335 425 V260" class="flow-red" marker-end="url(#cross)"/>
+  <text x="348" y="278" text-anchor="start" class="sans red s" font-weight="700">missed</text>
+  <text x="348" y="296" text-anchor="start" class="sans red s">with entry 2</text>
+  <path d="M548 425 V252" class="flow" marker-end="url(#arrow)"/>
+  <rect x="206" y="305" width="114" height="30" rx="15" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="220" y="325" text-anchor="start" class="sans ink s">reads a file</text>
+  <rect x="206" y="345" width="116" height="8" rx="4" fill="#2f817a"/>
+  <rect x="186" y="385" width="72" height="30" rx="15" fill="#e8f5e2" stroke="#7fc468" stroke-width="1.5"/>
+  <text x="200" y="405" text-anchor="start" class="sans ink s">reads 1</text>
+  <rect x="372" y="385" width="190" height="30" rx="15" fill="#e8f5e2" stroke="#7fc468" stroke-width="1.5"/>
+  <text x="386" y="405" text-anchor="start" class="sans ink s">reads 2, writes a file</text>
+  <rect x="186" y="425" width="376" height="8" rx="4" fill="#2f817a"/>
+  <path d="M270 353 V476" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <path d="M500 433 V476" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <text x="282" y="466" text-anchor="start" class="sans teal s">calls tools</text>
+  <text x="512" y="466" text-anchor="start" class="sans teal s">calls tools</text>
+  <g filter="url(#shadow)">
+    <rect x="170" y="480" width="806" height="124" rx="12" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.5"/>
+  </g>
+  <text x="190" y="510" text-anchor="start" class="sans ink n">Files</text>
+  <rect x="190" y="522" width="48" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="214.0" y="538.5" text-anchor="middle" class="mono code c">read</text>
+  <rect x="244" y="522" width="56" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="272.0" y="538.5" text-anchor="middle" class="mono code c">write</text>
+  <rect x="306" y="522" width="48" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="330.0" y="538.5" text-anchor="middle" class="mono code c">edit</text>
+  <text x="190" y="580" text-anchor="start" class="sans teal x">A message cites a file with a ref.</text>
+  <text x="420" y="510" text-anchor="start" class="sans ink n">Processes</text>
+  <rect x="420" y="522" width="48" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="444.0" y="538.5" text-anchor="middle" class="mono code c">bash</text>
+  <rect x="474" y="522" width="34" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="491.0" y="538.5" text-anchor="middle" class="mono code c">ps</text>
+  <rect x="514" y="522" width="48" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
+  <text x="538.0" y="538.5" text-anchor="middle" class="mono code c">wait</text>
+  <text x="420" y="580" text-anchor="start" class="sans dim x">A process outlives the activation.</text>
+  <text x="650" y="510" text-anchor="start" class="sans ink n">Optional</text>
+  <rect x="650" y="522" width="58" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="679.0" y="538.5" text-anchor="middle" class="sans ink x">tables</text>
+  <rect x="714" y="522" width="96" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="762.0" y="538.5" text-anchor="middle" class="sans ink x">repositories</text>
+  <rect x="650" y="552" width="66" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="683.0" y="568.5" text-anchor="middle" class="sans ink x">sensors</text>
+  <rect x="722" y="552" width="52" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="748.0" y="568.5" text-anchor="middle" class="sans ink x">skills</text>
+  <text x="840" y="510" text-anchor="start" class="sans ink n">Homes</text>
+  <rect x="840" y="522" width="44" height="24" rx="8" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="862" y="538.5" text-anchor="middle" class="sans ink x" font-weight="700">A</text>
+  <rect x="892" y="522" width="44" height="24" rx="8" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="914" y="538.5" text-anchor="middle" class="sans ink x" font-weight="700">B</text>
+  <text x="840" y="580" text-anchor="start" class="sans dim x">one for each agent</text>
+</svg>
