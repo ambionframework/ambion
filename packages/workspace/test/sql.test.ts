@@ -105,7 +105,7 @@ describe('a workspace with a SQL backend', () => {
 		const properties = Object.keys(
 			(toolOf(workspace, 'sql').parameters as { properties: Record<string, unknown> }).properties,
 		);
-		expect(properties.sort()).toEqual(['export', 'import', 'rows', 'sql']);
+		expect(properties.sort()).toEqual(['export', 'import', 'params', 'rows', 'sql']);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain('one shared database, :memory:');
 		expect(guidance).toContain('The database is SQLite: dates are functions');

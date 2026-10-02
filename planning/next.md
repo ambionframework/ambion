@@ -124,7 +124,7 @@ deadline, and a step sink.
       phase 2. (CP3)
 - [x] **2.** The declared outputs of the workspace tools. Needs phase 2.
       (CP4)
-- [ ] **3.** Skill macros. Needs CP3. (CP-M)
+- [x] **3.** Skill macros. Needs CP3. (CP-M)
 
 **Evidence:** acceptance items 1, 2, 4, and 5 of
 [Compose](../docs/compose.md#acceptance) pass on the scripted executor.

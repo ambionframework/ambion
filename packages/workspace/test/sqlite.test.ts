@@ -50,6 +50,7 @@ async function run(
 		maxRows?: number;
 		export?: string;
 		import?: string;
+		params?: readonly (string | number | null)[];
 		signal?: AbortSignal;
 		agent?: string;
 	} = {},
@@ -60,6 +61,7 @@ async function run(
 		maxRows: options.maxRows ?? 50,
 		...(options.export === undefined ? {} : { export: options.export }),
 		...(options.import === undefined ? {} : { import: options.import }),
+		...(options.params === undefined ? {} : { params: options.params }),
 	};
 	return resource.use({ name: options.agent ?? 'alpha' }, (env) =>
 		env.run(sql, runOptions, options.signal),
@@ -178,6 +180,51 @@ describe('the SQLite backend', () => {
 		const outcome = await run(workspace(), sql);
 		if (typeof expected === 'string') expect(messageOf(outcome)).toContain(expected);
 		else expect(outcome).toMatchObject({ ok: true, ...expected });
+	});
+
+	it('binds params to the ? placeholders of one statement, as values', async () => {
+		const site = workspace();
+		await run(site, 'CREATE TABLE t(id, label TEXT, note)');
+		const quote = "x'); DROP TABLE t; --";
+		const inserted = await run(site, 'INSERT INTO t VALUES (?, ?, ?)', {
+			params: [7, quote, null],
+		});
+		expect(inserted.ok).toBe(true);
+		const rows = await run(
+			site,
+			'SELECT id, typeof(id) AS kind, label, note FROM t WHERE label = ?',
+			{
+				params: [quote],
+			},
+		);
+		expect(rows.ok && rows.rows).toEqual([{ id: 7, kind: 'integer', label: quote, note: null }]);
+		const real = await run(site, 'SELECT ? AS pi, typeof(?) AS kind', { params: [3.5, 3.5] });
+		expect(real.ok && real.rows).toEqual([{ pi: 3.5, kind: 'real' }]);
+		const none = await run(site, 'SELECT count(*) AS n FROM t WHERE label = ?', {
+			params: ["' OR '1'='1"],
+		});
+		expect(none.ok && none.rows).toEqual([{ n: 0 }]);
+	});
+
+	it.each([
+		[
+			'two statements',
+			'INSERT INTO t VALUES (?); SELECT 2 AS b',
+			[1],
+			'params bind to one statement',
+		],
+		['more values than placeholders', 'INSERT INTO t VALUES (?)', [1, 2], 'out of range'],
+	])('refuses params with %s, and runs no statement', async (_name, sql, params, message) => {
+		const site = workspace();
+		await run(site, 'CREATE TABLE t(a)');
+		expect(messageOf(await run(site, sql, { params }))).toContain(message);
+		const kept = await run(site, 'SELECT count(*) AS n FROM t');
+		expect(kept.ok && kept.rows).toEqual([{ n: 0 }]);
+	});
+
+	it('binds nothing for an empty list, and takes several statements', async () => {
+		const outcome = await run(workspace(), 'SELECT 1 AS a; SELECT 2 AS b', { params: [] });
+		expect(outcome).toMatchObject({ ok: true, rowCount: 1 });
 	});
 
 	it('rounds maxRows down, and keeps no row for a negative one', async () => {

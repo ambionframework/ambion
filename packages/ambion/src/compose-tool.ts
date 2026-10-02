@@ -9,7 +9,7 @@
  * the `invoke` of each compose tool to an entry that takes the sink. The
  * `invoke` field itself runs with no sink and records no step.
  */
-import { type Static, Type } from 'typebox';
+import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
 import {
@@ -17,12 +17,17 @@ import {
 	COMPOSE_TOOL_NAME,
 	ComposeFailure,
 	type ComposeLimits,
+	type ComposeMacro,
 	type ComposeOptions,
+	type ComposeRequest,
 	type ComposeResult,
 	DEFAULT_COMPOSE_LIMITS,
+	type JsonValue,
 	mismatchOf,
+	plainJson,
 } from './compose.ts';
 import { bindable, renderCatalog } from './compose-catalog.ts';
+import { macroGuidance } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
 import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
 import type { Step } from './types.ts';
@@ -30,21 +35,48 @@ import type { Step } from './types.ts';
 const DESCRIPTION =
 	'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.';
 
+/**
+ * One object with four optional fields. The call is `uses` and `code`, or
+ * `macro` and `args`. A provider takes no `anyOf` at the top of a tool
+ * schema, so `resolveProgram` checks the two forms.
+ */
 const ARGUMENTS = Type.Object({
-	uses: Type.Array(Type.String(), {
-		description: 'The tools this compose call uses. Only these are bound.',
-	}),
-	code: Type.String({
-		description: 'The body of an asynchronous function. Its return value is the result.',
-	}),
+	uses: Type.Optional(
+		Type.Array(Type.String(), {
+			description: 'The tools this compose call uses. Only these are bound. Give it with code.',
+		}),
+	),
+	code: Type.Optional(
+		Type.String({
+			description: 'The body of an asynchronous function. Its return value is the result.',
+		}),
+	),
+	macro: Type.Optional(
+		Type.String({
+			description:
+				'The name of a macro that a skill names. Give it with args, in place of uses and code.',
+		}),
+	),
+	args: Type.Optional(
+		Type.Unknown({
+			description: 'The arguments of the macro, as the skill gives them. The code reads args.',
+		}),
+	),
 });
 
 type Arguments = Static<typeof ARGUMENTS>;
 
-/** The guidance that `compose` adds to the executor, or undefined for none. */
-export function composeGuidance(options: ComposeOptions | undefined): string | undefined {
+/**
+ * The guidance that `compose` adds to the executor, or undefined for none:
+ * the text, and one line for each macro of the seat.
+ */
+export function composeGuidance(
+	options: ComposeOptions | undefined,
+	macros: readonly ComposeMacro[] = [],
+): string | undefined {
 	if (options === undefined) return undefined;
-	return (options.guidance ?? COMPOSE_GUIDANCE).trim() || undefined;
+	const text = (options.guidance ?? COMPOSE_GUIDANCE).trim();
+	return [text, macroGuidance(macros)].filter(Boolean).join('\n\n') || undefined;
 }
 
 /** The limits of the option, with the defaults for each field that it leaves out. */
@@ -96,7 +128,7 @@ function rendered(outcome: ComposeOutcome): ToolResult<ComposeResult> {
 /** Ask the approval hook. A denial, and a hook that fails, refuse the compose call. */
 async function approve(
 	options: ComposeOptions,
-	request: { readonly uses: readonly string[]; readonly code: string },
+	request: ComposeRequest,
 	ctx: ToolContext,
 	record: ((step: Step) => void) | undefined,
 ): Promise<void> {
@@ -120,6 +152,8 @@ interface Program {
 	readonly code: string;
 	/** The tools that the code binds, by name. */
 	readonly tools: ReadonlyMap<string, AmbionTool>;
+	/** The macro that gave the code, with its checked arguments. Absent for free code. */
+	readonly macro?: { readonly macro: ComposeMacro; readonly args: JsonValue };
 }
 
 /** The entry that runs a compose call with the step sink of the activation. */
@@ -137,13 +171,12 @@ type ComposeEntry = (
  */
 const ENTRIES = new WeakMap<AmbionTool['invoke'], ComposeEntry>();
 
-/**
- * Resolve the arguments of a compose call to its program. This is the one
- * place that turns the arguments into `uses` and `code`, and into the tools
- * that the code binds. It refuses a name that the catalog does not hold.
- */
-function resolveProgram(params: Arguments, catalog: ReadonlyMap<string, AmbionTool>): Program {
-	const uses = [...new Set(params.uses)];
+/** The tools that `uses` names, by name. A name that the catalog does not hold refuses the call. */
+function bound(
+	names: readonly string[],
+	catalog: ReadonlyMap<string, AmbionTool>,
+): Pick<Program, 'uses' | 'tools'> {
+	const uses = [...new Set(names)];
 	const missing = uses.filter((name) => !catalog.has(name));
 	if (missing.length > 0)
 		throw refusal(
@@ -155,14 +188,84 @@ function resolveProgram(params: Arguments, catalog: ReadonlyMap<string, AmbionTo
 			return tool === undefined ? [] : [[name, tool] as const];
 		}),
 	);
-	return { uses, code: params.code, tools };
+	return { uses, tools };
+}
+
+/** The arguments of a macro call as JSON. Absent arguments are an empty object. */
+function argumentsOf(args: unknown): JsonValue {
+	if (args === undefined) return {};
+	try {
+		return plainJson(args, 'args');
+	} catch (error) {
+		throw refusal(`The arguments of the macro are not JSON: ${messageOf(error)}`);
+	}
+}
+
+/** The program of a macro: its stored code, under its stored `uses`, with `args` checked. */
+function macroProgram(
+	name: string,
+	params: Arguments,
+	catalog: ReadonlyMap<string, AmbionTool>,
+	macros: ReadonlyMap<string, ComposeMacro>,
+): Program {
+	if (params.uses !== undefined || params.code !== undefined)
+		throw refusal('Give macro and args, or uses and code. A call with all of them has no meaning.');
+	const macro = macros.get(name);
+	if (macro === undefined) {
+		const held = [...macros.keys()].map((one) => `'${one}'`).join(', ');
+		throw refusal(
+			`No macro is named '${name}'. ${held === '' ? 'Your skills hold no macro.' : `The macros are ${held}.`}`,
+		);
+	}
+	const args = argumentsOf(params.args);
+	if (!Check(macro.args as TSchema, args))
+		throw refusal(
+			`The arguments of the macro '${name}' do not match its schema: ${mismatchOf(macro.args as TSchema, args)}.`,
+		);
+	return { ...bound(macro.uses, catalog), code: macro.code, macro: { macro, args } };
+}
+
+/**
+ * Resolve the arguments of a compose call to its program. This is the one
+ * place that turns the arguments into `uses` and `code`, and into the tools
+ * that the code binds. It refuses a name that the catalog does not hold, a
+ * macro that the definition does not hold, and `args` that break the schema
+ * of the macro. A macro comes from the frozen set of the definition, so no
+ * file of the agent changes the code.
+ */
+function resolveProgram(
+	params: Arguments,
+	catalog: ReadonlyMap<string, AmbionTool>,
+	macros: ReadonlyMap<string, ComposeMacro>,
+): Program {
+	if (params.macro !== undefined) return macroProgram(params.macro, params, catalog, macros);
+	if (params.uses === undefined || params.code === undefined)
+		throw refusal('Give uses and code, or macro and args.');
+	if (params.args !== undefined) throw refusal('Give args with macro. Free code takes no args.');
+	return { ...bound(params.uses, catalog), code: params.code };
+}
+
+/** What `approve` reads for a program: the macro and its hash, or the code. */
+function requestOf(program: Program): ComposeRequest {
+	return program.macro === undefined
+		? { uses: program.uses, code: program.code }
+		: {
+				macro: program.macro.macro.name,
+				hash: program.macro.macro.hash,
+				args: program.macro.args,
+			};
 }
 
 /**
  * The `compose` tool over the tools of one definition. It binds each tool that
  * does not set `compose: false`. The catalog is built once, here.
  */
-export function composeTool(options: ComposeOptions, tools: readonly AmbionTool[]): AmbionTool {
+export function composeTool(
+	options: ComposeOptions,
+	tools: readonly AmbionTool[],
+	macros: readonly ComposeMacro[] = [],
+): AmbionTool {
+	const held = new Map(macros.map((macro) => [macro.name, macro]));
 	const catalog = new Map(
 		tools
 			.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME)
@@ -173,12 +276,13 @@ export function composeTool(options: ComposeOptions, tools: readonly AmbionTool[
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
 		if (!Check(ARGUMENTS, params))
 			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(ARGUMENTS, params)}.`);
-		const program = resolveProgram(params, catalog);
-		await approve(options, { uses: program.uses, code: program.code }, ctx, record);
+		const program = resolveProgram(params, catalog, held);
+		await approve(options, requestOf(program), ctx, record);
 		const run = new ComposeRun({
 			tools: program.tools,
 			code: program.code,
 			evaluator: options.evaluator,
+			...(program.macro === undefined ? {} : { args: program.macro.args }),
 			limits,
 			ctx,
 			...(record === undefined ? {} : { record }),

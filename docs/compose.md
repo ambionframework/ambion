@@ -2,8 +2,8 @@
 
 **Status: proposed design, in progress.** The `compose` option adds the
 `compose` tool, and the main entry exports its types and
-`COMPOSE_GUIDANCE`. The declared outputs of the workspace tools and the
-package `@ambionframework/evaluator` do not exist yet.
+`COMPOSE_GUIDANCE`. Skill [macros](#macros) run by name. The package
+`@ambionframework/evaluator` does not exist yet.
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
@@ -44,25 +44,39 @@ roster. This page never uses that word.
 | nested call  | One call of a tool that the code of a compose call makes.                       |
 | binding      | One tool as an asynchronous function inside the code: `tools.<name>`.           |
 | catalog      | The signatures of the tools that a seat can bind, in the `compose` description. |
+| macro        | A compose program that a skill stores. A compose call runs it by name.          |
 | evaluator    | The pluggable backend that evaluates the code. It holds no tool.                |
 | ledger       | The nested calls of one compose call, in order, with the outcome of each.       |
 
 ## The compose tool
 
-**`compose` takes two arguments.**
+**`compose` takes free code, or the name of a macro.**
 
 ```ts
-interface ComposeArguments {
-  /** The tools this compose call uses. Only these are bound. */
-  readonly uses: readonly string[];
-  /** The body of an asynchronous function. Its return value is the result. */
-  readonly code: string;
-}
+type ComposeArguments =
+  | {
+      /** The tools this compose call uses. Only these are bound. */
+      readonly uses: readonly string[];
+      /** The body of an asynchronous function. Its return value is the result. */
+      readonly code: string;
+    }
+  | {
+      /** The name of a macro that a skill names: `<skill>/<macro>`. */
+      readonly macro: string;
+      /** The arguments of the macro. Absent arguments are `{}`. */
+      readonly args?: JsonValue;
+    };
 ```
+
+**The tool schema is one object with four optional fields.** A model
+provider accepts no `anyOf` at the top of a tool schema. `resolveProgram`
+checks the two forms. A call that gives `uses` and `code`, or `macro` and
+`args`, is valid. Any other mix is a refusal with no ledger and no effect.
 
 **`uses` declares the tools before the code runs.** `compose` refuses a
 name that the catalog does not hold. It checks `uses` first, then asks
-the [approval](#approval), then evaluates the code. A refusal at either
+the [approval](#approval), then evaluates the code. A macro holds its own
+`uses`, so a macro call gives none. A refusal at either
 step has no ledger and no effect. `compose` binds only the named tools,
 so a call to another tool fails as an unknown binding.
 
@@ -132,7 +146,13 @@ once for each activation.
 ```ts
 declare const tools: {
   /** Run statements on the shared database. */
-  sql(args: { sql: string; export?: string; import?: string; rows?: number }): Promise<{
+  sql(args: {
+    sql: string;
+    export?: string;
+    import?: string;
+    params?: (string | number | null)[];
+    rows?: number;
+  }): Promise<{
     database: string;
     count: number;
     columns: string[];
@@ -199,12 +219,117 @@ Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call and its outcome. A completed call can have had an
 effect, so read the list before you call a tool again.
+
+When a skill names a macro, call compose with the macro and its args,
+and write no code. The macro holds the code and names its own tools.
+```
+
+**The guidance lists the macros of the seat.** A seat with macros gets
+one more block after the text. The block holds one line for each macro:
+its name, a colon, and its description on one line. A seat with no macro
+gets no block. `ComposeOptions.guidance` replaces the text and keeps the
+block, because the block is data of the skills. The description of
+`compose` and the guidance of the skills do not change.
+
+```text
+The macros of your skills. Run one with compose({ macro, args }):
+- lab-drift/snapshot-drift: Snapshot the files of every run with a label. Returns the count and the refs.
 ```
 
 **The description of `compose` is one sentence and the catalog.** The
 sentence is `Join your tools in one call. Code calls them as
 tools.<name>, and you read only the value that it returns.` The catalog
 follows it.
+
+## Macros
+
+**A macro is a compose program that a skill stores.** The skill holds the
+code once, and the model runs it by name. The code never passes through
+the model, so it costs no output tokens, and it cannot change between
+runs. The model writes a name and the arguments.
+
+```js
+/*---
+description: Snapshot the files of every run with a label. Returns the count and the refs.
+uses: [sql, snapshot]
+args:
+  type: object
+  properties: { label: { type: string } }
+  required: [label]
+---*/
+const runs = await tools.sql({
+  sql: 'SELECT path FROM runs WHERE label = ?',
+  params: [args.label],
+  rows: 500,
+});
+const { refs } = await tools.snapshot({ paths: runs.rows.map((row) => row.path) });
+return { runs: runs.count, refs };
+```
+
+```js
+// compose({ macro: 'lab-drift/snapshot-drift', args: { label: 'drift' } })
+```
+
+**A macro is data on a bundle.** `ToolBundle.macros` holds
+`ComposeMacro` values: the `name`, the `description`, `uses`, the `args`
+schema, the `code`, and the blob `hash` of the file. `composeMacro(fields)`
+checks the fields and gives a frozen copy. `workspace.tools({ skills })`
+puts the macros of a skill set on its bundle. [Skills](skills.md#macros)
+states how a skill holds them.
+
+**`describeExecutor` checks the macros of a seat that has `compose`.** It
+collects the macros of every bundle. It refuses a macro that names a tool
+that the catalog lacks, and a tool with `compose: false` is not in the
+catalog. It refuses two macros with one name. The error is an
+`AmbionError` with the code `invalid_tool`. A seat with no `compose` option
+ignores the macros, so one skill set fits every seat.
+
+**`compose` finds the macro in the frozen set of the definition.** It never
+reads `~/.skills`. The steps of a macro call are these:
+
+1. Refuse a call that mixes a macro with `uses`, `code`, or free `args`.
+2. Refuse a name that no macro holds. The error lists the names.
+3. Take absent `args` as `{}`. Refuse `args` that are not JSON.
+4. Check `args` against the `args` schema of the macro. Refuse a mismatch
+   with the path and the rule of each fault.
+5. Ask the [approval](#approval) with the name, the hash, and the `args`.
+6. Evaluate the stored code under the stored `uses`, with the global `args`.
+
+A refusal at steps 1 to 4 has no ledger, no approval, and no effect. From
+step 6 the call is an ordinary compose call: the nested calls, the ledger,
+the limits, and the result.
+
+**The `args` schema is JSON Schema, checked at load.** The schema must
+satisfy the meta-schema of draft 2020-12. `Check` ignores a keyword that it
+does not know, so a schema with one would accept every value. The
+check of a macro refuses every keyword that the table below omits. These
+include `$ref`, `$defs`, `$id`, `$anchor`, and `format`.
+
+| Kind              | Keywords                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Types and values  | `type`, `enum`, `const`, `required`, `dependentRequired`                                              |
+| Numbers           | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`                            |
+| Text              | `minLength`, `maxLength`, `pattern`                                                                   |
+| Lists and objects | `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, `minContains`, `maxContains` |
+| Schemas inside    | `properties`, `patternProperties`, `additionalProperties`, `items`, `prefixItems`, `contains`         |
+| Combinations      | `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`, `propertyNames`           |
+| Open objects      | `unevaluatedProperties`, `unevaluatedItems`                                                           |
+| Notes             | `title`, `description`, `default`, `examples`, `$comment`                                             |
+
+**`approve` can allow a macro and deny free code.** A host that denies
+free code runs only code that it wrote. The in-process evaluator is not a
+security boundary, so this limits what it runs. The authority stays the
+same: `compose` binds only tools that the seat already holds.
+
+**Macros have these limits.**
+
+- **A macro cannot call a macro.** `tools` binds native tools alone.
+- **The integrity covers the body, `uses`, and `args`.** A macro that runs
+  a script from `~/.skills` through `bash` runs the editable copy.
+  [Skills](skills.md#macros) states the rest.
+- **The free `code` form stays.** The guidance asks the model to run a
+  macro when a skill names one. The model can still write code.
+- **A seat on Cloudflare has no macro.** It has no evaluator.
 
 ## Bindings
 
@@ -552,9 +677,11 @@ has no permission callback and no built-in tool, so no harness hook exists
 to see them.
 
 **The `compose` option takes an `approve` hook.** `compose` calls it with
-`uses`, `code`, and the `ToolContext` of the `compose` call. The hook
-cannot record a step. It calls the hook after it checks `uses` and before it evaluates
-any code. The step that records the answer is part of this proposal. The
+a `ComposeRequest` and the `ToolContext` of the `compose` call. Free code
+gives `{ uses, code }`. A macro gives `{ macro, hash, args }`: the name, the
+blob hash of its file, and its checked arguments. The hook cannot record a
+step. `compose` calls the hook after it checks `uses`, or the macro and its
+`args`, and before it evaluates any code. The step that records the answer is part of this proposal. The
 step vocabulary has no such kind today. A denial fails the
 compose call with no ledger and no effect. With no hook, `compose` allows
 every compose call of the catalog.
@@ -563,7 +690,7 @@ every compose call of the catalog.
 interface ComposeOptions {
   readonly evaluator: Evaluator;
   readonly approve?: (
-    request: { readonly uses: readonly string[]; readonly code: string },
+    request: ComposeRequest,
     ctx: ToolContext,
   ) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
   /** Replaces `COMPOSE_GUIDANCE` ([Guidance](#guidance)). */
@@ -571,6 +698,10 @@ interface ComposeOptions {
   /** Absent fields keep their defaults ([Limits](#limits)). */
   readonly limits?: Partial<ComposeLimits>;
 }
+
+type ComposeRequest =
+  | { readonly uses: readonly string[]; readonly code: string }
+  | { readonly macro: string; readonly hash: string; readonly args: JsonValue };
 
 interface ComposeLimits {
   readonly calls: number;
@@ -594,6 +725,8 @@ interface Evaluator {
 interface EvaluatorInput {
   readonly code: string;
   readonly bindings: readonly string[];
+  /** The checked arguments of a macro. Absent for free code. */
+  readonly args?: JsonValue;
   /** Calls one binding. It resolves to the binding value, or rejects with `{ message, details? }`. */
   call(name: string, args: JsonValue): Promise<JsonValue>;
 }
@@ -601,7 +734,9 @@ interface EvaluatorInput {
 
 **The evaluator gives code no ambient authority.** The global scope holds
 `tools` and the ECMAScript built-ins, except those that read the clock or
-a random source. There is no module import, no filesystem, no network, no
+a random source. The code of a macro also reads `args`, the JSON value
+that `compose` checked. Free code has no `args`, and the name is
+undefined there. There is no module import, no filesystem, no network, no
 process, and no timer.
 
 | Name                                          | In the code                                      |
@@ -777,19 +912,20 @@ trace can cut a nested output.
 **The implementation updates these pages in the same change.** Until then,
 each page states the current surface.
 
-| Page                                                                   | Change                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                      |
-| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `invokeTool` and `invokeChecked`, `callId`.                                                                                                                                                                                                   |
-| [Trust](trust.md)                                                      | A harness sees one tool for a compose call, and no nested call. `approve` is the one hook that sees one.                                                                                                                                                                                 |
-| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, and `count` in the `sql` details.                                                                                                                                                                           |
-| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                              |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to `invokeChecked`. `fromPiTool` takes an output declaration.                                                                                                                                                                          |
-| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                     |
-| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                    |
-| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal and the deadline, and runs it through `invokeTool`.                                                                                                                                                                    |
-| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the value `COMPOSE_GUIDANCE`. The snapshot lists values only, so `COMPOSE_GUIDANCE` and `evaluatorConformance` from `/conformance` change it. |
-| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                           |
+| Page                                                                   | Change                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                                                                   |
+| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `invokeTool` and `invokeChecked`, `callId`.                                                                                                                                                                                                                                                |
+| [Trust](trust.md)                                                      | A harness sees one tool for a compose call, and no nested call. `approve` is the one hook that sees one.                                                                                                                                                                                                                              |
+| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, `count` in the `sql` details, and `params` of `sql`.                                                                                                                                                                                                     |
+| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                                                                           |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to `invokeChecked`. `fromPiTool` takes an output declaration.                                                                                                                                                                                                                       |
+| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                                                                  |
+| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                                                                 |
+| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal and the deadline, and runs it through `invokeTool`.                                                                                                                                                                                                                 |
+| [Skills](skills.md)                                                    | The `macros/` folder of a skill, and the macros of a skill set.                                                                                                                                                                                                                                                                       |
+| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeRequest`, `ComposeMacro`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the values `COMPOSE_GUIDANCE` and `composeMacro`. The snapshot lists values only, so those two and `evaluatorConformance` from `/conformance` change it. |
+| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                                                                        |
 
 ## Acceptance
 

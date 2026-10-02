@@ -26,6 +26,7 @@ import {
 	type ComposeOptions,
 	mismatchOf,
 } from './compose.ts';
+import { assertMacros, macrosOf } from './compose-macros.ts';
 import { composeGuidance, composeTool } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
@@ -125,12 +126,17 @@ export function pickPresent<T extends object, K extends keyof T>(
 export function describeExecutor(options: ExecutorOptions): Executor {
 	assertComposeOptions(options.compose);
 	const input = flattenTools(options.tools, options.bundles);
-	const guidance = joined([guidanceOf(options.bundles), composeGuidance(options.compose)]);
+	// A seat without `compose` ignores the macros, so one skill set fits every seat.
+	const macros = options.compose === undefined ? [] : macrosOf(options.bundles);
+	assertMacros(macros, input);
+	const guidance = joined([guidanceOf(options.bundles), composeGuidance(options.compose, macros)]);
 	const reminders = remindersOf(options.bundles);
 	const own = input.map((tool) => captureTool(tool));
 	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
 	const tools = Object.freeze(
-		options.compose === undefined ? own : [...own, captureTool(composeTool(options.compose, own))],
+		options.compose === undefined
+			? own
+			: [...own, captureTool(composeTool(options.compose, own, macros))],
 	);
 	return Object.freeze({
 		kind: options.kind,

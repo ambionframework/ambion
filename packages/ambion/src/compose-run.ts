@@ -36,6 +36,8 @@ export interface ComposeRunInput {
 	/** The tools that the compose call binds, by name. */
 	readonly tools: ReadonlyMap<string, AmbionTool>;
 	readonly code: string;
+	/** The checked arguments of a macro. The evaluator gives them to the code as `args`. */
+	readonly args?: JsonValue;
 	readonly evaluator: Evaluator;
 	readonly limits: ComposeLimits;
 	/** The context of the compose call. */
@@ -186,11 +188,12 @@ export class ComposeRun {
 	}
 
 	private async evaluate(): Promise<Ending> {
-		const { evaluator, code, tools } = this.input;
+		const { evaluator, code, tools, args } = this.input;
 		try {
 			const input = {
 				code,
 				bindings: [...tools.keys()],
+				...(args === undefined ? {} : { args }),
 				call: (name: string, args: JsonValue) => this.call(name, args),
 			};
 			return this.returned(await evaluator.evaluate(input, this.stop.signal));

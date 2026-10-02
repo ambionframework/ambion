@@ -50,6 +50,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'addUsage',
 		'awaitingFor',
 		'commitUri',
+		'composeMacro',
 		'contentText',
 		'createRuntime',
 		'defaultRuntime',

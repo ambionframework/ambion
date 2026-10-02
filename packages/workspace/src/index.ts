@@ -99,6 +99,7 @@ export type {
 	SqlImported,
 	SqlImportTable,
 	SqlOutcome,
+	SqlParam,
 	SqlProvenance,
 	SqlRow,
 	SqlRunOptions,

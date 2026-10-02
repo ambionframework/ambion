@@ -56,7 +56,7 @@ export async function readSource(source: SourceInput): Promise<SourceFiles> {
 }
 
 /** The git blob hash of `bytes`. */
-function blobHash(bytes: Uint8Array): string {
+export function blobHash(bytes: Uint8Array): string {
 	return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 

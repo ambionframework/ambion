@@ -18,6 +18,7 @@ export const CORE_LAYERS = [
 			'bodies.ts',
 			'bundle.ts',
 			'compose-catalog.ts',
+			'compose-macros.ts',
 			'compose-run.ts',
 			'compose-tool.ts',
 			'compose.ts',

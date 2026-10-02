@@ -1,14 +1,16 @@
 /**
  * An evaluator for tests: it runs the code as the body of an `AsyncFunction`
- * in the process of the test. It gives the code a `tools` proxy, and it has
+ * in the process of the test. It gives the code a `tools` proxy and the
+ * global `args` of a macro, and it has
  * none of the isolation of a real evaluator, so only tests import it.
  */
 import type { Evaluator, EvaluatorInput, JsonValue } from '../../src/index.ts';
 
-type Body = (tools: unknown) => Promise<JsonValue | undefined>;
+type Body = (tools: unknown, args: JsonValue | undefined) => Promise<JsonValue | undefined>;
 
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
-	name: string,
+	tools: string,
+	args: string,
 	code: string,
 ) => Body;
 
@@ -41,13 +43,13 @@ function bindingsOf(input: EvaluatorInput, signal: AbortSignal): unknown {
 /** Runs the code in the test process, and stops waiting for it at the signal. */
 export const functionEvaluator: Evaluator = {
 	async evaluate(input, signal) {
-		const run = new AsyncFunction('tools', input.code);
+		const run = new AsyncFunction('tools', 'args', input.code);
 		const cut = new Promise<never>((_resolve, reject) => {
 			signal.addEventListener('abort', () => reject(new Error('The evaluator was cut.')), {
 				once: true,
 			});
 		});
 		cut.catch(() => {});
-		return Promise.race([run(bindingsOf(input, signal)), cut]);
+		return Promise.race([run(bindingsOf(input, signal), input.args), cut]);
 	},
 };
