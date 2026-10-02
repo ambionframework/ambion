@@ -5,7 +5,7 @@
  * model library. This package holds Pi and the model registry.
  */
 
-export { piExecution } from './compose.ts';
+export { piExecution } from './execution.ts';
 export { fileCredentials } from './credentials.ts';
 export {
 	type CompactionOptions,
