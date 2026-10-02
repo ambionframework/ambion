@@ -32,11 +32,13 @@ pnpm start
 The seat runs on [Codex](../../docs/codex.md) and reuses the Codex login of
 your Mac. Run `codex login` once, and sign in with ChatGPT or an API key. The
 app needs no key of its own, reads no key file, and sets no environment
-variable. Startup exits with a message when `~/.codex/auth.json` (or
+variable. The seat ignores `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, and
+`OPENAI_API_KEY` in your shell, so it never bills an API account. Startup exits with a message when `~/.codex/auth.json` (or
 `auth.json` in `CODEX_HOME`) does not exist. Codex must store the login in
 that file, because a login in the macOS keyring does not reach the seat.
-The seat keeps its own Codex home in `<directory>/codex` and links that
-login file. It reads no `config.toml` from `~/.codex`.
+Startup computes that login path once, checks it, and passes the same path
+to the seat. The seat keeps its own Codex home in `<directory>/codex` and
+links that login file. It reads no `config.toml` from `~/.codex`.
 
 The default model is `gpt-5.6-luna` with medium reasoning. `--model <id>`
 selects another Codex model. The agent shell receives a fixed set of variables
