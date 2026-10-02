@@ -18,7 +18,7 @@ import {
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { openHome, rolloutOf, seatHome } from '../src/home.ts';
+import { openHome, seatHome } from '../src/home.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'ambion-codex-home-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -288,37 +288,4 @@ describe('openHome', () => {
 			);
 		},
 	);
-});
-
-describe('rolloutOf', () => {
-	/** A rollout file of `thread` under the day `YYYY/MM/DD` of a home. */
-	function rollout(home: string, day: string, thread: string): string {
-		const dir = join(home, 'sessions', ...day.split('/'));
-		mkdirSync(dir, { recursive: true });
-		const path = join(dir, `rollout-${day.replaceAll('/', '-')}T10-00-00-${thread}.jsonl`);
-		writeFileSync(path, '');
-		return path;
-	}
-
-	it('finds the file of a thread by its id, in the newest day first', () => {
-		const home = fresh();
-		const old = rollout(home, '2026/01/31', 'aaaa-1');
-		const recent = rollout(home, '2026/10/01', 'bbbb-2');
-		return Promise.all([
-			expect(rolloutOf(home, 'aaaa-1')).resolves.toBe(old),
-			expect(rolloutOf(home, 'bbbb-2')).resolves.toBe(recent),
-			expect(rolloutOf(home, 'aaaa')).resolves.toBeUndefined(),
-		]);
-	});
-
-	it('answers nothing for a home with no sessions, and for a thread past the newest days', async () => {
-		expect(await rolloutOf(fresh(), 'aaaa-1')).toBeUndefined();
-		const home = fresh();
-		rollout(home, '2025/01/01', 'gone-3');
-		for (let day = 1; day <= 31; day += 1) {
-			rollout(home, `2026/03/${String(day).padStart(2, '0')}`, `other-${day}`);
-		}
-		rollout(home, '2026/04/01', 'other-32');
-		expect(await rolloutOf(home, 'gone-3')).toBeUndefined();
-	});
 });

@@ -3,7 +3,7 @@
  * each case writes one JSON file to `<dir>`: the room calls with their
  * answers, every step the logger received, and, for each activation, the
  * prompt of each pass and each call that the executor made to the core.
- * Without the variable, the harness runs as it is.
+ * Without the variable, the executor runs as it is.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ import type {
 	Pass,
 	RunningActivation,
 } from '@ambionframework/ambion/hosting';
-import { Codex, type CodexOptions, type ThreadOptions, type TurnOptions } from '@openai/codex-sdk';
+import { type Connect, spawnAppServer } from '../../src/app-server.ts';
 import type { CodexOpenerOptions } from '../../src/executor.ts';
 
 /** The variable that names the directory of the dump. */
@@ -27,7 +27,7 @@ interface Seen {
 	readonly core: unknown[];
 	/** Each pass: its input, the record the core rendered, and the result. */
 	readonly passes: unknown[];
-	/** Each thread the client opened, and each prompt it ran, in order. */
+	/** Each thread, turn, steer, and interrupt request of the host, in order. */
 	readonly codex: unknown[];
 }
 
@@ -101,36 +101,36 @@ function session(inner: RunningActivation, seen: Seen): RunningActivation {
 }
 
 /**
- * The dump of one harness. `wrap` watches one executor. `write` writes the
+ * The dump of one executor. `wrap` watches one executor. `write` writes the
  * file of a case and forgets what the case saw.
  */
 export function liveDump(dir: string) {
 	mkdirSync(dir, { recursive: true });
 	let activations: Seen[] = [];
-	/** The Codex client of the activation that opened last. The suite runs one at a time. */
-	const client = (options: CodexOptions) => {
-		const real = new Codex(options);
-		const log = () => activations.at(-1)?.codex;
-		const thread = (made: ReturnType<Codex['startThread']>) => ({
-			runStreamed: (input: string, turn?: TurnOptions) => {
-				log()?.push({ prompt: input });
-				return made.runStreamed(input, turn);
-			},
-		});
+	/** The requests that the dump keeps: the ones that open a thread and drive a turn. */
+	const logged = new Set([
+		'thread/start',
+		'thread/resume',
+		'turn/start',
+		'turn/steer',
+		'turn/interrupt',
+	]);
+	/** The connection of the activation that opened last. The suite runs one at a time. */
+	const connect: Connect = (launch, handlers) => {
+		const real = spawnAppServer(launch, handlers);
 		return {
-			startThread: (threadOptions?: ThreadOptions) => {
-				log()?.push({ startThread: true });
-				return thread(real.startThread(threadOptions));
+			request: (method, params) => {
+				if (logged.has(method)) activations.at(-1)?.codex.push({ method, params });
+				return real.request(method, params);
 			},
-			resumeThread: (id: string, threadOptions?: ThreadOptions) => {
-				log()?.push({ resumeThread: id });
-				return thread(real.resumeThread(id, threadOptions));
-			},
+			notify: (method, params) => real.notify(method, params),
+			stderr: () => real.stderr(),
+			close: () => real.close(),
 		};
 	};
 	return {
-		/** The options that route the Codex client of `options` through the dump. */
-		options: (options: CodexOpenerOptions): CodexOpenerOptions => ({ ...options, client }),
+		/** The options that route the connection of `options` through the dump. */
+		options: (options: CodexOpenerOptions): CodexOpenerOptions => ({ ...options, connect }),
 		wrap:
 			(opener: ActivationOpener): ActivationOpener =>
 			(activation) => {

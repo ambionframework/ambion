@@ -1,9 +1,9 @@
 /**
- * What one activation passes to the Codex client, and the native tools off:
- * the room server, the thread policy, the patched catalog entry, the client
- * config, the scratch directory, and the catalog of the installed binary. A
- * hung or a broken binary fails, and never opens a seat. No key, no
- * network, no `codex` process.
+ * What one activation passes to `codex app-server`, and the native tools
+ * off: the config flags, the thread policy, the patched catalog entry, the
+ * scratch directory, and the catalog of the installed binary. A hung or a
+ * broken binary fails, and never opens a seat. No key, no network, no
+ * `codex app-server` process.
  */
 import {
 	chmodSync,
@@ -16,21 +16,25 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
 	EXCLUSIVE_FEATURES,
 	exclusiveConfig,
 	exclusiveEntry,
 	installedCatalog,
-	NODE_REPL,
 	Scratch,
 	scratchFor,
 } from '../src/catalog.ts';
 import { codex } from '../src/define.ts';
 import { seatHome } from '../src/home.ts';
-import { clientOptions, SEAT_NOTE, seatText, serverPath, threadOptions } from '../src/options.ts';
+import {
+	configFlags,
+	launchOf,
+	processConfig,
+	SEAT_NOTE,
+	seatText,
+	threadParams,
+} from '../src/options.ts';
 import { catalogFixture, recordedCatalog } from './support.ts';
 
 const luna = catalogFixture.models.find((entry) => entry.slug === 'gpt-5.6-luna');
@@ -44,100 +48,111 @@ describe('seatText', () => {
 	});
 });
 
-describe('clientOptions', () => {
-	it('names the instructions file, adds the config, and disables node_repl beside the approved room server', () => {
-		const scratch = new Scratch(luna, 'seat text');
-		try {
-			const config = clientOptions({}, seatHome({}), '/tmp/room.sock', 'auto', scratch).config as {
-				model_catalog_json: string;
-				model_instructions_file: string;
-				model_reasoning_summary: string;
-				mcp_servers: Record<
-					string,
-					{
-						enabled?: boolean;
-						required?: boolean;
-						command: string;
-						default_tools_approval_mode?: string;
-						args: string[];
-					}
-				>;
-			};
-			expect(config).not.toHaveProperty('developer_instructions');
-			expect(config.model_instructions_file).toBe(scratch.instructions);
-			expect(config.model_catalog_json).toBe(scratch.catalog);
-			expect(config.model_reasoning_summary).toBe('auto');
-			expect(config.mcp_servers[NODE_REPL]).toEqual({ command: 'true', enabled: false });
-			expect(Object.keys(config.mcp_servers)).toHaveLength(2);
-			const room = config.mcp_servers[ROOM_SERVER];
-			expect(room?.default_tools_approval_mode).toBe('approve');
-			// Codex then waits for the server before the first model request.
-			expect(room?.required).toBe(true);
-			expect(room?.args.at(-1)).toBe('/tmp/room.sock');
-		} finally {
-			scratch.remove();
-		}
+describe('configFlags', () => {
+	it('gives one -c flag for each leaf, with dotted keys and TOML values', () => {
+		expect(
+			configFlags({
+				model_reasoning_summary: 'auto',
+				features: { shell_tool: false, plugins: false },
+				web_search: 'disabled',
+				tools: { update_plan: { enabled: false } },
+				limit: 3,
+				names: ['a', 'b'],
+			}),
+		).toEqual([
+			'-c',
+			'model_reasoning_summary="auto"',
+			'-c',
+			'features.shell_tool=false',
+			'-c',
+			'features.plugins=false',
+			'-c',
+			'web_search="disabled"',
+			'-c',
+			'tools.update_plan.enabled=false',
+			'-c',
+			'limit=3',
+			'-c',
+			'names=["a", "b"]',
+		]);
+	});
+
+	it('quotes a key with other characters than letters, digits, and dashes, and escapes a string', () => {
+		expect(configFlags({ mcp_servers: { 'a.b': { command: 'a"b\n\u007f' } }, empty: {} })).toEqual([
+			'-c',
+			'mcp_servers."a.b".command="a\\"b\\n\\u007f"',
+			'-c',
+			'empty={}',
+		]);
+	});
+
+	it('refuses a value with no TOML form', () => {
+		expect(() => configFlags({ gone: null })).toThrow(/no TOML form/);
 	});
 });
 
-describe('clientOptions environment', () => {
-	it('gives the binary the environment of the seat: the overlay, then its own home variables', () => {
-		const home = seatHome({
-			home: '/srv/seat',
-			env: { PATH: '/bin', HOME: '/h', GONE: undefined },
-		});
-		const scratch = new Scratch(luna, 'seat text');
+describe('launchOf', () => {
+	it('starts app-server with the config of the seat, and gives the binary the environment of the seat', () => {
+		const scratch = new Scratch(luna);
 		try {
-			expect(
-				clientOptions({ codexPath: '/bin/codex' }, home, '/tmp/room.sock', 'auto', scratch),
-			).toMatchObject({
-				codexPathOverride: '/bin/codex',
-				env: { PATH: '/bin', HOME: '/srv/seat/home', CODEX_HOME: '/srv/seat' },
+			const home = seatHome({
+				home: '/srv/seat',
+				env: { PATH: '/bin', HOME: '/h', GONE: undefined },
 			});
-			expect(clientOptions({}, home, '/tmp/room.sock', 'auto', scratch).env).not.toHaveProperty(
-				'GONE',
-			);
+			const executor = codex({
+				instructions: 'x',
+				model: 'gpt-5.6-luna',
+				modelReasoningEffort: 'medium',
+			});
+			const launch = launchOf('/bin/codex', home, executor, scratch);
+			expect(launch.command).toBe('/bin/codex');
+			expect(launch.args[0]).toBe('app-server');
+			expect(launch.cwd).toBe(scratch.directory);
+			expect(launch.env).toMatchObject({
+				PATH: '/bin',
+				HOME: '/srv/seat/home',
+				CODEX_HOME: '/srv/seat',
+			});
+			expect(launch.env).not.toHaveProperty('GONE');
+			const flags = launch.args.filter((flag) => flag !== '-c').slice(1);
+			expect(flags).toContain('model_reasoning_effort="medium"');
+			expect(flags).toContain('model_reasoning_summary="auto"');
+			expect(flags).toContain(`model_catalog_json=${JSON.stringify(scratch.catalog)}`);
+			// The room tools are dynamic tools of the thread, so no server entry names them.
+			expect(flags).toContain('mcp_servers.node_repl.command="true"');
+			expect(flags).toContain('mcp_servers.node_repl.enabled=false');
+			expect(flags.some((flag) => flag.startsWith('mcp_servers.ambion'))).toBe(false);
+			expect(flags.some((flag) => flag.startsWith('model_instructions_file'))).toBe(false);
+		} finally {
+			scratch.remove();
+		}
+	});
+
+	it('leaves the effort out when the executor names none, and sends the summary of the executor', () => {
+		const scratch = new Scratch(luna);
+		try {
+			const plain = codex({ instructions: 'x', model: 'm' });
+			expect(processConfig(plain, scratch)).not.toHaveProperty('model_reasoning_effort');
+			const none = codex({ instructions: 'x', model: 'm', reasoningSummary: 'none' });
+			expect(processConfig(none, scratch)).toMatchObject({ model_reasoning_summary: 'none' });
 		} finally {
 			scratch.remove();
 		}
 	});
 });
 
-describe('serverPath', () => {
-	it('names the TypeScript server in the source tree, and the built server beside a built module', () => {
-		const path = serverPath();
-		expect(path.endsWith('/src/room-tools-server.ts')).toBe(true);
-		expect(existsSync(path)).toBe(true);
-		expect(serverPath('file:///app/node_modules/@ambionframework/codex/dist/index.mjs')).toBe(
-			'/app/node_modules/@ambionframework/codex/dist/room-tools-server.mjs',
-		);
-	});
-
-	it('names an existing built file when the package is built', () => {
-		const built = new URL('../dist/index.mjs', import.meta.url);
-		if (!existsSync(fileURLToPath(built))) return;
-		const path = serverPath(built);
-		expect(path.endsWith('/dist/room-tools-server.mjs')).toBe(true);
-		expect(existsSync(path)).toBe(true);
-	});
-});
-
-describe('threadOptions', () => {
-	it('fixes the policy for every seat, and passes only the reasoning effort of the executor', () => {
-		const scratch = new Scratch(luna, 'seat text');
+describe('threadParams', () => {
+	it('fixes the policy for every seat, and carries the model and the seat text', () => {
+		const scratch = new Scratch(luna);
 		try {
-			const fixed = {
-				model: 'm',
-				sandboxMode: 'read-only',
-				approvalPolicy: 'never',
-				networkAccessEnabled: false,
-				workingDirectory: scratch.directory,
-				skipGitRepoCheck: true,
-			};
 			const plain = codex({ instructions: 'x', model: 'm' });
-			expect(threadOptions(plain, scratch)).toEqual(fixed);
-			const effort = codex({ instructions: 'x', model: 'm', modelReasoningEffort: 'medium' });
-			expect(threadOptions(effort, scratch)).toEqual({ ...fixed, modelReasoningEffort: 'medium' });
+			expect(threadParams(plain, scratch, 'seat text')).toEqual({
+				cwd: scratch.directory,
+				sandbox: 'read-only',
+				approvalPolicy: 'never',
+				model: 'm',
+				baseInstructions: 'seat text',
+			});
 		} finally {
 			scratch.remove();
 		}
@@ -222,21 +237,19 @@ it('exclusiveConfig names the patched catalog, turns every listed feature off an
 });
 
 describe('Scratch', () => {
-	it('holds the patched catalog, the seat text, and an empty directory, and removes all', () => {
-		const scratch = new Scratch(luna, 'seat text');
+	it('holds the patched catalog and an empty directory, and removes both', () => {
+		const scratch = new Scratch(luna);
 		const stored = JSON.parse(readFileSync(scratch.catalog, 'utf8')) as { models: unknown[] };
 		expect(stored.models).toEqual([exclusiveEntry(luna)]);
-		expect(readFileSync(scratch.instructions, 'utf8')).toBe('seat text');
 		expect(readdirSync(scratch.directory)).toEqual([]);
 		scratch.remove();
 		expect(existsSync(scratch.catalog)).toBe(false);
-		expect(existsSync(scratch.instructions)).toBe(false);
 		expect(existsSync(scratch.directory)).toBe(false);
 		scratch.remove();
 	});
 
 	it('fails for a model that the catalog lacks, and names the model', async () => {
-		await expect(scratchFor('gpt-unknown', recordedCatalog, 'seat text')).rejects.toThrow(
+		await expect(scratchFor('gpt-unknown', recordedCatalog)).rejects.toThrow(
 			/'gpt-unknown'.*a Codex seat needs/,
 		);
 	});

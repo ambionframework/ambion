@@ -1,8 +1,8 @@
 /**
  * The Codex adapter example: `codex()` defines an agent that runs on the
- * Codex SDK, and `codexExecution()` gives a runtime or a room the services
- * that run it. The room tools reach Codex through a stdio MCP server over a
- * local socket. `README.md` describes the path.
+ * `codex app-server`, and `codexExecution()` gives a runtime or a room the
+ * services that run it. The room tools are dynamic tools of the Codex thread.
+ * `README.md` describes the path.
  */
 
 export { codexExecution } from './compose.ts';

@@ -691,11 +691,11 @@ to 1 and `maxItems` to 16, so the model reads them. A call outside them, or a
 call with `handle` in place of `handles`, fails. The harness sets the text
 that the model reads:
 
-| Harness | Who refuses the call                   | What the model reads                                                        |
-| ------- | -------------------------------------- | --------------------------------------------------------------------------- |
-| Pi      | The harness, before the tool runs      | The validation text of Pi                                                   |
-| Claude  | The Agent SDK, before the tool runs    | The validation text of the SDK                                              |
-| Codex   | `defineTool`, in the room tools server | `Invalid arguments for tool 'wait': must have required properties handles.` |
+| Harness | Who refuses the call                | What the model reads                                                        |
+| ------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| Pi      | The harness, before the tool runs   | The validation text of Pi                                                   |
+| Claude  | The Agent SDK, before the tool runs | The validation text of the SDK                                              |
+| Codex   | `defineTool`, in the host           | `Invalid arguments for tool 'wait': must have required properties handles.` |
 
 The Codex text above is for the call with `handle`. A call with no handles
 gives `handles must not have fewer than 1 items` after the colon. The trace

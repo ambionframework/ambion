@@ -2,11 +2,13 @@
  * How the end of a Codex pass maps to a pass result: the failure it
  * reports, its cause, and the length stop.
  *
- * Codex reports a failed pass as text in a `turn.failed` or `error` event.
- * The text is the only evidence, so the classification reads it.
+ * Codex reports a failed pass as text in the error of `turn/completed`. The
+ * error can carry the HTTP status of the provider. The text is the other
+ * evidence, so the classification reads both.
  */
 import type { FailureCause, PassResult } from '@ambionframework/ambion/hosting';
 import { classifyCause, providerMessage } from '@ambionframework/ambion/hosting';
+import type { CodexErrorInfo, TurnError } from './protocol.ts';
 
 /** Error text that names a full context window or a spent output limit. */
 const LENGTH_TEXT =
@@ -36,4 +38,19 @@ export function passResultOf(error?: string, status?: number | null): PassResult
 	if (error === undefined) return { failed: false };
 	if (LENGTH_TEXT.test(error)) return { failed: false, stop: 'length' };
 	return { failed: true, cause: causeOf(error, status), message: providerMessage(error) };
+}
+
+/** The HTTP status that the error info of a pass carries, or nothing. */
+function httpStatusOf(info: CodexErrorInfo | null | undefined): number | undefined {
+	if (info === null || info === undefined || typeof info === 'string') return undefined;
+	const status = Object.values(info)[0]?.httpStatusCode;
+	return status ?? undefined;
+}
+
+/** The pass result for a pass that failed with `error`. */
+export function turnFailure(error: TurnError | null | undefined): PassResult {
+	return passResultOf(
+		error?.message ?? 'The Codex pass failed.',
+		httpStatusOf(error?.codexErrorInfo),
+	);
 }

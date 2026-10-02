@@ -154,8 +154,6 @@ refuses every other import. A rule that matches nothing fails a test.
   holds the assistant.
 - `examples/workbench/src/brand.ts` reads `brand/tokens` at the
   repository root. The example is private.
-- `packages/codex/src/room-tools-server.ts` is a build entry that the
-  Codex executor starts by path. The manifest exports it under no name.
 
 **SK1 and SK2 leave the release.** D1 holds exchange bounds. Snapshot refs
 remove the need for SK2. D22 remains deferred. No deferred limit is used

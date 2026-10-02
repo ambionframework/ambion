@@ -1,23 +1,21 @@
 /**
- * A host that dies leaves the real `codex exec` running. The SDK closes the
- * input of `codex exec` at once, so the process would run its turn to the end
- * and keep calling the model. The room tools server sees the host socket
- * close and stops its parent. Each test kills a real host with SIGKILL in
- * the middle of a turn, and proves that Codex goes away.
+ * A host that dies must leave no `codex app-server` behind. The server reads
+ * its requests from standard input and exits when the input ends, and the
+ * end of a dead host closes the pipe. The test kills a real host with
+ * SIGKILL in the middle of a turn, and proves that Codex goes away and stops
+ * its request to the model.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { codexOn, hasBinary, MODEL } from './binary.ts';
+import { codexOn, hasBinary, holding, kill, MODEL, runningWith } from './binary.ts';
 import type { OnRequest, Reply } from './responses.ts';
 
 /**
- * How long Codex may take to go away after the host dies. On a loaded CI
- * runner, the room tools server can still be starting when the host dies,
- * and it signals Codex only once it fails to connect. Without the fix,
- * Codex keeps the request open for ever, so any bound tells the two apart.
+ * How long Codex may take to go away after the host dies. A server that did
+ * not stop on the end of its input keeps the request open for ever, so any
+ * bound tells the two apart.
  */
 const GONE_MS = 30_000;
 
@@ -25,31 +23,7 @@ const TEST_MS = 120_000;
 
 const host = fileURLToPath(new URL('./orphan-host.ts', import.meta.url));
 
-const say: Reply = { call: 'say', namespace: 'mcp__ambion', args: { text: 'hello room' } };
-
-/** The processes that run with `home` as their `CODEX_HOME`: the binary and the servers it spawned. */
-function runningWith(home: string): number[] {
-	return readdirSync('/proc')
-		.filter((name) => /^\d+$/.test(name))
-		.filter((pid) => {
-			try {
-				return readFileSync(`/proc/${pid}/environ`, 'utf8')
-					.split('\0')
-					.includes(`CODEX_HOME=${home}`);
-			} catch {
-				return false;
-			}
-		})
-		.map(Number);
-}
-
-function kill(pid: number): void {
-	try {
-		process.kill(pid, 'SIGKILL');
-	} catch {
-		// The process is gone already.
-	}
-}
+const say: Reply = { call: 'say', args: { text: 'hello room' } };
 
 /** Resolve when the child exits. */
 const exited = (child: ChildProcess) =>
@@ -63,19 +37,6 @@ async function within<T>(wait: Promise<T>, what: string): Promise<T> {
 	const late = Promise.withResolvers<never>();
 	const timer = setTimeout(() => late.reject(new Error(what)), GONE_MS);
 	return Promise.race([wait, late.promise]).finally(() => clearTimeout(timer));
-}
-
-/** An endpoint hook that holds the request `index` open until the client goes away. */
-function holding(index: number) {
-	const open = Promise.withResolvers<void>();
-	const closed = Promise.withResolvers<void>();
-	const onRequest: OnRequest = async (at, response) => {
-		if (at !== index) return;
-		response.on('close', () => closed.resolve());
-		open.resolve();
-		await closed.promise;
-	};
-	return { onRequest, open: open.promise, closed: closed.promise };
 }
 
 /**
@@ -131,7 +92,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)('a host that dies', 
 			// The connection of the open request closes, and no other request follows.
 			await within(held.closed, 'codex kept its request open');
 			expect(on.responses.requests).toHaveLength(1);
-			// Neither `codex exec` nor the room tools server remains.
+			// The app-server does not remain.
 			if (onLinux) {
 				await vi.waitFor(() => expect(runningWith(on.home)).toEqual([]), {
 					timeout: GONE_MS,

@@ -12,7 +12,7 @@
  * a token. A link keeps one login for the host and every seat. A copy would
  * hold a refresh token that Codex rotates, and the two files would diverge.
  */
-import { link, lstat, mkdir, readdir, stat, symlink } from 'node:fs/promises';
+import { link, lstat, mkdir, stat, symlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PermanentError } from '@ambionframework/ambion/hosting';
@@ -29,7 +29,8 @@ export interface HomeOptions {
 	 * The `auth.json` to link into the home. Absent, the login of the host:
 	 * `auth.json` in the `CODEX_HOME` of `env` when it sets one, else in
 	 * `.codex` under its `HOME`. `false` links nothing, for a seat that runs on
-	 * `CODEX_API_KEY`. A home that already holds an `auth.json` keeps it.
+	 * `CODEX_API_KEY`. A seat with `CODEX_API_KEY` logs in with the key, and the
+	 * key wins over `auth.json`. A home that already holds an `auth.json` keeps it.
 	 */
 	readonly login?: string | false;
 	/**
@@ -237,41 +238,4 @@ export async function openHome(home: SeatHome): Promise<void> {
 	await mkdir(home.path, { recursive: true, mode: 0o700 });
 	await linkLogin(home);
 	await mkdir(home.privateHome, { recursive: true, mode: 0o700 });
-}
-
-/** How many day directories the search for a rollout file reads at most. */
-const ROLLOUT_DAYS = 32;
-
-/** The names in a directory, the greatest first. A directory that cannot be read has none. */
-async function newestFirst(dir: string): Promise<string[]> {
-	return readdir(dir).then(
-		(names) => names.sort().reverse(),
-		() => [],
-	);
-}
-
-/** The directories `depth` levels below `dir`, newest first, at most `limit`. */
-async function recentDirs(dir: string, depth: number, limit: number): Promise<string[]> {
-	if (depth === 0) return [dir];
-	const found: string[] = [];
-	for (const name of await newestFirst(dir)) {
-		if (found.length >= limit) break;
-		found.push(...(await recentDirs(join(dir, name), depth - 1, limit - found.length)));
-	}
-	return found;
-}
-
-/**
- * The rollout file of a thread: Codex writes every item of the thread there.
- * The path is `sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl` under the
- * home. The search reads the newest day directories first and stops after a
- * fixed count. It never throws: a file it cannot find is absent.
- */
-export async function rolloutOf(home: string, thread: string): Promise<string | undefined> {
-	for (const day of await recentDirs(join(home, 'sessions'), 3, ROLLOUT_DAYS)) {
-		const names = await newestFirst(day);
-		const name = names.find((n) => n.startsWith('rollout-') && n.endsWith(`-${thread}.jsonl`));
-		if (name !== undefined) return join(day, name);
-	}
-	return undefined;
 }

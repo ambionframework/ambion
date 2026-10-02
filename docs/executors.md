@@ -386,8 +386,7 @@ every tool of the definition does.
 executor records the steps, and raises no tool event.
 
 **The executor hosts the tools.** Pi runs them in its harness, Claude in an
-MCP server in the process, and Codex in the stdio server that it spawns,
-over a local socket to the host. A harness that cannot see the id of a call
+MCP server in the process, and Codex as dynamic tools of its thread. A harness that cannot see the id of a call
 takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
 no call took yet, or a fresh id when none waits. A `tool_result` step ends
 its call, so the driver drops the id of that call. Each adapter page names
@@ -417,19 +416,19 @@ each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
 
-| Step          | Recorded by | Meaning                                                                                             |
-| ------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                       |
-| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                     |
-| `text`        | executor    | A block of model text. `final` closes the block.                                                    |
-| `tool_call`   | executor    | A tool starts, with its input.                                                                      |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                      |
-| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.   |
-| `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                     |
-| `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude records it. |
-| `usage`       | executor    | Tokens and cost.                                                                                    |
-| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.     |
-| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.      |
+| Step          | Recorded by | Meaning                                                                                                      |
+| ------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                                |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                              |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                             |
+| `tool_call`   | executor    | A tool starts, with its input.                                                                               |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                               |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.            |
+| `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                              |
+| `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude and Codex record it. |
+| `usage`       | executor    | Tokens and cost.                                                                                             |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.              |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.               |
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map
@@ -574,15 +573,15 @@ and [Codex](codex.md#failures) name the status source of each executor kind.
 ## The harness matrix
 
 **Three executor kinds ship today.** Pi, the Claude Agent SDK, and the
-Codex SDK implement the contract. The Anthropic SDK tool runner is an
+Codex `app-server` implement the contract. The Anthropic SDK tool runner is an
 anticipated executor kind. No package for it exists yet.
 
-| Kind                      | Package                   | Loop owner | Steer during a pass                 | Status      |
-| ------------------------- | ------------------------- | ---------- | ----------------------------------- | ----------- |
-| Pi harness                | `@ambionframework/pi`     | Harness    | Yes, as a queued write              | Shipped     |
-| Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo         | Shipped     |
-| Codex SDK                 | `@ambionframework/codex`  | Harness    | None; the next `run` takes the line | Shipped     |
-| Anthropic SDK tool runner | None                      | Caller     | Between passes                      | Anticipated |
+| Kind                      | Package                   | Loop owner | Steer during a pass           | Status      |
+| ------------------------- | ------------------------- | ---------- | ----------------------------- | ----------- |
+| Pi harness                | `@ambionframework/pi`     | Harness    | Yes, as a queued write        | Shipped     |
+| Claude Agent SDK          | `@ambionframework/claude` | Harness    | Yes, on the SDK `user` echo   | Shipped     |
+| Codex `app-server`        | `@ambionframework/codex`  | Harness    | Yes, on the `turn/steer` echo | Shipped     |
+| Anthropic SDK tool runner | None                      | Caller     | Between passes                | Anticipated |
 
 The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the packages.
 
@@ -690,11 +689,11 @@ needs a key or a network.
 The Codex executor runs the suite in its live tier, on a real `codex` and a
 real model, in `packages/codex/test/live/conformance.test.ts`, through
 `codexExecutorFixture` in its live support. The model follows each plan
-from its instructions. It declares no steer and no usage, because Codex
-takes no steer and a real model spends no planned usage. The run needs
-`CODEX_API_KEY` or a ChatGPT login, and skips without either. A fake `codex` proves only that the
-adapter agrees with its own guess about the SDK, so the package tests its
-mapping on events that a real `codex` recorded. See [Codex](codex.md).
+from its instructions. It declares steer and no usage, because Codex
+takes a steer and a real model spends no planned usage. The run needs
+`CODEX_API_KEY` or a ChatGPT login, and skips without either. The package
+also runs the real `codex app-server` on a scripted model, and tests its
+mapping on notifications that a real `codex` recorded. See [Codex](codex.md).
 
 **The suite checks the pass contract.** A failed activation raises exactly
 one `error` event, and a `say` raises no tool event.

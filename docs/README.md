@@ -20,7 +20,7 @@ each page.
 | [Compose](compose.md)                 | Proposed `compose` tool: join tools in one call through short code           |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                        |
 | [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing               |
-| [Codex](codex.md)                     | The Codex SDK executor: install, options, trust, and testing                 |
+| [Codex](codex.md)                     | The Codex executor: install, options, trust, and testing                     |
 | [Assistant](assistant.md)             | The default assistant package and the `assistant` room option                |
 | [Exchange](exchange.md)               | Human questions, completion, and durable result handles                      |
 | [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                   |

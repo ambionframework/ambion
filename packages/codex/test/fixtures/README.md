@@ -1,20 +1,25 @@
-# Recorded Codex events
+# Recorded Codex notifications
 
-Each `.jsonl` file holds one raw `ThreadEvent` on each line. It comes from
-a real `codex` 0.155.1, through `@openai/codex-sdk` 0.155.1, on the model
-`gpt-5.6-luna` at medium reasoning effort. The unit tests read it, so the
-tests check the mapping against what Codex sends.
+Each `.jsonl` file holds one `{ method, params }` message on each line. It
+comes from a real `codex app-server` 0.159.2, on the model `gpt-5.6-luna`
+at medium reasoning effort, behind the scripted Responses endpoint of
+`test/responses.ts`. The scripted endpoint sends each reply whole, so the
+stream holds no text delta. The unit tests read it, so the tests check the
+mapping against what Codex sends.
 
-The event streams stay as recorded on 0.155.1. The package now pins
-0.158.0, and nobody has recorded them again on that version.
+Two edits keep the file the same on every host. The text of the `userMessage`
+item, which holds the whole rendered view, reads `(the rendered view)`. The
+`configWarning` that names a missing `bwrap` is out, because it depends on
+the host.
 
 | File                   | What it holds                                            |
 | ---------------------- | -------------------------------------------------------- |
-| `plain-answer.jsonl`   | One answer with no tool, recorded on 0.155.1             |
-| `catalog-0.158.0.json` | The entries of `gpt-5.6-luna` and `gpt-5.5` from 0.158.0 |
+| `plain-answer.jsonl`   | One answer with a reasoning summary and no tool          |
+| `catalog-0.159.2.json` | The entries of `gpt-5.6-luna` and `gpt-5.5` from 0.159.2 |
 
 To regenerate the catalog, run `codex debug models` on the bundled binary
 with a temporary `CODEX_HOME`, and keep the entries that the tests use.
 
-To record a run, iterate `thread.runStreamed(prompt).events` and write
-`JSON.stringify(event)` for each event.
+To record a run, wrap `spawnAppServer` in a `connect` function that appends
+`JSON.stringify({ method, params })` for each notification, drive one pass
+with `test/drive.ts`, and apply the two edits above.

@@ -13,6 +13,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from 'node:fs';
@@ -22,7 +23,6 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Execution } from '@ambionframework/ambion';
-import { ROOM_SERVER } from '@ambionframework/ambion/hosting';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
 import {
@@ -41,8 +41,7 @@ export const MODEL = 'gpt-5.6-luna';
 /** The bundled binary of this platform, or nothing when the platform package is missing. */
 function bundledBinary(): string | undefined {
 	try {
-		const sdk = createRequire(import.meta.resolve('@openai/codex-sdk'));
-		const codex = createRequire(sdk.resolve('@openai/codex/package.json'));
+		const codex = createRequire(import.meta.resolve('@openai/codex/package.json'));
 		const platform = process.platform === 'android' ? 'linux' : process.platform;
 		const root = join(
 			dirname(codex.resolve(`@openai/codex-${platform}-${process.arch}/package.json`)),
@@ -142,10 +141,12 @@ export interface CodexOnOptions {
 	readonly hostLogin?: string;
 	/** Whether the provider takes the sign-in of the home and not the dummy key. */
 	readonly signIn?: boolean;
+	/** The value of `CODEX_API_KEY` in the environment of the binary. */
+	readonly apiKey?: string;
 	/** More lines for the `config.toml` of the home. */
 	readonly config?: string;
-	/** Whether the room tools server names a command that does not exist, so it cannot start. */
-	readonly brokenRoomServer?: boolean;
+	/** A line that the binary writes to its standard error before it starts. */
+	readonly stderrLine?: string;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
@@ -156,6 +157,8 @@ export interface CodexOnScript {
 	readonly home: string;
 	/** The home of the host user. Its `.codex` holds the traps. */
 	readonly hostHome: string;
+	/** The executable the seats run, when the script names a wrapper. */
+	readonly codexPath?: string;
 	/** The environment of the binary. A host in another process builds its execution from it. */
 	readonly env: Readonly<Record<string, string | undefined>>;
 	/** Whether the server in the config of the host started. */
@@ -165,14 +168,10 @@ export interface CodexOnScript {
 	close(): Promise<void>;
 }
 
-/**
- * A `codex` executable that runs the bundled binary with a room tools server
- * that cannot start. The last `-c` flag wins, so it replaces the server table.
- */
-function brokenServerBinary(dir: string): string {
+/** A `codex` executable that writes `line` to its standard error and then runs the bundled binary. */
+function noisyBinary(dir: string, line: string): string {
 	const path = join(dir, 'codex');
-	const table = `mcp_servers.${ROOM_SERVER}={command="/nonexistent/node",args=[],required=true}`;
-	writeFileSync(path, `#!/bin/sh\nexec '${bundledBinary()}' "$@" -c '${table}'\n`);
+	writeFileSync(path, `#!/bin/sh\necho '${line}' >&2\nexec '${bundledBinary()}' "$@"\n`);
 	chmodSync(path, 0o755);
 	return path;
 }
@@ -212,20 +211,24 @@ export async function codexOn(
 		// The host names its Codex home. The binary never gets this value.
 		CODEX_HOME: join(hostHome, '.codex'),
 		[DUMMY_KEY_VAR]: 'dummy-key-for-the-scripted-endpoint',
+		...(options.apiKey === undefined ? {} : { CODEX_API_KEY: options.apiKey }),
 		HTTP_PROXY: proxy.url,
 		HTTPS_PROXY: proxy.url,
 		ALL_PROXY: proxy.url,
 		NO_PROXY: '127.0.0.1,localhost',
 	};
+	const codexPath =
+		options.stderrLine === undefined ? undefined : noisyBinary(dir, options.stderrLine);
 	return {
 		// With a host login, the default `login` links it. Otherwise no seat links a login.
 		execution: codexExecution({
 			env,
 			...(options.hostLogin === undefined ? { login: false } : {}),
-			...(options.brokenRoomServer ? { codexPath: brokenServerBinary(dir) } : {}),
+			...(codexPath === undefined ? {} : { codexPath }),
 			...options.runtime,
 			home,
 		}),
+		...(codexPath === undefined ? {} : { codexPath }),
 		responses,
 		home,
 		hostHome,
@@ -235,7 +238,46 @@ export async function codexOn(
 		close: async () => {
 			await responses.close();
 			await proxy.close();
-			rmSync(dir, { recursive: true, force: true });
+			// The binary can still write to its home as it exits.
+			rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 		},
 	};
+}
+
+/** The processes that run with `home` as their `CODEX_HOME`: the app-server of a seat. Linux only. */
+export function runningWith(home: string): number[] {
+	return readdirSync('/proc')
+		.filter((name) => /^\d+$/.test(name))
+		.filter((pid) => {
+			try {
+				return readFileSync(`/proc/${pid}/environ`, 'utf8')
+					.split('\0')
+					.includes(`CODEX_HOME=${home}`);
+			} catch {
+				return false;
+			}
+		})
+		.map(Number);
+}
+
+/** Kill a process, and ignore one that is gone already. */
+export function kill(pid: number): void {
+	try {
+		process.kill(pid, 'SIGKILL');
+	} catch {
+		// The process is gone already.
+	}
+}
+
+/** An endpoint hook that holds the request `index` open until the client goes away. */
+export function holding(index: number) {
+	const open = Promise.withResolvers<void>();
+	const closed = Promise.withResolvers<void>();
+	const onRequest: OnRequest = async (at, response) => {
+		if (at !== index) return;
+		response.on('close', () => closed.resolve());
+		open.resolve();
+		await closed.promise;
+	};
+	return { onRequest, open: open.promise, closed: closed.promise };
 }

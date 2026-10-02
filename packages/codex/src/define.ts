@@ -10,10 +10,13 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
-import type { ModelReasoningEffort } from '@openai/codex-sdk';
+
+/** How much the model reasons before it answers. Codex 0.159.2 takes these values. */
+type ModelReasoningEffort =
+	'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | 'persistent';
 
 /** What Codex asks of the model about its reasoning. Codex shows a summary, never the raw reasoning. */
-export type ReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none';
+type ReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none';
 
 export interface CodexOptions extends ExecutorBaseOptions {
 	/** A Codex model identifier. */
@@ -28,7 +31,7 @@ export interface CodexOptions extends ExecutorBaseOptions {
 	reasoningSummary?: ReasoningSummary;
 }
 
-/** An agent's Codex executor: the Codex SDK loop, model, instructions, and tools. */
+/** An agent's Codex executor: the Codex loop, model, instructions, and tools. */
 export interface CodexExecutor extends Executor {
 	readonly kind: 'codex';
 	readonly model: string;
@@ -36,7 +39,7 @@ export interface CodexExecutor extends Executor {
 	readonly reasoningSummary?: ReasoningSummary;
 }
 
-/** The Codex executor: the Codex SDK's loop, model, instructions, and tools. */
+/** The Codex executor: the Codex loop, model, instructions, and tools. */
 export function codex(options: CodexOptions): CodexExecutor {
 	return Object.freeze({
 		...describeExecutor({ ...options, kind: 'codex' }),

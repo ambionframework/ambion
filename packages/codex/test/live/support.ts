@@ -164,8 +164,8 @@ function instructionsOf(plan: ExecutorPlan): string {
  * The executor suite on a real `codex` and a real model. The model follows
  * each plan from its instructions. A permanent failure is a key that the
  * provider refuses. A transient failure is a `codex` binary that does not
- * exist. Codex takes no steer, and a real model spends no planned usage, so
- * the fixture declares neither.
+ * exist. Codex takes a steer into the live turn, and a real model spends no
+ * planned usage, so the fixture declares the steer and no usage.
  */
 export function codexExecutorFixture(): ExecutorFixture {
 	const dir = dumpDirectory();
@@ -191,7 +191,7 @@ export function codexExecutorFixture(): ExecutorFixture {
 			if (dump === undefined) return createCodexOpener(options);
 			return dump.wrap(createCodexOpener(dump.options(options)));
 		},
-		can: { steer: false, usage: false, permanentFailure: true, memory: true },
+		can: { steer: true, usage: false, permanentFailure: true, memory: true },
 		patience: QUIET_MS,
 		...(dump === undefined ? {} : { close: async (report) => dump.write(report) }),
 	};
