@@ -17,7 +17,7 @@ each page.
 | [Technical facts](technical-facts.md) | Key facts, the 0.5.0 sensor work, twelve packages, and system limits          |
 | [Definitions and tools](agent.md)     | Definitions and tools                                                         |
 | [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                         |
-| [Compose](compose.md)                 | Proposed `compose` tool: join tools in one call through short code            |
+| [Compose](compose.md)                 | The `compose` tool: join tools in one call through short code                 |
 | [Macros](macros.md)                   | Skill macros: compose programs that a skill stores and the model runs by name |
 | [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                         |
 | [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing                |

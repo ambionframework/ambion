@@ -46,6 +46,20 @@ journal stays authoritative when a timed out call reached the room.
 activation. A continuing contribution keeps an exchange open.
 [Deployment](deployment.md) covers the limits a host adds.
 
+## The limits of a compose call
+
+**The `compose` option of a seat bounds each compose call.** A field that
+the option leaves out keeps its default.
+[Compose](compose.md#limits) states what each limit does when a call passes
+it.
+
+| Field                       | Bounds                                               | Default    |
+| --------------------------- | ---------------------------------------------------- | ---------- |
+| `compose.limits.calls`      | Nested calls in one compose call                     | 64         |
+| `compose.limits.concurrent` | Nested calls that run at the same time               | 8          |
+| `compose.limits.bytes`      | UTF-8 bytes of the encoded return value              | 65,536     |
+| `compose.limits.time`       | Wall time of one compose call, within `ctx.deadline` | 120,000 ms |
+
 ## The cost of the fold
 
 **The claim is a shape.** The oracle `foldRoom` in

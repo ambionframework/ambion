@@ -196,7 +196,9 @@ internal. Participant views omit `sessionId`.
 | `localExecution`         | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                               |
 | `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
 | `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
-| `describeExecutor`       | The neutral half of an executor definition, which an executor kind extends with its fields                                                                     |
+| `describeExecutor`       | The neutral half of an executor definition, which an executor kind extends with its fields. It appends the `compose` tool when the options hold `compose`      |
+| `invokeTool`             | Runs one direct call of a tool: prepares and checks the arguments, then invokes. It hands the step sink to the `compose` tool alone                            |
+| `invokeChecked`          | The same call for a harness that prepared and checked the arguments already, as Pi does                                                                        |
 | `present`, `pickPresent` | The option fields that hold a value, which an executor kind spreads into its executor                                                                          |
 | `Executor`               | The value in an agent definition: `kind`, `instructions`, `tools`, and the fields that the room reads                                                          |
 | `ActivationOpener`       | The executor contract: `ExecutorActivation`, `StepSink`, `Pass`, `PassRecord`, `ReadRange`, `PassResult`, and `RunningActivation`                              |
@@ -388,7 +390,9 @@ executor records the steps, and raises no tool event.
 **The executor hosts the tools.** Pi runs them in its harness, Claude in an
 MCP server in the process, and Codex as dynamic tools of its thread. A harness that cannot see the id of a call
 takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
-no call took yet, or a fresh id when none waits. A `tool_result` step ends
+no call took yet, or a fresh id when none waits. A step with a `parent` is
+never that step. A nested `bash` call of `compose` cannot give its id to a
+direct `bash` call of the same batch. A `tool_result` step ends
 its call, so the driver drops the id of that call. Each adapter page names
 the transport.
 
@@ -397,8 +401,8 @@ definition itself.** Claude and Codex host all of `pass.tools`. A
 `BoundTool` does not carry what the Pi harness does with a tool of the
 definition:
 
-- The harness applies `prepareArguments` before it checks the arguments
-  against the schema. A `BoundTool` applies it after the check.
+- The harness converts a primitive argument to the type of the schema
+  before it checks the call. A `BoundTool` converts nothing.
 - The harness runs a batch in turn when a tool sets `executionMode` to
   `sequential`.
 - The harness gives the tool `onUpdate`, and the abort signal of the pass.
@@ -410,7 +414,7 @@ the context that the driver gives it.
 
 ## The step vocabulary
 
-**A step is one thing an activation did.** The vocabulary has eleven kinds,
+**A step is one thing an activation did.** The vocabulary has twelve kinds,
 and every executor kind shares it. A step is plain JSON. The trace stamps
 each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
@@ -421,14 +425,24 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                                |
 | `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                              |
 | `text`        | executor    | A block of model text. `final` closes the block.                                                             |
-| `tool_call`   | executor    | A tool starts, with its input.                                                                               |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                               |
+| `tool_call`   | executor    | A tool starts, with its input. `parent` names the `compose` call that made a nested call.                    |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`. `parent` is the same as on `tool_call`.                       |
+| `approval`    | `compose`   | The answer of `approve` to one compose call: the `compose` call id, and `allow` or `deny`.                   |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.            |
 | `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                              |
 | `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude and Codex record it. |
 | `usage`       | executor    | Tokens and cost.                                                                                             |
 | `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.              |
 | `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.               |
+
+**A compose call records its own steps.** `compose` records an
+`approval` step when the `approve` hook answers. It records a `tool_call` step
+and a `tool_result` step for each nested call, with `parent` set to the call
+id of `compose`. The executor records no step for a nested call, and the
+driver raises the tool events from the steps as for any call. A step with a
+`parent` never gives its id to a direct call ([The room
+tools](#the-room-tools)). [Compose](compose.md#how-compose-runs-a-nested-call)
+states how.
 
 **Each executor guide holds its own mapping table.** [Pi](pi.md#the-step-mapping),
 [Claude](claude.md#the-step-mapping), and [Codex](codex.md#step-mapping) map

@@ -62,6 +62,7 @@ does not restrict who may address or steer whom.
 | Git on a workstation                  | The forced command `serve` and the account permissions restrict pushes to the agent's forks and shared repositories. An agent key works only from the loopback address, until it expires. A key that an agent copies into the record lets any account on the server push to that agent's repositories until then.                                                                                                                                                                                                                                                                                                                                                                                    | [Workstation git](workstation-git.md#trust)                                                       |
 | Writes to shared git repositories     | Every workspace agent can push any content. A hook refuses deletion and non-fast-forward updates of the default branch; other branches can be rewritten or deleted. Commit authors on the workstation are client supplied; the authenticated pushing agent is recorded in the reflog.                                                                                                                                                                                                                                                                                                                                                                                                                | [Git](git.md#shared-repositories), [Workstation git](workstation-git.md#trust)                    |
 | Writes to the shared database         | The guard of the append-only tables keeps each row and its provenance, and refuses every trigger of an agent. It does not keep the database open for writes. One agent can stop the INSERTs of every agent with ordinary DDL, for example a UNIQUE index on a constant expression, or `PRAGMA foreign_keys = ON` on a schema with `REFERENCES`. The PRAGMA stays on for later calls. Another agent can drop the index or set the PRAGMA back. The guard refuses the statements that it names, so an agent that runs SQL can still lift it with a statement that it does not name, for example `PRAGMA temp_store`, which drops the TEMP triggers of the guard. The backlog holds an allow-list (K2). | [Workspace](workspace.md#records-append-only-tables-with-provenance)                              |
+| Hostile code in an evaluator          | The evaluator limits the names that code reaches, and it is not a security boundary against hostile code. `quickjsEvaluator` shares the process of the host. `processEvaluator` runs a child under `--permission`, and an ArrayBuffer is outside its memory bound.                                                                                                                                                                                                                                                                                                                                                                                                                                   | [Compose](compose.md#the-evaluator)                                                               |
 
 ## What each harness exposes
 
@@ -101,6 +102,20 @@ Each executor kind has a guide with its options and its tests. Read the
 [Pi](../packages/pi/README.md), [Claude](../packages/claude/README.md), and
 [Codex](codex.md) pages, and [Executors](executors.md) for the
 contract that all three meet.
+
+## Compose
+
+**A harness sees one tool for a compose call.** The room hosts `compose` as
+one tool of the room server. The harness sees neither the nested calls nor
+the `bash` that the code calls, so a harness hook cannot refuse one. The
+`approve` hook of the `compose` option is the one hook that sees a compose
+call. It reads `{ uses, code }` or `{ macro, hash, args }` before any code
+runs, and an `approval` step records its answer
+([Compose](compose.md#approval)).
+
+**A nested call keeps the provenance of the compose call.** It runs the
+ordinary tool with the same agent, room, activation, and exchange. A tool
+gains no authority from the call.
 
 ## Harness memory
 

@@ -1,11 +1,11 @@
 # Compose
 
-**Status: implemented, with the live evidence and the final pages open.**
-The `compose` option adds the `compose` tool, and the main entry exports its
-types and `COMPOSE_GUIDANCE`. Skill [macros](macros.md) run by name. The
-package `@ambionframework/evaluator` holds `quickjsEvaluator` and
-`processEvaluator`, and both pass `evaluatorConformance`. The live
-comparison of the token cost and the update of the other pages stay open.
+**Status: the current contract of 0.6.0.** The `compose` option adds the
+`compose` tool, and the main entry exports its types and `COMPOSE_GUIDANCE`.
+Skill [macros](macros.md) run by name. The package
+`@ambionframework/evaluator` holds `quickjsEvaluator` and `processEvaluator`,
+and both pass `evaluatorConformance`. **Pending:** the live comparison of
+the token cost (CP6) has not run yet, so the page states no token figure.
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
@@ -124,18 +124,19 @@ interface LedgerEntry {
 }
 ```
 
-**A failed or cancelled compose call throws.** Its message renders the
-error and the ledger. Every executor kind marks a thrown error as a tool error:
-Claude and Codex give its message as an error result, and Pi does the
-same. The model then knows which calls completed and which effects can
-stand. The error is a `ToolFailure` whose `details` hold the `ComposeResult`. The ledger never holds the
+**A failed or cancelled compose call throws.** Its message renders the error
+and the ledger. Every executor kind turns a thrown error into an error result
+with that message. The model then knows which calls completed. It knows which
+effects can stand. The error is a `ComposeFailure`, an internal class of the
+core that the main entry does not export. Its `details` hold the
+`ComposeResult`, and no executor passes them on. The ledger never holds the
 input or the output of a call.
 
 **The content is the contract.** Claude and Codex host a definition tool as
 a `BoundTool`, and a `BoundTool` keeps the content alone
-([Executors](executors.md#the-room-tools)). The `ComposeResult` in
-`details` reaches a Pi seat and its trace. On Claude and Codex, the model
-and the trace read the rendered content.
+([Executors](executors.md#the-room-tools)). The `ComposeResult` of a
+completed call reaches a Pi seat in `details`, and the trace keeps it. On
+Claude and Codex, the model and the trace read the rendered content.
 
 ## The catalog
 
@@ -143,7 +144,7 @@ and the trace read the rendered content.
 renders one signature for each tool that the seat can bind. It reads the
 input schema, the description, and the declared output of the tool. The
 catalog is part of the description of `compose`, so the model reads it
-once for each activation.
+once for each activation. The example below shortens the descriptions.
 
 ```ts
 declare const tools: {
@@ -158,7 +159,7 @@ declare const tools: {
     database: string;
     count: number;
     columns: string[];
-    rows: Record<string, JsonValue>[];
+    rows: Record<string, string | number | null>[];
     export?: string;
     import?: string;
     imported?: number;
@@ -178,8 +179,8 @@ the authority: `compose` checks every argument against it.
 **The catalog costs input tokens.** The model already reads the schema of
 each tool as a native tool. The catalog repeats each input schema, and
 adds each declared output. A seat with many tools pays that cost in every
-activation. The live comparison of CP6 counts the catalog in the input
-tokens of the seat.
+activation. The comparison that the status names counts the catalog in the
+input tokens of the seat.
 
 ## Guidance
 
@@ -252,6 +253,11 @@ name, the hash, and the `args`. From the evaluation on, it is an ordinary
 compose call. [Macros](macros.md) states the format, the steps, and the
 limits.
 
+**The trace records the call of a macro without its hash.** The
+`tool_call` step of the `compose` call holds the input of the model:
+`{ macro, args }`. The hash goes to `approve` alone. The `approval` step
+holds the call id and the answer.
+
 ## Bindings
 
 **A binding returns the declared output of its tool.** A tool declares the
@@ -296,10 +302,8 @@ process that `wait` saw fail. The binding copies those `details` to
 error crosses to the evaluator as the JSON `{ message, details? }`, and
 the evaluator builds the `Error` from it.
 
-**A tool learns that a compose call called it from `ctx`.**
-`ToolContext.composeCall` holds the id of the `compose` call. It is absent
-for a direct call. `compose` sets it, and code cannot set it. The field
-changes no permission and no effect.
+**`compose` sets `ToolContext.composeCall` on each nested call.**
+[Definitions and tools](agent.md#tools) states the field.
 
 ```ts
 interface ToolContext {
@@ -308,33 +312,18 @@ interface ToolContext {
 }
 ```
 
-**The shipped tools declare their outputs.** Each tool below gives its
-`details` as the declared output:
-
-| Tool               | Declared output                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| `sql`              | The database, the count of every row, the columns, the preview rows, and the export or import facts. |
-| `snapshot`         | The refs, one for each path, in order.                                                               |
-| `bash`             | The process, with its handle and its state, and the output read.                                     |
-| `status`, `cancel` | The process, as `bash` gives it.                                                                     |
-| `ps`               | The processes, with the handle and the state of each.                                                |
-| `wait`             | One handle: the process, as `bash` gives it. Several: the processes, and the processes that ended.   |
-| `fork`             | The repository that the fork made, when the fork made one.                                           |
-
-**`sql` gives the rows that it already reads.** The preview holds the rows
-up to the limit `rows`, so the declared output needs no second query.
-`count` is the count of every row of the result. `rows` holds the preview
-rows, one object for each row. A row value is JSON: text,
-a number, or null. A blob is its bytes as lowercase hex, as the CSV export
-writes it. A `bigint` is its decimal digits as text.
+**The workspace tools declare their outputs.** `sql`, `snapshot`, `bash`,
+`status`, `cancel`, `wait`, `ps`, and `fork` set `compose: { output }`. Every
+other tool binds as text. [Workspace](workspace.md#declared-outputs) states
+the shape of each output.
 
 ## Typing a declared output
 
 **`defineTool` ties the return type of `execute` to the declared output.**
-With `compose: { output: O }`, `execute` must return a `ToolResult` whose
-`details` is `Static<O>`. A string, a missing field, or a value of the
-wrong type fails `tsc`. The runtime check of each call stays, because a
-tool built by hand as an `AmbionTool` gets no help from the compiler.
+[Definitions and tools](agent.md#declared-outputs) states the two overloads
+and `ToolResult<TDetails>`. A string, a missing field, or a value of the
+wrong type fails `tsc`. [Definitions and tools](agent.md#declared-outputs) states the runtime check
+of each call.
 
 ```ts
 const Order = Type.Object({
@@ -355,63 +344,8 @@ const findOrder = defineTool({
 });
 ```
 
-**`ToolResult` takes the type of its details.** `ToolResult<TDetails =
-unknown>` keeps its current shape when no type is given. `AmbionTool`
-keeps `details` as `unknown`, because a list of tools holds tools of many
-outputs.
-
-**`defineTool` has two overloads.** The overload for a declared output
-comes last, so the compiler reports its error, and that error names the
-field that breaks the schema, such as `Property 'status' is missing`.
-
-```ts
-interface DeclaredToolOptions<P extends TSchema, O extends TSchema> extends BaseToolOptions<P> {
-  compose: { readonly output: O };
-  execute: (
-    params: Static<P>,
-    ctx: ToolContext,
-  ) => Promise<ToolResult<Static<O>>> | ToolResult<Static<O>>;
-}
-
-interface PlainToolOptions<P extends TSchema> extends BaseToolOptions<P> {
-  compose?: false;
-  execute: (
-    params: Static<P>,
-    ctx: ToolContext,
-  ) => Promise<string | ToolResult> | string | ToolResult;
-}
-
-function defineTool<P extends TSchema>(options: PlainToolOptions<P>): AmbionTool;
-function defineTool<P extends TSchema, O extends TSchema>(
-  options: DeclaredToolOptions<P, O>,
-): AmbionTool;
-```
-
-`BaseToolOptions` holds the fields that every tool definition holds,
-except `execute`. A `tsc` run over this sketch accepts a matching `details`
-and a string from an undeclared tool. It refuses a string, a wrong literal,
-and a missing field from a declared tool.
-
-**Existing callers keep compiling.** `fromPiTool` calls
-`defineTool<TSchema>` with one type argument, so only the first overload
-applies. `recordedOnShell` returns a tool result with typed `details`,
-and its content parts fit `ToolResult<Static<O>>`.
-
-**The schema is the one source of the type.** A workspace tool derives its
-details type from its output schema, as `type SnapshotDetails =
-Static<typeof SnapshotOutput>`. The interface and the schema then cannot
-drift. `SqlDetails`, `SnapshotDetails`, `ProcessDetails`, `PsDetails`,
-`WaitDetails`, and `ForkDetails` each become such a type.
-
-**Two details need care.** `ProcessDetails.truncation` holds the
-workspace type `ShellOutputTruncation`. Its schema lists the fields of
-that type, and a type test pins that the two stay assignable. A `Static`
-type holds mutable arrays, so a tool copies a readonly array into its
-details, as `wait` already does with `[...processes]`.
-
-**`fromPiTool` takes the same declaration.** A second argument,
-`{ output: O }`, requires the `TDetails` of the Pi `AgentTool` to be
-`Static<O>`, and passes the declaration to `defineTool`.
+**`fromPiTool` takes no output declaration.** A native Pi tool binds as
+text.
 
 ## What a compose call binds
 
@@ -514,16 +448,21 @@ name while it flattens the tools of the options, before `compose` is
 appended. The check of the agent tools runs later, and its duplicate rule
 refuses a second `compose`.
 
-**The code of the tool lives in `packages/ambion/src/compose.ts`.** It
-uses the TypeBox checks and the step vocabulary, as `define.ts` does, so
-it joins the vocabulary layer. The file list of that layer in
-`biome.jsonc` gains it ([Toolchain](toolchain.md)).
+**Five files of the vocabulary layer hold the tool.** `compose.ts` holds
+the types, the checks, and `COMPOSE_GUIDANCE`. `compose-tool.ts` holds the
+tool and the hosting exports. `compose-run.ts` holds the run of one compose
+call. `compose-catalog.ts` renders the catalog, and `compose-macros.ts`
+checks the macros. `tool-call.ts` holds the one function that runs a tool
+call. The file list of the layer in `biome.jsonc` names each file
+([Toolchain](toolchain.md)).
 
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
 each tool of the definition as a `BoundTool`. The `invoke` of `compose`
 closes over the other tools of the definition. It runs each nested call
-through `tool-call.ts`, the one function that runs a tool call.
+through `tool-call.ts`, the one function that runs a tool call. A Codex
+seat gets `compose` through the same `agentTools` path as a Claude seat,
+and no test of `compose` runs on a Codex seat.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
 actions in this order:
@@ -534,7 +473,8 @@ actions in this order:
    input schema. A tool from `defineTool` checks them again inside
    `invoke`. The check of the core stands for every tool, because a tool
    built by hand can have an `invoke` that checks nothing. A direct call
-   of Claude, Codex, or the scripted executor takes the same check.
+   of Claude, Codex, or the scripted executor takes the same check. The
+   check coerces nothing.
 3. It gives the call a fresh call id and a `ToolContext`. The context
    copies the agent, the room, the activation, the exchange, the
    `deadline`, and the signal from the `compose` call. It sets
@@ -542,6 +482,13 @@ actions in this order:
 4. It calls `invoke`, and waits for the result.
 5. It checks a declared output, and hands the binding value to the
    evaluator.
+
+**Pi coerces primitive arguments of a direct call, and `compose` does not.**
+The Pi harness converts a primitive to the type that the schema names
+before it checks the arguments. The text `"5"` becomes the number 5. The
+arguments of the `compose` call pass through that conversion. The
+arguments of a nested call pass through the check of the core alone. Code
+must give the type that the schema states.
 
 **A nested call keeps the deadline of the activation.** `wait` reads
 `ctx.deadline` to end a wait before the room ends the activation
@@ -559,13 +506,11 @@ that holds the call id of `compose`. The core raises the tool events from
 them, as it does for every tool. `ToolContext` has no `record`, so no tool
 can write a step.
 
-**Only the core hands the step sink to `compose`.** The hosting export
-`invokeTool` runs one direct call. When the tool is a `compose` tool and a
-sink is present, it gives the sink to a private entry of that tool. It
-gives the sink to no other tool. The core passes it for Claude, Codex, and
-the scripted executor. Pi prepares and checks the arguments in its
-harness, so `@ambionframework/pi` calls `invokeChecked` with
-`activation.trace`. The public `invoke` of `compose` holds no sink.
+**Only the core hands the step sink to `compose`.** The hosting exports
+`invokeTool` and `invokeChecked` do it
+([Executors](executors.md#the-hosting-entry-exports)), and
+[Pi](pi.md#tools-and-bundles-an-agent-can-add) states the Pi path. The
+public `invoke` of `compose` holds no sink.
 `runAgent` runs outside a room and has no sink, so a compose call there
 records no nested step.
 
@@ -602,10 +547,11 @@ a `ComposeRequest` and the `ToolContext` of the `compose` call. Free code
 gives `{ uses, code }`. A macro gives `{ macro, hash, args }`: the name, the
 blob hash of its file, and its checked arguments. The hook cannot record a
 step. `compose` calls the hook after it checks `uses`, or the macro and its
-`args`, and before it evaluates any code. The `approval` step records the answer, with the call id and `allow` or
-`deny`. A denial fails the
-compose call with no ledger and no effect. With no hook, `compose` allows
-every compose call of the catalog.
+`args`, and before it evaluates any code. The `approval` step records the
+answer, with the call id of the `compose` call and `allow` or `deny`. A
+denial fails the compose call with no ledger and no effect. A hook that
+throws counts as a denial. With no hook, `compose` allows every compose call
+of the catalog, and records no `approval` step.
 
 ```ts
 interface ComposeOptions {
@@ -724,10 +670,10 @@ one conformance suite, `evaluatorConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
 the kernel.
 
-| Evaluator            | Runs the code                                           | Memory and CPU                                                                                                                          | Isolation                                                                                                  |
-| -------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap, and a CPU limit for each stretch of code. A cut ends the run between stretches                      | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
-| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap. An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
+| Evaluator            | Runs the code                                           | Memory and CPU                                                                                                                                   | Isolation                                                                                                  |
+| -------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches           | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
+| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap (64 MiB). An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
 
 **`quickjsEvaluator` uses the synchronous QuickJS build.** The asyncify
 build of `quickjs-emscripten` runs one host call at a time, so
@@ -736,9 +682,10 @@ build binds each tool as a host function that returns `ctx.newPromise()`.
 The host settles that promise when the nested call settles, then runs
 `runtime.executePendingJobs()`. Several nested calls then run together.
 `setMemoryLimit` and a WebAssembly memory of its own bound the heap. The
-interrupt handler ends code that runs past the CPU limit. The host thread
-cannot see the signal while code runs, so a cut takes effect between two
-stretches of code.
+CPU limit sums the time of the code over every stretch between two settled
+calls, and the wait for a call does not count. The interrupt handler ends
+code that runs past the limit. The host thread cannot see the signal while
+code runs, so a cut takes effect between two stretches of code.
 The evaluator disposes each promise and each value handle that it makes.
 QuickJS aborts the process when it frees a runtime that still holds one.
 The package is MIT, it has no native part, and the lockfile already holds
@@ -810,12 +757,8 @@ limit of the runtime: `limits` goes to the executions, and the context of
 a tool call carries none. So `compose` reads its limits from its own
 option. An absent field keeps the default.
 
-| Limit                       | What it bounds                                       | Default    |
-| --------------------------- | ---------------------------------------------------- | ---------- |
-| `compose.limits.calls`      | Nested calls in one compose call                     | 64         |
-| `compose.limits.concurrent` | Nested calls that run at the same time               | 8          |
-| `compose.limits.bytes`      | UTF-8 bytes of the encoded return value              | 65,536     |
-| `compose.limits.time`       | Wall time of one compose call, within `ctx.deadline` | 120,000 ms |
+[Envelope](envelope.md#the-limits-of-a-compose-call) names the four fields,
+what each bounds, and its default.
 
 **The time limit ends at the earlier bound.** `compose` stops the code at
 `compose.limits.time` from its start, or at `ctx.deadline`, whichever
@@ -825,47 +768,41 @@ comes first.
 return value to fit. The error names the limit, so the code can return a
 smaller value.
 
+**The `calls` limit rejects the binding, so code can catch it.** The call
+past the limit gets no id, no ledger entry, and no step. Its binding
+rejects with an error that names `compose.limits.calls`. A name that the
+compose call does not bind, and arguments that break the schema, reject in
+the same way. Code that catches the error can return what it has. The other
+limits end the compose call.
+
+**The time limit covers the drain of late calls.** The timer starts before
+the code and stops after every call settles. It can fire while `compose`
+waits for a call that outlived the code. The compose call then fails with
+the status `failed`, and the ledger marks each call that has not settled
+`pending`.
+
 **The trace caps bound what a nested call leaves.** Each nested call
 records two steps, and they count against `limits.trace.stepsPerPass`.
-Each output counts against `limits.trace.toolOutputBytes`. The default of
-64 calls keeps one compose call at 128 steps of the 1,000 of a pass. The
-trace can cut a nested output.
-
-## Changes to other contracts
-
-**The implementation updates these pages in the same change.** Until then,
-each page states the current surface.
-
-| Page                                                                   | Change                                                                                                                                                                                                                                                                                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                                                                   |
-| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `invokeTool` and `invokeChecked`, `callId`.                                                                                                                                                                                                                                                |
-| [Trust](trust.md)                                                      | A harness sees one tool for a compose call, and no nested call. `approve` is the one hook that sees one.                                                                                                                                                                                                                              |
-| [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, `count` in the `sql` details, and `params` of `sql`.                                                                                                                                                                                                     |
-| [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                                                                           |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to `invokeChecked`. `fromPiTool` takes an output declaration.                                                                                                                                                                                                                       |
-| [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                                                                  |
-| `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                                                                 |
-| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal and the deadline, and runs it through `invokeTool`.                                                                                                                                                                                                                 |
-| [Skills](skills.md) and [Macros](macros.md)                            | The `macros/` folder of a skill, and the macros of a skill set.                                                                                                                                                                                                                                                                       |
-| Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeRequest`, `ComposeMacro`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the values `COMPOSE_GUIDANCE` and `composeMacro`. The snapshot lists values only, so those two and `evaluatorConformance` from `/conformance` change it. |
-| Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                                                                        |
+Each output counts against `limits.trace.toolOutputBytes`
+([Envelope](envelope.md#the-limits)). The trace can cut a nested output.
 
 ## Acceptance
 
-**The scripted executor runs the acceptance.** Today it gives a tool call
-no signal and no deadline. The same change gives it both, and hands the
-step sink to `compose` through `invokeTool`, so `settled(room)` waits for a
-deterministic compose call, and a test reads the nested steps. The scripted executor records the text of a
+**The scripted executor runs the acceptance.** It gives a tool call a
+signal and the deadline. It hands the step sink to `compose` through
+`invokeTool`, so `settled(room)` waits for a deterministic compose call. A
+test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
-content. A unit test of the `invoke` of `compose` reads the
-`ComposeResult`. Items 1 and 6 also run on the live tier of each executor
-kind once.
+content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
+Items 1, 6, and 7 add a live run, which CP6 holds. That run is the one
+pending item of this page.
 
-1. **The tools compose unchanged.** A seat on each of Pi, Claude, and Codex
-   binds `sql` and `snapshot` with the same code. Each nested call keeps
-   its preparation, its checks, its provenance, its deadline, and its
-   steps.
+1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
+   `compose` as one more definition tool. A workspace test binds `sql` and
+   `snapshot` through `invokeTool`, and a macro test runs them on the
+   scripted executor. A Pi seat on a scripted stream and a Claude seat on a
+   fake executable run `compose` over a test tool. Each nested call keeps its
+   preparation, its checks, its provenance, its deadline, and its steps.
 2. **The data stays out of the context.** A test passes a large result
    from one tool into another. The model receives only the returned value,
    and the trace holds the nested calls with their `parent`.
@@ -883,8 +820,8 @@ kind once.
    siblings to settle, and the ledger holds the outcome of each.
 6. **Processes carry parallel work.** A compose call starts several
    processes with `bash` and waits for each. The wall time stays near the
-   time of the slowest process.
-7. **The guidance steers the choice.** The live comparison of CP6 holds
-   two cases on each executor kind. In the first, the result of one tool feeds
+   time of the slowest process. Only the live run measures the wall time.
+7. **The guidance steers the choice.** The live comparison holds two cases
+   on each executor kind. In the first, the result of one tool feeds
    another, and the seat calls `compose`. In the second, the seat must
    read a result before it decides, and it calls the tool directly.

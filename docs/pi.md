@@ -114,17 +114,18 @@ room resolves an execution.
 **`pi(options)` returns a frozen executor of kind `pi`.** The kernel
 validates the shared fields. Pi adds `model` and `compaction`.
 
-| Option                 | Required | Default             | Meaning                                                                          |
-| ---------------------- | -------- | ------------------- | -------------------------------------------------------------------------------- |
-| `instructions`         | Yes      | None                | The private guidance of the agent.                                               |
-| `model`                | Yes      | None                | A Pi model id, `provider/model-id`.                                              |
-| `tools`                | No       | None                | The tools of the agent, from `defineTool` or `fromPiTool`.                       |
-| `bundles`              | No       | None                | Tool bundles. Their guidance joins the prompt after the speaking policy.         |
-| `speaking`             | No       | `DEFAULT_SPEAKING`  | The speaking policy. It replaces the default.                                    |
-| `activationTokenLimit` | No       | The whole record    | The token limit of the record one activation reads. A positive integer.          |
-| `estimateTokens`       | No       | `'length'`          | The name of the estimator in the runtime that counts tokens. It needs the limit. |
-| `compaction`           | No       | The harness default | When the harness compacts the session. A partial Pi `CompactionPolicy`.          |
-| `thinking`             | No       | `'off'`             | How much the model reasons before it answers. A Pi thinking level.               |
+| Option                 | Required | Default             | Meaning                                                                                    |
+| ---------------------- | -------- | ------------------- | ------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None                | The private guidance of the agent.                                                         |
+| `model`                | Yes      | None                | A Pi model id, `provider/model-id`.                                                        |
+| `tools`                | No       | None                | The tools of the agent, from `defineTool` or `fromPiTool`.                                 |
+| `bundles`              | No       | None                | Tool bundles. Their guidance joins the prompt after the speaking policy.                   |
+| `compose`              | No       | None                | The `compose` tool of the seat: an evaluator, and optional limits ([Compose](compose.md)). |
+| `speaking`             | No       | `DEFAULT_SPEAKING`  | The speaking policy. It replaces the default.                                              |
+| `activationTokenLimit` | No       | The whole record    | The token limit of the record one activation reads. A positive integer.                    |
+| `estimateTokens`       | No       | `'length'`          | The name of the estimator in the runtime that counts tokens. It needs the limit.           |
+| `compaction`           | No       | The harness default | When the harness compacts the session. A partial Pi `CompactionPolicy`.                    |
+| `thinking`             | No       | `'off'`             | How much the model reasons before it answers. A Pi thinking level.                         |
 
 **Compaction is on by default.** The harness holds the default policy. The
 executor passes `compaction` to the harness as it is, and a field that the
@@ -339,7 +340,14 @@ the harness records the abort.
 
 **`fromPiTool` adapts a native Pi tool.** It keeps the name, the schema,
 `prepareArguments`, and `executionMode`, and passes the call id, the signal,
-and the update callback through.
+and the update callback through. It takes no output declaration, so
+`compose` binds the tool as text.
+
+**The harness prepares and checks the arguments, and the executor calls
+`invokeChecked`.** `toolsFor` passes the step sink of the activation to
+`invokeChecked`, which hands it to the `compose` tool and to no other tool.
+[Compose](compose.md#how-compose-runs-a-nested-call) states what the
+primitive conversion of the harness means for a nested call.
 
 **The `details` of a tool result must be JSON.** The session writes every
 tool result to its storage. The executor drops `details` that JSON cannot
@@ -439,7 +447,7 @@ model did.
 
 ## The step mapping
 
-[Executors](executors.md#the-step-vocabulary) holds the eleven step kinds and
+[Executors](executors.md#the-step-vocabulary) holds the twelve step kinds and
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 
@@ -450,6 +458,7 @@ driver writes `pass`, `room`, and `end`.
 | `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                          |
 | `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.       |
 | `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.        |
+| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                        |
 | `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.             |
 
 A redacted thinking block adds no step. The trace policy of the definition

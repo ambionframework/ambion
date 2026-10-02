@@ -114,13 +114,16 @@ integer. `SqlRunOptions` gains `params`, and the SQLite backend binds the
 values and fails a run that has `params` and more than one statement. The
 type `SqlParam` is new.
 
-**The new package `@ambionframework/evaluator` holds two evaluators.**
+### The evaluators
+
+**The new package `@ambionframework/evaluator` holds two evaluators.** It is
+the twelfth publishable package, and it depends on `@ambionframework/ambion`.
 `quickjsEvaluator()` runs the code of a compose call in QuickJS, on the
-synchronous build, in the host process. It gives each evaluation a runtime
-and a WebAssembly memory of its own, a memory limit, and a CPU limit.
+synchronous build, in the host process. It gives each evaluation a runtime and
+a WebAssembly memory of its own, a memory limit, and a CPU limit.
 `processEvaluator()` runs the code in a `node:vm` context in a child Node
-process under `--permission` with no allow flag. It needs `--allow-net`, so
-it throws at construction on Node 22. The child entry is a bundled file that
+process under `--permission` with no allow flag. It needs `--allow-net`, so it
+throws at construction on Node 22. The child entry is a bundled file that
 imports only `node:` built-ins. Both evaluators apply one globals table and
 pass one conformance suite.
 

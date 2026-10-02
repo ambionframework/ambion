@@ -169,6 +169,7 @@ model.** The executor passes each setting to `codex app-server`.
 | `model`                | Required           | A Codex model identifier                                            |
 | `tools`                | None               | Tools from `defineTool`. They reach Codex as dynamic tools          |
 | `bundles`              | None               | Tool bundles with guidance                                          |
+| `compose`              | None               | The `compose` tool: an evaluator, and optional limits               |
 | `speaking`             | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
 | `activationTokenLimit` | The whole record   | The token limit for the record one activation reads                 |
 | `estimateTokens`       | `'length'`         | The name of the estimator in the runtime that counts tokens         |
@@ -389,6 +390,12 @@ of each pass from `item_0`. The id of a step holds the activation id, the
 `turnId`, and the item id, as in `message:3:gpt:1:turn-1:item_1`. A room
 tool takes that id as the key of its commit, so the say of each activation
 lands under its own key.
+
+**A `compose` call adds steps that no Codex item carries.** Codex hosts
+`compose` as a dynamic tool, through the same `agentTools` path as Claude.
+The core records the `approval` step and the nested `tool_call` and
+`tool_result` steps with a `parent`. No test of `compose` runs on a Codex
+seat ([Compose](compose.md#acceptance)).
 
 **A failed tool call marks its result.** The `tool_result` carries the text
 of the answer. A failed call without text carries "The tool failed.".

@@ -500,8 +500,7 @@ never fields of the protocol.
 `@ambionframework/workspace/sensors` exports the wire schemas, types, and
 HTTP client. `@ambionframework/workspace/sensor-api.schema.json` exports the
 generated schema. `@ambionframework/workspace/conformance` exports
-`sensorConformance`. The package count stays at eleven; there is no separate
-sensor package.
+`sensorConformance`. The sensor work adds no package.
 
 **A host supplies the transport and expected evidence.** The probe fixture is a
 `ConformanceFixture<SensorConformanceProbe>`. It opens a probe for each case.
