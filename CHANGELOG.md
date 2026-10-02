@@ -49,7 +49,7 @@ Stored bodies change field names. The golden journals hold the new names.
 | `composition`  | `agents`, `available`, `summary` | `seated`, `reserve`, `summaryWriter` |
 | `close`        | `summary`                        | `summaryWriter`                      |
 
-The text that a model reads changes in three places. Live cases on Pi,
+The text that a model reads changes in four places. Live cases on Pi,
 Claude, and Codex pass on the new text.
 
 - The prompts and the tool results of `say` say "activation" where they said
@@ -59,6 +59,8 @@ Claude, and Codex pass on the new text.
   activation", and "closing assignment".
 - The `schedule` tool takes `delaySeconds` where it took `after`, and the two
   process texts that name the tool follow.
+- The identity of the judge says "Grades a simulation against its criteria"
+  where it said "Grades a run".
 
 The exported names change as follows.
 
@@ -80,7 +82,7 @@ The exported names change as follows.
 | Trace                   | `TraceRecord`, `RoomProjection.record`, `OwedFacts.record`, `TracePolicy.thinking: 'summary'`                                    | `TracedStep`, `summaryFacts`, `summaryFacts`, `'start'`                                                     |
 | `/testing`              | `scriptedExecutor`, `speak`, `later`, `isClosing`, `Step`, `Call`, `Result`, the script parameter `call`                         | `scriptedOpener`, `say`, `schedule`, `isSummarizing`, `ScriptStep`, `ScriptCall`, `ScriptResult`, `request` |
 | Conformance             | `ExecutorHarness`, `PortHarness`, `ConformanceHarness`, `piExecutorHarness`, `claudeExecutorHarness`                             | `ExecutorFixture`, `PortFixture`, `ConformanceFixture`, `piExecutorFixture`, `claudeExecutorFixture`        |
-| Simulator               | `Run`, `RunExchange`                                                                                                             | `Simulation`, `SimulationExchange`                                                                          |
+| Simulator               | `Run`, `RunExchange`, `SimulateOptions.exchanges`, `AgentActorOptions.timeoutMs`, `AgentJudgeOptions.timeoutMs`                 | `Simulation`, `SimulationExchange`, `messages`, `moveMs`, `gradeMs`                                         |
 | Executor packages       | `ClaudeRuntime`, `CodexRuntime`, `ClaudeHarnessOptions`, Pi testing `scripted`, Claude `FakeScenario.turns`                      | `ClaudeExecutionOptions`, `CodexExecutionOptions`, `ClaudeFixtureOptions`, `scriptedStream`, `passes`       |
 | Workspace endpoints     | `WorkspacePort`, `WorkspacePorts`, `open`, `hostname`, `BashBackend.ports`                                                       | `WorkspaceEndpoint`, `WorkspaceEndpoints`, `forward`, `machine`, `endpoints`                                |
 | Workspace backends      | `GitBackend.server`, `ObjectBackend.store`, `SqlBackend.database`, `Workspace.host`, `AuditLog.record`                           | `label`, `label`, `label`, `mirrorAgent`, `append`                                                          |
