@@ -118,7 +118,7 @@ it('settles on the result of the turn that answers a line steered during the fin
 		echoOnTurn: true,
 		passes: [
 			// The first turn streams its final text, and its `result` has no queued turn.
-			[{ text: 'It is Thursday.', stream: true }, { wait: 300 }],
+			[{ text: 'It is Thursday.', stream: true }, { wait: 1_000 }],
 			// The second turn runs longer than the grace period, then says.
 			[{ wait: 5_600 }, { say: 'Thursday, and bring the forms.' }],
 		],
