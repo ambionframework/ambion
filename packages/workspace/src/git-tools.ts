@@ -133,6 +133,7 @@ function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		description:
 			'Fork a repository into your own namespace on the git server. Set clone to put a working copy of the fork in your workspace.',
 		parameters: forkSchema,
+		compose: { output: ForkOutput },
 		execute: (params: ForkParams, ctx) => forked(options, params, ctx),
 	});
 	return Object.freeze([repos, clone, fork]);
@@ -229,12 +230,17 @@ async function cloned(
 
 // -- fork ----------------------------------------------------------------------
 
-interface ForkDetails {
-	repository?: string;
-	source: string;
-	url?: string;
-	clone?: string;
-}
+/** The declared output of `fork`: the repository that the fork made or found, and the clone. */
+const ForkOutput = Type.Object({
+	repository: Type.String({ description: 'The id of the fork.' }),
+	source: Type.String({ description: 'The repository that the call forked.' }),
+	url: Type.String({ description: 'The clone URL of the fork.' }),
+	clone: Type.Optional(
+		Type.String({ description: 'The path of the working copy, when the call made one.' }),
+	),
+});
+
+type ForkDetails = Static<typeof ForkOutput>;
 
 async function forked(
 	options: GitToolOptions,

@@ -122,7 +122,7 @@ deadline, and a step sink.
 
 - [x] **1.** The `compose` tool with an evaluator for tests alone. Needs
       phase 2. (CP3)
-- [ ] **2.** The declared outputs of the workspace tools. Needs phase 2.
+- [x] **2.** The declared outputs of the workspace tools. Needs phase 2.
       (CP4)
 - [ ] **3.** Skill macros. Needs CP3. (CP-M)
 

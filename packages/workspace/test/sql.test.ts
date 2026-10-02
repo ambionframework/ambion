@@ -17,7 +17,9 @@ import { toolOf } from './support/backends.ts';
 
 type Details = {
 	database: string;
-	rows: number;
+	count: number;
+	columns: string[];
+	rows: Record<string, string | number | null>[];
 	export?: string;
 	import?: string;
 	imported?: number;
@@ -123,7 +125,15 @@ SELECT * FROM pour ORDER BY id;`,
 		});
 		expect(made.text).toContain('| id | grade | tonnes |');
 		expect(made.text).toContain('| 1 | C30 | 12.5 |');
-		expect(made.details).toMatchObject({ database: ':memory:', rows: 2 });
+		expect(made.details).toEqual({
+			database: ':memory:',
+			count: 2,
+			columns: ['id', 'grade', 'tonnes'],
+			rows: [
+				{ id: 1, grade: 'C30', tonnes: 12.5 },
+				{ id: 2, grade: 'C40', tonnes: 8 },
+			],
+		});
 
 		const read = await call(
 			workspace,
@@ -158,14 +168,14 @@ SELECT * FROM pour ORDER BY id;`,
 			setup: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);',
 			sql: 'SELECT * FROM t WHERE id > 99;',
 			shows: ['No rows'],
-			rows: 0,
+			count: 0,
 		},
 		{
 			name: 'previews the last query when the script has several',
 			sql: 'SELECT 1 AS a; SELECT 2 AS b, 3 AS c;',
 			shows: ['| b | c |', '| 2 | 3 |'],
 			hides: ['| a |'],
-			rows: 1,
+			count: 1,
 		},
 		{
 			name: 'caps the preview for a large result',
@@ -175,7 +185,7 @@ INSERT INTO big SELECT id FROM seq;`,
 			sql: 'SELECT * FROM big ORDER BY id;',
 			preview: 5,
 			shows: ['Shows 5 of 200 rows'],
-			rows: 200,
+			count: 200,
 		},
 		{
 			name: 'joins the shared database with a private in-memory scratch in one statement',
@@ -188,7 +198,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 			shows: ['| 1 | a |', '| 3 | c |'],
 			hides: ['| 2 | b |'],
 		},
-	])('$name', async ({ setup, sql, preview, shows = [], hides = [], rows }) => {
+	])('$name', async ({ setup, sql, preview, shows = [], hides = [], count }) => {
 		const { workspace } = withSql();
 		if (setup !== undefined) await call(workspace, { sql: setup });
 		const result = await call(workspace, {
@@ -197,7 +207,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 		});
 		for (const text of shows) expect(result.text).toContain(text);
 		for (const text of hides) expect(result.text).not.toContain(text);
-		if (rows !== undefined) expect(result.details.rows).toBe(rows);
+		if (count !== undefined) expect(result.details.count).toBe(count);
 		await workspace.dispose();
 	});
 
@@ -211,7 +221,7 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 			sql: 'SELECT id, note FROM t ORDER BY id',
 			export: '~/out/t.csv',
 		});
-		expect(full.details).toMatchObject({ rows: 3, export: '/home/ada/out/t.csv' });
+		expect(full.details).toMatchObject({ count: 3, export: '/home/ada/out/t.csv' });
 		expect(full.text).toContain('Wrote 3 rows to /home/ada/out/t.csv.');
 		expect(full.text).toContain(`\`\`\`csv\n${csv}\`\`\``);
 		const head = await call(workspace, {
@@ -260,7 +270,7 @@ SELECT (SELECT count(*) FROM t2) AS copied,
 		expect(copied.text).toContain('| copied | differ | staged |');
 		expect(copied.text).toContain('| 5 | 0 | text |');
 		expect(copied.details).toMatchObject({
-			rows: 1,
+			count: 1,
 			import: '/home/ada/out/t.csv',
 			imported: 5,
 		});
@@ -321,7 +331,7 @@ SELECT count(*) AS n, max(ohms) AS top, typeof(max(ohms)) AS kind FROM sweep;`,
 		const { workspace } = withSql();
 		await call(workspace, { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
 		const good = await call(workspace, { sql: 'SELECT * FROM t;', export: '~/keep.csv' });
-		expect(good.details.rows).toBe(1);
+		expect(good.details.count).toBe(1);
 		// A refused statement fails the call, and the text names the database, the fault, and the next step.
 		await expect(
 			call(workspace, { sql: 'SELECT * FROM nope;', export: '~/keep.csv' }),
