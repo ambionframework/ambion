@@ -122,7 +122,7 @@ export class AgentRunner implements AgentPort {
 	 * Release, as failed, an activation whose run this process lost. A host
 	 * that dropped a run with its memory calls this when it comes back. The
 	 * release makes the attempts of one room call, and a release that none
-	 * of them confirms raises a `delivery_error`.
+	 * of them confirms raises a `port_error`.
 	 */
 	async recover(activation: string): Promise<void> {
 		await this.release(activation, 'failed', 0, undefined, undefined, undefined);
@@ -459,7 +459,7 @@ export class AgentRunner implements AgentPort {
 		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
 		error: Error,
 	): void {
-		this.emit({ type: 'delivery_error', seat: this.context.seat, activation, operation, error });
+		this.emit({ type: 'port_error', seat: this.context.seat, activation, operation, error });
 	}
 
 	private emit(event: ActivationEvent): void {

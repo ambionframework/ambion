@@ -116,7 +116,7 @@ backoff. Repeated claims renew the same activation; repeated release is stale
 and harmless.
 
 Lease ids derive from cause, journal position, seat, and attempt. No caller
-mints them. The room derives pending wakes and summary activations from the
+mints them. The room derives due wakes and summary activations from the
 record. It retries under `hostingOf(runtime).limits.activation` and records
 `abandoned` at `attempts`. `hostingOf` comes from
 `@ambionframework/ambion/hosting`, a host's own entry. Each claim or renewal
@@ -174,14 +174,14 @@ activation. An unknown result frees local seat metadata; the journal still owns
 the lease. A late reply cannot clear another activation's metadata.
 
 **Unclaimed work remains pending while eligible.** The room resends delivery
-under `hostingOf(runtime).limits.delivery.resend`. Delivery failure does not
+under `hostingOf(runtime).limits.port.resend`. Delivery failure does not
 consume an execution attempt. Activation deadlines start at a claim, not at
 the source message.
 An unresolved delivery does not prevent a later resend.
 Work can remain pending through a shutdown or a deliberate executor hold.
 Cancel and unseating record the boundaries that make delayed claims stale.
 
-Hosts receive `delivery_error` diagnostics for failed or uncertain delivery
+Hosts receive `port_error` diagnostics for failed or uncertain delivery
 calls. Each diagnostic identifies the agent, activation, and operation.
 These are live diagnostics; they do not change the accepted message or establish
 a durable exchange outcome. A successful delivery call does not prove that

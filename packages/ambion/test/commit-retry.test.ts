@@ -63,7 +63,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 		expect(answers.map((message) => message.kind === 'said' && message.text)).toEqual(['answer']);
 		expect(commits).toBeGreaterThan(1);
 		const commitErrors = events.filter(
-			(event) => event.type === 'delivery_error' && event.operation === 'commit',
+			(event) => event.type === 'port_error' && event.operation === 'commit',
 		);
 		expect(commitErrors.length > 0).toBe(lose === 'all');
 	});

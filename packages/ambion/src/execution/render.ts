@@ -312,7 +312,7 @@ function renderTurnContext(
 			context.omitted,
 		),
 		``,
-		...paragraph(renderPending(view)),
+		...paragraph(renderScheduled(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
 		askOf(view, def),
 	].join('\n');
@@ -328,7 +328,7 @@ function paragraph(text: string | undefined): string[] {
  * waits. A seat that continues its session reads it beside the delta, so the
  * list is current at every response activation.
  */
-export function renderPending(view: ActivationView): string | undefined {
+export function renderScheduled(view: ActivationView): string | undefined {
 	const { scheduled } = view.context;
 	if (view.spec.purpose.kind !== 'respond' || scheduled === undefined) return undefined;
 	if (scheduled.length === 0) return undefined;

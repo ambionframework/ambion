@@ -127,7 +127,7 @@ export const activationsOf = (events: readonly RoomNotification[], agent: string
 
 /** The failures a room reported. A live claim holds only when the list is empty. */
 export const errorsIn = (events: readonly RoomNotification[]) =>
-	events.filter((event) => event.type === 'error' || event.type === 'delivery_error');
+	events.filter((event) => event.type === 'error' || event.type === 'port_error');
 
 /** The instructions that make a real model perform one plan of the executor suite. */
 function instructionsOf(plan: ExecutorPlan): string {

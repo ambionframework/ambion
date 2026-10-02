@@ -174,7 +174,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		// the fold before the crash is the fold after the resume
 		expect(await participantsOf(resumed)).toEqual(participants);
 		expect(await currentExchange(resumed)).toEqual(exchange);
-		// the pending wake is sent again, and beta answers into the same exchange
+		// the due wake is sent again, and beta answers into the same exchange
 		await ended(resumed, 'beta');
 		expect((await messagesOf(resumed)).filter(isSaid).map((m) => m.from)).toEqual([
 			'priya',

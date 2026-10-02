@@ -179,7 +179,7 @@ describe('the execution a room chooses', () => {
 				error: { code: 'no_execution', message: reason },
 			});
 			const seen = events.length;
-			await clock.advance(3 * hostingOf(runtime).limits.delivery.resend);
+			await clock.advance(3 * hostingOf(runtime).limits.port.resend);
 			await room.reconcile();
 			expect(events.slice(seen)).toEqual([]);
 			expect(stateOf(room).due).toEqual([]);

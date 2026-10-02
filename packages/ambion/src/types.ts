@@ -359,7 +359,7 @@ export type ActivationEvent =
 	| { type: 'error'; seat: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
-			type: 'delivery_error';
+			type: 'port_error';
 			seat: string;
 			activation: string;
 			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';

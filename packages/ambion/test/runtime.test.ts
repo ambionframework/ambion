@@ -54,11 +54,7 @@ describe('createRuntime', () => {
 	it.each<[string, Limits, RegExp]>([
 		['a retry cap below one attempt', { activation: { attempts: 0 } }, /at least one attempt/],
 		['a fractional retry cap', { activation: { attempts: 1.5 } }, /positive integer/],
-		[
-			'a wake interval below one millisecond',
-			{ delivery: { resend: 0 } },
-			/limits.delivery.resend/,
-		],
+		['a wake interval below one millisecond', { port: { resend: 0 } }, /limits.port.resend/],
 		['a negative lease', { lease: { ttl: -1 } }, /limits.lease.ttl/],
 		[
 			'a deadline that is not a number',
@@ -88,14 +84,14 @@ describe('createRuntime', () => {
 			{ schedule: { minDelaySeconds: 600, maxDelaySeconds: 60 } },
 			/limits.schedule.maxDelaySeconds/,
 		],
-		['no scheduled says', { schedule: { pending: 0 } }, /limits.schedule.pending/],
+		['no scheduled says', { schedule: { waiting: 0 } }, /limits.schedule.waiting/],
 	])('refuses %s', (_, limits, error) => {
 		expect(() => createRuntime({ limits })).toThrow(error);
 	});
 
 	it('exposes every limit at its default, keeps the rest of a group on override, and accepts the floors', () => {
 		const limits = hostingOf(createRuntime()).limits;
-		expect(limits.delivery).toEqual({ resend: 5_000 });
+		expect(limits.port).toEqual({ resend: 5_000 });
 		expect(limits.lease).toEqual({ ttl: 60_000, deadline: 600_000 });
 		expect(limits.activation.attempts).toBe(3);
 		expect([1, 2, 3].map(limits.activation.backoff)).toEqual([30_000, 60_000, 90_000]);
@@ -103,21 +99,21 @@ describe('createRuntime', () => {
 		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
 		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
-		expect(limits.schedule).toEqual({ minDelaySeconds: 60, maxDelaySeconds: 604_800, pending: 4 });
+		expect(limits.schedule).toEqual({ minDelaySeconds: 60, maxDelaySeconds: 604_800, waiting: 4 });
 
 		const overridden = hostingOf(
 			createRuntime({
 				limits: {
 					lease: { ttl: 1 },
 					activation: { attempts: 1 },
-					delivery: { resend: 1 },
+					port: { resend: 1 },
 					context: { messages: 200 },
 				},
 			}),
 		).limits;
 		expect(overridden.lease).toEqual({ ttl: 1, deadline: 600_000 });
 		expect(overridden.activation.attempts).toBe(1);
-		expect(overridden.delivery.resend).toBe(1);
+		expect(overridden.port.resend).toBe(1);
 		expect(overridden.context.messages).toBe(200);
 		expect(overridden.message.bytes).toBe(Number.POSITIVE_INFINITY);
 		expect(() =>
