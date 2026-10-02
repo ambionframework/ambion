@@ -412,6 +412,8 @@ export type Step =
 	/** `parent` names the `compose` call that made a nested call. A direct call has none. */
 	| { type: 'tool_call'; call: string; name: string; input: unknown; parent?: string }
 	| { type: 'tool_result'; call: string; output: unknown; error?: string; parent?: string }
+	/** The answer to the approval of one compose call. `call` names the compose call. */
+	| { type: 'approval'; call: string; answer: 'allow' | 'deny' }
 	/** What the room answered to a commit the seat made. */
 	| {
 			type: 'room';

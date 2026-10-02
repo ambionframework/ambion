@@ -1,9 +1,10 @@
 # Compose
 
-**Status: proposed design.** The main entry exports the types of the
-option, the evaluator, and the result, and the `compose` field of a tool.
-No `compose` tool exists yet. [The 0.6.0 plan](../planning/next.md) holds
-the work.
+**Status: proposed design, in progress.** The `compose` option adds the
+`compose` tool, and the main entry exports its types and
+`COMPOSE_GUIDANCE`. The declared outputs of the workspace tools and the
+package `@ambionframework/evaluator` do not exist yet.
+[The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
 calls `compose` with the tools that it uses and short code. The code passes
@@ -476,8 +477,8 @@ it joins the vocabulary layer. The file list of that layer in
 **Every executor kind hosts `compose` as one more tool.** Pi builds its
 tools from the definition. Claude and Codex host `pass.tools`, which holds
 each tool of the definition as a `BoundTool`. The `invoke` of `compose`
-closes over the other tools of the definition, and calls each
-`AmbionTool` directly.
+closes over the other tools of the definition. It runs each nested call
+through `tool-call.ts`, the one function that runs a tool call.
 
 **`compose` runs each nested call as Pi runs a tool.** It takes these
 actions in this order:
@@ -486,8 +487,9 @@ actions in this order:
    under its limits.
 2. It applies `prepareArguments`, then checks the arguments against the
    input schema. A tool from `defineTool` checks them again inside
-   `invoke`. `compose` keeps its own check, because a tool built by hand
-   can have an `invoke` that checks nothing.
+   `invoke`. The check of the core stands for every tool, because a tool
+   built by hand can have an `invoke` that checks nothing. A direct call
+   of Claude, Codex, or the scripted executor takes the same check.
 3. It gives the call a fresh call id and a `ToolContext`. The context
    copies the agent, the room, the activation, the exchange, the
    `deadline`, and the signal from the `compose` call. It sets
@@ -506,17 +508,21 @@ agent, room, activation, and exchange as the `compose` call. Its call id is
 its own. A row that a nested call inserts carries the provenance of the
 activation, as a direct call does.
 
-**Each nested call records its steps.** `ToolContext` gains
-`record(step)`. `compose` records a `tool_call` step and a `tool_result`
-step for each nested call, with a `parent` field that holds the call id of
-`compose`. The core raises the tool events from them, as it does for every
-tool.
+**Each nested call records its steps.** The core records a `tool_call`
+step and a `tool_result` step for each nested call, with a `parent` field
+that holds the call id of `compose`. The core raises the tool events from
+them, as it does for every tool. `ToolContext` has no `record`, so no tool
+can write a step.
 
-**Each executor kind supplies `record`.** The hosting export `toolContext` takes
-the step sink of the activation. The core passes it for Claude and Codex.
-`@ambionframework/pi` builds the context of each call itself, so it passes
-`activation.trace` through `toolsFor`. `runAgent` runs outside a room and
-has no sink, so a compose call there records no nested step.
+**Only the core hands the step sink to `compose`.** The hosting export
+`invokeTool` runs one direct call. When the tool is a `compose` tool and a
+sink is present, it gives the sink to a private entry of that tool. It
+gives the sink to no other tool. The core passes it for Claude, Codex, and
+the scripted executor. Pi prepares and checks the arguments in its
+harness, so `@ambionframework/pi` calls `invokeChecked` with
+`activation.trace`. The public `invoke` of `compose` holds no sink.
+`runAgent` runs outside a room and has no sink, so a compose call there
+records no nested step.
 
 **`callId(tool)` skips a step with a `parent`.** A harness that cannot see
 the id of a call takes the oldest `tool_call` step of that tool
@@ -547,8 +553,8 @@ has no permission callback and no built-in tool, so no harness hook exists
 to see them.
 
 **The `compose` option takes an `approve` hook.** `compose` calls it with
-`uses`, `code`, and the `ToolContext` of the `compose` call, without
-`record`. It calls the hook after it checks `uses` and before it evaluates
+`uses`, `code`, and the `ToolContext` of the `compose` call. The hook
+cannot record a step. It calls the hook after it checks `uses` and before it evaluates
 any code. The step that records the answer is part of this proposal. The
 step vocabulary has no such kind today. A denial fails the
 compose call with no ledger and no effect. With no hook, `compose` allows
@@ -559,7 +565,7 @@ interface ComposeOptions {
   readonly evaluator: Evaluator;
   readonly approve?: (
     request: { readonly uses: readonly string[]; readonly code: string },
-    ctx: Omit<ToolContext, 'record'>,
+    ctx: ToolContext,
   ) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
   /** Replaces `COMPOSE_GUIDANCE` ([Guidance](#guidance)). */
   readonly guidance?: string;
@@ -775,23 +781,23 @@ each page states the current surface.
 | Page                                                                   | Change                                                                                                                                                                                                                                                                                   |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Definitions and tools](agent.md)                                      | The `compose` option, the `compose` field of a tool, the two overloads of `defineTool`, and `ToolResult<TDetails>`.                                                                                                                                                                      |
-| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `record` in `toolContext`, `callId`.                                                                                                                                                                                                          |
+| [Executors](executors.md)                                              | `parent` on `tool_call` and `tool_result`, `invokeTool` and `invokeChecked`, `callId`.                                                                                                                                                                                                   |
 | [Trust](trust.md)                                                      | A harness sees one tool for a compose call, and no nested call. `approve` is the one hook that sees one.                                                                                                                                                                                 |
 | [Workspace](workspace.md)                                              | The declared outputs of `sql`, `snapshot`, `bash`, `ps`, `wait`, and `fork`, and `count` in the `sql` details.                                                                                                                                                                           |
 | [Envelope](envelope.md)                                                | The four limits of the `compose` option and their defaults.                                                                                                                                                                                                                              |
-| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to each call. `fromPiTool` takes an output declaration.                                                                                                                                                                                |
+| [Pi](pi.md)                                                            | `toolsFor` passes the step sink of the activation to `invokeChecked`. `fromPiTool` takes an output declaration.                                                                                                                                                                          |
 | [Technical facts](technical-facts.md) and [Toolchain](toolchain.md)    | The package `@ambionframework/evaluator`, and the count of packages.                                                                                                                                                                                                                     |
 | `biome.jsonc` and `scripts/import-rules.test.mjs`                      | `compose.ts` joins the vocabulary layer. `packages/evaluator/src` may import `@ambionframework/ambion`, and not `/testing` or the source of the core.                                                                                                                                    |
-| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal, the deadline, and a step sink.                                                                                                                                                                                        |
+| [Executors](executors.md#the-room-tools) and [Toolchain](toolchain.md) | The scripted executor of `/testing` gives each tool call a signal and the deadline, and runs it through `invokeTool`.                                                                                                                                                                    |
 | Export entries and snapshot                                            | The main entry exports the types `Evaluator`, `EvaluatorInput`, `ComposeOptions`, `ComposeLimits`, `ComposeResult`, and `LedgerEntry`, and the value `COMPOSE_GUIDANCE`. The snapshot lists values only, so `COMPOSE_GUIDANCE` and `evaluatorConformance` from `/conformance` change it. |
 | Changelog                                                              | The step vocabulary, `ToolContext`, `AmbionTool`, `defineTool`, and the `sql` details: `rows` becomes `count`.                                                                                                                                                                           |
 
 ## Acceptance
 
 **The scripted executor runs the acceptance.** Today it gives a tool call
-no signal, no deadline, and no step sink. The same change gives it all
-three, so `settled(room)` waits for a deterministic compose call, and a
-test reads the nested steps. The scripted executor records the text of a
+no signal and no deadline. The same change gives it both, and hands the
+step sink to `compose` through `invokeTool`, so `settled(room)` waits for a
+deterministic compose call, and a test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the
 `ComposeResult`. Items 1 and 6 also run on the live tier of each executor

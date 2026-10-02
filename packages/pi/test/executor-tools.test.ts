@@ -55,7 +55,6 @@ const worker = defineAgent({
 				parameters: Type.Object({}),
 				execute: (_params, context) => {
 					seen.push(context);
-					context.record?.({ type: 'notice', level: 'info', text: `nested ${context.callId}` });
 					return 'recorded';
 				},
 			}),
@@ -432,10 +431,11 @@ describe('executor tool authority', () => {
 		expect(Object.isFrozen(first?.exchange)).toBe(true);
 		expect(second).toMatchObject({ room: 'room', activation: 'message:4:worker:1' });
 		expect(second).not.toHaveProperty('exchange');
-		// The record of the context reaches the sink of the activation.
-		expect(recorded).toEqual([
-			{ type: 'notice', level: 'info', text: 'nested call-1' },
-			{ type: 'notice', level: 'info', text: 'nested call-2' },
-		]);
+		// The sink of the activation reaches no tool but compose, and the context holds no function.
+		expect(recorded).toEqual([]);
+		const functions = Object.entries(first ?? {}).filter(
+			([, value]) => typeof value === 'function',
+		);
+		expect(functions.map(([key]) => key)).toEqual(['onUpdate']);
 	});
 });

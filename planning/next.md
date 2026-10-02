@@ -22,7 +22,7 @@ else.
 
 ## Status
 
-**In progress. Phase 2 is complete.** The compose design passed two design
+**In progress. Phase 2 and CP3 are complete.** The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
@@ -69,6 +69,9 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - The limits and the guidance live on the `compose` option.
 - The live token comparison is evidence of the release (CP6). It gates no
   phase before phase 5.
+- `ToolContext` has no public `record` and no public `ctx.call`. One
+  function runs a tool call (`tool-call.ts`), and only the core hands the
+  step sink to `compose`.
 
 ## Out of scope
 
@@ -117,15 +120,16 @@ deadline, and a step sink.
 
 ### Phase 3. Compose on the scripted executor
 
-- [ ] **1.** The `compose` tool with an evaluator for tests alone. Needs
+- [x] **1.** The `compose` tool with an evaluator for tests alone. Needs
       phase 2. (CP3)
 - [ ] **2.** The declared outputs of the workspace tools. Needs phase 2.
       (CP4)
+- [ ] **3.** Skill macros. Needs CP3. (CP-M)
 
 **Evidence:** acceptance items 1, 2, 4, and 5 of
 [Compose](../docs/compose.md#acceptance) pass on the scripted executor.
 A compose call binds `sql` and `snapshot` over a real workspace and a real
-SQLite file.
+SQLite file. A skill macro runs by name over the same workspace and file.
 
 ### Phase 4. The evaluators
 
@@ -216,8 +220,8 @@ write.
 **CP1. The vocabulary.** Add `compose` to `AmbionTool`, `defineTool`,
 `captureTool`, and `assertTool`, and capture its `output` schema. Give
 `defineTool` its two overloads, and `ToolResult` its type parameter. Add
-`ToolContext.composeCall` and `ToolContext.record`, and `parent` to the
-`tool_call` and `tool_result` steps. Add the `compose` option to the
+`ToolContext.composeCall`, and `parent` to the `tool_call` and
+`tool_result` steps. `ToolContext` has no `record`. Add the `compose` option to the
 executor options, and reserve the name in `appendTools`. Add
 `packages/ambion/src/compose.ts` to the vocabulary layer of
 `biome.jsonc`.
@@ -228,11 +232,10 @@ holds the `@ts-expect-error` cases of
 [Typing a declared output](../docs/compose.md#typing-a-declared-output).
 `fromPiTool` and every existing `defineTool` caller compile unchanged.
 
-**CP2. The trace.** The hosting export `toolContext` takes the step sink
-of the activation. `agentTools` and the Pi `toolsFor` pass it. `callId`
-and the record of unclaimed calls skip a step with a `parent`. The
-scripted executor gives each tool call a signal, the deadline of the view,
-and the step sink.
+**CP2. The trace.** The core records the steps of a nested call, and no
+tool holds the step sink. `callId` and the record of unclaimed calls skip
+a step with a `parent`. The scripted executor gives each tool call a
+signal and the deadline of the view.
 
 **Evidence:** a test records a nested `bash` step during a direct `bash`
 call of the same batch, and the direct call keeps its own id. A nested
@@ -241,14 +244,22 @@ tool call that reads its deadline.
 
 **CP3. The `compose` tool.** `compose.ts` builds the catalog, the
 guidance, the approval, the ledger, the limits, the nested context, the
-output check, and the rendering of the result and the error. A test
-evaluator in `test/support` runs the code as an `AsyncFunction`, and only
-tests import it.
+output check, and the rendering of the result and the error. `tool-call.ts`
+holds the one function that runs a tool call: it prepares and checks the
+arguments, calls `invoke`, and records the two steps of a nested call.
+`agentTools`, the scripted executor, and the nested calls of `compose` use
+it, so a direct call on Claude, Codex, and the scripted executor gets the
+full schema check. The hosting export `invokeTool` hands the step sink of
+the activation to the `compose` tool. A test evaluator in `test/support`
+runs the code as an `AsyncFunction`, and only tests import it.
 
 **Evidence:** acceptance items 1, 2, 4, and 5 pass on the scripted Pi
 stream and on the fake Claude executable. A room test reads the status
 and the ledger from the rendered content. A unit test of `invoke` reads
-the `ComposeResult`. `COMPOSE_GUIDANCE` joins the export snapshot.
+the `ComposeResult`. `COMPOSE_GUIDANCE` joins the export snapshot. A
+hand-built tool whose `invoke` checks nothing refuses bad arguments on a
+direct call, and no tool sees a function on its context beside
+`onUpdate`.
 
 **CP4. The declared outputs.** `sql` gives `count`, the columns, the
 preview rows, and the export or import facts. A blob is lowercase hex, and
@@ -259,6 +270,20 @@ declare their outputs. Each details type becomes `Static` of its schema.
 through `compose`, and the runtime check passes. A type test pins that
 `ShellOutputTruncation` stays assignable to its schema. The `sql` tests
 assert `count` in place of `details.rows`.
+
+**CP-M. Skill macros.** A skill stores a compose program that the model
+runs by name. `loadSkills` parses
+`macros/*.js`, and the bundle carries each macro. `describeExecutor`
+checks them. `compose` lists the macros, approves them, and runs them as
+`{ macro, args }`. `sql` gains bind `params`. The same commit updates
+[Compose](../docs/compose.md), [Skills](../docs/skills.md),
+`COMPOSE_GUIDANCE`, and the export snapshot.
+
+**Evidence:** a skill macro runs on the scripted executor over a real
+workspace and a real SQLite file. A load or a definition refuses a bad
+header, a bad `uses`, a bad `args` schema, and a duplicate name. An edit
+of `~/.skills` does not change the body that runs. A seat without
+`compose` takes the same skill set and lists no macro.
 
 **CP5. The evaluators.** `@ambionframework/ambion/conformance` exports
 `evaluatorConformance`. `@ambionframework/evaluator` holds
@@ -274,7 +299,9 @@ import in the child fails.
 
 **CP6. Live evidence.** Run acceptance items 1, 6, and 7 once on each
 family, and the token comparison of one task with and without `compose`,
-the catalog included. A run costs money, so it runs when a person asks
+the catalog included. One more case: a seat with a skill that names a
+macro runs it by name, and the comparison counts the output tokens of free
+code against the macro. A run costs money, so it runs when a person asks
 for release evidence.
 
 **Evidence:** a live evidence file beside this one records each run: the

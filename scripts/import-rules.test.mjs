@@ -223,6 +223,8 @@ function refusedProbes(tree) {
 			cwd: tree,
 			encoding: 'utf8',
 			stdio: ['ignore', 'pipe', 'pipe'],
+			// The diagnostics of every probe outgrow the default buffer of 1 MiB.
+			maxBuffer: 64 * 1024 * 1024,
 		});
 	} catch (error) {
 		output = `${error.stdout ?? ''}${error.stderr ?? ''}`;

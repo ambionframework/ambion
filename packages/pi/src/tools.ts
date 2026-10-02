@@ -14,7 +14,7 @@
  * to the largest safe integer. The tool owns the size of its result, as it
  * did before, and a result reaches the model whole.
  */
-import type { AmbionTool, ToolContext, ToolUpdate } from '@ambionframework/ambion';
+import type { AmbionTool, Step, ToolContext, ToolUpdate } from '@ambionframework/ambion';
 import { contentText } from '@ambionframework/ambion';
 import type {
 	ActivationView,
@@ -22,7 +22,7 @@ import type {
 	BoundTool,
 	StepSink,
 } from '@ambionframework/ambion/hosting';
-import { toolContext } from '@ambionframework/ambion/hosting';
+import { invokeChecked, toolContext } from '@ambionframework/ambion/hosting';
 import type { ToolExecutionResult, ToolRegistration } from '@earendil-works/pi-durable';
 
 /** A tool registration of the harness. */
@@ -90,9 +90,18 @@ function toExecution(result: Awaited<ReturnType<AmbionTool['invoke']>>): ToolExe
 /**
  * A tool registration from a normalized tool. `contextOf` gives each call its
  * context. A tool that throws gives an error result, and an abort of the
- * call throws on, so the harness records the abort.
+ * call throws on, so the harness records the abort. `record` is the step
+ * sink of the activation, which only the `compose` tool receives. With no
+ * sink, a compose call records no nested step.
+ *
+ * The harness has prepared and checked the arguments, so the call goes to
+ * `invokeChecked`, which prepares and checks nothing again.
  */
-export function fromAmbionTool(tool: AmbionTool, contextOf: ContextOf): PiTool {
+export function fromAmbionTool(
+	tool: AmbionTool,
+	contextOf: ContextOf,
+	record?: (step: Step) => void,
+): PiTool {
 	return {
 		name: tool.name,
 		description: tool.description,
@@ -112,7 +121,8 @@ export function fromAmbionTool(tool: AmbionTool, contextOf: ContextOf): PiTool {
 				}
 			};
 			try {
-				return toExecution(await tool.invoke(args, contextOf(api.callId, signal, onUpdate)));
+				const ctx = contextOf(api.callId, signal, onUpdate);
+				return toExecution(await invokeChecked(tool, args, ctx, record));
 			} catch (error) {
 				if (signal?.aborted) throw error;
 				return failure(messageOf(error));
@@ -131,8 +141,10 @@ function toPiTool(
 	sink: StepSink,
 	current: () => ActivationView,
 ): PiTool {
-	return fromAmbionTool(tool, (call, signal, onUpdate) =>
-		toolContext(agent, current(), call, signal, sink, onUpdate),
+	return fromAmbionTool(
+		tool,
+		(call, signal, onUpdate) => toolContext(agent, current(), call, signal, onUpdate),
+		(step) => sink.record(step),
 	);
 }
 
@@ -156,7 +168,8 @@ function toPiTool(
  *   gives the content alone.
  *
  * The context of each call comes from `toolContext`, as it does in the core.
- * `sink` is the step sink of the activation, which a tool records into.
+ * `sink` is the step sink of the activation. Only the `compose` tool
+ * receives it, through `invokeChecked`.
  */
 export function toolsFor(
 	view: ActivationView,

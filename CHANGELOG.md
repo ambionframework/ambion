@@ -15,19 +15,37 @@ must return a `ToolResult` whose `details` is `Static` of the schema.
 the export `DefineToolOptions`.
 
 **The tool context and the trace name a compose call.** `ToolContext`
-gains `composeCall` and `record`. The `tool_call` and `tool_result` steps
-gain `parent`.
+gains `composeCall`. The `tool_call` and `tool_result` steps gain
+`parent`. `ToolContext` has no `record`: no tool can write a step.
 
-**A tool records steps into the trace of its activation.** The hosting
-export `toolContext` takes the step sink of the activation as its fifth
-argument, and `toolsFor` of `@ambionframework/pi` takes it as its fourth.
-`callId` skips a step with a `parent`. The scripted executor gives each
-tool call a signal, the deadline, and the step sink.
+**The core records the steps of a nested call.** The hosting export
+`invokeTool` runs one direct call and hands the step sink of the activation
+to the `compose` tool, and to no other tool. `invokeChecked` does the same
+for a harness that prepared and checked the arguments, as Pi does.
+`toolContext` takes no sink. `toolsFor` of `@ambionframework/pi` keeps its
+sink for `invokeChecked`. `callId` skips a step with a `parent`. The
+scripted executor gives each tool call a signal and the deadline.
+
+**A direct call checks the full schema.** One function runs each tool call.
+A direct call on Claude, Codex, and the scripted executor now checks the
+arguments against the schema after `prepareArguments`. A hand-built tool
+whose `invoke` checks nothing no longer gets bad arguments. Pi keeps the
+check of its harness.
 
 **The executor options take `compose`.** The main entry exports the types
 `ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
 `Evaluator`, `EvaluatorInput`, and `JsonValue`. A definition refuses a user
-tool named `compose`. The option adds no tool yet.
+tool named `compose`.
+
+**The `compose` option adds the `compose` tool.** `describeExecutor`
+appends the tool after the tools and the bundles, and the guidance of the
+tool follows the guidance of the bundles. `COMPOSE_GUIDANCE` is the new
+export of the text, and `ComposeOptions.guidance` replaces it. The tool
+checks `uses`, asks `approve`, and runs the code in the evaluator of the
+option, within the four limits. A failed or cancelled compose call throws,
+and its message renders the error and the ledger. The step vocabulary gains
+the `approval` step, which records the answer of `approve`. A tool named
+`compose` in a hand-built executor stays an ordinary tool.
 
 ## 0.5.0 (2026-10-02)
 

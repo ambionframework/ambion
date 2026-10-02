@@ -1,4 +1,5 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
+import { invokeTool } from '../compose-tool.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
 	ActivationOpener,
@@ -11,7 +12,7 @@ import { failedPass } from '../execution/failure.ts';
 import { answerOf } from '../execution/room-tools.ts';
 import type { Execution } from '../host/runtime.ts';
 import type { ActivationView, CommitResult } from '../protocol.ts';
-import type { AgentDefinition, FailureCause, Step, Usage } from '../types.ts';
+import type { AgentDefinition, FailureCause, Usage } from '../types.ts';
 
 /** One tool call of a scripted reply. */
 export interface ScriptCall {
@@ -229,7 +230,6 @@ class ScriptedActivation implements RunningActivation {
 			agent: { name: this.definition.name, identity: this.definition.identity },
 			signal,
 			callId: id,
-			record: (step: Step) => trace.record(step),
 			room: view.context.name,
 			activation: this.activation.id,
 			...(exchange === undefined ? {} : { exchange: { ...exchange } }),
@@ -237,7 +237,7 @@ class ScriptedActivation implements RunningActivation {
 		});
 		trace.record({ type: 'tool_call', call: id, name: tool.name, input: call.args });
 		try {
-			const text = textOf(await tool.invoke(call.args, context));
+			const text = textOf(await invokeTool(tool, call.args, context, (step) => trace.record(step)));
 			trace.record({ type: 'tool_result', call: id, output: text });
 			return text;
 		} catch (error) {

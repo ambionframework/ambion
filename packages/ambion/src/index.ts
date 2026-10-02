@@ -30,6 +30,7 @@ export type {
 	JsonValue,
 	LedgerEntry,
 } from './compose.ts';
+export { COMPOSE_GUIDANCE } from './compose.ts';
 export type { DefineAgentOptions, DefineHumanOptions } from './define.ts';
 export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';

@@ -16,6 +16,7 @@ import {
 } from '../../pi/src/index.ts';
 import {
 	type AmbionTool,
+	COMPOSE_GUIDANCE,
 	type ComposeOptions,
 	createRuntime,
 	defineAgent,
@@ -180,15 +181,59 @@ describe('the definition of agent tools', () => {
 		expect(() => worker({ compose: compose as never })).toThrow(/Agent compose/);
 	});
 
-	it('accepts a compose option and keeps it off the frozen executor', () => {
+	it('appends the compose tool after the tools and the bundles, and keeps the option off the frozen executor', () => {
 		const compose: ComposeOptions = {
 			evaluator: { evaluate: async () => undefined },
 			approve: () => 'allow',
-			guidance: 'Compose.',
 			limits: { calls: 8 },
 		};
-		const agent = worker({ compose });
+		const hidden = defineTool({
+			name: 'hidden',
+			description: 'Stays out.',
+			parameters: Type.Object({}),
+			compose: false,
+			execute: () => 'x',
+		});
+		const bundle = { tools: [tool('inspect')], guidance: 'Use inspect.' };
+		const agent = worker({ tools: [tool('lookup'), hidden], bundles: [bundle], compose });
 		expect(agent.executor).not.toHaveProperty('compose');
+		expect(agent.executor.tools.map((one) => one.name)).toEqual([
+			'lookup',
+			'hidden',
+			'inspect',
+			'compose',
+		]);
+		const description = agent.executor.tools.at(-1)?.description ?? '';
+		expect(description).toContain('lookup(args: {}): Promise<string>;');
+		expect(description).toContain('inspect(args: {}): Promise<string>;');
+		expect(description).not.toContain('hidden');
+		expect(description).not.toContain('compose(');
+		// The guidance of the bundles comes first, and the guidance of compose follows it.
+		expect(agent.executor.guidance).toBe(`Use inspect.\n\n${COMPOSE_GUIDANCE}`);
+		expect(worker({ compose }).executor.guidance).toBe(COMPOSE_GUIDANCE);
+		expect(worker({ compose: { ...compose, guidance: 'Compose often.' } }).executor.guidance).toBe(
+			'Compose often.',
+		);
+		expect(worker({ compose: { ...compose, guidance: '  ' } }).executor).not.toHaveProperty(
+			'guidance',
+		);
+		expect(worker({ tools: [tool('lookup')] }).executor.tools.map((one) => one.name)).toEqual([
+			'lookup',
+		]);
+	});
+
+	it('refuses a second compose tool in a definition, and treats a hand-built compose tool as an ordinary one', () => {
+		const withCompose = worker({ compose: { evaluator: { evaluate: async () => undefined } } });
+		const duplicate = {
+			...withCompose.executor,
+			tools: [...withCompose.executor.tools, tool('compose')],
+		};
+		expect(() => defineAgent({ name: 'twin', identity: 'Twin.', executor: duplicate })).toThrow(
+			"brings duplicate tools named 'compose'",
+		);
+		// With no option, the executor has no compose tool, and a tool that a hand builds binds nothing.
+		const own = { kind: 'scripted', instructions: 'Work.', tools: [tool('compose')] };
+		expect(() => defineAgent({ name: 'own', identity: 'Own.', executor: own })).not.toThrow();
 	});
 
 	it('captures caller-owned tool arrays, records, and schemas', () => {

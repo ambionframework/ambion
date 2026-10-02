@@ -16,11 +16,12 @@
  */
 
 import type { ToolContext, ToolResult, ToolUpdate } from '../bundle.ts';
+import { invokeTool } from '../compose-tool.ts';
 import { DISMISS, RECALL, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
 import type { ActivationView, CommitResult, Intent, RoomProtocol, Unchanged } from '../protocol.ts';
 import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
-import type { AgentDefinition, Message, Seq, Step } from '../types.ts';
+import type { AgentDefinition, Message, Seq } from '../types.ts';
 import type { BoundTool, BoundToolResult, StepSink } from './contract.ts';
 import { refusal, summaryToolDescription } from './render.ts';
 
@@ -127,8 +128,8 @@ export function agentTools(
 		run: async (args, call) => {
 			const running = current();
 			try {
-				const params = one.prepareArguments === undefined ? args : one.prepareArguments(args);
-				const value = await one.invoke(params, toolContext(agent, running, call, signal, sink));
+				const ctx = toolContext(agent, running, call, signal);
+				const value = await invokeTool(one, args, ctx, (step) => sink.record(step));
 				return toolResultOf(value);
 			} catch (error) {
 				return text(error instanceof Error ? error.message : String(error), true);
@@ -139,15 +140,14 @@ export function agentTools(
 
 /**
  * The context an agent's tool receives for one call: the agent, the call, and
- * full provenance. `sink` is the step sink of the activation. `record` writes
- * to it.
+ * full provenance. It holds no step sink. `invokeTool` hands the sink of
+ * the activation to the `compose` tool, and to no other tool.
  */
 export function toolContext(
 	agent: AgentDefinition,
 	view: ActivationView,
 	call: string,
 	signal: AbortSignal | undefined,
-	sink: StepSink,
 	onUpdate?: ToolUpdate,
 ): ToolContext {
 	const exchange = view.context.exchange;
@@ -155,7 +155,6 @@ export function toolContext(
 		agent: { name: agent.name, identity: agent.identity },
 		signal,
 		callId: call,
-		record: (step: Step) => sink.record(step),
 		...(onUpdate === undefined ? {} : { onUpdate }),
 		room: view.context.name,
 		activation: view.spec.id,

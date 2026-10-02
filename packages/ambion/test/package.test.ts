@@ -43,6 +43,7 @@ it('builds every entry the manifest names', async () => {
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
+		'COMPOSE_GUIDANCE',
 		'DEFAULT_SPEAKING',
 		'PACKAGE_NAME',
 		'REF_LIMITS',
@@ -85,6 +86,8 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'executorOfKind',
 		'failedPass',
 		'hostingOf',
+		'invokeChecked',
+		'invokeTool',
 		'localExecution',
 		'pickPresent',
 		'present',
