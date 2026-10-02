@@ -129,11 +129,11 @@ function runShell(
  * `bash`. The shell sees the variables that the backend gives and no others.
  */
 export class LocalEnv extends HomeEnv implements WorkspaceEnv {
-	constructor(
-		home: string,
-		private readonly shellEnv: Record<string, string>,
-	) {
+	private readonly shellEnv: Record<string, string>;
+
+	constructor(home: string, shellEnv: Record<string, string>) {
 		super(home);
+		this.shellEnv = shellEnv;
 	}
 
 	protected readonly files: FileOperations = {
