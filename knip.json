@@ -19,7 +19,7 @@
 			"ignoreDependencies": ["cloudflare"]
 		},
 		"examples/camera-chat": {
-			"entry": ["templates/camera/main.ts"],
+			"entry": ["src/main.ts", "templates/camera/main.ts"],
 			"project": ["src/**/*.ts", "templates/**/*.ts"]
 		}
 	}

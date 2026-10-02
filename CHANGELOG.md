@@ -825,7 +825,11 @@ fork and clone the supplied template, launch it through Bash, and use standard
 `connect` and `observe`. A successful connection opens a small native-image
 preview above a Workbench-style transcript. Disconnect or process exit hides
 it. Retained observation images render inline beneath the messages that cite
-them, at the preview size. The demo exercises the same lifecycle with
+them, at the preview size. The seat runs on the Codex executor and reuses the
+Codex login of the host: it needs no API key, and startup exits with an
+instruction to run `codex login` when the host has no login. The default model
+is `gpt-5.6-luna` at medium reasoning, and `--model` selects another. The demo
+runs a script in place of Codex and exercises the same lifecycle with
 synthetic frames.
 
 **Ports-enabled workspaces can observe and retain sensor evidence.** The

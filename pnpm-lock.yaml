@@ -47,12 +47,12 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../../packages/ambion
+      '@ambionframework/codex':
+        specifier: workspace:*
+        version: link:../../packages/codex
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../../packages/journal
-      '@ambionframework/pi':
-        specifier: workspace:*
-        version: link:../../packages/pi
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace

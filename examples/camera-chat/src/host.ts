@@ -10,22 +10,27 @@ import {
 	resumeRoom,
 	startRoom,
 } from '@ambionframework/ambion';
+import { codex, codexExecution } from '@ambionframework/codex';
 import { type SqlValue, sqliteJournals } from '@ambionframework/journal';
-import { type PiExecutionOptions, pi, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
+import { demoExecution } from './demo.ts';
 import { localBashBackend } from './local-bash.ts';
 import { localGitBackend } from './local-git.ts';
 import { cameraPreview } from './preview.ts';
 
-export { demoStream } from './demo.ts';
+/** The Codex model of the seat. `--model` selects another. */
+export const DEFAULT_MODEL = 'gpt-5.6-luna';
 
-/** Host one durable room and its localhost workspace. */
+/**
+ * Host one durable room and its localhost workspace. The seat runs on Codex
+ * and the login of the host. With `demo`, a script runs the seat and no model
+ * is involved.
+ */
 export async function openHost(options: {
 	directory: string;
 	demo?: boolean;
 	device?: string;
 	model: string;
-	stream?: PiExecutionOptions['stream'];
 }) {
 	const directory = resolve(options.directory);
 	await mkdir(directory, { recursive: true });
@@ -53,9 +58,9 @@ export async function openHost(options: {
 	const agent = defineAgent({
 		name: 'observer',
 		identity: 'Discusses what the camera shows.',
-		executor: pi({
+		executor: codex({
 			model: options.model,
-			thinking: 'medium',
+			modelReasoningEffort: 'medium',
 			instructions: [
 				'Chat with the person about their camera and local workspace. Do not open the camera until asked. There is no camera connection at startup.',
 				'When asked to connect the camera, check your running processes and sensor reminder first. Reuse a running camera server if possible. Otherwise fork templates/camera into observer/camera with clone ~/camera. Read its README. Target five captured frames per second: ensure the FFmpeg filter in camera.ts uses fps=5, including in an existing clone. Commit any edits, test, and push the saved version, then start its foreground server through bash with name camera, wait 1, timeout 86400. Do not daemonize it.',
@@ -69,7 +74,7 @@ export async function openHost(options: {
 	});
 	const runtime = createRuntime({
 		storage,
-		execution: piExecution({ stream: options.stream, sessionDir: `${directory}/sessions` }),
+		execution: options.demo ? demoExecution() : codexExecution({ home: `${directory}/codex` }),
 	});
 	try {
 		const saved = await readRoom('camera', { runtime, messages: false });
@@ -133,7 +138,7 @@ function activityText(event: RoomNotification, previous: string): string {
 		case 'tool_call':
 			return `Agent is using ${event.name}`;
 		case 'abandoned':
-			return 'Agent could not answer. Check the model credentials and camera status.';
+			return 'Agent could not answer. Check the Codex login and camera status.';
 		default:
 			return previous;
 	}

@@ -1,5 +1,4 @@
-import { callTool, quiet } from '@ambionframework/ambion/testing';
-import { scriptedStream, toolResultTexts } from '@ambionframework/pi/testing';
+import { callTool, quiet, type ScriptStep, scripted } from '@ambionframework/ambion/testing';
 
 /** The demo reads status this many times, 100 ms apart, before it reports a failed start. */
 const READY_READS = 100;
@@ -11,15 +10,18 @@ function notReady(status: string) {
 	});
 }
 
-/** Exercise the same Git/process/connect/observe path without a camera or provider. */
-export function demoStream() {
+/**
+ * Run the seat on a script in place of Codex. The script calls the same
+ * Git, process, connect, and observe tools of the seat, with no model and no
+ * Codex login.
+ */
+export function demoExecution() {
 	let phase = 0;
 	let reads = 0;
 	let handle = '';
 	let port = 0;
-	return scriptedStream(async (context) => {
-		const results = toolResultTexts(context);
-		const last = results.at(-1) ?? '';
+	return scripted(async (step: ScriptStep) => {
+		const last = step.results.at(-1)?.text ?? '';
 		switch (phase++) {
 			case 0:
 				return callTool('fork', { source: 'templates/camera', name: 'camera', clone: '~/camera' });
