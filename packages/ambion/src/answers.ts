@@ -8,6 +8,7 @@ import type {
 	Stale,
 	ViewResponse,
 } from './protocol.ts';
+import { roundTrip } from './protocol.ts';
 import { seatAuthority } from './room/activation.ts';
 import { exchangeSession } from './room/exchange.ts';
 import type { RoomState } from './room/fold.ts';
@@ -101,7 +102,7 @@ function facts(room: Answering, state: RoomState, seat: string): RoomFacts {
  * ended hears `stale` too.
  */
 export async function answerCommit(room: Answering, commit: CommitRequest): Promise<CommitResult> {
-	const captured = structuredClone(commit);
+	const captured = roundTrip(commit);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const authority = seatAuthority(room.state(), captured.activation, room.now());
@@ -138,7 +139,7 @@ function refused(
  * work.
  */
 export async function answerLease(room: Answering, lease: LeaseRequest): Promise<LeaseResponse> {
-	const captured = structuredClone(lease);
+	const captured = roundTrip(lease);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	switch (captured.operation) {

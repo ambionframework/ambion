@@ -1,6 +1,7 @@
 /** The journal's queue, recovery, idempotency and writer fence. */
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type CloneableJournal, type Entry, Journal, type Vocabulary } from '../src/journal.ts';
+import { type Entry, Journal, type Vocabulary } from '../src/journal.ts';
+import { assertJson } from '../src/json.ts';
 import { memoryJournals } from '../src/memory.ts';
 
 type Kind = 'note' | 'mark' | 'run';
@@ -226,16 +227,7 @@ describe('a journal', () => {
 		expect('entry' in landed && landed.entry.seq).toBe(1);
 	});
 
-	it('proves at compile time that every body survives cloning, that a decision is synchronous, and that kind and body stay correlated', async () => {
-		// `CloneableJournal` is a journal only when every body is data. A body map
-		// that holds a function is not a journal; the type resolves to `never`.
-		expectTypeOf<CloneableJournal<Kind, Bodies>>().toEqualTypeOf<Journal<Kind, Bodies>>();
-		interface WithFunction {
-			note: { act: () => void };
-			mark: Mark;
-			run: Run;
-		}
-		expectTypeOf<CloneableJournal<Kind, WithFunction>>().toBeNever();
+	it('proves at compile time that a decision is synchronous, and that kind and body stay correlated', async () => {
 		const wrongIntent: import('../src/journal.ts').AppendIntent<Mark, never> = {
 			// @ts-expect-error a mark cannot carry a note body
 			decide: () => body(note('wrong')),
@@ -256,7 +248,7 @@ describe('a journal', () => {
 		}
 	});
 
-	it('allows an explicitly undefined body when that kind accepts it', async () => {
+	it('refuses an explicitly undefined body, and a decision that is async or empty', async () => {
 		type EmptyKind = 'empty' | 'run';
 		type EmptyBodies = { empty: undefined; run: Run };
 		const words: Vocabulary<EmptyKind> = {
@@ -281,8 +273,10 @@ describe('a journal', () => {
 			}),
 		).rejects.toThrow(/decision must return/);
 		expect(journal.entries).toEqual([]);
-		const result = await journal.append('empty', { decide: () => body(undefined) });
-		expect(result).toEqual({ entry: { kind: 'empty', body: undefined, seq: 1 } });
+		await expect(journal.append('empty', { decide: () => body(undefined) })).rejects.toThrow(
+			/\$ holds undefined/,
+		);
+		expect(journal.entries).toEqual([]);
 	});
 
 	it('evaluates the decision after recovery and in queue order', async () => {
@@ -416,6 +410,35 @@ describe('the entry and storage cursor', () => {
 			/rejects the proposed/,
 		);
 		expect(journal.entries).toEqual([]);
+	});
+
+	const sparse = [1];
+	sparse[2] = 3;
+	const shared = { n: 1 };
+	const cycle: Record<string, unknown> = {};
+	cycle.self = cycle;
+	it.each([
+		['an undefined field', { to: undefined }, /\$\.to holds undefined/],
+		['a Date', { at: new Date() }, /\$\.at holds an instance of Date/],
+		['a Map', { seats: new Map() }, /holds an instance of Map/],
+		['a bigint', { count: 1n }, /holds a bigint/],
+		['a NaN', { expiry: Number.NaN }, /finite/],
+		['a function', { fire: () => {} }, /holds a function/],
+		['an Error', { error: new Error('boom') }, /holds an instance of Error/],
+		['a nested undefined', { list: [{ gone: undefined }] }, /\$\.list\.0\.gone holds undefined/],
+		['a sparse array', { list: sparse }, /\$\.list\.1 holds undefined/],
+		['a cycle', cycle, /\$\.self is a cycle/],
+	])('refuses %s with the path of the fault', (_name, value, refusal) => {
+		expect(() => assertJson(value)).toThrow(refusal);
+	});
+
+	it.each([
+		['a plain tree', { text: 'a', n: 1, ok: true, none: null, list: [{ deep: [] }] }],
+		['an own key named constructor', { constructor: { name: 'Date' } }],
+		['a shared reference', { left: shared, right: shared, list: [shared, shared] }],
+		['an object with no prototype', Object.assign(Object.create(null), { a: 1 })],
+	])('accepts %s', (_name, value) => {
+		expect(() => assertJson(value)).not.toThrow();
 	});
 
 	it('does not replay an entry when its reaction throws after the cursor advances', async () => {

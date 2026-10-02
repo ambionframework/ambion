@@ -10,7 +10,6 @@
  * kind sits beside the messages, and takes its place from the same counter.
  */
 import {
-	type CloneableJournal,
 	type Entries,
 	type Entry,
 	Journal,
@@ -78,14 +77,8 @@ export const placed = (entry: Entry<Bodies['message']>): Message =>
 		...(entry.key === undefined ? {} : { key: unspaced(entry.key) }),
 	}) as Message;
 
-/**
- * The room composes a generic journal with its vocabulary. `CloneableJournal`
- * proves at compile time that every room body survives `structuredClone`: the
- * journal copies each body at its ownership boundaries. A body that gains a
- * function, a symbol, or a class instance makes this type `never`, and
- * `roomJournal` then fails to compile. See `docs/durability.md` §2.
- */
-export type RoomJournal = CloneableJournal<Kind, Bodies>;
+/** The room composes a generic journal with its vocabulary. */
+export type RoomJournal = Journal<Kind, Bodies>;
 
 export const roomJournal = (
 	open: Promise<JournalStorage>,

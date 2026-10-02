@@ -1,10 +1,11 @@
+import { assertJson } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
 import { renderActivation } from '../src/execution/render.ts';
 import type { ActivationSpec } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
-import { assertWire, type ContextParticipant, roundTrip } from '../src/protocol.ts';
+import { type ContextParticipant, roundTrip } from '../src/protocol.ts';
 import { viewOf } from '../src/room/view.ts';
 import type { Message } from '../src/types.ts';
 import { replayState } from './support/fold.ts';
@@ -104,11 +105,11 @@ describe('structured activation context', () => {
 		const views = Object.values(spec).map((activation) => viewOf(activation, facts()));
 
 		for (const view of views) {
-			expect(() => assertWire(view)).not.toThrow();
+			expect(() => assertJson(view)).not.toThrow();
 			expect(roundTrip(view)).toStrictEqual(view);
 			const capped = viewOf(view.spec, { ...facts(), limits: { messages: 1 } });
 			expect(capped.context.omitted).toBeGreaterThan(0);
-			expect(() => assertWire(capped)).not.toThrow();
+			expect(() => assertJson(capped)).not.toThrow();
 			expect(roundTrip(capped)).toStrictEqual(capped);
 			expect(JSON.stringify(view.context)).not.toContain('PRIVATE');
 			expect(view).not.toHaveProperty('model');

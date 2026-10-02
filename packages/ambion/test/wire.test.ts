@@ -2,6 +2,8 @@
  * Everything that crosses between a seat and its room, and every entry on the
  * journal, is plain JSON: it survives the wire unchanged.
  */
+
+import { assertJson } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import type {
 	ActivationView,
@@ -15,7 +17,7 @@ import type {
 } from '../src/hosting.ts';
 import { createRuntime } from '../src/index.ts';
 import type { Close, Composition, Lease } from '../src/journal/entries.ts';
-import { assertWire, roundTrip } from '../src/protocol.ts';
+import { roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
@@ -162,19 +164,10 @@ describe('the wire', () => {
 	it.each(Object.entries({ ...stored, departed, wake, steer, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
-			expect(() => assertWire(value)).not.toThrow();
+			expect(() => assertJson(value)).not.toThrow();
 			expect(roundTrip(value)).toStrictEqual(value);
 		},
 	);
-
-	it('refuses what would not survive', () => {
-		expect(() => assertWire({ to: undefined })).toThrow(/to is undefined/);
-		expect(() => assertWire({ at: new Date() })).toThrow(/is a Date/);
-		expect(() => assertWire({ seats: new Map() })).toThrow(/is a Map/);
-		expect(() => assertWire({ expiry: Number.NaN })).toThrow(/finite/);
-		expect(() => assertWire({ fire: () => {} })).toThrow(/is a function/);
-		expect(() => assertWire({ error: new Error('boom') })).toThrow(/is a Error/);
-	});
 
 	it('replays a SQLite journal whose every entry is plain JSON', async () => {
 		const opened = await openFor(sqlite);
@@ -186,7 +179,7 @@ describe('the wire', () => {
 			expect.arrayContaining(['close', 'composition', 'lease']),
 		);
 		for (const entry of written) {
-			expect(() => assertWire(entry.body)).not.toThrow();
+			expect(() => assertJson(entry.body)).not.toThrow();
 			expect(roundTrip(entry.body)).toStrictEqual(entry.body);
 		}
 	});

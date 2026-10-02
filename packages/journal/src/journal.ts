@@ -52,6 +52,8 @@
  *
  * The design contract is `docs/durability.md`.
  */
+
+import { assertJson, detached } from './json.ts';
 import {
 	advanceSeq,
 	type Fence,
@@ -94,48 +96,15 @@ export interface Entry<TBody = unknown> {
 	readonly run?: string;
 }
 
-/** Clone one value at an ownership boundary. Journal bodies are JSON values. */
-function detached<T>(value: T): T {
-	return structuredClone(value);
+/** Throw when a body is not JSON. The error names the kind and the path. */
+function assertBodyJson(kind: string, body: unknown): void {
+	try {
+		assertJson(body);
+	} catch (error) {
+		const fault = error instanceof Error ? error.message : String(error);
+		throw new Error(`The journal refuses the proposed '${kind}' body: ${fault}`);
+	}
 }
-
-/**
- * A value that survives `structuredClone`. The journal copies every body at
- * each ownership boundary, so a body holds data: a JSON value, and the extras
- * `structuredClone` keeps (a `Date`, a `bigint`, an `undefined` field). A
- * function, a symbol, or a class instance does not survive the copy, so
- * `Cloneable` maps it to `never`, and a proof over such a body stops matching.
- */
-type Cloneable<T> = T extends string | number | boolean | bigint | null | undefined | Date
-	? T
-	: T extends (...args: never[]) => unknown
-		? never
-		: T extends symbol
-			? never
-			: T extends readonly unknown[]
-				? { [K in keyof T]: Cloneable<T[K]> }
-				: T extends object
-					? { [K in keyof T]: Cloneable<T[K]> }
-					: never;
-
-/** True only when `A` and `B` are the same type, and false otherwise. */
-type Equal<A, B> =
-	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-
-/** True only when every body of a journal over these kinds survives cloning. */
-type BodiesAreCloneable<TKind extends string, TBodies extends Bodies<TKind>> = {
-	[K in TKind]: Equal<TBodies[K], Cloneable<TBodies[K]>>;
-}[TKind];
-
-/**
- * A journal whose bodies are proven to survive `structuredClone` at compile
- * time. The journal copies every body at each ownership boundary, so a body
- * holds data. Name a journal type through this alias, and it stops compiling
- * the moment a body gains a function, a symbol, or a class instance. See
- * `docs/durability.md` §2.
- */
-export type CloneableJournal<TKind extends string, TBodies extends Bodies<TKind>> =
-	BodiesAreCloneable<TKind, TBodies> extends true ? Journal<TKind, TBodies> : never;
 
 /** The body each kind carries. A caller names one body shape per kind. */
 export type Bodies<TKind extends string> = Record<TKind, unknown>;
@@ -491,6 +460,8 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 		if (this.sequence >= LAST_SEQ) {
 			throw new Error(`The journal is full: no seq follows ${this.sequence}.`);
 		}
+		// Refuse a body that is not JSON before storage sees it.
+		assertBodyJson(kind, proposal.body);
 		// Capture the draft before crossing the asynchronous storage boundary.
 		const stored = beside(
 			kind,

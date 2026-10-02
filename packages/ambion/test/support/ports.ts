@@ -4,10 +4,11 @@
  * purpose, and one whose ports the test writes itself.
  */
 
+import { assertJson } from '@ambionframework/journal';
 import type { ExecutionConnector } from '../../src/host/runtime.ts';
 import type { AgentPort, ConnectorRequest, Execution, RoomProtocol } from '../../src/hosting.ts';
 import type { Clock } from '../../src/index.ts';
-import { assertWire, roundTrip } from '../../src/protocol.ts';
+import { roundTrip } from '../../src/protocol.ts';
 
 /** How a test wraps the room calls of a seat and its port. Each part is optional. */
 export interface Wrap {
@@ -56,7 +57,7 @@ export function serializing(execution: Execution): SerializingExecution {
 	const check = <T>(what: string, value: T): T => {
 		crossed += 1;
 		try {
-			assertWire(value);
+			assertJson(value);
 			const back = roundTrip(value);
 			if (JSON.stringify(back) !== JSON.stringify(value)) violations.push(`${what}: changed`);
 			return back;

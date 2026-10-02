@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**JSON is the one rule of plain data.** `CloneableJournal` is removed from
+`@ambionframework/journal`, with its helper types. `RoomJournal` is
+`Journal<Kind, Bodies>`. The package exports `assertJson`, the one check that
+a value is JSON: plain objects and arrays, finite numbers, and no `undefined`
+field. `assertWire` is removed from the protocol of the core. `append` refuses
+a body that is not JSON, with the path of the fault, before storage sees it.
+A `Date`, a `bigint`, and a field that holds `undefined` are refused on every
+storage. The memory journal copies a value through JSON, as SQLite does.
+
 **Breaking: the Pi executor runs on `@earendil-works/pi-durable` 1.0.0.**
 `@ambionframework/pi` drops `@earendil-works/pi-agent-core` and its
 `AgentHarness`. It depends on `@earendil-works/pi-durable` pinned to exactly

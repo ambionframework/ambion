@@ -1,3 +1,4 @@
+import { assertJson } from '@ambionframework/journal';
 import type { JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
@@ -36,7 +37,7 @@ import {
 	startRoom,
 	type TracePolicy,
 } from '../src/index.ts';
-import { assertWire, roundTrip } from '../src/protocol.ts';
+import { roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { quiet, say, scriptedStream } from './support/scripted.ts';
@@ -110,7 +111,7 @@ describe('the trace of a room activation', () => {
 		expect(steps.find((step) => step.type === 'end')).toEqual(
 			expect.objectContaining({ stop: 'stopped' }),
 		);
-		for (const step of steps) assertWire(roundTrip(step));
+		for (const step of steps) assertJson(roundTrip(step));
 		await room.stop();
 		const snapshot = await readRoom(name, { runtime });
 		expect(snapshot.exchanges.flatMap((exchange) => exchange.activations)).toContainEqual(

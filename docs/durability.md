@@ -25,6 +25,16 @@ The journal owns its cache and sequence counter. Public reads, append receipts,
 and callbacks receive detached values. Incremental room projection reads only
 new entries, so protecting ownership does not copy old history on every operation.
 
+**A body is JSON.** The journal refuses a body that is not JSON before
+storage sees it. A body holds plain objects and arrays, strings, booleans,
+`null`, and finite numbers. A field that holds `undefined` is not JSON: omit
+the field. A `Date`, a `bigint`, a `Map`, a function, and a class instance
+are refused with the path of the fault. The memory journal, SQLite, and
+Durable Object storage then hold the same values. `assertJson` in
+`@ambionframework/journal` is the one check. The body schemas of the room
+state each shape at compile time. A field that holds `undefined` passes the
+body type and fails at append, so the runtime check is the guard for it.
+
 The first entry of each run is a fence and every write carries that run id. A
 later fence voids writes from earlier runs after the fence position. A
 superseded run emits `superseded`, drops its live handles, and writes nothing

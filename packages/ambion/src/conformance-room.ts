@@ -8,9 +8,9 @@
  * A script adds what one case needs: a held view or commit, a lost commit
  * answer, a `missed` answer, a record that moves, or a new exchange.
  */
+import { assertJson } from '@ambionframework/journal';
 import { type Call, LEASE_MS } from './conformance-support.ts';
 import {
-	assertWire,
 	type CommitRequest,
 	type CommitResult,
 	type LeaseRequest,
@@ -84,7 +84,7 @@ function recorder(calls: Call[], violations: string[]) {
 	return <T>(op: Call['op'], request: unknown, answer: () => T | Promise<T>): Promise<T> => {
 		const wire = (what: string, value: unknown) => {
 			try {
-				assertWire(value);
+				assertJson(value);
 			} catch (error) {
 				violations.push(`${op} ${what}: ${error instanceof Error ? error.message : String(error)}`);
 			}

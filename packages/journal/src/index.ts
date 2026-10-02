@@ -26,13 +26,13 @@ export type {
 	AppendIntent,
 	AppendResult,
 	Bodies,
-	CloneableJournal,
 	Entries,
 	Entry,
 	Seq,
 	Vocabulary,
 } from './journal.ts';
 export { Journal } from './journal.ts';
+export { assertJson } from './json.ts';
 export { memoryJournals } from './memory.ts';
 export type { Sql, SqlValue } from './sqlite.ts';
 export { sqliteJournals } from './sqlite.ts';
