@@ -4,7 +4,7 @@
  * `@ambionframework/journal` holds the machinery and the entry: one
  * serial queue, the fence between runs, the idempotency key, and the read that settles a write in doubt. It reads no body.
  *
- * What lives here is the part that is the room's: the five kinds of entry it
+ * What lives here is the part that is the room's: the six kinds of entry it
  * writes, what the storage holds each one under, and what it accepts as a
  * body under each. A message makes up the record a person reads; every other
  * kind sits beside the messages, and takes its place from the same counter.

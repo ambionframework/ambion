@@ -80,6 +80,11 @@ const entries = [
 		/\b(?:your turn|mid-turn|this turn|taking a turn|take your turn)\b/i,
 		/^(?:packages|examples)\/[^/]+\/(?:src|test\/live)\/.*\.(?:ts|tsx|mjs)$/,
 	),
+	entry(
+		'driver',
+		/\bthe core\b/i,
+		/^(?:packages\/ambion\/src\/execution\/.*|docs\/executors\.md)$/,
+	),
 	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {

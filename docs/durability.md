@@ -8,7 +8,7 @@ Read [`room.md`](room.md) for the room mechanisms and
 
 ## 1. The journal is the source of collaboration state
 
-One room has one append-only record, one ordered sequence, and one conditional
+One room has one append-only journal, one ordered sequence, and one conditional
 writer at a time. Every message and administrative entry consumes the next
 sequence position, so message positions may have gaps. Folding the ordered
 record reconstructs the composition, roster, people, exchanges, leases,

@@ -1,10 +1,10 @@
 # Executors
 
 An executor runs one agent's model loop for one activation. The room and the
-core own the record, the lease, the rules, and the state of each activation.
+driver own the record, the lease, the rules, and the state of each activation.
 An executor owns one harness: the model call, where the tools run, and the
 steps it reports. [The README](../README.md) holds the positioning. This
-page holds the contract between the core and an executor: the pass, the
+page holds the contract between the driver and an executor: the pass, the
 room tools, exchange continuity, failure classification, the step
 vocabulary, and the way to write an adapter. [The Pi guide](pi.md), [the Claude guide](claude.md), and
 [the Codex guide](codex.md) hold what is specific to one adapter.
@@ -87,10 +87,10 @@ one pass after another until the activation stops.
 
 ## The pass contract
 
-**The core owns the state of an activation.** It causes or observes each
+**The driver owns the state of an activation.** It causes or observes each
 fact of it, so no executor keeps a copy.
 
-| The core keeps                   | How                                                                                        |
+| The driver keeps                 | How                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------ |
 | `readThrough`                    | It joins the ranges that the executor reports read, and the positions that a say confirms. |
 | The cut                          | It aborts the `signal` of the activation. A cut activation runs no other pass.             |
@@ -114,12 +114,12 @@ holds what serves the whole activation, in these properties:
 | `id`              | The activation id.                                                                      |
 | `trace`           | A `StepSink`: its `record(step)` takes the steps that the executor owns.                |
 | `signal`          | The `AbortSignal` of the activation: the room, the driver, or a room tool cuts it.      |
-| `readThrough`     | The position the core holds as read. A harness that keeps a session writes it there.    |
+| `readThrough`     | The position the driver holds as read. A harness that keeps a session writes it there.  |
 | `read(range)`     | The model consumed `range`, `{ after, through }`: a prompt, a delta, or a steered line. |
 | `delivered(call)` | The result of the tool call `call` reached the model.                                   |
 | `callId(tool)`    | The id of the next call of `tool`, for a harness that cannot see the id of a call.      |
 
-**`pass` receives what the core decides for one pass.** `Pass` holds
+**`pass` receives what the driver decides for one pass.** `Pass` holds
 `kind`, `view`, and `after` for a delta, as `PassInput` does, and these
 properties:
 
@@ -140,29 +140,29 @@ properties:
 | `steer?(after, seq, line)` | Delivers a line to a live pass. Absent when the executor cannot.                    |
 | `close?()`                 | Frees a held process. The driver calls it once, after the release.                  |
 
-**The core records the session under the executor kind.** The release
+**The driver records the session under the executor kind.** The release
 records `{ kind, id }`, where `kind` is `definition.executor.kind`,
 such as `pi`. A running activation with no `session` id records none.
 
 **`pass` returns a `PassResult`.** It has these fields:
 
-| Field     | What it is                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------- |
-| `failed`  | Whether the pass failed.                                                                          |
-| `cause`   | On failure: `permanent` or `transient`. It tells the room whether a retry can pass.               |
-| `message` | On failure: what went wrong, for the `error` event and the `end` step.                            |
-| `error`   | On failure: the error that the `error` event carries. Absent, the core builds one from `message`. |
-| `stop`    | `'length'` when the model reached a length limit. The pass did not fail.                          |
+| Field     | What it is                                                                                          |
+| --------- | --------------------------------------------------------------------------------------------------- |
+| `failed`  | Whether the pass failed.                                                                            |
+| `cause`   | On failure: `permanent` or `transient`. It tells the room whether a retry can pass.                 |
+| `message` | On failure: what went wrong, for the `error` event and the `end` step.                              |
+| `error`   | On failure: the error that the `error` event carries. Absent, the driver builds one from `message`. |
+| `stop`    | `'length'` when the model reached a length limit. The pass did not fail.                            |
 
-**A running activation follows these rules.** The core reads it at fixed
+**A running activation follows these rules.** The driver reads it at fixed
 points.
 
 - **A pass that the cut ends reports no failure.** The cut aborts `signal`,
   and the pass returns `failed: false`.
-- **The core reads `session` after the last pass.** Keep the id of the
+- **The driver reads `session` after the last pass.** Keep the id of the
   vendor session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.
-- **Every pass holds the same tool values.** The core binds the tools on the
+- **Every pass holds the same tool values.** The driver binds the tools on the
   first pass, so an adapter can host them once for the activation.
 
 **The first pass receives the view. A later pass receives a delta.** The
@@ -208,9 +208,9 @@ message when the purpose may read it; `recall` reads a message below the
 window this way. The hosting entry exports no `ViewRange`, and the
 `context` of a view holds `omitted` and no `earliest`.
 
-## The prompt the core renders
+## The prompt the driver renders
 
-**The core renders three prompt parts.** Each part depends on one thing, so
+**The driver renders three prompt parts.** Each part depends on one thing, so
 an adapter places it where it caches best.
 
 - `mechanism` depends on the kernel version only. It states how a room
@@ -224,7 +224,7 @@ an adapter places it where it caches best.
 
 **A later pass reads the delta.** `record()` marks each message beyond
 `after` with the `[new]` prefix, and gives `undefined` when nothing is new.
-The core then counts the view read. The core renders each steered line and
+The driver then counts the view read. The driver renders each steered line and
 each room refusal for the model.
 
 **A resumed session reads the delta on its first pass.** `record(after)`
@@ -236,23 +236,23 @@ view.
 **A definition can replace the speaking policy.** The main entry exports
 `DEFAULT_SPEAKING`. An executor takes a `speaking` option that replaces it.
 Tool bundle guidance stays in the `guidance` field and follows the policy.
-The core resolves the `reminders` of the bundles once for each respond
+The driver resolves the `reminders` of the bundles once for each respond
 activation, when `record()` has something to send. Each reminder has 5
-seconds to answer, and at that bound the core aborts the signal that it
+seconds to answer, and at that bound the driver aborts the signal that it
 passed to the reminder. A reminder that throws, rejects, gives blank text,
-or answers late gives no text. The core does not cut a reminder, so the
+or answers late gives no text. The driver does not cut a reminder, so the
 bundle bounds the length of its own text.
 
 ## How an activation runs
 
-[The prompt the core renders](#the-prompt-the-core-renders) states the
+[The prompt the driver renders](#the-prompt-the-driver-renders) states the
 parts. The adapter page names the placement for its executor kind.
 
 **`readThrough` advances only when the model has consumed a message.** The
-core keeps it. The table below holds for every executor kind. An adapter page
+driver keeps it. The table below holds for every executor kind. An adapter page
 names the signal it reads for the first and the last events.
 
-| Event                                                | Who tells the core        | What moves                                                          |
+| Event                                                | Who tells the driver      | What moves                                                          |
 | ---------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- |
 | The model reads a prompt, a delta, or a steered line | The executor: `read`      | `readThrough` moves to the position of that message.                |
 | The room accepts an ordinary `say`                   | The say tool              | `readThrough` moves to the position the say confirms.               |
@@ -262,20 +262,20 @@ names the signal it reads for the first and the last events.
 
 **A steered line moves the position only when the record before it is
 already read.** A message that lands out of order does not advance
-`readThrough` until the gap closes. The core holds the range, and it joins
+`readThrough` until the gap closes. The driver holds the range, and it joins
 the range once the gap closes. Of two held ranges through one position,
-the core keeps the range that starts lower. The order in which the ranges
+the driver keeps the range that starts lower. The order in which the ranges
 arrive does not change the position.
 
-**The core decides on another pass.** It runs one when the record stands
+**The driver decides on another pass.** It runs one when the record stands
 past `readThrough` and the activation was not cut.
 
-**The core records the `steer` step of every line, with `consumed`.**
+**The driver records the `steer` step of every line, with `consumed`.**
 `consumed: true` marks a line the pass delivers. `consumed: false` marks a
 line that the pass does not use before it ends, and the next delta carries
-it. The core decides by the moment the line lands:
+it. The driver decides by the moment the line lands:
 
-| The line lands                                     | The core records                                                                                             |
+| The line lands                                     | The driver records                                                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Before the first pass                              | Nothing yet. The line waits for the first pass, and then follows the rules below.                            |
 | Before a first pass that never runs                | `consumed: false` when the pass would have started: a cut, a view of another seat, or a failed claim.        |
@@ -285,7 +285,7 @@ it. The core decides by the moment the line lands:
 | In a pass, and the executor has `steer`            | `consumed: true` when the executor calls `read` for the line, or `consumed: false` when the pass ends first. |
 | In a pass, and `steer` throws                      | `consumed: false` at once, unless the executor read the line first.                                          |
 
-The core calls `steer` at any moment after it calls `pass` and before that
+The driver calls `steer` at any moment after it calls `pass` and before that
 pass settles. That includes the moment before the body of `pass` reaches its
 first `await`. The executor holds a line that its harness cannot take yet,
 delivers it when the harness can, and drops what it holds when `pass`
@@ -308,14 +308,14 @@ every executor kind, and one view is one call over the wire.
 [Definitions and tools](agent.md#tools) states which tools a respond
 activation receives and which tools a summary activation receives.
 
-**The core binds the tools of the activation once, in a form that names no
+**The driver binds the tools of the activation once, in a form that names no
 harness.** Each executor kind adapts them to its own tool shape.
 
 - **`pass.tools`** holds the room tools that the purpose of the activation
   grants, then the tools of the definition. A summary activation gets the
   room tools alone. Each `RoomTool` has a `name`, a `description`, TypeBox
   `parameters`, and `run(args, call)`. `call` is the id of the tool call,
-  and the commit takes it as its key. The core binds each room tool to the
+  and the commit takes it as its key. The driver binds each room tool to the
   read position and the cut of the activation. A call of a tool of the
   definition reads the view of the pass that runs it.
 - **`toolContext(agent, view, call, signal, onUpdate?)`** builds the
@@ -332,7 +332,7 @@ summary activation.
 of `@ambionframework/ambion/testing` branches on a short answer, such as
 `delivered`, `missed`, or `stale: <why>`. The result holds only the text
 that a model reads, and the scripted executor makes no call to the room.
-The core keeps the answer beside each result, for the scripted executor
+The driver keeps the answer beside each result, for the scripted executor
 alone. The hosting entry does not export it, and no other executor reads
 it.
 
@@ -381,7 +381,7 @@ the host as a `message` event, and a tool event would report the same
 fact a second time. `recall` commits nothing, so it raises tool events, as
 every tool of the definition does.
 
-**The core raises the tool events from the steps.** It pairs each
+**The driver raises the tool events from the steps.** It pairs each
 `tool_call` step with the `tool_result` step of the same call id. An
 executor records the steps, and raises no tool event.
 
@@ -390,7 +390,7 @@ MCP server in the process, and Codex in the stdio server that it spawns,
 over a local socket to the host. A harness that cannot see the id of a call
 takes it with `callId(tool)`: the oldest `tool_call` step of that tool that
 no call took yet, or a fresh id when none waits. A `tool_result` step ends
-its call, so the core drops the id of that call. Each adapter page names
+its call, so the driver drops the id of that call. Each adapter page names
 the transport.
 
 **Pi hosts the room tools of `pass.tools`, and builds the tools of the
@@ -407,7 +407,7 @@ definition:
   gives the content alone.
 
 Pi builds each tool from its `AmbionTool`, and `toolContext` gives each call
-the context that the core gives it.
+the context that the driver gives it.
 
 ## The step vocabulary
 
@@ -425,7 +425,7 @@ zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 | `tool_call`   | executor    | A tool starts, with its input.                                                                      |
 | `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                      |
 | `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.   |
-| `steer`       | core        | A message landed mid-activation. `consumed` says whether the pass delivered it.                     |
+| `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                     |
 | `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude records it. |
 | `usage`       | executor    | Tokens and cost.                                                                                    |
 | `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.     |
@@ -496,7 +496,7 @@ session as `spec.resume`. A summary activation gets the session of the
 exchange it summarizes. The room never reads the id. There is no option:
 every executor works this way.
 
-**An executor resumes only the session that `pass.resumeId` names.** The core
+**An executor resumes only the session that `pass.resumeId` names.** The driver
 sets `pass.resumeId` only when `spec.resume` names the kind of the
 executor. With no `pass.resumeId` the executor starts a fresh session.
 [Pi](pi.md#exchange-continuity) keeps each session of a seat apart, so the
@@ -548,7 +548,7 @@ is transient, so the room retries it.
 from `@ambionframework/ambion/hosting` builds the failed `PassResult`. The
 cause is `permanent` for a `PermanentError` and `transient` for every other
 value. The rule reads the name of the error, so a second copy of the
-package gives the same cause. The result always carries `error`. The core
+package gives the same cause. The result always carries `error`. The driver
 calls it when a session throws, and an executor calls it for a fault of its
 own. A fault that the retry meets again, because the retry runs the same
 configuration, is a `PermanentError`.
@@ -562,7 +562,7 @@ from the original text.
 
 **A length stop is no failure.** The pass reports `stop: 'length'`.
 
-**The core raises the `error` event once.** A failed pass, or a room call
+**The driver raises the `error` event once.** A failed pass, or a room call
 that the driver cannot recover from, raises one `error` event with its
 cause. The event carries the `error` of the pass result, or an error built
 from its `message`. No executor raises one.
@@ -588,7 +588,7 @@ The [Pi](pi.md), [Claude](claude.md), and [Codex](codex.md) guides describe the 
 
 **An executor that cannot steer still passes.** Its `readThrough` advances at
 the pass boundary, and the driver holds a steer for the next pass. The
-core records that line as `consumed: false`. What a
+driver records that line as `consumed: false`. What a
 harness remembers between activations is in [Trust](trust.md).
 
 ## How to write an adapter
@@ -599,11 +599,11 @@ executor kind. `@ambionframework/claude` is the worked example, and
 
 1. **Implement `ActivationOpener` and `RunningActivation`.** The opener is a
    function that takes the activation and returns a running activation. Keep
-   the model loop for one activation inside the running activation. The core
+   the model loop for one activation inside the running activation. The driver
    records the harness session under the executor kind of the seat.
 2. **Place the prompt.** Put `pass.mechanism` and `pass.agent` where the
    harness caches them, and send the text of `pass.record()`.
-   [The prompt the core renders](#the-prompt-the-core-renders) states the
+   [The prompt the driver renders](#the-prompt-the-driver-renders) states the
    parts.
 3. **Host the tools.** Adapt `pass.tools` to the form the harness needs,
    and run them where the harness reaches them.
@@ -613,19 +613,19 @@ executor kind. `@ambionframework/claude` is the worked example, and
    answers.
 4. **Record the steps you own.** Call `trace.record` of the activation for
    `thinking`, `text`, `tool_call`, `tool_result`, `session` when the
-   harness reports its session, and `usage`. The driver records `pass`, `room`, and `end`. The core records
+   harness reports its session, and `usage`. The driver records `pass`, `room`, and `end`. The driver records
    `steer`, and it raises the tool events from the steps.
 5. **Report what the model consumed.** Call `read(range)` when the model
    consumes a range, and `delivered(call)` when a tool result reaches it,
    and on nothing earlier. [How an activation runs](#how-an-activation-runs)
    states the events. Declare `steer` only when the harness takes a line
-   into a live pass. The core calls `steer` at any moment after it calls
+   into a live pass. The driver calls `steer` at any moment after it calls
    `pass` and before that pass settles, also before the body of `pass`
    reaches its first `await`. Hold a line that the harness cannot take yet,
    deliver it when the harness can, and drop what you hold when `pass`
    settles. Call `read({ after, through: seq })` when the model consumes a
    line, and record no `steer` step.
-   [The core rule](#how-an-activation-runs) sets `consumed`.
+   [The driver rule](#how-an-activation-runs) sets `consumed`.
 6. **Classify every failure.** Sort it into `permanent` and `transient`
    with `classifyCause`. Throw `PermanentError` for a fault that a retry
    cannot clear, such as a model that the registry does not hold, and

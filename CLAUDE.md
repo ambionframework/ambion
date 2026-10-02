@@ -203,8 +203,8 @@ sentence. `README.md` and `docs/` follow these rules.
 4. **One word, one meaning.** An **activation** is the room waking one seat.
    An **exchange** is a person's question and every activation until the
    room goes quiet. What the journal holds is an **entry**. `turn` belongs to
-   Pi (one request to a provider). `row` belongs to SQL. `round` belongs to
-   nobody. An activation is never a `trigger`, a `call`, or a `wake`.
+   a vendor loop (one request to a provider). `row` belongs to SQL. `round`
+   belongs to nobody. An activation is never a `trigger`, a `call`, or a `wake`.
 5. **Simple tenses.** Present for how things work, imperative for
    instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits".

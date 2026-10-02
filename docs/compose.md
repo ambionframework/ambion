@@ -166,7 +166,7 @@ call helps, and when a direct call is the right call.
 the guidance of `compose` after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the speaking
 policy, as it renders the guidance of every bundle
-([Executors](executors.md#the-prompt-the-core-renders)). The description of
+([Executors](executors.md#the-prompt-the-driver-renders)). The description of
 `compose` holds one sentence and the catalog.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main

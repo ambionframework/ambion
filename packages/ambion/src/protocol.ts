@@ -90,16 +90,16 @@ export interface AgentPort {
 
 // -- the executor contract ----------------------------------------------------
 
-// The contract between the core and the running activation of an executor.
+// The contract between the driver and the running activation of an executor.
 //
-// The core owns what it causes or observes: the lease, its renewal, the cut,
+// The driver owns what it causes or observes: the lease, its renewal, the cut,
 // the wake queue, the decision to run another pass, the read position, the
 // room tools and their binding, the prompt, the tool events, and the error
 // event. A running activation owns one harness: the mapping of its events to
 // steps, the resume of a vendor session, the place where it hosts the
 // tools, and the signal that the model consumed input. Its `steer` is
 // optional because an executor kind may only take context between passes.
-// The core records the `steer` step of every steered line.
+// The driver records the `steer` step of every steered line.
 
 /** What a room tool or an agent tool hands back to the model. */
 export interface RoomToolResult {
@@ -153,14 +153,14 @@ export interface ReadRange {
 }
 
 /**
- * What the core gives an `ActivationOpener` to open one activation. Every
+ * What the driver gives an `ActivationOpener` to open one activation. Every
  * member serves the whole activation, so a running activation keeps it
  * across its passes.
  */
 export interface ExecutorActivation {
 	readonly id: string;
 	/**
-	 * Where the executor records the steps it owns. The core reads the
+	 * Where the executor records the steps it owns. The driver reads the
 	 * `tool_call` and `tool_result` steps for the tool events. The driver owns
 	 * the sink: it opens each pass, sums the usage, and closes the sink.
 	 */
@@ -174,7 +174,7 @@ export interface ExecutorActivation {
 	 * range counts once it joins the position already read, so a line that
 	 * lands out of order waits until the gap closes. A steered line is
 	 * consumed when the executor reads `{ after, through: seq }` for it, the
-	 * range that `steer` received. The core then records the consumed `steer`
+	 * range that `steer` received. The driver then records the consumed `steer`
 	 * step.
 	 */
 	read(range: ReadRange): void;
@@ -204,7 +204,7 @@ export interface PassRecord {
 	readonly range: ReadRange;
 }
 
-/** What the core hands one pass: the prompt it rendered, the tools it bound, and the session to resume. */
+/** What the driver hands one pass: the prompt it rendered, the tools it bound, and the session to resume. */
 export type Pass = PassInput & {
 	/** How a room works. It depends on the kernel version alone. */
 	readonly mechanism: string;
@@ -216,7 +216,7 @@ export type Pass = PassInput & {
 	 * the `after` of its input. The argument `after` names the position that
 	 * a resumed vendor session read through: the first pass of a respond
 	 * activation then reads the reminders, the scheduled says, and the delta
-	 * after it. It gives nothing when no message is new, and the core then
+	 * after it. It gives nothing when no message is new, and the driver then
 	 * counts the view read.
 	 */
 	record(after?: Seq): Promise<PassRecord | undefined>;
@@ -237,7 +237,7 @@ export interface PassResult {
 	readonly cause?: FailureCause;
 	/** Set only when `failed`: what went wrong, for the `error` event and the `end` step. */
 	readonly message?: string;
-	/** Set only when `failed`: the error the `error` event carries. Absent, the core builds one from `message`. */
+	/** Set only when `failed`: the error the `error` event carries. Absent, the driver builds one from `message`. */
 	readonly error?: Error;
 	/** Set when the model stopped because it reached a length limit. */
 	readonly stop?: 'length';
@@ -245,13 +245,13 @@ export interface PassResult {
 
 /**
  * One activation of a seat, as its executor runs it: opened once, passed over
- * as the record moves, then closed. The core cuts it through the signal of
+ * as the record moves, then closed. The driver cuts it through the signal of
  * the activation.
  */
 export interface RunningActivation {
 	/**
 	 * The id of the vendor session to record with the release, read after
-	 * the last pass. The core records it under the executor kind. The room
+	 * the last pass. The driver records it under the executor kind. The room
 	 * hands it to the seat's next activation in the same exchange as
 	 * `spec.resume`. It never reads the id.
 	 */
@@ -264,10 +264,10 @@ export interface RunningActivation {
 	pass(pass: Pass): Promise<PassResult>;
 	/**
 	 * Deliver a line to the pass in flight, when the harness can take it. The
-	 * core calls `steer` at any moment after it calls `pass` and before that
+	 * driver calls `steer` at any moment after it calls `pass` and before that
 	 * pass settles, also before the body of `pass` reaches its first `await`.
 	 * Hold a line that the harness cannot take yet, deliver it when the harness
-	 * can, and drop what you hold when `pass` settles. The core records the
+	 * can, and drop what you hold when `pass` settles. The driver records the
 	 * `steer` step, and the executor records none. The executor reads
 	 * `{ after, through: seq }` when the model consumes the line. A line that
 	 * the pass does not read waits for the next delta, and the step says so. A
@@ -286,7 +286,7 @@ export interface RunningActivation {
 
 /**
  * Opens one activation of one seat. One opener per seat, for its whole
- * lifetime. The core records and resumes vendor sessions under the seat's
+ * lifetime. The driver records and resumes vendor sessions under the seat's
  * executor kind, `definition.executor.kind`.
  */
 export type ActivationOpener = (activation: ExecutorActivation) => RunningActivation;
