@@ -92,6 +92,8 @@ function lineOf(step: TraceStep): StepLine {
 			return step.error
 				? { kind: 'error', text: `failed: ${brief(step.error)}` }
 				: { kind: 'result', text: render(step.output) };
+		case 'approval':
+			return { kind: 'notice', text: `approval ${step.answer}` };
 		case 'room':
 			return { kind: 'room', text: `room ${step.result}${step.seq ? ` at ${step.seq}` : ''}` };
 		case 'steer':

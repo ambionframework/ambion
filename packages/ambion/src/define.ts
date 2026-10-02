@@ -8,7 +8,7 @@
  * takes — a name the room can address, and a composition of ordinary tools.
  */
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
-import { Check, Errors } from 'typebox/value';
+import { Check } from 'typebox/value';
 import type {
 	AmbionTool,
 	DeclaredToolOptions,
@@ -24,7 +24,9 @@ import {
 	assertToolCompose,
 	COMPOSE_TOOL_NAME,
 	type ComposeOptions,
+	mismatchOf,
 } from './compose.ts';
+import { composeGuidance, composeTool } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
@@ -123,9 +125,13 @@ export function pickPresent<T extends object, K extends keyof T>(
 export function describeExecutor(options: ExecutorOptions): Executor {
 	assertComposeOptions(options.compose);
 	const input = flattenTools(options.tools, options.bundles);
-	const guidance = guidanceOf(options.bundles);
+	const guidance = joined([guidanceOf(options.bundles), composeGuidance(options.compose)]);
 	const reminders = remindersOf(options.bundles);
-	const tools = Object.freeze(input.map((tool) => captureTool(tool)));
+	const own = input.map((tool) => captureTool(tool));
+	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
+	const tools = Object.freeze(
+		options.compose === undefined ? own : [...own, captureTool(composeTool(options.compose, own))],
+	);
 	return Object.freeze({
 		kind: options.kind,
 		instructions: options.instructions,
@@ -261,20 +267,6 @@ export function defineTool<TParameters extends TSchema>(
 			return execute(params, context);
 		},
 	});
-}
-
-/**
- * What the arguments of a call break in the schema of the tool, as the
- * model reads it: each property path and its rule, such as `handles must
- * not have fewer than 1 items`. A rule on the whole object has no path.
- */
-function mismatchOf(parameters: TSchema, params: unknown): string {
-	return Errors(parameters, params)
-		.map((error) => {
-			const path = error.instancePath.slice(1).replaceAll('/', '.');
-			return path === '' ? error.message : `${path} ${error.message}`;
-		})
-		.join('; ');
 }
 
 /** Copies authoring data while keeping executable and resource values by identity. */
@@ -467,6 +459,11 @@ function assertReminders(reminders: readonly unknown[] | undefined): void {
 	if (!Array.isArray(reminders) || reminders.some((one) => typeof one !== 'function')) {
 		throw new Error('A bundle remind must be a function.');
 	}
+}
+
+/** The guidance texts that exist, joined by a blank line, or undefined for none. */
+function joined(texts: readonly (string | undefined)[]): string | undefined {
+	return texts.filter((text): text is string => text !== undefined).join('\n\n') || undefined;
 }
 
 function guidanceOf(bundles: readonly ToolBundle[] | undefined): string | undefined {

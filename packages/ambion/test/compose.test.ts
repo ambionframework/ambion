@@ -1,0 +1,810 @@
+/**
+ * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
+ * the catalog, the approval, the ledger, the limits, the nested context, the
+ * declared output check, and the result and the error that the model reads.
+ * The code runs in the evaluator of `test/support`.
+ */
+import { type TSchema, Type } from 'typebox';
+import { describe, expect, it } from 'vitest';
+import type { AmbionTool, ToolContext } from '../src/bundle.ts';
+import { ComposeFailure } from '../src/compose.ts';
+import { describeExecutor } from '../src/define.ts';
+import { invokeTool } from '../src/hosting.ts';
+import {
+	type ComposeOptions,
+	type ComposeResult,
+	createRuntime,
+	defineAgent,
+	defineTool,
+	type Evaluator,
+	type Step,
+	startRoom,
+} from '../src/index.ts';
+import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
+import {
+	broken,
+	echo,
+	gauge,
+	held,
+	later,
+	pause,
+	table,
+	text,
+	total,
+} from './support/compose-tools.ts';
+import { functionEvaluator } from './support/evaluator.ts';
+import { andrei, collect, roomName } from './support/room.ts';
+import { stopAtEnd } from './support/stop.ts';
+
+const hidden = defineTool({
+	name: 'hidden',
+	description: 'Stays out of compose.',
+	parameters: Type.Object({}),
+	compose: false,
+	execute: () => 'hidden',
+});
+
+/** An evaluator that counts its runs. A refused compose call never reaches it. */
+function neverRuns() {
+	let runs = 0;
+	const evaluator: Evaluator = {
+		evaluate: async () => {
+			runs += 1;
+			return undefined;
+		},
+	};
+	return { evaluator, evaluated: () => runs };
+}
+
+interface Ran {
+	readonly result: ComposeResult;
+	/** What the model reads: the content of a result, or the message of the error. */
+	readonly read: string;
+	readonly steps: Step[];
+	readonly raw: unknown;
+}
+
+interface RunOptions {
+	readonly compose?: Partial<ComposeOptions>;
+	readonly ctx?: Partial<ToolContext>;
+	readonly record?: boolean;
+}
+
+function composeOf(
+	tools: readonly AmbionTool[],
+	options: Partial<ComposeOptions> = {},
+): AmbionTool {
+	const executor = describeExecutor({
+		kind: 'test',
+		instructions: 'Test.',
+		tools,
+		compose: { evaluator: functionEvaluator, ...options },
+	});
+	const tool = executor.tools.find((one) => one.name === 'compose');
+	if (tool === undefined) throw new Error('The executor has no compose tool.');
+	return tool;
+}
+
+/** Run one compose call, and read the result whether it completed or failed. */
+async function run(
+	tools: readonly AmbionTool[],
+	args: { readonly uses: readonly string[]; readonly code: string },
+	options: RunOptions = {},
+): Promise<Ran> {
+	const steps: Step[] = [];
+	const ctx: ToolContext = {
+		agent: { name: 'worker', identity: 'Worker.' },
+		callId: 'c1',
+		room: 'lab',
+		activation: 'message:1:worker:1',
+		exchange: { person: 'priya', from: 1 },
+		deadline: Date.now() + 60_000,
+		...options.ctx,
+	};
+	const tool = composeOf(tools, options.compose);
+	try {
+		const sink = options.record === false ? undefined : (step: Step) => void steps.push(step);
+		const raw = await invokeTool(tool, args, ctx, sink);
+		if (typeof raw === 'string') throw new Error('compose returned a string.');
+		return {
+			result: raw.details as ComposeResult,
+			read: raw.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
+			steps,
+			raw,
+		};
+	} catch (error) {
+		if (!(error instanceof ComposeFailure)) throw error;
+		return { result: error.details, read: error.message, steps, raw: error };
+	}
+}
+
+const ledgerOf = (ran: Ran) => ran.result.calls.map((call) => [call.call, call.tool, call.status]);
+
+describe('a completed compose call', () => {
+	it('passes a large result between tools, keeps it out of the content, and records the nested steps', async () => {
+		const probe: ToolContext[] = [];
+		const spy = defineTool({
+			name: 'spy',
+			description: 'Read the context.',
+			parameters: Type.Object({}),
+			execute: (_params, ctx) => {
+				probe.push(ctx);
+				return 'seen';
+			},
+		});
+		const ran = await run([table, total, spy, hidden], {
+			uses: ['table', 'total', 'spy'],
+			code: `
+				const { rows } = await tools.table({ count: 500 });
+				const { sum } = await tools.total({ ids: rows.map((row) => row.id) });
+				await tools.spy({});
+				return { count: rows.length, sum };
+			`,
+		});
+		expect(ran.result).toEqual({
+			status: 'completed',
+			value: { count: 500, sum: 124750 },
+			calls: [
+				{ call: 'c1.1', tool: 'table', status: 'completed' },
+				{ call: 'c1.2', tool: 'total', status: 'completed' },
+				{ call: 'c1.3', tool: 'spy', status: 'completed' },
+			],
+		});
+		expect(ran.read).toBe('{"count":500,"sum":124750}');
+		expect(ran.raw).not.toHaveProperty('terminate');
+		// The data stays in the steps of the nested calls, and each step names its parent.
+		expect(ran.steps.map((step) => [step.type, 'call' in step ? step.call : ''])).toEqual([
+			['tool_call', 'c1.1'],
+			['tool_result', 'c1.1'],
+			['tool_call', 'c1.2'],
+			['tool_result', 'c1.2'],
+			['tool_call', 'c1.3'],
+			['tool_result', 'c1.3'],
+		]);
+		expect(ran.steps.every((step) => 'parent' in step && step.parent === 'c1')).toBe(true);
+		expect(ran.steps[1]).toMatchObject({ output: { details: { rows: expect.any(Array) } } });
+		// The nested call keeps the provenance of the compose call, and has an id of its own.
+		expect(probe[0]).toMatchObject({
+			agent: { name: 'worker', identity: 'Worker.' },
+			room: 'lab',
+			activation: 'message:1:worker:1',
+			exchange: { person: 'priya', from: 1 },
+			callId: 'c1.3',
+			composeCall: 'c1',
+		});
+		expect(probe[0]?.deadline).toBeGreaterThan(Date.now());
+		expect(probe[0]?.signal).toBeUndefined();
+		expect(Object.isFrozen(probe[0])).toBe(true);
+		// The nested context holds no sink: no value of it is a function.
+		expect(Object.values(probe[0] ?? {}).filter((value) => typeof value === 'function')).toEqual(
+			[],
+		);
+	});
+
+	it('gives the text of an undeclared tool, the details of a declared one, and no value for no return', async () => {
+		const parts = defineTool({
+			name: 'parts',
+			description: 'Two text parts and an image.',
+			parameters: Type.Object({}),
+			execute: () => ({
+				content: [
+					...text('first'),
+					{ type: 'image' as const, data: 'AA==', mimeType: 'image/png' },
+					...text('second'),
+				],
+				details: { hidden: true },
+			}),
+		});
+		const ran = await run([parts, total], {
+			uses: ['parts', 'total'],
+			code: `return [await tools.parts({}), await tools.total({ ids: [1, 2] })];`,
+		});
+		expect(ran.result.value).toEqual(['first\nsecond', { sum: 3 }]);
+		const none = await run([echo], { uses: [], code: 'const x = 1;' });
+		expect(none.result).toEqual({ status: 'completed', calls: [] });
+		expect(none.read).toBe('The compose call completed with no value.');
+	});
+
+	it('prepares the arguments of a nested call, and ignores a terminate flag', async () => {
+		const ends = defineTool({
+			name: 'ends',
+			description: 'Ends the batch.',
+			parameters: Type.Object({ text: Type.String() }),
+			prepareArguments: (args) => (typeof args === 'string' ? { text: args } : (args as never)),
+			execute: ({ text: value }) => ({ content: text(value), details: null, terminate: true }),
+		});
+		const ran = await run([ends], { uses: ['ends'], code: `return await tools.ends('hi');` });
+		expect(ran.result.value).toBe('hi');
+		expect(ran.raw).not.toHaveProperty('terminate');
+	});
+
+	it('records no nested step when the call has no step sink', async () => {
+		const ran = await run(
+			[echo],
+			{
+				uses: ['echo'],
+				code: `return await tools.echo({ text: 'x' });`,
+			},
+			{ record: false },
+		);
+		expect(ran.result.value).toBe('x');
+		expect(ran.steps).toEqual([]);
+	});
+
+	it('runs through the invoke of the tool with no sink', async () => {
+		const tool = composeOf([echo]);
+		const ctx: ToolContext = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'c1' };
+		const raw = await tool.invoke(
+			{ uses: ['echo'], code: `return await tools.echo({ text: 'y' });` },
+			ctx,
+		);
+		expect(typeof raw === 'string' ? raw : raw.details).toMatchObject({
+			status: 'completed',
+			value: 'y',
+		});
+	});
+
+	it.each([
+		['a call that succeeds', later('echo', false), 'completed'],
+		['a call that fails', later('broken', true), 'failed'],
+	])(
+		'keeps the result when %s outlives the code, and names that call in the content',
+		async (_name, tool, status) => {
+			const ran = await run([tool], {
+				uses: [tool.name],
+				code: `tools.${tool.name}({}); return 'done';`,
+			});
+			expect(ran.result).toMatchObject({ status: 'completed', value: 'done' });
+			expect(ledgerOf(ran)[0]?.[2]).toBe(status);
+			expect(ran.read).toBe(
+				`"done"\nCall c1.1 (${ledgerOf(ran)[0]?.[1]}) ${status} after the code returned.`,
+			);
+		},
+	);
+});
+
+describe('a failed compose call', () => {
+	it('names the call that raised the error, and renders the ledger', async () => {
+		const ran = await run([echo, broken], {
+			uses: ['echo', 'broken'],
+			code: `await tools.echo({ text: 'a' }); await tools.broken({});`,
+		});
+		expect(ran.result).toEqual({
+			status: 'failed',
+			error: { message: 'The archive is closed.', call: 'c1.2' },
+			calls: [
+				{ call: 'c1.1', tool: 'echo', status: 'completed' },
+				{ call: 'c1.2', tool: 'broken', status: 'failed' },
+			],
+		});
+		expect(ran.read).toBe(
+			[
+				'The compose call failed at call c1.2: The archive is closed.',
+				'Calls, in the order that the code made them:',
+				'- c1.1 echo: completed',
+				'- c1.2 broken: failed',
+			].join('\n'),
+		);
+		expect(ran.steps.at(-1)).toMatchObject({
+			type: 'tool_result',
+			call: 'c1.2',
+			error: 'The archive is closed.',
+			parent: 'c1',
+		});
+	});
+
+	it('gives the code the details of a failed call, so it can return a partial value', async () => {
+		const ran = await run([echo, broken], {
+			uses: ['echo', 'broken'],
+			code: `
+				const done = [await tools.echo({ text: 'a' })];
+				try { await tools.broken({}); } catch (error) { return { done, status: error.details.status }; }
+			`,
+		});
+		expect(ran.result).toMatchObject({ status: 'completed', value: { done: ['a'], status: 3 } });
+		expect(ledgerOf(ran).map((call) => call[2])).toEqual(['completed', 'failed']);
+	});
+
+	it('fails with no call named when the code throws by itself', async () => {
+		const ran = await run([echo], {
+			uses: ['echo'],
+			code: `throw new Error('The code gave up.');`,
+		});
+		expect(ran.result).toEqual({
+			status: 'failed',
+			error: { message: 'The code gave up.' },
+			calls: [],
+		});
+		expect(ran.read).toBe('The compose call failed: The code gave up.\nNo call started.');
+	});
+
+	it('leaves its siblings to settle when Promise.all rejects, and lists the outcome of each', async () => {
+		let settled = false;
+		const slow = defineTool({
+			name: 'slow',
+			description: 'Settle later.',
+			parameters: Type.Object({}),
+			execute: async () => {
+				await pause(30);
+				settled = true;
+				return 'slow';
+			},
+		});
+		const ran = await run([slow, broken], {
+			uses: ['slow', 'broken'],
+			code: `await Promise.all([tools.slow({}), tools.broken({})]);`,
+		});
+		expect(ran.result.status).toBe('failed');
+		expect(settled).toBe(true);
+		expect(ledgerOf(ran)).toEqual([
+			['c1.1', 'slow', 'completed'],
+			['c1.2', 'broken', 'failed'],
+		]);
+	});
+
+	it('refuses further calls after the first uncaught error, and lets the code catch a refused call', async () => {
+		const ran = await run([echo], {
+			uses: ['echo'],
+			code: `
+				const calls = [];
+				try { await tools.echo({ text: 3 }); } catch (error) { calls.push(error.message); }
+				try { await tools.other({}); } catch (error) { calls.push(error.message); }
+				return calls;
+			`,
+		});
+		expect(ran.result.value).toEqual([
+			"Invalid arguments for tool 'echo': text must be string.",
+			"The compose call binds no tool 'other'.",
+		]);
+		// A refused call has no id, no ledger entry, and no step.
+		expect(ran.result.calls).toEqual([]);
+		expect(ran.steps).toEqual([]);
+	});
+
+	it.each([
+		['a function', `return () => 1;`, 'The returned value is not JSON: it holds a function.'],
+		['a bigint', `return 10n;`, 'The returned value is not JSON: it holds a bigint.'],
+		['NaN', `return { n: NaN };`, 'The returned value.n is not JSON: it holds the number NaN.'],
+		[
+			'a cycle',
+			`const a = {}; a.a = a; return a;`,
+			'The returned value.a is not JSON: it holds a cycle.',
+		],
+		['a map', `return new Map();`, 'The returned value is not JSON: it holds a Map.'],
+		['a hole', `return [undefined];`, 'The returned value[0] is not JSON: it holds undefined.'],
+	])('fails and names the problem when the code returns %s', async (_name, code, message) => {
+		const ran = await run([echo], { uses: [], code });
+		expect(ran.result).toEqual({ status: 'failed', error: { message }, calls: [] });
+	});
+
+	it('fails the call that carries a value that JSON cannot hold', async () => {
+		const ran = await run([echo], {
+			uses: ['echo'],
+			code: `try { await tools.echo({ text: 1n }); } catch (error) { return error.message; }`,
+		});
+		expect(ran.result.value).toBe(
+			'The arguments of tools.echo.text is not JSON: it holds a bigint.',
+		);
+	});
+});
+
+describe('the limits of a compose call', () => {
+	it.each([
+		{
+			name: 'calls',
+			limits: { calls: 2 },
+			code: `for (let i = 0; i < 3; i++) await tools.echo({ text: 'x' });`,
+			message: 'The compose call passed compose.limits.calls (2).',
+			ledger: ['completed', 'completed'],
+		},
+		{
+			name: 'bytes',
+			limits: { bytes: 10 },
+			code: `return 'x'.repeat(20);`,
+			message: 'The returned value is 22 bytes, over compose.limits.bytes (10). Return less.',
+			ledger: [],
+		},
+		{
+			name: 'time',
+			limits: { time: 30 },
+			code: `await tools.stuck({});`,
+			message: 'The compose call passed compose.limits.time (30 ms).',
+			ledger: ['pending'],
+		},
+	])(
+		'fails on the limit of $name, names it, and never cuts a value',
+		async ({ limits, code, message, ledger }) => {
+			const stuck = held('stuck');
+			const ran = await run(
+				[echo, stuck.tool],
+				{ uses: ['echo', 'stuck'], code },
+				{ compose: { limits } },
+			);
+			expect(ran.result.status).toBe('failed');
+			expect(ran.result.error).toMatchObject({ message });
+			expect(ran.result).not.toHaveProperty('value');
+			expect(ran.result.calls.map((call) => call.status)).toEqual(ledger);
+			stuck.open();
+		},
+	);
+
+	it('ends at the deadline of the activation when it comes before the time limit, and runs no code past it', async () => {
+		const stuck = held('stuck');
+		const near = await run(
+			[stuck.tool],
+			{ uses: ['stuck'], code: `await tools.stuck({});` },
+			{
+				ctx: { deadline: Date.now() + 30 },
+			},
+		);
+		expect(near.result.error?.message).toBe(
+			'The compose call reached the deadline of the activation.',
+		);
+		expect(ledgerOf(near)).toEqual([['c1.1', 'stuck', 'pending']]);
+		const past = await run(
+			[stuck.tool],
+			{ uses: ['stuck'], code: `await tools.stuck({});` },
+			{
+				ctx: { deadline: Date.now() - 1 },
+			},
+		);
+		expect(past.result).toMatchObject({ status: 'failed', calls: [] });
+		expect(stuck.seen.calls).toBe(1);
+		stuck.open();
+	});
+
+	it.each([
+		{ limit: 2, count: 6, most: 2 },
+		{ limit: undefined, count: 12, most: 8 },
+	])(
+		'runs at most $most calls together for a cap of $limit, and lists the calls in the order made',
+		async ({ limit, count, most }) => {
+			const one = gauge('one');
+			const ran = await run(
+				[one.tool],
+				{
+					uses: ['one'],
+					code: `return (await Promise.all(Array.from({ length: ${count} }, () => tools.one({})))).length;`,
+				},
+				{ compose: limit === undefined ? {} : { limits: { concurrent: limit } } },
+			);
+			expect(ran.result.value).toBe(count);
+			expect(one.seen.most).toBe(most);
+			expect(ran.result.calls.map((call) => call.call)).toEqual(
+				Array.from({ length: count }, (_, at) => `c1.${at + 1}`),
+			);
+			expect(ran.result.calls.every((call) => call.status === 'completed')).toBe(true);
+		},
+	);
+
+	it('runs the calls of a sequential tool one at a time, beside the calls of other tools', async () => {
+		const sequential = gauge('turn', 'sequential');
+		const parallel = gauge('side');
+		const ran = await run([sequential.tool, parallel.tool], {
+			uses: ['turn', 'side'],
+			code: `
+				await Promise.all([
+					tools.turn({}), tools.side({}), tools.turn({}), tools.side({}), tools.turn({}), tools.side({}),
+				]);
+			`,
+		});
+		expect(ran.result.status).toBe('completed');
+		expect(sequential.seen).toMatchObject({ most: 1, calls: 3 });
+		expect(parallel.seen.most).toBeGreaterThan(1);
+		expect(ledgerOf(ran).map((call) => call[1])).toEqual([
+			'turn',
+			'side',
+			'turn',
+			'side',
+			'turn',
+			'side',
+		]);
+	});
+});
+
+describe('the cut of a compose call', () => {
+	it('cancels the call, starts no queued call, and marks a started call pending', async () => {
+		const stuck = held('stuck');
+		const controller = new AbortController();
+		const running = run(
+			[stuck.tool],
+			{
+				uses: ['stuck'],
+				code: `await Promise.all([tools.stuck({}), tools.stuck({}), tools.stuck({})]);`,
+			},
+			{ compose: { limits: { concurrent: 1 } }, ctx: { signal: controller.signal } },
+		);
+		await pause(20);
+		controller.abort();
+		const ran = await running;
+		expect(ran.result).toEqual({
+			status: 'cancelled',
+			error: { message: 'The compose call was cut.' },
+			calls: [{ call: 'c1.1', tool: 'stuck', status: 'pending' }],
+		});
+		expect(ran.read).toContain('The compose call was cancelled: The compose call was cut.');
+		expect(ran.read).toContain('A pending call did not settle, and its effect can still happen.');
+		stuck.open();
+		await pause(10);
+		expect(stuck.seen.calls).toBe(1);
+	});
+
+	it('runs no code for a call that was cut before it started', async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const never = neverRuns();
+		const ran = await run(
+			[echo],
+			{ uses: [], code: '' },
+			{
+				compose: { evaluator: never.evaluator },
+				ctx: { signal: controller.signal },
+			},
+		);
+		expect(ran.result.status).toBe('cancelled');
+		expect(never.evaluated()).toBe(0);
+	});
+});
+
+describe('the checks before the code runs', () => {
+	it('refuses a name that the catalog lacks, with no ledger, no approval, and no code', async () => {
+		const never = neverRuns();
+		let asked = 0;
+		const ran = await run(
+			[echo, hidden],
+			{ uses: ['echo', 'hidden', 'compose', 'nothing'], code: '' },
+			{
+				compose: {
+					evaluator: never.evaluator,
+					approve: () => {
+						asked += 1;
+						return 'allow';
+					},
+				},
+			},
+		);
+		expect(ran.result).toEqual({
+			status: 'failed',
+			error: { message: "The catalog holds no tool named 'hidden', 'compose', 'nothing'." },
+			calls: [],
+		});
+		expect([never.evaluated(), asked, ran.steps]).toEqual([0, 0, []]);
+	});
+
+	it('refuses arguments that break the schema of compose', async () => {
+		await expect(run([echo], { uses: 'echo', code: 1 } as never)).rejects.toThrow(
+			"Invalid arguments for tool 'compose': uses must be array; code must be string.",
+		);
+	});
+
+	it('asks the approval with the uses, the code, and a context with no sink, then records the answer', async () => {
+		const asked: unknown[] = [];
+		const ran = await run(
+			[echo],
+			{ uses: ['echo', 'echo'], code: `return 1;` },
+			{
+				compose: {
+					approve: async (request, ctx): Promise<'allow'> => {
+						asked.push({ request, ctx });
+						return 'allow';
+					},
+				},
+			},
+		);
+		expect(ran.result.value).toBe(1);
+		expect(asked).toEqual([
+			{
+				request: { uses: ['echo'], code: 'return 1;' },
+				ctx: expect.objectContaining({ callId: 'c1', room: 'lab', agent: expect.any(Object) }),
+			},
+		]);
+		expect(asked[0]).toHaveProperty('ctx.callId');
+		const ctx = (asked[0] as { ctx: object }).ctx;
+		expect(Object.values(ctx).filter((value) => typeof value === 'function')).toEqual([]);
+		expect(ran.steps).toEqual([{ type: 'approval', call: 'c1', answer: 'allow' }]);
+	});
+
+	it.each([
+		['a denial', (): 'deny' => 'deny', 'The approval refused this compose call. No code ran.'],
+		[
+			'a hook that throws',
+			(): 'allow' => {
+				throw new Error('The policy is down.');
+			},
+			'The approval failed: The policy is down.',
+		],
+	])('refuses the call on %s, with no ledger and no effect', async (_name, approve, message) => {
+		const never = neverRuns();
+		const ran = await run(
+			[echo],
+			{ uses: ['echo'], code: `await tools.echo({ text: 'x' });` },
+			{
+				compose: { evaluator: never.evaluator, approve },
+			},
+		);
+		expect(ran.result).toEqual({ status: 'failed', error: { message }, calls: [] });
+		expect(never.evaluated()).toBe(0);
+		expect(ran.steps).toEqual([{ type: 'approval', call: 'c1', answer: 'deny' }]);
+	});
+});
+
+describe('the declared output of a tool', () => {
+	const liar = defineTool({
+		name: 'liar',
+		description: 'Declares an integer and gives text.',
+		parameters: Type.Object({}),
+		compose: { output: Type.Object({ n: Type.Integer() }) },
+		execute: () => ({ content: text('x'), details: { n: 'x' } as never }),
+	});
+
+	it('rejects the binding with the tool, the call, and the failing paths, and marks the call completed', async () => {
+		const caught = await run([liar], {
+			uses: ['liar'],
+			code: `try { await tools.liar({}); } catch (error) { return error.message; }`,
+		});
+		expect(caught.result.value).toBe(
+			"The details of call c1.1 of tool 'liar' break its declared output: n must be integer. The call completed, and its effect stands.",
+		);
+		expect(ledgerOf(caught)).toEqual([['c1.1', 'liar', 'completed']]);
+		const uncaught = await run([liar], { uses: ['liar'], code: `await tools.liar({});` });
+		expect(uncaught.result.status).toBe('failed');
+		expect(uncaught.result.error?.call).toBe('c1.1');
+		expect(uncaught.read).toContain('- c1.1 liar: completed');
+	});
+});
+
+describe('the compose tool of an executor', () => {
+	it('describes itself with one sentence and the catalog', () => {
+		const tool = composeOf([echo, table, hidden]);
+		expect(tool.description).toBe(
+			[
+				'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.',
+				'',
+				'declare const tools: {',
+				'  /** Return the text. */',
+				'  echo(args: { text: string }): Promise<string>;',
+				'  /** Give a count of rows. */',
+				'  table(args: { count: number }): Promise<{ rows: { id: number; label: string }[] }>;',
+				'};',
+			].join('\n'),
+		);
+	});
+
+	const catalogOf = (tool: AmbionTool) => composeOf([tool]).description.split('\n\n')[1];
+
+	it.each<[string, TSchema, string]>([
+		[
+			'an optional property',
+			Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) }),
+			'{ a: string; b?: number }',
+		],
+		['an empty object', Type.Object({}), '{}'],
+		[
+			'a nested array of unions',
+			Type.Array(Type.Union([Type.String(), Type.Integer()])),
+			'(string | number)[]',
+		],
+		[
+			'literals',
+			Type.Union([Type.Literal('open'), Type.Literal(2), Type.Literal(true), Type.Null()]),
+			'"open" | 2 | true | null',
+		],
+		['an enum', Type.Enum(['a', 'b']), '"a" | "b"'],
+		['a record', Type.Record(Type.String(), Type.Boolean()), 'Record<string, boolean>'],
+		['a property that needs quotes', Type.Object({ 'a-b': Type.String() }), '{ "a-b": string }'],
+		['an unknown value', Type.Unknown(), 'unknown'],
+		['a tuple', Type.Tuple([Type.String()]), 'unknown[]'],
+		[
+			'an intersection',
+			Type.Intersect([Type.Object({ a: Type.String() }), Type.Object({ b: Type.String() })]),
+			'unknown',
+		],
+		['a union with an unknown member', Type.Union([Type.String(), Type.Unknown()]), 'unknown'],
+	])('renders %s as TypeScript', (_name, schema, expected) => {
+		const declared = defineTool({
+			name: 'shape',
+			description: 'Give a shape.',
+			parameters: Type.Object({ value: schema }),
+			compose: { output: schema },
+			execute: () => ({ content: [], details: undefined as never }),
+		});
+		expect(catalogOf(declared)).toContain(
+			`shape(args: { value: ${expected} }): Promise<${expected}>;`,
+		);
+	});
+
+	it('writes a many-line description as a doc comment, and keeps a comment end out of it', () => {
+		const tool = defineTool({
+			name: 'note-pad',
+			description: 'First line.\n\nSecond line */ ends.',
+			parameters: Type.Object({}),
+			execute: () => '',
+		});
+		expect(catalogOf(tool)).toBe(
+			[
+				'declare const tools: {',
+				'  /**',
+				'   * First line.',
+				'   *',
+				'   * Second line *\\/ ends.',
+				'   */',
+				'  "note-pad"(args: {}): Promise<string>;',
+				'};',
+			].join('\n'),
+		);
+	});
+
+	it('binds no room tool and no compose tool of its own', () => {
+		const names = (tool: AmbionTool) =>
+			[...tool.description.matchAll(/^ {2}(\w+)\(/gm)].map((m) => m[1]);
+		expect(names(composeOf([echo, hidden]))).toEqual(['echo']);
+	});
+});
+
+describe('a compose call in a room', () => {
+	it('gives the model the returned value and the late calls alone, and logs the nested calls with their parent', async () => {
+		const seat = defineAgent({
+			name: 'worker',
+			identity: 'Works with tables.',
+			executor: describeExecutor({
+				kind: 'scripted',
+				instructions: 'Compose.',
+				tools: [table, total, later('later', false)],
+				compose: { evaluator: functionEvaluator },
+			}),
+		});
+		const logged: Step[] = [];
+		const read: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-room'),
+				agents: [seat],
+				runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+				execution: scripted((step, _seat, request) => {
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['table', 'total'],
+							code: `const { rows } = await tools.table({ count: 300 });
+								return await tools.total({ ids: rows.map((row) => row.id) });`,
+						});
+					if (request === 2)
+						return callTool('compose', {
+							uses: ['later'],
+							code: `tools.later({}); return 'sent';`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return request === 3
+						? say(step.results.map((result) => result.text).join(' | '))
+						: quiet();
+				}),
+			}),
+		);
+		const events = collect(room);
+		await (await room.visit(andrei)).send({ text: 'Total the rows.' });
+		await settled(room);
+		// The model reads the value, and the late call by its content. It never reads a row.
+		expect(read[0]).toBe('{"sum":44850}');
+		expect(read[1]).toMatch(/^"sent"\nCall \S+ \(later\) completed after the code returned\.$/);
+		expect(read.join('')).not.toContain('row 299');
+		const nested = logged.filter((step) => 'parent' in step);
+		expect(nested.map((step) => step.type)).toEqual([
+			'tool_call',
+			'tool_result',
+			'tool_call',
+			'tool_result',
+			'tool_call',
+			'tool_result',
+		]);
+		const parents = logged.filter((step) => step.type === 'tool_call' && step.name === 'compose');
+		expect(parents).toHaveLength(2);
+		expect(nested[0]).toMatchObject({
+			parent: parents[0] && 'call' in parents[0] ? parents[0].call : '',
+		});
+		// The core raises a tool event for each nested call beside the compose call.
+		expect(
+			events
+				.filter((event) => event.type === 'tool_call')
+				.map((event) => 'name' in event && event.name),
+		).toEqual(['compose', 'table', 'total', 'compose', 'later']);
+	});
+});

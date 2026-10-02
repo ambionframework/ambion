@@ -28,6 +28,7 @@
  * design contract for the wire.
  */
 
+export { invokeChecked, invokeTool } from './compose-tool.ts';
 export type { ExecutorBaseOptions, ExecutorOptions } from './define.ts';
 export { describeExecutor, executorOfKind, pickPresent, present } from './define.ts';
 export type {

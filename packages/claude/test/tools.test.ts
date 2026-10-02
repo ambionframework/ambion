@@ -74,7 +74,6 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 			params: { id: 'r1' },
 			agent: { name: 'sonnet', identity: 'Answers what is asked.' },
 			signal: expect.any(AbortSignal),
-			record: expect.any(Function),
 			callId: expect.stringMatching(/^toolu_/),
 			room: 'lab',
 			activation: 'message:1:sonnet:1',

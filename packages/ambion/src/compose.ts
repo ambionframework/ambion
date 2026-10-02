@@ -5,7 +5,8 @@
  * (`docs/compose.md`). The checks of the option and of the tool field live
  * here too.
  */
-import { IsSchema } from 'typebox';
+import { IsSchema, type TSchema } from 'typebox';
+import { Errors } from 'typebox/value';
 import type { ToolContext } from './bundle.ts';
 
 /** A value that JSON holds. */
@@ -52,7 +53,7 @@ export interface ComposeOptions {
 	 */
 	readonly approve?: (
 		request: { readonly uses: readonly string[]; readonly code: string },
-		ctx: Omit<ToolContext, 'record'>,
+		ctx: ToolContext,
 	) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
 	/** Replaces `COMPOSE_GUIDANCE`. */
 	readonly guidance?: string;
@@ -79,6 +80,103 @@ export interface ComposeResult {
 
 /** The name of the `compose` tool. A tool of the options cannot take it. */
 export const COMPOSE_TOOL_NAME = 'compose';
+
+/** What `compose` guides a model with: when a compose call helps, and when a direct call does. */
+export const COMPOSE_GUIDANCE = `compose joins your tools in one call. Put the tools that you use in
+uses, and the body of an async function in code. Each tool is
+tools.<name>, and the description of compose gives its signature. You
+read only the value that the code returns.
+
+Use compose when:
+- the result of one tool is the input of another tool;
+- a tool gives a large result, and you need a count, a filter, or a
+  few fields of it;
+- you call one tool for many inputs;
+- you start several processes and wait for each.
+
+Call a tool directly when:
+- you must read its result before you decide the next step;
+- you make one call and need its whole result;
+- you speak. say, schedule, seat, unseat, dismiss, and recall are not
+  in compose.
+
+Return only the values that you need to read. The code has no clock,
+no random source, and no I/O except through tools. A failed compose
+call lists each call and its outcome. A completed call can have had an
+effect, so read the list before you call a tool again.`;
+
+/** The limits of a compose call that the option leaves unset. */
+export const DEFAULT_COMPOSE_LIMITS: ComposeLimits = Object.freeze({
+	calls: 64,
+	concurrent: 8,
+	bytes: 65_536,
+	time: 120_000,
+});
+
+/**
+ * A failed or cancelled compose call. The message renders the error and the
+ * ledger, and `details` holds the `ComposeResult`.
+ */
+export class ComposeFailure extends Error {
+	override readonly name = 'ComposeFailure';
+	readonly details: ComposeResult;
+
+	constructor(message: string, details: ComposeResult) {
+		super(message);
+		this.details = details;
+	}
+}
+
+/**
+ * What the arguments of a call break in a schema, as the model reads it:
+ * each property path and its rule, such as `handles must not have fewer
+ * than 1 items`. A rule on the whole value has no path.
+ */
+export function mismatchOf(schema: TSchema, value: unknown): string {
+	return Errors(schema, value)
+		.map((error) => {
+			const path = error.instancePath.slice(1).replaceAll('/', '.');
+			return path === '' ? error.message : `${path} ${error.message}`;
+		})
+		.join('; ');
+}
+
+/**
+ * A copy of a value that JSON holds. A function, a symbol, a bigint, a
+ * number that is not finite, a value that is not a plain object, and a cycle
+ * each throw an error that names the place. An object property that holds
+ * `undefined` is absent, as `JSON.stringify` writes it.
+ */
+export function plainJson(value: unknown, where = 'the value'): JsonValue {
+	return copyJson(value, where, []);
+}
+
+function copyJson(value: unknown, where: string, path: readonly object[]): JsonValue {
+	if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+	if (typeof value === 'number' && Number.isFinite(value)) return value;
+	if (typeof value !== 'object')
+		throw new Error(`${where} is not JSON: it holds ${describe(value)}.`);
+	if (path.includes(value)) throw new Error(`${where} is not JSON: it holds a cycle.`);
+	const inside = [...path, value];
+	if (Array.isArray(value))
+		return value.map((item, at) => copyJson(item, `${where}[${at}]`, inside));
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== Object.prototype && prototype !== null)
+		throw new Error(`${where} is not JSON: it holds ${describe(value)}.`);
+	return Object.fromEntries(
+		Object.entries(value)
+			.filter(([, item]) => item !== undefined)
+			.map(([key, item]) => [key, copyJson(item, `${where}.${key}`, inside)]),
+	);
+}
+
+function describe(value: unknown): string {
+	if (value === undefined) return 'undefined';
+	if (typeof value === 'number') return `the number ${value}`;
+	if (typeof value === 'object' && value !== null)
+		return `a ${Object.getPrototypeOf(value)?.constructor?.name ?? 'object'}`;
+	return `a ${typeof value}`;
+}
 
 const LIMIT_NAMES = ['calls', 'concurrent', 'bytes', 'time'];
 

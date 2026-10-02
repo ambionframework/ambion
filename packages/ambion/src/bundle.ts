@@ -5,7 +5,7 @@
  * flattens bundles at definition time (`define.ts`).
  */
 import type { Static, TSchema } from 'typebox';
-import type { ExchangeRef, Step } from './types.ts';
+import type { ExchangeRef } from './types.ts';
 
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent
@@ -34,15 +34,10 @@ export interface ToolContext {
 	/**
 	 * The id of the `compose` call that made this call. Absent for a direct
 	 * call. `compose` sets it, and code cannot set it. It changes no
-	 * permission and no effect.
+	 * permission and no effect. A tool records no step: the core records the
+	 * steps of a nested call.
 	 */
 	readonly composeCall?: string;
-	/**
-	 * Records one step of the trace of the activation. `compose` records the
-	 * steps of each nested call with it. Absent when the call runs outside an
-	 * activation that has a trace, as `runAgent` does.
-	 */
-	readonly record?: (step: Step) => void;
 }
 
 /** One normalized tool definition used by the room executor. */

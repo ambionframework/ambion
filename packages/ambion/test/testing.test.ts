@@ -15,7 +15,13 @@ import type {
 	RunningActivation,
 } from '../src/execution/contract.ts';
 import { PermanentError } from '../src/execution/failure.ts';
-import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
+import {
+	type AmbionTool,
+	createRuntime,
+	defineAgent,
+	defineTool,
+	startRoom,
+} from '../src/index.ts';
 import type { ActivationView, CommitRequest, CommitResult } from '../src/protocol.ts';
 import {
 	byAgent,
@@ -90,8 +96,10 @@ describe('scripted', () => {
 		expect(results).toContainEqual(['echoed', 'delivered']);
 	});
 
-	it('gives a tool call a signal, the deadline, and the step sink, and settled waits for it', async () => {
-		const seen: { signal?: AbortSignal; deadline?: number } = {};
+	it('gives a tool call a signal and the deadline, and no sink, and settled waits for it', async () => {
+		const seen: { signal?: AbortSignal; deadline?: number; functions: PropertyKey[] } = {
+			functions: [],
+		};
 		let finished = false;
 		const probe = defineTool({
 			name: 'probe',
@@ -100,40 +108,66 @@ describe('scripted', () => {
 			execute: async (_params, ctx) => {
 				seen.signal = ctx.signal;
 				if (ctx.deadline !== undefined) seen.deadline = ctx.deadline;
-				ctx.record?.({
-					type: 'tool_call',
-					call: 'nested-1',
-					name: 'bash',
-					input: {},
-					parent: ctx.callId,
-				});
-				// The tool runs on after its nested step, so settled must wait for the call itself.
+				// A tool holds no sink: its context carries no function.
+				seen.functions = Reflect.ownKeys(ctx).filter(
+					(key) => typeof Reflect.get(ctx, key) === 'function',
+				);
 				await new Promise((resolve) => setTimeout(resolve, 50));
-				ctx.record?.({ type: 'tool_result', call: 'nested-1', output: 'ok', parent: ctx.callId });
 				finished = true;
 				return 'probed';
 			},
 		});
-		const logged: Step[] = [];
 		const room = await open({
 			name: roomName('testing-context'),
 			agents: [agent('a', [probe])],
-			runtime: createRuntime({
-				logger: (traced) => void logged.push(traced.step),
-			}),
 			execution: scripted((_step, _seat, request) => (request === 1 ? callTool('probe') : quiet())),
 		});
-		const events = collect(room);
 		await (await room.visit(andrei)).send({ text: 'Hello?' });
 		await settled(room);
 		expect(finished).toBe(true);
 		expect(seen.signal).toBeInstanceOf(AbortSignal);
 		expect(seen.deadline).toBeGreaterThan(0);
+		expect(seen.functions).toEqual([]);
+	});
+
+	it('checks the full schema of a direct call after prepareArguments, for a tool that checks nothing', async () => {
+		const reached: unknown[] = [];
+		const lax: AmbionTool = {
+			name: 'lax',
+			description: 'Checks nothing.',
+			parameters: Type.Object({ text: Type.String() }),
+			label: 'lax',
+			prepareArguments: (args) =>
+				'word' in (args as object) ? { text: (args as { word: string }).word } : args,
+			invoke: (params) => {
+				reached.push(params);
+				return 'ran';
+			},
+		};
+		const logged: Step[] = [];
+		const room = await open({
+			name: roomName('testing-schema'),
+			agents: [agent('a', [lax])],
+			runtime: createRuntime({
+				clock: fakeClock(),
+				limits: { activation: { attempts: 1, backoff: () => 0 } },
+				logger: (traced) => void logged.push(traced.step),
+			}),
+			execution: scripted((_step, _seat, request) => {
+				if (request === 1) return callTool('lax', { word: 'prepared' });
+				return request === 2 ? callTool('lax', { text: 3 }) : quiet();
+			}),
+		});
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		// The prepared arguments pass. The arguments that break the schema never reach invoke.
+		expect(reached).toEqual([{ text: 'prepared' }]);
 		expect(logged).toContainEqual(
-			expect.objectContaining({ type: 'tool_call', call: 'nested-1', parent: expect.any(String) }),
+			expect.objectContaining({
+				type: 'tool_result',
+				error: "Invalid arguments for tool 'lax': text must be string.",
+			}),
 		);
-		// The nested step raises tool events beside the call of the tool.
-		expect(events.filter((event) => event.type === 'tool_call')).toHaveLength(2);
 	});
 
 	it('turns a script that throws into a transient error and writes no message', async () => {
