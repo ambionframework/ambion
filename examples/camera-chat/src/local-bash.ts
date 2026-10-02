@@ -1,14 +1,8 @@
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import {
-	BACKGROUND_CONTEXT,
-	type BashBackend,
-	type GitBackend,
-	resolvePath,
-	type WorkspaceEnv,
-} from '@ambionframework/workspace';
+import type { BashBackend, GitBackend } from '@ambionframework/workspace';
 import { assertAgent } from '@ambionframework/workspace/git';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { LocalEnv } from './local-env.ts';
 
 /** A trusted local shell. Agent directories provide organization, without an OS sandbox. */
 export function localBashBackend(directory: string, git: GitBackend): BashBackend {
@@ -39,8 +33,8 @@ export function localBashBackend(directory: string, git: GitBackend): BashBacken
 			assertAgent(agent);
 			const home = `${root}/homes/${agent.name}`;
 			await mkdir(home, { recursive: true });
-			// The shell gets only these variables. The host environment holds the model key.
-			const shellEnv = {
+			// The shell gets only these variables. The host environment stays out of it.
+			return new LocalEnv(home, {
 				PATH: process.env.PATH ?? '/usr/bin:/bin',
 				HOME: home,
 				LANG: 'en_US.UTF-8',
@@ -48,38 +42,7 @@ export function localBashBackend(directory: string, git: GitBackend): BashBacken
 				GIT_AUTHOR_EMAIL: `${agent.name}@localhost`,
 				GIT_COMMITTER_NAME: agent.name,
 				GIT_COMMITTER_EMAIL: `${agent.name}@localhost`,
-			};
-			const env = new NodeExecutionEnv({ cwd: home, shellPath: '/bin/bash', shellEnv });
-			return new Proxy(env, {
-				get(target, key) {
-					if (key === 'cleanup') return () => target.cleanup(BACKGROUND_CONTEXT);
-					if (key === 'exec')
-						return (
-							command: string,
-							options: Parameters<WorkspaceEnv['exec']>[1],
-							context: Parameters<WorkspaceEnv['exec']>[2],
-						) =>
-							target.exec(
-								command,
-								{
-									...options,
-									cwd: resolvePath(home, home, options?.cwd ?? home),
-									env: { ...shellEnv, ...options?.env },
-									inheritEnv: false,
-								},
-								context,
-							);
-					const member = Reflect.get(target, key);
-					if (typeof member !== 'function') return member;
-					return (...args: unknown[]) => {
-						if (typeof args[0] === 'string' && key !== 'joinPath')
-							args[0] = resolvePath(home, home, args[0]);
-						if (key === 'renameFile' && typeof args[1] === 'string')
-							args[1] = resolvePath(home, home, args[1]);
-						return Reflect.apply(member, target, args);
-					};
-				},
-			}) as unknown as WorkspaceEnv;
+			});
 		},
 		async dispose() {
 			disposed = true;
