@@ -137,7 +137,7 @@ export async function openHost(options: {
 		};
 	} catch (error) {
 		preview.close();
-		await started?.stop();
+		await started?.stop().catch(() => undefined);
 		await workspace.dispose();
 		database.close();
 		throw error;
