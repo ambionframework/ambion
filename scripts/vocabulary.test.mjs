@@ -53,7 +53,9 @@ const OLD_NAMES = [
 	['speaking default', /\bDEFAULT_GUIDANCE\b/],
 	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
 	['read position', /\bwatermark\b/],
-	['scheduled say', /\b(?:PendingSay|pendingFor)\b/],
+	['scheduled say', /\b(?:PendingSay|pendingFor|renderPending)\b/],
+	['port error', /\bdelivery_error\b/],
+	['send state', /\bDeliveryState\b/],
 	[
 		'journal entries',
 		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,

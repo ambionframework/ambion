@@ -52,9 +52,9 @@ function recorded(deliver = true): { tap: Tap; sent: Wake[] } {
 
 const activations = (sent: readonly Wake[]): string[] => sent.map((wake) => wake.activation).sort();
 
-type DeliveryError = Extract<RoomNotification, { type: 'delivery_error' }>;
+type DeliveryError = Extract<RoomNotification, { type: 'port_error' }>;
 const deliveryErrors = (events: readonly RoomNotification[]): DeliveryError[] =>
-	events.filter((event): event is DeliveryError => event.type === 'delivery_error');
+	events.filter((event): event is DeliveryError => event.type === 'port_error');
 
 /**
  * One broadcast worker on a fake clock, stopped with its storage when the
@@ -180,7 +180,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 				}),
 		});
 		room.subscribe((event) => {
-			if (event.type === 'delivery_error') throw new Error('observer failed');
+			if (event.type === 'port_error') throw new Error('observer failed');
 		});
 		const events = collect(room);
 		const exchange = await (await room.visit(priya)).send({ text: 'Keep this question.' });
@@ -201,7 +201,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 	it('reports a rejected wake, coalesces retries, and emits again after recovery', async () => {
 		let available = false;
 		const { room, clock, runtime } = await workerRoom(storage, {
-			limits: { delivery: { resend: 10 } },
+			limits: { port: { resend: 10 } },
 			wrap: (execution) =>
 				tapped(execution, {
 					wake: async (wake, port) => {
@@ -210,7 +210,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 					},
 				}),
 		});
-		const resend = hostingOf(runtime).limits.delivery.resend;
+		const resend = hostingOf(runtime).limits.port.resend;
 		const events = collect(room);
 		const visit = await room.visit(priya);
 		const first = await visit.send({ text: 'Retry this question.' });
@@ -246,7 +246,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 	it('resends an unresolved wake and completes when the next delivery works', async () => {
 		let deliveries = 0;
 		const { room, clock } = await workerRoom(storage, {
-			limits: { delivery: { resend: 10 } },
+			limits: { port: { resend: 10 } },
 			wrap: (execution) =>
 				tapped(execution, {
 					wake: (wake, port) => {

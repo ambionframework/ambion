@@ -146,7 +146,7 @@ export const trailOf = (events: RoomNotification[], name: string): string =>
 		events.flatMap((e): Record<string, unknown>[] => {
 			if (!('seat' in e) || e.seat !== name) return [];
 			if (e.type === 'activation_end') return [{ type: e.type, said: e.said }];
-			if (e.type === 'error' || e.type === 'delivery_error')
+			if (e.type === 'error' || e.type === 'port_error')
 				return [{ type: e.type, error: e.error.message }];
 			if (e.type === 'abandoned') return [{ type: e.type, cause: e.cause }];
 			return [{ type: e.type }];

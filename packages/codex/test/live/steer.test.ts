@@ -69,7 +69,7 @@ live('a message during a turn', () => {
 			);
 			expect(said.length).toBeGreaterThan(0);
 			expect(said.some((message) => message.seq > (late?.seq ?? Infinity))).toBe(true);
-			expect(errorsIn(events).filter((event) => event.type === 'delivery_error')).toEqual([]);
+			expect(errorsIn(events).filter((event) => event.type === 'port_error')).toEqual([]);
 		} finally {
 			await room.stop();
 		}

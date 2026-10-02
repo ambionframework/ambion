@@ -70,12 +70,12 @@ import {
 	acceptedEntry,
 	type CompositionDraft,
 	compositionOf,
-	type DeliveryState,
 	decideAndAppend,
 	type ExchangeHandle,
 	notificationFor,
 	type RoomHostState,
 	requireSubmission,
+	type SendState,
 	submit,
 } from './core.ts';
 import * as dispatch from './dispatch.ts';
@@ -170,10 +170,10 @@ export class RoomHost implements Room, RunningRoom, RoomHostState {
 	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
 	readonly waiters = new Set<() => void>();
-	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
+	/** When this room last sent each wake. A cache: a resumed room sends every due wake again. */
 	readonly sentAt = new Map<string, number>();
 	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
-	readonly deliveryStates = new Map<string, DeliveryState>();
+	readonly deliveryStates = new Map<string, SendState>();
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases = new Set<string>();
 	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */

@@ -59,10 +59,10 @@ export interface RoomHostState {
 	 * wake empties the set.
 	 */
 	readonly waiters: Set<() => void>;
-	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
+	/** When this room last sent each wake. A cache: a resumed room sends every due wake again. */
 	readonly sentAt: Map<string, number>;
 	/** The delivery in flight for each due or live activation. A token fences a late reply. */
-	readonly deliveryStates: Map<string, DeliveryState>;
+	readonly deliveryStates: Map<string, SendState>;
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	readonly heardLeases: Set<string>;
 	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
@@ -251,7 +251,7 @@ export interface ExchangeHandle extends ExchangeRef {
 	waitForSummary(): Promise<SummaryMessage | undefined>;
 }
 
-export interface DeliveryState {
+export interface SendState {
 	activation: string;
 	token: number;
 	pending: boolean;

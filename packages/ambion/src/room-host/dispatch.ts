@@ -13,7 +13,7 @@ import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
 import type { ExchangeRange, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
-import type { DeliveryState, RoomHostState } from './core.ts';
+import type { RoomHostState, SendState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
@@ -67,7 +67,7 @@ export function seedHeard(host: RoomHostState): void {
 /**
  * A message on the record: the host hears about it, then what it opened,
  * steers every active ordinary seat, and asks reconciliation to dispatch
- * the pending activations the projection derives. One message, one entry,
+ * the due activations the projection derives. One message, one entry,
  * one order.
  */
 function queueMessage(host: RoomHostState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
@@ -245,7 +245,7 @@ function dispatch(
 			new Error('The previous delivery result is still pending; its outcome is unknown.'),
 		);
 	}
-	const state: DeliveryState = previous ?? {
+	const state: SendState = previous ?? {
 		activation,
 		token: 0,
 		pending: false,
@@ -309,7 +309,7 @@ function emitDeliveryError(
 	error: unknown,
 ): void {
 	host.emit({
-		type: 'delivery_error',
+		type: 'port_error',
 		seat,
 		activation,
 		operation,

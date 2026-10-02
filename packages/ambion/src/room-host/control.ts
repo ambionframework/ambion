@@ -185,7 +185,7 @@ async function reconcileOnce(host: RoomHostState): Promise<void> {
 		if (await onePass(host)) return;
 	}
 	// A pass that kept writing yields, and the room looks again after the resend window.
-	if (!host.gone()) arm(host, host.now() + host.runtime.limits.delivery.resend);
+	if (!host.gone()) arm(host, host.now() + host.runtime.limits.port.resend);
 }
 
 /**
@@ -198,7 +198,7 @@ async function onePass(host: RoomHostState): Promise<boolean> {
 		{
 			type: 'reconcile',
 			options: {
-				resend: host.runtime.limits.delivery.resend,
+				resend: host.runtime.limits.port.resend,
 				attempts: host.runtime.limits.activation.attempts,
 				sent: host.sentAt,
 				stopped: host.gone(),
@@ -211,7 +211,7 @@ async function onePass(host: RoomHostState): Promise<boolean> {
 		changed = await apply(host, decision);
 	} catch {
 		// A write that failed because the room is gone arms nothing.
-		if (!host.gone()) arm(host, host.now() + host.runtime.limits.delivery.resend);
+		if (!host.gone()) arm(host, host.now() + host.runtime.limits.port.resend);
 		return true;
 	}
 	if (changed) return false;
