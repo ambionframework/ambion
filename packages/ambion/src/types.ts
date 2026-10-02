@@ -305,8 +305,8 @@ export type Participant = AgentParticipant | PersonParticipant;
 export type RoomEvent =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
-	 * whoever wrote it: what a person delivered, what an agent said, what the
-	 * an agent wrote, and a person arriving or leaving all reach a host the same
+	 * whoever wrote it: what a person delivered, what an agent said, what an
+	 * agent wrote, and a person arriving or leaving all reach a host the same
 	 * way.
 	 */
 	| { type: 'message'; message: Message }
@@ -326,9 +326,8 @@ export type RoomEvent =
 	| { type: 'exchange_opened'; exchange: ExchangeRef }
 	/**
 	 * The room went quiet with an exchange open, so that exchange is over and
-	 * holds the range it turned out to cover. It arrives after `settled` and
-	 * before any summary: the configured writer is one reader of this, not the only
-	 * one.
+	 * holds the range it turned out to cover. It arrives before any summary:
+	 * the configured writer is one reader of this, not the only one.
 	 */
 	| { type: 'exchange_closed'; exchange: ExchangeRange };
 
