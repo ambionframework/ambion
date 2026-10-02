@@ -1,5 +1,5 @@
 /**
- * What every mechanism of the room host shares: the state of the room each
+ * What every mechanism of the room run shares: the state of the room each
  * one reads, and the way a decision becomes an entry on the journal.
  *
  * `RoomRun` in `room.ts` holds all state. A mechanism module exports
