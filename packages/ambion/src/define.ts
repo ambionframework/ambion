@@ -11,12 +11,20 @@ import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import type {
 	AmbionTool,
+	DeclaredToolOptions,
+	PlainToolOptions,
 	Reminder,
 	ToolBundle,
 	ToolConcurrency,
 	ToolContext,
 	ToolResult,
 } from './bundle.ts';
+import {
+	assertComposeOptions,
+	assertToolCompose,
+	COMPOSE_TOOL_NAME,
+	type ComposeOptions,
+} from './compose.ts';
 import { AmbionError } from './errors.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
@@ -67,6 +75,11 @@ export interface ExecutorBaseOptions {
 	 * registry of the runtime. Absent names `length`.
 	 */
 	readonly estimateTokens?: string;
+	/**
+	 * The `compose` tool for this seat. It joins the tools of the seat into
+	 * one call. Absent, the seat has no `compose` tool.
+	 */
+	readonly compose?: ComposeOptions;
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -108,6 +121,7 @@ export function pickPresent<T extends object, K extends keyof T>(
  * executor kind adds its own fields to the value this returns.
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
+	assertComposeOptions(options.compose);
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
 	const reminders = remindersOf(options.bundles);
@@ -206,38 +220,28 @@ export function captureHuman(human: PersonDefinition): PersonDefinition {
 	});
 }
 
-export interface DefineToolOptions<TParameters extends TSchema> {
-	name: string;
-	description: string;
-	parameters: TParameters;
-	label?: string;
-	prepareArguments?: (args: unknown) => Static<TParameters>;
-	executionMode?: ToolConcurrency;
-	/**
-	 * Return a string (or the full content shape when needed). Throw on failure.
-	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
-	 * signal the executor gives the tool call. `ctx.room`, `ctx.activation`, and
-	 * `ctx.exchange` name the room, the activation, and the open exchange the
-	 * call ran in.
-	 */
-	execute: (
-		params: Static<TParameters>,
-		ctx: ToolContext,
-	) => Promise<string | ToolResult> | string | ToolResult;
-}
-
 /**
  * Define one typed tool. The callback receives parsed parameters and the
  * calling agent context. A native Pi tool goes through `fromPiTool`, from
  * `@ambionframework/pi`.
  */
 export function defineTool<TParameters extends TSchema>(
-	options: DefineToolOptions<TParameters>,
+	options: PlainToolOptions<TParameters>,
+): AmbionTool;
+/** Define one typed tool that declares its output. The compiler checks `details` against it. */
+export function defineTool<TParameters extends TSchema, TOutput extends TSchema>(
+	options: DeclaredToolOptions<TParameters, TOutput>,
+): AmbionTool;
+export function defineTool<TParameters extends TSchema>(
+	options: PlainToolOptions<TParameters> | DeclaredToolOptions<TParameters, TSchema>,
 ): AmbionTool {
 	assertDefineToolOptions(options);
 	const parameters = capture(options.parameters);
 	const name = options.name;
-	const execute = options.execute;
+	const execute: (
+		params: Static<TParameters>,
+		ctx: ToolContext,
+	) => Promise<string | ToolResult> | string | ToolResult = options.execute;
 	return Object.freeze({
 		name,
 		description: options.description,
@@ -247,6 +251,7 @@ export function defineTool<TParameters extends TSchema>(
 			? {}
 			: { prepareArguments: options.prepareArguments }),
 		...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
+		...captureCompose(options.compose),
 		invoke: (params: unknown, context: ToolContext) => {
 			if (!Check(parameters, params)) {
 				throw new Error(`Invalid arguments for tool '${name}': ${mismatchOf(parameters, params)}.`);
@@ -418,6 +423,11 @@ function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: s
 	if (!Array.isArray(tools)) throw new Error(`Agent ${source} must be an array.`);
 	for (const tool of tools) {
 		assertTool(tool);
+		if (tool.name === COMPOSE_TOOL_NAME)
+			throw new AmbionError(
+				'invalid_tool',
+				`A tool of the agent ${source} is named '${tool.name}': the compose option reserves the name. Give the tool another name.`,
+			);
 		into.push(tool);
 	}
 }
@@ -430,8 +440,15 @@ function captureTool(tool: AmbionTool): AmbionTool {
 		label: tool.label,
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
+		...captureCompose(tool.compose),
 		invoke: tool.invoke,
 	});
+}
+
+/** The `compose` field of a tool, copied. The `output` schema is captured as `parameters` is. */
+function captureCompose(compose: AmbionTool['compose']): Pick<AmbionTool, 'compose'> {
+	if (compose === undefined || compose === false) return compose === undefined ? {} : { compose };
+	return { compose: Object.freeze({ output: capture(compose.output) }) };
 }
 
 /** The reminder of each bundle that has one, in bundle order, or undefined for none. */
@@ -496,6 +513,7 @@ function assertTool(value: unknown): asserts value is AmbionTool {
 	if (!isExecutionMode(value.executionMode)) {
 		throw new Error('Tool executionMode must be sequential or parallel.');
 	}
+	assertToolCompose(value.compose);
 }
 
 function assertDefineToolOptions(value: unknown): void {
@@ -518,6 +536,7 @@ function assertDefineToolOptions(value: unknown): void {
 	if (!isExecutionMode(value.executionMode)) {
 		throw new Error('Tool executionMode must be sequential or parallel.');
 	}
+	assertToolCompose(value.compose);
 }
 
 function isToolSchema(value: unknown): value is TSchema {

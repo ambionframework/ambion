@@ -1,7 +1,9 @@
 # Compose
 
-**Status: proposed design.** No package exports these interfaces yet.
-[The 0.6.0 plan](../planning/next.md) holds the work.
+**Status: proposed design.** The main entry exports the types of the
+option, the evaluator, and the result, and the `compose` field of a tool.
+No `compose` tool exists yet. [The 0.6.0 plan](../planning/next.md) holds
+the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
 calls `compose` with the tools that it uses and short code. The code passes
@@ -339,7 +341,7 @@ function defineTool<P extends TSchema, O extends TSchema>(
 ): AmbionTool;
 ```
 
-`BaseToolOptions` holds the fields that `DefineToolOptions` holds today,
+`BaseToolOptions` holds the fields that every tool definition holds,
 except `execute`. A `tsc` run over this sketch accepts a matching `details`
 and a string from an undeclared tool. It refuses a string, a wrong literal,
 and a missing field from a declared tool.

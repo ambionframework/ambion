@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### The compose vocabulary
+
+**A tool can declare its output for `compose`.** `AmbionTool` gains the
+field `compose`: `false`, or `{ output }` with a TypeBox schema. The check
+of a tool refuses any other value. `captureTool` copies the field.
+
+**`defineTool` has two overloads.** With `compose: { output }`, `execute`
+must return a `ToolResult` whose `details` is `Static` of the schema.
+`ToolResult` takes the type of its details. The new types
+`BaseToolOptions`, `PlainToolOptions`, and `DeclaredToolOptions` replace
+the export `DefineToolOptions`.
+
+**The tool context and the trace name a compose call.** `ToolContext`
+gains `composeCall` and `record`. The `tool_call` and `tool_result` steps
+gain `parent`.
+
+**The executor options take `compose`.** The main entry exports the types
+`ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
+`Evaluator`, `EvaluatorInput`, and `JsonValue`. A definition refuses a user
+tool named `compose`. The option adds no tool yet.
+
 ## 0.5.0 (2026-10-02)
 
 <img alt="Ambion 0.5.0, six things new in this release. Sensors: an agent forks a sensor template, commits it, runs it, and observes through it, and each observation is kept as evidence. Actuators: an actuator is a controller command that the agent starts with bash, and exit 0 means the device is safe. Isolation: Claude, Codex, and Pi seats have no native tools, and files and a shell come only through the workspace. Camera Chat on macOS: an agent forks a camera sensor, launches it, and looks through it with a live preview. Codex runs on app-server, with turn/start, turn/steer, and turn/interrupt. Pi runs on Pi 1.0, on a Claude or ChatGPT subscription. Also new: a clone tool, JSON as the one data rule, a session trace step, steer with a receipt, and one word for each meaning." src="docs/assets/ambion-0.5.0.png" width="800">

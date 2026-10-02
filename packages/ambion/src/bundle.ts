@@ -4,8 +4,8 @@
  * tool, what a call receives, and what it hands back live here too. The core
  * flattens bundles at definition time (`define.ts`).
  */
-import type { TSchema } from 'typebox';
-import type { ExchangeRef } from './types.ts';
+import type { Static, TSchema } from 'typebox';
+import type { ExchangeRef, Step } from './types.ts';
 
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent
@@ -31,6 +31,18 @@ export interface ToolContext {
 	readonly exchange?: Pick<ExchangeRef, 'person' | 'from'>;
 	/** When the room ends the activation, in ms since the epoch on the wall clock. Absent outside a room. */
 	readonly deadline?: number;
+	/**
+	 * The id of the `compose` call that made this call. Absent for a direct
+	 * call. `compose` sets it, and code cannot set it. It changes no
+	 * permission and no effect.
+	 */
+	readonly composeCall?: string;
+	/**
+	 * Records one step of the trace of the activation. `compose` records the
+	 * steps of each nested call with it. Absent when the call runs outside an
+	 * activation that has a trace, as `runAgent` does.
+	 */
+	readonly record?: (step: Step) => void;
 }
 
 /** One normalized tool definition used by the room executor. */
@@ -41,10 +53,63 @@ export interface AmbionTool {
 	readonly label: string;
 	readonly prepareArguments?: (args: unknown) => unknown;
 	readonly executionMode?: ToolConcurrency;
+	/**
+	 * How the `compose` tool binds this tool. `false` leaves the tool out of
+	 * the catalog. `{ output }` declares the shape of `details`, and the
+	 * binding returns `details`. Absent, the binding returns the text of
+	 * `content`.
+	 */
+	readonly compose?: false | { readonly output: TSchema };
 	readonly invoke: (
 		params: unknown,
 		ctx: ToolContext,
 	) => Promise<string | ToolResult> | string | ToolResult;
+}
+
+/** The fields that every tool definition holds, whether or not it declares an output. */
+export interface BaseToolOptions<TParameters extends TSchema> {
+	name: string;
+	description: string;
+	parameters: TParameters;
+	label?: string;
+	prepareArguments?: (args: unknown) => Static<TParameters>;
+	executionMode?: ToolConcurrency;
+}
+
+/**
+ * A tool with no declared output. `compose` binds it as text, or leaves it out
+ * when `compose` is `false`.
+ */
+export interface PlainToolOptions<
+	TParameters extends TSchema,
+> extends BaseToolOptions<TParameters> {
+	compose?: false;
+	/**
+	 * Return a string (or the full content shape when needed). Throw on failure.
+	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
+	 * signal the executor gives the tool call. `ctx.room`, `ctx.activation`, and
+	 * `ctx.exchange` name the room, the activation, and the open exchange the
+	 * call ran in.
+	 */
+	execute: (
+		params: Static<TParameters>,
+		ctx: ToolContext,
+	) => Promise<string | ToolResult> | string | ToolResult;
+}
+
+/**
+ * A tool that declares its output. `execute` returns a tool result whose
+ * `details` match the schema, and `compose` binds those `details`.
+ */
+export interface DeclaredToolOptions<
+	TParameters extends TSchema,
+	TOutput extends TSchema,
+> extends BaseToolOptions<TParameters> {
+	compose: { readonly output: TOutput };
+	execute: (
+		params: Static<TParameters>,
+		ctx: ToolContext,
+	) => Promise<ToolResult<Static<TOutput>>> | ToolResult<Static<TOutput>>;
 }
 
 /** Whether an executor runs the calls of one activation in turn or together. */
@@ -61,9 +126,9 @@ export function contentText(content: readonly ToolContent[]): string {
 }
 
 /** What a tool hands back to the model: content it reads, and details it does not. */
-export interface ToolResult {
+export interface ToolResult<TDetails = unknown> {
 	readonly content: ToolContent[];
-	readonly details: unknown;
+	readonly details: TDetails;
 	/** Ends the activation after this result when every call of the batch sets it. */
 	readonly terminate?: boolean;
 }
