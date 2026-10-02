@@ -111,3 +111,30 @@ it('ends the pass in flight on abort, commits nothing, and still counts the usag
 	expect(run.commits).toEqual([]);
 	run.session.close?.();
 });
+
+// The real executable runs a line that lands during the final answer as a turn of its own.
+it('settles on the result of the turn that answers a line steered during the final answer', async () => {
+	const run = open({
+		echoOnTurn: true,
+		passes: [
+			// The first turn streams its final text, and its `result` has no queued turn.
+			[{ text: 'It is Thursday.', stream: true }, { wait: 300 }],
+			// The second turn runs longer than the grace period, then says.
+			[{ wait: 5_600 }, { say: 'Thursday, and bring the forms.' }],
+		],
+	});
+	const pass = run.session.pass({ kind: 'view', view: viewOf(1) });
+	await until(() => run.session.readThrough === 1, 'the echo of the view');
+	run.session.steer?.(1, 2, '[2] priya: Also bring the forms.');
+	const result = await pass;
+	expect(result).toEqual({ failed: false });
+	expect(run.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
+	// The say of the second turn committed after the line, and the pass did not end before it.
+	expect(run.commits).toHaveLength(1);
+	expect(run.commits[0]?.intent).toMatchObject({
+		kind: 'said',
+		text: 'Thursday, and bring the forms.',
+	});
+	expect(run.commits[0]?.readThrough).toBeGreaterThanOrEqual(2);
+	run.session.close?.();
+}, 15_000);

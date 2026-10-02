@@ -14,7 +14,9 @@
  * - **Steer.** A line that lands mid-pass joins the streaming input, and
  *   its echo tells the core that the model read it. The core records the
  *   `steer` step ([`executors.md`](../../../docs/executors.md)), and a line
- *   with no echo waits for the next delta.
+ *   with no echo waits for the next delta. A line that lands during the
+ *   final answer runs as a turn of its own after the first `result`. Its
+ *   echo arrives with that turn, so the pass settles on the later `result`.
  * - **Cut.** The signal of the activation interrupts the query. `close` ends
  *   the input and the process, and the driver calls it when the activation
  *   is over.
@@ -138,7 +140,9 @@ class Activation implements RunningActivation {
 	/**
 	 * The result that waits on `grace` to settle the pass. The end of the
 	 * stream, a throw, or `close` settles the pass with it at once, so the
-	 * exit of the process cannot replace its cause.
+	 * exit of the process cannot replace its cause. The echo that it waits
+	 * for drops a result that did not fail: the turn of that echo answers
+	 * next.
 	 */
 	private parked: PassResult | undefined;
 	private stopped = false;
@@ -366,17 +370,30 @@ class Activation implements RunningActivation {
 		this.stream?.close();
 	}
 
-	/** The SDK sent a user message back: the model has it, so the core counts its range read. */
+	/**
+	 * The SDK sent a user message back: the model has it, so the core counts
+	 * its range read. A result that did not fail and waits on the grace timer
+	 * ended the turn before this message. The message starts the next turn, so
+	 * the echo cancels the timer and drops that result. The pass settles on
+	 * the result of the next turn. A failed result keeps its timer, because
+	 * the timer lets the standard error arrive.
+	 */
 	private echoed(message: Extract<SDKMessage, { type: 'user' }>): void {
 		const range = this.echoes.confirm(message.uuid);
 		if (range === undefined) return;
 		if (message.uuid !== undefined) this.outbox.delete(message.uuid);
 		this.activation.read(range);
+		if (this.parked !== undefined && !this.parked.failed) {
+			clearTimeout(this.grace);
+			this.parked = undefined;
+		}
 	}
 
 	/**
 	 * A result ends the pass when no sent message still waits for its echo and
-	 * no queued message follows. Otherwise the pass waits for its result.
+	 * no queued message follows. Otherwise the result waits on the grace timer,
+	 * and the echo of the message cancels the timer; see `echoed`. The timer
+	 * ends the pass with the result when no echo comes.
 	 */
 	private answered(message: Extract<SDKMessage, { type: 'result' }>): void {
 		if (this.stopped) return;
@@ -392,6 +409,8 @@ class Activation implements RunningActivation {
 	 * Settle the pass with a result after `delay` milliseconds. A failed
 	 * result waits a moment more, because the standard error comes on a pipe
 	 * of its own and can trail the result. The message then holds its tail.
+	 * A parked result that did not fail does not settle the pass when an echo
+	 * arrives first; see `echoed`.
 	 */
 	private settleWith(result: PassResult, delay: number): void {
 		clearTimeout(this.grace);
