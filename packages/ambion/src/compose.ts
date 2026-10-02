@@ -83,12 +83,12 @@ export const COMPOSE_TOOL_NAME = 'compose';
 const LIMIT_NAMES = ['calls', 'concurrent', 'bytes', 'time'];
 
 const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
-	typeof value === 'object' && value !== null;
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Refuse a tool `compose` that is not absent, `false`, or an object with a TypeBox `output`. */
 export function assertToolCompose(compose: unknown): void {
 	if (compose === undefined || compose === false) return;
-	if (!isRecord(compose) || !IsSchema(compose.output)) {
+	if (!isRecord(compose) || !isRecord(compose.output) || !IsSchema(compose.output)) {
 		throw new Error('Tool compose must be false or an object with an output schema.');
 	}
 }

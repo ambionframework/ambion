@@ -5,7 +5,7 @@
  * guidance; the core does not know what the bundle reaches. A running tool
  * reads its agent, the room, the activation, and the open exchange.
  */
-import { type Static, Type } from 'typebox';
+import { Type } from 'typebox';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
 	fromPiTool,
@@ -115,6 +115,7 @@ describe('the definition of agent tools', () => {
 		['an empty object', {}],
 		['an output that is not a schema', { output: 'x' }],
 		['a string', 'yes'],
+		['an output that is an array', { output: [] }],
 	])('refuses a compose value of %s on a tool and on its options', (_name, compose) => {
 		const options = {
 			name: 'bad',
@@ -171,6 +172,7 @@ describe('the definition of agent tools', () => {
 		['an approve that is not a function', { evaluator: ok, approve: 'yes' }],
 		['guidance that is not a string', { evaluator: ok, guidance: 1 }],
 		['limits that are not an object', { evaluator: ok, limits: 3 }],
+		['limits that are an array', { evaluator: ok, limits: [] }],
 		['a limit of zero', { evaluator: ok, limits: { calls: 0 } }],
 		['a limit of a fraction', { evaluator: ok, limits: { time: 1.5 } }],
 		['a limit that has no name', { evaluator: ok, limits: { speed: 2 } }],
@@ -319,12 +321,19 @@ describe('the definition of agent tools', () => {
 				description: 'Fetch an order by id, as data.',
 				parameters,
 				compose: { output: Order },
-				execute: ({ id }) => {
-					const details: Static<typeof Order> = { id, status: 'open' };
-					return { content: text(id), details };
-				},
+				execute: ({ id }) => ({ content: text(id), details: { id, status: 'open' } }),
 			});
 			expectTypeOf(matching).toEqualTypeOf<AmbionTool>();
+			defineTool({
+				name: 'async_order',
+				description: 'Fetch an order by id, as data, later.',
+				parameters,
+				compose: { output: Order },
+				execute: async ({ id }) => ({
+					content: text(id),
+					details: { id, status: 'delayed', eta: 'soon' },
+				}),
+			});
 			defineTool({
 				name: 'string_order',
 				description: 'Returns a string.',

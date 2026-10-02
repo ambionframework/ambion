@@ -229,9 +229,11 @@ export function defineTool<TParameters extends TSchema>(
 	options: PlainToolOptions<TParameters>,
 ): AmbionTool;
 /** Define one typed tool that declares its output. The compiler checks `details` against it. */
-export function defineTool<TParameters extends TSchema, TOutput extends TSchema>(
-	options: DeclaredToolOptions<TParameters, TOutput>,
-): AmbionTool;
+export function defineTool<
+	TParameters extends TSchema,
+	TOutput extends TSchema,
+	const TDetails extends Static<TOutput>,
+>(options: DeclaredToolOptions<TParameters, TOutput, TDetails>): AmbionTool;
 export function defineTool<TParameters extends TSchema>(
 	options: PlainToolOptions<TParameters> | DeclaredToolOptions<TParameters, TSchema>,
 ): AmbionTool {

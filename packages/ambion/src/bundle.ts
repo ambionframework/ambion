@@ -99,17 +99,20 @@ export interface PlainToolOptions<
 
 /**
  * A tool that declares its output. `execute` returns a tool result whose
- * `details` match the schema, and `compose` binds those `details`.
+ * `details` match the schema, and `compose` binds those `details`. The
+ * compiler infers `TDetails` from the result and checks it against the
+ * schema, so a literal in the result keeps its literal type.
  */
 export interface DeclaredToolOptions<
 	TParameters extends TSchema,
 	TOutput extends TSchema,
+	TDetails extends Static<TOutput> = Static<TOutput>,
 > extends BaseToolOptions<TParameters> {
 	compose: { readonly output: TOutput };
 	execute: (
 		params: Static<TParameters>,
 		ctx: ToolContext,
-	) => Promise<ToolResult<Static<TOutput>>> | ToolResult<Static<TOutput>>;
+	) => Promise<ToolResult<TDetails>> | ToolResult<TDetails>;
 }
 
 /** Whether an executor runs the calls of one activation in turn or together. */
