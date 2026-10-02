@@ -7,6 +7,7 @@
  * the host home shows it.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
 	chmodSync,
 	existsSync,
@@ -22,6 +23,7 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Execution } from '@ambionframework/ambion';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
@@ -238,14 +240,20 @@ export async function codexOn(
 		close: async () => {
 			await responses.close();
 			await proxy.close();
-			// The binary can still write to its home as it exits.
+			// `close` of an activation sends a signal and returns. The binary can still write to
+			// its home as it exits, so wait for it, stop one that remains, and then remove the files.
+			await gone(home);
 			rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 		},
 	};
 }
 
-/** The processes that run with `home` as their `CODEX_HOME`: the app-server of a seat. Linux only. */
+/** The processes that run with `home` as their `CODEX_HOME`: the app-server of a seat. */
 export function runningWith(home: string): number[] {
+	return process.platform === 'linux' ? runningWithProc(home) : runningWithPs(home);
+}
+
+function runningWithProc(home: string): number[] {
 	return readdirSync('/proc')
 		.filter((name) => /^\d+$/.test(name))
 		.filter((pid) => {
@@ -258,6 +266,28 @@ export function runningWith(home: string): number[] {
 			}
 		})
 		.map(Number);
+}
+
+/** macOS has no /proc. `ps eww` prints the environment after the command of a process. */
+function runningWithPs(home: string): number[] {
+	const table = execFileSync('ps', ['eww', '-axo', 'pid=,command='], {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+	});
+	const marker = ` CODEX_HOME=${home}`;
+	return table
+		.split('\n')
+		.filter((line) => line.endsWith(marker) || line.includes(`${marker} `))
+		.map((line) => Number.parseInt(line.trim(), 10))
+		.filter((pid) => pid !== process.pid);
+}
+
+/** Wait until no process runs with `home`. A process that remains after the deadline is killed. */
+export async function gone(home: string, deadlineMs = 5_000): Promise<void> {
+	const end = Date.now() + deadlineMs;
+	while (runningWith(home).length > 0 && Date.now() < end) await sleep(50);
+	for (const pid of runningWith(home)) kill(pid);
+	while (runningWith(home).length > 0 && Date.now() < end + 5_000) await sleep(50);
 }
 
 /** Kill a process, and ignore one that is gone already. */

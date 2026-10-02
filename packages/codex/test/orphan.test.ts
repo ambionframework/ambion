@@ -60,7 +60,7 @@ async function startHost(script: readonly Reply[], onRequest?: OnRequest) {
 	);
 	onTestFinished(async () => {
 		child.kill('SIGKILL');
-		if (process.platform === 'linux') for (const pid of runningWith(on.home)) kill(pid);
+		for (const pid of runningWith(on.home)) kill(pid);
 		await exited(child);
 		await on.close();
 	});
@@ -74,9 +74,6 @@ async function startHost(script: readonly Reply[], onRequest?: OnRequest) {
 	};
 }
 
-// The check of the processes reads /proc, so it runs on Linux only.
-const onLinux = process.platform === 'linux';
-
 describe.skipIf(!hasBinary && process.env.CI === undefined)('a host that dies', () => {
 	it(
 		'takes its codex process with it, and the request that is open closes',
@@ -86,18 +83,16 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)('a host that dies', 
 			const { on, die } = await startHost([say, { text: 'done' }], held.onRequest);
 
 			await held.open;
-			if (onLinux) expect(runningWith(on.home).length).toBeGreaterThan(0);
+			expect(runningWith(on.home).length).toBeGreaterThan(0);
 			await die();
 
 			// The connection of the open request closes, and no other request follows.
 			await within(held.closed, 'codex kept its request open');
 			expect(on.responses.requests).toHaveLength(1);
 			// The app-server does not remain.
-			if (onLinux) {
-				await vi.waitFor(() => expect(runningWith(on.home)).toEqual([]), {
-					timeout: GONE_MS,
-				});
-			}
+			await vi.waitFor(() => expect(runningWith(on.home)).toEqual([]), {
+				timeout: GONE_MS,
+			});
 		},
 		TEST_MS,
 	);
