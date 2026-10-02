@@ -14,6 +14,7 @@ packages/
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
+  evaluator/    the evaluators of compose: quickjsEvaluator() and processEvaluator()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
@@ -28,7 +29,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The eleven `packages/*` entries are publishable and share a lockstep version.
+The twelve `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -36,6 +37,7 @@ ambion ──▶ journal
 pi ──▶ ambion
 claude ──▶ ambion
 codex ──▶ ambion
+evaluator ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
 just-bash ──▶ workspace
@@ -354,7 +356,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the eleven packages under the `@ambionframework` scope.
+Two channels publish the twelve packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |

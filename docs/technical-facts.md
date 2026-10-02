@@ -1,7 +1,7 @@
 # Technical facts
 
 This page lists the key technical facts of Ambion, the 0.5.0 sensor scope,
-the eleven packages, and system limits. The [README](../README.md) holds the
+the twelve packages, and system limits. The [README](../README.md) holds the
 positioning and the current capabilities.
 
 ## Key technical facts

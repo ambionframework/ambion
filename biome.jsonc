@@ -677,6 +677,7 @@
 				"packages/pi/src/**",
 				"packages/claude/src/**",
 				"packages/codex/src/**",
+				"packages/evaluator/src/**",
 				"packages/workspace/src/**",
 				"packages/simulator/src/**",
 				"examples/**/src/**"
@@ -701,6 +702,39 @@
 											"**/ambion/src/**"
 										],
 										"message": "Reach the core through `@ambionframework/ambion` or its `/hosting` or `/conformance` entry, never a file inside it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The child of `processEvaluator` runs under --permission with no allow
+			// flag: Node loads its entry file and no other file. The build bundles
+			// the setup script into the entry, so the source imports that script and
+			// `node:` built-ins, and nothing else. A Biome override replaces the
+			// options of an earlier one for the same rule, so this entry repeats
+			// the refusal of the core's files.
+			"includes": ["packages/evaluator/src/child.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/**",
+											"quickjs-emscripten",
+											"quickjs-emscripten/**",
+											"./*",
+											"!./guest.ts",
+											"../**"
+										],
+										"message": "The child loads its entry file and no other file at run time. It imports `node:` built-ins and the setup script, which the build bundles."
 									}
 								]
 							}

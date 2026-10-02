@@ -1,0 +1,18 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		// The tests read the core's conformance suite, and the core's branded
+		// types carry a `unique symbol`, so its source and its built `.d.mts`
+		// are two nominally different types. The check reads the source of the
+		// core, and both sides agree. The mapping lives here because `tsdown`
+		// reads `tsconfig.json`: a build that followed it would emit the
+		// declarations of the core into its own source tree.
+		"paths": {
+			"@ambionframework/ambion": ["../ambion/src/index.ts"],
+			"@ambionframework/ambion/conformance": ["../ambion/src/conformance.ts"],
+			"@ambionframework/journal/conformance": ["../journal/src/conformance.ts"],
+			"@ambionframework/journal": ["../journal/src/index.ts"]
+		}
+	},
+	"include": ["src", "test"]
+}
