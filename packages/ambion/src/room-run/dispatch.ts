@@ -5,7 +5,7 @@
  * reply from an earlier delivery changes nothing.
  */
 
-import type { Close, LeaseChange } from '../journal/entries.ts';
+import type { Close, Lease } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
@@ -156,7 +156,7 @@ function queueCancellation(run: RoomRunState, seq: Seq): void {
  * end ends one. A change that ends a lease the journal never held is a
  * wake written off, and starts nothing.
  */
-function queueLease(run: RoomRunState, lease: LeaseChange, first: boolean): void {
+function queueLease(run: RoomRunState, lease: Lease, first: boolean): void {
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(run, () => {

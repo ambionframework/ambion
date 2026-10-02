@@ -4,7 +4,7 @@
  * full journal replay.
  */
 import { describe, expect, it } from 'vitest';
-import type { LeaseChange } from '../src/journal/entries.ts';
+import type { Lease } from '../src/journal/entries.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
 import { planReconciliation } from '../src/room/reconcile.ts';
 import { decide, type RoomDecision } from '../src/room/transition.ts';
@@ -29,7 +29,7 @@ const wake = (seq: number, text = 'Question.'): RoomEntry => ({
 	seq,
 	body: { kind: 'said', at, from: 'priya', text, wakes: ['solo'] },
 });
-const lease = (seq: number, body: LeaseChange): RoomEntry => ({ kind: 'lease', seq, body });
+const lease = (seq: number, body: Lease): RoomEntry => ({ kind: 'lease', seq, body });
 const held = (id: string, seq: number, readThrough: number): RoomEntry =>
 	lease(seq, {
 		id,
