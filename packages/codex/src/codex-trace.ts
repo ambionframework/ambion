@@ -71,7 +71,7 @@ export function usageOf(usage: {
  * activation.
  *
  * A real `codex` numbers the items of each pass from `item_0`, so an item id
- * is unique only inside one turn. The id of a step is the scope, the number
+ * is unique only inside one pass. The id of a step is the scope, the number
  * of the pass, and the item id. A room tool takes that id as the key of its
  * commit, and the room keeps one message for each key.
  */
@@ -79,7 +79,7 @@ export class CodexSteps {
 	/** What makes an id unique in the room: the id of the activation. */
 	private readonly scope: string;
 	/** The number of the pass in flight. It moves on each `turn.started`. */
-	private turn = 0;
+	private pass = 0;
 	/** How much of each text item the steps already hold, by step id. */
 	private readonly sent = new Map<string, number>();
 	/** Tool calls seen, by step id, so a completed item adds no second call step. */
@@ -91,13 +91,13 @@ export class CodexSteps {
 
 	/** The id of the steps of an item in the pass in flight. */
 	private idOf(item: ThreadItem): string {
-		return `${this.scope}:${this.turn}:${item.id}`;
+		return `${this.scope}:${this.pass}:${item.id}`;
 	}
 
 	steps(event: ThreadEvent): Step[] {
 		switch (event.type) {
 			case 'turn.started':
-				this.turn += 1;
+				this.pass += 1;
 				return [];
 			case 'item.started':
 			case 'item.updated':
