@@ -30,7 +30,7 @@ on the simulation, and asks the judge. The local `support.ts` holds the agent
 definitions, the model ids, a runtime on the live model, and `stopAtEnd`.
 
 ```ts
-import { defineHuman, startRoom } from '@ambionframework/ambion';
+import { definePerson, startRoom } from '@ambionframework/ambion';
 import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
 import { expect, it } from 'vitest';
 import {
@@ -43,7 +43,7 @@ import {
   weather,
 } from './support.ts';
 
-const priya = defineHuman({ name: 'priya', identity: 'Site manager. Pours concrete.' });
+const priya = definePerson({ name: 'priya', identity: 'Site manager. Pours concrete.' });
 
 it('the assistant asks the weather desk once, and answers the person', async () => {
   const room = stopAtEnd(
@@ -196,12 +196,12 @@ export interface SeenExchange {
 
 /** What the person has seen: one entry for each exchange the loop ran. */
 export interface Seen {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   readonly exchanges: readonly SeenExchange[];
 }
 
 export interface SimulateOptions {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   readonly actor: Actor;
   /** The most messages the actor sends. Required, so that every eval states its bound. */
   readonly exchanges: number;
@@ -391,7 +391,7 @@ details.
 
 ```ts
 export interface Simulation {
-  readonly person: HumanDefinition;
+  readonly person: PersonDefinition;
   /** Every move the actor made, in order, the last `stop` included. */
   readonly moves: readonly Move[];
   /** One entry for each message the actor sent, in order. */

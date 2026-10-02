@@ -25,9 +25,9 @@ import type { ScheduledSay } from './scheduling.ts';
 import type {
 	AgentParticipant,
 	FailureCause,
-	HumanParticipant,
 	Intent,
 	Message,
+	PersonParticipant,
 	Seq,
 	Step,
 	Usage,
@@ -296,7 +296,7 @@ export type ActivationOpener = (activation: ExecutorActivation) => RunningActiva
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
 	| AgentParticipant
-	| (HumanParticipant & {
+	| (PersonParticipant & {
 			readonly changedAt?: string;
 			readonly lastDeparture?: Seq;
 			readonly messagesSinceDeparture: number;

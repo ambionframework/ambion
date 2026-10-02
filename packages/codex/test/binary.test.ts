@@ -14,7 +14,7 @@ import {
 	type AmbionTool,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	defineTool,
 	type Execution,
 	isSaid,
@@ -55,7 +55,7 @@ const warningsOf = (steps: readonly TraceStep[]) =>
 /** A sentence of the mechanism text of the room. It marks the seat text. */
 const MECHANISM = 'You are an agent seated in a room';
 
-const priya = defineHuman({ name: 'priya', identity: 'Project manager. Asks the questions.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager. Asks the questions.' });
 
 const lookup = defineTool({
 	name: 'lookup',

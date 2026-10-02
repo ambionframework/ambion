@@ -83,7 +83,7 @@ finds the executable that it ships with.
 ## A complete example
 
 ```ts
-import { defineAgent, defineHuman, defineTool, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
 import { claude, claudeExecution } from '@ambionframework/claude';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -110,7 +110,7 @@ const reviewer = defineAgent({
   }),
 });
 
-const priya = defineHuman({ name: 'priya', identity: 'Owns the delivery.' });
+const priya = definePerson({ name: 'priya', identity: 'Owns the delivery.' });
 
 const room = await startRoom({
   name: 'delivery',

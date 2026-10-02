@@ -90,8 +90,8 @@ export class FakeHost implements Workbench {
 	listeners(room: string): number {
 		return this.watching.get(room)?.size ?? 0;
 	}
-	async join(room: string, who: string) {
-		this.calls.push(`join:${room}:${who}`);
+	async visit(room: string, who: string) {
+		this.calls.push(`visit:${room}:${who}`);
 	}
 	async leave(room: string, who: string) {
 		this.calls.push(`leave:${room}:${who}`);

@@ -21,7 +21,7 @@ import {
 import {
 	type CreateRuntimeOptions,
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSaid,
 	isSummary,
 	type Room,
@@ -63,7 +63,7 @@ import { stopAtEnd } from './support/stop.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 
 const solo = scriptedAgent('solo', 'Speaks once.');
-const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
 interface Options {
 	faults?: Fault[];

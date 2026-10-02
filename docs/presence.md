@@ -71,7 +71,7 @@ They wait on the journal and are available after the person returns.
 
 ## 4. The visit
 
-The public handle is deliberately small: a `human` definition, a live `lastDeparture`
+The public handle is deliberately small: a `person` definition, a live `lastDeparture`
 position, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host/people.ts)
 for the exact TypeScript signature.
 
@@ -81,7 +81,7 @@ moves when a later departure lands. A visit does not become usable until its
 `arrived` write is confirmed.
 
 **`visit` ensures presence, `send` contributes through that visit, and `leave`
-ends it.** Calling `visit(human)` repeatedly is idempotent:
+ends it.** Calling `visit(person)` repeatedly is idempotent:
 
 | Recorded state                  | Result                                           |
 | ------------------------------- | ------------------------------------------------ |

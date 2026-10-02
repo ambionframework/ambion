@@ -12,7 +12,7 @@ import { piExecution } from '../../pi/src/index.ts';
 import { type Execution, hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	isSummary,
 	type Room,
 	type RoomNotification,
@@ -52,12 +52,12 @@ const alpha = scriptedAgent('alpha');
 const beta = scriptedAgent('beta');
 const gamma = scriptedAgent('gamma');
 const people = [
-	defineHuman({
+	definePerson({
 		name: 'priya',
 		identity: 'Project manager.',
 		preferences: 'Lead with the decision.',
 	}),
-	defineHuman({ name: 'sam', identity: 'Site foreman.' }),
+	definePerson({ name: 'sam', identity: 'Site foreman.' }),
 ];
 const names = people.map((p) => p.name);
 
@@ -222,8 +222,8 @@ class Walk {
 		const visit = repeated ? first : picked;
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
-		this.lastFrom = visit.human.name;
-		this.journal.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
+		this.lastFrom = visit.person.name;
+		this.journal.push(`  ${visit.person.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
 		await visit.send({ text: `Question ${key}?`, key: key as string }).catch(expected);
 	}
 

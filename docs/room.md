@@ -104,12 +104,12 @@ removes a seated agent and returns the definition to the reserve. A live activat
 may call the same operations for another agent or itself, unless the target
 seat is fixed: the summary writer's seat is fixed by default, and only the
 host can unseat it. The room refuses an unknown name and a name that belongs
-to a human visitor. See [Roster](roster.md) for seating, attention, and
+to a person. See [Roster](roster.md) for seating, attention, and
 duplicate-operation semantics. Attention selects work and does not authorize
 contributions.
 
-`defineHuman` supplies a name, identity, and optional reading preferences.
-`room.visit(human)` records arrival and returns a visit. `visit.send` records
+`definePerson` supplies a name, identity, and optional reading preferences.
+`room.visit(person)` records arrival and returns a visit. `visit.send` records
 a question or delivery and returns an exchange handle. `visit.leave` records
 the departure. `exchange.waitForClose()` returns the source discussion for
 human review. `exchange.waitForSummary()` returns the optional summary

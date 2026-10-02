@@ -13,7 +13,7 @@ import {
 	type AgentDefinition,
 	createRuntime,
 	defineAgent,
-	defineHuman,
+	definePerson,
 	type Execution,
 	isSaid,
 	type Message,
@@ -44,7 +44,7 @@ export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;
 
-export const person = defineHuman({
+export const person = definePerson({
 	name: 'priya',
 	identity: 'Project manager. Asks the questions.',
 });

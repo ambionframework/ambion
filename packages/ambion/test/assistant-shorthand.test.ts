@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
 	createRuntime,
-	defineHuman,
+	definePerson,
 	resumeRoom,
 	type StartRoomOptions,
 	startRoom,
@@ -16,7 +16,7 @@ import { memory, storages } from './support/storage.ts';
 const assistant = scriptedAgent('assistant');
 const builder = scriptedAgent('builder');
 const reviewer = scriptedAgent('reviewer');
-const person = defineHuman({ name: 'priya', identity: 'The request owner.' });
+const person = definePerson({ name: 'priya', identity: 'The request owner.' });
 
 async function open(options: Partial<StartRoomOptions> = {}) {
 	const opened = await openFor(memory);

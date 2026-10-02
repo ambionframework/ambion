@@ -71,7 +71,7 @@ cannot recover JavaScript functions, credentials, or external data.
 `resumeRoom` preserves recorded people, identities, and presence. It does not
 restore sockets, authenticated sessions, or `Visit` objects.
 
-After authenticating a reconnecting client, call `room.visit(human)` with
+After authenticating a reconnecting client, call `room.visit(person)` with
 its saved definition. If that person remains present, the call restores the
 local visit without writing another `arrived`. The recorded identity must
 match. Reconnecting does not update the person's recorded preferences.
@@ -81,7 +81,7 @@ for a recorded person remains, use the recorded name and identity:
 
 ```ts
 const visit = await room.visit(
-  defineHuman({ name: recordedPerson.name, identity: recordedPerson.identity }),
+  definePerson({ name: recordedPerson.name, identity: recordedPerson.identity }),
 );
 await visit.leave();
 ```
@@ -136,7 +136,7 @@ updated definitions. With the saved client values:
 
 ```ts
 const room = await resumeRoom(saved.roomName, { runtime, agents });
-const visit = await room.visit(human);
+const visit = await room.visit(person);
 const exchange = room.exchange(saved.exchangeFrom);
 if (!exchange) throw new Error('The saved exchange is not in this room.');
 

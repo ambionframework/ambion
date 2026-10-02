@@ -1,7 +1,7 @@
 /** Helpers for the SN35 lifecycle acceptance run on the provisioned OpenSSH tier. */
 
 import { randomUUID } from 'node:crypto';
-import { defineAgent, defineHuman, type Message, startRoom } from '@ambionframework/ambion';
+import { defineAgent, definePerson, type Message, startRoom } from '@ambionframework/ambion';
 import { callTool, isSummarizing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
 import type { Workspace } from '@ambionframework/workspace';
 
@@ -81,7 +81,7 @@ export async function runToolRoom(
 	});
 	try {
 		const visit = await room.visit(
-			defineHuman({ name: 'sn35-operator', identity: 'Runs acceptance.' }),
+			definePerson({ name: 'sn35-operator', identity: 'Runs acceptance.' }),
 		);
 		await settled(room);
 		started = true;
