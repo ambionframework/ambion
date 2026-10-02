@@ -68,7 +68,9 @@ try {
 
 **Run it with `node room.mts`.** Both agents read the question in
 parallel. Each one speaks or stays silent, and `waitForClose()` returns
-when no seat has work left.
+when no seat has work left. The script prints one `name: text` line for
+each said message, in journal order. An agent that stays silent prints
+nothing.
 
 ## One team on three harnesses
 
