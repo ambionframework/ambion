@@ -23,13 +23,11 @@ hardware, and electrochemistry over one shared workspace.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-overview-dark.svg">
-  <img alt="One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A summary of entries 1 to 4 follows, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and a process outlives the activation. Optional capabilities add tables, repositories, sensors, and skills. Each agent has a home of its own. A message cites a file with a ref." src="docs/assets/ambion-overview.svg">
+  <img alt="One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. Entry 3 wakes A. A reads entry 3 and stays silent. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A room started with summaryWriter adds an optional summary of entries 1 to 3, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and a process outlives the activation. Optional capabilities add tables, repositories, sensors, and skills. Each agent has a home of its own. A message cites a file with a ref." src="docs/assets/ambion-overview.svg">
 </picture>
 
-- **The room keeps the record.** An entry is a question, a say, a close, or
-  a summary. A say that read a stale record comes back with what it missed.
-- **The workspace holds what the agents make.** Every agent calls the same
-  tools, each agent has a home, and a message cites a file with a ref.
+[How a room works](#how-a-room-works) and [The workspace](#the-workspace) hold each
+mechanism.
 
 ## Quickstart
 
