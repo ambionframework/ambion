@@ -75,14 +75,14 @@ becomes its `person` and receives its summary. An exchange where no person
 spoke owes no summary.
 
 **The room derives `person` from the record.** `exchangeAfter` reads the
-first spoken message of a person at or after `from`, and the close stamps
+first said message of a person at or after `from`, and the close stamps
 it. A handle and the `exchange_opened` event hold `person` as it was when
 they were made, and no event follows when a person joins. The close and
 the `Exchange` hold the final value.
 
 ## 5. A fold over the journal
 
-`exchangeAfter` finds the first spoken message from a known person, or the
+`exchangeAfter` finds the first said message from a known person, or the
 first post, after the last close. Closes, leases, messages,
 and pending work are all reconstructed from the journal, so a resumed room continues an exchange interrupted by a
 process or host failure. Unexpired leases may continue; unclaimed or expired
@@ -286,12 +286,12 @@ if (recorded) {
 the record. It adds no entry kind and starts no timer, so a resumed room reads
 the same outcome. The first case that holds wins:
 
-| Outcome     | When it holds                                                                  |
-| ----------- | ------------------------------------------------------------------------------ |
-| `cancelled` | A cancellation wrote the close.                                                |
-| `exhausted` | The room gave up on a respond activation in the range.                         |
-| `awaiting`  | The last spoken message asks a person, and that person has said nothing since. |
-| `complete`  | None of the above.                                                             |
+| Outcome     | When it holds                                                                |
+| ----------- | ---------------------------------------------------------------------------- |
+| `cancelled` | A cancellation wrote the close.                                              |
+| `exhausted` | The room gave up on a respond activation in the range.                       |
+| `awaiting`  | The last said message asks a person, and that person has said nothing since. |
+| `complete`  | None of the above.                                                           |
 
 A message to the author of the opening message is the answer to that
 person's question, so it never makes an exchange `awaiting`. A returned say

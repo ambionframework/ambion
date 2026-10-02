@@ -291,7 +291,7 @@ agent definition and one more:
   quote or mention the brief. End each move with one call to `send` or
   `stop`.
 - **The user prompt** holds each exchange: the text the person sent, every
-  spoken message with its author and recipient, and the summary.
+  said message with its author and recipient, and the summary.
 - **The move ends with a tool call.** `send({ text, to? })` is a message to
   the room. `stop({ reason })` ends the loop. Before either one, the actor
   can call its other tools, for example `read` on a file that an agent
@@ -426,7 +426,7 @@ source in the simulation.
 | Fact                              | Where it is in the simulation                                      |
 | --------------------------------- | ------------------------------------------------------------------ |
 | Who spoke, to whom, what text     | `simulation.room.messages`                                         |
-| A seat stayed silent              | No spoken message from the seat in `simulation.room.messages`      |
+| A seat stayed silent              | No said message from the seat in `simulation.room.messages`        |
 | What one exchange said            | `simulation.exchanges[].discussion`                                |
 | Unnecessary activations           | `simulation.exchanges[].view.activations`, by `seat` and `purpose` |
 | An activation failed or retried   | `simulation.exchanges[].view.activations[].outcome` and `attempt`  |

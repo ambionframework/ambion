@@ -23,7 +23,7 @@ the table. `Limits` in
 | `limits.call.timeout`             | Each executor call to the room                              | 10,000 ms              |
 | `limits.call.attempts`            | Retries of a claim or a release                             | 2                      |
 | `limits.context.messages`         | Messages one view holds beyond the open exchange            | unbounded (`Infinity`) |
-| `limits.message.bytes`            | UTF-8 bytes in one spoken message or summary text           | unbounded (`Infinity`) |
+| `limits.message.bytes`            | UTF-8 bytes in one said message or summary text             | unbounded (`Infinity`) |
 | `limits.schedule.minDelaySeconds` | The least `delaySeconds` of a scheduled say                 | 60                     |
 | `limits.schedule.maxDelaySeconds` | The most `delaySeconds` of a scheduled say                  | 604,800 (7 days)       |
 | `limits.schedule.waiting`         | Scheduled says of one seat that wait to return              | 4                      |

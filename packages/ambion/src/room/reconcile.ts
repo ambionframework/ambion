@@ -45,7 +45,7 @@ interface Send {
 }
 
 /** One lease the pass ends, and how. `decide` builds the entry. */
-export interface Ending {
+export interface LeaseEnd {
 	id: string;
 	reason: 'revoked' | 'expired' | 'abandoned';
 	readThrough: number;
@@ -54,11 +54,11 @@ export interface Ending {
 
 export interface Reconciliation {
 	/** Running leases made stale by a seat's durable removal. */
-	revoked: Ending[];
+	revoked: LeaseEnd[];
 	/** Leases that ran past their expiry. */
-	expired: Ending[];
+	expired: LeaseEnd[];
 	/** The attempts the room does not make: the activations at the cap. */
-	abandoned: Ending[];
+	abandoned: LeaseEnd[];
 	/** The exchange the room closes, when nothing is live and one is open. `decide` builds the entry. */
 	close: CloseRef | undefined;
 	/** The seqs of the scheduled says the room returns in this pass, after the close. */
@@ -157,9 +157,9 @@ function isStale(state: RoomState, activation: ActivationFields): boolean {
 }
 
 /** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */
-function endings(state: RoomState, now: number): { revoked: Ending[]; expired: Ending[] } {
-	const revoked: Ending[] = [];
-	const expired: Ending[] = [];
+function endings(state: RoomState, now: number): { revoked: LeaseEnd[]; expired: LeaseEnd[] } {
+	const revoked: LeaseEnd[] = [];
+	const expired: LeaseEnd[] = [];
 	for (const lease of state.leases.values()) {
 		const ending = endingOf(
 			lease.phase === 'running',
@@ -193,7 +193,7 @@ const capped = (owed: DueActivation, options: ReconcileOptions): boolean =>
  * entry answers the wake or the close it stood for, so the room stops trying
  * and every reader sees that it did.
  */
-function abandonments(state: RoomState, options: ReconcileOptions): Ending[] {
+function abandonments(state: RoomState, options: ReconcileOptions): LeaseEnd[] {
 	return state.due
 		.filter((owed) => capped(owed, options))
 		.map((owed) => ({

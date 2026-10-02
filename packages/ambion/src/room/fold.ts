@@ -57,7 +57,7 @@ export interface BaseFacts {
 }
 
 /** The empty room facts before the first committed entry. */
-export const older = (): BaseFacts => ({
+export const noFacts = (): BaseFacts => ({
 	messages: [],
 	closes: [],
 	cancelledAt: undefined,

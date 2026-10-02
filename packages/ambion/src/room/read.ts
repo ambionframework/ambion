@@ -84,7 +84,7 @@ function validateSelection(selection: MessageSelection | undefined): void {
 }
 
 /**
- * The closed exchanges that wait on one person: the last spoken message asks
+ * The closed exchanges that wait on one person: the last said message asks
  * them and they have said nothing since. The read holds the answer, so this
  * waits for nothing and starts nothing.
  */

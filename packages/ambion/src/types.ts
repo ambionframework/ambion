@@ -112,7 +112,7 @@ export type ExchangeOutcome =
 	| { readonly kind: 'cancelled' }
 	/** The room gave up on a respond activation in the range. */
 	| { readonly kind: 'exhausted' }
-	/** The last spoken message is directed at a person who has said nothing since. */
+	/** The last said message is directed at a person who has said nothing since. */
 	| { readonly kind: 'awaiting'; readonly person: string };
 
 /** A detached exchange, open or closed, that a host reads without starting a room. */

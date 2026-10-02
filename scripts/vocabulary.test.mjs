@@ -70,6 +70,7 @@ const OLD_NAMES = [
 	['process cancel', /\b(?:StopCause|process-stop)\b/],
 	['process record', /\b(?:ProcessStatus|ProcessRecord|ProcessView)\b/],
 	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
+	['due respond', /\b(?:Due|Open|Held)Wake\b/],
 	['trace policy', /\bthinking:\s*'summary'/],
 	['simulation', /\bRunExchange\b/],
 	['traced step', /\bTraceRecord\b/],
@@ -92,7 +93,7 @@ const entries = [
 		/\bthe core\b/i,
 		/^(?:packages\/ambion\/src\/execution\/.*|docs\/executors\.md)$/,
 	),
-	entry('Spoken', /\w+Spoken\b|\bSpoken\w+/, SOURCE),
+	entry('Spoken', /\w+Spoken\b|\bspoken\w*/i, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
 	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {

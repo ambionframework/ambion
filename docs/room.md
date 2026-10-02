@@ -79,10 +79,10 @@ call is work that the room does not replay.
 
 ## The two spans
 
-| Span           | Starts                                                              | Ends                                         |
-| -------------- | ------------------------------------------------------------------- | -------------------------------------------- |
-| **activation** | The room wakes one seat                                             | That seat's work ends                        |
-| **exchange**   | A person's spoken message or a post lands while no exchange is open | The room reaches quiescence or terminal work |
+| Span           | Starts                                                            | Ends                                         |
+| -------------- | ----------------------------------------------------------------- | -------------------------------------------- |
+| **activation** | The room wakes one seat                                           | That seat's work ends                        |
+| **exchange**   | A person's said message or a post lands while no exchange is open | The room reaches quiescence or terminal work |
 
 An activation may contain more than one provider request. The exchange spans
 every activation from its opening question to its durable close. See

@@ -54,7 +54,7 @@ datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person:
 
 datatype Grant = Grant(seat: string, attempt: int, purpose: GrantPurpose)
 
-datatype Verdict = pending(owed: bool) | silent | failed
+datatype SummaryVerdict = pending(owed: bool) | silent | failed
 
 datatype Range = Range(from: int, through: int)
 
@@ -689,20 +689,20 @@ lemma cancelledSummary_ensures(summaries: seq<RuleLease>, cancelledAfterClose: b
 {
 }
 
-function summaryVerdict(writerNamed: bool, removedAfterClose: bool, summaries: seq<RuleLease>, cancelledAfterClose: bool): Verdict
+function summaryVerdict(writerNamed: bool, removedAfterClose: bool, summaries: seq<RuleLease>, cancelledAfterClose: bool): SummaryVerdict
 {
   if !(writerNamed) then
-    Verdict.silent
+    SummaryVerdict.silent
   else
     if removedAfterClose then
-      Verdict.failed
+      SummaryVerdict.failed
     else
       var down := stoodDown(summaries);
       if cancelledSummary(summaries, cancelledAfterClose) then
-        Verdict.failed
+        SummaryVerdict.failed
       else
         if (!(down) && cancelledAfterClose) then
-          Verdict.failed
+          SummaryVerdict.failed
         else
           if !(down) then
             pending(true)
@@ -711,9 +711,9 @@ function summaryVerdict(writerNamed: bool, removedAfterClose: bool, summaries: s
               pending(false)
             else
               if summaryReleased(summaries) then
-                Verdict.silent
+                SummaryVerdict.silent
               else
-                Verdict.failed
+                SummaryVerdict.failed
 }
 
 lemma summaryVerdict_ensures(writerNamed: bool, removedAfterClose: bool, summaries: seq<RuleLease>, cancelledAfterClose: bool)
