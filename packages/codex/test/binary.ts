@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Execution } from '@ambionframework/ambion';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
@@ -238,7 +239,9 @@ export async function codexOn(
 		close: async () => {
 			await responses.close();
 			await proxy.close();
-			// The binary can still write to its home as it exits.
+			// The close of the app-server sends a signal and returns. The binary can still write to
+			// its home as it exits, so wait for it, stop one that remains, and then remove the files.
+			if (process.platform === 'linux') await gone(home);
 			rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 		},
 	};
@@ -258,6 +261,14 @@ export function runningWith(home: string): number[] {
 			}
 		})
 		.map(Number);
+}
+
+/** Wait until no process runs with `home`. A process that remains after the deadline is killed. Linux only. */
+async function gone(home: string, deadlineMs = 5_000): Promise<void> {
+	const end = Date.now() + deadlineMs;
+	while (runningWith(home).length > 0 && Date.now() < end) await sleep(50);
+	for (const pid of runningWith(home)) kill(pid);
+	while (runningWith(home).length > 0 && Date.now() < end + 5_000) await sleep(50);
 }
 
 /** Kill a process, and ignore one that is gone already. */
