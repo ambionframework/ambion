@@ -22,7 +22,7 @@ import { copyMessage } from '../types.ts';
 import {
 	decideAndAppend,
 	messageKeyConflict,
-	type RoomHostState,
+	type RoomRunState,
 	refusalError,
 	requireSubmission,
 	saidContentMatches,
@@ -69,17 +69,17 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 
 /** One operation on the room's commit queue, with the wakes the room routes. */
 export async function writeCommit(
-	host: RoomHostState,
+	run: RoomRunState,
 	commit: CommitRequest,
 ): Promise<CommitResult | { refusal: Refusal }> {
 	const appended = await decideAndAppend(
-		host,
+		run,
 		'message',
 		{
 			type: 'commit',
 			commit,
-			bytes: host.runtime.limits.message.bytes,
-			schedule: host.runtime.limits.schedule,
+			bytes: run.runtime.limits.message.bytes,
+			schedule: run.runtime.limits.schedule,
 		},
 		{ key: spaced('commit', commit.key) },
 	);
@@ -92,7 +92,7 @@ export async function writeCommit(
 					reason: messageKeyConflict(commit.key, message),
 				},
 			};
-		return { committed: copyMessage(message), ...unreadBefore(host, commit, message) };
+		return { committed: copyMessage(message), ...unreadBefore(run, commit, message) };
 	}
 	if (appended.result === undefined) throw new Error('The commit did not propose a message.');
 	return appended.result;
@@ -104,28 +104,28 @@ export async function writeCommit(
  * same record, so it hands back the same messages.
  */
 function unreadBefore(
-	host: RoomHostState,
+	run: RoomRunState,
 	commit: CommitRequest,
 	message: Message,
 ): { unread?: Message[] } {
 	const { readThrough, intent } = commit;
 	if (intent.kind !== 'said' || intent.delaySeconds === undefined || readThrough === undefined)
 		return {};
-	const unread = host
+	const unread = run
 		.state()
 		.messages.filter((entry) => entry.seq > readThrough && entry.seq < message.seq);
 	return unread.length === 0 ? {} : { unread: unread.map(copyMessage) };
 }
 
 export async function hold(
-	host: RoomHostState,
+	run: RoomRunState,
 	id: string,
 	type: 'claim' | 'renew',
 	readThrough?: Seq,
 ): Promise<LeaseResponse> {
-	const lease = host.runtime.limits.lease;
+	const lease = run.runtime.limits.lease;
 	const written = await decideAndAppend(
-		host,
+		run,
 		'lease',
 		{
 			type,
@@ -138,7 +138,7 @@ export async function hold(
 	);
 	// A refusal of a claim or a renewal is the same answer as a lease that ended.
 	return 'entry' in written && written.entry.body.phase === 'running'
-		? { ok: { expiresAt: written.entry.body.expiresAt, through: host.state().lastSeq } }
+		? { ok: { expiresAt: written.entry.body.expiresAt, through: run.state().lastSeq } }
 		: { stale: 'the lease ended' };
 }
 
@@ -154,10 +154,10 @@ export async function hold(
  * seat's own end, and `decide` checks the authority of the seat first.
  */
 export async function end(
-	host: RoomHostState,
+	run: RoomRunState,
 	command: Extract<ReconcileStep, { type: 'end' }> | ReleaseCommand,
 ): Promise<boolean | { refusal: Refusal }> {
-	const appended = await decideAndAppend(host, 'lease', command);
+	const appended = await decideAndAppend(run, 'lease', command);
 	if ('entry' in appended) return true;
 	if (appended.result !== undefined && 'refusal' in appended.result)
 		return { refusal: appended.result.refusal };
@@ -166,9 +166,9 @@ export async function end(
 
 // -- reconcile ----------------------------------------------------------------
 
-export function reconcile(host: RoomHostState): Promise<void> {
-	host.reconciling = host.reconciling.then(() => reconcileOnce(host)).catch(() => {});
-	return host.reconciling;
+export function reconcile(run: RoomRunState): Promise<void> {
+	run.reconciling = run.reconciling.then(() => reconcileOnce(run)).catch(() => {});
+	return run.reconciling;
 }
 
 /**
@@ -179,69 +179,69 @@ export function reconcile(host: RoomHostState): Promise<void> {
  * the room looks again after the resend window, when the storage may be
  * back and what it decided is still on the fold.
  */
-async function reconcileOnce(host: RoomHostState): Promise<void> {
-	await host.journal.ready;
-	for (let pass = 0; pass < PASSES_PER_RECONCILE && !host.gone(); pass += 1) {
-		if (await onePass(host)) return;
+async function reconcileOnce(run: RoomRunState): Promise<void> {
+	await run.journal.ready;
+	for (let pass = 0; pass < PASSES_PER_RECONCILE && !run.gone(); pass += 1) {
+		if (await onePass(run)) return;
 	}
 	// A pass that kept writing yields, and the room looks again after the resend window.
-	if (!host.gone()) arm(host, host.now() + host.runtime.limits.delivery.resend);
+	if (!run.gone()) arm(run, run.now() + run.runtime.limits.delivery.resend);
 }
 
 /**
  * One pass: decide, apply, and arm the clock where the room stops. True
  * where the room has nothing more to write, and the caller stops looking.
  */
-async function onePass(host: RoomHostState): Promise<boolean> {
+async function onePass(run: RoomRunState): Promise<boolean> {
 	const decision = decide(
-		host.state(),
+		run.state(),
 		{
 			type: 'reconcile',
 			options: {
-				resend: host.runtime.limits.delivery.resend,
-				attempts: host.runtime.limits.activation.attempts,
-				sent: host.sentAt,
-				stopped: host.gone(),
+				resend: run.runtime.limits.delivery.resend,
+				attempts: run.runtime.limits.activation.attempts,
+				sent: run.sentAt,
+				stopped: run.gone(),
 			},
 		},
-		host.now(),
+		run.now(),
 	);
 	let changed: boolean;
 	try {
-		changed = await apply(host, decision);
+		changed = await apply(run, decision);
 	} catch {
 		// A write that failed because the room is gone arms nothing.
-		if (!host.gone()) arm(host, host.now() + host.runtime.limits.delivery.resend);
+		if (!run.gone()) arm(run, run.now() + run.runtime.limits.delivery.resend);
 		return true;
 	}
 	if (changed) return false;
-	arm(host, decision.effects.alarmAt);
+	arm(run, decision.effects.alarmAt);
 	return true;
 }
 
 /** Write what the decision wrote, send what it sent. True when anything changed. */
-async function apply(host: RoomHostState, decision: ReconcileDecision): Promise<boolean> {
+async function apply(run: RoomRunState, decision: ReconcileDecision): Promise<boolean> {
 	// A wake the fold no longer says is due is not one this room waits on.
-	for (const id of decision.effects.forget) host.sentAt.delete(id);
+	for (const id of decision.effects.forget) run.sentAt.delete(id);
 	let changed = false;
 	// The decision says how each lease ends: revoked, expired, then given up on.
 	for (const step of decision.steps) {
 		// A room that went away mid-pass writes nothing more of what it decided.
-		if (host.gone()) return changed;
-		changed = (await applyStep(host, step)) || changed;
+		if (run.gone()) return changed;
+		changed = (await applyStep(run, step)) || changed;
 	}
-	for (const send of decision.effects.sends) host.sendWake(send.id, send.seat);
+	for (const send of decision.effects.sends) run.sendWake(send.id, send.seat);
 	return changed || decision.effects.sends.length > 0;
 }
 
-function applyStep(host: RoomHostState, step: ReconcileStep): Promise<boolean> {
+function applyStep(run: RoomRunState, step: ReconcileStep): Promise<boolean> {
 	switch (step.type) {
 		case 'end':
-			return end(host, step).then(requireEnd);
+			return end(run, step).then(requireEnd);
 		case 'close':
-			return closeExchange(host, step);
+			return closeExchange(run, step);
 		case 'return':
-			return returnSay(host, step);
+			return returnSay(run, step);
 	}
 }
 
@@ -251,10 +251,10 @@ function applyStep(host: RoomHostState, step: ReconcileStep): Promise<boolean> {
  * writes nothing, and the fence refuses a run that lost the room.
  */
 async function returnSay(
-	host: RoomHostState,
+	run: RoomRunState,
 	step: Extract<ReconcileStep, { type: 'return' }>,
 ): Promise<boolean> {
-	const written = await decideAndAppend(host, 'message', step, { whileRunning: true });
+	const written = await decideAndAppend(run, 'message', step, { whileRunning: true });
 	requireSubmission(written);
 	return 'entry' in written;
 }
@@ -272,26 +272,26 @@ function requireEnd(result: boolean | { refusal: Refusal }): boolean {
  * next pass closes that one at once when nobody works on it.
  */
 async function closeExchange(
-	host: RoomHostState,
+	run: RoomRunState,
 	close: Extract<ReconcileStep, { type: 'close' }>,
 ): Promise<boolean> {
-	const written = await decideAndAppend(host, 'close', close, { whileRunning: true });
+	const written = await decideAndAppend(run, 'close', close, { whileRunning: true });
 	requireSubmission(written);
 	if ('entry' in written) return true;
-	const state = host.state();
+	const state = run.state();
 	// A close that did not land is progress when the same exchange is still open
 	// and the record moved or its work is live: the complement of what
 	// `admitsClose` admits, so the next pass decides the close again.
 	return (
 		state.exchange?.from === close.from &&
-		(state.lastSeq !== close.through || liveWork(state, host.now()).exchange)
+		(state.lastSeq !== close.through || liveWork(state, run.now()).exchange)
 	);
 }
 
-function arm(host: RoomHostState, at: number | undefined): void {
-	host.cancelAlarm();
-	host.cancelAlarm =
-		at === undefined ? () => {} : host.runtime.clock.alarm(at, () => void host.reconcile());
+function arm(run: RoomRunState, at: number | undefined): void {
+	run.cancelAlarm();
+	run.cancelAlarm =
+		at === undefined ? () => {} : run.runtime.clock.alarm(at, () => void run.reconcile());
 }
 
 // -- control ----------------------------------------------------------------
@@ -301,84 +301,84 @@ function arm(host: RoomHostState, at: number | undefined): void {
  * journal queue, so a say that returned first writes nothing. The room then
  * looks again, so its alarm drops the due time of the say.
  */
-export async function dismissSay(host: RoomHostState, seq: Seq): Promise<boolean> {
-	await host.ready;
-	host.assertRunning();
+export async function dismissSay(run: RoomRunState, seq: Seq): Promise<boolean> {
+	await run.ready;
+	run.assertRunning();
 	const written = await decideAndAppend(
-		host,
+		run,
 		'message',
 		{ type: 'dismiss', message: seq },
 		{ whileRunning: true },
 	);
 	requireSubmission(written);
-	if (host.gone() && !('entry' in written))
-		throw new AmbionError('room_stopped', `Room '${host.name}' stopped before the dismissal.`);
+	if (run.gone() && !('entry' in written))
+		throw new AmbionError('room_stopped', `Room '${run.name}' stopped before the dismissal.`);
 	if (!('entry' in written)) return false;
-	await host.reconcile();
+	await run.reconcile();
 	return true;
 }
 
-export async function cancel(host: RoomHostState): Promise<void> {
-	host.assertRunning();
-	if (host.cancelInFlight !== undefined) return host.cancelInFlight;
-	const key = host.cancelKey ?? crypto.randomUUID();
-	host.cancelKey = key;
-	const operation = appendCancel(host, key);
-	host.cancelInFlight = operation;
+export async function cancel(run: RoomRunState): Promise<void> {
+	run.assertRunning();
+	if (run.cancelInFlight !== undefined) return run.cancelInFlight;
+	const key = run.cancelKey ?? crypto.randomUUID();
+	run.cancelKey = key;
+	const operation = appendCancel(run, key);
+	run.cancelInFlight = operation;
 	try {
 		await operation;
-		host.cancelKey = undefined;
+		run.cancelKey = undefined;
 	} finally {
-		if (host.cancelInFlight === operation) host.cancelInFlight = undefined;
+		if (run.cancelInFlight === operation) run.cancelInFlight = undefined;
 	}
 }
 
 /** Append the cancellation marker after every earlier journal request. */
-async function appendCancel(host: RoomHostState, key: string): Promise<void> {
-	await host.ready;
-	host.assertRunning();
+async function appendCancel(run: RoomRunState, key: string): Promise<void> {
+	await run.ready;
+	run.assertRunning();
 	const appended = await decideAndAppend(
-		host,
+		run,
 		'cancel',
 		{ type: 'cancel' },
 		{ key, whileRunning: true },
 	);
 	requireSubmission(appended);
 	if (!('entry' in appended))
-		throw new AmbionError('room_stopped', `Room '${host.name}' stopped before cancellation.`);
+		throw new AmbionError('room_stopped', `Room '${run.name}' stopped before cancellation.`);
 }
 
 /** Revoke every running lease until a durable read finds none. Unclaimed work stays for the next run. */
-async function stopWork(host: RoomHostState): Promise<void> {
+async function stopWork(run: RoomRunState): Promise<void> {
 	// Admission is closed. Each entry revokes one running lease;
 	// the final decision confirms the recovered journal has no running lease.
 	for (;;) {
-		const result = await submit(host.journal, 'lease', () =>
-			stopWorkDecision(host.state(), host.now()),
+		const result = await submit(run.journal, 'lease', () =>
+			stopWorkDecision(run.state(), run.now()),
 		);
 		requireSubmission(result);
 		if (!('entry' in result)) return;
 	}
 }
 
-export async function stopRun(host: RoomHostState): Promise<void> {
+export async function stopRun(run: RoomRunState): Promise<void> {
 	try {
 		// A room dropped from memory writes nothing: the next run over the journal takes it up.
-		if (host.evicted()) return;
-		await host.ready;
-		await stopWork(host);
+		if (run.evicted()) return;
+		await run.ready;
+		await stopWork(run);
 		// A write queued ahead of the stop lands first, so the record says who was present.
-		await host.journal.settled();
-		await host.leaveEverybody();
+		await run.journal.settled();
+		await run.leaveEverybody();
 	} catch (error) {
 		// A stop that found another run's fence has nothing left to write: the
 		// run said `superseded`, and the name is the other run's.
-		if (!host.evicted()) throw error;
+		if (!run.evicted()) throw error;
 	} finally {
 		// The name comes free whatever the storage did. A failed write must
 		// not leave a room that can never be started again.
-		host.release();
+		run.release();
 		// The room is gone: each caller that waits looks once more, and stops.
-		host.notifyExchangeWaiters();
+		run.notifyExchangeWaiters();
 	}
 }

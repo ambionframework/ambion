@@ -6,7 +6,7 @@ import { ProcessBrowser, stateText } from '../src/process-browser.ts';
 import { lastPart } from '../src/processes.ts';
 import { scenarios } from '../src/scenarios.ts';
 import { Session } from '../src/session.ts';
-import type { ActivationSteps, OpenOptions, ProcessView, Workbench } from '../src/workbench.ts';
+import type { ActivationSteps, OpenOptions, Process, Workbench } from '../src/workbench.ts';
 import { started, view } from './fake-host.ts';
 import { freshDirectory, idleStream, openHost } from './hosting.ts';
 
@@ -496,7 +496,7 @@ describe('Session awaiting and approval', () => {
 
 describe('Session /ps', () => {
 	const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 12, 0, seconds)).toISOString();
-	const process = (handle: string, extra: Partial<ProcessView> = {}): ProcessView => ({
+	const process = (handle: string, extra: Partial<Process> = {}): Process => ({
 		handle,
 		kind: 'bash',
 		agent: 'design',

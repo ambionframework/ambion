@@ -105,7 +105,7 @@
 		//   execution/**  the execution side of the wire: driver, rendering, tool bodies, trace
 		//   conformance*.ts  the suites that play the room from outside the wire
 		//   testing/**  the deterministic test tools, over the vocabulary and the execution side
-		//   room-host/**  room.ts (state, phases), core.ts (shared view, no sibling), one file per mechanism
+		//   room-run/**  room.ts (state, phases), core.ts (shared view, no sibling), one file per mechanism
 		//   room.ts  the room facade, which composes the layers below it
 		//   index.ts, hosting.ts, testing.ts  the published entry files, which reach every layer
 		//
@@ -144,7 +144,7 @@
 											"./room/*",
 											"./execution/*",
 											"./room.ts",
-											"./room-host/*",
+											"./room-run/*",
 											"./protocol.ts",
 											"./answers.ts",
 											"./conformance*",
@@ -189,7 +189,7 @@
 											"../room/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing/*",
@@ -234,7 +234,7 @@
 											"../room/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing/*",
@@ -277,7 +277,7 @@
 											"../host/*",
 											"../execution/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing/*",
@@ -320,7 +320,7 @@
 											"./execution/*",
 											"./host/*",
 											"./room.ts",
-											"./room-host/*",
+											"./room-run/*",
 											"./conformance*",
 											"./testing/*",
 											"./testing.ts",
@@ -362,7 +362,7 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing/*",
@@ -408,7 +408,7 @@
 											"./journal/*",
 											"./room/*",
 											"./room.ts",
-											"./room-host/*",
+											"./room-run/*",
 											"./answers.ts",
 											"./testing/*",
 											"./testing.ts",
@@ -452,7 +452,7 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
-											"../room-host/*",
+											"../room-run/*",
 											"../answers.ts",
 											"../conformance*",
 											"../testing.ts",
@@ -483,7 +483,7 @@
 		{
 			// The collaboration host uses protocol and room facts. Execution and
 			// provider services are composed by the public room facade.
-			"includes": ["packages/ambion/src/room-host/**"],
+			"includes": ["packages/ambion/src/room-run/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -526,7 +526,7 @@
 			// `core.ts` holds the view that every mechanism shares, and imports no
 			// mechanism. This override repeats every group of the override above,
 			// because Biome replaces the options of an earlier override.
-			"includes": ["packages/ambion/src/room-host/core.ts"],
+			"includes": ["packages/ambion/src/room-run/core.ts"],
 			"linter": {
 				"rules": {
 					"style": {

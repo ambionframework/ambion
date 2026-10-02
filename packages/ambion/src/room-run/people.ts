@@ -14,7 +14,7 @@ import {
 	decideAndAppend,
 	type ExchangeHandle,
 	messageKeyConflict,
-	type RoomHostState,
+	type RoomRunState,
 	requireSubmission,
 	saidContentMatches,
 } from './core.ts';
@@ -62,10 +62,10 @@ function deliveryMatches(
 }
 
 /** Puts a person in the room. A second visit while they are here is the same visit. */
-export async function visit(host: RoomHostState, person: PersonDefinition): Promise<Visit> {
-	host.assertRunning();
+export async function visit(run: RoomRunState, person: PersonDefinition): Promise<Visit> {
+	run.assertRunning();
 	const captured = captureHuman(person);
-	const pending = host.arrivals.get(captured.name);
+	const pending = run.arrivals.get(captured.name);
 	if (pending !== undefined) {
 		if (pending.identity !== captured.identity)
 			throw new AmbionError(
@@ -73,17 +73,17 @@ export async function visit(host: RoomHostState, person: PersonDefinition): Prom
 				`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
 			);
 		const admitted = await pending.promise;
-		host.assertRunning();
-		return handle(host, admitted);
+		run.assertRunning();
+		return handle(run, admitted);
 	}
-	const arrival = arrive(host, captured);
-	host.arrivals.set(captured.name, { identity: captured.identity, promise: arrival });
+	const arrival = arrive(run, captured);
+	run.arrivals.set(captured.name, { identity: captured.identity, promise: arrival });
 	try {
 		const admitted = await arrival;
-		host.assertRunning();
-		return handle(host, admitted);
+		run.assertRunning();
+		return handle(run, admitted);
 	} finally {
-		if (host.arrivals.get(captured.name)?.promise === arrival) host.arrivals.delete(captured.name);
+		if (run.arrivals.get(captured.name)?.promise === arrival) run.arrivals.delete(captured.name);
 	}
 }
 
@@ -92,11 +92,11 @@ export async function visit(host: RoomHostState, person: PersonDefinition): Prom
  * writes nothing. A room that resumed holds no handle for the people who
  * stayed, so the first call takes one from the record.
  */
-export function presentVisit(host: RoomHostState, name: string): Visit | undefined {
-	if (host.gone()) return undefined;
-	const known = host.visits.get(name);
-	if (known !== undefined) return handle(host, known);
-	const recorded = host.state().people.get(name);
+export function presentVisit(run: RoomRunState, name: string): Visit | undefined {
+	if (run.gone()) return undefined;
+	const known = run.visits.get(name);
+	if (known !== undefined) return handle(run, known);
+	const recorded = run.state().people.get(name);
 	if (recorded?.presence !== 'present') return undefined;
 	const person = captureHuman({
 		name,
@@ -104,85 +104,85 @@ export function presentVisit(host: RoomHostState, name: string): Visit | undefin
 		...(recorded.preferences === undefined ? {} : { preferences: recorded.preferences }),
 	});
 	const runtime: VisitRuntime = { person, gone: false };
-	host.visits.set(name, runtime);
-	return handle(host, runtime);
+	run.visits.set(name, runtime);
+	return handle(run, runtime);
 }
 
 /** Complete one arrival and cache the handle only after its presence is durable. */
-async function arrive(host: RoomHostState, captured: PersonDefinition): Promise<VisitRuntime> {
-	await host.ready;
-	host.assertRunning();
-	await host.journal.settled();
-	host.assertRunning();
-	const known = host.visits.get(captured.name);
-	if (known?.gone) return retryKnown(host, captured, known);
-	assertVisitable(host, captured);
-	const committed = await commitPresence(host, {
+async function arrive(run: RoomRunState, captured: PersonDefinition): Promise<VisitRuntime> {
+	await run.ready;
+	run.assertRunning();
+	await run.journal.settled();
+	run.assertRunning();
+	const known = run.visits.get(captured.name);
+	if (known?.gone) return retryKnown(run, captured, known);
+	assertVisitable(run, captured);
+	const committed = await commitPresence(run, {
 		kind: 'arrived',
 		from: captured.name,
 		subject: captured.name,
 		identity: captured.identity,
 		...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
 	});
-	host.assertRunning();
-	const current = host.visits.get(captured.name);
-	if (current?.gone) return retryKnown(host, captured, current);
+	run.assertRunning();
+	const current = run.visits.get(captured.name);
+	if (current?.gone) return retryKnown(run, captured, current);
 	if (committed === undefined && current !== undefined) return current;
 	if (current !== undefined) current.gone = true;
 	const runtime: VisitRuntime = { person: captured, gone: false };
-	host.visits.set(captured.name, runtime);
+	run.visits.set(captured.name, runtime);
 	return runtime;
 }
 
 async function retryKnown(
-	host: RoomHostState,
+	run: RoomRunState,
 	captured: PersonDefinition,
 	known: VisitRuntime,
 ): Promise<VisitRuntime> {
 	if (known.departure !== undefined) await known.departure.catch(() => {});
-	else await endVisit(host, known);
-	return arrive(host, captured);
+	else await endVisit(run, known);
+	return arrive(run, captured);
 }
 
-function assertVisitable(host: RoomHostState, person: PersonDefinition): void {
-	if (host.defs.has(person.name))
+function assertVisitable(run: RoomRunState, person: PersonDefinition): void {
+	if (run.defs.has(person.name))
 		throw new AmbionError(
 			'duplicate_name',
 			`'${person.name}' is an agent in this room: one name names one participant.`,
 		);
 }
 
-function handle(host: RoomHostState, runtime: VisitRuntime): Visit {
+function handle(run: RoomRunState, runtime: VisitRuntime): Visit {
 	return {
 		person: runtime.person,
 		get lastDeparture() {
-			return host.state().people.get(runtime.person.name)?.lastDeparture;
+			return run.state().people.get(runtime.person.name)?.lastDeparture;
 		},
 		async send(input) {
 			if (runtime.gone)
 				throw new AmbionError('visit_ended', `${runtime.person.name}'s visit has ended.`);
-			host.assertRunning();
-			return deliverFrom(host, runtime.person.name, input);
+			run.assertRunning();
+			return deliverFrom(run, runtime.person.name, input);
 		},
 		leave() {
-			return endVisit(host, runtime);
+			return endVisit(run, runtime);
 		},
 	};
 }
 
-async function endVisit(host: RoomHostState, runtime: VisitRuntime): Promise<void> {
+async function endVisit(run: RoomRunState, runtime: VisitRuntime): Promise<void> {
 	if (runtime.departure !== undefined) return runtime.departure;
 	// A terminal room invalidates handles it ended itself. A handle that
 	// started a departure has a stable key and must still retry its write,
 	// even when shutdown also failed while the storage was unavailable.
-	if (runtime.gone && runtime.departureKey === undefined && host.gone()) return;
+	if (runtime.gone && runtime.departureKey === undefined && run.gone()) return;
 	if (runtime.departureKey === undefined) runtime.departureKey = crypto.randomUUID();
 	const key = runtime.departureKey;
 	// Close this handle's admission immediately. The durable decision below
 	// still checks recorded presence before any speech or departure lands.
 	runtime.gone = true;
 	let operation!: Promise<void>;
-	operation = leaveVisit(host, runtime, key).catch((error) => {
+	operation = leaveVisit(run, runtime, key).catch((error) => {
 		if (runtime.departure === operation) runtime.departure = undefined;
 		throw error;
 	});
@@ -190,41 +190,41 @@ async function endVisit(host: RoomHostState, runtime: VisitRuntime): Promise<voi
 	return operation;
 }
 
-async function leaveVisit(host: RoomHostState, runtime: VisitRuntime, key: string): Promise<void> {
-	await host.ready;
-	await host.journal.settled();
-	if (host.state().people.get(runtime.person.name)?.presence === 'present') {
-		const current = host.visits.get(runtime.person.name);
+async function leaveVisit(run: RoomRunState, runtime: VisitRuntime, key: string): Promise<void> {
+	await run.ready;
+	await run.journal.settled();
+	if (run.state().people.get(runtime.person.name)?.presence === 'present') {
+		const current = run.visits.get(runtime.person.name);
 		if (current !== undefined && current !== runtime) {
 			return;
 		}
 		await commitPresence(
-			host,
+			run,
 			{ kind: 'left', from: runtime.person.name, subject: runtime.person.name },
 			true,
 			key,
 		);
 	}
 	runtime.gone = true;
-	if (host.visits.get(runtime.person.name) === runtime) host.visits.delete(runtime.person.name);
+	if (run.visits.get(runtime.person.name) === runtime) run.visits.delete(runtime.person.name);
 }
 
 async function deliverFrom(
-	host: RoomHostState,
+	run: RoomRunState,
 	from: string,
 	input: { to?: string; text: string; refs?: string[]; key?: string },
 ): Promise<ExchangeHandle> {
 	const to = input.to;
 	const key = input.key ?? crypto.randomUUID();
-	const committed = await commitMessage(host, key, {
+	const committed = await commitMessage(run, key, {
 		type: 'deliver',
 		from,
 		...(to === undefined ? {} : { to }),
 		text: input.text,
-		bytes: host.runtime.limits.message.bytes,
+		bytes: run.runtime.limits.message.bytes,
 		...(input.refs === undefined ? {} : { refs: input.refs }),
 	});
-	return host.handleForMessage(committed);
+	return run.handleForMessage(committed);
 }
 
 /**
@@ -235,12 +235,12 @@ async function deliverFrom(
  * journal hears nothing, and the room reacts to nothing.
  */
 async function commitMessage(
-	host: RoomHostState,
+	run: RoomRunState,
 	key: string,
 	command: Extract<RoomCommand, { type: 'deliver' | 'post' }>,
 ): Promise<Message> {
 	const space = command.type === 'deliver' ? 'delivery' : 'post';
-	const appended = await decideAndAppend(host, 'message', command, { key: spaced(space, key) });
+	const appended = await decideAndAppend(run, 'message', command, { key: spaced(space, key) });
 	requireSubmission(appended);
 	if (!('entry' in appended)) throw new Error('The room command did not append a message.');
 	const message = placed(appended.entry);
@@ -263,17 +263,17 @@ export interface PostInput {
  * exchange when none is open. A repeated key lands once, and the post it
  * landed carries it back.
  */
-export async function post(host: RoomHostState, input: PostInput): Promise<ExchangeHandle> {
-	host.assertRunning();
+export async function post(run: RoomRunState, input: PostInput): Promise<ExchangeHandle> {
+	run.assertRunning();
 	const key = input.key ?? crypto.randomUUID();
-	const committed = await commitMessage(host, key, {
+	const committed = await commitMessage(run, key, {
 		type: 'post',
 		...(input.to === undefined ? {} : { to: input.to }),
 		text: input.text,
-		bytes: host.runtime.limits.message.bytes,
+		bytes: run.runtime.limits.message.bytes,
 		...(input.refs === undefined ? {} : { refs: input.refs }),
 	});
-	return host.handleForMessage(committed);
+	return run.handleForMessage(committed);
 }
 
 /**
@@ -281,13 +281,13 @@ export async function post(host: RoomHostState, input: PostInput): Promise<Excha
  * The decision where the message commits refuses what the room refuses.
  */
 async function commitPresence(
-	host: RoomHostState,
+	run: RoomRunState,
 	change: PresenceDraft,
 	route = true,
 	key: string = crypto.randomUUID(),
 ): Promise<Message | undefined> {
 	const appended = await decideAndAppend(
-		host,
+		run,
 		'message',
 		{ type: 'presence', change, route },
 		{ key },
@@ -298,14 +298,14 @@ async function commitPresence(
 
 /** The host seats a registered agent. Executable definitions stay fixed for the run. */
 export async function seatAgent(
-	host: RoomHostState,
+	run: RoomRunState,
 	name: string,
 	options: SeatOptions = {},
 ): Promise<void> {
 	const attention = options.attention ?? 'broadcast';
-	host.assertRunning();
-	await host.ready;
-	const definition = host.defs.get(name);
+	run.assertRunning();
+	await run.ready;
+	const definition = run.defs.get(name);
 	if (definition === undefined)
 		throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
 	const change: PresenceDraft = {
@@ -315,16 +315,16 @@ export async function seatAgent(
 		attention,
 		...(options.fixed === undefined ? {} : { fixed: options.fixed }),
 	};
-	await commitPresence(host, change);
+	await commitPresence(run, change);
 }
 
 /** The host takes an agent off the roster. */
-export async function unseatAgent(host: RoomHostState, name: string): Promise<void> {
-	host.assertRunning();
-	await host.ready;
-	if (!host.defs.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
-	await commitPresence(host, { kind: 'unseated', subject: name });
-	await host.reconcile();
+export async function unseatAgent(run: RoomRunState, name: string): Promise<void> {
+	run.assertRunning();
+	await run.ready;
+	if (!run.defs.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
+	await commitPresence(run, { kind: 'unseated', subject: name });
+	await run.reconcile();
 }
 
 /**
@@ -332,14 +332,14 @@ export async function unseatAgent(host: RoomHostState, name: string): Promise<vo
  * so, and the host hears it. It wakes nobody: an activation started to
  * hear that the room is closing is an activation nobody reads.
  */
-export async function leaveEverybody(host: RoomHostState): Promise<void> {
-	for (const person of host.state().people.values()) {
+export async function leaveEverybody(run: RoomRunState): Promise<void> {
+	for (const person of run.state().people.values()) {
 		if (person.presence !== 'present') continue;
-		const runtime = host.visits.get(person.name);
-		await commitPresence(host, { kind: 'left', from: person.name, subject: person.name }, false);
+		const runtime = run.visits.get(person.name);
+		await commitPresence(run, { kind: 'left', from: person.name, subject: person.name }, false);
 		if (runtime) {
 			runtime.gone = true;
-			if (host.visits.get(person.name) === runtime) host.visits.delete(person.name);
+			if (run.visits.get(person.name) === runtime) run.visits.delete(person.name);
 		}
 	}
 }

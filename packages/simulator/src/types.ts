@@ -73,7 +73,7 @@ export interface SimulateOptions {
 	readonly person: PersonDefinition;
 	readonly actor: Actor;
 	/** The most messages the actor sends. Required, so that every eval states its bound. */
-	readonly exchanges: number;
+	readonly messages: number;
 	/** Real milliseconds for one exchange: its close and its summary. The default is 150 000. */
 	readonly exchangeMs?: number;
 }

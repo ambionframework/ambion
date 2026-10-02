@@ -24,7 +24,7 @@ const room = await startRoom({ name: 'pour', agents: [weather] });
 const simulation = await simulate(room, {
   person: priya,
   actor: scriptedActor(['Can we pour concrete on Thursday?']),
-  exchanges: 1,
+  messages: 1,
 });
 
 console.log(simulation.ended, simulation.exchanges[0]?.view.outcome);

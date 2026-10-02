@@ -201,12 +201,12 @@ const CASES = [
 	['packages/journal/src', '@ambionframework/workspace/resource', true],
 	// The core cases come from the table of layers.
 	...coreCases(),
-	// `room-host/core.ts` holds the rules of its layer, and imports no file
+	// `room-run/core.ts` holds the rules of its layer, and imports no file
 	// beside it.
 	[
-		`${coreSource}/room-host`,
+		`${coreSource}/room-run`,
 		[
-			...coreCases().find(([folder]) => folder.startsWith(`${coreSource}/room-host`))[1],
+			...coreCases().find(([folder]) => folder.startsWith(`${coreSource}/room-run`))[1],
 			['./dispatch.ts', true],
 			['./waits.ts', true],
 		],

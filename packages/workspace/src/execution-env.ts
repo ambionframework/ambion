@@ -20,13 +20,13 @@ import { randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
 import type { WorkspaceEnv } from './backend.ts';
 import {
-	ExecutionError,
 	err,
 	FileError,
 	type FileInfo,
 	type FileResult,
 	ok,
 	type Result,
+	ShellError,
 	type ShellExecResult,
 	type ShellOutputLimits,
 	type ShellOutputView,
@@ -267,10 +267,10 @@ export class Deadline {
 	}
 
 	/** Why the command stopped early, or undefined when it ran to its end. */
-	error(): ExecutionError | undefined {
-		if (this.caller?.aborted) return new ExecutionError('aborted', 'Command aborted');
+	error(): ShellError | undefined {
+		if (this.caller?.aborted) return new ShellError('aborted', 'Command aborted');
 		if (this.timedOut) {
-			return new ExecutionError('timeout', `Command timed out after ${this.timeout} seconds`);
+			return new ShellError('timeout', `Command timed out after ${this.timeout} seconds`);
 		}
 		return undefined;
 	}
@@ -284,19 +284,19 @@ export class Deadline {
 /**
  * Run one command under a `Deadline` from the caller's signal and `timeout`.
  * `run` returns the result. What it throws becomes an `unknown`
- * `ExecutionError`, and the deadline clears in every case.
+ * `ShellError`, and the deadline clears in every case.
  */
 export async function withDeadline<T>(
 	signal: AbortSignal | undefined,
 	timeout: number | undefined,
-	run: (deadline: Deadline) => Promise<Result<T, ExecutionError>>,
-): Promise<Result<T, ExecutionError>> {
+	run: (deadline: Deadline) => Promise<Result<T, ShellError>>,
+): Promise<Result<T, ShellError>> {
 	const deadline = new Deadline(signal, timeout);
 	try {
 		return await run(deadline);
 	} catch (error) {
 		const cause = error instanceof Error ? error : new Error(String(error));
-		return err(new ExecutionError('unknown', cause.message, cause));
+		return err(new ShellError('unknown', cause.message, cause));
 	} finally {
 		deadline.clear();
 	}
@@ -323,7 +323,7 @@ export async function runScript(
 	script: string,
 	options: Omit<WorkspaceExecOptions, 'onUpdate'> | undefined,
 	signal?: AbortSignal,
-): Promise<Result<ScriptRun, ExecutionError>> {
+): Promise<Result<ScriptRun, ShellError>> {
 	let view: ShellOutputView | undefined;
 	const ran = await env.exec(
 		script,
