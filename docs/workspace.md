@@ -675,7 +675,7 @@ each value, so a quote or a keyword in a value cannot change the statement.
 A whole number binds as an integer. Use `1` or `0` for a boolean. A call with a
 non-empty `params` holds one statement. A call with more fails before it
 runs any.
-A skill [macro](skills.md#macros) passes each argument that came from the
+A skill [macro](macros.md#write-a-macro) passes each argument that came from the
 model through `params`.
 
 **The preview stays in context and writes nothing to disk.** The tool shows

@@ -157,7 +157,7 @@ breaks one.** The error starts with `Skill set:` and names the file.
 | `name` has 1 to 64 characters of `a-z`, `0-9`, and single hyphens, with no hyphen at an end | `Pour`, `a--b`, `-a`              |
 | `description` is text that is not blank, of at most 1024 characters                         | No `description`                  |
 | `compatibility`, when present, is text of at most 500 characters                            | 501 characters                    |
-| Each macro file passes the rules of [Macros](#macros)                                       | A `macros/x.js` with no header    |
+| Each macro file passes the rules of [Macros](macros.md#the-file-format)                     | A `macros/x.js` with no header    |
 | The set holds at least one skill                                                            | An empty folder                   |
 
 **Other frontmatter fields stay in the file, and the room reads none of
@@ -167,122 +167,12 @@ it reads `SKILL.md`. The workspace does not limit the tools of a seat by
 
 ## Macros
 
-**A macro is a compose program that the skill stores.** The skill holds
-the code once, and the model runs it by name with `compose`. The model
-writes a name and arguments. The macro runs the tools
-that it declares, through one nested-call path, with the provenance, the
-steps, and the audit of any compose call. [Compose](compose.md#macros)
-states how `compose` runs it.
-
-**A skill holds a macro in `macros/<name>.js`.** The agentskills.io format
-allows any folder in a skill, so other harnesses ignore this one.
-
-```text
-lab-drift/
-  SKILL.md
-  macros/
-    snapshot-drift.js
-```
-
-**The file opens with a YAML block comment, and then the body.** The header
-lies between a `/*---` line and a `---*/` line. `loadSkills` strips the
-comment marks and reads the lines with the frontmatter parser of `SKILL.md`.
-The body is the body of the async function that `compose` runs, with one
-more global, `args`.
-
-```js
-/*---
-description: Snapshot the files of every run with a label. Returns the count and the refs.
-uses: [sql, snapshot]
-args:
-  type: object
-  properties: { label: { type: string } }
-  required: [label]
----*/
-const runs = await tools.sql({
-  sql: 'SELECT path FROM runs WHERE label = ?',
-  params: [args.label],
-  rows: 500,
-});
-const { refs } = await tools.snapshot({ paths: runs.rows.map((row) => row.path) });
-return { runs: runs.count, refs };
-```
-
-**`SKILL.md` names the macro and does not quote it.** The macro is
-`<skill>/<macro>`, here `lab-drift/snapshot-drift`.
-
-```markdown
-1. Run the macro `lab-drift/snapshot-drift` with `{ "label": "drift" }`.
-2. Cite the refs in your say.
-```
-
-**The header has three fields, and `loadSkills` refuses any other.**
-
-| Field         | Rule                                                                      |
-| ------------- | ------------------------------------------------------------------------- |
-| `description` | Text that is not blank, of at most 1024 characters. The guidance shows it |
-| `uses`        | A non-empty list of tool names. The macro binds these tools alone         |
-| `args`        | Required. A JSON Schema object that the arguments must satisfy            |
-
-**`loadSkills` refuses a macro file that breaks a rule.** The error starts
-with `Skill set:` and names the file.
-
-| Rule                                                                            | Refused example                  |
-| ------------------------------------------------------------------------------- | -------------------------------- |
-| The file is UTF-8 text that starts with a header in a `/*---` and `---*/` block | A body with no header            |
-| The header is a YAML mapping with the fields above and no other field           | `when: always`                   |
-| The name of the file has the rules of a skill name, before `.js`                | `Snap_Shot.js`, `a--b.js`        |
-| The file sits directly in `macros/`                                             | `macros/more/one.js`             |
-| `description` and `uses` follow the table above                                 | `uses: []`                       |
-| `args` is JSON Schema of draft 2020-12 with the keywords that the check reads   | `type: banana`, `$ref`, `format` |
-
-**The check of `args` refuses a keyword that `Check` ignores.** TypeBox
-ignores a keyword that it does not know, so a schema with one would
-accept every value. The keyword list is in
-[Compose](compose.md#macros). A file in `macros/` that does not end in `.js`
-is a resource of the skill.
-
-**`loadSkills` keeps the text and the hash of each macro.** The set holds
-`set.macros`: for each file, the name, the description, `uses`, the `args`
-schema, the body as text, and the git blob hash of the whole file. The
-hash covers the header and the body. `Object.freeze` does not freeze the
-bytes of a file, so the set keeps the text of the macro. The copy in
-`~/.skills` holds the file too, so the model can read the code.
-
-**`workspace.tools({ skills })` puts the macros on the bundle.** The
-bundle field is `macros`. A seat with the `compose` option lists them in the
-guidance of `compose`, and runs them by name. A seat with no `compose`
-option takes the same set and lists no macro. `describeExecutor` refuses a
-macro that names a tool which the catalog lacks. Two macros with one name
-are an error. See [Compose](compose.md#macros).
-
-**A macro sends model data to tools, so treat it as a public API.** The
-model chooses `args`.
-
-- **Check `args` with the schema.** `compose` checks them before it runs
-  any code.
-- **Pass SQL values through `params`.** The `sql` tool binds them
-  ([Workspace](workspace.md#query-the-shared-database)). Never join `args` into the
-  text of a statement.
-- **Quote a value that goes into a shell command.** Pass it to `bash` as a
-  quoted word.
-
-### What a macro keeps, and what it does not
-
-**A macro runs from the frozen set of the definition.** `compose` never
-reads `~/.skills`. An agent that edits its copy of a macro changes nothing
-that runs.
-
-| Part                                | Protected                                                                 |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| The body, `uses`, and `args` schema | Yes. They come from the set, and `approve` sees the hash                  |
-| A script that the body runs by path | No. `bash ~/.skills/<skill>/scripts/x.sh` runs the editable copy          |
-| `SKILL.md`                          | No. The copy decides which macro the model runs, and with which arguments |
-| A macro that calls a macro          | Not supported. `tools` binds native tools alone                           |
-
-**On `memoryBackend` and `directoryBackend`, any agent can write the copy.**
-A macro body that runs a script of the copy gives up its integrity. Write
-the work in the body, or call a tool that the host owns.
+**A skill can store macros in `macros/<name>.js`.** A macro is a compose
+program that the model runs by name. `loadSkills` checks each macro file and
+keeps its text and hash in `set.macros`, and `workspace.tools({ skills })`
+puts them on the bundle. The copy in `~/.skills` holds the files too.
+[Macros](macros.md) states the format, the checks, and what the copy
+protects.
 
 ## What the model reads
 
@@ -403,7 +293,7 @@ the backend.
 
 **The set in the definition does not change.** An edit of the copy lasts
 until the copy step writes it again. The macros of the set run from the
-set, so an edit of a macro file in the copy changes none of them. [Trust](trust.md#what-the-kernel-does-not-defend)
+set, so an edit of a macro file in the copy changes none of them ([Macros](macros.md#what-a-macro-keeps-and-what-it-does-not)). [Trust](trust.md#what-the-kernel-does-not-defend)
 states what the kernel does not defend.
 
 ## Skills and git templates

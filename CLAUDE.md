@@ -44,19 +44,19 @@ newer, the OpenTUI floor.
 
 ## Read before you change
 
-| Change                                  | Read first                                             |
-| --------------------------------------- | ------------------------------------------------------ |
-| The runtime                             | `docs/agent.md`, then `exchange`, `presence`, `roster` |
-| The record under failure                | `docs/durability.md`, `docs/deployment.md`             |
-| A `rules.verified.ts`                   | `docs/formal.md`                                       |
-| The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                 |
-| The simulator                           | `docs/simulator.md`                                    |
-| The workspace or its tools              | `docs/workspace.md`, then `skills`, `processes`, `git` |
-| The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`       |
-| Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                 |
-| A room open to untrusted agents         | `docs/trust.md`                                        |
-| `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                    |
-| The example                             | `docs/example.md`                                      |
+| Change                                  | Read first                                                       |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| The runtime                             | `docs/agent.md`, then `exchange`, `presence`, `roster`           |
+| The record under failure                | `docs/durability.md`, `docs/deployment.md`                       |
+| A `rules.verified.ts`                   | `docs/formal.md`                                                 |
+| The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
+| The simulator                           | `docs/simulator.md`                                              |
+| The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
+| The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
+| Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |
+| A room open to untrusted agents         | `docs/trust.md`                                                  |
+| `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                              |
+| The example                             | `docs/example.md`                                                |
 
 [`docs/README.md`](docs/README.md) indexes every page.
 
