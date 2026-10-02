@@ -1,10 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import type { Static } from 'typebox';
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
 import { tempDir } from '../../just-bash/test/support/backends.ts';
+import type { ShellOutputTruncation } from '../src/port.ts';
 import {
 	LOST,
+	type Process,
 	type ProcessFiles,
 	processesDir,
 	statusOf,
@@ -13,8 +16,14 @@ import {
 	writeSpec,
 	writeStop,
 } from '../src/process-files.ts';
+import type {
+	ProcessDetails,
+	ProcessFacts,
+	PsDetails,
+	TruncationFacts,
+	WaitDetails,
+} from '../src/process-schema.ts';
 import { FINISHED_IN_REMINDER, LATER_LINE, stateLine } from '../src/process-text.ts';
-import type { ProcessDetails, PsDetails, WaitDetails } from '../src/process-tools.ts';
 import {
 	MAX_FINISHED_PROCESSES,
 	MAX_RUNNING_PROCESSES,
@@ -23,6 +32,15 @@ import {
 import { openResource } from '../src/resource.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { callAs, invokeText, toolOf, wrapped } from './support/backends.ts';
+
+describe('the declared output of a process', () => {
+	it('keeps ShellOutputTruncation and Process assignable to their schemas, and the schemas to them', () => {
+		expectTypeOf<ShellOutputTruncation>().toExtend<Static<typeof TruncationFacts>>();
+		expectTypeOf<Static<typeof TruncationFacts>>().toExtend<ShellOutputTruncation>();
+		expectTypeOf<Process>().toExtend<Static<typeof ProcessFacts>>();
+		expectTypeOf<Static<typeof ProcessFacts>>().toExtend<Process>();
+	});
+});
 
 let serial = 0;
 

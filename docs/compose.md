@@ -262,24 +262,23 @@ interface ToolContext {
 }
 ```
 
-**The shipped tools declare their outputs in the same change.** Today
-`sql` keeps the rows in its text preview, and its `details` hold only the
-count of rows. The other tools below already return structured `details`,
-and each gains a schema for them:
+**The shipped tools declare their outputs.** Each tool below gives its
+`details` as the declared output:
 
-| Tool       | Declared output                                                                                      |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| `sql`      | The database, the count of every row, the columns, the preview rows, and the export or import facts. |
-| `snapshot` | The refs, one for each path, in order.                                                               |
-| `bash`     | The process, with its handle and its state, and the output read.                                     |
-| `ps`       | The processes, with the handle and the state of each.                                                |
-| `wait`     | The processes, and the processes that ended.                                                         |
-| `fork`     | The repository that the fork made, when the fork made one.                                           |
+| Tool               | Declared output                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `sql`              | The database, the count of every row, the columns, the preview rows, and the export or import facts. |
+| `snapshot`         | The refs, one for each path, in order.                                                               |
+| `bash`             | The process, with its handle and its state, and the output read.                                     |
+| `status`, `cancel` | The process, as `bash` gives it.                                                                     |
+| `ps`               | The processes, with the handle and the state of each.                                                |
+| `wait`             | One handle: the process, as `bash` gives it. Several: the processes, and the processes that ended.   |
+| `fork`             | The repository that the fork made, when the fork made one.                                           |
 
 **`sql` gives the rows that it already reads.** The preview holds the rows
 up to the limit `rows`, so the declared output needs no second query.
-`count` is the count of every row of the result, which `details.rows`
-holds today. `rows` becomes the preview rows. A row value is JSON: text,
+`count` is the count of every row of the result. `rows` holds the preview
+rows, one object for each row. A row value is JSON: text,
 a number, or null. A blob is its bytes as lowercase hex, as the CSV export
 writes it. A `bigint` is its decimal digits as text.
 

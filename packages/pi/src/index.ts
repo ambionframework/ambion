@@ -5,7 +5,6 @@
  * model library. This package holds Pi and the model registry.
  */
 
-export { piExecution } from './execution.ts';
 export { fileCredentials } from './credentials.ts';
 export {
 	type CompactionOptions,
@@ -16,6 +15,7 @@ export {
 	pi,
 	type ThinkingLevel,
 } from './define.ts';
+export { piExecution } from './execution.ts';
 export { loginPi, type TerminalStreams, terminalInteraction } from './login.ts';
 export type { StreamFn } from './models.ts';
 export {

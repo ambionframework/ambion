@@ -32,10 +32,34 @@ const ROWS_PER_TURN = 256;
 /** Let timers and other work run, so an abort or a time limit can fire. */
 const yieldTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
+/** A blob as lowercase hex. */
+const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+/**
+ * One cell as a JSON value: NULL stays null, a blob is lowercase hex, and a
+ * `bigint` is its decimal digits as text. A number that is not finite is
+ * its text, since JSON has no form for it.
+ */
+function jsonCell(value: SqlValue | undefined): string | number | null {
+	if (value === null || value === undefined) return null;
+	if (value instanceof Uint8Array) return hexOf(value);
+	if (typeof value === 'bigint') return value.toString();
+	if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
+	return value;
+}
+
+/** One row as a JSON object, with a key for each of `columns`. */
+export function jsonRow(
+	columns: readonly string[],
+	row: SqlRow,
+): Record<string, string | number | null> {
+	return Object.fromEntries(columns.map((name) => [name, jsonCell(row[name])]));
+}
+
 /** One CSV field: `\N` for NULL, hex for a blob, and RFC 4180 quoting for the rest. */
 function csvField(value: SqlValue | undefined): string {
 	if (value === null || value === undefined) return NULL_SENTINEL;
-	if (value instanceof Uint8Array) return Buffer.from(value).toString('hex');
+	if (value instanceof Uint8Array) return hexOf(value);
 	const text = String(value);
 	return text === NULL_SENTINEL ? `"${text}"` : csvText(text);
 }

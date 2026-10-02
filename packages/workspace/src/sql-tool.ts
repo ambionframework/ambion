@@ -32,7 +32,7 @@ import type {
 	SqlRunOptions,
 } from './sql-backend.ts';
 import { IMPORT_TABLE, MAX_IMPORT_BYTES } from './sql-import.ts';
-import { csvHeader, csvRecord, NULL_SENTINEL } from './sql-result.ts';
+import { csvHeader, csvRecord, jsonRow, NULL_SENTINEL } from './sql-result.ts';
 import type { DetailedResult } from './tools.ts';
 
 /** How many rows the preview shows when the caller names no limit. */
@@ -41,15 +41,23 @@ const PREVIEW_ROWS = 50;
 /** The most rows one preview shows. A larger result goes to a file through `export`. */
 const MAX_PREVIEW_ROWS = 1000;
 
-/** What the tool reports beside its text, for logs and UI. */
-interface SqlDetails {
-	database: string;
-	rows: number;
-	export?: string;
-	/** The absolute path of the imported file, and its row count. */
-	import?: string;
-	imported?: number;
-}
+/** One value of a preview row: text, a number, or null. A blob is hex, and a `bigint` is text. */
+const Cell = Type.Union([Type.String(), Type.Number(), Type.Null()]);
+
+/** What the tool declares for `compose`, and reports beside its text. */
+const SqlOutput = Type.Object({
+	database: Type.String({ description: 'The name of the database.' }),
+	count: Type.Integer({ description: 'How many rows the last statement gave, in all.' }),
+	columns: Type.Array(Type.String(), { description: 'The columns of the last statement.' }),
+	rows: Type.Array(Type.Record(Type.String(), Cell), {
+		description: 'The preview rows: the first rows of the last statement, up to the limit rows.',
+	}),
+	export: Type.Optional(Type.String({ description: 'The absolute path of the CSV export.' })),
+	import: Type.Optional(Type.String({ description: 'The absolute path of the imported file.' })),
+	imported: Type.Optional(Type.Integer({ description: 'How many rows the import read.' })),
+});
+
+type SqlDetails = Static<typeof SqlOutput>;
 
 type SqlResult = DetailedResult<SqlDetails>;
 
@@ -123,6 +131,7 @@ function createSqlTool(options: SqlToolOptions): AmbionTool {
 		description:
 			'Run statements on the shared database. Share a table or a view; it needs no copy. Set export to write a CSV file, and import to read one.',
 		parameters: sqlSchema,
+		compose: { output: SqlOutput },
 		execute: (params: SqlParams, ctx) => run(options, params, ctx),
 	});
 }
@@ -176,9 +185,20 @@ function withImport(result: SqlResult, imported: { path: string; rows: number })
 
 /** The report of one preview: a Markdown table of the preview rows. */
 function previewed(database: string, outcome: Rows): SqlResult {
-	const rows = outcome.rowCount;
-	if (rows === 0) return report(`Ran on ${database}. No rows.`, { database, rows });
-	return report(table(outcome), { database, rows });
+	const details = detailsOf(database, outcome);
+	if (outcome.rowCount === 0) return report(`Ran on ${database}. No rows.`, details);
+	return report(table(outcome), details);
+}
+
+/** The details of one outcome: the count of every row, the columns, and the preview rows as JSON. */
+function detailsOf(database: string, outcome: Rows): SqlDetails {
+	const { columns } = outcome;
+	return {
+		database,
+		count: outcome.rowCount,
+		columns: [...columns],
+		rows: outcome.rows.map((row) => jsonRow(columns, row)),
+	};
 }
 
 /** The report of one export: the head of the file as a CSV block, and the row count. */
@@ -191,7 +211,7 @@ function exported(database: string, outcome: Rows, exportPath: string): SqlResul
 	const block =
 		outcome.columns.length === 0 ? '(no rows)' : `\`\`\`csv\n${records.join('\n')}\n\`\`\``;
 	const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
-	return report(`${block}${footer}`, { database, rows, export: exportPath });
+	return report(`${block}${footer}`, { ...detailsOf(database, outcome), export: exportPath });
 }
 
 /** Render the preview rows as a GitHub Markdown table, with a footer that counts every row. */

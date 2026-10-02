@@ -30,6 +30,14 @@ import type { ShellOutputTruncation } from './port.ts';
 import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type Process } from './process-files.ts';
 import { readOutput } from './process-output.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
+import {
+	type ProcessDetails,
+	ProcessOutput,
+	type PsDetails,
+	PsOutput,
+	type WaitDetails,
+	WaitOutput,
+} from './process-schema.ts';
 import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
@@ -139,25 +147,6 @@ type BashParams = Static<typeof bashSchema>;
 type HandleParams = Static<typeof handleSchema>;
 type WaitParams = Static<typeof waitSchema>;
 
-/** What a handle tool gives in `details`. */
-export interface ProcessDetails {
-	process: Process;
-	/** The bytes of the output that the result shows: from the cursor to the end the read saw. */
-	read: { from: number; to: number };
-	truncation?: ShellOutputTruncation;
-}
-
-/** What `wait` on several handles gives in `details`: every status in the order of the handles, and each process it shows. */
-export interface WaitDetails {
-	processes: readonly Process[];
-	ended: readonly ProcessDetails[];
-}
-
-/** What `ps` gives in `details`. */
-export interface PsDetails {
-	processes: readonly Process[];
-}
-
 /** The process capability: the five process tools, their note, and the reminder of the table. */
 export function processCapability(options: ProcessToolOptions): Capability {
 	return {
@@ -176,6 +165,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			label: 'bash',
 			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
 			parameters: bashSchema,
+			compose: { output: ProcessOutput },
 			execute: (params: BashParams, ctx) => started(options, params, ctx),
 		}),
 		defineTool({
@@ -183,6 +173,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			label: 'Processes',
 			description: 'List your running processes.',
 			parameters: psSchema,
+			compose: { output: PsOutput },
 			execute: async (_params: object, ctx) => listed(table, ctx),
 		}),
 		defineTool({
@@ -191,6 +182,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			description:
 				'Give the state of a process and its new output: the output after your last result for it.',
 			parameters: handleSchema,
+			compose: { output: ProcessOutput },
 			execute: async (params: HandleParams, ctx) => {
 				const process = await table.find(ctx.agent, params.handle, ctx.signal);
 				const note = deadlineLine(NOT_CUT, process, [process], ctx);
@@ -203,6 +195,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			description:
 				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. A process that has ended makes a wait return at once, so drop its handle from handles.',
 			parameters: waitSchema,
+			compose: { output: WaitOutput },
 			execute: (params: WaitParams, ctx) => waited(options, params, ctx),
 		}),
 		defineTool({
@@ -211,6 +204,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			description:
 				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. A command can trap TERM, clean up, and exit in that time. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
+			compose: { output: ProcessOutput },
 			execute: async (params: HandleParams, ctx) => {
 				const { status, cancelled } = await table.cancel(ctx.agent, params.handle);
 				return cancelResult(await described(options, status, ctx), cancelled);

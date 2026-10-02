@@ -47,6 +47,23 @@ and its message renders the error and the ledger. The step vocabulary gains
 the `approval` step, which records the answer of `approve`. A tool named
 `compose` in a hand-built executor stays an ordinary tool.
 
+### The declared outputs of the workspace tools
+
+**`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
+declare their outputs.** Each tool sets `compose: { output }` with a
+TypeBox schema, and its details type is `Static` of that schema. `compose`
+checks every result against the schema. `process-tools` no longer declares
+`ProcessDetails`, `WaitDetails`, and `PsDetails` by hand.
+
+**The `sql` details change.** `rows` becomes `count`: the count of every
+row of the last statement. `rows` now holds the preview rows, up to the
+limit `rows`, and `columns` names the columns. A blob is lowercase hex, a
+`bigint` is decimal text, and a number that is not finite is its text.
+`database`, `export`, `import`, and `imported` stay.
+
+**`wait` declares one union.** A `wait` on one handle gives the details of
+`status`. A `wait` on several handles gives `processes` and `ended`.
+
 ## 0.5.0 (2026-10-02)
 
 <img alt="Ambion 0.5.0, six things new in this release. Sensors: an agent forks a sensor template, commits it, runs it, and observes through it, and each observation is kept as evidence. Actuators: an actuator is a controller command that the agent starts with bash, and exit 0 means the device is safe. Isolation: Claude, Codex, and Pi seats have no native tools, and files and a shell come only through the workspace. Camera Chat on macOS: an agent forks a camera sensor, launches it, and looks through it with a live preview. Codex runs on app-server, with turn/start, turn/steer, and turn/interrupt. Pi runs on Pi 1.0, on a Claude or ChatGPT subscription. Also new: a clone tool, JSON as the one data rule, a session trace step, steer with a receipt, and one word for each meaning." src="docs/assets/ambion-0.5.0.png" width="800">

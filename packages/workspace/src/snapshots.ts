@@ -227,10 +227,13 @@ const snapshotSchema = Type.Object({
 
 type SnapshotParams = Static<typeof snapshotSchema>;
 
+/** The declared output of `snapshot`: one ref for each path, in order. */
+const SnapshotOutput = Type.Object({
+	refs: Type.Array(Type.String(), { description: 'One ref for each path, in the order of paths.' }),
+});
+
 /** What `snapshot` gives in `details`. */
-export interface SnapshotDetails {
-	refs: readonly string[];
-}
+export type SnapshotDetails = Static<typeof SnapshotOutput>;
 
 /** Build the `snapshot` tool. Each call reads the files as the calling agent. */
 function createSnapshotTool(store: SnapshotStore): AmbionTool {
@@ -240,6 +243,7 @@ function createSnapshotTool(store: SnapshotStore): AmbionTool {
 		description:
 			'Freeze files of the workspace and give one ref for each. A ref names the bytes the file holds now, and a later change to the file does not change them. Put the refs in the refs of a say to cite the files.',
 		parameters: snapshotSchema,
+		compose: { output: SnapshotOutput },
 		execute: async (params: SnapshotParams, ctx: ToolContext) => {
 			const refs = await takeSnapshot(store, params.paths, {
 				agent: ctx.agent,
@@ -248,7 +252,7 @@ function createSnapshotTool(store: SnapshotStore): AmbionTool {
 			const lines = params.paths.map((path, index) => `${path}: ${refs[index]}`);
 			return {
 				content: [{ type: 'text' as const, text: lines.join('\n') }],
-				details: { refs } satisfies SnapshotDetails,
+				details: { refs: [...refs] } satisfies SnapshotDetails,
 			};
 		},
 	});
