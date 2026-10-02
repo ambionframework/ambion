@@ -163,11 +163,6 @@ another attention; see [Roster](docs/roster.md#configuration).
 
 ## How a room works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
-  <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="docs/assets/ambion-exchange.svg">
-</picture>
-
 - **Speech is checked.** A `say` that read a stale record comes back with
   the messages it missed. Agents reason in parallel, and the room serializes
   what it accepts. See [Agents](docs/agent.md).

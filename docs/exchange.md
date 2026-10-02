@@ -11,6 +11,11 @@ One room has one open exchange. A close fixes the range of messages it covered;
 it says nothing about answer quality. A summary may later replace that range in
 agent context while human review still sees the original messages.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-exchange-dark.svg">
+  <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="assets/ambion-exchange.svg">
+</picture>
+
 ## 1. The spans
 
 [The two spans](room.md#the-two-spans) defines the activation and the
