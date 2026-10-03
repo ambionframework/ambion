@@ -178,9 +178,15 @@ async function approve(
 	throw refusal(failed ?? 'The approval refused this compose call. No code ran.');
 }
 
-/** The part of a room tool that a compose call reads: the commit and the content it returns. */
+/**
+ * The part of a room tool that a compose call reads: the commit and the
+ * content it returns. It restates `BoundTool`, because `execution/contract.ts`
+ * sits above this file in the layers.
+ */
 export interface RoomCall {
 	readonly name: string;
+	/** The compose call `compose` shows the results of the nested calls `calls` in its own result. */
+	reported?(compose: string, calls: readonly string[]): void;
 	run(
 		args: unknown,
 		call: string,
@@ -210,8 +216,11 @@ function roomEntry(spec: RoomSpec): AmbionTool {
 	});
 }
 
-/** What the room tools of one compose call report to the model: the lines it must read. */
-type RoomNotes = string[];
+/** What the room tools of one compose call report to the model: the lines it must read, and the nested calls they came from. */
+interface RoomNotes {
+	readonly lines: string[];
+	readonly calls: string[];
+}
 
 /**
  * The room tool, run through its call of the activation. A result that the
@@ -220,17 +229,21 @@ type RoomNotes = string[];
  * nested result.
  */
 function liveEntry(entry: AmbionTool, call: RoomCall, notes: RoomNotes): AmbionTool {
-	return Object.freeze({
+	const live: AmbionTool = Object.freeze({
 		...entry,
 		invoke: async (params: unknown, ctx: ToolContext) => {
 			const result = await call.run(params, ctx.callId);
 			const value = contentText(result.content);
-			if (result.carriesRecord === true || result.isError === true)
-				notes.push(`Call ${ctx.callId} (${entry.name}): ${value}`);
+			if (result.carriesRecord === true || result.isError === true) {
+				notes.lines.push(`Call ${ctx.callId} (${entry.name}): ${value}`);
+				notes.calls.push(ctx.callId);
+			}
 			if (result.isError === true) throw new Error(value);
 			return value;
 		},
 	});
+	ROOM_ENTRIES.add(live);
+	return live;
 }
 
 /** The room tools that `names` use, bound to the calls of the activation. A tool with no call refuses the compose call. */
@@ -391,7 +404,7 @@ export function composeTool(
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
 		if (!Check(ARGUMENTS, params))
 			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(ARGUMENTS, params)}.`);
-		const notes: RoomNotes = [];
+		const notes: RoomNotes = { lines: [], calls: [] };
 		const program = liveRoom(resolveProgram(params, catalog, held), calls, notes);
 		await approve(options, requestOf(program), ctx, record);
 		const run = new ComposeRun({
@@ -402,8 +415,12 @@ export function composeTool(
 			limits,
 			ctx,
 			...(record === undefined ? {} : { record }),
+			commits: (nested) => ROOM_ENTRIES.has(nested),
 		});
-		return rendered(await run.run(), notes);
+		const outcome = await run.run();
+		// The activation counts a nested result as read only when this result shows it.
+		calls?.find((one) => one.reported !== undefined)?.reported?.(ctx.callId, notes.calls);
+		return rendered(outcome, notes.lines);
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,

@@ -8,7 +8,6 @@
  * does a tool result that carries record once it reaches the model.
  */
 
-import { madeBy } from '../compose-run.ts';
 import type { Seq } from '../types.ts';
 import type { ReadRange } from './contract.ts';
 
@@ -18,6 +17,8 @@ export class Freshness {
 	private readonly consumed = new Map<Seq, ReadRange>();
 	/** Tool results that carry record, by call id. */
 	private readonly results = new Map<string, Seq>();
+	/** The nested calls whose results a `compose` call shows, by the id of that call. */
+	private readonly shown = new Map<string, string[]>();
 
 	get readThrough(): Seq {
 		return this.read;
@@ -30,16 +31,25 @@ export class Freshness {
 
 	/** The result of the tool call `call` carries the record through `seq`. */
 	resultExpected(call: string, seq: Seq): void {
-		this.results.set(call, Math.max(this.results.get(call) ?? 0, seq));
+		this.results.set(call, seq);
+	}
+
+	/** The result of the `compose` call `compose` shows the results of the nested calls `calls`. */
+	reported(compose: string, calls: readonly string[]): void {
+		this.shown.set(compose, [...(this.shown.get(compose) ?? []), ...calls]);
 	}
 
 	/**
-	 * The result of the tool call `call` reached the model. A `compose` call
-	 * shows the results of its nested calls in its own result, so it delivers them.
+	 * The result of the tool call `call` reached the model. For a `compose`
+	 * call, the nested results that it showed reached the model with it. A
+	 * nested result that the compose result does not show stays unread.
 	 */
 	delivered(call: string): void {
-		for (const [id, through] of [...this.results]) {
-			if (id !== call && !madeBy(call, id)) continue;
+		const ids = [call, ...(this.shown.get(call) ?? [])];
+		this.shown.delete(call);
+		for (const id of ids) {
+			const through = this.results.get(id);
+			if (through === undefined) continue;
 			this.results.delete(id);
 			this.acknowledgeThrough(through);
 		}

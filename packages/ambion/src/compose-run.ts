@@ -44,6 +44,11 @@ export interface ComposeRunInput {
 	readonly ctx: ToolContext;
 	/** Where the steps of the nested calls go. Absent, the run records no step. */
 	readonly record?: (step: Step) => void;
+	/**
+	 * Whether a call of the tool cannot be cancelled and answers with record
+	 * lines. The run waits for such a call to settle before it reports.
+	 */
+	readonly commits?: (tool: AmbionTool) => boolean;
 }
 
 type CallState = 'queued' | 'running' | 'completed' | 'failed' | 'dropped';
@@ -101,11 +106,6 @@ function nestedCallId(parent: string, index: number): string {
 	return `${parent}.${index}`;
 }
 
-/** Whether `id` is the id of a call that the compose call `parent` made. */
-export function madeBy(parent: string, id: string): boolean {
-	return id.startsWith(`${parent}.`);
-}
-
 /** The text parts of a result, joined by a line. */
 function textOf(result: string | ToolResult): string {
 	if (typeof result === 'string') return result;
@@ -119,6 +119,8 @@ export class ComposeRun {
 	private readonly late = new Set<Call>();
 	private readonly busy = new Set<string>();
 	private readonly waiters: (() => void)[] = [];
+	/** The running calls that commit to the room. A commit has no cancel. */
+	private readonly committing = new Set<Promise<void>>();
 	private readonly stop = new AbortController();
 	private running = 0;
 	/** The run starts no further call that the code makes. */
@@ -143,12 +145,16 @@ export class ComposeRun {
 		const left = Math.min(limits.time, untilDeadline);
 		if (left <= 0) return this.outcome(this.timeout());
 		const gate = this.watch(left);
+		let ending: Ending;
 		try {
-			return this.outcome(await Promise.race([this.body(), gate.stopped]));
+			ending = await Promise.race([this.body(), gate.stopped]);
 		} finally {
 			gate.clear();
 			this.close();
 		}
+		// A commit that the end of the call cannot cancel still answers, and its answer can carry record.
+		await Promise.all([...this.committing]);
+		return this.outcome(ending);
 	}
 
 	private cut(): Ending {
@@ -334,12 +340,16 @@ export class ComposeRun {
 		call.state = 'running';
 		this.running += 1;
 		if (call.tool.executionMode === 'sequential') this.busy.add(call.tool.name);
-		void this.execute(call).then(() => {
+		const done = this.execute(call).then(() => {
 			this.running -= 1;
 			this.busy.delete(call.tool.name);
 			this.pump();
 			this.wake();
 		});
+		if (this.input.commits?.(call.tool)) {
+			this.committing.add(done);
+			void done.then(() => this.committing.delete(done));
+		}
 	}
 
 	/** Steps 3 to 5: the context, `invoke` with its steps, the declared output, and the binding value. It never rejects. */

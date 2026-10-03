@@ -1099,6 +1099,36 @@ describe('a compose call over the room tools', () => {
 		expect(names).toEqual(expect.arrayContaining(['ana', 'ben']));
 	});
 
+	it('says to an agent that it seated in the same compose call', async () => {
+		const read: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-seat-say'),
+				agents: [composer('worker'), quietAgent('ana')],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, seat, request) => {
+					if (seat !== 'worker') return quiet();
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['seat', 'say'],
+							code: `await tools.seat({ name: 'ana' });
+								return await tools.say({ to: 'ana', text: 'Welcome.' });`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Bring in ana.' });
+		await settled(room);
+		expect(JSON.parse(read[0] ?? '')).toMatch(/^said #\d+ to ana$/);
+		expect(read[0]).not.toContain('Room tools reported');
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said).toHaveLength(1);
+	});
+
 	it('records the steps of a nested room tool under the compose call, and shows the names to the approval', async () => {
 		const logged: Step[] = [];
 		const requests: unknown[] = [];

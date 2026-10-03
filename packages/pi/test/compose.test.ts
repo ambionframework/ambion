@@ -109,6 +109,14 @@ describe('compose on a Pi seat', () => {
 		expect(seen[0]?.deadline).toBeGreaterThan(Date.now());
 	});
 
+	it('binds the room tools: a say in a compose call lands', async () => {
+		const { read } = await composed([], {
+			uses: ['say'],
+			code: `return await tools.say({ to: 'andrei', text: 'Done.' });`,
+		});
+		expect(JSON.parse(read)).toMatch(/^said #\d+ to andrei$/);
+	});
+
 	it.each([
 		{
 			name: 'an error',

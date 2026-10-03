@@ -509,7 +509,7 @@ binds a tool with no declared output. Use them to say to many
 participants, seat several agents, or recall many refs in one call.
 
 **The driver hands the room tools to the compose call.** It passes the
-`BoundTool` list of the activation to `invokeTool` and `invokeChecked`,
+room tools of the activation to `invokeTool` and `invokeChecked`,
 beside the step sink. The room tools stay bound to the activation, so a
 nested call commits with the read position of the activation. A direct
 `invoke` of `compose` has no activation. A call that uses a room tool then
@@ -528,7 +528,10 @@ error, under `Room tools reported:`. A failed or cut compose call lists
 them too. The activation counts the record as read through a nested call
 when the compose result reaches the model. A nested call id is the call id
 of `compose`, a dot, and the place of the call. It is the commit key of
-the nested call.
+the nested call. The compose result lists the ids that it shows, and the
+activation counts only those nested calls as read. A nested `say` has no
+cancel, so the compose call waits for each running room-tool call to settle
+before it builds the result, also after a time limit or a cut.
 
 **Code reads the record with `recall`.** A workspace mirror also writes the
 messages of a room to `/rooms/<name>/messages.jsonl`
@@ -567,8 +570,9 @@ position, and the say lock of the room refuses the second. `compose` starts
 the next say after the previous say lands, and the landed say raises the
 read position. Code can use `Promise.all` over `say` calls, and the says
 land in the order that the code made them. `schedule`, `seat`, `unseat`,
-`dismiss`, and `recall` run together, up to the cap. A seating that lands
-before a say moves the record, and the room can refuse that say as missed.
+`dismiss`, and `recall` run together, up to the cap. A seating or a dismissal that lands counts as read, because it is the own
+act of the activation. A line of another participant that lands before a say
+still makes the room refuse that say as missed.
 
 **A resource can serialize what `compose` runs together.** `compose`
 starts the calls. The resource behind a tool decides whether their work
