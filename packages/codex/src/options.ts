@@ -28,8 +28,10 @@ export interface CodexExecutionOptions extends HomeOptions {
  * otherwise. The room hears only `say`, so the seat text says so first.
  */
 export const SEAT_NOTE =
-	'You are a seat in a room. Your final reply in this thread reaches no one. ' +
-	'The room hears only what you send through the `say` tool, so answer with `say`, then stop.';
+	'Your final reply reaches no one. The room hears only the `say` tool. ' +
+	'When you have something to add, call `say`, then end your activation. ' +
+	'The sandbox and the working directory of this harness apply to no tool you hold. ' +
+	'Your tools reach the workspace, and every path is a workspace path.';
 
 /**
  * The seat text: the harness note, the mechanism, and the agent part. They
