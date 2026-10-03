@@ -37,8 +37,8 @@ configuration. `pi`, `claude`, and `codex` are the executors that ship; see
 guide](codex.md). The `instructions`
 are private model guidance. `model` names a model of that executor kind. `tools`
 and `bundles` supply the agent's domain tools. The `compose` tool joins
-those tools in one call. `pi()`, `claude()`, and `codex()` add it by default,
-and `compose: false` removes it ([Compose](compose.md)).
+those tools in one call, and the `describe` tool returns their signatures.
+`pi()`, `claude()`, and `codex()` add both to every seat ([Compose](compose.md)).
 `activationTokenLimit`
 bounds the record one activation reads. Without a limit, an activation reads
 the whole record the room serves. See `limits.context.messages` in

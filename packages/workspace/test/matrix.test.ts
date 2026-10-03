@@ -85,6 +85,8 @@ const twoWorkspaces: Scenario = {
 									'unseat',
 									'dismiss',
 									'recall',
+									'compose',
+									'describe',
 								]);
 								return quiet();
 							},

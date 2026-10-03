@@ -143,18 +143,18 @@ validates the shared fields. The executor passes `maxBudgetUsd` and `effort`
 to the SDK unchanged. The definition has no field for a tool, a directory, or
 a permission, because a Claude seat has no built-in tool.
 
-| Option                 | Required | Default            | Meaning                                                                                                    |
-| ---------------------- | -------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `instructions`         | Yes      | None               | The private guidance of the agent.                                                                         |
-| `model`                | Yes      | None               | A Claude model id. The executor passes it as `--model`.                                                    |
-| `tools`                | No       | None               | The tools of the agent, from `defineTool`. They run in the host process.                                   |
-| `bundles`              | No       | None               | Tool bundles. Their guidance joins the prompt after the speaking policy.                                   |
-| `compose`              | No       | `quickjsRuntime()` | The `compose` tool of the seat: a runtime and optional limits. `false` removes it ([Compose](compose.md)). |
-| `speaking`             | No       | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                                                              |
-| `activationTokenLimit` | No       | The whole record   | The token limit of the record one activation reads. A positive integer.                                    |
-| `estimateTokens`       | No       | `'length'`         | The name of the estimator in the runtime that counts tokens. It needs the limit.                           |
-| `maxBudgetUsd`         | No       | None               | The most one activation may spend, in US dollars.                                                          |
-| `effort`               | No       | The SDK default    | `low`, `medium`, `high`, `xhigh`, or `max`.                                                                |
+| Option                 | Required | Default            | Meaning                                                                                                |
+| ---------------------- | -------- | ------------------ | ------------------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None               | The private guidance of the agent.                                                                     |
+| `model`                | Yes      | None               | A Claude model id. The executor passes it as `--model`.                                                |
+| `tools`                | No       | None               | The tools of the agent, from `defineTool`. They run in the host process.                               |
+| `bundles`              | No       | None               | Tool bundles. Their guidance joins the prompt after the speaking policy.                               |
+| `compose`              | No       | `quickjsRuntime()` | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
+| `speaking`             | No       | `DEFAULT_SPEAKING` | The speaking policy. It replaces the default.                                                          |
+| `activationTokenLimit` | No       | The whole record   | The token limit of the record one activation reads. A positive integer.                                |
+| `estimateTokens`       | No       | `'length'`         | The name of the estimator in the runtime that counts tokens. It needs the limit.                       |
+| `maxBudgetUsd`         | No       | None               | The most one activation may spend, in US dollars.                                                      |
+| `effort`               | No       | The SDK default    | `low`, `medium`, `high`, `xhigh`, or `max`.                                                            |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,

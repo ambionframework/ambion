@@ -1,12 +1,14 @@
 /**
  * The catalog of the `compose` tool: one TypeScript signature for each tool
- * that code can bind. The renderer reads the JSON Schema that TypeBox
+ * that code can bind, and the compact list of those tools. The renderer reads the JSON Schema that TypeBox
  * writes. A schema with no TypeScript form renders as `unknown`. A field
  * description becomes a doc comment, and a schema with an `$id` becomes a
  * named type. A schema whose `$id` is no identifier, or whose `$id` another
  * schema already holds, renders inline. The renderer never throws, because
  * it must not stop `defineAgent`. The input schema stays the authority, because `compose`
- * checks every argument against it (`docs/compose.md`).
+ * checks every argument against it (`docs/compose.md`). The `describe` tool
+ * renders the signatures of the tools that a call names, and a failed compose
+ * call renders the signatures of the tools that it names.
  */
 import type { AmbionTool } from './bundle.ts';
 
@@ -167,6 +169,31 @@ function signature(tool: AmbionTool, catalog: Catalog): string {
 
 /** Whether code can bind the tool: a tool with `compose: false` stays out. */
 export const bindable = (tool: AmbionTool): boolean => tool.compose !== false;
+
+/**
+ * The name of the type that a tool binds to. A tool with no declared output
+ * binds to `string`. A declared output gives its `$id` when that is an
+ * identifier, and else its primitive or `array` form, or `object`.
+ */
+function outputName(tool: AmbionTool): string {
+	const output = tool.compose ? tool.compose.output : undefined;
+	if (output === undefined) return 'string';
+	const node: Node = isNode(output) ? output : {};
+	if (typeof node.$id === 'string' && IDENTIFIER.test(node.$id)) return node.$id;
+	if (node.type === 'array') return 'array';
+	return PRIMITIVES[String(node.type)] ?? 'object';
+}
+
+/**
+ * The compact list of the tools that code can bind: `name -> Type` for each
+ * tool, in the order given. It holds no signature. `renderCatalog` gives those.
+ */
+export function renderBindings(tools: readonly AmbionTool[]): string {
+	return tools
+		.filter(bindable)
+		.map((tool) => `${keyOf(tool.name)} -> ${outputName(tool)}`)
+		.join(', ');
+}
 
 /**
  * The catalog of the tools that code can bind, as TypeScript declarations.

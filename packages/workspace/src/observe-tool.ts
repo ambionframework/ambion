@@ -33,34 +33,37 @@ const observeSchema = Type.Object(
 type ObserveParams = Static<typeof observeSchema>;
 
 /** The declared output of `observe`: the evidence that the call retained, and where it sits. */
-const ObserveOutput = Type.Object({
-	sensor: Type.String({ description: 'The qualified sensor name.' }),
-	request: Type.Object(ObserveRequestSchema.properties, {
-		additionalProperties: false,
-		description: 'The request that the call sent to the sensor.',
-	}),
-	process: Type.String({ description: 'The handle of the process that runs the server.' }),
-	hostname: Type.String({ description: 'The host of the workstation.' }),
-	connection: Type.Object({
-		name: Type.String({ description: 'The connection name.' }),
-		owner: Type.String({ description: 'The agent that owns the process.' }),
-		port: Type.Integer({ description: 'The port of the sensor server.' }),
-	}),
-	source: SensorSourceFacts,
-	manifestRef: Type.String({
-		description: 'The snapshot ref of the manifest. It names the whole result. Cite it.',
-	}),
-	manifestPath: Type.String({ description: 'The absolute path of the manifest file.' }),
-	directory: Type.String({ description: 'The absolute path of the directory of the export.' }),
-	files: Type.Array(
-		Type.Object({
-			digest: Type.String({ description: 'The SHA-256 digest of the file.' }),
-			ref: Type.String({ description: 'The snapshot ref of the file.' }),
-			path: Type.String({ description: 'The absolute path of the exported file.' }),
+const ObserveOutput = Type.Object(
+	{
+		sensor: Type.String({ description: 'The qualified sensor name.' }),
+		request: Type.Object(ObserveRequestSchema.properties, {
+			additionalProperties: false,
+			description: 'The request that the call sent to the sensor.',
 		}),
-		{ description: 'Each file of the observation, such as a frame or a series.' },
-	),
-});
+		process: Type.String({ description: 'The handle of the process that runs the server.' }),
+		hostname: Type.String({ description: 'The host of the workstation.' }),
+		connection: Type.Object({
+			name: Type.String({ description: 'The connection name.' }),
+			owner: Type.String({ description: 'The agent that owns the process.' }),
+			port: Type.Integer({ description: 'The port of the sensor server.' }),
+		}),
+		source: SensorSourceFacts,
+		manifestRef: Type.String({
+			description: 'The snapshot ref of the manifest. It names the whole result. Cite it.',
+		}),
+		manifestPath: Type.String({ description: 'The absolute path of the manifest file.' }),
+		directory: Type.String({ description: 'The absolute path of the directory of the export.' }),
+		files: Type.Array(
+			Type.Object({
+				digest: Type.String({ description: 'The SHA-256 digest of the file.' }),
+				ref: Type.String({ description: 'The snapshot ref of the file.' }),
+				path: Type.String({ description: 'The absolute path of the exported file.' }),
+			}),
+			{ description: 'Each file of the observation, such as a frame or a series.' },
+		),
+	},
+	{ $id: 'ObserveResult' },
+);
 
 type ObserveDetails = Static<typeof ObserveOutput>;
 

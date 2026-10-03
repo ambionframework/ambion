@@ -309,6 +309,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(tools).toEqual({
 						functions: [
 							'compose',
+							'describe',
 							'dismiss',
 							'lookup',
 							'recall',
@@ -410,6 +411,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 								'recall',
 								'lookup',
 								'compose',
+								'describe',
 							],
 							servers: [{ name: 'node_repl', status: 'disabled' }],
 							activation: expect.any(String),
@@ -459,6 +461,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					expect(toolsOf(first)).toEqual({
 						functions: [
 							'compose',
+							'describe',
 							'dismiss',
 							'look',
 							'recall',
@@ -534,6 +537,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'bash',
 							'cancel',
 							'compose',
+							'describe',
 							'dismiss',
 							'edit',
 							'ps',

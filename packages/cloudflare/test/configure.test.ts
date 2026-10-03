@@ -8,7 +8,7 @@ const agent = (name: string) =>
 	defineAgent({
 		name,
 		identity: `${name} identity`,
-		executor: pi({ instructions: `${name} instructions`, model: 'scripted/test', compose: false }),
+		executor: pi({ instructions: `${name} instructions`, model: 'scripted/test' }),
 	});
 
 describe('configure', () => {
@@ -28,15 +28,14 @@ describe('configure', () => {
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
 	});
 
-	it('refuses an agent with a compose tool', () => {
+	it('accepts an agent with the compose and describe tools', () => {
 		const composer = defineAgent({
 			name: 'composer',
 			identity: 'composer identity',
 			executor: pi({ instructions: 'Compose.', model: 'scripted/test' }),
 		});
-		expect(() => configure({ agents: [composer] })).toThrow(
-			"Worker agent 'composer' has a compose tool. Pass compose: false.",
-		);
+		expect(composer.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
+		expect(() => configure({ agents: [composer] })).not.toThrow();
 	});
 
 	it('gives a seat the Pi execution, and a host with the configured limits and logger', () => {
@@ -62,7 +61,6 @@ describe('configure', () => {
 			executor: pi({
 				instructions: 'Read.',
 				model: 'scripted/test',
-				compose: false,
 				activationTokenLimit: 40,
 				estimateTokens: 'chars',
 			}),

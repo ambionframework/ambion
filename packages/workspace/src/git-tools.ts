@@ -131,21 +131,24 @@ function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 // -- repos ---------------------------------------------------------------------
 
 /** The declared output of `repos`: the server, and each repository that the call listed. */
-const ReposOutput = Type.Object({
-	server: Type.String({ description: 'The name of the git server of the workspace.' }),
-	repositories: Type.Array(
-		Type.Object({
-			id: Type.String({ description: 'The repository, such as templates/weekly-report.' }),
-			description: Type.Optional(Type.String({ description: 'What the repository holds.' })),
-			source: Type.Optional(Type.String({ description: 'The repository that this one forks.' })),
-			defaultBranch: Type.String({ description: 'The branch that a clone checks out.' }),
-			branches: Type.Record(Type.String(), Type.String(), {
-				description: 'Each branch, with the full hash of the commit that it names.',
+const ReposOutput = Type.Object(
+	{
+		server: Type.String({ description: 'The name of the git server of the workspace.' }),
+		repositories: Type.Array(
+			Type.Object({
+				id: Type.String({ description: 'The repository, such as templates/weekly-report.' }),
+				description: Type.Optional(Type.String({ description: 'What the repository holds.' })),
+				source: Type.Optional(Type.String({ description: 'The repository that this one forks.' })),
+				defaultBranch: Type.String({ description: 'The branch that a clone checks out.' }),
+				branches: Type.Record(Type.String(), Type.String(), {
+					description: 'Each branch, with the full hash of the commit that it names.',
+				}),
+				url: Type.String({ description: 'The clone URL.' }),
 			}),
-			url: Type.String({ description: 'The clone URL.' }),
-		}),
-	),
-});
+		),
+	},
+	{ $id: 'ReposResult' },
+);
 
 type ReposDetails = Static<typeof ReposOutput>;
 
@@ -221,14 +224,17 @@ function cell(text: string): string {
 // -- fork ----------------------------------------------------------------------
 
 /** The declared output of `fork`: the repository that the fork made or found, and the clone. */
-const ForkOutput = Type.Object({
-	repository: Type.String({ description: 'The id of the fork.' }),
-	source: Type.String({ description: 'The repository that the call forked.' }),
-	url: Type.String({ description: 'The clone URL of the fork.' }),
-	clone: Type.Optional(
-		Type.String({ description: 'The path of the working copy, when the call made one.' }),
-	),
-});
+const ForkOutput = Type.Object(
+	{
+		repository: Type.String({ description: 'The id of the fork.' }),
+		source: Type.String({ description: 'The repository that the call forked.' }),
+		url: Type.String({ description: 'The clone URL of the fork.' }),
+		clone: Type.Optional(
+			Type.String({ description: 'The path of the working copy, when the call made one.' }),
+		),
+	},
+	{ $id: 'ForkResult' },
+);
 
 type ForkDetails = Static<typeof ForkOutput>;
 

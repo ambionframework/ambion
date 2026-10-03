@@ -193,8 +193,8 @@ function checked(macro: unknown): ComposeMacro {
 
 /**
  * Refuse a macro that names a tool of no catalog entry, and two macros of
- * one name. A tool with `compose: false` and the tool `compose` are not in
- * the catalog.
+ * one name. A tool with `compose: false`, the tool `compose`, and the tool
+ * `describe` are not in the catalog.
  */
 export function assertMacros(macros: readonly ComposeMacro[], tools: readonly AmbionTool[]): void {
 	const names = new Set(tools.filter(bindable).map((tool) => tool.name));
