@@ -4,8 +4,8 @@
 `compose` tool, and the main entry exports its types and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
 `@ambionframework/evaluator` holds `quickjsEvaluator` and `processEvaluator`,
-and both pass `evaluatorConformance`. **Pending:** the live comparison of
-the token cost (CP6) has not run yet, so the page states no token figure.
+and both pass `evaluatorConformance`. The live run of CP6 is in
+[the compose evidence](../planning/compose-evidence.md).
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
@@ -181,6 +181,21 @@ each tool as a native tool. The catalog repeats each input schema, and
 adds each declared output. A seat with many tools pays that cost in every
 activation. The comparison that the status names counts the catalog in the
 input tokens of the seat.
+
+**The live comparison measured the catalog only.** The seat ran the chain
+task once with `compose` and once without it, on each executor kind. No
+seat called `compose` for the chain task, so the comparison holds no
+saving. The run with `compose` cost more input tokens:
+
+| Kind   | Input with | Input without | Output with | Output without |
+| ------ | ---------- | ------------- | ----------- | -------------- |
+| Pi     | 55016      | 45861         | 934         | 1028           |
+| Claude | 60065      | 33964         | 828         | 627            |
+| Codex  | 34575      | 23767         | 439         | 442            |
+
+Each figure is one run. The Claude run with `compose` made four `sql`
+calls, and the run without it made one, so the calls of the seat also
+change the figure.
 
 ## Guidance
 
@@ -794,8 +809,8 @@ signal and the deadline. It hands the step sink to `compose` through
 test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
-Items 1, 6, and 7 add a live run, which CP6 holds. That run is the one
-pending item of this page.
+Items 1, 6, and 7 add a live run, which CP6 holds.
+[The compose evidence](../planning/compose-evidence.md) records it.
 
 1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
    `compose` as one more definition tool. A workspace test binds `sql` and
@@ -826,4 +841,6 @@ pending item of this page.
    another, and the seat calls `compose`. In the second, the seat must
    read a result before it decides, and the result decides what it does.
    Code that branches on the result is a valid compose call too. So the
-   run records whether the seat called the tool directly.
+   run records whether the seat called the tool directly. In the live run,
+   the second case passed on each kind. The first case failed on each
+   kind: the seat called `sql` and `snapshot` directly.
