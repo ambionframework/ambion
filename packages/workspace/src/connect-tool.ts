@@ -2,6 +2,7 @@
 
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
+import { SensorSourceSchema } from './sensor-api.ts';
 import type { RegisteredSensorConnection, SensorConnections } from './sensor-connections.ts';
 import type { DetailedResult } from './tools.ts';
 
@@ -24,16 +25,27 @@ const connectSchema = Type.Object({
 
 type ConnectParams = Static<typeof connectSchema>;
 
-interface ConnectDetails {
-	readonly name: string;
-	readonly hostname: string;
-	readonly port: number;
-	readonly process: string;
-	readonly owner: string;
-	readonly source: RegisteredSensorConnection['source'];
-	readonly index: RegisteredSensorConnection['index'];
-	readonly sensors: readonly string[];
-}
+/** The schema of the launch source of a sensor server, named for the catalog of `compose`. */
+export const SensorSourceFacts = Type.Object(SensorSourceSchema.properties, {
+	$id: 'SensorSource',
+	additionalProperties: false,
+	description: 'The repository, the commit, and the branch that the server launched from.',
+});
+
+/** The declared output of `connect`: the connection, and the sensors that it found. */
+const ConnectOutput = Type.Object({
+	name: Type.String({ description: 'The connection name.' }),
+	hostname: Type.String({ description: 'The host of the workstation.' }),
+	port: Type.Integer({ description: 'The port of the sensor server.' }),
+	process: Type.String({ description: 'The handle of the process that runs the server.' }),
+	owner: Type.String({ description: 'The agent that owns the process.' }),
+	source: SensorSourceFacts,
+	sensors: Type.Array(Type.String(), {
+		description: 'The qualified name of each sensor, such as bench/temperature.',
+	}),
+});
+
+type ConnectDetails = Static<typeof ConnectOutput>;
 
 /** Create the `connect` tool for a workspace that has workstation endpoints. */
 export function createConnectTool(options: {
@@ -44,6 +56,7 @@ export function createConnectTool(options: {
 		label: 'Connect sensor server',
 		description: 'Connect a running process you own to its sensor API and discover its sensors.',
 		parameters: connectSchema,
+		compose: { output: ConnectOutput },
 		execute: async (params: ConnectParams, ctx: ToolContext) => {
 			const connection = await options.connections.connect(ctx.agent, params, ctx.signal);
 			return result(connection);
@@ -80,7 +93,6 @@ function result(connection: RegisteredSensorConnection): DetailedResult<ConnectD
 			process: connection.process.handle,
 			owner: connection.owner,
 			source,
-			index: connection.index,
 			sensors,
 		},
 	};

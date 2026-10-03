@@ -3,6 +3,7 @@ import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { ObjectBackend } from '../src/object-backend.ts';
 import { toolOf } from './support/backends.ts';
+import { composed } from './support/compose.ts';
 import { agent, run, toolResults } from './support/room.ts';
 import { sensorFixture } from './support/sensor-fixture.ts';
 import {
@@ -28,6 +29,43 @@ async function textAt(
 }
 
 describe('workspace observe integration', () => {
+	it('binds connect and observe through compose with their declared details', async () => {
+		const rig = await openSensorObserveRoom();
+		try {
+			const result = await composed(
+				rig.site.tools(),
+				['connect', 'observe'],
+				`const connected = await tools.connect({ name: 'bench-one', process: '${rig.process}', port: ${rig.port} });
+const observed = await tools.observe({ sensor: 'bench-one/bench' });
+return { connected, observed };`,
+				'sensor-owner',
+			);
+			expect(result.status).toBe('completed');
+			const { connected, observed } = result.value as Record<
+				'connected' | 'observed',
+				Record<string, unknown>
+			>;
+			expect(connected).toMatchObject({
+				name: 'bench-one',
+				process: rig.process,
+				port: rig.port,
+				owner: 'sensor-owner',
+				sensors: ['bench-one/bench'],
+			});
+			expect(connected).not.toHaveProperty('index');
+			expect(observed).toMatchObject({
+				sensor: 'bench-one/bench',
+				request: { api: 1 },
+				manifestRef: expect.stringContaining('ambion://workspace/'),
+				manifestPath: expect.any(String),
+				directory: expect.any(String),
+			});
+			expect((observed.files as unknown[]).length).toBeGreaterThan(0);
+		} finally {
+			await rig.close();
+		}
+	});
+
 	it('works on the first direct call, reads latest and supported spans, and retains every part', async () => {
 		const rig = await openSensorObserveRoom();
 		try {

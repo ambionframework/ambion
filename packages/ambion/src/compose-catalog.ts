@@ -1,9 +1,10 @@
 /**
  * The catalog of the `compose` tool: one TypeScript signature for each tool
  * that code can bind. The renderer reads the JSON Schema that TypeBox
- * writes. A schema with no TypeScript form renders as `unknown`. The input
- * schema stays the authority, because `compose` checks every argument
- * against it (`docs/compose.md`).
+ * writes. A schema with no TypeScript form renders as `unknown`. A field
+ * description becomes a doc comment, and a schema with an `$id` becomes a
+ * named type. The input schema stays the authority, because `compose`
+ * checks every argument against it (`docs/compose.md`).
  */
 import type { AmbionTool } from './bundle.ts';
 
@@ -25,8 +26,10 @@ const PRIMITIVES: Readonly<Record<string, string>> = {
 	null: 'null',
 };
 
-/** A union member, in the place where a union needs parentheses. */
-const wrapped = (text: string): string => (text.includes(' | ') ? `(${text})` : text);
+/** What one render collects: the named types, by id, with the schema each id came from. */
+interface Catalog {
+	readonly named: Map<string, { readonly key: string; text: string }>;
+}
 
 function literal(value: unknown): string {
 	return ['string', 'number', 'boolean'].includes(typeof value) || value === null
@@ -34,26 +37,70 @@ function literal(value: unknown): string {
 		: 'unknown';
 }
 
-function union(members: readonly unknown[]): string {
-	const forms = [...new Set(members.map((member) => typeOf(member)))];
+function union(members: readonly unknown[], catalog: Catalog, indent: string): string {
+	const forms = [...new Set(members.map((member) => typeOf(member, catalog, indent)))];
 	return forms.includes('unknown') ? 'unknown' : forms.join(' | ');
 }
 
-function objectOf(node: Node): string {
-	const properties = isNode(node.properties) ? node.properties : {};
-	const required = Array.isArray(node.required) ? node.required : [];
-	const fields = Object.entries(properties).map(
-		([name, schema]) => `${keyOf(name)}${required.includes(name) ? '' : '?'}: ${typeOf(schema)}`,
-	);
-	const pattern = isNode(node.patternProperties) ? Object.values(node.patternProperties)[0] : null;
-	const rest = isNode(node.additionalProperties) ? node.additionalProperties : pattern;
-	if (fields.length === 0 && rest !== null && rest !== undefined)
-		return `Record<string, ${typeOf(rest)}>`;
-	return fields.length === 0 ? '{}' : `{ ${fields.join('; ')} }`;
+/** The description of a field, when its doc comment belongs at the field. A named type keeps its own. */
+function noteOf(schema: unknown): string | undefined {
+	if (!isNode(schema)) return undefined;
+	if (typeof schema.description !== 'string' || typeof schema.$id === 'string') return undefined;
+	return schema.description.trim() === '' ? undefined : schema.description;
 }
 
-function arrayOf(node: Node): string {
-	return isNode(node.items) ? `${wrapped(typeOf(node.items))}[]` : 'unknown[]';
+/** The description as a doc comment at `indent`. A comment end in the text is escaped. */
+function docComment(description: string, indent: string): string {
+	const lines = description
+		.trim()
+		.split('\n')
+		.map((line) => line.trimEnd().replaceAll('*/', '*\\/'));
+	if (lines.length === 1) return `${indent}/** ${lines[0]} */`;
+	return [
+		`${indent}/**`,
+		...lines.map((line) => (line === '' ? `${indent} *` : `${indent} * ${line}`)),
+		`${indent} */`,
+	].join('\n');
+}
+
+interface Field {
+	readonly line: string;
+	readonly note: string | undefined;
+}
+
+/** The fields on one line, or one to a line with their doc comments when any field has a note. */
+function layout(fields: readonly Field[], indent: string): string {
+	const multi = fields.some((field) => field.note !== undefined || field.line.includes('\n'));
+	if (!multi) return `{ ${fields.map((field) => field.line).join('; ')} }`;
+	const inner = `${indent}  `;
+	const lines = fields.flatMap((field) => [
+		...(field.note === undefined ? [] : [docComment(field.note, inner)]),
+		`${inner}${field.line};`,
+	]);
+	return ['{', ...lines, `${indent}}`].join('\n');
+}
+
+function objectOf(node: Node, catalog: Catalog, indent: string): string {
+	const properties = isNode(node.properties) ? node.properties : {};
+	const required = Array.isArray(node.required) ? node.required : [];
+	const fields = Object.entries(properties).map(([name, schema]) => ({
+		line: `${keyOf(name)}${required.includes(name) ? '' : '?'}: ${typeOf(schema, catalog, `${indent}  `)}`,
+		note: noteOf(schema),
+	}));
+	const pattern = isNode(node.patternProperties) ? Object.values(node.patternProperties)[0] : null;
+	const rest = isNode(node.additionalProperties) ? node.additionalProperties : pattern;
+	if (fields.length > 0) return layout(fields, indent);
+	return rest === null || rest === undefined
+		? '{}'
+		: `Record<string, ${typeOf(rest, catalog, indent)}>`;
+}
+
+function arrayOf(node: Node, catalog: Catalog, indent: string): string {
+	const items = node.items;
+	if (!isNode(items)) return 'unknown[]';
+	const text = typeOf(items, catalog, indent);
+	const listed = typeof items.$id !== 'string' && alternatives(items) !== undefined;
+	return `${listed && text.includes(' | ') ? `(${text})` : text}[]`;
 }
 
 /** The members of a schema that lists alternatives: an enum, a type list, or a union. */
@@ -65,46 +112,68 @@ function alternatives(schema: Node): readonly unknown[] | undefined {
 }
 
 /** The form of a schema that names one type. */
-function shapeOf(node: Node): string {
-	if (node.type === 'object') return objectOf(node);
-	if (node.type === 'array') return arrayOf(node);
+function shapeOf(node: Node, catalog: Catalog, indent: string): string {
+	if (node.type === 'object') return objectOf(node, catalog, indent);
+	if (node.type === 'array') return arrayOf(node, catalog, indent);
 	return PRIMITIVES[String(node.type)] ?? 'unknown';
 }
 
-/** The TypeScript form of one JSON Schema, or `unknown`. */
-function typeOf(schema: unknown): string {
-	if (!isNode(schema)) return 'unknown';
+/** The TypeScript form of a schema, with no regard for its `$id`. */
+function formOf(schema: Node, catalog: Catalog, indent: string): string {
 	if ('const' in schema) return literal(schema.const);
 	const members = alternatives(schema);
-	return members === undefined ? shapeOf(schema) : union(members);
+	return members === undefined ? shapeOf(schema, catalog, indent) : union(members, catalog, indent);
 }
 
-/** The description as a doc comment. A comment end in the text is escaped. */
-function docComment(description: string): string {
-	const lines = description
-		.trim()
-		.split('\n')
-		.map((line) => line.trimEnd().replaceAll('*/', '*\\/'));
-	if (lines.length === 1) return `  /** ${lines[0]} */`;
-	return ['  /**', ...lines.map((line) => (line === '' ? '   *' : `   * ${line}`)), '   */'].join(
-		'\n',
-	);
+/**
+ * The name of a schema that carries an `$id`. The first use adds the
+ * declaration to the catalog. Two different schemas with one id are a
+ * programming error.
+ */
+function nameOf(schema: Node, id: string, catalog: Catalog): string {
+	if (!IDENTIFIER.test(id)) throw new Error(`The $id ${JSON.stringify(id)} is not a type name.`);
+	const { $id: _id, ...body } = schema;
+	const key = JSON.stringify(body);
+	const known = catalog.named.get(id);
+	if (known !== undefined) {
+		if (known.key !== key) throw new Error(`Two different schemas share the $id ${id}.`);
+		return id;
+	}
+	const entry = { key, text: '' };
+	catalog.named.set(id, entry);
+	const note = noteOf(body);
+	const lead = note === undefined ? '' : `${docComment(note, '')}\n`;
+	entry.text = `${lead}type ${id} = ${formOf(body, catalog, '')};`;
+	return id;
+}
+
+/** The TypeScript form of one JSON Schema, or `unknown`. */
+function typeOf(schema: unknown, catalog: Catalog, indent: string): string {
+	if (!isNode(schema)) return 'unknown';
+	return typeof schema.$id === 'string'
+		? nameOf(schema, schema.$id, catalog)
+		: formOf(schema, catalog, indent);
 }
 
 /** The signature of one tool: its input, and its declared output or `string`. */
-function signature(tool: AmbionTool): string {
-	const output = tool.compose ? typeOf(tool.compose.output) : 'string';
+function signature(tool: AmbionTool, catalog: Catalog): string {
+	const output = tool.compose ? typeOf(tool.compose.output, catalog, '  ') : 'string';
 	return [
-		docComment(tool.description),
-		`  ${keyOf(tool.name)}(args: ${typeOf(tool.parameters)}): Promise<${output}>;`,
+		docComment(tool.description, '  '),
+		`  ${keyOf(tool.name)}(args: ${typeOf(tool.parameters, catalog, '  ')}): Promise<${output}>;`,
 	].join('\n');
 }
 
 /** Whether code can bind the tool: a tool with `compose: false` stays out. */
 export const bindable = (tool: AmbionTool): boolean => tool.compose !== false;
 
-/** The catalog of the tools that code can bind, as TypeScript declarations. */
+/**
+ * The catalog of the tools that code can bind, as TypeScript declarations.
+ * A schema with an `$id` renders once as a `type` before the tools.
+ */
 export function renderCatalog(tools: readonly AmbionTool[]): string {
-	const entries = tools.filter(bindable).map(signature);
-	return ['declare const tools: {', ...entries, '};'].join('\n');
+	const catalog: Catalog = { named: new Map() };
+	const entries = tools.filter(bindable).map((tool) => signature(tool, catalog));
+	const types = [...catalog.named.values()].map((entry) => entry.text);
+	return [...types, 'declare const tools: {', ...entries, '};'].join('\n');
 }

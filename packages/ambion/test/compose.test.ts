@@ -654,11 +654,15 @@ describe('the declared output of a tool', () => {
 });
 
 describe('the compose tool of an executor', () => {
-	it('describes itself with one sentence and the catalog', () => {
-		const tool = composeOf([echo, table, hidden]);
+	it('describes itself with one sentence, the limits of the seat, and the catalog', () => {
+		const tool = composeOf([echo, table, hidden], { limits: { calls: 32, time: 90_000 } });
 		expect(tool.description).toBe(
 			[
 				'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.',
+				'',
+				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
+				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call, and a call that completed keeps its effect.',
+				'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 				'',
 				'declare const tools: {',
 				'  /** Return the text. */',
@@ -670,7 +674,8 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	const catalogOf = (tool: AmbionTool) => composeOf([tool]).description.split('\n\n')[1];
+	const catalogOf = (tool: AmbionTool) =>
+		composeOf([tool]).description.split('\n\n').slice(2).join('\n\n');
 
 	it.each<[string, TSchema, string]>([
 		[
@@ -732,6 +737,86 @@ describe('the compose tool of an executor', () => {
 				'};',
 			].join('\n'),
 		);
+	});
+
+	it('writes the description of a field as a doc comment, nested in the block of its tool', () => {
+		const tool = defineTool({
+			name: 'find',
+			description: 'Find rows.',
+			parameters: Type.Object({
+				query: Type.String({ description: 'The search text.' }),
+				page: Type.Optional(Type.Number()),
+				filter: Type.Object({ tag: Type.String({ description: 'A tag */ name.' }) }),
+			}),
+			compose: {
+				output: Type.Object({
+					rows: Type.Array(Type.Object({ n: Type.Number({ description: 'Row count.' }) })),
+				}),
+			},
+			execute: () => ({ content: [], details: undefined as never }),
+		});
+		expect(catalogOf(tool)).toBe(
+			[
+				'declare const tools: {',
+				'  /** Find rows. */',
+				'  find(args: {',
+				'    /** The search text. */',
+				'    query: string;',
+				'    page?: number;',
+				'    filter: {',
+				'      /** A tag *\\/ name. */',
+				'      tag: string;',
+				'    };',
+				'  }): Promise<{',
+				'    rows: {',
+				'      /** Row count. */',
+				'      n: number;',
+				'    }[];',
+				'  }>;',
+				'};',
+			].join('\n'),
+		);
+	});
+
+	it('renders a schema with an $id once, as a type before the tools', () => {
+		const Point = Type.Object(
+			{ x: Type.Number({ description: 'East.' }), y: Type.Number() },
+			{ $id: 'Point', description: 'A place.' },
+		);
+		const tool = defineTool({
+			name: 'move',
+			description: 'Move.',
+			parameters: Type.Object({ to: Point }),
+			compose: { output: Type.Object({ path: Type.Array(Point), at: Point }) },
+			execute: () => ({ content: [], details: undefined as never }),
+		});
+		expect(catalogOf(tool)).toBe(
+			[
+				'/** A place. */',
+				'type Point = {',
+				'  /** East. */',
+				'  x: number;',
+				'  y: number;',
+				'};',
+				'declare const tools: {',
+				'  /** Move. */',
+				'  move(args: { to: Point }): Promise<{ path: Point[]; at: Point }>;',
+				'};',
+			].join('\n'),
+		);
+	});
+
+	it('refuses two different schemas with one $id', () => {
+		const tool = defineTool({
+			name: 'clash',
+			description: 'Clash.',
+			parameters: Type.Object({
+				a: Type.Object({ x: Type.String() }, { $id: 'Box' }),
+				b: Type.Object({ y: Type.String() }, { $id: 'Box' }),
+			}),
+			execute: () => '',
+		});
+		expect(() => composeOf([tool])).toThrow('Two different schemas share the $id Box.');
 	});
 
 	it('binds no room tool and no compose tool of its own', () => {

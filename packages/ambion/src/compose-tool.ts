@@ -36,6 +36,19 @@ const DESCRIPTION =
 	'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.';
 
 /**
+ * What a model must know about the bounds and the failures of a compose
+ * call. The numbers are the limits of the seat. `COMPOSE_GUIDANCE` states
+ * the rest: the clock, the room tools, and the effect of a completed call.
+ */
+function limitsText(limits: ComposeLimits): string {
+	return [
+		`Limits of this seat: at most ${limits.calls} nested calls, ${limits.concurrent} at a time. The return value holds at most ${limits.bytes} bytes of JSON. The call lasts at most ${limits.time / 1000} seconds, and the end of your activation cuts it sooner.`,
+		'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call, and a call that completed keeps its effect.',
+		'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
+	].join('\n');
+}
+
+/**
  * One object with four optional fields. The call is `uses` and `code`, or
  * `macro` and `args`. A provider takes no `anyOf` at the top of a tool
  * schema, so `resolveProgram` checks the two forms.
@@ -291,7 +304,9 @@ export function composeTool(
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,
-		description: `${DESCRIPTION}\n\n${renderCatalog([...catalog.values()])}`,
+		description: [DESCRIPTION, limitsText(limits), renderCatalog([...catalog.values()])].join(
+			'\n\n',
+		),
 		parameters: ARGUMENTS,
 		label: COMPOSE_TOOL_NAME,
 		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined),

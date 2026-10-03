@@ -142,7 +142,10 @@ return { preview, exported, imported };`,
 			`const quick = await tools.bash({ command: 'echo hi', wait: 20 });
 const long = await tools.bash({ command: 'seq 1 5000', wait: 20 });
 return { quick, long };`,
-		)) as Record<'quick' | 'long', { process: object; read: object; truncation?: object }>;
+		)) as Record<
+			'quick' | 'long',
+			{ process: object; text: string; read: object; truncation?: object }
+		>;
 		expect(value.quick).toEqual({
 			process: expect.objectContaining({
 				handle: expect.stringMatching(/^bash-[0-9a-f]{12}$/),
@@ -152,8 +155,10 @@ return { quick, long };`,
 				kind: 'bash',
 				agent: 'ada',
 			}),
+			text: 'hi',
 			read: { from: 0, to: 3 },
 		});
+		expect(value.long.text).toContain('5000');
 		expect(value.long.truncation).toMatchObject({ truncated: true, truncatedBy: 'lines' });
 	});
 
@@ -208,6 +213,93 @@ return {
 	});
 });
 
+describe('the declared outputs of the file, snapshot, and git tools', () => {
+	it('gives read the text with no notice, and where the text sits in the file', async () => {
+		const { workspace } = await lab();
+		await put(workspace, '/home/ada/five.txt', 'a\nb\nc\nd\ne');
+		await put(workspace, '/home/ada/big.txt', `${'x'.repeat(100)}\n`.repeat(3000));
+		await put(workspace, '/home/ada/wide.txt', `${'y'.repeat(60_000)}\nnext\n`);
+		await put(workspace, '/home/ada/pic.gif', 'GIF89a');
+		const value = (await returned(
+			workspace,
+			['read'],
+			`const whole = await tools.read({ path: 'five.txt' });
+const limited = await tools.read({ path: 'five.txt', offset: 2, limit: 2 });
+const big = await tools.read({ path: 'big.txt' });
+const wide = await tools.read({ path: 'wide.txt' });
+const pic = await tools.read({ path: 'pic.gif' });
+return { whole, limited, big, wide, pic };`,
+		)) as Record<'whole' | 'limited' | 'big' | 'wide' | 'pic', Record<string, unknown>>;
+		expect(value.whole).toEqual({
+			path: '/home/ada/five.txt',
+			text: 'a\nb\nc\nd\ne',
+			from: 1,
+			to: 5,
+			lines: 5,
+		});
+		expect(value.limited).toEqual({
+			path: '/home/ada/five.txt',
+			text: 'b\nc',
+			from: 2,
+			to: 3,
+			lines: 5,
+			next: 4,
+		});
+		expect(value.big).toMatchObject({ from: 1, lines: 3000, truncation: { truncated: true } });
+		expect(value.big.next).toBe((value.big.to as number) + 1);
+		expect(String(value.big.text)).not.toContain('Use offset');
+		expect(value.wide).toEqual({
+			path: '/home/ada/wide.txt',
+			text: '',
+			from: 1,
+			to: 0,
+			lines: 2,
+			truncation: expect.objectContaining({ firstLineExceedsLimit: true }),
+		});
+		expect(value.pic).toEqual({
+			path: '/home/ada/pic.gif',
+			text: '',
+			image: { mimeType: 'image/gif' },
+		});
+	});
+
+	it('gives restore the ref, the path, and the size, and clone and repos their facts', async () => {
+		const { workspace } = await lab();
+		await put(workspace, '/home/ada/a.md', 'alpha\n');
+		const value = (await returned(
+			workspace,
+			['snapshot', 'restore', 'clone', 'repos'],
+			`const { refs } = await tools.snapshot({ paths: ['/home/ada/a.md'] });
+const restored = await tools.restore({ ref: refs[0], path: '~/back.md' });
+const cloned = await tools.clone({ source: 'templates/weekly-report', path: '~/copy' });
+const listed = await tools.repos({ namespace: 'templates' });
+return { ref: refs[0], restored, cloned, listed };`,
+		)) as { ref: string; restored: unknown; cloned: unknown; listed: unknown };
+		expect(value.restored).toEqual({ ref: value.ref, path: '/home/ada/back.md', bytes: 6 });
+		expect(value.cloned).toEqual({
+			repository: 'templates/weekly-report',
+			source: 'templates/weekly-report',
+			url: expect.stringContaining('weekly-report'),
+			clone: '/home/ada/copy',
+		});
+		expect(value.listed).toEqual({
+			server: expect.any(String),
+			repositories: [
+				{
+					id: 'templates/weekly-report',
+					description: 'A report.',
+					defaultBranch: expect.any(String),
+					branches: {
+						[(value.listed as { repositories: [{ defaultBranch: string }] }).repositories[0]
+							.defaultBranch]: expect.stringMatching(/^[0-9a-f]{40,64}$/),
+					},
+					url: expect.stringContaining('weekly-report'),
+				},
+			],
+		});
+	});
+});
+
 describe('the compose field of the workspace tools', () => {
 	/** The tools of `bundle` that declare an output, with the schema they declare. */
 	const declared = (bundle: ToolBundle): Record<string, AmbionTool['compose']> =>
@@ -229,8 +321,12 @@ describe('the compose field of the workspace tools', () => {
 		expect(Object.keys(plain).sort()).toEqual([
 			'bash',
 			'cancel',
+			'clone',
 			'fork',
 			'ps',
+			'read',
+			'repos',
+			'restore',
 			'snapshot',
 			'sql',
 			'status',

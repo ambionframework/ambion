@@ -60,6 +60,7 @@ const cases: readonly Case[] = [
 		files: { 'a.txt': 'one\ntwo\nthree\n' },
 		args: { path: 'a.txt' },
 		content: text('one\ntwo\nthree\n'),
+		details: { path: `${home}/a.txt`, text: 'one\ntwo\nthree\n', from: 1, to: 3, lines: 3 },
 	},
 	{
 		name: 'a path that starts with @',
@@ -67,6 +68,7 @@ const cases: readonly Case[] = [
 		files: { 'a.txt': 'hi' },
 		args: { path: '@a.txt' },
 		content: text('hi'),
+		details: { path: `${home}/a.txt`, text: 'hi', from: 1, to: 1, lines: 1 },
 	},
 	{
 		name: 'lines from an offset to a limit',
@@ -74,6 +76,14 @@ const cases: readonly Case[] = [
 		files: { 'a.txt': numbered(10).join('\n') },
 		args: { path: 'a.txt', offset: 3, limit: 2 },
 		content: text('line 3\nline 4\n\n[6 more lines in file. Use offset=5 to continue.]'),
+		details: {
+			path: `${home}/a.txt`,
+			text: 'line 3\nline 4',
+			from: 3,
+			to: 4,
+			lines: 10,
+			next: 5,
+		},
 	},
 	{
 		name: 'a limit past the end of the file',
@@ -81,6 +91,7 @@ const cases: readonly Case[] = [
 		files: { 'a.txt': numbered(10).join('\n') },
 		args: { path: 'a.txt', offset: 9, limit: 5 },
 		content: text('line 9\nline 10'),
+		details: { path: `${home}/a.txt`, text: 'line 9\nline 10', from: 9, to: 10, lines: 10 },
 	},
 	{
 		name: 'an offset past the end of the file',
@@ -98,8 +109,13 @@ const cases: readonly Case[] = [
 			`${numbered(2000).join('\n')}\n\n[Showing lines 1-2000 of 2500. Use offset=2001 to continue.]`,
 		),
 		details: {
+			path: `${home}/a.txt`,
+			text: numbered(2000).join('\n'),
+			from: 1,
+			to: 2000,
+			lines: 2500,
+			next: 2001,
 			truncation: {
-				content: numbered(2000).join('\n'),
 				truncated: true,
 				truncatedBy: 'lines',
 				totalLines: 2500,
@@ -122,8 +138,13 @@ const cases: readonly Case[] = [
 			`${sizeLimited.slice(0, 49).join('\n')}\n\n[Showing lines 1-49 of 100 (50.0KB limit). Use offset=50 to continue.]`,
 		),
 		details: {
+			path: `${home}/a.txt`,
+			text: sizeLimited.slice(0, 49).join('\n'),
+			from: 1,
+			to: 49,
+			lines: 100,
+			next: 50,
 			truncation: {
-				content: sizeLimited.slice(0, 49).join('\n'),
 				truncated: true,
 				truncatedBy: 'bytes',
 				totalLines: 100,
@@ -146,8 +167,12 @@ const cases: readonly Case[] = [
 			"[Line 1 is 58.6KB, exceeds 50.0KB limit. Use bash: sed -n '1p' a.txt | head -c 51200]",
 		),
 		details: {
+			path: `${home}/a.txt`,
+			text: '',
+			from: 1,
+			to: 0,
+			lines: 1,
 			truncation: {
-				content: '',
 				truncated: true,
 				truncatedBy: 'bytes',
 				totalLines: 1,
@@ -171,6 +196,7 @@ const cases: readonly Case[] = [
 			{ type: 'image', data: 'iVBORw0KGgoAAAANSUhEUg==', mimeType: 'image/png' },
 			{ type: 'text', text: `Image path: ${home}/pic.png` },
 		],
+		details: { path: `${home}/pic.png`, text: '', image: { mimeType: 'image/png' } },
 	},
 	{
 		name: 'a BMP image, which has no image part',
@@ -184,6 +210,7 @@ const cases: readonly Case[] = [
 			},
 			{ type: 'text', text: `Image path: ${home}/pic.bmp` },
 		],
+		details: { path: `${home}/pic.bmp`, text: '', image: { mimeType: 'image/bmp' } },
 	},
 	{
 		name: 'a file that does not exist',

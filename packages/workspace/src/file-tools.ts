@@ -27,6 +27,7 @@ import {
 } from './edit-diff.ts';
 import { imageMimeType } from './image-type.ts';
 import type { FileError, Result } from './port.ts';
+import { TruncationFacts } from './process-schema.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from './truncate.ts';
 
@@ -37,6 +38,37 @@ const readSchema = Type.Object({
 	),
 	limit: Type.Optional(Type.Number({ description: 'Maximum number of lines to read' })),
 });
+
+/** The declared output of `read`: the text with no notice, and where it sits in the file. */
+const ReadOutput = Type.Object({
+	path: Type.String({ description: 'The absolute path of the file.' }),
+	text: Type.String({
+		description:
+			'The file text from line `from`, with no notice. Empty for an image, and when the first line alone exceeds the byte limit.',
+	}),
+	from: Type.Optional(
+		Type.Integer({ description: 'The first line of text, counted from 1. Absent for an image.' }),
+	),
+	to: Type.Optional(
+		Type.Integer({
+			description: 'The last line of text. It is one less than from when text is empty.',
+		}),
+	),
+	lines: Type.Optional(Type.Integer({ description: 'The lines in the file.' })),
+	next: Type.Optional(
+		Type.Integer({ description: 'The offset to read next when more lines of the file remain.' }),
+	),
+	truncation: Type.Optional(TruncationFacts),
+	image: Type.Optional(
+		Type.Object(
+			{ mimeType: Type.String({ description: 'The image type, such as image/png.' }) },
+			{ description: 'Set for an image file. The image itself does not reach code.' },
+		),
+	),
+});
+
+/** What `read` gives in `details`. */
+type ReadDetails = Static<typeof ReadOutput>;
 
 const writeSchema = Type.Object({
 	path: Type.String({ description: 'Path to the file to write (relative or absolute)' }),
@@ -74,6 +106,8 @@ function assertLive(signal: AbortSignal | undefined): void {
 	if (signal?.aborted) throw new Error('Operation aborted');
 }
 
+function text(message: string): ToolResult<undefined>;
+function text<D>(message: string, details: D): ToolResult<D>;
 function text(message: string, details?: unknown): ToolResult {
 	return { content: [{ type: 'text', text: message }], details };
 }
@@ -120,12 +154,11 @@ async function readImage(
 	bytes: Uint8Array,
 	mimeType: string,
 	signal?: AbortSignal,
-): Promise<ToolResult> {
+): Promise<ToolResult<ReadDetails>> {
 	const resolved = await env.absolutePath(path, signal);
-	const note = {
-		type: 'text' as const,
-		text: `Image path: ${resolved.ok ? resolved.value : path}`,
-	};
+	const shown = resolved.ok ? resolved.value : path;
+	const details: ReadDetails = { path: shown, text: '', image: { mimeType } };
+	const note = { type: 'text' as const, text: `Image path: ${shown}` };
 	if (mimeType === 'image/bmp') {
 		return {
 			content: [
@@ -135,7 +168,7 @@ async function readImage(
 				},
 				note,
 			],
-			details: undefined,
+			details,
 		};
 	}
 	return {
@@ -144,13 +177,13 @@ async function readImage(
 			{ type: 'image', data: Buffer.from(bytes).toString('base64'), mimeType },
 			note,
 		],
-		details: undefined,
+		details,
 	};
 }
 
 /** The notice after the lines of a `read` that a limit cut short, and the reason. */
 function readNotice(
-	truncation: ReturnType<typeof truncateHead>,
+	truncation: Pick<ReturnType<typeof truncateHead>, 'truncatedBy' | 'outputLines'>,
 	first: number,
 	total: number,
 ): string {
@@ -161,44 +194,63 @@ function readNotice(
 	return `\n\n[${where}${limit}. Use offset=${last + 1} to continue.]`;
 }
 
-/** The result of a `read` of a text file. */
-function readText(bytes: Uint8Array, { path, offset, limit }: ReadParams): ToolResult {
+/** The lines of a file: none for an empty file, and no empty line after a final newline. */
+function lineCount(lines: readonly string[]): number {
+	if (lines.length === 1 && lines[0] === '') return 0;
+	return lines.at(-1) === '' ? lines.length - 1 : lines.length;
+}
+
+/** The result of a `read` of a text file at `path`, an absolute path. */
+function readText(
+	bytes: Uint8Array,
+	{ path: given, offset, limit }: ReadParams,
+	path: string,
+): ToolResult<ReadDetails> {
 	const lines = new TextDecoder().decode(bytes).split('\n');
 	const start = offset ? Math.max(0, offset - 1) : 0;
 	if (start >= lines.length) {
 		throw new Error(`Offset ${offset} is beyond end of file (${lines.length} lines total)`);
 	}
 	const end = limit === undefined ? lines.length : Math.min(start + limit, lines.length);
-	const truncation = truncateHead(lines.slice(start, end).join('\n'));
+	const { content, ...facts } = truncateHead(lines.slice(start, end).join('\n'));
 	const first = start + 1;
-	if (truncation.firstLineExceedsLimit) {
+	const last = first + facts.outputLines - 1;
+	const view: ReadDetails = {
+		path,
+		text: content,
+		from: first,
+		to: last,
+		lines: lineCount(lines),
+	};
+	if (facts.firstLineExceedsLimit) {
 		const size = formatSize(Buffer.byteLength(lines[start] ?? '', 'utf8'));
-		const sed = `sed -n '${first}p' ${path} | head -c ${DEFAULT_MAX_BYTES}`;
+		const sed = `sed -n '${first}p' ${given} | head -c ${DEFAULT_MAX_BYTES}`;
 		return text(
 			`[Line ${first} is ${size}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: ${sed}]`,
-			{ truncation },
+			{ ...view, text: '', truncation: facts },
 		);
 	}
-	if (truncation.truncated) {
-		return text(truncation.content + readNotice(truncation, first, lines.length), { truncation });
+	if (facts.truncated) {
+		const notice = readNotice(facts, first, lines.length);
+		return text(content + notice, { ...view, next: last + 1, truncation: facts });
 	}
 	if (limit !== undefined && end < lines.length) {
 		const more = `\n\n[${lines.length - end} more lines in file. Use offset=${end + 1} to continue.]`;
-		return text(truncation.content + more);
+		return text(content + more, { ...view, next: end + 1 });
 	}
-	return text(truncation.content);
+	return text(content, view);
 }
 
 async function readFile(
 	env: WorkspaceEnv,
 	params: ReadParams,
 	signal: AbortSignal | undefined,
-): Promise<ToolResult> {
+): Promise<ToolResult<ReadDetails>> {
 	const path = await resolveReadPath(env, params.path, signal);
 	const bytes = value(await env.readBinaryFile(path, signal));
 	const mimeType = imageMimeType(bytes);
 	return mimeType === undefined
-		? readText(bytes, params)
+		? readText(bytes, params, path)
 		: readImage(env, params.path, bytes, mimeType, signal);
 }
 
@@ -303,14 +355,10 @@ function prepareEditArguments(input: unknown): EditParams {
 /** The three file tools, run through the queue of `use`. */
 export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly AmbionTool[] {
 	const through =
-		<P>(
-			operation: (
-				env: WorkspaceEnv,
-				params: P,
-				signal: AbortSignal | undefined,
-			) => Promise<ToolResult>,
+		<P, R extends ToolResult>(
+			operation: (env: WorkspaceEnv, params: P, signal: AbortSignal | undefined) => Promise<R>,
 		) =>
-		(params: P, ctx: ToolContext): Promise<ToolResult> =>
+		(params: P, ctx: ToolContext): Promise<R> =>
 			use(ctx.agent, (env) => operation(env, params, ctx.signal), ctx.signal);
 	return Object.freeze([
 		defineTool({
@@ -318,6 +366,7 @@ export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly
 			label: 'read',
 			description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments, with the path of the file. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
 			parameters: readSchema,
+			compose: { output: ReadOutput },
 			execute: through(readFile),
 		}),
 		defineTool({

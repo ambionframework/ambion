@@ -975,21 +975,45 @@ backend exists. That backend moves them back to the conformance entry
 
 ## Declared outputs
 
-**Eight tools declare their output for `compose`.** Each sets
+**Fourteen tools declare their output for `compose`.** Each sets
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares
-none, so `compose` binds it as text.
+none, so `compose` binds it as text. `write`, `edit`, and `disconnect`
+declare none, because code needs only their success or their rejection.
 
 | Tool               | Declared output                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | `sql`              | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them. |
 | `snapshot`         | `refs`: one ref for each path, in order.                                                                |
-| `bash`             | `process`, `read`, and `truncation` when the result cut the output.                                     |
+| `restore`          | `ref`, `path` of the file, and `bytes`.                                                                 |
+| `read`             | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.       |
+| `bash`             | `process`, `text`, `read`, and `truncation` when the result cut the output.                             |
 | `status`, `cancel` | The same facts as `bash`.                                                                               |
 | `ps`               | `processes`: the facts of each process of the caller.                                                   |
 | `wait`             | On one handle, the facts of `status`. On several, `processes` and `ended`.                              |
+| `repos`            | `server`, and `repositories` with the id, branches, and clone URL of each.                              |
+| `clone`            | `repository`, `source`, `url`, and the `clone` path.                                                    |
 | `fork`             | `repository`, `source`, `url`, and `clone` when the call made a working copy.                           |
+| `connect`          | `name`, `hostname`, `port`, `process`, `owner`, `source`, and the qualified names in `sensors`.         |
+| `observe`          | `sensor`, `request`, `manifestRef`, `manifestPath`, `directory`, `files`, and the connection facts.     |
+
+**The `read` details give the text with no notice.** `text` holds the lines
+that the result shows, and the notice lines of a direct call stay out of it.
+`from` and `to` are the first and the last line of `text`, counted from 1.
+`lines` is the count of lines in the file. `next` is the offset that
+continues the read, and it is present when lines remain after a `limit` or
+after the cut at 2000 lines or 50 KB. `truncation` is present with that
+cut. When the first line alone exceeds 50 KB, `text` is empty, and
+`truncation.firstLineExceedsLimit` is true. For an image, `text` is empty,
+`image.mimeType` names the format, and the other line fields are absent.
+
+**The git, snapshot, and sensor tools declare the facts that they already
+report.** `repos` gives `repositories` as data, with the branches and the
+hash of each, so code reads no table. `restore` and `clone` give the
+absolute path that they wrote. `connect` gives the connection and the names
+of its sensors, and its `details` hold no copy of the server index.
+`observe` gives the paths and refs of the retained evidence.
 
 **The `sql` details hold the rows that the tool already reads.** `count` is
 the count of every row of the last statement. `columns` names its columns.
@@ -1000,17 +1024,21 @@ as text, and a number that is not finite is its text.
 
 **The process facts come from the process table
 ([Processes](processes.md)).** `process` holds the handle, the
-state, the command, and the times of one process. `read` holds the `from`
-and `to` of the bytes that the result shows. `wait` on several
+state, the command, and the times of one process. `text` holds the new
+output that the result shows, with no bracketed line. `read` holds the
+`from` and `to` of those bytes as offsets in the output file. `wait` on several
 handles gives `processes`, with every status in the order of the handles,
-and `ended`, with the details of each process that ended
+and `ended`, with the details of each process that ended.
 A call that fails on a process that ended badly throws a `ToolFailure` with
-the same facts in `details`. A binding copies them to `error.details`.
+the same facts in `details`. A binding copies them to `error.details`. The
+`bash` description states this rule for the model.
 
 **The schema is the one source of the type.** The details type of each tool is
 `Static` of its schema, so the schema and the type cannot drift. The schema of
 `truncation` lists the fields of `ShellOutputTruncation`, and a type test pins
-that the two stay assignable. A `Static` type holds mutable arrays, so a tool
+that the two stay assignable. A schema with an `$id` renders once as a
+named type in the catalog of `compose`: `Process`, `ProcessResult`,
+`Truncation`, and `SensorSource`. A `Static` type holds mutable arrays, so a tool
 copies a readonly array into its details.
 
 ## The resource contract

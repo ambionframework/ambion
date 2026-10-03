@@ -3,10 +3,11 @@
 import { type AmbionTool, defineTool, type ToolContext } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
 import type { Capability } from './capability.ts';
-import { connectToolGuidance, createConnectTool } from './connect-tool.ts';
+import { connectToolGuidance, createConnectTool, SensorSourceFacts } from './connect-tool.ts';
 import { createDisconnectTool, disconnectToolGuidance } from './disconnect-tool.ts';
 import {
 	type ObserveRequest,
+	ObserveRequestSchema,
 	type ObserveResponse,
 	type SensorPart,
 	SensorSpanSchema,
@@ -31,22 +32,37 @@ const observeSchema = Type.Object(
 
 type ObserveParams = Static<typeof observeSchema>;
 
-interface ObserveDetails {
-	readonly sensor: string;
-	readonly request: ObserveRequest;
-	readonly process: string;
-	readonly hostname: string;
-	readonly connection: SensorRetentionMetadata['connection'];
-	readonly source: SensorRetentionMetadata['source'];
-	readonly manifestRef: string;
-	readonly manifestPath: string;
-	readonly directory: string;
-	readonly files: readonly {
-		readonly digest: string;
-		readonly ref: string;
-		readonly path: string;
-	}[];
-}
+/** The declared output of `observe`: the evidence that the call retained, and where it sits. */
+const ObserveOutput = Type.Object({
+	sensor: Type.String({ description: 'The qualified sensor name.' }),
+	request: Type.Object(ObserveRequestSchema.properties, {
+		additionalProperties: false,
+		description: 'The request that the call sent to the sensor.',
+	}),
+	process: Type.String({ description: 'The handle of the process that runs the server.' }),
+	hostname: Type.String({ description: 'The host of the workstation.' }),
+	connection: Type.Object({
+		name: Type.String({ description: 'The connection name.' }),
+		owner: Type.String({ description: 'The agent that owns the process.' }),
+		port: Type.Integer({ description: 'The port of the sensor server.' }),
+	}),
+	source: SensorSourceFacts,
+	manifestRef: Type.String({
+		description: 'The snapshot ref of the manifest. It names the whole result. Cite it.',
+	}),
+	manifestPath: Type.String({ description: 'The absolute path of the manifest file.' }),
+	directory: Type.String({ description: 'The absolute path of the directory of the export.' }),
+	files: Type.Array(
+		Type.Object({
+			digest: Type.String({ description: 'The SHA-256 digest of the file.' }),
+			ref: Type.String({ description: 'The snapshot ref of the file.' }),
+			path: Type.String({ description: 'The absolute path of the exported file.' }),
+		}),
+		{ description: 'Each file of the observation, such as a frame or a series.' },
+	),
+});
+
+type ObserveDetails = Static<typeof ObserveOutput>;
 
 /** Build the observe tool over a workspace's connections and snapshot store. */
 function createObserveTool(options: {
@@ -58,6 +74,7 @@ function createObserveTool(options: {
 		label: 'Observe sensor',
 		description: 'Read a connected sensor and retain its evidence as a workspace snapshot.',
 		parameters: observeSchema,
+		compose: { output: ObserveOutput },
 		execute: (params: ObserveParams, ctx: ToolContext) => executeObserve(params, ctx, options),
 	});
 }
@@ -230,7 +247,7 @@ function renderResult(
 			manifestRef: retained.manifestRef,
 			manifestPath: retained.manifestPath,
 			directory: retained.directory,
-			files: retained.files,
+			files: retained.files.map((file) => ({ ...file })),
 		},
 	};
 }
