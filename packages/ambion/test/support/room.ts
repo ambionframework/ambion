@@ -39,7 +39,6 @@ export function scriptedAgent(
 		executor: pi({
 			instructions: 'Answer.',
 			model: `scripted/${name}`,
-			compose: false,
 			...options,
 		}),
 	});

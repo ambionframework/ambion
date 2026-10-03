@@ -3,7 +3,8 @@
 The runtimes of the `compose` tool of an
 [Ambion](https://ambionframework.com) seat. A runtime runs the code of one
 compose call. The code calls the tools of the seat as `tools.<name>(args)`.
-`pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()` by default, and `compose: false` removes the tool.
+`pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()` by default.
+A host passes `compose: { runtime }` to choose another runtime.
 
 ## Install
 
@@ -36,7 +37,7 @@ const analyst = defineAgent({
 
 ## The two runtimes
 
-| Runtime            | Runs the code                                           | Memory and CPU                                                        | Isolation                                                                                     |
+| ComposeRuntime     | Runs the code                                           | Memory and CPU                                                        | Isolation                                                                                     |
 | ------------------ | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options                   | A runtime and a WebAssembly memory for each compose call. It shares the process of the host.  |
 | `processRuntime()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the child. The host kills it at the signal. | The child runs under `--permission` with no allow flag: no file, network, process, or worker. |

@@ -286,6 +286,25 @@ function boundedModule(
 }
 
 /**
+ * The bounded module, or an error that says what to do when the runtime
+ * cannot load the WebAssembly, such as workerd, which loads it only from the
+ * bundle of the worker.
+ */
+async function loadedModule(
+	variant: QuickJSSyncVariant | undefined,
+	memoryLimit: number,
+): Promise<QuickJSWASMModule> {
+	try {
+		return await boundedModule(variant, memoryLimit);
+	} catch (cause) {
+		throw new Error(
+			`QuickJS could not load its WebAssembly in this runtime (${cause instanceof Error ? cause.message : String(cause)}). Pass compose: { runtime } with a compose runtime that this host can run.`,
+			{ cause },
+		);
+	}
+}
+
+/**
  * A runtime that runs the code in QuickJS, in the process of the host.
  * Each evaluation has a fresh runtime, so no state outlives a compose call.
  * The code reaches no module, file, network, process, or timer, and a
@@ -300,7 +319,7 @@ export function quickjsRuntime(options: QuickjsOptions = {}): ComposeRuntime {
 	return {
 		async evaluate(input, signal) {
 			if (signal.aborted) throw cutError();
-			const module = await boundedModule(options.variant, limits.memoryLimit);
+			const module = await loadedModule(options.variant, limits.memoryLimit);
 			// The load of the module can outlast a cut.
 			if (signal.aborted) throw cutError();
 			const run = new QuickjsRun(module.newRuntime(), input, signal, limits);

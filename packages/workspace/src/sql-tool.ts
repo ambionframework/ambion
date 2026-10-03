@@ -48,17 +48,20 @@ const Cell = Type.Union([Type.String(), Type.Number(), Type.Null()]);
 const Param = Type.Union([Type.String(), Type.Number(), Type.Null()]);
 
 /** What the tool declares for `compose`, and reports beside its text. */
-const SqlOutput = Type.Object({
-	database: Type.String({ description: 'The name of the database.' }),
-	count: Type.Integer({ description: 'How many rows the last statement gave, in all.' }),
-	columns: Type.Array(Type.String(), { description: 'The columns of the last statement.' }),
-	rows: Type.Array(Type.Record(Type.String(), Cell), {
-		description: 'The preview rows: the first rows of the last statement, up to the limit rows.',
-	}),
-	export: Type.Optional(Type.String({ description: 'The absolute path of the CSV export.' })),
-	import: Type.Optional(Type.String({ description: 'The absolute path of the imported file.' })),
-	imported: Type.Optional(Type.Integer({ description: 'How many rows the import read.' })),
-});
+const SqlOutput = Type.Object(
+	{
+		database: Type.String({ description: 'The name of the database.' }),
+		count: Type.Integer({ description: 'How many rows the last statement gave, in all.' }),
+		columns: Type.Array(Type.String(), { description: 'The columns of the last statement.' }),
+		rows: Type.Array(Type.Record(Type.String(), Cell), {
+			description: 'The preview rows: the first rows of the last statement, up to the limit rows.',
+		}),
+		export: Type.Optional(Type.String({ description: 'The absolute path of the CSV export.' })),
+		import: Type.Optional(Type.String({ description: 'The absolute path of the imported file.' })),
+		imported: Type.Optional(Type.Integer({ description: 'How many rows the import read.' })),
+	},
+	{ $id: 'SqlResult' },
+);
 
 type SqlDetails = Static<typeof SqlOutput>;
 

@@ -1023,6 +1023,7 @@ describe('a summary writer with domain tools', () => {
 				'recall',
 				'book-inspector',
 				'compose',
+				'describe',
 			]);
 			expect(view.prompt).toContain('Book guidance.');
 		}
