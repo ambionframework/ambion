@@ -30,6 +30,7 @@ import {
 	type ComposeResult,
 	DEFAULT_COMPOSE_LIMITS,
 	type JsonValue,
+	type LedgerEntry,
 	mismatchOf,
 	plainJson,
 } from './compose.ts';
@@ -112,7 +113,56 @@ function refusal(message: string): ComposeFailure {
 	return new ComposeFailure(failureText(details), details);
 }
 
-function failureText(result: ComposeResult, notes: readonly string[] = []): string {
+/** The most bytes of JSON that a failed result shows for one completed call. */
+const CALL_RESULT_BYTES = 4096;
+
+/** What a failed result shows of the completed calls: their values, and the byte limit of the lot. */
+interface Shown {
+	readonly values: ReadonlyMap<string, JsonValue>;
+	readonly bytes: number;
+}
+
+const UTF8 = new TextEncoder();
+const UTF8_LOSSY = new TextDecoder();
+
+/** The first `bytes` bytes of `text`, cut at a character. */
+function prefixOf(text: string, bytes: number): string {
+	return UTF8_LOSSY.decode(UTF8.encode(text).slice(0, bytes)).replace(/\uFFFD+$/, '');
+}
+
+/**
+ * The lines that show the value of each completed call, in call order. One
+ * value shows at most `CALL_RESULT_BYTES`, and all values show at most the
+ * byte limit of the return value. Each cut says so, with the full size.
+ */
+function resultLines(calls: readonly LedgerEntry[], shown: Shown): ReadonlyMap<string, string> {
+	let left = shown.bytes;
+	const lines = new Map<string, string>();
+	for (const call of calls) {
+		const value = shown.values.get(call.call);
+		if (call.status !== 'completed' || value === undefined) continue;
+		const json = JSON.stringify(value);
+		const size = UTF8.encode(json).length;
+		const allowed = Math.min(CALL_RESULT_BYTES, left);
+		if (allowed <= 0) {
+			lines.set(
+				call.call,
+				`  result: omitted, because the results above fill ${shown.bytes} bytes.`,
+			);
+			continue;
+		}
+		left -= Math.min(size, allowed);
+		lines.set(
+			call.call,
+			size <= allowed
+				? `  result: ${json}`
+				: `  result: cut to ${allowed} of ${size} bytes: ${prefixOf(json, allowed)}`,
+		);
+	}
+	return lines;
+}
+
+function failureText(result: ComposeResult, notes: readonly string[] = [], shown?: Shown): string {
 	const error = result.error;
 	const at = error?.call === undefined ? '' : ` at call ${error.call}`;
 	const head =
@@ -120,7 +170,13 @@ function failureText(result: ComposeResult, notes: readonly string[] = []): stri
 			? `The compose call was cancelled${at}: ${error?.message}`
 			: `The compose call failed${at}: ${error?.message}`;
 	if (result.calls.length === 0) return `${head}\nNo call started.`;
-	const lines = result.calls.map((call) => `- ${call.call} ${call.tool}: ${call.status}`);
+	const results =
+		shown === undefined ? new Map<string, string>() : resultLines(result.calls, shown);
+	const lines = result.calls.flatMap((call) => {
+		const line = `- ${call.call} ${call.tool}: ${call.status}`;
+		const value = results.get(call.call);
+		return value === undefined ? [line] : [line, value];
+	});
 	const pending = result.calls.some((call) => call.status === 'pending')
 		? ['A pending call did not settle, and its effect can still happen.']
 		: [];
@@ -151,9 +207,16 @@ function completedText({ result, late }: ComposeOutcome, notes: readonly string[
 }
 
 /** The tool result of a completed call. A failed or cancelled call throws. */
-function rendered(outcome: ComposeOutcome, notes: readonly string[]): ToolResult<ComposeResult> {
+function rendered(
+	outcome: ComposeOutcome,
+	notes: readonly string[],
+	limits: ComposeLimits,
+): ToolResult<ComposeResult> {
 	const { result } = outcome;
-	if (result.status !== 'completed') throw new ComposeFailure(failureText(result, notes), result);
+	if (result.status !== 'completed') {
+		const shown = { values: outcome.values, bytes: limits.bytes };
+		throw new ComposeFailure(failureText(result, notes, shown), result);
+	}
 	return { content: [{ type: 'text', text: completedText(outcome, notes) }], details: result };
 }
 
@@ -409,6 +472,7 @@ export function composeTool(
 		await approve(options, requestOf(program), ctx, record);
 		const run = new ComposeRun({
 			tools: program.tools,
+			unlisted: [...catalog.keys()].filter((name) => !program.tools.has(name)),
 			code: program.code,
 			evaluator: options.evaluator,
 			...(program.macro === undefined ? {} : { args: program.macro.args }),
@@ -420,7 +484,7 @@ export function composeTool(
 		const outcome = await run.run();
 		// The activation counts a nested result as read only when this result shows it.
 		calls?.find((one) => one.reported !== undefined)?.reported?.(ctx.callId, notes.calls);
-		return rendered(outcome, notes.lines);
+		return rendered(outcome, notes.lines, limits);
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,

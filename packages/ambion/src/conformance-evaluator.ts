@@ -66,6 +66,7 @@ function host(handlers: Record<string, Handler> = {}): Host {
 
 interface Options {
 	readonly bindings?: readonly string[];
+	readonly unlisted?: readonly string[];
 	readonly host?: Host;
 	readonly signal?: AbortSignal;
 	readonly args?: JsonValue;
@@ -77,6 +78,7 @@ function run(evaluator: Evaluator, code: string, options: Options = {}) {
 	const input: EvaluatorInput = {
 		code,
 		bindings: options.bindings ?? [],
+		...(options.unlisted === undefined ? {} : { unlisted: options.unlisted }),
 		call,
 		...(options.args === undefined ? {} : { args: options.args }),
 	};
@@ -257,10 +259,43 @@ const valueCases: readonly (readonly [string, Body])[] = [
 	[
 		'binds each name as tools.<name> and no other name',
 		async (evaluator) => {
-			const value = await run(evaluator, 'return [Object.keys(tools).sort(), typeof tools.c];', {
+			const value = await run(evaluator, "return [Object.keys(tools).sort(), 'c' in tools];", {
 				bindings: ['b', 'a'],
 			});
-			same(value, [['a', 'b'], 'undefined'], 'the bindings');
+			same(value, [['a', 'b'], false], 'the bindings');
+		},
+	],
+	[
+		'names the tool and the bound names when code reads a name that it does not bind',
+		async (evaluator) => {
+			const scripted = host();
+			const read = (code: string, unlisted?: readonly string[]) =>
+				failsWith(
+					run(evaluator, code, {
+						bindings: ['bash', 'sql'],
+						host: scripted,
+						...(unlisted === undefined ? {} : { unlisted }),
+					}),
+					'unbound',
+				);
+			const listed = await read('return await tools.wait({});', ['wait']);
+			same(
+				listed.message,
+				'tools.wait is not bound. This call binds bash, sql. Add wait to uses.',
+				'a tool of the seat',
+			);
+			const unknown = await read('return tools.nope;', ['wait']);
+			same(
+				unknown.message,
+				'tools.nope does not exist. This seat has no tool named nope. This call binds bash, sql.',
+				'no tool of the seat',
+			);
+			const unsaid = await read('return tools.wait;');
+			check(
+				unsaid.message.startsWith('tools.wait is not bound. This call binds bash, sql.'),
+				'unsaid',
+			);
+			check(scripted.calls.length === 0, 'the host saw a call');
 		},
 	],
 	[

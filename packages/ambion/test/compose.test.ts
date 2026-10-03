@@ -282,6 +282,7 @@ describe('a failed compose call', () => {
 				'The compose call failed at call c1.2: The archive is closed.',
 				'Calls, in the order that the code made them:',
 				'- c1.1 echo: completed',
+				'  result: "a"',
 				'- c1.2 broken: failed',
 			].join('\n'),
 		);
@@ -291,6 +292,77 @@ describe('a failed compose call', () => {
 			error: 'The archive is closed.',
 			parent: 'c1',
 		});
+	});
+
+	it('shows the result of each completed call, cut to a bound that it names', async () => {
+		const ran = await run([echo, broken], {
+			uses: ['echo', 'broken'],
+			code: `
+				await tools.echo({ text: 'a'.repeat(5000) });
+				await tools.echo({ text: 'é'.repeat(3000) });
+				await tools.broken({});
+			`,
+		});
+		const lines = ran.read.split('\n');
+		const first = lines.find((line) => line.startsWith('  result: cut to 4096 of 5002 bytes: '));
+		expect(first?.length).toBe('  result: cut to 4096 of 5002 bytes: '.length + 4096);
+		// A character is never split: the second value cuts at a whole 'é' of two bytes.
+		const second = lines.find((line) => line.startsWith('  result: cut to 4096 of 6002 bytes: '));
+		expect(second?.endsWith('é')).toBe(true);
+		expect(ran.read).toContain('- c1.3 broken: failed');
+	});
+
+	it('holds the results of a failed call to the byte limit of the return value', async () => {
+		const ran = await run(
+			[echo, broken],
+			{
+				uses: ['echo', 'broken'],
+				code: `
+				await tools.echo({ text: 'a'.repeat(3000) });
+				await tools.echo({ text: 'b'.repeat(3000) });
+				await tools.echo({ text: 'c' });
+				await tools.broken({});
+			`,
+			},
+			{ compose: { limits: { bytes: 4000 } } },
+		);
+		expect(ran.read).toContain('  result: cut to 998 of 3002 bytes: ');
+		expect(ran.read).toContain('  result: omitted, because the results above fill 4000 bytes.');
+	});
+
+	it('shows the results of the calls that finished before a cut and before the time limit', async () => {
+		const stuck = held('stuck');
+		const ran = await run(
+			[echo, stuck.tool],
+			{ uses: ['echo', 'stuck'], code: `await tools.echo({ text: 'p1' }); await tools.stuck({});` },
+			{ compose: { limits: { time: 30 } } },
+		);
+		expect(ran.read).toBe(
+			[
+				'The compose call failed: The compose call passed compose.limits.time (30 ms).',
+				'Calls, in the order that the code made them:',
+				'- c1.1 echo: completed',
+				'  result: "p1"',
+				'- c1.2 stuck: pending',
+				'A pending call did not settle, and its effect can still happen.',
+			].join('\n'),
+		);
+		stuck.open();
+	});
+
+	it('tells the evaluator which tools of the seat the call leaves unbound', async () => {
+		const seen: (readonly string[] | undefined)[] = [];
+		const evaluator: Evaluator = {
+			evaluate: async (input) => {
+				seen.push(input.unlisted);
+				return undefined;
+			},
+		};
+		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { evaluator } });
+		// The room tools of the seat are in the catalog, and a tool with compose: false is not.
+		expect(seen[0]).toContain('table');
+		expect(seen[0]).not.toContain('echo');
+		expect(seen[0]).not.toContain('hidden');
 	});
 
 	it('gives the code the details of a failed call, so it can return a partial value', async () => {
