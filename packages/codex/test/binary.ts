@@ -25,6 +25,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Execution } from '@ambionframework/ambion';
+import { defineExecution } from '@ambionframework/ambion/hosting';
+import type { Connect } from '../src/app-server.ts';
+import { createCodexOpener } from '../src/executor.ts';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
 import {
@@ -149,7 +152,16 @@ export interface CodexOnOptions {
 	readonly config?: string;
 	/** A line that the binary writes to its standard error before it starts. */
 	readonly stderrLine?: string;
+	/** Opens the connection to the app-server, to watch it. Absent, the execution of the package. */
+	readonly connect?: Connect;
 }
+
+/** The execution of the package, over a connection that a test opens. */
+const watchedExecution = defineExecution<CodexExecutionOptions & { readonly connect: Connect }>(
+	'codex',
+	(_host, options) => (request) =>
+		createCodexOpener({ definition: request.definition, ...options }),
+);
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
 export interface CodexOnScript {
@@ -221,15 +233,19 @@ export async function codexOn(
 	};
 	const codexPath =
 		options.stderrLine === undefined ? undefined : noisyBinary(dir, options.stderrLine);
+	// With a host login, the default `login` links it. Otherwise no seat links a login.
+	const runtime: CodexExecutionOptions = {
+		env,
+		...(options.hostLogin === undefined ? { login: false } : {}),
+		...(codexPath === undefined ? {} : { codexPath }),
+		...options.runtime,
+		home,
+	};
 	return {
-		// With a host login, the default `login` links it. Otherwise no seat links a login.
-		execution: codexExecution({
-			env,
-			...(options.hostLogin === undefined ? { login: false } : {}),
-			...(codexPath === undefined ? {} : { codexPath }),
-			...options.runtime,
-			home,
-		}),
+		execution:
+			options.connect === undefined
+				? codexExecution(runtime)
+				: watchedExecution({ ...runtime, connect: options.connect }),
 		...(codexPath === undefined ? {} : { codexPath }),
 		responses,
 		home,
