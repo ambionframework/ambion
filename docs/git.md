@@ -455,15 +455,15 @@ resource, and that operation ends. The tool then runs `git clone <url>
 source, a refused fork, and a failed clone fail the call, and the error
 text is the text below. After a failed clone, the fork stays.
 
-| Outcome                 | The result text                                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Forked                  | `Forked templates/weekly-report to analyst/report. Clone URL: <url>`                                                                                  |
-| Forked and cloned       | The line above, then `Cloned it into /home/analyst/report on branch <default branch>. origin is the fork.`                                            |
-| No such source          | `templates/weekly-report does not exist. Call repos to list the repositories.`                                                                        |
-| Name taken              | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork                                              |
-| Name taken, path in use | The line above, then `/home/analyst/report already exists, so the tool made no clone.`                                                                |
-| Refused                 | `The git server refused the fork: <message> Call repos to see what exists.`                                                                           |
-| Clone failed            | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays. Run git clone <url> /home/analyst/report with bash.` |
+| Outcome                 | The result text                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Forked                  | `Forked templates/weekly-report to analyst/report. Clone URL: <url>`                                                                                                       |
+| Forked and cloned       | The line above, then `Cloned it into /home/analyst/report on branch <default branch>. origin is the fork.`                                                                 |
+| No such source          | `templates/weekly-report does not exist. Call repos to list the repositories.`                                                                                             |
+| Name taken              | `analyst/report exists. Clone URL: <url>.` With `clone`, the tool then clones it, the same as a new fork                                                                   |
+| Name taken, path in use | The line above, then `/home/analyst/report already exists, so the tool made no clone.`                                                                                     |
+| Refused                 | `The git server refused the fork: <message> Call repos to see what exists.`                                                                                                |
+| Clone failed            | The forked line, then `The clone into /home/analyst/report failed: <git output>. The fork stays. Run git clone <url> <path> with bash, at a path that does not exist yet.` |
 
 **A taken name makes a repeated call safe.** A `fork` call that repeats
 after a timeout finds its own fork, and the result gives its URL. With
@@ -579,8 +579,8 @@ templates/<name> is a read-only template. shared/<name> is a repository every ag
 You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
 If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
 To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
-Its origin is the source, with the source's push permissions: a clone of shared/<name> pushes back to it,
-and a clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
+Its origin is the source, with the source's push permissions. A clone of shared/<name> pushes back to it.
+A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
 To make work of your own that you can push, call fork with clone.
 In that clone, make a branch, commit, and push to origin with git in bash.
 An edit persists only after you commit it and push it. Push before you finish.

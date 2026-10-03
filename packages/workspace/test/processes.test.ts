@@ -146,7 +146,7 @@ describe('bash', () => {
 		expect(await fileOf(workspace, 'alpha', output)).toBe('out\nerr\n');
 	});
 
-	it('returns a running process at once with wait 0, and wait with timeout 0, wait and the output file reach it', async () => {
+	it('returns a running process at once with wait 0, and a wait with timeout 0, a wait, and the output file reach it', async () => {
 		const workspace = site();
 		const started = await call(workspace, 'bash', {
 			command: 'sleep 0.3; echo done',
@@ -775,7 +775,6 @@ describe('the note that points to a scheduled say', () => {
 		const wait = toolOf(workspace, 'wait');
 		const texts = [
 			started.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
-			await invokeText(toolOf(workspace, 'wait'), { handles: [handle], timeout: 0 }, inside),
 			await invokeText(wait, { handles: [handle], timeout: 0 }, inside),
 			await invokeText(wait, { handles: [other, handle], timeout: 0 }, inside),
 			await invokeText(wait, { handles: [ended, other, handle], timeout: 0 }, inside),
@@ -789,7 +788,7 @@ describe('the note that points to a scheduled say', () => {
 		}
 		if (shows) {
 			expect(texts[0]).toContain(`Process ${handle} can run longer.`);
-			expect(texts[3]).toContain(`Processes ${other}, ${handle} can run longer.`);
+			expect(texts[2]).toContain(`Processes ${other}, ${handle} can run longer.`);
 		}
 	});
 });

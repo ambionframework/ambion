@@ -788,7 +788,7 @@ workstation's Unix accounts.
 
 ## The audit log
 
-**Each call of the five tools has one audit entry.** The entry runs on the
+**Each call of the four tools has one audit entry.** The entry runs on the
 bash resource after the call ends. The entry of a `bash` call holds the state at
 the end of the call, which can be `running`. A call that fails on a process
 that ended badly records `error` with the name `ToolFailure` and the `details`

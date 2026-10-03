@@ -975,7 +975,7 @@ backend exists. That backend moves them back to the conformance entry
 
 ## Declared outputs
 
-**Fourteen tools declare their output for `compose`.** Each sets
+**Twelve tools declare their output for `compose`.** Each sets
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares

@@ -145,8 +145,8 @@ describe('the tools and the guidance', () => {
 			You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
 			If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
 			To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
-			Its origin is the source, with the source's push permissions: a clone of shared/<name> pushes back to it,
-			and a clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
+			Its origin is the source, with the source's push permissions. A clone of shared/<name> pushes back to it.
+			A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
 			To make work of your own that you can push, call fork with clone.
 			In that clone, make a branch, commit, and push to origin with git in bash.
 			An edit persists only after you commit it and push it. Push before you finish.
@@ -326,7 +326,7 @@ describe('fork', () => {
 		);
 		const [, failure] = forked.split('\n');
 		expect(failure).toMatch(
-			/^The clone into \/home\/analyst\/busy failed: .+\. The fork stays\. Run git clone http:\/\/git\.ambion\.invalid\/analyst\/report \/home\/analyst\/busy with bash\.$/s,
+			/^The clone into \/home\/analyst\/busy failed: .+\. The fork stays\. Run git clone http:\/\/git\.ambion\.invalid\/analyst\/report <path> with bash, at a path that does not exist yet\.$/s,
 		);
 		const fork = await workspace.git?.use({ name: 'analyst' }, (env) => env.get('analyst/report'));
 		expect(fork?.source).toBe('templates/weekly-report');
@@ -384,11 +384,17 @@ describe('a clone made with bash', () => {
 
 	it('refuses a push from a clone of a template', async () => {
 		const { workspace } = await lab();
+		const cloned = await pushOf(
+			workspace,
+			`git clone ${SERVER}/templates/weekly-report ~/template`,
+		);
+		expect(cloned.ok && cloned.value.exitCode).toBe(0);
 		const pushed = await pushOf(
 			workspace,
-			`git clone ${SERVER}/templates/weekly-report ~/template && cd ~/template && git switch -c edit && git commit --allow-empty -m edit && git push origin edit`,
+			'cd ~/template && git switch -c edit && git commit --allow-empty -m edit && git push origin edit',
 		);
-		expect(pushed.ok && pushed.value.exitCode).not.toBe(0);
+		expect(pushed.ok).toBe(true);
+		expect(pushed.ok ? pushed.value.exitCode : 0).not.toBe(0);
 	});
 
 	it('rejects an aborted fork with a clone, and creates no destination', async () => {

@@ -7,7 +7,7 @@ workspace gives nine tools, from ten. A workspace with a SQL backend and a
 git backend gives twelve, from fourteen. The agent reaches the same facts
 through the tools that stay.
 
-### Changed
+### Simplification
 
 **`wait` with one handle and `timeout: 0` reads a process.** The call does
 not wait. It gives the state and the new output of the process, as `status`
@@ -25,7 +25,8 @@ clone <url> <path>` with `bash`. The `origin` is the source, with the push
 permissions of the source. A clone of `shared/<name>` pushes back to it, and
 a clone of a template or of another agent's fork is read-only. The agent
 raises `wait` for a large repository. `fork` keeps its `clone` option. A
-failed clone of a fork now says `Run git clone <url> <path> with bash.`
+failed clone of a fork now says `Run git clone <url> <path> with bash, at a path
+that does not exist yet.`
 
 **The reminder and the state line name `wait`.** A running process reads
 `Call wait with its handle, and timeout 0 to read it at once.` The reminder

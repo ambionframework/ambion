@@ -58,8 +58,8 @@ export function gitToolGuidance(server: string, workspace: string): string {
 		`You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.`,
 		`If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.`,
 		`To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.`,
-		`Its origin is the source, with the source's push permissions: a clone of shared/<name> pushes back to it,`,
-		`and a clone of a template or of another agent's fork is read-only. Raise wait for a large repository.`,
+		`Its origin is the source, with the source's push permissions. A clone of shared/<name> pushes back to it.`,
+		`A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.`,
 		`To make work of your own that you can push, call fork with clone.`,
 		`In that clone, make a branch, commit, and push to origin with git in bash.`,
 		`An edit persists only after you commit it and push it. Push before you finish.`,
@@ -295,7 +295,7 @@ async function cloneInto(
 			}
 			return {
 				path: target,
-				text: `The clone into ${target} failed: ${failure}. The fork stays. Run git clone ${repository.url} ${target} with bash.`,
+				text: `The clone into ${target} failed: ${failure}. The fork stays. Run git clone ${repository.url} <path> with bash, at a path that does not exist yet.`,
 				failed: true,
 			};
 		},
