@@ -159,6 +159,8 @@ Call a tool directly only when:
 The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
 compose result shows the new lines. Read them before you speak again.
+A seat that starts before a say in one Promise.all lands first, and the
+room refuses the say. Await the seat, then say.
 
 A tool that fails rejects with an Error. error.details holds its result
 when the tool gives one. bash rejects when the command exits with a code

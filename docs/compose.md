@@ -664,6 +664,14 @@ land in the order that the code made them. `schedule`, `seat`, `unseat`,
 act of the activation. A line of another participant that lands before a say
 still makes the room refuse that say as missed.
 
+**A seat that starts beside a say can make the say miss.** `Promise.all` of
+a `seat` before a `say` starts both with the same read position. The seat
+commit lands first, and its entry is past that position. The room refuses
+the say as missed. Run the seat, await it, and then say: the landed seat
+counts as read, and the say carries the new position. A line of another
+participant that lands between the seat and the say makes the say miss
+in the same way, and the compose result shows that line.
+
 **A resource can serialize what `compose` runs together.** `compose`
 starts the calls. The resource behind a tool decides whether their work
 overlaps. The shipped workspace gives these results:
