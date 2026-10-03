@@ -111,6 +111,7 @@ function unreadBefore(
 ): { unread?: Message[] } {
 	const { readThrough, intent } = commit;
 	const ordinarySay = intent.kind === 'said' && intent.delaySeconds === undefined;
+	if (ordinarySay || readThrough === undefined) return {};
 	// The rule decides which entries are unread.
 	const unread = run
 		.state()

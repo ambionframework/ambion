@@ -32,7 +32,7 @@ code as one.
 
 **A change to a core state machine is a change to a rules file.** The
 fold, the transition, and the pass project the state and run a rule. So
-an edit to how the journal or the room decides lands in one of the two
+an edit to how the journal or the room decides lands in one of the three
 files, `pnpm rule:check` proves that file in seconds, and the gate
 refuses the edit until its proof, its binding case, and its type pin
 agree.
@@ -203,7 +203,8 @@ flag column. `scripts/setup.sh` installs Dafny 4.11 for a desk run.
 **Add a rule only inside the line, and where its caller may import it.**
 A decision over the lease, an admission, a grant, the exchange, the
 verdict, or the pass goes in the room's rules file. A rule the journal
-decides by goes in the journal's rules file. A decision outside the three
+decides by goes in the journal's rules file. A rule that the seat side
+decides by goes in `execution/rules.verified.ts`. A decision outside the three
 machines stays ordinary TypeScript. The core is laid out in layers, and
 an import points down only (`toolchain.md` §1). Then:
 
@@ -291,8 +292,9 @@ before the rules existed.
 **Every exported room rule but `exchangeOutcome` gates a write.** A rule stays in
 `room/rules.verified.ts` when a fault in it loses or duplicates the
 record: it decides an entry, an admission, the `due` list that
-`admitsLease` reads, or the read position that the say lock reads. A rule that only shapes a read leaves the file, and
-it lives beside its caller with an ordinary test. The sweep for 0.2.0
+`admitsLease` reads, or the read position that the say lock reads. A rule
+that only shapes a read leaves the file, and it lives beside its caller
+with an ordinary test. The sweep for 0.2.0
 found no such rule.
 
 | Rule                   | The write it gates                                                           |

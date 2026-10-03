@@ -158,7 +158,7 @@ Call a tool directly only when:
 The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
 compose result shows the new lines. Read them before you speak again.
-A seat that starts beside a say in one Promise.all lands first, and the
+A seat that starts before a say in one Promise.all lands first, and the
 room refuses the say. Await the seat, then say.
 
 For example, "snapshot each file that a query finds" is one compose

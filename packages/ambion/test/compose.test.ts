@@ -1274,7 +1274,7 @@ describe('a compose call over the room tools', () => {
 		await (await room.visit(andrei)).send({ text: 'Start.' });
 		await started.promise;
 		// The time limit passes while the say still waits on the room.
-		await pause(120);
+		await pause(300);
 		expect(read).toEqual([]);
 		release.resolve();
 		await settled(room);
@@ -1295,7 +1295,7 @@ describe('a compose call over the room tools', () => {
 		{ held: 'seated', story: 'before the seat lands' },
 		{ held: 'said', story: 'between the seat and the say' },
 	] as const)(
-		'refuses the says that follow a seat when a line of another participant lands $story, and reads nothing past that line',
+		'refuses the says that follow a seat when a line of another participant lands $story, and shows that line',
 		async ({ held }) => {
 			const read: string[] = [];
 			let visit: Awaited<ReturnType<typeof room.visit>> | undefined;
