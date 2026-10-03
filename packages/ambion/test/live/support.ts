@@ -38,7 +38,7 @@ import {
 	MODEL,
 	REPORTS_COST,
 	refusingExecutionFor,
-	SIGN_IN,
+	signIn,
 } from './support/kind.ts';
 
 export {
@@ -53,7 +53,7 @@ export {
 };
 
 /** `describe` when the seats can sign in, on the key or on a login; a skipped block when they cannot. */
-export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(SIGN_IN === undefined);
+export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(signIn() === undefined);
 
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;

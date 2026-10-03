@@ -122,11 +122,12 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 (`ANTHROPIC_API_KEY` by default). `claude` reads `ANTHROPIC_API_KEY`, and
 `codex` reads `CODEX_API_KEY`.
 
-A live file runs on the key, or else on the host login: `~/.codex/auth.json`
-for `codex`, and a stored `openai-codex` or `anthropic` sign-in in
-`~/.ambion/pi/credentials.json` for `pi`, with
-`AMBION_MODEL=openai-codex/<model>` for the first. A host with a login runs
-and bills those files. Read neither login file.
+A live file of `ambion` or `workspace` runs on the key, or else on the host
+login: `~/.codex/auth.json` for `codex`, and a stored sign-in for the provider
+of `AMBION_MODEL` in `~/.ambion/pi/credentials.json` for `pi`, such as
+`openai-codex` with `AMBION_MODEL=openai-codex/<model>`. A host with a login
+runs and bills those files. The live files of `assistant` and `simulator`
+need the key. Read neither login file.
 
 ## Product rules
 

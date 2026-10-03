@@ -95,7 +95,13 @@ export function signInOf(
 	return hasLogin() ? 'login' : undefined;
 }
 
-export const SIGN_IN = signInOf(process.env[KEY_VAR], hostSignedIn);
+let signedIn: ReturnType<typeof signInOf> | 'unset' = 'unset';
+
+/** How the seats sign in, computed on first use so that an import reads no login. */
+export function signIn(): 'key' | 'login' | undefined {
+	if (signedIn === 'unset') signedIn = signInOf(process.env[KEY_VAR], hostSignedIn);
+	return signedIn;
+}
 
 /** The reasoning level that `AMBION_THINKING` sets for every executor kind. */
 const THINKING = process.env.AMBION_THINKING || undefined;
@@ -138,7 +144,7 @@ export function executorFor(options: Omit<PiOptions, 'model'> & { model?: string
 export function executionFor() {
 	if (LIVE_KIND === 'claude') return claudeExecution();
 	if (LIVE_KIND === 'codex') return codexExecution();
-	return SIGN_IN === 'login'
+	return signIn() === 'login'
 		? piExecution({ credentials: fileCredentials(PI_CREDENTIALS) })
 		: piExecution();
 }
@@ -149,7 +155,7 @@ export function executionFor() {
  * execution reads an empty credential store and the key variable answers.
  */
 export function refusingExecutionFor() {
-	if (LIVE_KIND !== 'pi' || SIGN_IN !== 'login') return executionFor();
+	if (LIVE_KIND !== 'pi' || signIn() !== 'login') return executionFor();
 	const empty = join(tmpdir(), `ambion-no-credentials-${process.pid}`, 'credentials.json');
 	return piExecution({ credentials: fileCredentials(empty) });
 }

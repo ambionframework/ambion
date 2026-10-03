@@ -344,14 +344,16 @@ every other package once, with both keys. Run one harness by hand with
 `AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
 
-A live file of `@ambionframework/ambion` runs on the key, or else on the
-login of the host. The key wins when it is set. The login of a `codex` seat is
-`~/.codex/auth.json`. The login of a `pi` seat is a stored `openai-codex` or
-`anthropic` sign-in in `~/.ambion/pi/credentials.json`, with
-`AMBION_MODEL=openai-codex/<model>` for the first. A `claude` seat has no
-login path and needs `ANTHROPIC_API_KEY`. A file skips when the host has
-neither the key nor the login. A host with a login now runs those files and
-the provider account of the login pays for them.
+A live file of `@ambionframework/ambion` or `@ambionframework/workspace` runs
+on the key, or else on the login of the host. The key wins when it is set.
+The login of a `codex` seat is `~/.codex/auth.json`. The login of a `pi` seat
+is a stored sign-in for the provider of `AMBION_MODEL` in
+`~/.ambion/pi/credentials.json`, such as `openai-codex` with
+`AMBION_MODEL=openai-codex/<model>`. A `claude` seat has no login path and
+needs `ANTHROPIC_API_KEY`. The live files of `@ambionframework/assistant` and
+`@ambionframework/simulator` need the key. A file skips when the host has
+neither the key nor the login. A host with a login runs those files, and the
+provider account of the login pays for them.
 
 `@ambionframework/codex` has a live tier of its own. Its files run on
 `CODEX_API_KEY` or on the ChatGPT login of the host, and skip without either.
