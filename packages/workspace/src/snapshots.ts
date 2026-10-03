@@ -269,12 +269,15 @@ const restoreSchema = Type.Object({
 
 type RestoreParams = Static<typeof restoreSchema>;
 
+/** The declared output of `restore`: the ref, and the file that now holds its bytes. */
+const RestoreOutput = Type.Object({
+	ref: Type.String({ description: 'The snapshot ref that the call restored.' }),
+	path: Type.String({ description: 'The absolute path of the file that holds the bytes.' }),
+	bytes: Type.Integer({ description: 'The size of the file, in bytes.' }),
+});
+
 /** What `restore` gives in `details`. */
-interface RestoreDetails {
-	ref: string;
-	path: string;
-	bytes: number;
-}
+type RestoreDetails = Static<typeof RestoreOutput>;
 
 /** Write `bytes` to `path` as the agent of `env`, and give the absolute path. */
 async function writeFile(
@@ -321,6 +324,7 @@ export function createRestoreTool(store: SnapshotStore): AmbionTool {
 		description:
 			'Put the bytes of a snapshot ref in a file of your own, and give its path. The bytes are the ones the file held at the snapshot.',
 		parameters: restoreSchema,
+		compose: { output: RestoreOutput },
 		execute: async (params: RestoreParams, ctx) => {
 			const details = await restoreSnapshot(
 				store,

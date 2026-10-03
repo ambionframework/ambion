@@ -117,6 +117,7 @@ function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		description:
 			"List the repositories on the workspace's git server: read-only templates, shared repositories, and every agent's forks, with clone URLs.",
 		parameters: reposSchema,
+		compose: { output: ReposOutput },
 		execute: (params: ReposParams, ctx) => listed(options, params, ctx),
 	});
 	const clone = defineTool({
@@ -125,6 +126,7 @@ function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 		description:
 			'Clone any repository into your workspace without creating a fork. The source remains origin.',
 		parameters: cloneSchema,
+		compose: { output: CloneOutput },
 		execute: (params: CloneParams, ctx) => cloned(options, params, ctx),
 	});
 	const fork = defineTool({
@@ -141,10 +143,24 @@ function createGitTools(options: GitToolOptions): readonly AmbionTool[] {
 
 // -- repos ---------------------------------------------------------------------
 
-interface ReposDetails {
-	server: string;
-	repositories: number;
-}
+/** The declared output of `repos`: the server, and each repository that the call listed. */
+const ReposOutput = Type.Object({
+	server: Type.String({ description: 'The name of the git server of the workspace.' }),
+	repositories: Type.Array(
+		Type.Object({
+			id: Type.String({ description: 'The repository, such as templates/weekly-report.' }),
+			description: Type.Optional(Type.String({ description: 'What the repository holds.' })),
+			source: Type.Optional(Type.String({ description: 'The repository that this one forks.' })),
+			defaultBranch: Type.String({ description: 'The branch that a clone checks out.' }),
+			branches: Type.Record(Type.String(), Type.String(), {
+				description: 'Each branch, with the full hash of the commit that it names.',
+			}),
+			url: Type.String({ description: 'The clone URL.' }),
+		}),
+	),
+});
+
+type ReposDetails = Static<typeof ReposOutput>;
 
 async function listed(
 	options: GitToolOptions,
@@ -156,9 +172,25 @@ async function listed(
 		(env) => env.list(params.namespace, ctx.signal),
 		ctx.signal,
 	);
-	const details = { server: options.server, repositories: repositories.length };
+	const details: ReposDetails = {
+		server: options.server,
+		repositories: repositories.map(repositoryFacts),
+	};
 	if (repositories.length === 0) return report(`No repositories on ${options.server}.`, details);
 	return report(reposTable(repositories), details);
+}
+
+/** The facts of one repository for `details`. A field that is absent stays absent. */
+function repositoryFacts(repository: GitRepository): ReposDetails['repositories'][number] {
+	const { id, description, source, defaultBranch, branches, url } = repository;
+	return {
+		id,
+		...(description === undefined ? {} : { description }),
+		...(source === undefined ? {} : { source }),
+		defaultBranch,
+		branches: { ...branches },
+		url,
+	};
 }
 
 /** One line for each repository, and a count. */
@@ -201,12 +233,15 @@ function cell(text: string): string {
 
 // -- clone ---------------------------------------------------------------------
 
-interface CloneDetails {
-	repository: string;
-	source: string;
-	url: string;
-	clone: string;
-}
+/** The declared output of `clone`: the repository, and the path of the working copy. */
+const CloneOutput = Type.Object({
+	repository: Type.String({ description: 'The id of the repository.' }),
+	source: Type.String({ description: 'The repository that the call cloned.' }),
+	url: Type.String({ description: 'The clone URL.' }),
+	clone: Type.String({ description: 'The absolute path of the working copy.' }),
+});
+
+type CloneDetails = Static<typeof CloneOutput>;
 
 async function cloned(
 	options: GitToolOptions,

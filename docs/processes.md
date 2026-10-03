@@ -199,10 +199,12 @@ shows only the bracketed line.
 cursor to the size of `out` when the read began, and writes that size to
 `cursor`. A result that starts past the start of the output adds `The text
 above starts at byte <n> of the output. An earlier result showed the bytes
-before it.` `details.read` holds `from` and `to`. Ten polls of a long build
-give ten new parts, and no part twice. One read takes at most 200 KB, so a
-burst past that shows only its end, and `read` reaches the rest. The cursor is a file, so a new run
-of the host reads on from the same byte. A failed write of `cursor` gives
+before it.` `details.text` holds the new output with no bracketed line, and
+`details.read` holds `from` and `to`, the byte offsets of the output file.
+Ten polls of a long build give ten new parts, and no part twice. One read
+takes at most 200 KB, so a burst past that shows only its end, and `read`
+reaches the rest. The cursor is a file, so a new run of the host reads on
+from the same byte. A failed write of `cursor` gives
 the same bytes again on the next read.
 
 ```text
@@ -292,6 +294,12 @@ ended badly. `cancel` gives the state of the process it cancelled, and
 `ps` lists running processes, so neither fails on a state. An unknown
 handle and the limit of running processes fail too
 ([Workspace](workspace.md#give-the-resource-to-an-agent)).
+
+**In a compose call, the binding of a failed call rejects.** The binding of
+`bash`, `status`, or `wait` rejects with an `Error`, and `error.details`
+holds the same result as a completed call: the `Process`, the new output in
+`text`, and `read`. The binding of `cancel` and of `ps` never rejects on a
+state ([Compose](compose.md#bindings)).
 
 ## A process
 

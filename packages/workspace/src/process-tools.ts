@@ -163,7 +163,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash, status, and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
 			parameters: bashSchema,
 			compose: { output: ProcessOutput },
 			execute: (params: BashParams, ctx) => started(options, params, ctx),
@@ -488,6 +488,7 @@ async function described(
 		.join('\n\n');
 	const details: ProcessDetails = {
 		process,
+		text: output,
 		read: { from: read.from, to: read.to },
 		...(read.truncation.truncated ? { truncation: read.truncation } : {}),
 	};

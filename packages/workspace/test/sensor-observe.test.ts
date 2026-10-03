@@ -3,6 +3,7 @@ import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { DEFAULT_AUDIT_LOG } from '../src/audit.ts';
 import type { ObjectBackend } from '../src/object-backend.ts';
 import { toolOf } from './support/backends.ts';
+import { composed } from './support/compose.ts';
 import { agent, run, toolResults } from './support/room.ts';
 import { sensorFixture } from './support/sensor-fixture.ts';
 import {
@@ -28,7 +29,7 @@ async function textAt(
 }
 
 describe('workspace observe integration', () => {
-	it('works on the first direct call, reads latest and supported spans, and retains every part', async () => {
+	it('works on the first direct call, reads latest and supported spans, binds through compose, and retains every part', async () => {
 		const rig = await openSensorObserveRoom();
 		try {
 			// Calling the actual bound tool directly has no reminder or discovery text in its context.
@@ -66,6 +67,38 @@ describe('workspace observe integration', () => {
 			expect(windowText).toContain('Observation 1 at 2026-09-29T10:00:01.000Z');
 			expect(windowText).not.toContain('Observation 1 at 2026-09-29T09:59:59.000Z');
 			expect(rig.observeCalls).toBe(2);
+
+			// The same two tools through compose, with their declared details.
+			const result = await composed(
+				rig.site.tools(),
+				['connect', 'observe'],
+				`const connected = await tools.connect({ name: 'bench-one', process: '${rig.process}', port: ${rig.port} });
+const observed = await tools.observe({ sensor: 'bench-one/bench' });
+return { connected, observed };`,
+				'sensor-owner',
+			);
+			expect(result.status).toBe('completed');
+			const { connected, observed } = result.value as Record<
+				'connected' | 'observed',
+				Record<string, unknown>
+			>;
+			expect(connected).toMatchObject({
+				name: 'bench-one',
+				process: rig.process,
+				port: rig.port,
+				owner: 'sensor-owner',
+				sensors: ['bench-one/bench'],
+			});
+			expect(connected).not.toHaveProperty('index');
+			expect(observed).toMatchObject({
+				sensor: 'bench-one/bench',
+				request: { api: 1 },
+				manifestRef: expect.stringContaining('ambion://workspace/'),
+				manifestPath: expect.any(String),
+				directory: expect.any(String),
+			});
+			expect((observed.files as unknown[]).length).toBeGreaterThan(0);
+			expect(rig.observeCalls).toBe(3);
 		} finally {
 			await rig.close();
 		}

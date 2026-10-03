@@ -146,6 +146,46 @@ a `BoundTool`, and a `BoundTool` keeps the content alone
 completed call reaches a Pi seat in `details`, and the trace keeps it. On
 Claude and Codex, the model and the trace read the rendered content.
 
+## Limitations
+
+**This section gathers what `compose` cannot do.** Each point links to the
+section that states it in full.
+
+- **Some tools never bind.** The room tools `say`, `schedule`, `seat`,
+  `unseat`, `dismiss`, and `recall` are not in the catalog. `compose` does
+  not bind itself, and a tool with `compose: false` does not bind. A
+  summary activation has no `compose` tool
+  ([What a compose call binds](#what-a-compose-call-binds)).
+- **Four limits bound a compose call.** The defaults are 64 nested calls,
+  8 calls at a time, 65,536 bytes of returned JSON, and 120,000 ms of wall
+  time. The activation deadline ends a call sooner. The description of
+  `compose` shows the values of the seat ([Limits](#limits)).
+- **Each evaluator adds limits of its own.** `quickjsEvaluator` limits the
+  heap to 64 MiB and the code to 10,000 ms of CPU. `processEvaluator`
+  limits the old space of the child heap to 64 MiB. The description of
+  `compose` does not state them ([The evaluator](#the-evaluator)).
+- **The code has no ambient authority.** It has no clock, no random
+  source, no timer, no import, and no I/O except through tools
+  ([The evaluator](#the-evaluator)).
+- **The evaluator is not a security boundary.** Hostile code can pass the
+  limits of its names ([Trust](trust.md#what-the-kernel-does-not-defend)).
+- **A completed nested call keeps its effect.** A failure or a cut undoes
+  nothing, and a rejected call cancels no sibling
+  ([Failure, cancellation, and effects](#failure-cancellation-and-effects),
+  [Parallel calls](#parallel-calls)).
+- **Image parts of a result do not reach the code.** A binding gives
+  `details`, or the text of `content` ([Bindings](#bindings)).
+- **A tool without a declared output binds as text.** The code parses the
+  string ([Bindings](#bindings)).
+- **A harness hook does not see a nested call.** Only the `approve` hook
+  of the `compose` option sees the compose call ([Approval](#approval)).
+- **Free code saved no tokens in the live runs.** The runs held a chain
+  task and a fan-out task. The catalog and the exploration calls cost more
+  input tokens than the data that the code kept out of the context. A
+  macro runs by name with no code and no exploration, so it is the main
+  use ([Compose evidence](../planning/next.md#the-compose-evidence),
+  [Catalog](#the-catalog)).
+
 ## The catalog
 
 **The `compose` tool describes its bindings as TypeScript.** The core
@@ -155,29 +195,49 @@ catalog is part of the description of `compose`, so the model reads it
 once for each activation. The example below shortens the descriptions.
 
 ```ts
+/** One order. */
+type Order = {
+  id: string;
+  status: 'open' | 'delayed' | 'shipped';
+  /** The promised day of delivery. */
+  eta?: string;
+};
 declare const tools: {
   /** Run statements on the shared database. */
   sql(args: {
+    /** One or more SQL statements. The last query gives the preview. */
     sql: string;
-    export?: string;
-    import?: string;
-    params?: (string | number | null)[];
+    /** How many rows the preview shows, up to 1000. The default is 50. */
     rows?: number;
   }): Promise<{
-    database: string;
+    /** How many rows the last statement gave, in all. */
     count: number;
-    columns: string[];
+    /** The preview rows: the first rows of the last statement. */
     rows: Record<string, string | number | null>[];
-    export?: string;
-    import?: string;
-    imported?: number;
   }>;
-  /** Freeze files of the workspace and give one ref for each. */
-  snapshot(args: { paths: string[] }): Promise<{ refs: string[] }>;
   /** Fetch an order by id. */
-  lookup_order(args: { id: string }): Promise<string>;
+  lookup_order(args: { id: string }): Promise<Order>;
+  /** Write a note. */
+  note(args: { text: string }): Promise<string>;
 };
 ```
+
+**A field description becomes a doc comment.** The renderer writes the
+`description` of a property before the field, in the input and in the
+output schema. An object with a described field renders one field on each
+line, and the indentation follows the nesting. An object with no described
+field renders on one line. A comment end in a description is escaped. An
+array item and a record value show no description.
+
+**A schema with an `$id` becomes a named type.** The renderer writes it
+once as `type <Id> = ...;` before `declare const tools`, and every use shows
+the name. TypeBox writes the `$id` on the node where the schema is used, so
+the check of the schema needs no context. The renderer never throws, because
+it must not stop `defineAgent`. A schema with an `$id` that is no TypeScript
+identifier renders inline. When a different schema arrives under an `$id`
+that is taken, it renders inline, and the first schema keeps the name. The
+process and workspace tools use this for `Process`, `ProcessResult`,
+`Truncation`, and `SensorSource`, which several tools share.
 
 **The renderer covers the JSON Schema that TypeBox writes.** An object, an
 array, a union, a literal, and the primitive types each have a TypeScript
@@ -216,7 +276,7 @@ the guidance of `compose` after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the speaking
 policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
-`compose` holds one sentence and the catalog.
+`compose` holds one sentence, the limits, and the catalog.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
@@ -254,6 +314,18 @@ call. Do not call sql first to read the paths:
   const found = await tools.sql({ sql: 'SELECT path FROM files' });
   return tools.snapshot({ paths: found.rows.map((row) => row.path) });
 
+Write the code from the signatures. A typed result gives fields, such
+as rows of sql and text of bash: read the fields, and do not parse
+text. A tool that fails rejects with an Error. error.details holds its
+result when the tool gives one. bash rejects when the command exits
+with a code other than 0. When the task expects such a failure, catch
+it and read error.details:
+  const run = await tools
+    .bash({ command: 'pnpm test', wait: 300 })
+    .catch((error) => error.details);
+  const { refs } = await tools.snapshot({ paths: [run.process.output] });
+  return { exit: run.process.exitCode, tail: run.text.slice(-500), log: refs[0] };
+
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call and its outcome. A completed call can have had an
@@ -275,10 +347,17 @@ The macros of your skills. Run one with compose({ macro, args }):
 - lab-drift/snapshot-drift: Snapshot the files of every run with a label. Returns the count and the refs.
 ```
 
-**The description of `compose` is one sentence and the catalog.** The
-sentence is `Join your tools in one call. Code calls them as
-tools.<name>, and you read only the value that it returns.` The catalog
-follows it.
+**The description of `compose` holds one sentence, the limits, and the
+catalog.** The sentence is `Join your tools in one call. Code calls them
+as tools.<name>, and you read only the value that it returns.` A block of
+three lines follows it. The first line gives the limits of the seat:
+`compose.limits` after the defaults. The second line states that a
+binding rejects with an `Error` when its tool fails, and that
+`error.details` holds the details of the tool. It states that a rejection
+cancels no other call. The third line states that a compose call cannot start
+a compose call, and that image parts do not reach the code. The guidance
+holds the other facts, including that a completed call keeps its effect, so
+no fact is in both places. The catalog follows the block.
 
 ## Macros
 
@@ -348,9 +427,11 @@ interface ToolContext {
 }
 ```
 
-**The workspace tools declare their outputs.** `sql`, `snapshot`, `bash`,
-`status`, `cancel`, `wait`, `ps`, and `fork` set `compose: { output }`. Every
-other tool binds as text. [Workspace](workspace.md#declared-outputs) states
+**The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
+`restore`, `bash`, `status`, `cancel`, `wait`, `ps`, `repos`, `clone`,
+`fork`, `connect`, and `observe` set `compose: { output }`. `write`, `edit`,
+and `disconnect` bind as text, because the code needs only their success or
+their rejection. [Workspace](workspace.md#declared-outputs) states
 the shape of each output.
 
 ## Typing a declared output
@@ -461,7 +542,7 @@ const states = [];
 for (const { process } of started) {
   // wait rejects when the process fails, and the error keeps the details.
   const ended = await tools.wait({ handles: [process.handle] }).catch((error) => error.details);
-  states.push({ suite: process.name, state: ended.processes[0].state });
+  states.push({ suite: process.name, state: ended.process.state, tail: ended.text.slice(-200) });
 }
 return states;
 ```
