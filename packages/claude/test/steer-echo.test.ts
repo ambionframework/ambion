@@ -76,7 +76,8 @@ it('sends a line that lands while a later pass renders its record, and counts it
 	};
 	const second = run.session.pass({ kind: 'delta', after: 1, view });
 	// The pass has not sent its prompt yet: the executor holds the line, and sends it after the prompt.
-	run.session.steer(2, 3, '[3] priya: One more thing.');
+	const line = '[new] #3 [priya] One more thing.';
+	run.session.steer(2, 3, line);
 	expect(await second).toEqual({ failed: false });
 	expect(run.steps).toContainEqual({ type: 'steer', seq: 3, consumed: true });
 	expect(run.session.readThrough).toBe(3);
@@ -84,6 +85,8 @@ it('sends a line that lands while a later pass renders its record, and counts it
 	const users = run.log().filter((line) => 'user' in line);
 	expect(users).toHaveLength(3);
 	expect(users.every((line) => line.composed === true)).toBe(true);
+	// The executor sends the steered line as the core marked it.
+	expect(users.at(-1)).toMatchObject({ user: line });
 	run.session.close?.();
 });
 
@@ -91,7 +94,7 @@ it('takes no line that lands outside a pass', async () => {
 	const run = open({ passes: [[{ say: 'Saturday.' }]] });
 	await run.session.pass({ kind: 'view', view: viewOf(1) });
 	// The core never steers outside a pass. The executor still sends nothing then.
-	run.sessions[0]?.steer?.(1, 2, '[2] priya: Late.');
+	run.sessions[0]?.steer?.(1, 2, '[new] #2 [priya] Late.');
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	expect(run.log().filter((line) => 'user' in line)).toHaveLength(1);
 	run.session.close?.();

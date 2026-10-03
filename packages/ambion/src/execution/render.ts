@@ -214,6 +214,11 @@ export function renderSystem(
 	return { mechanism: MECHANISM, agent: renderAgent(view, def) };
 }
 
+/** A message that landed after the model read the record, as a line the model reads. */
+export function renderNew(message: Message): string {
+	return `[new] ${renderLine(message)}`;
+}
+
 /**
  * What a later pass tells the model: each message that landed beyond `after`.
  * Each line reads as a steer does. Nothing is new when no message stands
@@ -222,7 +227,7 @@ export function renderSystem(
 export function renderDelta(view: ActivationView, after: Seq): string | undefined {
 	const fresh = view.context.messages.filter((message) => message.seq > after);
 	if (fresh.length === 0) return undefined;
-	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
+	return fresh.map(renderNew).join('\n');
 }
 
 /** How a room works. No definition and no pass shapes it. */

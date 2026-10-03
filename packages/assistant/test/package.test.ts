@@ -1,8 +1,13 @@
+import { claude } from '@ambionframework/claude';
+import { codex } from '@ambionframework/codex';
+import { pi } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
-import { defineAssistant } from '../src/index.ts';
+import { type AssistantParts, defineAssistant } from '../src/index.ts';
+
+const onPi = (parts: AssistantParts) => pi({ ...parts, model: 'scripted/assistant' });
 
 it('builds the default ordinary assistant definition', () => {
-	const assistant = defineAssistant({ model: 'scripted/assistant' });
+	const assistant = defineAssistant({ executor: onPi });
 
 	expect(assistant).toMatchObject({
 		name: 'assistant',
@@ -14,7 +19,7 @@ it('builds the default ordinary assistant definition', () => {
 
 it('keeps application instructions after and alongside maintained defaults', () => {
 	const assistant = defineAssistant({
-		model: 'scripted/custom',
+		executor: onPi,
 		name: 'guide',
 		identity: 'A local guide.',
 		instructions: 'Prefer small changes.',
@@ -29,7 +34,7 @@ it('keeps application instructions after and alongside maintained defaults', () 
 
 it('passes tool bundles through the ordinary agent definition', () => {
 	const assistant = defineAssistant({
-		model: 'scripted/tools',
+		executor: onPi,
 		tools: [],
 		bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.' }],
 	});
@@ -41,3 +46,26 @@ it('passes tool bundles through the ordinary agent definition', () => {
 	);
 	expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 });
+
+it.each([
+	['pi', (parts: AssistantParts) => pi({ ...parts, model: 'scripted/assistant' })],
+	['codex', (parts: AssistantParts) => codex({ ...parts, model: 'gpt-6-luna' })],
+	['claude', (parts: AssistantParts) => claude({ ...parts, model: 'claude-sonnet-5' })],
+] as const)(
+	'gives the %s executor the same instructions, tools, guidance, and reminders',
+	(kind, executor) => {
+		const remind = () => 'Check the stock list.';
+		const assistant = defineAssistant({
+			executor,
+			instructions: 'Prefer small changes.',
+			bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.', remind }],
+		});
+
+		expect(assistant.executor.kind).toBe(kind);
+		expect(assistant.executor.instructions).toContain('Prefer small changes.');
+		expect(assistant.executor.tools).toEqual([]);
+		expect(assistant.executor.guidance).toContain('This is a respond activation.');
+		expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
+		expect(assistant.executor.reminders).toEqual([remind]);
+	},
+);

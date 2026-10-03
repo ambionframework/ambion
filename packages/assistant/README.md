@@ -8,17 +8,22 @@ Install it alongside the core package using the repository's GitHub Packages
 registry configuration:
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/assistant
+npm install @ambionframework/ambion @ambionframework/assistant @ambionframework/pi
 ```
+
+The `executor` option is required. It is a function that receives the parts of
+the assistant and returns an executor of any package. Install the package of
+the executor that you pick.
 
 ```ts
 import { startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { pi } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
-  model: 'anthropic/claude-sonnet-5',
   instructions: 'Prefer small, reversible changes.',
   bundles: [workspace.tools()],
+  executor: (parts) => pi({ ...parts, model: 'anthropic/claude-sonnet-5', thinking: 'low' }),
 });
 
 await startRoom({
@@ -29,6 +34,21 @@ await startRoom({
   seats: { builder: 'named', reviewer: 'named' },
 });
 ```
+
+To run the assistant on Codex, change only the function:
+
+```ts
+import { codex } from '@ambionframework/codex';
+
+const assistant = defineAssistant({
+  instructions: 'Prefer small, reversible changes.',
+  bundles: [workspace.tools()],
+  executor: (parts) => codex({ ...parts, model: 'gpt-5.6-luna', modelReasoningEffort: 'low' }),
+});
+```
+
+A room with `execution: [piExecution(), codexExecution()]` runs the assistant
+and the specialists, each on the executor that its definition names.
 
 The room expands the shorthand into the ordinary definitions before it validates
 or composes the room. The assistant joins with `broadcast` attention and writes

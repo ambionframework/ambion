@@ -116,7 +116,7 @@ const noop = () => {};
 /** A steered line as a part of the pass that reads it. */
 const steerPart = (held: Held): Part => ({
 	range: { after: held.after, through: held.seq, steer: true },
-	text: `[new] ${held.line}`,
+	text: held.line,
 });
 
 /** One activation, from the moment the room wakes a seat until it stops. */

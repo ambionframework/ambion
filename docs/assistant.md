@@ -38,7 +38,16 @@ pass through it.
 **The package supplies a reusable agent definition.** The
 `defineAssistant()` factory returns an ordinary `AgentDefinition`. It supplies
 a default name, identity, and maintained behavioral instructions. Applications
-choose the model and can supply additional instructions, tools, and bundles.
+supply a required `executor` function and can supply additional instructions,
+tools, and bundles.
+
+**The `executor` function picks the executor package.** The function receives
+`AssistantParts`: the `instructions`, the `tools`, and the `bundles`. The
+`bundles` hold the respond guidance first, then the bundles of the
+application. The function returns an executor of any package. A spread of the
+parts is the whole adapter. The function sets the model, `thinking`, `compose`,
+and every other option of its package. The package of the assistant depends on
+`@ambionframework/ambion` only.
 
 The factory places participation guidance in the existing bundle guidance
 field, which reaches respond activations only. Shared instructions describe
@@ -67,11 +76,12 @@ that definition without depending on `@ambionframework/assistant`.
 ```ts
 import { startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { pi } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
-  model,
   instructions: 'Prefer small, reversible changes.',
   bundles: [workspace.tools()],
+  executor: (parts) => pi({ ...parts, model, thinking: 'low' }),
 });
 
 const room = await startRoom({
@@ -189,8 +199,9 @@ no useful work remains. The room runs the summary work in a separate
 summary activation.
 
 **The guidance names the marker that a mid-activation result carries.** The
-room delivers a message that lands while the assistant works as a user message
-that starts with `[new]`, then the seq of the message. A specialist result
+core adds the `[new]` prefix to each message that lands while the assistant
+works, and every executor sends the line unchanged. The assistant
+reads a user message that starts with `[new]`, then the seq of the message. A specialist result
 reads `[new] #12 [specialist → assistant] text`. The ordinary guidance names this marker
 and says to end without a tool call. Change the marker and the guidance
 together.

@@ -31,7 +31,8 @@ choice in it.
   `broadcast` seat, and the `summaryWriter`. The kernel then holds a role
   that it otherwise treats as ordinary. The question: does the option go,
   with a helper in `@ambionframework/assistant` that returns the three
-  options? A second question: does the assistant stay on Pi alone?
+  options? The executor of the assistant is settled: `defineAssistant`
+  takes an `executor` function.
 - **K13. One counter for the journal.** Both storages append at the head
   plus one, so each `seq` equals its storage position. The journal keeps
   `nextSeq`, `advanceSeq`, and the cursor, which always agree. The

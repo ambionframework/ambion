@@ -41,10 +41,12 @@
 		"test:live": "pnpm --filter '@ambionframework/assistant^...' build && vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
-		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/pi": "workspace:*"
+		"@ambionframework/ambion": "workspace:*"
 	},
 	"devDependencies": {
+		"@ambionframework/claude": "workspace:*",
+		"@ambionframework/codex": "workspace:*",
+		"@ambionframework/pi": "workspace:*",
 		"@ambionframework/simulator": "workspace:*",
 		"@earendil-works/pi-ai": "^1.0.0",
 		"tsdown": "^0.23.0",

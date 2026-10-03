@@ -9,7 +9,7 @@ import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
 import { expect, it, onTestFinished } from 'vitest';
-import { defineAssistant } from '../src/index.ts';
+import { type AssistantParts, defineAssistant } from '../src/index.ts';
 
 /**
  * Stop the room when the test ends. The declaration build reads the test
@@ -25,6 +25,8 @@ const goal = 'Resolve customer reports within the static prototype scope.';
 const override = 'Application override: use the local response format in every activation.';
 const preferences = 'PRIVATE_READER_PREFERENCE: lead with customer impact.';
 const summary = 'R-19: draft supplied; no files edited.';
+
+const onPi = (parts: AssistantParts) => pi({ ...parts, model: 'scripted/assistant' });
 
 const agent = (name: string, identity: string, instructions: string) =>
 	defineAgent({ name, identity, executor: pi({ instructions, model: `scripted/${name}` }) });
@@ -76,7 +78,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 			name: `prompt-review-${attention}`,
 			goal,
 			execution: piExecution({ sessions: 'memory', stream }),
-			assistant: defineAssistant({ model: 'scripted/assistant', instructions: override }),
+			assistant: defineAssistant({ executor: onPi, instructions: override }),
 			agents: [agent('writer', 'Customer writer.', 'Draft within the user constraints.')],
 			seats: attention === 'named' ? { writer: 'named' } : {},
 		}),
@@ -176,7 +178,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 	room = stopAtEnd(
 		await startRoom({
 			name: 'steer-marker',
-			assistant: defineAssistant({ model: 'scripted/assistant' }),
+			assistant: defineAssistant({ executor: onPi }),
 			agents: [agent('inventory', 'Checks stock.', 'Report the stock once.')],
 			seats: { inventory: 'named' },
 			execution: piExecution({ sessions: 'memory', stream }),

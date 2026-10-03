@@ -42,7 +42,7 @@ cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ workspace
-assistant ──▶ ambion, pi
+assistant ──▶ ambion
 simulator ──▶ ambion, pi
 ```
 

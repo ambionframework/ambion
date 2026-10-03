@@ -4,7 +4,7 @@ export type ExecutorKind = 'pi' | 'claude' | 'codex';
 /** The environment variables a run reads. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
-/** The seats that run on an executor kind. The assistant keeps the default executor, which is Pi. */
+/** The seats that run on an executor kind, the assistant included. */
 export const seatKinds: Readonly<Record<string, ExecutorKind>> = {
 	assistant: 'pi',
 	datasheets: 'pi',

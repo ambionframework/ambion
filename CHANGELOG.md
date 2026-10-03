@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### A harness-neutral assistant
+
+**`defineAssistant` takes a required `executor` function.** The function
+receives `AssistantParts` (`instructions`, `tools`, and `bundles`) and
+returns an executor of any package. The options `model` and `thinking` are
+gone. Pass them to the executor in the function: `executor: (parts) =>
+pi({ ...parts, model, thinking })`. The package exports the new type
+`AssistantParts`.
+
+**`@ambionframework/assistant` no longer depends on `@ambionframework/pi`.**
+It depends on `@ambionframework/ambion` only.
+
+**The core adds the `[new]` marker to a steered line.** The runner marks the
+line with the prefix of `renderDelta`. Pi no longer adds its own prefix.
+Codex and Claude now send the marked line.
+
 ### The compose vocabulary
 
 **A tool can declare its output for `compose`.** `AmbionTool` gains the

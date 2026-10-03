@@ -20,7 +20,6 @@ import type {
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
-import { renderLine } from '../record.ts';
 import type {
 	ActivationEvent,
 	EndReason,
@@ -33,6 +32,7 @@ import type {
 import { type ActivationInput, ActivationState } from './activation.ts';
 import type { PassInput, PassResult, TraceSink } from './contract.ts';
 import { failedPass } from './failure.ts';
+import { renderNew } from './render.ts';
 
 type CallResult<T> = { kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cut' };
 
@@ -87,7 +87,7 @@ export class AgentRunner implements AgentPort {
 	async steer(steer: Steer): Promise<void> {
 		const current = this.current;
 		if (current === undefined || current.over || current.id !== steer.activation) return;
-		current.state.steer(steer.after, steer.message.seq, renderLine(steer.message));
+		current.state.steer(steer.after, steer.message.seq, renderNew(steer.message));
 	}
 
 	/**
