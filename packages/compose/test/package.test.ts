@@ -32,6 +32,7 @@ it('keeps the child entry free of any import but node: built-ins, built and in s
 it('builds the library with one entry that imports the child by path only', () => {
 	expect(importsOf(read('../dist/runtime.mjs')).sort()).toEqual([
 		'node:child_process',
+		'node:fs',
 		'node:readline',
 		'node:url',
 		'quickjs-emscripten',

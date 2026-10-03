@@ -82,9 +82,9 @@ live('steer', () => {
 			});
 			await visit.send({ text: 'When can we pour the slab? Explain the cure times first.' });
 			const activation = await started;
-			// The final answer streams when a text step is open after the first say.
+			// The final answer starts when the result of the first say returns to the model.
 			const deadline = Date.now() + 60_000;
-			while (!closingNoteStreams(stepsOf(activation))) {
+			while (!finalAnswerStarts(stepsOf(activation))) {
 				if (Date.now() > deadline) throw new Error('The answer did not start streaming.');
 				await new Promise((resolve) => setTimeout(resolve, 20));
 			}
@@ -110,10 +110,17 @@ live('steer', () => {
 	});
 });
 
-/** Whether a text step is open after the first committed say: the model streams its closing note. */
-function closingNoteStreams(steps: readonly TraceStep[]): boolean {
-	const said = steps.findIndex(
+/**
+ * Whether the result of the first committed say has returned to the model.
+ * The model then streams its closing note. The trace joins the deltas of a
+ * text block and logs only the whole block, so no open text step shows.
+ */
+function finalAnswerStarts(steps: readonly TraceStep[]): boolean {
+	const said = steps.find(
 		(step) => step.type === 'room' && step.intent.kind === 'said' && step.result === 'committed',
 	);
-	return said >= 0 && steps.slice(said).some((step) => step.type === 'text' && !step.final);
+	return (
+		said?.type === 'room' &&
+		steps.some((step) => step.type === 'tool_result' && step.call === said.call)
+	);
 }

@@ -11,6 +11,7 @@ import {
 	type SpawnOptionsWithoutStdio,
 	spawn,
 } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { createInterface, type Interface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import type { Evaluator, EvaluatorInput, JsonValue } from '@ambionframework/ambion';
@@ -66,6 +67,10 @@ function watchExit(): void {
 /**
  * Start the child on `entry`: Node with the permission model and no allow
  * flag, an empty environment, and a bound on the old space of its heap.
+ * Node lets the child read its entry. It resolves the entry through each
+ * folder of the path, so a symbolic link in the path needs a read that the
+ * child does not have. On macOS, `/var` is such a link. The child starts on
+ * the resolved path.
  */
 export function startChild(
 	entry: string,
@@ -73,7 +78,7 @@ export function startChild(
 	start: SpawnChild = spawn,
 ): ChildProcessWithoutNullStreams {
 	const megabytes = Math.ceil(memoryLimit / (1024 * 1024));
-	const args = ['--permission', `--max-old-space-size=${megabytes}`, entry];
+	const args = ['--permission', `--max-old-space-size=${megabytes}`, realpathSync(entry)];
 	const child = start(process.execPath, args, { env: {}, windowsHide: true });
 	alive.add(child);
 	watchExit();

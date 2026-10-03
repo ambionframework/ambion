@@ -25,6 +25,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Execution } from '@ambionframework/ambion';
+import { localExecution } from '@ambionframework/ambion/hosting';
+import type { Connect } from '../src/app-server.ts';
+import { createCodexOpener } from '../src/executor.ts';
 import { codexExecution } from '../src/index.ts';
 import type { CodexExecutionOptions } from '../src/options.ts';
 import {
@@ -149,6 +152,8 @@ export interface CodexOnOptions {
 	readonly config?: string;
 	/** A line that the binary writes to its standard error before it starts. */
 	readonly stderrLine?: string;
+	/** Opens the connection to the app-server, to watch it. It leaves the default of the kind. */
+	readonly connect?: Connect;
 }
 
 /** A real binary on a script: the execution to give a room, the endpoint, and the cleanup. */
@@ -221,15 +226,24 @@ export async function codexOn(
 	};
 	const codexPath =
 		options.stderrLine === undefined ? undefined : noisyBinary(dir, options.stderrLine);
+	const connect = options.connect;
+	// With a host login, the default `login` links it. Otherwise no seat links a login.
+	const runtime: CodexExecutionOptions = {
+		env,
+		...(options.hostLogin === undefined ? { login: false } : {}),
+		...(codexPath === undefined ? {} : { codexPath }),
+		...options.runtime,
+		home,
+	};
 	return {
-		// With a host login, the default `login` links it. Otherwise no seat links a login.
-		execution: codexExecution({
-			env,
-			...(options.hostLogin === undefined ? { login: false } : {}),
-			...(codexPath === undefined ? {} : { codexPath }),
-			...options.runtime,
-			home,
-		}),
+		execution:
+			connect === undefined
+				? codexExecution(runtime)
+				: localExecution(
+						'codex',
+						() => (request) =>
+							createCodexOpener({ definition: request.definition, ...runtime, connect }),
+					),
 		...(codexPath === undefined ? {} : { codexPath }),
 		responses,
 		home,

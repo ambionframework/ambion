@@ -196,10 +196,15 @@ const messagesOf = (request: ResponsesRequest | undefined) =>
 const threadOf = (request: ResponsesRequest | undefined): unknown =>
 	(request?.client_metadata as { thread_id?: string } | undefined)?.thread_id;
 
-/** What a watched connection saw: each process it spawned, and each request that Codex refused. */
+/**
+ * What a watched connection saw: each process it spawned, each steer that Codex took, and each
+ * request that Codex refused.
+ */
 function watched(options: { delayCompleted?: number } = {}) {
 	const seen = {
 		spawned: 0,
+		/** The `turn/steer` requests that Codex answered. The line then waits in the turn. */
+		steered: 0,
 		/** Whether the server reported the end of a turn, though the host may not have heard yet. */
 		completed: false,
 		rejected: [] as { method: string; code: number; message: string }[],
@@ -221,7 +226,9 @@ function watched(options: { delayCompleted?: number } = {}) {
 		const connection: Connection = {
 			request: async (method, params) => {
 				try {
-					return await inner.request(method, params);
+					const result = await inner.request(method, params);
+					if (method === 'turn/steer') seen.steered += 1;
+					return result;
 				} catch (error) {
 					if (error instanceof RpcError) {
 						seen.rejected.push({ method, code: error.code, message: error.message });
@@ -687,10 +694,17 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					parameters: Type.Object({}),
 					execute: async () => {
 						await send?.();
+						// The send ends at the journal. The tool returns once Codex holds the line in the turn.
+						await until(() => watch.seen.steered === 1, 'the steer');
 						return 'slept';
 					},
 				});
-				const on = await codexOn([{ call: 'slow', args: {} }, say('first'), { text: 'done' }]);
+				const watch = watched();
+				const on = await codexOn(
+					[{ call: 'slow', args: {} }, say('first'), { text: 'done' }],
+					undefined,
+					{ connect: watch.connect },
+				);
 				try {
 					const { visit, room, steps } = await roomOn(on.execution, { extraTools: [slow] });
 					send = () => visit.send({ text: 'Also name the owner.' });
