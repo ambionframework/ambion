@@ -501,6 +501,7 @@ describe('Session /ps', () => {
 		kind: 'bash',
 		agent: 'design',
 		command: 'npm test',
+		port: 20000,
 		state: 'running',
 		output: `/home/design/.processes/${handle}/out`,
 		timeout: 600,

@@ -24,6 +24,7 @@
  * `docs/processes.md` is the design contract.
  */
 
+import { randomInt } from 'node:crypto';
 import type { WorkspaceEnv } from './backend.ts';
 import { randomName } from './execution-env.ts';
 import { cancelWaitMs, type Live, type Own, openCancels, POLL_MS } from './process-cancel.ts';
@@ -66,6 +67,22 @@ export const MAX_RUNNING_PROCESSES = 4;
 export const MAX_FINISHED_PROCESSES = 64;
 
 const CLOSED = 'Workspace is no longer available.';
+
+/** The first and the last port that the table gives to a process. */
+const PORT_FIRST = 20000;
+const PORT_LAST = 29999;
+
+/**
+ * A random port in the range of the table, other than a port in `taken`.
+ * An agent runs at most `MAX_RUNNING_PROCESSES` processes, so the range
+ * never runs out.
+ */
+function pickPort(taken: ReadonlySet<number>): number {
+	for (;;) {
+		const port = randomInt(PORT_FIRST, PORT_LAST + 1);
+		if (!taken.has(port)) return port;
+	}
+}
 
 /** A process as a read finds it: its files, and the status they give. */
 interface Found {
@@ -338,6 +355,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 			kind: 'bash',
 			agent: agent.name,
 			command: request.command,
+			port: pickPort(new Set([...live.values()].map((one) => one.spec.port))),
 			timeout: request.timeout,
 			grace: request.grace,
 			...(request.room === undefined ? {} : { room: request.room }),

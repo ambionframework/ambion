@@ -163,6 +163,7 @@ export function status(handle: string, agent: string, state: Process['state']): 
 		kind: 'bash',
 		agent,
 		command: 'node server.mjs',
+		port: 20000,
 		state,
 		output: `/home/${agent}/.processes/${handle}/out`,
 		timeout: 600,

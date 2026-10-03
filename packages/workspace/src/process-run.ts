@@ -81,6 +81,7 @@ export async function runBash(
 			{
 				timeout: Math.min(spec.timeout + grace + BACKEND_SLACK_SECONDS, MAX_TIMER_SECONDS),
 				grace,
+				env: { PORT: String(spec.port) },
 				capture: { limits: SHELL_OUTPUT },
 			},
 			signal,

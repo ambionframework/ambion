@@ -90,6 +90,8 @@ export function processToolGuidance(): string {
 		`wait takes a list of handles and waits for the first of them to end.`,
 		`wait with one handle and timeout 0 gives the state and the new output of that process at once.`,
 		`cancel takes a handle and stops its process. ps lists your running processes.`,
+		`The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.`,
+		`Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,

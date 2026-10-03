@@ -13,7 +13,7 @@ import type { Process } from './process-files.ts';
 export const FINISHED_IN_REMINDER = 10;
 
 /** The columns of the `ps` table. */
-const PS_COLUMNS = ['Handle', 'Name', 'Runs for', 'Command'];
+const PS_COLUMNS = ['Handle', 'Name', 'Port', 'Runs for', 'Command'];
 
 /** The most characters of a command that `ps` and the reminder show. */
 const COMMAND_CHARS = 80;
@@ -46,9 +46,9 @@ export function stateLine(process: Process): string {
 	switch (process.state) {
 		case 'running':
 			if (process.stopping === true) {
-				return `${who} is running, and the table stopped it. It has not ended yet. ${where} Call wait with its handle to read the end.`;
+				return `${who} is running, and the table stopped it. It has not ended yet. ${where} Call wait with its handle to read the end. $PORT=${process.port}.`;
 			}
-			return `${who} is running. ${where} Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes.`;
+			return `${who} is running. ${where} Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes. $PORT=${process.port}.`;
 		case 'exited':
 			return `${who} exited with code ${process.exitCode}. ${where}`;
 		case 'timed_out':
@@ -137,6 +137,7 @@ export function psTable(processes: readonly Process[], now: number): string {
 	const rows = processes.map((process) => ({
 		Handle: process.handle,
 		Name: process.name ?? '',
+		Port: String(process.port),
 		'Runs for': duration(now - Date.parse(process.startedAt)),
 		Command: shortCommand(process.command),
 	}));
