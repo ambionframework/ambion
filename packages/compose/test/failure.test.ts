@@ -78,11 +78,4 @@ describe.each([
 			);
 		},
 	);
-
-	it.runIf(runs)('says that the seat has no tool of that name', async () => {
-		const message = await failure(evaluator(), ['bash', 'wait'], 'return tools.kill({});');
-		expect(message).toBe(
-			'The compose call failed: tools.kill does not exist. This seat has no tool named kill. This call binds bash, wait.\nNo call started.',
-		);
-	});
 });

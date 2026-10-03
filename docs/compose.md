@@ -108,7 +108,7 @@ step has no ledger and no effect. `compose` binds only the named tools.
 
 **Code that reads an unbound name gets an error that names the fix.** The
 evaluator wraps `tools` so that a read of `tools.<name>` for any other name
-throws, and the code reads no `undefined`. The message names the tool and
+throws. The message names the tool and
 the bound names. It differs for three cases:
 
 | Case                                       | Message                                                                                    |
@@ -178,7 +178,8 @@ failed has lost the values that its calls returned, such as the handles of
 processes that it started. The message gives each completed call a line
 `  result: <JSON>` under its ledger line, so the model can recover what the
 code started. The value is the binding value that the code received. A
-failed or pending call shows no result. A cancelled call, a time limit, and
+failed or pending call shows no result. A room tool shows none either: its
+result reaches the model only under `Room tools reported:`. A cancelled compose call, a time limit, and
 a failure show their results in the same way.
 
 ```text
@@ -192,7 +193,7 @@ Calls, in the order that the code made them:
 
 **The results have two bounds.** One result shows at most 4096 bytes of
 JSON. All results together show at most `compose.limits.bytes`. A cut result
-reads `result: cut to <shown> of <full> bytes:` and then its first bytes,
+reads `result: cut to at most <shown> of <full> bytes:` and then its first bytes,
 cut at a character. A result past the total reads `result: omitted, because
 the results above fill <bytes> bytes.`
 
@@ -993,8 +994,8 @@ smaller value.
 **The `calls` limit rejects the binding, so code can catch it.** The call
 past the limit gets no id, no ledger entry, and no step. Its binding
 rejects with an error that names `compose.limits.calls`. Arguments that
-break the schema reject in the same way. Code that catches the error can return what it has. The other
-limits end the compose call.
+break the schema reject in the same way. Code that catches the error can
+return what it has. The other limits end the compose call.
 
 **The time limit covers the drain of late calls.** The timer starts before
 the code and stops after every call settles. It can fire while `compose`

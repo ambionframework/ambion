@@ -6,7 +6,9 @@
 reads `tools.<name>` for a name outside `uses` gets an error that names the
 tool and the bound names. The error says to add the tool to `uses`, or that
 the seat has no such tool. `EvaluatorInput` gains the optional `unlisted`.
-`'x' in tools` is false for an unbound name.
+`'x' in tools` is false for an unbound name. The evaluator conformance
+suite requires the throw, so an evaluator that does not run the shared
+guest script fails it.
 
 **A failed compose call shows the result of each completed call.** The
 message gives one `result:` line under each completed call, so the model

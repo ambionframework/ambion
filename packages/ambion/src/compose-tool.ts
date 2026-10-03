@@ -156,7 +156,7 @@ function resultLines(calls: readonly LedgerEntry[], shown: Shown): ReadonlyMap<s
 			call.call,
 			size <= allowed
 				? `  result: ${json}`
-				: `  result: cut to ${allowed} of ${size} bytes: ${prefixOf(json, allowed)}`,
+				: `  result: cut to at most ${allowed} of ${size} bytes: ${prefixOf(json, allowed)}`,
 		);
 	}
 	return lines;

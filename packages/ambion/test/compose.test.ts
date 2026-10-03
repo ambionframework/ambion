@@ -8,6 +8,7 @@ import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { AmbionTool, ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
+import type { RoomCall } from '../src/compose-tool.ts';
 import { describeExecutor } from '../src/define.ts';
 import { invokeTool } from '../src/hosting.ts';
 import {
@@ -304,10 +305,14 @@ describe('a failed compose call', () => {
 			`,
 		});
 		const lines = ran.read.split('\n');
-		const first = lines.find((line) => line.startsWith('  result: cut to 4096 of 5002 bytes: '));
-		expect(first?.length).toBe('  result: cut to 4096 of 5002 bytes: '.length + 4096);
+		const first = lines.find((line) =>
+			line.startsWith('  result: cut to at most 4096 of 5002 bytes: '),
+		);
+		expect(first?.length).toBe('  result: cut to at most 4096 of 5002 bytes: '.length + 4096);
 		// A character is never split: the second value cuts at a whole 'é' of two bytes.
-		const second = lines.find((line) => line.startsWith('  result: cut to 4096 of 6002 bytes: '));
+		const second = lines.find((line) =>
+			line.startsWith('  result: cut to at most 4096 of 6002 bytes: '),
+		);
 		expect(second?.endsWith('é')).toBe(true);
 		expect(ran.read).toContain('- c1.3 broken: failed');
 	});
@@ -326,7 +331,7 @@ describe('a failed compose call', () => {
 			},
 			{ compose: { limits: { bytes: 4000 } } },
 		);
-		expect(ran.read).toContain('  result: cut to 998 of 3002 bytes: ');
+		expect(ran.read).toContain('  result: cut to at most 998 of 3002 bytes: ');
 		expect(ran.read).toContain('  result: omitted, because the results above fill 4000 bytes.');
 	});
 
@@ -1245,6 +1250,33 @@ describe('a compose call over the room tools', () => {
 			owner,
 			owner,
 		]);
+	});
+
+	it('shows the result of a room tool once in a failed call, under the room notes', async () => {
+		const room: RoomCall = {
+			name: 'say',
+			run: async () => ({ content: text('said #9 to ana. Missed: #8 ben'), carriesRecord: true }),
+		};
+		const tool = composeOf([echo]);
+		const ctx: ToolContext = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'c1' };
+		const error = await invokeTool(
+			tool,
+			{
+				uses: ['echo', 'say'],
+				code: `await tools.echo({ text: 'a' }); await tools.say({ text: 'Hi.' }); throw new Error('stop');`,
+			},
+			ctx,
+			() => {},
+			[room],
+		).catch((thrown: unknown) => thrown);
+		expect(error).toBeInstanceOf(ComposeFailure);
+		const message = (error as ComposeFailure).message;
+		expect(message).toContain('- c1.1 echo: completed\n  result: "a"\n- c1.2 say: completed');
+		expect(message).toContain(
+			'Room tools reported:\nCall c1.2 (say): said #9 to ana. Missed: #8 ben',
+		);
+		// The room tool shows no result line: its text appears once, under the notes.
+		expect(message.split('said #9 to ana').length).toBe(2);
 	});
 
 	it('refuses a room tool in a direct invoke, at call time, with no code run', async () => {

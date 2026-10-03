@@ -29,7 +29,11 @@ interface CallError {
 /** One compose call, as the run reports it. `late` holds the calls that outlived the code. */
 export interface ComposeOutcome {
 	readonly result: ComposeResult;
-	/** The binding value of each completed call, by call id. The ledger holds none. */
+	/**
+	 * The binding value of each completed call, by call id, for a compose call
+	 * that did not complete. A room tool has none: its result reaches the model
+	 * through the room notes. The ledger holds none.
+	 */
 	readonly values: ReadonlyMap<string, JsonValue>;
 	readonly late: readonly LedgerEntry[];
 }
@@ -278,10 +282,9 @@ export class ComposeRun {
 	private outcome(ending: Ending): ComposeOutcome {
 		const calls = this.ledger();
 		const late = [...this.late].map((call) => entryOf(call));
+		const settled = ending.status === 'completed' ? [] : this.calls;
 		const values = new Map(
-			this.calls.flatMap((call) =>
-				call.value === undefined ? [] : [[call.id, call.value] as const],
-			),
+			settled.flatMap((call) => (call.value === undefined ? [] : [[call.id, call.value] as const])),
 		);
 		if (ending.status === 'completed') {
 			const value = ending.value === undefined ? {} : { value: ending.value };
@@ -319,6 +322,7 @@ export class ComposeRun {
 		const { tools, limits } = this.input;
 		if (this.refusing) throw new Error('The compose call has ended: it starts no further call.');
 		const tool = tools.get(name);
+		// An evaluator that conforms throws before it reaches this line. The line guards one that does not.
 		if (tool === undefined) throw new Error(`The compose call binds no tool '${name}'.`);
 		if (this.calls.length >= limits.calls)
 			throw new Error(`The compose call passed compose.limits.calls (${limits.calls}).`);
@@ -377,8 +381,10 @@ export class ComposeRun {
 		}
 		call.state = 'completed';
 		try {
-			call.value = this.valueOf(call, result);
-			call.resolve(call.value);
+			const value = this.valueOf(call, result);
+			// The result of a room tool reaches the model through the room notes, once.
+			if (!this.input.commits?.(call.tool)) call.value = value;
+			call.resolve(value);
 		} catch (error) {
 			call.error = messageOf(error);
 			call.reject(crossing(error));
