@@ -1,4 +1,4 @@
-/** Helpers for the SN35 lifecycle acceptance run on the provisioned OpenSSH tier. */
+/** Helpers for the process HTTP acceptance run on the provisioned OpenSSH tier. */
 
 import { randomUUID } from 'node:crypto';
 import { defineAgent, definePerson, type Message, startRoom } from '@ambionframework/ambion';
@@ -56,7 +56,7 @@ export async function runToolRoom(
 	const tools = workspace.tools();
 	const agent = defineAgent({
 		name,
-		identity: `Runs the ${name} workstation lifecycle tools.`,
+		identity: `Runs the ${name} workstation tools.`,
 		executor: {
 			kind: 'scripted',
 			instructions: 'Run each requested workspace tool in order.',
@@ -66,7 +66,7 @@ export async function runToolRoom(
 		},
 	});
 	const room = await startRoom({
-		name: `sn35-${randomUUID().slice(0, 8)}`,
+		name: `http-${randomUUID().slice(0, 8)}`,
 		agents: [agent],
 		execution: scripted((step) => {
 			if (!started || completed || isSummarizing(step.view)) return quiet();
@@ -81,11 +81,11 @@ export async function runToolRoom(
 	});
 	try {
 		const visit = await room.visit(
-			definePerson({ name: 'sn35-operator', identity: 'Runs acceptance.' }),
+			definePerson({ name: 'http-operator', identity: 'Runs acceptance.' }),
 		);
 		await settled(room);
 		started = true;
-		const exchange = await visit.send({ text: 'Run the workstation sensor lifecycle acceptance.' });
+		const exchange = await visit.send({ text: 'Run the process HTTP acceptance.' });
 		await exchange.waitForClose();
 		if (failure !== undefined) {
 			const detail = failure.error instanceof Error ? failure.error.message : String(failure.error);
@@ -170,16 +170,16 @@ export function processHandle(text: string): string {
 	return handle;
 }
 
-/** Read the server's selected loopback port from its ready line. */
-export function readyPort(text: string): number {
-	const port = /READY http:\/\/127\.0\.0\.1:(\d+)/.exec(text)?.[1];
-	if (port === undefined) throw new Error(`The process output has no READY port: ${text}`);
+/** Read the `$PORT` of a running process from the state line of `bash` or `wait`. */
+export function portOf(text: string): number {
+	const port = /\$PORT=(\d+)\./.exec(text)?.[1];
+	if (port === undefined) throw new Error(`The process text has no $PORT: ${text}`);
 	return Number(port);
 }
 
-/** Read a retained manifest ref from the observation shown to the agent. */
-export function manifestRef(text: string): string {
+/** Read the snapshot ref of a `fetch` result. */
+export function refOf(text: string): string {
 	const ref = /Snapshot ref: (ambion:\/\/\S+)/.exec(text)?.[1];
-	if (ref === undefined) throw new Error(`The observe result has no snapshot ref: ${text}`);
+	if (ref === undefined) throw new Error(`The fetch result has no snapshot ref: ${text}`);
 	return ref;
 }

@@ -37,12 +37,6 @@ export type {
 export { gitConformance } from './git-conformance.ts';
 export type { ObjectConformanceStore } from './object-conformance.ts';
 export { objectConformance } from './object-conformance.ts';
-export type {
-	SensorConformanceFixture,
-	SensorConformanceProbe,
-	SensorConformanceReply,
-} from './sensor-conformance.ts';
-export { sensorConformance } from './sensor-conformance.ts';
 export { type ConformanceCase, type ConformanceFixture, check, conformanceSuite };
 
 /** A bash backend that a case connects to, and how the case releases it. */

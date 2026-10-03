@@ -1,5 +1,5 @@
 /**
- * The package's eight entries, and what each one names. `index.ts` opens a
+ * The package's seven entries, and what each one names. `index.ts` opens a
  * resource and its logs, over no backend. `./resource` holds the neutral
  * contract, and `./sqlite` the SQLite backend. `./git` holds the name
  * rules and the template helpers that every git backend shares. `./s3`
@@ -17,7 +17,6 @@ import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
 import * as resource from '../src/resource-entry.ts';
 import * as s3 from '../src/s3-entry.ts';
-import * as sensors from '../src/sensors.ts';
 import * as sqlite from '../src/sqlite-entry.ts';
 
 const read = async (name: string) =>
@@ -37,10 +36,9 @@ const STEMS: Record<string, string> = {
 	'./git': 'git-entry',
 	'./s3': 's3-entry',
 	'./conformance': 'conformance',
-	'./sensors': 'sensors',
 };
 
-it('holds exactly eight entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
+it('holds exactly seven entries, builds each under the name the manifest gives it, and keeps the package name in step', async () => {
 	const { name, exports } = await manifest();
 	expect(PACKAGE_NAME).toBe(name);
 	expect(Object.keys(exports).sort()).toEqual([
@@ -50,11 +48,8 @@ it('holds exactly eight entries, builds each under the name the manifest gives i
 		'./package.json',
 		'./resource',
 		'./s3',
-		'./sensor-api.schema.json',
-		'./sensors',
 		'./sqlite',
 	]);
-	expect(exports['./sensor-api.schema.json']).toBe('./dist/sensor-api.schema.json');
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
 	expect(built).toEqual([
@@ -64,10 +59,9 @@ it('holds exactly eight entries, builds each under the name the manifest gives i
 		'src/git-entry.ts',
 		'src/s3-entry.ts',
 		'src/conformance.ts',
-		'src/sensors.ts',
 	]);
 	for (const [path, target] of Object.entries(exports)) {
-		if (path === './package.json' || path === './sensor-api.schema.json') continue;
+		if (path === './package.json') continue;
 		const stem = STEMS[path];
 		expect(stem).toBeDefined();
 		expect(typeof target === 'string' ? target : target.import).toBe(`./dist/${stem}.mjs`);
@@ -111,35 +105,9 @@ it.each([
 	['./sqlite', sqlite, ['sqliteBackend']],
 	['./s3', s3, ['s3ObjectBackend']],
 	[
-		'./sensors',
-		sensors,
-		[
-			'ObserveRequestSchema',
-			'ObserveResponseSchema',
-			'SensorApiSchema',
-			'SensorDigestError',
-			'SensorErrorSchema',
-			'SensorHttpError',
-			'SensorIndexSchema',
-			'SensorPartSchema',
-			'SensorProtocolError',
-			'SensorSourceSchema',
-			'SensorSpanSchema',
-			'createSensorClient',
-			'isValidObserveRequest',
-		],
-	],
-	[
 		'./conformance',
 		conformance,
-		[
-			'check',
-			'conformanceSuite',
-			'gitConformance',
-			'objectConformance',
-			'sensorConformance',
-			'workspaceConformance',
-		],
+		['check', 'conformanceSuite', 'gitConformance', 'objectConformance', 'workspaceConformance'],
 	],
 	[
 		'./git',
@@ -185,19 +153,6 @@ it('exports the neutral endpoint types from the root', async () => {
 	expect([endpoints.machine, endpoint.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
 });
 
-it('exports host sensor discovery and lifecycle types from the root', () => {
-	const connection: main.SensorDiscovery = {
-		name: 'camera',
-		hostname: 'localhost',
-		port: 43127,
-		process: 'bash-000000000001',
-		state: 'disconnected',
-		sensors: [],
-	};
-	const event: main.SensorConnectionEvent = { type: 'disconnected', connection };
-	expect(event.connection.state).toBe('disconnected');
-});
-
 it('keeps the neutral resource contract free of imports, Pi among them', async () => {
 	const contract = await read('src/resource.ts');
 	expect(contract).not.toMatch(/@earendil-works\/pi/);
@@ -241,21 +196,6 @@ it.each([
 	['root', 'index.mjs', ['just-bash', 'node:sqlite']],
 	['resource', 'resource-entry.mjs', ['just-bash']],
 	['sqlite', 'sqlite-entry.mjs', ['just-bash']],
-	[
-		'sensors',
-		'sensors.mjs',
-		[
-			'@ambionframework/ambion',
-			'@ambionframework/pi',
-			'@earendil-works/pi-agent-core',
-			'@earendil-works/pi-ai',
-			'node-hid',
-			'node-serialport',
-			'serialport',
-			'just-bash',
-			'vitest',
-		],
-	],
 	[
 		'git',
 		'git-entry.mjs',

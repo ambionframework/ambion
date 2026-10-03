@@ -13,7 +13,6 @@
 			"@ambionframework/workspace": ["../workspace/src/index.ts"],
 			"@ambionframework/workspace/resource": ["../workspace/src/resource-entry.ts"],
 			"@ambionframework/workspace/conformance": ["../workspace/src/conformance.ts"],
-			"@ambionframework/workspace/sensors": ["../workspace/src/sensors.ts"],
 			"@ambionframework/workspace/git": ["../workspace/src/git-entry.ts"],
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
 			"@ambionframework/ambion/conformance": ["../ambion/src/conformance.ts"],

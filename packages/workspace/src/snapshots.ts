@@ -317,7 +317,7 @@ async function restoreSnapshot(
 }
 
 /** Build the `restore` tool. Each call writes the bytes as the calling agent. */
-export function createRestoreTool(store: SnapshotStore): AmbionTool {
+function createRestoreTool(store: SnapshotStore): AmbionTool {
 	return defineTool({
 		name: 'restore',
 		label: 'Restore a snapshot',
