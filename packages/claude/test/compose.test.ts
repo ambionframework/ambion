@@ -12,6 +12,7 @@ import {
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -20,7 +21,6 @@ import {
 	table,
 	total,
 } from '../../ambion/test/support/compose-tools.ts';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
 import { claude } from '../src/index.ts';
 import { open, seat, viewOf } from './support.ts';
 
@@ -37,7 +37,7 @@ async function composed(
 ) {
 	const run = open(
 		{ passes: [calls.map((call) => ({ call }))] },
-		seat({ tools, compose: { evaluator: functionEvaluator, ...compose } }),
+		seat({ tools, compose: { runtime: functionRuntime, ...compose } }),
 	);
 	await run.session.pass({ kind: 'view', view: viewOf() });
 	run.session.close?.();
@@ -58,7 +58,7 @@ async function composed(
 const compose = (call: Call) => ({ tool: 'compose', args: call });
 
 describe('compose on a Claude seat', () => {
-	const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
+	const own: ComposeOptions = { runtime: functionRuntime, guidance: 'Own guidance.' };
 
 	it.each([
 		['absent', undefined, ['compose', 'describe'], COMPOSE_GUIDANCE],

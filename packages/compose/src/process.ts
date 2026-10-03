@@ -1,5 +1,5 @@
 /**
- * `processEvaluator`: the code of a compose call runs in a `node:vm` context
+ * `processRuntime`: the code of a compose call runs in a `node:vm` context
  * in a child Node process. The child runs under `--permission` with no allow
  * flag: no file, network, child process, worker, or addon. `--max-old-space-size`
  * bounds the old space of its heap. An ArrayBuffer lives outside that bound.
@@ -14,7 +14,7 @@ import {
 import { realpathSync } from 'node:fs';
 import { createInterface, type Interface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import type { Evaluator, EvaluatorInput, JsonValue } from '@ambionframework/ambion';
+import type { ComposeRuntime, ComposeRuntimeInput, JsonValue } from '@ambionframework/ambion';
 import { configText, failureOf } from './crossing.ts';
 
 /** Starts the child process. The default is `spawn` of `node:child_process`. */
@@ -50,7 +50,7 @@ type Line =
 	| { readonly type: 'call'; readonly id: number; readonly name: string; readonly args: JsonValue }
 	| { readonly type: 'done'; readonly report: Report };
 
-const cutError = () => new Error('The evaluator was cut.');
+const cutError = () => new Error('The runtime was cut.');
 
 /** The children that run now. The host kills them when it exits. */
 const alive = new Set<ChildProcessWithoutNullStreams>();
@@ -97,13 +97,13 @@ class ProcessRun {
 	private readonly lines: Interface;
 	private readonly outcome = Promise.withResolvers<JsonValue | undefined>();
 	private readonly listener = () => this.fail(cutError());
-	private readonly input: EvaluatorInput;
+	private readonly input: ComposeRuntimeInput;
 	private readonly signal: AbortSignal;
 	private readonly memoryLimit: number;
 	private ended = false;
 	private tail = '';
 
-	constructor(input: EvaluatorInput, signal: AbortSignal, options: Required<ProcessOptions>) {
+	constructor(input: ComposeRuntimeInput, signal: AbortSignal, options: Required<ProcessOptions>) {
 		this.input = input;
 		this.signal = signal;
 		this.memoryLimit = options.memoryLimit;
@@ -187,21 +187,21 @@ class ProcessRun {
 	private closed(code: number | null, by: NodeJS.Signals | null): Error {
 		if (this.tail.includes(OUT_OF_MEMORY)) return this.memoryError();
 		const how = by === null ? `exit code ${code}` : `signal ${by}`;
-		return new Error(`The evaluator process ended before the code returned (${how}).`, {
+		return new Error(`The runtime process ended before the code returned (${how}).`, {
 			cause: this.tail,
 		});
 	}
 }
 
 /**
- * An evaluator that runs the code in a child Node process, under the
+ * A runtime that runs the code in a child Node process, under the
  * permission model of Node with no allow flag. It needs a Node that has
  * `--allow-net`, so it refuses to start on Node 22.
  */
-export function processEvaluator(options: ProcessOptions = {}): Evaluator {
+export function processRuntime(options: ProcessOptions = {}): ComposeRuntime {
 	if (!process.allowedNodeEnvironmentFlags.has('--allow-net')) {
 		throw new Error(
-			`processEvaluator needs the permission flag --allow-net, which Node ${process.version} lacks. Use quickjsEvaluator, or run Node 26 or newer.`,
+			`processRuntime needs the permission flag --allow-net, which Node ${process.version} lacks. Use quickjsRuntime, or run Node 26 or newer.`,
 		);
 	}
 	const settings = {

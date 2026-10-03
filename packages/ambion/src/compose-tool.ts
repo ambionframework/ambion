@@ -493,7 +493,7 @@ export function composeTools(
 			tools: program.tools,
 			unlisted: [...catalog.keys()].filter((name) => !program.tools.has(name)),
 			code: program.code,
-			evaluator: options.evaluator,
+			runtime: options.runtime,
 			...(program.macro === undefined ? {} : { args: program.macro.args }),
 			limits,
 			ctx,

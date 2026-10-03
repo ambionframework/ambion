@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { AmbionTool, ToolBundle } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { fromDirectory, loadSkills, openWorkspace, type Workspace } from '../src/index.ts';
@@ -345,7 +345,7 @@ describe('the compose field of the workspace tools', () => {
 			kind: 'test',
 			instructions: 'Test.',
 			bundles: [bundle],
-			compose: { evaluator: functionEvaluator },
+			compose: { runtime: functionRuntime },
 		});
 		const [compose, describer] = ['compose', 'describe'].map((name) =>
 			executor.tools.find((tool) => tool.name === name),

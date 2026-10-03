@@ -24,10 +24,10 @@ newer, the OpenTUI floor.
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
   the real binary on a scripted model, and its live tier runs a real model.
-- `packages/compose`: the evaluators of the `compose` tool, in the `/runtime`
-  entry. `quickjsEvaluator` runs the code in QuickJS, and `processEvaluator`
+- `packages/compose`: the runtimes of the `compose` tool, in the `/runtime`
+  entry. `quickjsRuntime` runs the code in QuickJS, and `processRuntime`
   runs it in a child Node process under `--permission`. Both pass
-  `evaluatorConformance`.
+  `composeRuntimeConformance`.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of
@@ -52,7 +52,7 @@ newer, the OpenTUI floor.
 | A `rules.verified.ts`                   | `docs/formal.md`                                                 |
 | The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
 | The simulator                           | `docs/simulator.md`                                              |
-| The `compose` tool or an evaluator      | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
+| The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
 | The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
 | The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
 | Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |

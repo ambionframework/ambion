@@ -73,12 +73,12 @@ seated or in reserve, through `configure`. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 **A worker seat has `compose` and `describe`.** `pi()` gives every seat both
-tools, with `quickjsEvaluator()`. `describe` works in workerd. A compose call
+tools, with `quickjsRuntime()`. `describe` works in workerd. A compose call
 fails there with an error that says QuickJS could not load its WebAssembly,
 because a worker loads WebAssembly only from its bundle. The call fails until
-an evaluator for workerd exists. A host can pass `compose: { evaluator }` with
-an evaluator that workerd can run
-([Compose](../../docs/compose.md#the-evaluator)).
+a runtime for workerd exists. A host can pass `compose: { runtime }` with
+a runtime that workerd can run
+([Compose](../../docs/compose.md#the-runtime)).
 
 `read()` returns the detached coherent room projection, including stopped
 records. Messages, participants, exchanges, and the read position `through` come from

@@ -61,7 +61,7 @@ export function describeTool(catalog: Catalog): AmbionTool {
 	});
 }
 
-/** The pattern of the message that an evaluator gives for a tool that the seat has and the call did not bind. */
+/** The pattern of the message that a runtime gives for a tool that the seat has and the call did not bind. */
 const UNBOUND = /\btools\.([\w$]+) is not bound\./;
 
 /**

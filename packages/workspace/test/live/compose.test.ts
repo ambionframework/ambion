@@ -29,7 +29,7 @@ import {
 	within,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { quickjsEvaluator } from '../../../compose/src/runtime.ts';
+import { quickjsRuntime } from '../../../compose/src/runtime.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
 import { loadSkills, openWorkspace, type Workspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
@@ -200,7 +200,7 @@ interface Run {
 /** The longest wait for one seat. Two seats in one case end before the test timeout. */
 const SEAT_DEADLINE_MS = 150_000;
 
-const composed = { compose: { evaluator: quickjsEvaluator() } };
+const composed = { compose: { runtime: quickjsRuntime() } };
 
 function seat(
 	name: string,

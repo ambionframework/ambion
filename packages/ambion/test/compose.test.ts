@@ -2,7 +2,7 @@
  * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
  * the catalog, the approval, the ledger, the limits, the nested context, the
  * declared output check, and the result and the error that the model reads.
- * The code runs in the evaluator of `test/support`.
+ * The code runs in the runtime of `test/support`.
  */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -14,14 +14,15 @@ import { invokeTool } from '../src/hosting.ts';
 import {
 	type ComposeOptions,
 	type ComposeResult,
+	type ComposeRuntime,
 	createRuntime,
 	defineAgent,
 	defineTool,
-	type Evaluator,
 	type Step,
 	startRoom,
 } from '../src/index.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
+import { functionRuntime } from './support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -33,7 +34,6 @@ import {
 	text,
 	total,
 } from './support/compose-tools.ts';
-import { functionEvaluator } from './support/evaluator.ts';
 import { andrei, collect, messagesOf, participantsOf, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -45,16 +45,16 @@ const hidden = defineTool({
 	execute: () => 'hidden',
 });
 
-/** An evaluator that counts its runs. A refused compose call never reaches it. */
+/** A runtime that counts its runs. A refused compose call never reaches it. */
 function neverRuns() {
 	let runs = 0;
-	const evaluator: Evaluator = {
+	const runtime: ComposeRuntime = {
 		evaluate: async () => {
 			runs += 1;
 			return undefined;
 		},
 	};
-	return { evaluator, evaluated: () => runs };
+	return { runtime, evaluated: () => runs };
 }
 
 interface Ran {
@@ -80,7 +80,7 @@ function toolOf(
 		kind: 'test',
 		instructions: 'Test.',
 		tools,
-		compose: { evaluator: functionEvaluator, ...options },
+		compose: { runtime: functionRuntime, ...options },
 	});
 	const tool = executor.tools.find((one) => one.name === name);
 	if (tool === undefined) throw new Error(`The executor has no ${name} tool.`);
@@ -382,15 +382,15 @@ describe('a failed compose call', () => {
 		stuck.open();
 	});
 
-	it('tells the evaluator which tools of the seat the call leaves unbound', async () => {
+	it('tells the runtime which tools of the seat the call leaves unbound', async () => {
 		const seen: (readonly string[] | undefined)[] = [];
-		const evaluator: Evaluator = {
+		const runtime: ComposeRuntime = {
 			evaluate: async (input) => {
 				seen.push(input.unlisted);
 				return undefined;
 			},
 		};
-		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { evaluator } });
+		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { runtime } });
 		// The room tools of the seat are in the catalog, and a tool with compose: false is not.
 		expect(seen[0]).toContain('table');
 		expect(seen[0]).not.toContain('echo');
@@ -409,12 +409,12 @@ describe('a failed compose call', () => {
 			false,
 		],
 	])('shows the signature of %s only when the seat has the tool', async (_name, message, shown) => {
-		const evaluator: Evaluator = {
+		const runtime: ComposeRuntime = {
 			evaluate: async () => {
 				throw new Error(message);
 			},
 		};
-		const ran = await run([echo, table], { uses: ['echo'], code: '' }, { compose: { evaluator } });
+		const ran = await run([echo, table], { uses: ['echo'], code: '' }, { compose: { runtime } });
 		expect(ran.read.startsWith(`The compose call failed: ${message}\nNo call started.`)).toBe(true);
 		expect(ran.read.includes('  table(args: { count: number }): Promise<{')).toBe(shown);
 		expect(ran.read.includes('Signatures of the tools that the failure names:')).toBe(shown);
@@ -664,7 +664,7 @@ describe('the cut of a compose call', () => {
 			[echo],
 			{ uses: [], code: '' },
 			{
-				compose: { evaluator: never.evaluator },
+				compose: { runtime: never.runtime },
 				ctx: { signal: controller.signal },
 			},
 		);
@@ -682,7 +682,7 @@ describe('the checks before the code runs', () => {
 			{ uses: ['echo', 'hidden', 'compose', 'nothing'], code: '' },
 			{
 				compose: {
-					evaluator: never.evaluator,
+					runtime: never.runtime,
 					approve: () => {
 						asked += 1;
 						return 'allow';
@@ -746,7 +746,7 @@ describe('the checks before the code runs', () => {
 			[echo],
 			{ uses: ['echo'], code: `await tools.echo({ text: 'x' });` },
 			{
-				compose: { evaluator: never.evaluator, approve },
+				compose: { runtime: never.runtime, approve },
 			},
 		);
 		expect(ran.result).toEqual({ status: 'failed', error: { message }, calls: [] });
@@ -1066,7 +1066,7 @@ describe('a compose call in a room', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				tools: [table, total, later('later', false)],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		});
 		const logged: Step[] = [];
@@ -1134,7 +1134,7 @@ function composer(name: string, tools: readonly AmbionTool[] = []) {
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			compose: { evaluator: functionEvaluator },
+			compose: { runtime: functionRuntime },
 		}),
 	});
 }
@@ -1338,7 +1338,7 @@ describe('a compose call over the room tools', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				compose: {
-					evaluator: functionEvaluator,
+					runtime: functionRuntime,
 					approve: (request) => {
 						requests.push(request);
 						return 'allow';
@@ -1402,8 +1402,8 @@ describe('a compose call over the room tools', () => {
 	});
 
 	it('refuses a room tool in a direct invoke, at call time, with no code run', async () => {
-		const { evaluator, evaluated } = neverRuns();
-		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { evaluator } });
+		const { runtime, evaluated } = neverRuns();
+		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { runtime } });
 		expect(ran.read).toContain("The room tools 'say' need an activation");
 		expect(ran.result).toMatchObject({ status: 'failed', calls: [] });
 		expect(evaluated()).toBe(0);

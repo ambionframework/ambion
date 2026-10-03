@@ -11,7 +11,7 @@ import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
 import {
 	type ComposeLimits,
 	type ComposeResult,
-	type Evaluator,
+	type ComposeRuntime,
 	type JsonValue,
 	type LedgerEntry,
 	mismatchOf,
@@ -20,7 +20,7 @@ import {
 import { callChecked, checkedArguments, messageOf } from './tool-call.ts';
 import type { Step } from './types.ts';
 
-/** What a rejected binding carries across the evaluator: the message and the details of the error. */
+/** What a rejected binding carries across the runtime: the message and the details of the error. */
 interface CallError {
 	readonly message: string;
 	readonly details?: JsonValue;
@@ -44,9 +44,9 @@ export interface ComposeRunInput {
 	/** The names of the tools that the seat has and the call does not bind. */
 	readonly unlisted?: readonly string[];
 	readonly code: string;
-	/** The checked arguments of a macro. The evaluator gives them to the code as `args`. */
+	/** The checked arguments of a macro. The runtime gives them to the code as `args`. */
 	readonly args?: JsonValue;
-	readonly evaluator: Evaluator;
+	readonly runtime: ComposeRuntime;
 	readonly limits: ComposeLimits;
 	/** The context of the compose call. */
 	readonly ctx: ToolContext;
@@ -101,7 +101,7 @@ function detailsOf(error: unknown): JsonValue | undefined {
 	}
 }
 
-/** An error, as it crosses to the evaluator. */
+/** An error, as it crosses to the runtime. */
 function crossing(error: unknown): CallError {
 	const details = detailsOf(error);
 	return details === undefined
@@ -214,7 +214,7 @@ export class ComposeRun {
 	}
 
 	private async evaluate(): Promise<Ending> {
-		const { evaluator, code, tools, args, unlisted } = this.input;
+		const { runtime, code, tools, args, unlisted } = this.input;
 		try {
 			const input = {
 				code,
@@ -223,7 +223,7 @@ export class ComposeRun {
 				...(args === undefined ? {} : { args }),
 				call: (name: string, args: JsonValue) => this.call(name, args),
 			};
-			return this.returned(await evaluator.evaluate(input, this.stop.signal));
+			return this.returned(await runtime.evaluate(input, this.stop.signal));
 		} catch (error) {
 			const message = messageOf(error);
 			const raised = this.calls.findLast((call) => call.error === message);
@@ -322,7 +322,7 @@ export class ComposeRun {
 		const { tools, limits } = this.input;
 		if (this.refusing) throw new Error('The compose call has ended: it starts no further call.');
 		const tool = tools.get(name);
-		// An evaluator that conforms throws before it reaches this line. The line guards one that does not.
+		// A runtime that conforms throws before it reaches this line. The line guards one that does not.
 		if (tool === undefined) throw new Error(`The compose call binds no tool '${name}'.`);
 		if (this.calls.length >= limits.calls)
 			throw new Error(`The compose call passed compose.limits.calls (${limits.calls}).`);

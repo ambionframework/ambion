@@ -1,6 +1,6 @@
 /**
  * The vocabulary of the `compose` tool: the option that a seat opts in with,
- * the evaluator that runs the code, and the result and the ledger that a
+ * the runtime that runs the code, and the result and the ledger that a
  * compose call reports. The tool joins the tools of a seat into one call
  * (`docs/compose.md`). The checks of the option and of the tool field live
  * here too.
@@ -13,8 +13,8 @@ import type { ToolContext } from './bundle.ts';
 export type JsonValue =
 	null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-/** What `compose` gives an evaluator for one compose call. */
-export interface EvaluatorInput {
+/** What `compose` gives a runtime for one compose call. */
+export interface ComposeRuntimeInput {
 	/** The body of an asynchronous function. */
 	readonly code: string;
 	/** The names of the tools that the code can call as `tools.<name>`. */
@@ -41,8 +41,8 @@ export interface EvaluatorInput {
  * The backend that evaluates the code of a compose call. It holds no tool,
  * no room, and no `ToolContext`. It gives the code no ambient authority.
  */
-export interface Evaluator {
-	evaluate(input: EvaluatorInput, signal: AbortSignal): Promise<JsonValue | undefined>;
+export interface ComposeRuntime {
+	evaluate(input: ComposeRuntimeInput, signal: AbortSignal): Promise<JsonValue | undefined>;
 }
 
 /** The bounds of one compose call. */
@@ -92,7 +92,7 @@ export interface ComposeMacro {
  * absent option. `pi()`, `claude()`, and `codex()` fill an absent option.
  */
 export interface ComposeOptions {
-	readonly evaluator: Evaluator;
+	readonly runtime: ComposeRuntime;
 	/**
 	 * Called after `compose` checks `uses` or the macro and its `args`, and
 	 * before it evaluates any code. A denial fails the compose call with no
@@ -277,10 +277,10 @@ export function assertComposeOptions(compose: unknown): void {
 	if (compose === undefined) return;
 	if (
 		!isRecord(compose) ||
-		!isRecord(compose.evaluator) ||
-		typeof compose.evaluator.evaluate !== 'function'
+		!isRecord(compose.runtime) ||
+		typeof compose.runtime.evaluate !== 'function'
 	) {
-		throw new Error('Agent compose must be an object with an evaluator.');
+		throw new Error('Agent compose must be an object with a runtime.');
 	}
 	if (compose.approve !== undefined && typeof compose.approve !== 'function') {
 		throw new Error('Agent compose approve must be a function.');

@@ -13,7 +13,7 @@ import { DEFAULT_SPEAKING, renderActivation } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
-import { functionEvaluator } from './support/evaluator.ts';
+import { functionRuntime } from './support/compose-runtime.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const messages: Message[] = [
@@ -50,7 +50,7 @@ const worker = defineAgent({
 		instructions: 'Work carefully.',
 		model: 'scripted/worker',
 		// A short guidance keeps this snapshot apart from the text of COMPOSE_GUIDANCE.
-		compose: { evaluator: functionEvaluator, guidance: 'Compose when one result feeds another.' },
+		compose: { runtime: functionRuntime, guidance: 'Compose when one result feeds another.' },
 	}),
 });
 const respond: ActivationView = {

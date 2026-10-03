@@ -39,12 +39,19 @@ a tool that the code read and `uses` left out.
 **`COMPOSE_GUIDANCE` is shorter.** It tells the model to call `describe` before
 code that reads the fields of a result, and it drops the two code examples.
 
+**`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
+the runtime of its `compose` tool in the `runtime` field. The exports change
+as follows: `Evaluator` becomes `ComposeRuntime`, `EvaluatorInput` becomes
+`ComposeRuntimeInput`, `quickjsEvaluator` becomes `quickjsRuntime`,
+`processEvaluator` becomes `processRuntime`, and `evaluatorConformance`
+becomes `composeRuntimeConformance`.
+
 **A compose call that reads an unbound tool names the fix.** Code that
 reads `tools.<name>` for a name outside `uses` gets an error that names the
 tool and the bound names. The error says to add the tool to `uses`, or that
-the seat has no such tool. `EvaluatorInput` gains the optional `unlisted`.
-`'x' in tools` is false for an unbound name. The evaluator conformance
-suite requires the throw, so an evaluator that does not run the shared
+the seat has no such tool. `ComposeRuntimeInput` gains the optional `unlisted`.
+`'x' in tools` is false for an unbound name. The runtime conformance
+suite requires the throw, so a runtime that does not run the shared
 guest script fails it.
 
 **A failed compose call shows the result of each completed call.** The

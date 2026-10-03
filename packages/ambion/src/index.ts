@@ -27,8 +27,8 @@ export type {
 	ComposeOptions,
 	ComposeRequest,
 	ComposeResult,
-	Evaluator,
-	EvaluatorInput,
+	ComposeRuntime,
+	ComposeRuntimeInput,
 	JsonValue,
 	LedgerEntry,
 } from './compose.ts';

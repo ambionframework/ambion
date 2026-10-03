@@ -177,22 +177,22 @@ describe('the definition of agent tools', () => {
 
 	it.each([
 		['the value false', false],
-		['an option with no evaluator', {}],
-		['an evaluator with no evaluate', { evaluator: {} }],
-		['an approve that is not a function', { evaluator: ok, approve: 'yes' }],
-		['guidance that is not a string', { evaluator: ok, guidance: 1 }],
-		['limits that are not an object', { evaluator: ok, limits: 3 }],
-		['limits that are an array', { evaluator: ok, limits: [] }],
-		['a limit of zero', { evaluator: ok, limits: { calls: 0 } }],
-		['a limit of a fraction', { evaluator: ok, limits: { time: 1.5 } }],
-		['a limit that has no name', { evaluator: ok, limits: { speed: 2 } }],
+		['an option with no runtime', {}],
+		['a runtime with no evaluate', { runtime: {} }],
+		['an approve that is not a function', { runtime: ok, approve: 'yes' }],
+		['guidance that is not a string', { runtime: ok, guidance: 1 }],
+		['limits that are not an object', { runtime: ok, limits: 3 }],
+		['limits that are an array', { runtime: ok, limits: [] }],
+		['a limit of zero', { runtime: ok, limits: { calls: 0 } }],
+		['a limit of a fraction', { runtime: ok, limits: { time: 1.5 } }],
+		['a limit that has no name', { runtime: ok, limits: { speed: 2 } }],
 	])('refuses a compose option with %s', (_name, compose) => {
 		expect(() => worker({ compose: compose as never })).toThrow(/Agent compose/);
 	});
 
 	it('appends the compose and describe tools after the tools and the bundles, and keeps the option off the frozen executor', () => {
 		const compose: ComposeOptions = {
-			evaluator: { evaluate: async () => undefined },
+			runtime: { evaluate: async () => undefined },
 			approve: () => 'allow',
 			limits: { calls: 8 },
 		};
@@ -254,7 +254,7 @@ describe('the definition of agent tools', () => {
 	});
 
 	it('refuses a second compose tool in a definition, and treats a hand-built compose tool as an ordinary one', () => {
-		const withCompose = worker({ compose: { evaluator: { evaluate: async () => undefined } } });
+		const withCompose = worker({ compose: { runtime: { evaluate: async () => undefined } } });
 		const duplicate = {
 			...withCompose.executor,
 			tools: [...withCompose.executor.tools, tool('compose')],
