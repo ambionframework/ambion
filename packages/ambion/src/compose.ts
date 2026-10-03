@@ -120,7 +120,8 @@ export const COMPOSE_TOOL_NAME = 'compose';
 export const COMPOSE_GUIDANCE = `compose joins your tools in one call. Put the tools that you use in
 uses, and the body of an async function in code. Each tool is
 tools.<name>, and the description of compose gives its signature. You
-read only the value that the code returns.
+read only the value that the code returns. compose runs any JavaScript,
+so code with no tools also calculates and transforms data.
 
 Plan the tool calls of a task before you make the first call. When the
 plan has two or more tool calls, make them in one compose call. Each
@@ -134,7 +135,9 @@ Use compose when:
 - a tool gives a large result, and you need a count, a filter, or a
   few fields of it;
 - you call one tool for many inputs;
-- you start several processes and wait for each.
+- you start several processes and wait for each;
+- you need exact arithmetic, or you sort, group, or reshape data that
+  you already hold. Give uses: [] and put the data in the code.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives

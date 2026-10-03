@@ -654,11 +654,11 @@ describe('the declared output of a tool', () => {
 });
 
 describe('the compose tool of an executor', () => {
-	it('describes itself with one sentence, the limits of the seat, and the catalog', () => {
+	it('describes itself with its uses, the limits of the seat, and the catalog', () => {
 		const tool = composeOf([echo, table, hidden], { limits: { calls: 32, time: 90_000 } });
 		expect(tool.description).toBe(
 			[
-				'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.',
+				'Run JavaScript in one call. Its main use joins your tools: code calls them as tools.<name>. Code with no tools calculates and transforms data. You read only the value that the code returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
