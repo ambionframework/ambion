@@ -14,17 +14,17 @@ items that the pruning of 2026-10-03 removed.
 the first item comes first. An item whose condition holds moves to the
 top of its section.
 
-| Section                                       | Items  | First item                               |
-| --------------------------------------------- | ------ | ---------------------------------------- |
-| [The 0.7.0 theme](#the-070-theme)             | B1     | B1, breakout rooms                       |
-| [Pending decisions](#pending-decisions)       | Q1, Q2 | Q1, the `assistant` option               |
-| [Known defects](#known-defects)               | F1     | F1, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | R1     | R1, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1     | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | S1–S7  | S1, one name rule                        |
-| [Designs with a shape](#designs-with-a-shape) | D1–D5  | D1, bounds on unattended work            |
-| [Considered and kept](#considered-and-kept)   | None   | None                                     |
-| [Deferred by decision](#deferred-by-decision) | None   | None                                     |
+| Section                                       | Items | First item                               |
+| --------------------------------------------- | ----- | ---------------------------------------- |
+| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                       |
+| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option               |
+| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard      |
+| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one       |
+| [Rules and proofs](#rules-and-proofs)         | P1    | P1, `returnable` into the verified rules |
+| [Simplification](#simplification)             | S1–S7 | S1, one name rule                        |
+| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work            |
+| [Considered and kept](#considered-and-kept)   | None  | None                                     |
+| [Deferred by decision](#deferred-by-decision) | None  | None                                     |
 
 ## The 0.7.0 theme
 
@@ -91,13 +91,6 @@ options? The executor of the assistant is settled: `defineAssistant`
 takes an `executor` function. A close as a message (D2) removes the
 option with it.
 
-**Q2. Sensors fail the test that the actuator page states.** The sensor
-path adds `connect`, `disconnect`, `observe`, and a versioned wire API,
-about 2,100 lines of `packages/workspace`. [Actuators](../docs/actuators.md)
-runs a controller as an ordinary `bash` process, and `curl` and
-`snapshot` give the same bytes as `observe`. The question: does the
-sensor path shrink to the actuator pattern?
-
 ## Known defects
 
 **F1. An agent that runs SQL can lift the append-only guard.** The guard
@@ -140,15 +133,15 @@ the concepts removed times the confidence (high 3, medium 2, low 1).
 Twenty-six reductions and W5 have landed. The changelog and the git
 history record them.
 
-| ID  | Finding                                                            | Evidence                                                                                                                                                                                         | Rank |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
-| S1  | One name rule is written fourteen times                            | Core: `NAME_PATTERN`, `SEAT`. Workspace: nine literals in seven sensor files, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 12   |
-| S2  | The close rule is written three times                              | `reconcile.ts` plans it with `admitsClose`, `transition.ts` checks it again, and `room-run/control.ts` writes its complement. `decide` can return written, not owed, or plan again               | 6    |
-| S3  | The publication tail keeps caches because it lacks the prior state | `heardLeases`, `heardCloses`, and `seedHeard` in `room-run/`. A step that hands the hearer the state before the entry derives both                                                               | 6    |
-| S4  | One in-doubt append is written four times                          | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                                | 6    |
-| S5  | A package import sets the default execution of its kind            | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                                       | 6    |
-| S6  | `resources.md` overlaps `workspace.md` and states a false count    | `resources.md` says "two bindings"; seven backend factories exist                                                                                                                                | 3    |
-| S7  | "Envelope" has three meanings                                      | `envelope.md`, `durability.md`, `formal.md`                                                                                                                                                      | 3    |
+| ID  | Finding                                                            | Evidence                                                                                                                                                                                  | Rank |
+| --- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| S1  | One name rule is written six times                                 | Core: `NAME_PATTERN`, `SEAT`. Workspace: the literal in `resource.ts`, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 6    |
+| S2  | The close rule is written three times                              | `reconcile.ts` plans it with `admitsClose`, `transition.ts` checks it again, and `room-run/control.ts` writes its complement. `decide` can return written, not owed, or plan again        | 6    |
+| S3  | The publication tail keeps caches because it lacks the prior state | `heardLeases`, `heardCloses`, and `seedHeard` in `room-run/`. A step that hands the hearer the state before the entry derives both                                                        | 6    |
+| S4  | One in-doubt append is written four times                          | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                         | 6    |
+| S5  | A package import sets the default execution of its kind            | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                                | 6    |
+| S6  | `resources.md` overlaps `workspace.md` and states a false count    | `resources.md` says "two bindings"; seven backend factories exist                                                                                                                         | 3    |
+| S7  | "Envelope" has three meanings                                      | `envelope.md`, `durability.md`, `formal.md`                                                                                                                                               | 3    |
 
 **S2, S3, and S4 change nothing that a host sees.** They stay inside
 `room-run/` and `reconcile`, and one change can carry all three. S5
@@ -229,9 +222,9 @@ stay open. The first step adds a package and no kernel change.
 **Each of these looks like a duplicate and carries a meaning of its
 own.** A later review does not propose them again.
 
-- **Two owners close the sensor connections.** The close in `dispose`
-  stops pending connects at once. The close in `withProcesses` waits for
-  the processes.
+- **Two owners close the forward cache.** The close in `dispose` stops
+  pending forwards at once. The close in `withProcesses` waits for the
+  processes.
 - **The simulator keeps `deadlineSignal`, and the workbench keeps its
   usage formatter.** A test pins the reason of the timeout.
 - **`pi()` and `piExecution()`.** One definition runs on different

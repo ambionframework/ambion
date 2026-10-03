@@ -136,11 +136,11 @@ need the key. Read neither login file.
   alias, reader for an older format, or compatibility test. Update the export
   snapshot and the golden journals in the same commit, and name the change in
   the changelog. [`planning/next.md`](planning/next.md) holds the rule.
-- **The sensor wire API carries a version number.** A breaking change raises
-  `api`, and a client refuses a server at another `api`. A supplied server
-  does not upgrade with the host. Reducer state belongs to the server. The
-  workspace keeps observed evidence through existing snapshot refs. Measurement timestamps are the source of truth; host
-  time governs host interactions.
+- **A sensor template carries a protocol version.** A breaking change raises
+  `api`, and the template's macros refuse a server at another `api`. A forked
+  server does not upgrade with the host. Reducer state belongs to the server.
+  The workspace keeps what `fetch` reads through snapshot refs. Measurement
+  timestamps are the source of truth; host time governs host interactions.
 - **A sensor definition starts as a Git template.** The agent forks,
   customizes, validates, commits, and pushes before it runs a saved version.
   Replacement and rollback use the Git and process tools.

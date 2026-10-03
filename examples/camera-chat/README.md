@@ -113,7 +113,7 @@ lists the processes of an agent after the agent acts, so the preview finds a
 camera that still runs when the agent next uses the workspace.
 
 The standalone [camera template](templates/camera/README.md) documents runtime,
-validation, device selection, readiness, Git source metadata, replacement, and
+validation, device selection, `$PORT`, Git source metadata, replacement, and
 rollback. It uses no runtime npm dependencies and implements version 2 of the
 [sensor protocol](../../docs/sensors.md). It buffers recent frames in memory and
 advertises no span support. The clone records its own launch source metadata.
@@ -135,20 +135,20 @@ image data.
 
 ## Code and validation
 
-| File                      | Responsibility                                          |
-| ------------------------- | ------------------------------------------------------- |
-| `src/main.ts`             | CLI, Codex login check, room startup, cleanup           |
-| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle         |
-| `src/login.ts`            | Find the Codex login of the host                        |
-| `src/demo.ts`             | Scripted seat for `--demo`                              |
-| `src/preview.ts`          | Connection callbacks and standard sensor-client polling |
-| `src/reference-images.ts` | Resolve retained images cited by messages               |
-| `src/tui.ts`              | Workbench transcript and floating preview               |
-| `src/terminal.ts`         | Native graphics requirement                             |
-| `src/local-bash.ts`       | Local shell backend and loopback ports                  |
-| `src/local-env.ts`        | Local files and `bash` on the workspace port            |
-| `src/local-git.ts`        | Template seeding and local repositories                 |
-| `templates/camera/`       | Independently runnable, forkable camera server          |
+| File                      | Responsibility                                  |
+| ------------------------- | ----------------------------------------------- |
+| `src/main.ts`             | CLI, Codex login check, room startup, cleanup   |
+| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle |
+| `src/login.ts`            | Find the Codex login of the host                |
+| `src/demo.ts`             | Scripted seat for `--demo`                      |
+| `src/preview.ts`          | Process events and `workspace.fetch` polling    |
+| `src/reference-images.ts` | Resolve retained images cited by messages       |
+| `src/tui.ts`              | Workbench transcript and floating preview       |
+| `src/terminal.ts`         | Native graphics requirement                     |
+| `src/local-bash.ts`       | Local shell backend and loopback ports          |
+| `src/local-env.ts`        | Local files and `bash` on the workspace port    |
+| `src/local-git.ts`        | Template seeding and local repositories         |
+| `templates/camera/`       | Independently runnable, forkable camera server  |
 
 ```sh
 pnpm check:types

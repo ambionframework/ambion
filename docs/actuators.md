@@ -57,7 +57,7 @@ flowchart LR
   instrument -- internal feedback --> command
   command -- events.jsonl --> agent
   stock --> sensor[Sensor server]
-  sensor -- observe --> agent
+  sensor -- fetch --> agent
 ```
 
 **The command closes the fast loop.** It reads its instrument, drives the
@@ -69,15 +69,15 @@ and revises the command.
 
 **The loop has two paths of feedback, and they do not meet.**
 
-| Path              | Reader      | Carrier                                   | Purpose                                    |
-| ----------------- | ----------- | ----------------------------------------- | ------------------------------------------ |
-| Internal feedback | The command | Its own driver or instrument, in process  | The control law, at the period of the loop |
-| Sensor            | The agent   | A sensor server, `connect`, and `observe` | Confirmation, evidence, and revision       |
+| Path              | Reader      | Carrier                                  | Purpose                                    |
+| ----------------- | ----------- | ---------------------------------------- | ------------------------------------------ |
+| Internal feedback | The command | Its own driver or instrument, in process | The control law, at the period of the loop |
+| Sensor            | The agent   | A sensor server, read with `fetch`       | Confirmation, evidence, and revision       |
 
 **A sensor is not an input of a command.** A command that read a sensor
 through the workspace would put the host inside its loop. The loop would
 then take the latency of SSH forwarding. It would also stop when a host
-run ends, because a connection lasts for one host run. The command reads
+run ends, because a forward lasts for one host run. The command reads
 its instrument directly, and it keeps running while no host runs.
 
 **One instrument can serve both paths.** A command and a sensor server
@@ -238,7 +238,7 @@ bash({ command: 'bash ~/bath-control/start', grace: 5, name: 'bath-hold', timeou
 // Result: process bash-3f9a2c1d0b7e is running.
 schedule({
   delaySeconds: 900,
-  text: 'Check bath-hold, read its log, and observe bath/temperature.',
+  text: 'Check bath-hold, read its log, and fetch the bath sensor.',
 });
 ```
 
@@ -252,7 +252,7 @@ schedule({
 | Processes    | `bash`, `ps`, `wait`, `cancel`   | The life of every command, and the checks of the agent       |
 | Repositories | `repos`, `fork`                  | The versions of the controller                               |
 | Tables       | `sql`                            | Shared plans, schedules, and results                         |
-| Sensors      | `connect`, `observe`             | The agent's own view of the stock, retained as evidence      |
+| Sensors      | `fetch`                          | The agent's own view of the stock, retained as evidence      |
 | Actuators    | `bash` and the actuator template | The controller: a command that stops safe and logs its state |
 
 **An agent builds a new loop while the application runs.** A new loop
@@ -302,8 +302,7 @@ world before any `say` commits. The room does not run an effect once
 
 ## Out of scope
 
-- An actuator tool, an actuator API, a server, or a `connect` step for
-  actuators.
+- An actuator tool, an actuator API, or a server for actuators.
 - A sensor as an input of a command.
 - A lock in the workspace; `flock` in the command does it.
 - A check of the goal by the workspace; the agent confirms convergence.

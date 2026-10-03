@@ -54,7 +54,7 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - **Three fixes** close defects that 0.5.0 left open: a late steer on
   Claude (CS1), the Camera Chat findings (CC1), and Codex on a ChatGPT
   sign-in (CX1).
-- **One simplification** gives the sensor path one validation (W5).
+- **One simplification** replaces the sensor tools with `fetch` (W5).
 
 ## Decisions taken
 
@@ -104,12 +104,12 @@ runs beside the compose phases and blocks only the release.
 - [x] **1.** A late steer on Claude keeps its answer. (CS1)
 - [x] **2.** The Camera Chat fixes. (CC1)
 - [x] **3.** Codex on a ChatGPT sign-in. (CX1)
-- [x] **4.** The sensor path validates once. (W5)
+- [x] **4.** The sensor tools give way to `fetch`. (W5)
 
 **Evidence:** the `claude` tests steer during the final answer, and the
 answer to the line commits. Each Camera Chat fix has its test or its
 README text. The full Codex live tier passes on the ChatGPT login of the
-owner's Mac. The sensor path checks each schema and digest once.
+owner's Mac. The sensor tools and the wire client are gone, and `fetch` reads a process.
 
 ### Phase 2. The vocabulary and the trace
 
@@ -213,15 +213,22 @@ the run covers.
 **Evidence:** the full Codex live tier passes on the ChatGPT login, and
 `docs/codex.md` names the run and what stays untested.
 
-**W5. The sensor path validates once.** The sensor client
-(`sensor-client.ts`) and the retention (`sensor-retention.ts`) both check
-the schema and the digest of a response. The client owns the check. The
-retention trusts a verified result.
+**W5. The sensor tools give way to `fetch`.** The kernel stops knowing
+sensors. Every process of `bash` has a port in `$PORT`, and any agent reads
+a running process with `fetch({ process, path })`. The host reads it with
+`workspace.fetch`. The sensor protocol, its version, and its digest rule
+move into the templates, which ship an `observe` macro over `fetch`.
+`loadSkills` takes several sources, so a host loads the skill of a template.
+The old sensor path validated each schema and digest in two places. The new
+path has one check, in the macro of the template. This item settles
+backlog Q2.
 
-**Evidence:** the path holds one schema check and one digest check. The
-client tests for a bad digest and a malformed body still fail at the
-client. The retention tests still refuse a missing file and a failed
-write.
+**Evidence:** `connect`, `disconnect`, `observe`, `workspace.sensors`, the
+`./sensors` and `./sensor-api.schema.json` exports, and `sensorConformance`
+no longer exist. The `fetch` tests read a real HTTP server behind a real
+process. The macro test reads the sensor-server template through `compose`.
+The workstation acceptance test reads a template process as a second agent
+across a host crash and a cancel. It needs the OpenSSH tier, and the run on the owner's Mac is still open.
 
 **CP1. The vocabulary.** Add `compose` to `AmbionTool`, `defineTool`,
 `captureTool`, and `assertTool`, and capture its `output` schema. Give

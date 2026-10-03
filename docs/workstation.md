@@ -1,7 +1,7 @@
 # The workstation
 
 **The workstation forwards endpoints through SSH.** See
-[Workstation endpoints](sensors.md#workstation-endpoints) for the transport contract.
+[The forward](processes.md#the-forward) for the transport contract.
 
 **`@ambionframework/workstation` implements this page.** It builds on the
 workspace interface that [Workspace](workspace.md) states. The

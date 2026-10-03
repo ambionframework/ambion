@@ -300,7 +300,7 @@ it must not stop `defineAgent`. A schema with an `$id` that is no TypeScript
 identifier renders inline. When a different schema arrives under an `$id`
 that is taken, it renders inline, and the first schema keeps the name. The
 process and workspace tools use this for `Process`, `ProcessResult`,
-`Truncation`, and `SensorSource`, which several tools share.
+and `Truncation`, which several tools share.
 
 **The renderer covers the JSON Schema that TypeBox writes.** An object, an
 array, a union, a literal, and the primitive types each have a TypeScript
@@ -507,8 +507,8 @@ interface ToolContext {
 
 **The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
 `restore`, `bash`, `cancel`, `wait`, `ps`, `repos`, `fork`,
-`connect`, and `observe` set `compose: { output }`. `write`, `edit`,
-and `disconnect` bind as text, because the code needs only their success or
+and `fetch` set `compose: { output }`. `write` and `edit`
+bind as text, because the code needs only their success or
 their rejection. [Workspace](workspace.md#declared-outputs) states
 the shape of each output.
 

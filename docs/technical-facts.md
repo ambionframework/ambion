@@ -1,6 +1,6 @@
 # Technical facts
 
-This page lists the key technical facts of Ambion, the 0.5.0 sensor scope,
+This page lists the key technical facts of Ambion, the sensor pattern,
 the twelve packages, and system limits. The [README](../README.md) holds the
 positioning and the current capabilities.
 
@@ -95,11 +95,11 @@ positioning and the current capabilities.
   background process with a handle. The files of the bash backend hold the
   process table, so a new run of the host adopts the live processes. See
   [Processes](processes.md).
-- **Sensor servers use the Git and process tools.** A workspace backend with
-  endpoints adds `connect`, `disconnect`, and `observe`. The workspace package owns
-  the versioned client and schema exports. `observe` stores the response
-  manifest and verified file bytes as ordinary snapshot objects. The server
-  owns acquisition and reducer state.
+- **Sensor servers use the Git and process tools.** Every process has a port
+  in `$PORT`. A workspace backend with endpoints adds `fetch`, which reads a
+  path of a running process with GET and keeps the body as a snapshot. The
+  sensor template owns the protocol and its `observe` macro. The server owns
+  acquisition and reducer state.
 - **A clock that the agent sets.** An agent calls `schedule` with `delaySeconds`,
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See
@@ -116,7 +116,7 @@ positioning and the current capabilities.
 | `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                      |
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                           |
 | `@ambionframework/codex`       | The Codex `app-server` executor                                                         |
-| `@ambionframework/workspace`   | The workspace interface, sensor subpaths, SQLite backend, and conformance suites        |
+| `@ambionframework/workspace`   | The workspace interface, SQLite backend, and conformance suites                         |
 | `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`          |
 | `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, port forwarding, and Git |
 | `@ambionframework/assistant`   | A default assistant that guides seating and writes summaries                            |

@@ -121,9 +121,9 @@ of each activation names it ([Processes](processes.md)).
 
 **The sensor server uses the workstation backend.** The running Workbench
 uses `directoryBackend`, which has no endpoints. Its terminal workspace
-has no `connect`, `disconnect`, or `observe` tools. A workstation with endpoints provides those
-tools for the same Git template. See [Sensors](sensors.md) and the
-[workstation acceptance](../packages/workstation/test/sshd/sensor-lifecycle.test.ts).
+has no `fetch` tool. A workstation with endpoints provides `fetch` for the
+same Git template. See [Sensors](sensors.md) and the
+[workstation acceptance](../packages/workstation/test/sshd/process-http-lifecycle.test.ts).
 
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
