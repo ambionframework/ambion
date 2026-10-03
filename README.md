@@ -4,20 +4,18 @@
 
 [ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-overview-dark.svg">
+  <img alt="One exchange between a person, a room, and two agents that share a workspace. The exchange page walks through it." src="docs/assets/ambion-overview.svg">
+</picture>
+
 A room is a shared journal with rules for taking part. People ask questions
 and read results. Agents on any framework speak when they have something to
-add and stay silent when they do not. The kernel keeps the record and the
-rules, and a restart loses nothing.
-
-**One question can need several domains.** "Can we promise a Thursday
-delivery?" needs inventory, scheduling, and compliance. Each agent has its
-own owner, instructions, model, tools, and framework. A room makes their
-contributions usable together. The application supplies hosting, agent
-definitions, credentials, and domain tools.
-
-[Workbench](https://github.com/fastforwardengine/workbench) is the first
-application on Ambion. It seats specialists for electrical engineering,
-hardware, and electrochemistry over one shared workspace.
+add and stay silent when they do not. One question can need several domains,
+and each agent has its own owner, instructions, model, tools, and framework.
+The kernel keeps the record and the rules, and a restart loses nothing. The
+application supplies hosting, agent definitions, credentials, and domain
+tools.
 
 ## Quickstart
 
@@ -70,7 +68,9 @@ try {
 
 **Run it with `node room.mts`.** Both agents read the question in
 parallel. Each one speaks or stays silent, and `waitForClose()` returns
-when no seat has work left.
+when no seat has work left. The script prints one `name: text` line for
+each said message, in journal order. An agent that stays silent prints
+nothing.
 
 ## One team on three harnesses
 
@@ -106,12 +106,48 @@ The room seats every agent at `broadcast` by default. Pass `seats` to choose
 another attention; see [Roster](docs/roster.md#configuration).
 [Executors](docs/executors.md) holds the contract for a new harness.
 
-## How a room works
+## Evaluate the room
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-exchange-dark.svg">
-  <img alt="Two exchanges on a time axis. A person asks with visit.send(), entry 1. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file and says, entry 2. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a new file, and says to A, entry 3. Entry 3 wakes A, and A resumes the harness session of its first activation. A reads only entry 3 and answers the person, entry 4. The room closes the exchange, entry 5, and waitForClose() returns. A summary follows, entry 6, and waitForSummary() returns it. The person asks again, entry 7. A starts a fresh session, reads the summary and entry 7, and says, entry 8. B has nothing to add and stays silent. The record is durable. The session is a cache for one exchange. The workspace keeps the files. The trace goes to the host's logs." src="docs/assets/ambion-exchange.svg">
-</picture>
+**The simulator runs an eval on the same room.** An actor plays the person
+on a model, and a judge grades the record against criteria. The actor
+and the judge call the provider, so each run costs money.
+
+```sh
+npm install @ambionframework/simulator
+```
+
+**Add the import to `room.mts`, and replace its `try` block.**
+
+```ts
+import { agentActor, agentJudge, simulate } from '@ambionframework/simulator';
+
+try {
+  const simulation = await simulate(room, {
+    person: priya,
+    actor: agentActor({
+      model,
+      brief: 'Choose a regulator for a 3.3 V, 2 A rail. Stop when you have a part and its limits.',
+    }),
+    messages: 3,
+  });
+
+  const verdict = await agentJudge({ model })(simulation, [
+    'The design agent names one part and gives the reason.',
+    'The datasheets agent states the output current limit of that part with its unit.',
+  ]);
+  console.log(verdict.pass, verdict.findings);
+} finally {
+  await room.stop();
+}
+```
+
+**`simulate` sends each message of the actor as one exchange.** It ends
+when the actor stops, after `messages` messages, at a timeout, or on a
+failure. A healthy run has `simulation.ended` equal to `stopped` or `limit`,
+and no exchange ends `exhausted`. [The simulator page](docs/simulator.md)
+shows an eval as a vitest test.
+
+## How a room works
 
 - **Speech is checked.** A `say` that read a stale record comes back with
   the messages it missed. Agents reason in parallel, and the room serializes
@@ -130,13 +166,13 @@ another attention; see [Roster](docs/roster.md#configuration).
   with `room.post`. See [A scheduled say](docs/exchange.md#6-a-scheduled-say).
 - **The steps of each activation go to the host's logger.** See
   [The trace log](docs/executors.md#the-trace-log).
+- **The boundaries are narrow.** The journal owns no domain transactions and
+  no credentials. Tools can act before a contribution commits, so
+  applications own effect idempotency. A scheduled say is the one clock an
+  agent sets, and every other event comes from the host through `room.post`.
+  [Technical facts](docs/technical-facts.md) lists every limit.
 
 ## The workspace
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files and objects. read, write, and edit reach the files. snapshot puts the bytes of a file in an object store, and restore gives them back. The store is a folder of the workspace or an S3 bucket. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="docs/assets/ambion-capabilities.svg">
-</picture>
 
 **The journal records what is said. The workspace holds what is made, and a
 message cites it.** Each agent has a home, and each capability is a set of
@@ -173,21 +209,14 @@ Run `pnpm demo` in [`examples/camera-chat`](examples/camera-chat) for a
 camera-free preview. Its README describes live capture and the localhost
 shell and Git backends.
 
-## Boundaries
-
-- The journal owns no domain transactions and no credentials.
-- Tools can act before a contribution commits. Applications own effect
-  idempotency.
-- A scheduled say is the one clock an agent sets. Every other event comes
-  from the host through `room.post`.
-
-[Technical facts](docs/technical-facts.md) lists every limit.
-
 ## Read more
 
 - [Documentation](docs/README.md) maps the design contracts and hosting.
 - [`examples/workbench`](examples/workbench) runs a team in a terminal with
   `pnpm start`. It needs Node 26.4 or later.
+- [Workbench](https://github.com/fastforwardengine/workbench) is the first
+  application on Ambion. It seats specialists for electrical engineering,
+  hardware, and electrochemistry over one shared workspace.
 - [Contributing](CONTRIBUTING.md) covers builds and checks.
   [Toolchain](docs/toolchain.md#9-release-and-publishing) covers dev builds
   of `main`.
