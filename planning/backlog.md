@@ -57,9 +57,10 @@ takes visits.
 | Seat the workers        | `room.seat` from the reserve                                                                                              |
 | Send the goal and notes | `room.post` with `to` and `key` wakes or steers the target and lands once across a restart                                |
 | Read the exchanges      | [The room mirror](../docs/workspace.md#mirror-a-rooms-messages) on a shared workspace. `recall` reads its own room alone. |
-| Return the result       | The host posts the closing summary of the breakout room into the parent room, with a ref to the room                      |
+| Return the result       | The host posts a line for each closed exchange of the breakout room into the parent room, with a ref to its range         |
 
-**The first step is a host tool bundle with no change to the kernel.**
+**[Breakout rooms](../docs/breakout.md) states the design.** The first
+step is a host tool bundle with no change to the kernel.
 `breakout({ goal, agents })` opens a room, seats the agents, and posts the
 goal. `tell({ room, text })` posts to a room that the caller opened. The
 mirror serves reads. Each journal holds its own entries, and the posts
