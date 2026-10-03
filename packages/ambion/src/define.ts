@@ -80,9 +80,11 @@ export interface ExecutorBaseOptions {
 	readonly estimateTokens?: string;
 	/**
 	 * The `compose` tool for this seat. It joins the tools of the seat into
-	 * one call. Absent, the seat has no `compose` tool.
+	 * one call. The executor packages give a default when the field is
+	 * absent. `describeExecutor` by itself adds no tool for an absent field
+	 * or for `false`.
 	 */
-	readonly compose?: ComposeOptions;
+	readonly compose?: ComposeOptions | false;
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -125,18 +127,19 @@ export function pickPresent<T extends object, K extends keyof T>(
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
 	assertComposeOptions(options.compose);
+	const compose = options.compose === false ? undefined : options.compose;
 	const input = flattenTools(options.tools, options.bundles);
 	// A seat without `compose` ignores the macros, so one skill set fits every seat.
-	const macros = options.compose === undefined ? [] : macrosOf(options.bundles);
+	const macros = compose === undefined ? [] : macrosOf(options.bundles);
 	assertMacros(macros, input);
-	const guidance = joined([guidanceOf(options.bundles), composeGuidance(options.compose, macros)]);
+	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, macros)]);
 	const reminders = remindersOf(options.bundles);
 	const own = input.map((tool) => captureTool(tool));
 	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
 	const tools = Object.freeze(
-		options.compose === undefined
+		compose === undefined
 			? own
-			: [...own, captureTool(composeTool(options.compose, own, macros, ROOM_COMPOSE))],
+			: [...own, captureTool(composeTool(compose, own, macros, ROOM_COMPOSE))],
 	);
 	return Object.freeze({
 		kind: options.kind,

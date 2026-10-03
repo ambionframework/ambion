@@ -1,7 +1,9 @@
 # Compose
 
-**Status: the current contract of 0.6.0.** The `compose` option adds the
-`compose` tool, and the main entry exports its types and `COMPOSE_GUIDANCE`.
+**Status: the current contract of 0.6.0.** Every Pi, Claude, and Codex seat
+has the `compose` tool with `quickjsEvaluator()` by default, and
+`compose: false` removes it. The main entry exports the types of the option
+and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
 `@ambionframework/compose/runtime` holds `quickjsEvaluator` and `processEvaluator`,
 and both pass `evaluatorConformance`. The live run of CP6 is in
@@ -270,6 +272,12 @@ each tool as a native tool. The catalog repeats each input schema, and
 adds each declared output. A seat with many tools pays that cost in every
 activation. The comparison that the status names counts the catalog in the
 input tokens of the seat.
+
+**A seat that never chains tools can set `compose: false`.** Every seat
+has `compose` by default. The CP6 runs measured that offering `compose`
+adds input tokens when the seat does not use it: about 9,000 to 26,000
+for each activation ([the table below](#the-catalog)). `compose: false`
+removes the tool, its catalog, and its guidance.
 
 **The live comparison measured the catalog only.** The seat ran the chain
 task once with `compose` and once without it, on each executor kind. No
@@ -617,10 +625,12 @@ outcome of each call, so code that wants every result uses it.
 
 **`compose` is a definition tool.** The executor options take a `compose`
 option, beside `tools` and `bundles`. `describeExecutor` flattens the
-tools, then appends `compose` when the option is present. `pi()`,
-`claude()`, and `codex()` each call `describeExecutor`, so every executor kind
-gets the tool the same way. The frozen executor keeps no `compose` field:
-the tool closes over the option.
+tools, then appends `compose` when the option is an object. An absent
+option and `false` add no tool. `pi()`, `claude()`, and `codex()` fill an
+absent option with `{ evaluator: quickjsEvaluator() }` once, when the
+agent is defined, so the tool list of a definition is the same in every
+activation. The frozen executor keeps no `compose` field: the tool closes
+over the option.
 
 **The name `compose` is reserved.** `appendTools` refuses a tool of that
 name while it flattens the tools of the options, before `compose` is
@@ -822,8 +832,11 @@ host files outside the sandbox ([Codex](codex.md#the-trust-boundary)).
 The Codex executor keeps it off in every seat. A Codex seat uses the `compose` tool,
 as every seat does.
 
-**A seat opts in with an evaluator.** The executor options take a
-`compose` option. With no option, the seat has no `compose` tool.
+**A seat has `quickjsEvaluator()` by default.** The executor options take a
+`compose` option. With no option, the seat has the `compose` tool with
+`quickjsEvaluator()`. `compose: false` removes the tool. A host passes its
+own `compose` object to choose `processEvaluator()`, an approval hook,
+guidance, or limits.
 
 ```ts
 import { quickjsEvaluator } from '@ambionframework/compose/runtime';
@@ -840,8 +853,9 @@ const analyst = defineAgent({
 });
 ```
 
-**The kernel imports no evaluator.** An evaluator package provides one, as
-an executor package provides an execution. A definition already holds the
+**The kernel imports no evaluator.** An executor package imports the
+default one from `@ambionframework/compose/runtime`, and `describeExecutor`
+alone adds no tool for an absent option. A definition already holds the
 `invoke` function of each tool, so it can hold an evaluator. No journal
 entry holds a definition, and `@ambionframework/cloudflare` finds each
 definition by name in the worker, so no function crosses a wire.
@@ -889,9 +903,10 @@ entry, and the entry imports only `node:` built-ins.
 `packages/claude/tsdown.config.ts` builds two entries in the same way.
 
 **Cloudflare has no evaluator in the first version.** A worker cannot
-start a process, and a worker loads WebAssembly only from its bundle. A
-seat on `@ambionframework/cloudflare` has no `compose` option until an
-evaluator for workerd exists.
+start a process, and a worker loads WebAssembly only from its bundle. The
+import of `quickjsEvaluator` works in workerd, and an evaluation fails
+there. A seat on `@ambionframework/cloudflare` sets `compose: false` until
+an evaluator for workerd exists.
 
 ## Failure, cancellation, and effects
 

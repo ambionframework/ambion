@@ -45,8 +45,9 @@ tools, and bundles.
 `AssistantParts`: the `instructions`, the `tools`, and the `bundles`. The
 `bundles` hold the respond guidance first, then the bundles of the
 application. The function returns an executor of any package. A spread of the
-parts is the whole adapter. The function sets the model, `thinking`, `compose`,
-and every other option of its package. The package of the assistant depends on
+parts is the whole adapter. The function sets the model, `thinking`, and every
+other option of its package. The executor packages give the assistant the
+`compose` tool by default, and `compose: false` removes it. The package of the assistant depends on
 `@ambionframework/ambion` only.
 
 The factory places participation guidance in the existing bundle guidance

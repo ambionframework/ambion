@@ -264,13 +264,13 @@ export function assertToolCompose(compose: unknown): void {
 
 /** Refuse a malformed `compose` option, when the agent is defined. */
 export function assertComposeOptions(compose: unknown): void {
-	if (compose === undefined) return;
+	if (compose === undefined || compose === false) return;
 	if (
 		!isRecord(compose) ||
 		!isRecord(compose.evaluator) ||
 		typeof compose.evaluator.evaluate !== 'function'
 	) {
-		throw new Error('Agent compose must be an object with an evaluator.');
+		throw new Error('Agent compose must be false or an object with an evaluator.');
 	}
 	if (compose.approve !== undefined && typeof compose.approve !== 'function') {
 		throw new Error('Agent compose approve must be a function.');

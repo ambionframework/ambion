@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The `compose` tool is on by default for Pi, Claude, and Codex seats.**
+`pi()`, `claude()`, and `codex()` give a seat `compose` with
+`quickjsEvaluator()` when the options name none. `compose: false` removes the
+tool. A host passes its own `compose` object to choose `processEvaluator()`, an
+approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
+input tokens when a seat does not use it, so a seat that never chains tools
+can set `compose: false`. A seat on Cloudflare sets `compose: false`, because
+workerd has no evaluator yet.
+
 **The workspace drops the `status` and `clone` tools.** The smallest
 workspace gives nine tools, from ten. A workspace with a SQL backend and a
 git backend gives twelve, from fourteen. The agent reaches the same facts
@@ -35,6 +44,11 @@ handles name `wait` in place of `status`.
 
 ### Breaking changes
 
+- **Set `compose: false` to keep a seat without `compose`.** The tool list
+  and the guidance of every Pi, Claude, and Codex seat gain `compose` and its
+  catalog. `ExecutorBaseOptions.compose` takes `ComposeOptions` or `false`, and
+  `@ambionframework/pi`, `@ambionframework/claude`, and
+  `@ambionframework/codex` now depend on `@ambionframework/compose`.
 - **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
   `timeout: 0`. The result has the same text and the same details. In a
   compose call, `tools.status` is gone, and `tools.wait` binds the same

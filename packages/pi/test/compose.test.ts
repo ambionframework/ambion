@@ -6,6 +6,7 @@
 
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import {
+	COMPOSE_GUIDANCE,
 	type ComposeOptions,
 	createRuntime,
 	defineTool,
@@ -32,7 +33,7 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { piExecution } from '../src/index.ts';
+import { pi, piExecution } from '../src/index.ts';
 
 interface Call {
 	readonly uses: readonly string[];
@@ -72,6 +73,22 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 const nestedOf = (logged: readonly Step[]) => logged.filter((step) => 'parent' in step);
 
 describe('compose on a Pi seat', () => {
+	const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
+
+	it.each([
+		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],
+		['false', false as const, [], undefined],
+		['an object', own, ['compose'], 'Own guidance.'],
+	])('gives the tool list of the seat for compose %s', (_name, compose, names, guidance) => {
+		const executor = pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			...(compose === undefined ? {} : { compose }),
+		});
+		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
+		expect(executor.guidance).toBe(guidance);
+	});
+
 	it('binds tools with a declared output, hands the large result on, and shows the model the returned value alone', async () => {
 		const seen: ToolContext[] = [];
 		const spy = defineTool({

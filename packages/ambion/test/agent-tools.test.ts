@@ -14,10 +14,12 @@ import {
 	pi,
 	piExecution,
 } from '../../pi/src/index.ts';
+import { describeExecutor } from '../src/hosting.ts';
 import {
 	type AmbionTool,
 	COMPOSE_GUIDANCE,
 	type ComposeOptions,
+	composeMacro,
 	createRuntime,
 	defineAgent,
 	definePerson,
@@ -221,6 +223,32 @@ describe('the definition of agent tools', () => {
 			'lookup',
 		]);
 	});
+
+	it.each([
+		['absent', undefined],
+		['false', false as const],
+	])(
+		'adds no compose tool, no guidance, and no macro check when compose is %s',
+		(_name, compose) => {
+			const macro = composeMacro({
+				name: 'bundle/orphan',
+				description: 'Calls a tool that the catalog lacks.',
+				uses: ['missing'],
+				code: 'return 1;',
+				args: { type: 'object', properties: {} },
+				hash: 'orphan',
+			});
+			const executor = describeExecutor({
+				kind: 'scripted',
+				instructions: 'Work.',
+				tools: [tool('lookup')],
+				bundles: [{ tools: [], macros: [macro] }],
+				...(compose === undefined ? {} : { compose }),
+			});
+			expect(executor.tools.map((one) => one.name)).toEqual(['lookup']);
+			expect(executor).not.toHaveProperty('guidance');
+		},
+	);
 
 	it('refuses a second compose tool in a definition, and treats a hand-built compose tool as an ordinary one', () => {
 		const withCompose = worker({ compose: { evaluator: { evaluate: async () => undefined } } });

@@ -1020,6 +1020,7 @@ describe('a summary writer with domain tools', () => {
 				'dismiss',
 				'recall',
 				'book-inspector',
+				'compose',
 			]);
 			expect(view.prompt).toContain('Book guidance.');
 		}
