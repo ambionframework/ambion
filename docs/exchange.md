@@ -76,8 +76,8 @@ opens a later exchange once the room is quiet.
 
 **A post opens an exchange with no author.** Its exchange has no
 `person` until a person speaks in the range. The first person who speaks
-becomes its `person` and receives its summary. An exchange where no person
-spoke owes no summary.
+becomes its `person`. That person receives its summary when an agent said a
+message in the range. An exchange where no person spoke owes no summary.
 
 **The room derives `person` from the record.** `exchangeAfter` reads the
 first said message of a person at or after `from`, and the close stamps
@@ -327,7 +327,7 @@ is absent when the executor recorded none.
 ## 8. What reads one
 
 - The summary writer receives one dedicated summary activation and may write a
-  summary through `say`.
+  summary through `say` when an agent said a message in the closed range.
 - A client groups the fixed range under the question it answered.
 - A host can measure cost and completion per exchange. A closed exchange
   read carries `usage`: the sum of every activation in its range, the

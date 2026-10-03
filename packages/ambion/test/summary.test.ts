@@ -177,16 +177,12 @@ const writesEach =
 	(_context, _name, request) =>
 		summarise(`${text} ${request}`);
 
-/** A product that is still reading when the room changes under it. */
+/** A product that is still reading when the room changes under it, then answers once. */
 function heldUntil(held: Promise<void>): PiScript {
 	return async (_context, _name, request) => {
-		if (request === 1) {
-			await held;
-			return quiet();
-		}
-		if (request === 2) return say('answer 1');
-		if (request === 3) return say('answer 2');
-		return quiet();
+		if (request !== 1) return quiet();
+		await held;
+		return say('answer 1');
 	};
 }
 
@@ -241,6 +237,12 @@ describe('closing summaries', () => {
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// it is told whom it writes for, and how that person reads
 		expect(prompts[0]).toContain('You are writing for priya.');
+		// the exchange messages are the only source, and no answer means no summary
+		expect(prompts[0]).toContain('The messages of the exchange are your source.');
+		expect(prompts[0]).toContain('Add nothing from your own knowledge.');
+		expect(prompts[0]).toContain('is a fact of the exchange: report it.');
+		expect(prompts[0]).toContain('end your activation without calling say');
+		expect(contexts[0]).toContain('These messages are your only source.');
 		expect(prompts[0]).toContain('Leave out who said what.');
 		// The last line names the range this activation closes, in the journal's
 		// own seq: the same number a workspace mirror writes for each message,
@@ -1021,6 +1023,7 @@ describe('a summary writer with domain tools', () => {
 				'recall',
 				'book-inspector',
 				'compose',
+				'describe',
 			]);
 			expect(view.prompt).toContain('Book guidance.');
 		}

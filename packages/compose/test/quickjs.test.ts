@@ -1,5 +1,5 @@
 import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
-import { DEBUG_SYNC } from 'quickjs-emscripten';
+import { DEBUG_SYNC, RELEASE_SYNC } from 'quickjs-emscripten';
 import { describe, expect, it, vi } from 'vitest';
 import { quickjsRuntime } from '../src/runtime.ts';
 
@@ -80,5 +80,22 @@ describe('the limits of quickjsRuntime', () => {
 			new AbortController().signal,
 		);
 		expect(value).toBe(1);
+	});
+});
+
+describe('a runtime that cannot load the WebAssembly', () => {
+	it('fails the evaluation with an error that names the module and the way out', async () => {
+		const variant = {
+			...RELEASE_SYNC,
+			importModuleLoader: () => Promise.reject(new Error('Wasm code generation disallowed')),
+		};
+		const runtime = quickjsRuntime({ variant });
+		const failed = runtime.evaluate(
+			{ code: 'return 1;', bindings: [], call: async () => null },
+			new AbortController().signal,
+		);
+		await expect(failed).rejects.toThrow(
+			'QuickJS could not load its WebAssembly in this runtime (Wasm code generation disallowed). Pass compose: { runtime } with a compose runtime that this host can run.',
+		);
 	});
 });

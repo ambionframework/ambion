@@ -24,10 +24,11 @@ import {
 	assertToolCompose,
 	COMPOSE_TOOL_NAME,
 	type ComposeOptions,
+	DESCRIBE_TOOL_NAME,
 	mismatchOf,
 } from './compose.ts';
 import { assertMacros, macrosOf } from './compose-macros.ts';
-import { composeGuidance, composeTool } from './compose-tool.ts';
+import { composeGuidance, composeTools } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
@@ -80,11 +81,11 @@ export interface ExecutorBaseOptions {
 	readonly estimateTokens?: string;
 	/**
 	 * The `compose` tool for this seat. It joins the tools of the seat into
-	 * one call. The executor packages give a default when the field is
-	 * absent. `describeExecutor` by itself adds no tool for an absent field
-	 * or for `false`.
+	 * one call, and the `describe` tool that returns the signatures of the
+	 * tools it binds. The executor packages give a default when the field is
+	 * absent. `describeExecutor` by itself adds no tool for an absent field.
 	 */
-	readonly compose?: ComposeOptions | false;
+	readonly compose?: ComposeOptions;
 }
 
 /** What `describeExecutor` reads: the fields every executor kind shares. */
@@ -127,7 +128,7 @@ export function pickPresent<T extends object, K extends keyof T>(
  */
 export function describeExecutor(options: ExecutorOptions): Executor {
 	assertComposeOptions(options.compose);
-	const compose = options.compose === false ? undefined : options.compose;
+	const compose = options.compose;
 	const input = flattenTools(options.tools, options.bundles);
 	// A seat without `compose` ignores the macros, so one skill set fits every seat.
 	const macros = compose === undefined ? [] : macrosOf(options.bundles);
@@ -139,7 +140,7 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	const tools = Object.freeze(
 		compose === undefined
 			? own
-			: [...own, captureTool(composeTool(compose, own, macros, ROOM_COMPOSE))],
+			: [...own, ...composeTools(compose, own, macros, ROOM_COMPOSE).map(captureTool)],
 	);
 	return Object.freeze({
 		kind: options.kind,
@@ -315,7 +316,7 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 const CITED = Type.Array(
 	Type.String({
 		description:
-			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
+			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, never by its path, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
 	}),
 );
 
@@ -323,7 +324,7 @@ const CITED = Type.Array(
 export const SAY = {
 	name: 'say' as const,
 	description:
-		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`.',
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String({ description: 'What you say, as the record shows it.' }),
@@ -366,7 +367,7 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person of the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
+		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. The message then opens an exchange for the person of the exchange in which you scheduled it. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		delaySeconds: Type.Integer({
 			minimum: 1,
@@ -429,7 +430,7 @@ function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: s
 	if (!Array.isArray(tools)) throw new Error(`Agent ${source} must be an array.`);
 	for (const tool of tools) {
 		assertTool(tool);
-		if (tool.name === COMPOSE_TOOL_NAME)
+		if (tool.name === COMPOSE_TOOL_NAME || tool.name === DESCRIBE_TOOL_NAME)
 			throw new AmbionError(
 				'invalid_tool',
 				`A tool of the agent ${source} is named '${tool.name}': the compose option reserves the name. Give the tool another name.`,

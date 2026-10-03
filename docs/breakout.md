@@ -164,9 +164,10 @@ the same kind of catalog for its rooms today (`workbench_rooms`).
 
 **A person visits a breakout room as any other room.** The person reads its
 exchanges and can speak. The first person who speaks in an exchange becomes
-its `person`, and a configured summary writer then owes that person a
-summary. A worker can ask a visiting person a question with `say({ to })`,
-and the `awaiting` outcome holds the wait.
+its `person`, and a configured summary writer owes that person a summary
+once a worker says a message in the exchange. A worker can ask a visiting
+person a question with `say({ to })`, and the `awaiting` outcome holds the
+wait.
 
 ## Bounds
 

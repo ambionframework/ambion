@@ -40,32 +40,35 @@ const readSchema = Type.Object({
 });
 
 /** The declared output of `read`: the text with no notice, and where it sits in the file. */
-const ReadOutput = Type.Object({
-	path: Type.String({ description: 'The absolute path of the file.' }),
-	text: Type.String({
-		description:
-			'The file text from line `from`, with no notice. Empty for an image, and when the first line alone exceeds the byte limit.',
-	}),
-	from: Type.Optional(
-		Type.Integer({ description: 'The first line of text, counted from 1. Absent for an image.' }),
-	),
-	to: Type.Optional(
-		Type.Integer({
-			description: 'The last line of text. It is one less than from when text is empty.',
+const ReadOutput = Type.Object(
+	{
+		path: Type.String({ description: 'The absolute path of the file.' }),
+		text: Type.String({
+			description:
+				'The file text from line `from`, with no notice. Empty for an image, and when the first line alone exceeds the byte limit.',
 		}),
-	),
-	lines: Type.Optional(Type.Integer({ description: 'The lines in the file.' })),
-	next: Type.Optional(
-		Type.Integer({ description: 'The offset to read next when more lines of the file remain.' }),
-	),
-	truncation: Type.Optional(TruncationFacts),
-	image: Type.Optional(
-		Type.Object(
-			{ mimeType: Type.String({ description: 'The image type, such as image/png.' }) },
-			{ description: 'Set for an image file. The image itself does not reach code.' },
+		from: Type.Optional(
+			Type.Integer({ description: 'The first line of text, counted from 1. Absent for an image.' }),
 		),
-	),
-});
+		to: Type.Optional(
+			Type.Integer({
+				description: 'The last line of text. It is one less than from when text is empty.',
+			}),
+		),
+		lines: Type.Optional(Type.Integer({ description: 'The lines in the file.' })),
+		next: Type.Optional(
+			Type.Integer({ description: 'The offset to read next when more lines of the file remain.' }),
+		),
+		truncation: Type.Optional(TruncationFacts),
+		image: Type.Optional(
+			Type.Object(
+				{ mimeType: Type.String({ description: 'The image type, such as image/png.' }) },
+				{ description: 'Set for an image file. The image itself does not reach code.' },
+			),
+		),
+	},
+	{ $id: 'ReadResult' },
+);
 
 /** What `read` gives in `details`. */
 type ReadDetails = Static<typeof ReadOutput>;

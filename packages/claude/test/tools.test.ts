@@ -49,6 +49,7 @@ it('lists the room tools with JSON Schema beside the agent tools, runs an agent 
 	expect(listed.map((tool) => tool.name).sort()).toEqual([
 		'broken',
 		'compose',
+		'describe',
 		'dismiss',
 		'lookup',
 		'recall',

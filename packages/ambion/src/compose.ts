@@ -86,7 +86,11 @@ export interface ComposeMacro {
 	readonly hash: string;
 }
 
-/** The `compose` option of the executor options. With no option, the seat has no `compose` tool. */
+/**
+ * The `compose` option of the executor options. `describeExecutor` adds the
+ * `compose` tool and the `describe` tool for an option, and none for an
+ * absent option. `pi()`, `claude()`, and `codex()` fill an absent option.
+ */
 export interface ComposeOptions {
 	readonly runtime: ComposeRuntime;
 	/**
@@ -124,12 +128,20 @@ export interface ComposeResult {
 /** The name of the `compose` tool. A tool of the options cannot take it. */
 export const COMPOSE_TOOL_NAME = 'compose';
 
+/** The name of the `describe` tool, which returns the signatures of bindable tools. A tool of the options cannot take it. */
+export const DESCRIBE_TOOL_NAME = 'describe';
+
 /** What `compose` guides a model with: when a compose call helps, and when a direct call does. */
 export const COMPOSE_GUIDANCE = `compose joins your tools in one call. Put the tools that you use in
 uses, and the body of an async function in code. Each tool is
-tools.<name>, and the description of compose gives its signature. You
-read only the value that the code returns. compose runs JavaScript, so
-code with no tools also calculates and transforms data.
+tools.<name>. You read only the value that the code returns. compose
+runs JavaScript, so code with no tools also calculates and transforms
+data.
+
+Before you write code that reads the fields of a result, call describe
+with the names of the tools. It returns their signatures and types. The
+description of compose lists the tools and the type of each result.
+Read the fields, and do not parse text.
 
 Plan the tool calls of a task before you make the first call. When the
 plan has two or more tool calls, make them in one compose call. Each
@@ -159,29 +171,17 @@ The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
 compose result shows the new lines. Read them before you speak again.
 
-For example, "snapshot each file that a query finds" is one compose
-call. Do not call sql first to read the paths:
-  const found = await tools.sql({ sql: 'SELECT path FROM files' });
-  return tools.snapshot({ paths: found.rows.map((row) => row.path) });
-
-Write the code from the signatures. A typed result gives fields, such
-as rows of sql and text of bash: read the fields, and do not parse
-text. A tool that fails rejects with an Error. error.details holds its
-result when the tool gives one. bash rejects when the command exits
-with a code other than 0. When the task expects such a failure, catch
-it and read error.details:
-  const run = await tools
-    .bash({ command: 'pnpm test', wait: 300 })
-    .catch((error) => error.details);
-  const { refs } = await tools.snapshot({ paths: [run.process.output] });
-  return { exit: run.process.exitCode, tail: run.text.slice(-500), log: refs[0] };
+A tool that fails rejects with an Error. error.details holds its result
+when the tool gives one. bash rejects when the command exits with a code
+other than 0. When the task expects such a failure, catch it with
+.catch((error) => error.details) and read the details.
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call, its outcome, and the result of each completed
-call, such as a process handle. A completed call can have had an effect,
-so read the list before you call a tool again. A tool that the code
-reads as tools.<name> must be in uses.
+call, such as a process handle. A completed call can have had an
+effect, so read the list before you call a tool again. A tool that the
+code reads as tools.<name> must be in uses.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.`;
@@ -274,13 +274,13 @@ export function assertToolCompose(compose: unknown): void {
 
 /** Refuse a malformed `compose` option, when the agent is defined. */
 export function assertComposeOptions(compose: unknown): void {
-	if (compose === undefined || compose === false) return;
+	if (compose === undefined) return;
 	if (
 		!isRecord(compose) ||
 		!isRecord(compose.runtime) ||
 		typeof compose.runtime.evaluate !== 'function'
 	) {
-		throw new Error('Agent compose must be false or an object with a runtime.');
+		throw new Error('Agent compose must be an object with a runtime.');
 	}
 	if (compose.approve !== undefined && typeof compose.approve !== 'function') {
 		throw new Error('Agent compose approve must be a function.');

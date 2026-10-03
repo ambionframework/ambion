@@ -9,11 +9,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AmbionTool, ToolBundle } from '@ambionframework/ambion';
+import { describeExecutor } from '@ambionframework/ambion/hosting';
 import { describe, expect, it, onTestFinished } from 'vitest';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { fromDirectory, loadSkills, openWorkspace, type Workspace } from '../src/index.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
+import { callAs } from './support/backends.ts';
 import { composed } from './support/compose.ts';
 
 let serial = 0;
@@ -333,5 +336,32 @@ describe('the compose field of the workspace tools', () => {
 		expect(declared(audited.tools())).toEqual(plain);
 		expect(declared(workspace.tools({ skills }))).toEqual(plain);
 		expect(declared(audited.tools({ skills }))).toEqual(plain);
+	});
+
+	it('describes a full seat in under 1,500 characters that name every bindable tool, and describe gives each signature', async () => {
+		const { workspace } = await lab();
+		const bundle = workspace.tools();
+		const executor = describeExecutor({
+			kind: 'test',
+			instructions: 'Test.',
+			bundles: [bundle],
+			compose: { runtime: functionRuntime },
+		});
+		const [compose, describer] = ['compose', 'describe'].map((name) =>
+			executor.tools.find((tool) => tool.name === name),
+		);
+		const room = ['say', 'schedule', 'recall', 'seat', 'unseat', 'dismiss'];
+		const names = [...bundle.tools.map((tool) => tool.name), ...room];
+		expect(compose?.description.length).toBeLessThan(1500);
+		for (const name of names) expect(compose?.description).toContain(`${name} -> `);
+		// A declared output names its type, and an undeclared one is text.
+		expect(compose?.description).toContain('read -> ReadResult');
+		expect(compose?.description).toContain('sql -> SqlResult');
+		expect(compose?.description).toContain('bash -> ProcessResult');
+		expect(compose?.description).toContain('wait -> WaitResult');
+		expect(compose?.description).toContain('write -> string');
+		const described = await describer?.invoke({ tools: names }, callAs('ada', { room: 'lobby' }));
+		expect(described).toContain('type SqlResult = {');
+		for (const name of names) expect(described).toMatch(new RegExp(`^ {2}${name}\\(args:`, 'm'));
 	});
 });

@@ -1104,19 +1104,26 @@ as its `details` and checks them against the schema at every call
 none, so `compose` binds it as text. `write` and `edit`
 declare none, because code needs only their success or their rejection.
 
-| Tool       | Declared output                                                                                                      |
-| ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| `sql`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them.              |
-| `snapshot` | `refs`: one ref for each path, in order.                                                                             |
-| `restore`  | `ref`, `path` of the file, and `bytes`.                                                                              |
-| `read`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.                    |
-| `bash`     | `process`, `text`, `read`, and `truncation` when the result cut the output.                                          |
-| `cancel`   | The same facts as `bash`.                                                                                            |
-| `ps`       | `processes`: the facts of each process of the caller.                                                                |
-| `wait`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                             |
-| `repos`    | `server`, and `repositories` with the id, branches, and clone URL of each.                                           |
-| `fork`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                                        |
-| `fetch`    | `process`, `handle`, `owner`, `path`, `status`, `mediaType`, `bytes`, `sha256`, `ref`, `file`, and `json` or `text`. |
+**Each output has a named type.** The schema carries an `$id`, which is the
+name in the `Type` column. The description of `compose` lists `name -> Type`
+for each tool, and `describe` renders the type once for all tools that
+share it ([Compose](compose.md#the-catalog)). `wait` gives `WaitResult`, a
+union of `ProcessResult` and `WaitedResult`. `Process` and `Truncation` are the named types
+inside them.
+
+| Tool       | Type             | Declared output                                                                                                      |
+| ---------- | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `sql`      | `SqlResult`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them.              |
+| `snapshot` | `SnapshotResult` | `refs`: one ref for each path, in order.                                                                             |
+| `restore`  | `RestoreResult`  | `ref`, `path` of the file, and `bytes`.                                                                              |
+| `read`     | `ReadResult`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.                    |
+| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` when the result cut the output.                                          |
+| `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                                            |
+| `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                                |
+| `wait`     | `WaitResult`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                             |
+| `repos`    | `ReposResult`    | `server`, and `repositories` with the id, branches, and clone URL of each.                                           |
+| `fork`     | `ForkResult`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                                        |
+| `fetch`    | `FetchResult`    | `process`, `handle`, `owner`, `path`, `status`, `mediaType`, `bytes`, `sha256`, `ref`, `file`, and `json` or `text`. |
 
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.

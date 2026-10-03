@@ -74,6 +74,11 @@ describe.each([
 					'  result: "process b"',
 					'- c1.3 bash: completed',
 					'  result: "process c"',
+					'Signatures of the tools that the failure names:',
+					'declare const tools: {',
+					'  /** Wait for a process. */',
+					'  wait(args: { process: string }): Promise<string>;',
+					'};',
 				].join('\n'),
 			);
 		},

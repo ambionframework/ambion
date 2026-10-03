@@ -99,20 +99,23 @@ export const ProcessOutput = Type.Object(
 );
 
 /** What `wait` on several handles gives: every state in the order of the handles, and each process it shows. */
-const WaitedOutput = Type.Object({
-	processes: Type.Array(ProcessFacts, {
-		description: 'Every process, in the order of the handles.',
-	}),
-	ended: Type.Array(ProcessOutput, {
-		description: 'The result of each process that ended and fit the result.',
-	}),
-});
+const WaitedOutput = Type.Object(
+	{
+		processes: Type.Array(ProcessFacts, {
+			description: 'Every process, in the order of the handles.',
+		}),
+		ended: Type.Array(ProcessOutput, {
+			description: 'The result of each process that ended and fit the result.',
+		}),
+	},
+	{ $id: 'WaitedResult' },
+);
 
 /** What `wait` gives: the result of `bash` for one handle, and `WaitedOutput` for several. */
-export const WaitOutput = Type.Union([ProcessOutput, WaitedOutput]);
+export const WaitOutput = Type.Union([ProcessOutput, WaitedOutput], { $id: 'WaitResult' });
 
 /** The running processes of the caller. */
-export const PsOutput = Type.Object({ processes: Type.Array(ProcessFacts) });
+export const PsOutput = Type.Object({ processes: Type.Array(ProcessFacts) }, { $id: 'PsResult' });
 
 /** What a handle tool gives in `details`. */
 export type ProcessDetails = Static<typeof ProcessOutput>;

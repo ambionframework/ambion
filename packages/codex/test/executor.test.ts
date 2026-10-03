@@ -222,7 +222,7 @@ describe('the session step', () => {
 				session: 'thread-1',
 				auth: 'apiKey',
 				permissionMode: 'never, readOnly',
-				tools: ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall', 'compose'],
+				tools: ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall', 'compose', 'describe'],
 				servers: [{ name: 'node_repl', status: 'disabled' }],
 			},
 		]);

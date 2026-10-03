@@ -94,13 +94,25 @@ describe('room reconciliation', () => {
 			const close = planReconciliation(state, options()).close;
 			return close === undefined ? undefined : decide(state, { type: 'close', ...close }, T0);
 		};
-		const quiet = [composition(), arrived(), said(), released('message:3:product:1')];
-		expect(planReconciliation(fold(quiet), options()).close).toEqual({ from: 3, through: 3 });
+		const quiet = [
+			composition(),
+			arrived(),
+			said(),
+			said(4, 'product'),
+			released('message:3:product:1', 4),
+		];
+		expect(planReconciliation(fold(quiet), options()).close).toEqual({ from: 3, through: 4 });
 		expect(closed(fold(quiet))).toEqual({
 			entry: {
 				kind: 'close',
-				body: { person: 'priya', from: 3, through: 3, at, summaryWriter: 'writer' },
+				body: { person: 'priya', from: 3, through: 4, at, summaryWriter: 'writer' },
 			},
+		});
+
+		// A request that no agent answered owes no summary.
+		const unanswered = fold([composition(), arrived(), said(), released('message:3:product:1')]);
+		expect(closed(unanswered)).toEqual({
+			entry: { kind: 'close', body: { person: 'priya', from: 3, through: 3, at } },
 		});
 
 		const absentOwner = fold([
@@ -110,9 +122,9 @@ describe('room reconciliation', () => {
 		]);
 		expect(planReconciliation(absentOwner, options()).close).toEqual(undefined);
 
-		const writerLeft = fold([...quiet.slice(0, 3), unseated(4), quiet[3] as RoomEntry]);
+		const writerLeft = fold([...quiet.slice(0, 4), unseated(5), quiet[4] as RoomEntry]);
 		expect(closed(writerLeft)).toEqual({
-			entry: { kind: 'close', body: { person: 'priya', from: 3, through: 4, at } },
+			entry: { kind: 'close', body: { person: 'priya', from: 3, through: 5, at } },
 		});
 
 		// A returned say that no person answers closes with no person and owes no summary.

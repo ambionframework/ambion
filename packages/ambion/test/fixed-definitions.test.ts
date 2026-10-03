@@ -20,7 +20,13 @@ import {
 	storedOf,
 	waitForRoom,
 } from './support/room.ts';
-import { callTool, quiet, scriptedStream } from './support/scripted.ts';
+import {
+	answersLastQuestion,
+	byAgent,
+	callTool,
+	quiet,
+	scriptedStream,
+} from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { storages } from './support/storage.ts';
 
@@ -92,6 +98,10 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 
 	it('leaves a closed exchange without a summary while the host holds the writer out of the room', async () => {
 		const { room } = await open('reserve-writer', {
+			execution: piExecution({
+				sessions: 'memory',
+				stream: scriptedStream(byAgent({ alpha: answersLastQuestion(['priya']) })),
+			}),
 			agents: [alpha, beta],
 			seats: { alpha: 'broadcast', beta: 'none' },
 			summaryWriter: 'beta',

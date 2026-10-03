@@ -27,8 +27,8 @@ import {
 /** The tools of the room. */
 const ROOM = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
 
-/** The tools of the room and the one tool of the application. */
-const ALLOWED = [...ROOM, 'lookup'];
+/** The tools of the room, the one tool of the application, and the compose tools of every seat. */
+const ALLOWED = [...ROOM, 'lookup', 'compose', 'describe'];
 
 /** The MCP helpers that Codex adds when an MCP server is on. A seat runs no server, so none may appear. */
 const HELPERS = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'];

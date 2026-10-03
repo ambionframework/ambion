@@ -2,20 +2,56 @@
 
 ## Unreleased
 
+**The guidance of a seat follows the review of the workbench prompts.**
+The speaking policy states that a directed say wakes a participant. The
+hand-off paragraph asks for one only when the roster marks the seat "named
+only". The roster legend explains the marks that the roster shows. The
+ask line drops the sentences that only the assistant needs. The `say` tool
+states that a file path is no URI. The `schedule` tool states who the
+scheduled message opens an exchange for. The assistant names attention by the marks of the
+roster. The Codex seat note drops "answer with `say`, then stop" and states
+that the sandbox applies to no tool the seat holds. The workspace tool line
+gives no count. The audit note and the process note lose their recaps. The
+shell note shortens the git list. The workbench gives the assistant its own
+short instructions, states the approval of an instrument across activations,
+and defines the assignment of a specialist.
+
 **The scripted executor returns a tool error to the script.** When an own
 tool of a seat throws, for example a failed `compose` call, the script reads
 the message in `step.results` and the activation goes on. Before, the pass
 failed as transient and the room retried it after a delay. A script that
 needs a failed pass throws a `ScriptedFailure`.
 
-**The `compose` tool is on by default for Pi, Claude, and Codex seats.**
-`pi()`, `claude()`, and `codex()` give a seat `compose` with
-`quickjsRuntime()` when the options name none. `compose: false` removes the
-tool. A host passes its own `compose` object to choose `processRuntime()`, an
-approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
-input tokens when a seat does not use it, so a seat that never chains tools
-can set `compose: false`. The Cloudflare `configure` refuses an agent with a
-`compose` tool, because workerd has no compose runtime yet.
+**The `compose` tool is on for every Pi, Claude, and Codex seat.**
+`pi()`, `claude()`, and `codex()` give a seat `compose` and `describe`, with
+`quickjsRuntime()` when the options name no runtime. A seat cannot turn
+the tools off. A host passes its own `compose` object to choose
+`processRuntime()`, an approval hook, guidance, or limits. The Cloudflare
+`configure` accepts the tools. A compose call fails in workerd with an error
+that says QuickJS could not load its WebAssembly, until a compose runtime
+for workerd exists. A host passes `compose: { runtime }` with a compose
+runtime that the host can run.
+
+**The `describe` tool returns the signatures that `compose` no longer lists.**
+`describe({ tools })` takes a non-empty list of bindable tool names, the room
+tools included. It returns their typed signatures and named types, and runs
+nothing. A name outside the catalog fails the call and lists the bindable
+names. The kernel reserves the name `describe` as it reserves `compose`.
+
+**The description of `compose` holds a compact list.** It keeps the
+contract, the limits, and the rejection rule. Each bindable tool appears as
+`name -> Type`, where `Type` names the declared output, `string` for a tool
+with no output, and `object`, `array`, or the primitive type for an output with no `$id`. The full catalog
+moved to `describe`. The tool list of a full workspace seat shrinks from
+about 22,100 to about 9,600 characters in every request. The workspace
+outputs declare an `$id`, so the list names each type.
+
+**A failed compose call shows the signature of the tool that it names.** The
+message appends the signature of the tool of the failing nested call, and of
+a tool that the code read and `uses` left out.
+
+**`COMPOSE_GUIDANCE` is shorter.** It tells the model to call `describe` before
+code that reads the fields of a result, and it drops the two code examples.
 
 **`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
 the runtime of its `compose` tool in the `runtime` field. The exports change
@@ -80,6 +116,77 @@ for a span. Each template ships a skill with an `observe` macro over
 `fetch`. The macro checks `api` and the digest of each file. See
 [Sensors](docs/sensors.md).
 
+### Assistant
+
+**The assistant routes first and stays silent after that.** In a respond
+activation its job is to get the request to the specialists who need it. To
+route to a seated specialist at `named` attention, it calls `say` with `to` set
+to the name of that specialist. The `seat` tool routes nothing, and the
+guidance now states before the `seat` rule that a seated specialist needs `say`. A live run
+showed the failure: the assistant called `seat` for two specialists that were
+already seated, ended with no directed `say`, and no specialist received the
+request.
+
+For everything else the assistant calls `say` in three cases only: a
+participant asks it a question, the application instructions require a
+message, or it steers a forbidden action. A specialist result, report, failure,
+or acknowledgment is not a question, even when it is addressed to the
+assistant. The assistant sends no message about it, and the closing summary
+reports it. In an earlier live run, the assistant posted a specialist result
+to the person and added a wiring step that no specialist had stated.
+
+The assistant may steer in one case: a specialist writes that it will now take
+an action that the person forbade in words. Then it sends that specialist one
+short directed `say` that names the constraint. A result that already
+happened, a plan, a proposal, or an estimate is no such action. The guidance
+states the rule once, in about the same length as before.
+
+The workbench specialists report with a `say` that has no `to`. They answer a
+question that another specialist addressed to them with a directed `say`. They
+hand an artifact that a colleague continues to that colleague with a directed
+`say`. A live run showed specialists that sent a result to a seat that never
+asked for it. A live workbench run on a ChatGPT login checked the routing, the
+refused say, and the summary.
+
+**The `seat` tool says what to do for a seated agent.** The result for an agent
+that the record already seats is now `<name> is already seated. Seating it
+again does not activate it. To give it the request, call say with to set to
+<name>.`
+
+### Summaries
+
+**A summary rests on the messages of its exchange.** The summary prompt names
+those messages as the only source. Every fact, value, and recommendation must
+come from a message of the exchange. A reported failure, an unknown, or a
+question to the person is a fact of the exchange, and the summary reports it.
+The writer adds nothing from its own knowledge. When no message after the
+request reports anything, the writer ends the activation without `say`, and the
+source messages stay in later prompts.
+
+The room checks the clear case itself: when no agent said a message inside the
+range of a closed exchange, the close names no summary writer and the room
+assigns no summary activation. The rule is `owesSummary` in
+`rules.verified.ts`. The prompt no longer says "Answer what they asked". The
+assistant no longer publishes a summary for every closed exchange or a summary
+that states a gap that no message reports. Its identity no longer says that
+it summarizes each exchange, and now says that it routes each request.
+
+The writer copies each value as a message states it, derives none, and keeps
+the source paths and URIs that a message cites. The assistant writes no summary
+when its only agent messages are its own answer to the person or its own
+routing requests that no specialist answered. It also writes none when one
+specialist message already answers the request in full. The summary prompt
+of every writer checks this case and the empty case first. A live run showed a summary with
+"9.3–10.7 mA" computed from a formula and the datasheet paths dropped.
+
+### A refused `say` tells the model what to do
+
+The result of a `say` that the freshness rule refuses reads `Not delivered: the
+room moved while you were speaking. New on the record:`, the new lines, and
+`Read it, then call say again with your message unless the new messages already
+say it or make it unnecessary.` A live run showed the old advice end an
+activation and lose the answer of a specialist.
+
 ### Simplification
 
 **`wait` with one handle and `timeout: 0` reads a process.** The call does
@@ -115,11 +222,18 @@ live in the templates. This settles backlog Q2.
 
 ### Breaking changes
 
-- **Set `compose: false` to keep a seat without `compose`.** The tool list
-  and the guidance of every Pi, Claude, and Codex seat gain `compose` and its
-  catalog. `ExecutorBaseOptions.compose` takes `ComposeOptions` or `false`, and
-  `@ambionframework/pi`, `@ambionframework/claude`, and
-  `@ambionframework/codex` now depend on `@ambionframework/compose`.
+- **Every seat has `compose` and `describe`.** The tool list and the
+  guidance of every Pi, Claude, and Codex seat gain both tools.
+  `ExecutorBaseOptions.compose` takes `ComposeOptions` only, and
+  `assertComposeOptions` refuses `false`. The name `describe` is reserved,
+  so a user tool of that name is refused. `@ambionframework/pi`,
+  `@ambionframework/claude`, and `@ambionframework/codex` now depend on
+  `@ambionframework/compose`.
+- **The `$id` of a workspace output names its type.** `ReadResult`,
+  `SqlResult`, `SnapshotResult`, `RestoreResult`, `WaitResult`,
+  `WaitedResult`, `PsResult`, `ReposResult`, `ForkResult`, `ConnectResult`,
+  and `ObserveResult` join `Process`, `ProcessResult`, `Truncation`, and
+  `SensorSource`.
 - **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
   `timeout: 0`. The result has the same text and the same details. In a
   compose call, `tools.status` is gone, and `tools.wait` binds the same

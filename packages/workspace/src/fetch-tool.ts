@@ -61,24 +61,29 @@ const fetchSchema = Type.Object(
 type FetchParams = Static<typeof fetchSchema>;
 
 /** The declared output of `fetch`: the same for every call. */
-const FetchOutput = Type.Object({
-	process: Type.String({ description: 'The name of the process, or its handle when it has none.' }),
-	handle: Type.String({ description: 'The handle of the process at the read.' }),
-	owner: Type.String({ description: 'The agent that started the process.' }),
-	path: Type.String({ description: 'The path that the call read.' }),
-	status: Type.Integer({ description: 'The HTTP status.' }),
-	mediaType: Type.String({ description: 'The media type of the body, in lower case.' }),
-	bytes: Type.Integer({ description: 'The bytes of the body.' }),
-	sha256: Type.String({ description: 'The SHA-256 digest of the body.' }),
-	ref: Type.String({ description: 'The snapshot ref of the body. Cite it.' }),
-	file: Type.String({ description: 'The absolute path of the exported file.' }),
-	json: Type.Optional(
-		Type.Unknown({ description: 'The JSON body, parsed. Set for a body of at most 4 MiB.' }),
-	),
-	text: Type.Optional(
-		Type.String({ description: 'The text body, whole. Set for a body of at most 4 MiB.' }),
-	),
-});
+const FetchOutput = Type.Object(
+	{
+		process: Type.String({
+			description: 'The name of the process, or its handle when it has none.',
+		}),
+		handle: Type.String({ description: 'The handle of the process at the read.' }),
+		owner: Type.String({ description: 'The agent that started the process.' }),
+		path: Type.String({ description: 'The path that the call read.' }),
+		status: Type.Integer({ description: 'The HTTP status.' }),
+		mediaType: Type.String({ description: 'The media type of the body, in lower case.' }),
+		bytes: Type.Integer({ description: 'The bytes of the body.' }),
+		sha256: Type.String({ description: 'The SHA-256 digest of the body.' }),
+		ref: Type.String({ description: 'The snapshot ref of the body. Cite it.' }),
+		file: Type.String({ description: 'The absolute path of the exported file.' }),
+		json: Type.Optional(
+			Type.Unknown({ description: 'The JSON body, parsed. Set for a body of at most 4 MiB.' }),
+		),
+		text: Type.Optional(
+			Type.String({ description: 'The text body, whole. Set for a body of at most 4 MiB.' }),
+		),
+	},
+	{ $id: 'FetchResult' },
+);
 
 type FetchDetails = Static<typeof FetchOutput>;
 
