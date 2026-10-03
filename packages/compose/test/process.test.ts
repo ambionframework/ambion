@@ -72,6 +72,20 @@ describe.runIf(permitted)('processRuntime on a Node with --allow-net', () => {
 			),
 		).rejects.toThrow('memory limit of 33554432 bytes');
 	});
+
+	it('names the memory limit when the child aborts before V8 prints its line', async () => {
+		const runtime = processRuntime({
+			memoryLimit: 32 * 1024 * 1024,
+			spawn: (command, args, options) => {
+				const child = spawn(command, args, options);
+				child.once('spawn', () => child.kill('SIGABRT'));
+				return child;
+			},
+		});
+		await expect(
+			runtime.evaluate(input('for (;;) {}'), new AbortController().signal),
+		).rejects.toThrow('memory limit of 33554432 bytes');
+	});
 });
 
 /** What a child that Node starts under `--permission`, with no allow flag, cannot do. */
