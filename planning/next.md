@@ -80,8 +80,8 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 
 ## Out of scope
 
-- **An evaluator for workerd.** A seat on `@ambionframework/cloudflare`
-  has no `compose` option in 0.6.0.
+- **An evaluator for workerd.** `configure` of `@ambionframework/cloudflare`
+  refuses a seat with `compose`, so a worker seat sets `compose: false`.
 - **Replay of a compose call from its trace.** The trace caps can cut a
   nested output.
 - **Room tools in a compose call.** `say`, `schedule`, `seat`, `unseat`,

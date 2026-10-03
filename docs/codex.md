@@ -163,18 +163,18 @@ package. The block in `packages/codex/README.md` gets the same check.
 **`codex(options)` takes the fields of an agent and two settings of the
 model.** The executor passes each setting to `codex app-server`.
 
-| Option                 | Default            | What it does                                                        |
-| ---------------------- | ------------------ | ------------------------------------------------------------------- |
-| `instructions`         | Required           | The private voice of the agent                                      |
-| `model`                | Required           | A Codex model identifier                                            |
-| `tools`                | None               | Tools from `defineTool`. They reach Codex as dynamic tools          |
-| `bundles`              | None               | Tool bundles with guidance                                          |
-| `compose`              | None               | The `compose` tool: an evaluator, and optional limits               |
-| `speaking`             | `DEFAULT_SPEAKING` | The speaking policy that replaces the default                       |
-| `activationTokenLimit` | The whole record   | The token limit for the record one activation reads                 |
-| `estimateTokens`       | `'length'`         | The name of the estimator in the runtime that counts tokens         |
-| `modelReasoningEffort` | Codex default      | `minimal` up to `ultra`, as Codex lists them                        |
-| `reasoningSummary`     | `'auto'`           | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation" |
+| Option                 | Default              | What it does                                                             |
+| ---------------------- | -------------------- | ------------------------------------------------------------------------ |
+| `instructions`         | Required             | The private voice of the agent                                           |
+| `model`                | Required             | A Codex model identifier                                                 |
+| `tools`                | None                 | Tools from `defineTool`. They reach Codex as dynamic tools               |
+| `bundles`              | None                 | Tool bundles with guidance                                               |
+| `compose`              | `quickjsEvaluator()` | The `compose` tool: an evaluator and optional limits. `false` removes it |
+| `speaking`             | `DEFAULT_SPEAKING`   | The speaking policy that replaces the default                            |
+| `activationTokenLimit` | The whole record     | The token limit for the record one activation reads                      |
+| `estimateTokens`       | `'length'`           | The name of the estimator in the runtime that counts tokens              |
+| `modelReasoningEffort` | Codex default        | `minimal` up to `ultra`, as Codex lists them                             |
+| `reasoningSummary`     | `'auto'`             | `auto`, `concise`, `detailed`, or `none`: see "Debug an activation"      |
 
 **`estimateTokens` names an estimator in the runtime.** The room runs it
 and windows the record, so the definition carries the name alone. `length`,

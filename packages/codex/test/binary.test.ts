@@ -303,11 +303,20 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 
 					const [first, second] = on.responses.requests as [ResponsesRequest, ResponsesRequest];
 
-					// The model sees the room tools and the tool of the seat as functions, and nothing else.
+					// The model sees the room tools, the tool of the seat, and compose as functions, and nothing else.
 					// Codex adds no `exec`, `wait`, or MCP helper tool.
 					const tools = toolsOf(first);
 					expect(tools).toEqual({
-						functions: ['dismiss', 'lookup', 'recall', 'say', 'schedule', 'seat', 'unseat'],
+						functions: [
+							'compose',
+							'dismiss',
+							'lookup',
+							'recall',
+							'say',
+							'schedule',
+							'seat',
+							'unseat',
+						],
 					});
 					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
 					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
@@ -392,7 +401,16 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							session: thread?.data?.thread,
 							auth: 'none',
 							permissionMode: 'never, readOnly',
-							tools: ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall', 'lookup'],
+							tools: [
+								'say',
+								'schedule',
+								'seat',
+								'unseat',
+								'dismiss',
+								'recall',
+								'lookup',
+								'compose',
+							],
 							servers: [{ name: 'node_repl', status: 'disabled' }],
 							activation: expect.any(String),
 							pass: expect.any(Number),
@@ -437,9 +455,18 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 						],
 					});
 					expect(JSON.stringify(result)).not.toContain(PIXEL);
-					// No native tool reads images, so the tool list holds the room tools and the seat tool.
+					// No native tool reads images, so the tool list holds the room tools, the seat tool, and compose.
 					expect(toolsOf(first)).toEqual({
-						functions: ['dismiss', 'look', 'recall', 'say', 'schedule', 'seat', 'unseat'],
+						functions: [
+							'compose',
+							'dismiss',
+							'look',
+							'recall',
+							'say',
+							'schedule',
+							'seat',
+							'unseat',
+						],
 					});
 					const named = JSON.stringify([first.tools, first.input.filter((i) => i.tools)]);
 					for (const native of NATIVE) expect(named).not.toContain(`"name":"${native}"`);
@@ -506,6 +533,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 						functions: [
 							'bash',
 							'cancel',
+							'compose',
 							'dismiss',
 							'edit',
 							'ps',

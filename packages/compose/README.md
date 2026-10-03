@@ -3,7 +3,7 @@
 The evaluators of the `compose` tool of an
 [Ambion](https://ambionframework.com) seat. An evaluator runs the code of one
 compose call. The code calls the tools of the seat as `tools.<name>(args)`.
-The kernel imports no evaluator, so a seat opts in with one.
+`pi()`, `claude()`, and `codex()` give every seat `quickjsEvaluator()` by default, and `compose: false` removes the tool.
 
 ## Install
 
@@ -16,7 +16,7 @@ newer.
 
 ## Use
 
-Pass an evaluator in the `compose` option of an executor.
+Pass a `compose` object to an executor to choose the evaluator, an approval hook, guidance, or limits.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';

@@ -16,7 +16,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/ambion';
 import { afterAll, describe, expect, it } from 'vitest';
+import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
 import {
 	EXCLUSIVE_FEATURES,
 	exclusiveConfig,
@@ -36,6 +38,8 @@ import {
 	threadParams,
 } from '../src/options.ts';
 import { catalogFixture, recordedCatalog } from './support.ts';
+
+const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
 
 const luna = catalogFixture.models.find((entry) => entry.slug === 'gpt-5.6-luna');
 if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');
@@ -156,6 +160,20 @@ describe('threadParams', () => {
 		} finally {
 			scratch.remove();
 		}
+	});
+
+	it.each([
+		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],
+		['false', false as const, [], undefined],
+		['an object', own, ['compose'], 'Own guidance.'],
+	])('gives the tool list of the seat for compose %s', (_name, compose, names, guidance) => {
+		const executor = codex({
+			instructions: 'x',
+			model: 'm',
+			...(compose === undefined ? {} : { compose }),
+		});
+		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
+		expect(executor.guidance).toBe(guidance);
 	});
 
 	it('defaults reasoningSummary to auto', () => {

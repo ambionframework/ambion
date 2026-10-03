@@ -48,6 +48,19 @@
 			"inputs": ["src/**", "test/**", "vitest*.ts", "tsconfig.json", "package.json", "index.html"],
 			"outputs": [],
 			"outputLogs": "errors-only"
+		},
+		// The core's tests read the Pi source, and Pi imports the compose
+		// runtime. Compose depends on the core, so no dependency edge builds it
+		// first. These two entries name its build.
+		"@ambionframework/ambion#check:types": {
+			"dependsOn": ["build", "^build", "@ambionframework/compose#build"],
+			"outputLogs": "errors-only"
+		},
+		"@ambionframework/ambion#test": {
+			"dependsOn": ["build", "^build", "@ambionframework/compose#build"],
+			"inputs": ["src/**", "test/**", "vitest*.ts", "tsconfig.json", "package.json", "index.html"],
+			"outputs": [],
+			"outputLogs": "errors-only"
 		}
 	}
 }

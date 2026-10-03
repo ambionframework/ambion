@@ -10,6 +10,7 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
+import { quickjsEvaluator } from '@ambionframework/compose/runtime';
 
 /**
  * What the harness may spend and how hard it thinks. A Claude seat has no
@@ -38,7 +39,11 @@ const POLICY = ['maxBudgetUsd', 'effort'] as const;
 /** The Claude executor: the Claude Agent SDK's loop, model, instructions, tools and policy. */
 export function claude(options: ClaudeOptions): ClaudeExecutor {
 	return Object.freeze({
-		...describeExecutor({ ...options, kind: 'claude' }),
+		...describeExecutor({
+			...options,
+			compose: options.compose ?? { evaluator: quickjsEvaluator() },
+			kind: 'claude',
+		}),
 		...pickPresent(options, POLICY),
 		kind: 'claude' as const,
 		model: options.model,

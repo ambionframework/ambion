@@ -199,6 +199,7 @@ interface Run {
 const SEAT_DEADLINE_MS = 150_000;
 
 const composed = { compose: { evaluator: quickjsEvaluator() } };
+const uncomposed = { compose: false as const };
 
 function seat(
 	name: string,
@@ -447,7 +448,7 @@ live('compose', () => {
 			// Each seat is checked before the next one starts, so a later failure hides no verdict.
 			verify('with compose', () => holdsDigests(withCompose.answer, DRIFTED));
 			const without = await ask(
-				seat('without', await lab(), { instructions: 'Answer with one say.' }),
+				seat('without', await lab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				CHAIN_TASK,
 				(spent) => record('without compose', spent),
 			);
@@ -501,7 +502,7 @@ live('compose', () => {
 			// Each seat is checked before the next one starts, so a later failure hides no verdict.
 			verify('with compose', () => holdsAnswer(withCompose));
 			const without = await ask(
-				seat('without', await fanLab(), { instructions: 'Answer with one say.' }),
+				seat('without', await fanLab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				FAN_TASK,
 				(spent) => record('without compose', spent, wayOf(spent)),
 			);

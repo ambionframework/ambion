@@ -5,6 +5,7 @@
  */
 import {
 	type AmbionTool,
+	COMPOSE_GUIDANCE,
 	type ComposeOptions,
 	defineTool,
 	type ToolContext,
@@ -20,6 +21,7 @@ import {
 	total,
 } from '../../ambion/test/support/compose-tools.ts';
 import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
+import { claude } from '../src/index.ts';
 import { open, seat, viewOf } from './support.ts';
 
 interface Call {
@@ -56,6 +58,22 @@ async function composed(
 const compose = (call: Call) => ({ tool: 'compose', args: call });
 
 describe('compose on a Claude seat', () => {
+	const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
+
+	it.each([
+		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],
+		['false', false as const, [], undefined],
+		['an object', own, ['compose'], 'Own guidance.'],
+	])('gives the tool list of the seat for compose %s', (_name, compose, names, guidance) => {
+		const executor = claude({
+			instructions: 'Work.',
+			model: 'claude-fake',
+			...(compose === undefined ? {} : { compose }),
+		});
+		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
+		expect(executor.guidance).toBe(guidance);
+	});
+
 	it('binds tools with a declared output, and shows the model the returned value alone', async () => {
 		const seen: ToolContext[] = [];
 		const spy = defineTool({
