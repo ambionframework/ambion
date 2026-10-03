@@ -1141,6 +1141,38 @@ describe('a compose call over the room tools', () => {
 		expect(lines.some((message) => message.from === 'worker')).toBe(false);
 	});
 
+	it('returns the error of a failed compose call to the script, keeps its say, and makes no retry', async () => {
+		const read: string[] = [];
+		let requests = 0;
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-error'),
+				agents: [composer('worker')],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, _seat, request) => {
+					requests = request;
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['say'],
+							code: `await tools.say({ text: 'Done.' }); throw new Error('stop');`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Say it, then fail.' });
+		await settled(room);
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said).toHaveLength(1);
+		expect(read[0]).toMatch(/say: completed/);
+		expect(read[0]).toContain('The compose call failed: stop');
+		// The error reaches the script as a result, so the activation does not fail and the room retries nothing.
+		expect(requests).toBe(2);
+	});
+
 	it('seats two agents and recalls a message in one compose call', async () => {
 		const read: string[] = [];
 		const room = stopAtEnd(

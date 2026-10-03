@@ -23,7 +23,10 @@ export interface ScriptCall {
 /** What a seat does in one step of a pass: the calls it makes. An empty reply ends the pass. */
 export type Reply = readonly ScriptCall[];
 
-/** What one call answered. `text` is `delivered` when the room took it. */
+/**
+ * What one call answered. `text` is `delivered` when the room took it. When an
+ * own tool of the seat throws, `text` is the error message, as a model reads it.
+ */
 export interface ScriptResult {
 	readonly tool: string;
 	readonly text: string;
@@ -250,7 +253,10 @@ class ScriptedActivation implements RunningActivation {
 			const message = error instanceof Error ? error.message : String(error);
 			this.activation.delivered(id);
 			trace.record({ type: 'tool_result', call: id, output: null, error: message });
-			throw error;
+			// A real harness returns a tool error to the model, and the activation goes on.
+			// A script reads the message the same way. Only a `ScriptedFailure` ends the pass.
+			if (error instanceof ScriptedFailure) throw error;
+			return message;
 		}
 	}
 }
