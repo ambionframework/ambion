@@ -336,6 +336,28 @@ steer `claude-sonnet-5`. One more run gave the main rule in the
 description of `compose` too, and `claude-sonnet-5` still called the
 tools directly, so the description keeps its text.
 
+**Third run: the chain case and the fan-out case.** A run with
+`AMBION_THINKING` unset ran the chain case, the token comparison, and the
+fan-out case once on each kind.
+[The fan-out evidence](compose-evidence-fanout.md) holds each run. In the
+fan-out case, the seat reads the log of each drift run, finds the peak, and
+snapshots four logs.
+
+| Kind   | Chain                | Fan-out with compose                            | Fan-out without compose     |
+| ------ | -------------------- | ----------------------------------------------- | --------------------------- |
+| Pi     | passed, compose      | passed, compose of 32 bash calls, 180508 / 2495 | passed, bash, 105117 / 1965 |
+| Claude | failed, direct calls | passed, compose of one bash call, 99276 / 1928  | passed, bash, 61823 / 1324  |
+| Codex  | passed, compose      | failed, compose then bash, 238616 / 1037        | failed, bash, 305275 / 2209 |
+
+Each fan-out cell gives the outcome, the approach, and the input and
+output tokens. On Pi and Claude, the seat with `compose` cost more input
+tokens than the seat without it. The seat with `compose` also made many
+direct calls of `bash` and `sql` before it composed. Both Codex seats
+counted 10 runs: they omitted the drift label and counted each log with a
+peak over 900. The lab holds 4 drift runs with a peak over 900. The chain
+case on Claude chose direct calls again. On Pi it passed, so the choice of
+`claude-sonnet-5` changes from run to run.
+
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own
 facts, so [Compose](../docs/compose.md) holds no list of changes. Change

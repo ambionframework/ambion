@@ -859,4 +859,11 @@ Items 1, 6, and 7 add a live run, which CP6 holds.
    first case failed on each kind: the seat called `sql` and `snapshot`
    directly. With the current guidance, the first case passed on Codex at
    the efforts medium and high. It failed on Pi and Claude with
-   `claude-sonnet-5`.
+   `claude-sonnet-5`. A later run passed on Pi and failed on Claude, so
+   the choice of `claude-sonnet-5` changes from run to run. A fan-out
+   case reads many logs and snapshots a few. With `compose`, the seat
+   cost more input tokens on Pi and Claude, because it made many direct
+   calls before it composed. Codex failed the fan-out case with and
+   without `compose`: it omitted a filter of the task.
+   [The fan-out evidence](../planning/compose-evidence-fanout.md) holds
+   each run.
