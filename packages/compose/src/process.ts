@@ -179,8 +179,8 @@ class ProcessRun {
 		settle();
 	}
 
-	private memoryError(): Error {
-		return new Error(`The code passed the memory limit of ${this.memoryLimit} bytes.`);
+	private memoryError(cause?: string): Error {
+		return new Error(`The code passed the memory limit of ${this.memoryLimit} bytes.`, { cause });
 	}
 
 	/**
@@ -189,7 +189,7 @@ class ProcessRun {
 	 * before V8 prints its line, so SIGABRT alone also names the limit.
 	 */
 	private closed(code: number | null, by: NodeJS.Signals | null): Error {
-		if (this.tail.includes(OUT_OF_MEMORY) || by === 'SIGABRT') return this.memoryError();
+		if (this.tail.includes(OUT_OF_MEMORY) || by === 'SIGABRT') return this.memoryError(this.tail);
 		const how = by === null ? `exit code ${code}` : `signal ${by}`;
 		return new Error(`The runtime process ended before the code returned (${how}).`, {
 			cause: this.tail,

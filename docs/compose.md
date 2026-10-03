@@ -404,9 +404,9 @@ policy, as it renders the guidance of every bundle
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_SPEAKING`. The text tells the model to plan first, to compose a plan of two or more
-calls, and to call `describe` before it writes the code. The text
-follows:
+option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
+first, to compose a plan of two or more calls, and to call `describe`
+before it writes the code. The text follows:
 
 ```text
 Plan the tool calls of a task before you make the first call. When the
