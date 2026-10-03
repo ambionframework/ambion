@@ -20,6 +20,11 @@ export interface BoundToolResult {
 	readonly content: readonly ToolContent[];
 	/** The model reads the content as an error. */
 	readonly isError?: true;
+	/**
+	 * The content carries lines of the record that the model has not read. A
+	 * `compose` call that ran the tool then shows the content in its own result.
+	 */
+	readonly carriesRecord?: true;
 	/** The activation has nothing more to do: the executor may end its model loop. */
 	readonly terminate?: true;
 }

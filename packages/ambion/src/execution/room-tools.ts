@@ -110,7 +110,8 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 /**
  * The agent's own tools, as room tools. A summary activation holds none. Each
  * call reads the view of the pass that runs it, so the room and the open
- * exchange it names are current. A tool that throws gives the model its
+ * exchange it names are current. `room` holds the room tools of the
+ * activation, which a `compose` call binds. A tool that throws gives the model its
  * message as an error result.
  */
 export function agentTools(
@@ -119,6 +120,7 @@ export function agentTools(
 	signal: AbortSignal,
 	sink: StepSink,
 	current: () => ActivationView,
+	room: readonly BoundTool[],
 ): BoundTool[] {
 	if (view.spec.purpose.kind === 'summarize') return [];
 	return agent.executor.tools.map((one) => ({
@@ -129,7 +131,7 @@ export function agentTools(
 			const running = current();
 			try {
 				const ctx = toolContext(agent, running, call, signal);
-				const value = await invokeTool(one, args, ctx, (step) => sink.record(step));
+				const value = await invokeTool(one, args, ctx, (step) => sink.record(step), room);
 				return toolResultOf(value);
 			} catch (error) {
 				return text(error instanceof Error ? error.message : String(error), true);
@@ -140,8 +142,8 @@ export function agentTools(
 
 /**
  * The context an agent's tool receives for one call: the agent, the call, and
- * full provenance. It holds no step sink. `invokeTool` hands the sink of
- * the activation to the `compose` tool, and to no other tool.
+ * full provenance. It holds no step sink. `invokeTool` hands the sink and the
+ * room tools of the activation to the `compose` tool, and to no other tool.
  */
 export function toolContext(
 	agent: AgentDefinition,
@@ -328,7 +330,10 @@ function scheduleResult(
 		return text(line);
 	}
 	binding.resultExpected(call, message.seq);
-	return text([`${line}. New on the record before it:`, ...unread.map(renderLine)].join('\n'));
+	return {
+		...text([`${line}. New on the record before it:`, ...unread.map(renderLine)].join('\n')),
+		carriesRecord: true,
+	};
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */
@@ -354,7 +359,7 @@ function missedSay(
 	if (closing === undefined) {
 		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
 	}
-	return text(
+	const result = text(
 		refusal(
 			'Not delivered — the room moved while you were speaking. New on the record:',
 			[...missed],
@@ -362,6 +367,7 @@ function missedSay(
 		),
 		true,
 	);
+	return closing === undefined ? { ...result, carriesRecord: true } : result;
 }
 
 /** The tool that seats or removes one agent. */

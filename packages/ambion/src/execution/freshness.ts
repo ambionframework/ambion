@@ -8,6 +8,7 @@
  * does a tool result that carries record once it reaches the model.
  */
 
+import { madeBy } from '../compose-run.ts';
 import type { Seq } from '../types.ts';
 import type { ReadRange } from './contract.ts';
 
@@ -29,15 +30,19 @@ export class Freshness {
 
 	/** The result of the tool call `call` carries the record through `seq`. */
 	resultExpected(call: string, seq: Seq): void {
-		this.results.set(call, seq);
+		this.results.set(call, Math.max(this.results.get(call) ?? 0, seq));
 	}
 
-	/** The result of the tool call `call` reached the model. */
+	/**
+	 * The result of the tool call `call` reached the model. A `compose` call
+	 * shows the results of its nested calls in its own result, so it delivers them.
+	 */
 	delivered(call: string): void {
-		const through = this.results.get(call);
-		if (through === undefined) return;
-		this.results.delete(call);
-		this.acknowledgeThrough(through);
+		for (const [id, through] of [...this.results]) {
+			if (id !== call && !madeBy(call, id)) continue;
+			this.results.delete(id);
+			this.acknowledgeThrough(through);
+		}
 		this.join();
 	}
 

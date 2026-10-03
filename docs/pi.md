@@ -345,7 +345,8 @@ and the update callback through. It takes no output declaration, so
 
 **The harness prepares and checks the arguments, and the executor calls
 `invokeChecked`.** `toolsFor` passes the step sink of the activation to
-`invokeChecked`, which hands it to the `compose` tool and to no other tool.
+`invokeChecked`, with the room tools of the pass. It hands both to the
+`compose` tool and to no other tool.
 [Compose](compose.md#how-compose-runs-a-nested-call) states what the
 primitive conversion of the harness means for a nested call.
 

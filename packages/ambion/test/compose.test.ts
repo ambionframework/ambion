@@ -33,7 +33,7 @@ import {
 	total,
 } from './support/compose-tools.ts';
 import { functionEvaluator } from './support/evaluator.ts';
-import { andrei, collect, roomName } from './support/room.ts';
+import { andrei, collect, messagesOf, participantsOf, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
 const hidden = defineTool({
@@ -669,13 +669,49 @@ describe('the compose tool of an executor', () => {
 				'  echo(args: { text: string }): Promise<string>;',
 				'  /** Give a count of rows. */',
 				'  table(args: { count: number }): Promise<{ rows: { id: number; label: string }[] }>;',
+				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`. */',
+				'  say(args: {',
+				'    /** A participant name from the roster. */',
+				'    to?: string;',
+				'    /** What you say, as the record shows it. */',
+				'    text: string;',
+				'    refs?: string[];',
+				'  }): Promise<string>;',
+				'  /** Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person of the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it. */',
+				'  schedule(args: {',
+				'    /** Seconds until the room wakes you with this message. */',
+				'    delaySeconds: number;',
+				'    /** What to do when the room wakes you. */',
+				'    text: string;',
+				'    refs?: string[];',
+				'  }): Promise<string>;',
+				'  /** Read messages of this room by seq, as #12, or by URI, ambion://room/<room>/message/<seq>: a message that your context leaves out or that a summary folds, or one that a say cites. The result gives one line for each ref. */',
+				'  recall(args: { refs: string[] }): Promise<string>;',
+				'  /** Seat one agent from the reserve. It joins the room and reads the record. */',
+				'  seat(args: {',
+				'    /** An agent name from the reserve. */',
+				'    name: string;',
+				'  }): Promise<string>;',
+				"  /** Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays. */",
+				'  unseat(args: {',
+				'    /** A seated agent name. */',
+				'    name: string;',
+				'  }): Promise<string>;',
+				'  /** Drop a message you scheduled, by its seq. The room does not wake you with it. */',
+				'  dismiss(args: {',
+				'    /** The seq of the scheduled message, as the record shows it: 41 for #41. */',
+				'    message: number;',
+				'  }): Promise<string>;',
 				'};',
 			].join('\n'),
 		);
 	});
 
-	const catalogOf = (tool: AmbionTool) =>
-		composeOf([tool]).description.split('\n\n').slice(2).join('\n\n');
+	/** The catalog of one tool, without the room tools that every catalog lists after it. */
+	const catalogOf = (tool: AmbionTool) => {
+		const text = composeOf([tool]).description.split('\n\n').slice(2).join('\n\n');
+		return `${text.slice(0, text.indexOf('  /** Speak on the record.'))}};`;
+	};
 
 	it.each<[string, TSchema, string]>([
 		[
@@ -839,10 +875,18 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('binds no room tool and no compose tool of its own', () => {
+	it('lists the room tools after its own tools, and no compose tool', () => {
 		const names = (tool: AmbionTool) =>
 			[...tool.description.matchAll(/^ {2}(\w+)\(/gm)].map((m) => m[1]);
-		expect(names(composeOf([echo, hidden]))).toEqual(['echo']);
+		expect(names(composeOf([echo, hidden]))).toEqual([
+			'echo',
+			'say',
+			'schedule',
+			'recall',
+			'seat',
+			'unseat',
+			'dismiss',
+		]);
 	});
 });
 
@@ -911,5 +955,206 @@ describe('a compose call in a room', () => {
 				.filter((event) => event.type === 'tool_call')
 				.map((event) => 'name' in event && event.name),
 		).toEqual(['compose', 'table', 'total', 'compose', 'later']);
+	});
+});
+
+/** A seat that composes over `tools` and the room tools. Its script runs on the scripted executor. */
+function composer(name: string, tools: readonly AmbionTool[] = []) {
+	return defineAgent({
+		name,
+		identity: `${name}.`,
+		executor: describeExecutor({
+			kind: 'scripted',
+			instructions: 'Compose.',
+			tools,
+			compose: { evaluator: functionEvaluator },
+		}),
+	});
+}
+
+const quietAgent = (name: string) =>
+	defineAgent({
+		name,
+		identity: `${name}.`,
+		executor: describeExecutor({ kind: 'scripted', instructions: 'Wait.' }),
+	});
+
+describe('a compose call over the room tools', () => {
+	it('says to each of three participants one after another, in the order of the code', async () => {
+		const read: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-say'),
+				agents: [composer('worker'), quietAgent('ana'), quietAgent('ben')],
+				seats: { worker: 'broadcast', ana: 'named', ben: 'named' },
+				execution: scripted((step, seat, request) => {
+					if (seat !== 'worker') return quiet();
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['say'],
+							code: `return await Promise.all(
+								['ana', 'ben', 'andrei'].map((to) => tools.say({ to, text: 'Hello ' + to })),
+							);`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Greet everyone.' });
+		await settled(room);
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said.map((message) => (message.kind === 'said' ? message.to : ''))).toEqual([
+			'ana',
+			'ben',
+			'andrei',
+		]);
+		const seqs = said.map((message) => message.seq);
+		expect(JSON.parse(read[0] ?? '[]')).toEqual([
+			`said #${seqs[0]} to ana`,
+			`said #${seqs[1]} to ben`,
+			`said #${seqs[2]} to andrei`,
+		]);
+	});
+
+	it('rejects a say that the room refuses as missed, shows the missed lines in the result, and counts them read', async () => {
+		const gate = held('gate');
+		const read: string[] = [];
+		let passes = 0;
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-missed'),
+				agents: [composer('worker', [gate.tool])],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, _seat, request) => {
+					passes += 1;
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['gate', 'say'],
+							code: `await tools.gate({});
+								try {
+									await tools.say({ text: 'Done.' });
+									return 'said';
+								} catch (error) {
+									return 'refused: ' + error.message.slice(0, 40);
+								}`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		const visit = await room.visit(andrei);
+		await visit.send({ text: 'Start.' });
+		while (gate.seen.calls === 0) await pause(2);
+		await visit.send({ text: 'Wait, check Q3 first.' });
+		gate.open();
+		await settled(room);
+		const result = read[0] ?? '';
+		expect(result).toContain('"refused: Not delivered');
+		expect(result).toContain('Room tools reported:');
+		expect(result).toMatch(/Call \S+\.2 \(say\): Not delivered/);
+		expect(result).toContain('Wait, check Q3 first.');
+		// The compose result holds the lines, so the activation reads them once: no pass repeats them.
+		expect(read).toHaveLength(1);
+		expect(passes).toBe(2);
+		const lines = (await messagesOf(room)).filter((message) => message.kind === 'said');
+		expect(lines.some((message) => message.from === 'worker')).toBe(false);
+	});
+
+	it('seats two agents and recalls a message in one compose call', async () => {
+		const read: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-seat'),
+				agents: [composer('worker'), quietAgent('ana'), quietAgent('ben')],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, seat, request) => {
+					if (seat !== 'worker') return quiet();
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['seat', 'recall'],
+							code: `const seated = await Promise.all([
+									tools.seat({ name: 'ana' }),
+									tools.seat({ name: 'ben' }),
+								]);
+								return { seated, first: await tools.recall({ refs: ['#4'] }) };`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Bring in ana and ben.' });
+		await settled(room);
+		const value = JSON.parse((read[0] ?? '').split('\n')[0] ?? '{}');
+		expect(value.seated).toEqual([
+			expect.stringMatching(/^seated ana \(#\d+\)$/),
+			expect.stringMatching(/^seated ben \(#\d+\)$/),
+		]);
+		expect(value.first).toMatch(/^#4 /);
+		const names = (await participantsOf(room)).map((one) => one.name);
+		expect(names).toEqual(expect.arrayContaining(['ana', 'ben']));
+	});
+
+	it('records the steps of a nested room tool under the compose call, and shows the names to the approval', async () => {
+		const logged: Step[] = [];
+		const requests: unknown[] = [];
+		const seat = defineAgent({
+			name: 'worker',
+			identity: 'worker.',
+			executor: describeExecutor({
+				kind: 'scripted',
+				instructions: 'Compose.',
+				compose: {
+					evaluator: functionEvaluator,
+					approve: (request) => {
+						requests.push(request);
+						return 'allow';
+					},
+				},
+			}),
+		});
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-trace'),
+				agents: [seat],
+				runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+				execution: scripted((_step, _seat, request) =>
+					request === 1
+						? callTool('compose', {
+								uses: ['recall'],
+								code: `return await tools.recall({ refs: ['#4'] });`,
+							})
+						: quiet(),
+				),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Recall.' });
+		await settled(room);
+		expect(requests).toEqual([{ uses: ['recall'], code: expect.any(String) }]);
+		const parent = logged.find((step) => step.type === 'tool_call' && step.name === 'compose');
+		const nested = logged.filter((step) => 'parent' in step);
+		expect(nested.map((step) => step.type)).toEqual(['tool_call', 'tool_result']);
+		const owner = parent !== undefined && 'call' in parent ? parent.call : undefined;
+		expect(nested.map((step) => ('parent' in step ? step.parent : undefined))).toEqual([
+			owner,
+			owner,
+		]);
+	});
+
+	it('refuses a room tool in a direct invoke, at call time, with no code run', async () => {
+		const { evaluator, evaluated } = neverRuns();
+		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { evaluator } });
+		expect(ran.read).toContain("The room tools 'say' need an activation");
+		expect(ran.result).toMatchObject({ status: 'failed', calls: [] });
+		expect(evaluated()).toBe(0);
+		const clean = await run([echo], {
+			uses: ['echo'],
+			code: `return await tools.echo({ text: 'x' });`,
+		});
+		expect(clean.result.status).toBe('completed');
 	});
 });

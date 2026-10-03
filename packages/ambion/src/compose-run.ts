@@ -96,6 +96,16 @@ function crossing(error: unknown): CallError {
 
 const unsettled = (call: Call): boolean => call.state === 'queued' || call.state === 'running';
 
+/** The id of nested call `index` of the compose call `parent`. */
+function nestedCallId(parent: string, index: number): string {
+	return `${parent}.${index}`;
+}
+
+/** Whether `id` is the id of a call that the compose call `parent` made. */
+export function madeBy(parent: string, id: string): boolean {
+	return id.startsWith(`${parent}.`);
+}
+
 /** The text parts of a result, joined by a line. */
 function textOf(result: string | ToolResult): string {
 	if (typeof result === 'string') return result;
@@ -298,7 +308,7 @@ export class ComposeRun {
 		// A call that fails here has no id, no ledger entry, and no step.
 		const params = checkedArguments(tool, input);
 		const call: Call = {
-			id: `${this.input.ctx.callId}.${this.calls.length + 1}`,
+			id: nestedCallId(this.input.ctx.callId, this.calls.length + 1),
 			tool,
 			input,
 			params,
