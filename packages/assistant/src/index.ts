@@ -1,17 +1,31 @@
-import { type AgentDefinition, defineAgent } from '@ambionframework/ambion';
-import { type PiOptions, pi } from '@ambionframework/pi';
+import { type AgentDefinition, defineAgent, type Executor } from '@ambionframework/ambion';
+import type { ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
+
+/**
+ * What the assistant gives the executor function. The option type of every
+ * executor accepts these parts, so a spread is the whole adapter.
+ */
+export type AssistantParts = Required<
+	Pick<ExecutorBaseOptions, 'instructions' | 'tools' | 'bundles'>
+>;
 
 /** Options for the reusable room assistant definition. */
-export interface DefineAssistantOptions extends Pick<
-	PiOptions,
-	'model' | 'thinking' | 'tools' | 'bundles'
-> {
+export interface DefineAssistantOptions {
 	/** The assistant name in a room. Defaults to `assistant`. */
 	readonly name?: string;
 	/** The identity that specialists read in the room roster. */
 	readonly identity?: string;
 	/** Application instructions. They take precedence over the package defaults. */
 	readonly instructions?: string;
+	/** The tools of the assistant. */
+	readonly tools?: ExecutorBaseOptions['tools'];
+	/** The bundles of the assistant. They follow the respond guidance. */
+	readonly bundles?: ExecutorBaseOptions['bundles'];
+	/**
+	 * Builds the executor from the parts. It adds the model and every other
+	 * option of its executor package, such as `compose`.
+	 */
+	readonly executor: (parts: AssistantParts) => Executor;
 }
 
 /** The default identity for the assistant supplied by this package. */
@@ -56,14 +70,12 @@ export function defineAssistant(options: DefineAssistantOptions): AgentDefinitio
 	return defineAgent({
 		name: options.name ?? 'assistant',
 		identity: options.identity ?? ASSISTANT_IDENTITY,
-		executor: pi({
+		executor: options.executor({
 			instructions:
 				instructions === undefined
 					? ASSISTANT_INSTRUCTIONS
 					: `${ASSISTANT_INSTRUCTIONS}\n\nApplication instructions:\n${instructions}`,
-			model: options.model,
-			...(options.thinking === undefined ? {} : { thinking: options.thinking }),
-			tools: options.tools,
+			tools: options.tools ?? [],
 			bundles: [{ tools: [], guidance: RESPOND_GUIDANCE }, ...(options.bundles ?? [])],
 		}),
 	});

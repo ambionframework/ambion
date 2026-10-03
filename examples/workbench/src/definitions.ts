@@ -76,7 +76,11 @@ export function team(workspace: Workspace, instrument: Instrument) {
 	const model = piModel();
 	// One list of bundles serves every agent, so every seat holds the same tools over one workspace.
 	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools()];
-	const assistant = defineAssistant({ model, instructions: shared, bundles });
+	const assistant = defineAssistant({
+		instructions: shared,
+		bundles,
+		executor: (parts) => executorFor('assistant', parts, model),
+	});
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
 		const options = {
 			instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
@@ -93,14 +97,14 @@ export function team(workspace: Workspace, instrument: Instrument) {
 }
 
 /**
- * The executor of a specialist, on the executor kind that `seatKinds` names. Every
+ * The executor of a seat, on the executor kind that `seatKinds` names. Every
  * kind gets the same options, so every seat reaches the world only through
  * the same bundles. Pi has no native tool. A Claude seat has no built-in
  * tool and no option that names one. A Codex seat has no native tool.
  */
 function executorFor(
 	name: string,
-	options: { instructions: string; bundles: ToolBundle[] },
+	options: { instructions: string; bundles: readonly ToolBundle[] },
 	model: string,
 ) {
 	switch (seatKinds[name]) {

@@ -25,7 +25,7 @@ import {
 } from '@ambionframework/ambion';
 import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, say, scripted } from '@ambionframework/ambion/testing';
-import { type PiOptions, piExecution } from '@ambionframework/pi';
+import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
 import type { Simulation, SimulationExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
 import { defineAssistant } from '../../src/index.ts';
@@ -126,7 +126,10 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 	];
 	const started = await startRoom({
 		name: `assistant-eval-${crypto.randomUUID()}`,
-		assistant: defineAssistant({ model, thinking: THINKING, instructions: options.instructions }),
+		assistant: defineAssistant({
+			executor: (parts) => pi({ ...parts, model, thinking: THINKING }),
+			instructions: options.instructions,
+		}),
 		agents: [inventory],
 		seats: options.attention === undefined ? {} : { inventory: options.attention },
 		runtime: createRuntime({ execution }),

@@ -559,8 +559,8 @@ reached the provider, and the specialist returned one fixed `say`.
   `executor: { kind: 'scripted', instructions, tools: [] }`.
   The room passes `[piExecution(), scripted()]`: the assistant runs on
   `piExecution()`, and the specialist runs on `scripted()`, which has no
-  kind and serves every kind. `defineAssistant`
-  builds its executor with `pi()`, so the assistant has the kind `pi`.
+  kind and serves every kind. The `executor` function of `defineAssistant`
+  calls `pi()`, so the assistant has the kind `pi`.
 - **`simulate` replaces `evaluate()`.** A case passes
   `scriptedActor([question])` and `messages: 1`. `exchangeMs: 90_000`
   replaces the timer.

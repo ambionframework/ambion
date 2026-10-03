@@ -241,7 +241,8 @@ in a specialist, and writes the closing summary.
 | **Design**      | Chooses parts and values, and shows the circuit math               | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` |
 | **Experiments** | Turns a question into a short, repeatable test plan                | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     |
 
-The assistant uses `defineAssistant` from `@ambionframework/assistant`. Each
+The assistant uses `defineAssistant` from `@ambionframework/assistant`, and
+its `executor` function builds the executor of the kind that `seatKinds` names. Each
 room seats the specialists it needs. The reserve holds the rest. The header
 of the terminal shows the executor kind beside each agent name.
 

@@ -124,7 +124,6 @@ const CASES = [
 	['examples/workbench/src', '../../../packages/ambion/src/room.ts', true],
 	// The assistant reaches the core the same way.
 	['packages/assistant/src', '@ambionframework/ambion', false],
-	['packages/assistant/src', '@ambionframework/pi', false],
 	['packages/assistant/src', '@ambionframework/ambion/testing', true],
 	['packages/assistant/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/assistant/src', '../../ambion/src/room.ts', true],

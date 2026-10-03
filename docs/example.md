@@ -48,7 +48,8 @@ uses `defineAssistant` from `@ambionframework/assistant`, seated at
 Each room seats the specialists it needs. The reserve holds the rest. The
 specialists collaborate through directed messages and report back once.
 
-**The team runs on three executor kinds.** The assistant and the
+**The team runs on three executor kinds.** The `seatKinds` table names the
+kind of each seat, the assistant included. The assistant and the
 datasheets specialist run on Pi. The design specialist runs on
 `@ambionframework/claude`. The experiments specialist runs on
 `@ambionframework/codex`. The workbench passes its own execution for each
