@@ -371,23 +371,26 @@ login of the host, `gpt-5.6-luna` at medium effort. Pi used
 
 Codex passed 6 of 6 cases. Pi passed 5 of 6. The Pi chain case failed:
 the seat called `compose` for one `sql` query and took the snapshots with
-direct calls. The model made that choice, and the answer was right.
+direct calls. The model made that choice. The case checks the nested
+calls before the answer, so the run did not check the answer.
 
 - **Seats with `compose` said from inside `compose` in 3 of 6 cases on
   each kind.** On Codex, those cases are read before deciding, parallel
   processes, and fan-out. On Pi, they are parallel processes, the token
   comparison, and fan-out. The other cases used a direct `say`.
 - **The fan-out prompt names the table `runs`.** All four seats found the
-  4 hot runs. In the third run, the Codex seats never found the table.
-- **Fan-out input tokens:** Codex used 105,477 with `compose` and 40,794
-  without. Pi used 89,510 with `compose` and 206,748 without. One run does
+  4 hot runs. In the third run, the prompts did not name the table, and
+  both Codex seats counted 10 runs.
+- **Fan-out input tokens:** Codex used 105477 with `compose` and 40794
+  without. Pi used 89510 with `compose` and 206748 without. One run does
   not support a general conclusion.
 - **The token counts do not compare with the earlier tables.** The prompts
   name the table now.
 
-On the same login, the run on `a439aef4` (before #522) passed 4 of 6 cases
-on Codex and 5 of 6 on Pi. The run on `1f5e6df` (after #522) passed 5 of 6
-on Codex and 4 of 6 on Pi.
+On the same login, with the login support of #525 applied before it
+merged, the run on `a439aef4` (before #522) passed 4 of 6 cases on Codex
+and 5 of 6 on Pi. The run on `1f5e6df1` (after #522) passed 5 of 6 on
+Codex and 4 of 6 on Pi.
 
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own
@@ -405,8 +408,8 @@ the release does not export.
 `scripts/compose-evidence.mjs` writes the tables from the JSON lines of a
 run. The tools column lists the direct calls of the seat, and the nested
 calls follow. `×3` counts three calls in a row of one tool. Input tokens
-count the prompt, the cache read, and the cache write. The tables of the
-second and fourth runs are summarized in CP6.
+count the prompt, the cache read, and the cache write. The table of the
+second run is in CP6.
 
 ### The first run
 
