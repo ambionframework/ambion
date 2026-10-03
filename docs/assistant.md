@@ -366,7 +366,7 @@ anything, the assistant writes no summary and ends the activation without `say`.
 the only agent messages of the exchange are its own answer to a question that
 the person addressed to it, or its own routing requests that no specialist
 answered. It also holds when one specialist message already answers the request
-in full, with its sources. The source messages then stay in later prompts.
+in full, with its sources, whoever that message addresses. The source messages then stay in later prompts.
 
 A summary activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.
