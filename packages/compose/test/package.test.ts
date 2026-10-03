@@ -10,12 +10,8 @@ const importsOf = (text: string) =>
 		(match) => match[1],
 	);
 
-it('exports the two evaluators, and names the package as package.json does', () => {
-	expect(Object.keys(entry).sort()).toEqual([
-		'PACKAGE_NAME',
-		'processEvaluator',
-		'quickjsEvaluator',
-	]);
+it('exports the two runtimes, and names the package as package.json does', () => {
+	expect(Object.keys(entry).sort()).toEqual(['PACKAGE_NAME', 'processRuntime', 'quickjsRuntime']);
 	const manifest = JSON.parse(read('../package.json'));
 	expect(entry.PACKAGE_NAME).toBe(manifest.name);
 	expect(manifest.engines.node).toBe('>=22.19.0');

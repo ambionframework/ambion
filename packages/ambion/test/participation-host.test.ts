@@ -91,6 +91,12 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 		const first = await visit.send({ text: 'First question.' });
 		const betaFirst = `message:${first.from}:beta:1`;
 		await peer.lease({ operation: 'claim', activation: betaFirst });
+		await peer.commit({
+			activation: betaFirst,
+			key: 'beta-answer',
+			readThrough: stateOf(room).lastSeq,
+			intent: { kind: 'said', text: 'First answer.' },
+		});
 		await peer.lease({
 			operation: 'release',
 			activation: betaFirst,

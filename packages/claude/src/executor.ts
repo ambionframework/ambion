@@ -50,7 +50,7 @@ import { roomServer } from './tools.ts';
 
 /** The head of the first message of a resumed query. The system prompt of the session is older. */
 export const RESUMED_NOTE =
-	'Your duties and instructions for this activation follow. Where they differ from the start of this session, follow these.';
+	'Your duties and instructions for this activation follow. Where they differ from your earlier activations, follow these.';
 
 /** How long a failed result waits for the end of the standard error, in milliseconds. */
 const STDERR_DRAIN = 50;

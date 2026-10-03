@@ -96,7 +96,7 @@
 		// these rules against it. Each line names the globs of a layer, then what
 		// the layer holds:
 		//
-		//   activation-id.ts, bodies.ts, bundle.ts, compose-catalog.ts, compose-macros.ts, compose-run.ts, compose-tool.ts, compose.ts, define.ts, errors.ts, record.ts, refs.ts, scheduling.ts, session-facts.ts, tool-call.ts, types.ts  the public shapes, the stored bodies, the record lines, the session facts, and the identity codec
+		//   activation-id.ts, bodies.ts, bundle.ts, compose-catalog.ts, compose-describe.ts, compose-macros.ts, compose-run.ts, compose-tool.ts, compose.ts, define.ts, errors.ts, record.ts, refs.ts, scheduling.ts, session-facts.ts, tool-call.ts, types.ts  the public shapes, the stored bodies, the record lines, the session facts, and the identity codec
 		//   protocol.ts  the wire shapes between the room and a seat
 		//   execution/contract.ts  the executor contract: the types between the driver and one running activation
 		//   host/**  what a host owns: the runtime value
@@ -130,6 +130,7 @@
 				"packages/ambion/src/bundle.ts",
 				"packages/ambion/src/compose.ts",
 				"packages/ambion/src/compose-catalog.ts",
+				"packages/ambion/src/compose-describe.ts",
 				"packages/ambion/src/compose-macros.ts",
 				"packages/ambion/src/compose-run.ts",
 				"packages/ambion/src/compose-tool.ts",
@@ -711,7 +712,7 @@
 			}
 		},
 		{
-			// The child of `processEvaluator` runs under --permission with no allow
+			// The child of `processRuntime` runs under --permission with no allow
 			// flag: Node loads its entry file and no other file. The build bundles
 			// the setup script into the entry, so the source imports that script and
 			// `node:` built-ins, and nothing else. A Biome override replaces the

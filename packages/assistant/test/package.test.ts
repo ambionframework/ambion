@@ -13,21 +13,20 @@ it('builds the default ordinary assistant definition', () => {
 		name: 'assistant',
 		executor: {
 			model: 'scripted/assistant',
-			tools: [expect.objectContaining({ name: 'compose' })],
+			tools: [
+				expect.objectContaining({ name: 'compose' }),
+				expect.objectContaining({ name: 'describe' }),
+			],
 		},
 	});
-	expect(assistant.identity).toContain('Seats and unseats specialists');
+	expect(assistant.identity).toContain('routes each request');
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 
-it('gives the assistant the compose tool unless the executor turns it off', () => {
-	const on = defineAssistant({ executor: onPi });
-	const off = defineAssistant({
-		executor: (parts) => pi({ ...parts, model: 'scripted/assistant', compose: false }),
-	});
+it('gives the assistant the compose and describe tools', () => {
+	const assistant = defineAssistant({ executor: onPi });
 
-	expect(on.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
-	expect(off.executor.tools).toEqual([]);
+	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
 });
 
 it('keeps application instructions after and alongside maintained defaults', () => {
@@ -52,7 +51,7 @@ it('passes tool bundles through the ordinary agent definition', () => {
 		bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.' }],
 	});
 
-	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
+	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
 	expect(assistant.executor.guidance).toContain('This is a respond activation.');
 	expect(assistant.executor.guidance).toContain(
 		'The presence of the person who asked does not change the work.',
@@ -76,7 +75,7 @@ it.each([
 
 		expect(assistant.executor.kind).toBe(kind);
 		expect(assistant.executor.instructions).toContain('Prefer small changes.');
-		expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
+		expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose', 'describe']);
 		expect(assistant.executor.guidance).toContain('This is a respond activation.');
 		expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 		expect(assistant.executor.reminders).toEqual([remind]);

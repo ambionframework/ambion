@@ -1,5 +1,5 @@
 /**
- * The child process of `processEvaluator`. Node starts it with `--permission`
+ * The child process of `processRuntime`. Node starts it with `--permission`
  * and no allow flag, so it loads this file and no other file, and it reads no
  * file, opens no socket, and starts no process or worker. The build bundles
  * the setup script, and this file imports only `node:` built-ins.

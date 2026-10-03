@@ -231,8 +231,8 @@ the record, so a restart keeps them.
 ## The team
 
 **One assistant coordinates three specialists, and the specialists run on
-three executor kinds.** The assistant answers ordinary messages, brings
-in a specialist, and writes the closing summary.
+three executor kinds.** The assistant seats a specialist, routes a request to a named specialist,
+and writes the closing summary.
 
 | Agent           | Scope                                                              | Kind   | Model                              | Key                 |
 | --------------- | ------------------------------------------------------------------ | ------ | ---------------------------------- | ------------------- |

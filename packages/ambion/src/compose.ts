@@ -1,6 +1,6 @@
 /**
  * The vocabulary of the `compose` tool: the option that a seat opts in with,
- * the evaluator that runs the code, and the result and the ledger that a
+ * the runtime that runs the code, and the result and the ledger that a
  * compose call reports. The tool joins the tools of a seat into one call
  * (`docs/compose.md`). The checks of the option and of the tool field live
  * here too.
@@ -13,8 +13,8 @@ import type { ToolContext } from './bundle.ts';
 export type JsonValue =
 	null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-/** What `compose` gives an evaluator for one compose call. */
-export interface EvaluatorInput {
+/** What `compose` gives a runtime for one compose call. */
+export interface ComposeRuntimeInput {
 	/** The body of an asynchronous function. */
 	readonly code: string;
 	/** The names of the tools that the code can call as `tools.<name>`. */
@@ -41,8 +41,8 @@ export interface EvaluatorInput {
  * The backend that evaluates the code of a compose call. It holds no tool,
  * no room, and no `ToolContext`. It gives the code no ambient authority.
  */
-export interface Evaluator {
-	evaluate(input: EvaluatorInput, signal: AbortSignal): Promise<JsonValue | undefined>;
+export interface ComposeRuntime {
+	evaluate(input: ComposeRuntimeInput, signal: AbortSignal): Promise<JsonValue | undefined>;
 }
 
 /** The bounds of one compose call. */
@@ -86,9 +86,13 @@ export interface ComposeMacro {
 	readonly hash: string;
 }
 
-/** The `compose` option of the executor options. With no option, the seat has no `compose` tool. */
+/**
+ * The `compose` option of the executor options. `describeExecutor` adds the
+ * `compose` tool and the `describe` tool for an option, and none for an
+ * absent option. `pi()`, `claude()`, and `codex()` fill an absent option.
+ */
 export interface ComposeOptions {
-	readonly evaluator: Evaluator;
+	readonly runtime: ComposeRuntime;
 	/**
 	 * Called after `compose` checks `uses` or the macro and its `args`, and
 	 * before it evaluates any code. A denial fails the compose call with no
@@ -124,31 +128,28 @@ export interface ComposeResult {
 /** The name of the `compose` tool. A tool of the options cannot take it. */
 export const COMPOSE_TOOL_NAME = 'compose';
 
+/** The name of the `describe` tool, which returns the signatures of bindable tools. A tool of the options cannot take it. */
+export const DESCRIBE_TOOL_NAME = 'describe';
+
 /** What `compose` guides a model with: when a compose call helps, and when a direct call does. */
-export const COMPOSE_GUIDANCE = `compose joins your tools in one call. Put the tools that you use in
-uses, and the body of an async function in code. Each tool is
-tools.<name>, and the description of compose gives its signature. You
-read only the value that the code returns. compose runs JavaScript, so
-code with no tools also calculates and transforms data.
+export const COMPOSE_GUIDANCE = `Plan the tool calls of a task before you make the first call. When the
+plan has two or more tool calls, make them in one compose call. This
+includes say and the other room tools. Each direct call costs one more
+turn, and you read its whole result.
 
-Plan the tool calls of a task before you make the first call. When the
-plan has two or more tool calls, make them in one compose call. Each
-result that you read costs tokens and one more turn.
+Write a compose call in two steps:
+1. Call describe with the tools of the plan. It returns their
+   signatures and the fields of each result.
+2. Call compose. Put those tools in uses, and the body of an async
+   function in code. Each tool is tools.<name>. Read the fields of each
+   result, and do not parse text. You read only the value that the code
+   returns.
 
-Use compose when:
-- the result of one tool is the input of another tool, also when you
-  filter or map the result first;
-- the task gives the rule for the next step. Code can apply the rule
-  with if, filter, and map;
-- a tool gives a large result, and you need a count, a filter, or a
-  few fields of it;
-- you call one tool for many inputs;
-- you start several processes and wait for each;
-- you speak to many participants, seat several agents, or recall many
-  refs. say, schedule, seat, unseat, dismiss, and recall are tools of
-  compose;
-- you calculate, or you sort, group, or reshape data that you already
-  hold. Give uses: [] and put the data in the code.
+Use compose also to explore. To learn the size or the shape of data,
+return a count, a few fields, or a short sample from code. Do not read
+large results one direct call at a time. Code with uses: [] calculates,
+sorts, groups, and reshapes data that you already hold. When the code
+starts processes, call wait on each handle before the code returns.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
@@ -161,29 +162,16 @@ compose result shows the new lines. Read them before you speak again.
 A seat that starts before a say in one Promise.all lands first, and the
 room refuses the say. Await the seat, then say.
 
-For example, "snapshot each file that a query finds" is one compose
-call. Do not call sql first to read the paths:
-  const found = await tools.sql({ sql: 'SELECT path FROM files' });
-  return tools.snapshot({ paths: found.rows.map((row) => row.path) });
-
-Write the code from the signatures. A typed result gives fields, such
-as rows of sql and text of bash: read the fields, and do not parse
-text. A tool that fails rejects with an Error. error.details holds its
-result when the tool gives one. bash rejects when the command exits
-with a code other than 0. When the task expects such a failure, catch
-it and read error.details:
-  const run = await tools
-    .bash({ command: 'pnpm test', wait: 300 })
-    .catch((error) => error.details);
-  const { refs } = await tools.snapshot({ paths: [run.process.output] });
-  return { exit: run.process.exitCode, tail: run.text.slice(-500), log: refs[0] };
+A tool that fails rejects with an Error. error.details holds its result
+when the tool gives one. bash rejects when the command exits with a code
+other than 0. When the task expects such a failure, catch it with
+.catch((error) => error.details) and read the details.
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call, its outcome, and the result of each completed
-call, such as a process handle. A completed call can have had an effect,
-so read the list before you call a tool again. A tool that the code
-reads as tools.<name> must be in uses.
+call, such as a process handle. A completed call can have had an
+effect, so read the list before you call a tool again.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.`;
@@ -276,13 +264,13 @@ export function assertToolCompose(compose: unknown): void {
 
 /** Refuse a malformed `compose` option, when the agent is defined. */
 export function assertComposeOptions(compose: unknown): void {
-	if (compose === undefined || compose === false) return;
+	if (compose === undefined) return;
 	if (
 		!isRecord(compose) ||
-		!isRecord(compose.evaluator) ||
-		typeof compose.evaluator.evaluate !== 'function'
+		!isRecord(compose.runtime) ||
+		typeof compose.runtime.evaluate !== 'function'
 	) {
-		throw new Error('Agent compose must be false or an object with an evaluator.');
+		throw new Error('Agent compose must be an object with a runtime.');
 	}
 	if (compose.approve !== undefined && typeof compose.approve !== 'function') {
 		throw new Error('Agent compose approve must be a function.');

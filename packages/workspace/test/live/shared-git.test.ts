@@ -27,6 +27,7 @@ import { openWorkspace, runScript } from '../../src/index.ts';
 const FIRST = 'scribe-a';
 const SECOND = 'scribe-b';
 const REMOTE = 'http://git.ambion.invalid/shared/notes';
+const PUSH = /\bgit push\s+origin\s+main\b/;
 
 interface BashCall {
 	readonly command: string;
@@ -188,15 +189,19 @@ live('shared git rebase', () => {
 
 			const rejectedAt = evidence.second.findIndex(
 				(call) =>
-					/git push\s+origin\s+main/.test(call.command) &&
+					PUSH.test(call.command) &&
 					/rejected|non-fast-forward|fetch first/i.test(`${call.output} ${call.error ?? ''}`),
 			);
+			// A script can recover in the same call as the rejected push, so the
+			// recovery starts after the first push of that call.
 			const recovery = evidence.second.flatMap((call, index) => {
-				if (index <= rejectedAt) return [];
+				if (index < rejectedAt) return [];
+				const from = index === rejectedAt ? call.command.search(PUSH) + 1 : 0;
+				const rest = call.command.slice(from);
 				return [
-					{ kind: 'fetch', at: call.command.search(/\bgit fetch\s+origin\b/), call: index },
-					{ kind: 'rebase', at: call.command.search(/\bgit rebase\s+origin\/main\b/), call: index },
-					{ kind: 'push', at: call.command.search(/\bgit push\s+origin\s+main\b/), call: index },
+					{ kind: 'fetch', at: rest.search(/\bgit fetch\s+origin\b/), call: index },
+					{ kind: 'rebase', at: rest.search(/\bgit rebase\s+origin\/main\b/), call: index },
+					{ kind: 'push', at: rest.search(PUSH), call: index },
 				]
 					.filter((operation) => operation.at >= 0)
 					.sort((left, right) => left.at - right.at);
@@ -212,8 +217,6 @@ live('shared git rebase', () => {
 			expect(fetchAt, JSON.stringify(evidence.second)).toBeGreaterThanOrEqual(0);
 			expect(rebaseAt, JSON.stringify(evidence.second)).toBeGreaterThan(fetchAt);
 			expect(retryAt, JSON.stringify(evidence.second)).toBeGreaterThan(rebaseAt);
-			const retryCall = recovery[retryAt]?.call;
-			expect(evidence.second[retryCall ?? -1]?.output).not.toMatch(/rejected|non-fast-forward/i);
 
 			const verified = await runScriptOrThrow(
 				workspace,

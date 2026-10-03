@@ -46,7 +46,6 @@ const worker = defineAgent({
 	executor: pi({
 		instructions: 'Use the tool that the room gives you.',
 		model: 'scripted/assistant',
-		compose: false,
 		tools: [
 			defineTool({
 				name: 'record_decision',
@@ -138,11 +137,15 @@ describe('executor tool authority', () => {
 			'dismiss',
 			'recall',
 			'record_decision',
+			'compose',
+			'describe',
 		]);
 		// The room tools are exactly the names that `defineAgent` refuses for a definition tool.
-		expect(new Set(names(tools).slice(0, -1))).toEqual(new Set(ROOM_TOOL_NAMES));
+		expect(new Set(names(tools).slice(0, 6))).toEqual(new Set(ROOM_TOOL_NAMES));
 		// Pi builds the tool of the definition from its `AmbionTool`. A `BoundTool` has no execution mode.
-		expect(tools.at(-1)).toMatchObject({ executionMode: 'sequential' });
+		expect(tools.find((tool) => tool.name === 'record_decision')).toMatchObject({
+			executionMode: 'sequential',
+		});
 		// Every tool owns the size of its result: pi-durable bounds none of it.
 		for (const tool of tools) expect(tool.outputLimits).toEqual(UNBOUNDED);
 		expect(names((await bound('activation', summarize)).tools)).toEqual(['say']);
@@ -326,7 +329,11 @@ describe('executor tool authority', () => {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
-			content: [{ text: 'surveyor is already seated' }],
+			content: [
+				{
+					text: 'surveyor is already seated. Seating it again does not activate it. Read its mark in the roster: marked "named only", it gets the request through say with to set to surveyor; with no mark or marked "watches arrivals", it already has the request.',
+				},
+			],
 		});
 		expect(commits).toEqual([
 			{
@@ -415,12 +422,10 @@ describe('executor tool authority', () => {
 		};
 		const recorded: Step[] = [];
 		const sink = { record: (step: Step) => void recorded.push(step) };
-		await call(toolsFor(open, worker, [], sink).at(-1), 'call-1', {});
-		await call(
-			toolsFor({ ...open, context: { ...base.context } }, worker, [], sink).at(-1),
-			'call-2',
-			{},
-		);
+		const decision = (view: ActivationView) =>
+			toolsFor(view, worker, [], sink).find((tool) => tool.name === 'record_decision');
+		await call(decision(open), 'call-1', {});
+		await call(decision({ ...open, context: { ...base.context } }), 'call-2', {});
 
 		const [first, second] = seen;
 		expect(first).toMatchObject({

@@ -104,7 +104,16 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
 		await waitForRoom(session);
 
-		expect(tools[0]).toEqual(['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall']);
+		expect(tools[0]).toEqual([
+			'say',
+			'schedule',
+			'seat',
+			'unseat',
+			'dismiss',
+			'recall',
+			'compose',
+			'describe',
+		]);
 		expect(contexts[1]).toMatch(/seated surveyor \(#\d+\)/);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');

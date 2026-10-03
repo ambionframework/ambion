@@ -29,7 +29,7 @@ import {
 	within,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { quickjsEvaluator } from '../../../compose/src/runtime.ts';
+import { quickjsRuntime } from '../../../compose/src/runtime.ts';
 import { memoryBackend } from '../../../just-bash/src/index.ts';
 import { loadSkills, openWorkspace, type Workspace } from '../../src/index.ts';
 import { sqliteBackend } from '../../src/sqlite-entry.ts';
@@ -193,13 +193,14 @@ interface Run {
 	/** Milliseconds from the `compose` call to its result, when the seat made one. */
 	readonly wallMs: number | undefined;
 	readonly composeInputs: unknown[];
+	/** The length of the description of the `compose` tool, which every request carries. */
+	readonly composeChars: number | undefined;
 }
 
 /** The longest wait for one seat. Two seats in one case end before the test timeout. */
 const SEAT_DEADLINE_MS = 150_000;
 
-const composed = { compose: { evaluator: quickjsEvaluator() } };
-const uncomposed = { compose: false as const };
+const composed = { compose: { runtime: quickjsRuntime() } };
 
 function seat(
 	name: string,
@@ -251,10 +252,10 @@ async function ask(
 			);
 		} finally {
 			// A run that times out still spent, so it is recorded before the error goes up.
-			record(await spentBy(session, definition.name, records));
+			record(await spentBy(session, definition, records));
 		}
 		await invariants(session, events);
-		return await spentBy(session, definition.name, records);
+		return await spentBy(session, definition, records);
 	} finally {
 		await session.stop();
 	}
@@ -262,9 +263,10 @@ async function ask(
 
 async function spentBy(
 	session: Awaited<ReturnType<typeof open>>['session'],
-	name: string,
+	definition: AgentDefinition,
 	records: readonly TracedStep[],
 ): Promise<Run> {
+	const name = definition.name;
 	const { exchanges, messages } = await session.read();
 	let input = 0;
 	let output = 0;
@@ -280,6 +282,8 @@ async function spentBy(
 		answer: said.map((message: SaidMessage) => JSON.stringify(message)).join('\n'),
 		input,
 		output,
+		composeChars: definition.executor.tools.find((tool) => tool.name === 'compose')?.description
+			.length,
 		...callsOf(records, name),
 	};
 }
@@ -298,45 +302,24 @@ interface Entry {
 const firstLine = (error: unknown) =>
 	(error instanceof Error ? error.message : String(error)).split('\n')[0];
 
-/** What a case body records, and how it checks the run of one seat. */
+/** What a case body records. */
 interface Evidence {
 	readonly record: (label: string, run: Run, note?: string) => void;
-	/**
-	 * Check the run of the seat that has this label. The check is synchronous.
-	 * A failed check does not stop the case, so the case checks every seat.
-	 * The case fails at the end with one error that names each failed seat.
-	 */
-	readonly verify: (label: string, check: () => void) => void;
 }
 
 /**
  * Run one case. Each recorded run becomes one JSON line in the file that
- * `AMBION_LIVE_REPORT` names. A line holds the outcome of its own seat, when
- * the case verified that seat. A line with no verdict takes the outcome of
- * the case. A failed case writes its lines too, because the spend happened.
+ * `AMBION_LIVE_REPORT` names. A failed case writes its lines too, because the
+ * spend happened. A line holds the length of the description of `compose`,
+ * which every request of the seat carries.
  */
 async function evidence(name: string, body: (tools: Evidence) => Promise<void>): Promise<void> {
 	const entries: Entry[] = [];
-	const verdicts = new Map<string, string>();
 	let outcome = 'passed';
 	try {
 		await body({
 			record: (label, run, note) => void entries.push({ label, run, ...(note ? { note } : {}) }),
-			verify: (label, check) => {
-				try {
-					check();
-					verdicts.set(label, 'passed');
-				} catch (error) {
-					verdicts.set(label, `failed: ${firstLine(error)}`);
-				}
-			},
 		});
-		const failed = [...verdicts].filter(([, verdict]) => verdict !== 'passed');
-		if (failed.length > 0) {
-			throw new Error(
-				failed.map(([label, verdict]) => `${label === '' ? name : label}: ${verdict}`).join('\n'),
-			);
-		}
 	} catch (error) {
 		outcome = `failed: ${firstLine(error)}`;
 		throw error;
@@ -352,7 +335,8 @@ async function evidence(name: string, body: (tools: Evidence) => Promise<void>):
 				inputTokens: run.input,
 				outputTokens: run.output,
 				wallMs: run.wallMs ?? null,
-				outcome: verdicts.get(label) ?? outcome,
+				composeChars: run.composeChars ?? null,
+				outcome,
 				...(note === undefined ? {} : { note }),
 			};
 			process.stdout.write(`live · compose · ${JSON.stringify(line)}\n`);
@@ -438,28 +422,6 @@ live('compose', () => {
 		});
 	});
 
-	it('token comparison: the same chain task with compose and without it', async () => {
-		await evidence('token comparison', async ({ record, verify }) => {
-			const withCompose = await ask(
-				seat('with', await lab(), { instructions: 'Answer with one say.', ...composed }),
-				CHAIN_TASK,
-				(spent) => record('with compose', spent),
-			);
-			// Each seat is checked before the next one starts, so a later failure hides no verdict.
-			verify('with compose', () => holdsDigests(withCompose.answer, DRIFTED));
-			const without = await ask(
-				seat('without', await lab(), { instructions: 'Answer with one say.', ...uncomposed }),
-				CHAIN_TASK,
-				(spent) => record('without compose', spent),
-			);
-			// The case asserts the answers. The token numbers are recorded as evidence only.
-			verify('without compose', () => {
-				holdsDigests(without.answer, DRIFTED);
-				expect(without.tools).not.toContain('compose');
-			});
-		});
-	}, 360_000);
-
 	it('macro: the seat runs the macro of its skill by name and writes no code', async () => {
 		await evidence('macro', async ({ record }) => {
 			const store = await lab();
@@ -482,31 +444,20 @@ live('compose', () => {
 		});
 	});
 
-	// Two seats run in turn, and the seat without compose can make many calls.
 	it('fan-out: many logs are read and only the digests of a few matter', async () => {
-		await evidence('fan-out', async ({ record, verify }) => {
+		await evidence('fan-out', async ({ record }) => {
 			const wayOf = (spent: Run) => {
 				if (spent.tools.includes('compose')) return 'compose';
 				return [...spent.tools, ...spent.nested].includes('bash') ? 'bash' : 'direct calls';
 			};
-			const withCompose = await ask(
-				seat('with', await fanLab(), { instructions: 'Answer with one say.', ...composed }),
+			const run = await ask(
+				seat('fan', await fanLab(), { instructions: 'Answer with one say.', ...composed }),
 				FAN_TASK,
-				(spent) => record('with compose', spent, wayOf(spent)),
+				(spent) => record('', spent, wayOf(spent)),
 			);
 			// The case does not assert the way of the seat. The way is the evidence.
-			const holdsAnswer = (run: Run) => {
-				expect(run.text).toMatch(new RegExp(`\\b${FAN_HOT.length}\\b|four`, 'i'));
-				holdsDigests(run.answer, FAN_HOT);
-			};
-			// Each seat is checked before the next one starts, so a later failure hides no verdict.
-			verify('with compose', () => holdsAnswer(withCompose));
-			const without = await ask(
-				seat('without', await fanLab(), { instructions: 'Answer with one say.', ...uncomposed }),
-				FAN_TASK,
-				(spent) => record('without compose', spent, wayOf(spent)),
-			);
-			verify('without compose', () => holdsAnswer(without));
+			expect(run.text).toMatch(new RegExp(`\\b${FAN_HOT.length}\\b|four`, 'i'));
+			holdsDigests(run.answer, FAN_HOT);
 		});
 	}, 360_000);
 });

@@ -33,17 +33,20 @@ export const SensorSourceFacts = Type.Object(SensorSourceSchema.properties, {
 });
 
 /** The declared output of `connect`: the connection, and the sensors that it found. */
-const ConnectOutput = Type.Object({
-	name: Type.String({ description: 'The connection name.' }),
-	hostname: Type.String({ description: 'The host of the workstation.' }),
-	port: Type.Integer({ description: 'The port of the sensor server.' }),
-	process: Type.String({ description: 'The handle of the process that runs the server.' }),
-	owner: Type.String({ description: 'The agent that owns the process.' }),
-	source: SensorSourceFacts,
-	sensors: Type.Array(Type.String(), {
-		description: 'The qualified name of each sensor, such as bench/temperature.',
-	}),
-});
+const ConnectOutput = Type.Object(
+	{
+		name: Type.String({ description: 'The connection name.' }),
+		hostname: Type.String({ description: 'The host of the workstation.' }),
+		port: Type.Integer({ description: 'The port of the sensor server.' }),
+		process: Type.String({ description: 'The handle of the process that runs the server.' }),
+		owner: Type.String({ description: 'The agent that owns the process.' }),
+		source: SensorSourceFacts,
+		sensors: Type.Array(Type.String(), {
+			description: 'The qualified name of each sensor, such as bench/temperature.',
+		}),
+	},
+	{ $id: 'ConnectResult' },
+);
 
 type ConnectDetails = Static<typeof ConnectOutput>;
 

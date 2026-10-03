@@ -83,13 +83,10 @@ export function processToolGuidance(): string {
 	return [
 		`bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.`,
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
-		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and its output.`,
+		`The call waits up to its \`wait\` argument, ${DEFAULT_BASH_WAIT_SECONDS} seconds by default, and then gives the state of the process and its output.`,
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
 		`Each process has a directory, ${PROCESSES_DIR}/<handle>/, with its spec, its out, and its exit code when it ends.`,
 		`ls ${PROCESSES_DIR} lists every process you started that the workspace still keeps.`,
-		`wait takes a list of handles and waits for the first of them to end.`,
-		`wait with one handle and timeout 0 gives the state and the new output of that process at once.`,
-		`cancel takes a handle and stops its process. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
@@ -166,7 +163,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to the seconds of its \`wait\` argument for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
 			parameters: bashSchema,
 			compose: { output: ProcessOutput },
 			execute: (params: BashParams, ctx) => started(options, params, ctx),

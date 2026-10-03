@@ -156,10 +156,8 @@ describe('chipLine', () => {
 });
 
 describe('the team instructions', () => {
-	it('cite a file with a snapshot and a table with its URI, with examples that the terminal resolves', () => {
-		expect(shared).toContain(
-			'call snapshot with its path, for example /library/led-5mm.md, and put the ref it gives in refs',
-		);
+	it('name a file path and a table URI in examples that the terminal resolves', () => {
+		expect(shared).toContain('for example /library/led-5mm.md');
 		expect(shared).toContain('lab:///<table>, for example lab:///runs');
 		expect(known.files).toContain('/library/led-5mm.md');
 		expect(resolveRef('lab:///runs', known).target).toBeDefined();

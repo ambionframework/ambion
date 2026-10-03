@@ -1,12 +1,12 @@
 /**
- * `quickjsEvaluator`: the code of a compose call runs in QuickJS, compiled to
+ * `quickjsRuntime`: the code of a compose call runs in QuickJS, compiled to
  * WebAssembly, in the host process. It uses the synchronous build. Each
  * binding is a host function that returns a promise, and the host settles
  * that promise when the nested call settles, so several nested calls run
  * together. A fresh runtime serves each evaluation, and the evaluation
  * disposes every handle before it frees the runtime.
  */
-import type { Evaluator, EvaluatorInput, JsonValue } from '@ambionframework/ambion';
+import type { ComposeRuntime, ComposeRuntimeInput, JsonValue } from '@ambionframework/ambion';
 import {
 	newQuickJSWASMModule,
 	newVariant,
@@ -69,7 +69,7 @@ interface Report {
 	readonly message?: string;
 }
 
-const cutError = () => new Error('The evaluator was cut.');
+const cutError = () => new Error('The runtime was cut.');
 
 /** One evaluation: a runtime, a context, and the nested calls that the code has in flight. */
 class QuickjsRun {
@@ -78,7 +78,7 @@ class QuickjsRun {
 	private readonly outcome = Promise.withResolvers<JsonValue | undefined>();
 	private readonly listener = () => this.fail(cutError());
 	private readonly runtime: QuickJSRuntime;
-	private readonly input: EvaluatorInput;
+	private readonly input: ComposeRuntimeInput;
 	private readonly signal: AbortSignal;
 	private readonly memoryLimit: number;
 	private readonly cpuLimit: number;
@@ -93,7 +93,7 @@ class QuickjsRun {
 
 	constructor(
 		runtime: QuickJSRuntime,
-		input: EvaluatorInput,
+		input: ComposeRuntimeInput,
 		signal: AbortSignal,
 		limits: { memoryLimit: number; cpuLimit: number },
 	) {
@@ -286,13 +286,32 @@ function boundedModule(
 }
 
 /**
- * An evaluator that runs the code in QuickJS, in the process of the host.
+ * The bounded module, or an error that says what to do when the runtime
+ * cannot load the WebAssembly, such as workerd, which loads it only from the
+ * bundle of the worker.
+ */
+async function loadedModule(
+	variant: QuickJSSyncVariant | undefined,
+	memoryLimit: number,
+): Promise<QuickJSWASMModule> {
+	try {
+		return await boundedModule(variant, memoryLimit);
+	} catch (cause) {
+		throw new Error(
+			`QuickJS could not load its WebAssembly in this runtime (${cause instanceof Error ? cause.message : String(cause)}). Pass compose: { runtime } with a compose runtime that this host can run.`,
+			{ cause },
+		);
+	}
+}
+
+/**
+ * A runtime that runs the code in QuickJS, in the process of the host.
  * Each evaluation has a fresh runtime, so no state outlives a compose call.
  * The code reaches no module, file, network, process, or timer, and a
  * memory limit and a CPU limit bound it. It shares the process of the host,
  * so it is no defense against hostile code.
  */
-export function quickjsEvaluator(options: QuickjsOptions = {}): Evaluator {
+export function quickjsRuntime(options: QuickjsOptions = {}): ComposeRuntime {
 	const limits = {
 		memoryLimit: options.memoryLimit ?? DEFAULT_MEMORY,
 		cpuLimit: options.cpuLimit ?? DEFAULT_CPU,
@@ -300,7 +319,7 @@ export function quickjsEvaluator(options: QuickjsOptions = {}): Evaluator {
 	return {
 		async evaluate(input, signal) {
 			if (signal.aborted) throw cutError();
-			const module = await boundedModule(options.variant, limits.memoryLimit);
+			const module = await loadedModule(options.variant, limits.memoryLimit);
 			// The load of the module can outlast a cut.
 			if (signal.aborted) throw cutError();
 			const run = new QuickjsRun(module.newRuntime(), input, signal, limits);

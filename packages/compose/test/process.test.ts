@@ -4,20 +4,20 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evaluatorConformance } from '@ambionframework/ambion/conformance';
+import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
 import { describe, expect, it, vi } from 'vitest';
 import { startChild } from '../src/process.ts';
-import { processEvaluator } from '../src/runtime.ts';
+import { processRuntime } from '../src/runtime.ts';
 
-/** Node 22 has no `--allow-net`, so `processEvaluator` refuses it. */
+/** Node 22 has no `--allow-net`, so `processRuntime` refuses it. */
 const permitted = process.allowedNodeEnvironmentFlags.has('--allow-net');
 
 const limits = { memoryLimit: 64 * 1024 * 1024 };
 const input = (code: string) => ({ code, bindings: [], call: async () => null });
 
-describe('processEvaluator', () => {
+describe('processRuntime', () => {
 	it.runIf(!permitted)('refuses a Node that lacks --allow-net, at construction', () => {
-		expect(() => processEvaluator()).toThrow('--allow-net');
+		expect(() => processRuntime()).toThrow('--allow-net');
 	});
 
 	it('refuses a Node whose flags lack --allow-net, at construction', () => {
@@ -25,8 +25,8 @@ describe('processEvaluator', () => {
 			.spyOn(process, 'allowedNodeEnvironmentFlags', 'get')
 			.mockReturnValue(new Set(['--permission']));
 		try {
-			expect(() => processEvaluator()).toThrow(
-				/needs the permission flag --allow-net.*quickjsEvaluator/,
+			expect(() => processRuntime()).toThrow(
+				/needs the permission flag --allow-net.*quickjsRuntime/,
 			);
 		} finally {
 			flags.mockRestore();
@@ -34,12 +34,12 @@ describe('processEvaluator', () => {
 	});
 });
 
-describe.runIf(permitted)('processEvaluator on a Node with --allow-net', () => {
-	for (const c of evaluatorConformance(() => processEvaluator(limits))) it(c.name, c.run);
+describe.runIf(permitted)('processRuntime on a Node with --allow-net', () => {
+	for (const c of composeRuntimeConformance(() => processRuntime(limits))) it(c.name, c.run);
 
 	it('kills the child at the signal, and at the end of the code', async () => {
 		const children: ChildProcessWithoutNullStreams[] = [];
-		const evaluator = processEvaluator({
+		const runtime = processRuntime({
 			spawn: (command, args, options) => {
 				const child = spawn(command, args, options);
 				children.push(child);
@@ -47,8 +47,8 @@ describe.runIf(permitted)('processEvaluator on a Node with --allow-net', () => {
 			},
 		});
 		const cut = new AbortController();
-		const busy = evaluator.evaluate(input('for (;;) {}'), cut.signal);
-		const refused = expect(busy).rejects.toThrow('The evaluator was cut.');
+		const busy = runtime.evaluate(input('for (;;) {}'), cut.signal);
+		const refused = expect(busy).rejects.toThrow('The runtime was cut.');
 		await vi.waitFor(() => expect(children).toHaveLength(1));
 		cut.abort();
 		await refused;
@@ -56,7 +56,7 @@ describe.runIf(permitted)('processEvaluator on a Node with --allow-net', () => {
 		expect(cutChild?.pid).toBeTypeOf('number');
 		if (cutChild?.exitCode === null && cutChild.signalCode === null) await once(cutChild, 'exit');
 		expect(cutChild?.signalCode).toBe('SIGKILL');
-		await evaluator.evaluate(input('return 1;'), new AbortController().signal);
+		await runtime.evaluate(input('return 1;'), new AbortController().signal);
 		const [, doneChild] = children;
 		if (doneChild?.exitCode === null && doneChild.signalCode === null)
 			await once(doneChild, 'exit');
@@ -64,12 +64,26 @@ describe.runIf(permitted)('processEvaluator on a Node with --allow-net', () => {
 	});
 
 	it('names the memory limit when the child runs out of memory', async () => {
-		const evaluator = processEvaluator({ memoryLimit: 32 * 1024 * 1024 });
+		const runtime = processRuntime({ memoryLimit: 32 * 1024 * 1024 });
 		await expect(
-			evaluator.evaluate(
+			runtime.evaluate(
 				input('const a = []; for (;;) a.push(new Array(1e4).fill(1));'),
 				new AbortController().signal,
 			),
+		).rejects.toThrow('memory limit of 33554432 bytes');
+	});
+
+	it('names the memory limit when the child aborts before V8 prints its line', async () => {
+		const runtime = processRuntime({
+			memoryLimit: 32 * 1024 * 1024,
+			spawn: (command, args, options) => {
+				const child = spawn(command, args, options);
+				child.once('spawn', () => child.kill('SIGABRT'));
+				return child;
+			},
+		});
+		await expect(
+			runtime.evaluate(input('for (;;) {}'), new AbortController().signal),
 		).rejects.toThrow('memory limit of 33554432 bytes');
 	});
 });

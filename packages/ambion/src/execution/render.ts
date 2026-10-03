@@ -110,6 +110,26 @@ const ATTENTION_NOTE: Record<Attention, string> = {
 	presence: 'watches arrivals',
 };
 
+/** What each point of the scale means, for the points that a seat of this roster holds. */
+const ATTENTION_MEANING: Record<Attention, string> = {
+	broadcast: 'Unmarked: anything said.',
+	named: '"named only": a say addressed to it.',
+	presence: '"watches arrivals": also somebody arriving or leaving.',
+	none: '"wakes for nothing said": nothing reaches it and you cannot address it.',
+};
+
+/** The legend of the roster. It explains the marks that the roster shows and no others. */
+function renderLegend(seats: readonly ContextParticipant[]): string[] {
+	const held = new Set(seats.flatMap((seat) => (seat.kind === 'agent' ? [seat.attention] : [])));
+	const meanings = (Object.keys(ATTENTION_MEANING) as Attention[])
+		.filter((attention) => held.has(attention))
+		.map((attention) => ATTENTION_MEANING[attention]);
+	return [
+		`The agents. Each is seated at one point of a scale — the widest kind of message that wakes it.${meanings.length > 0 ? ` ${meanings.join(' ')}` : ''}`,
+		`(active: in an activation now; idle: at rest.)`,
+	];
+}
+
 function renderAgents(seats: readonly ContextParticipant[]): string {
 	const agents = seats.filter((seat) => seat.kind === 'agent');
 	return agents
@@ -151,8 +171,9 @@ function renderClock(now: number): string {
 }
 
 /**
- * What a refused author is told. The runtime states what it missed; the
- * sentences around that belong to the kind of writing it was doing.
+ * What a refused author is told: the opening, the missed lines, then the
+ * advice. The caller supplies the opening and the advice for its kind of
+ * writing, and the runtime supplies the missed lines.
  */
 export function refusal(opening: string, missed: Message[], advice: string): string {
 	return [opening, ...missed.map(renderLine), advice].join('\n');
@@ -183,14 +204,15 @@ export const DEFAULT_SPEAKING = [
 	`adds something the record does not already hold — new information, a decision moved`,
 	`forward, or a genuinely different perspective. A point already made does not need a`,
 	`second voice; restating it in your own words is repetition, not contribution — stay`,
-	`silent instead. A directed say (to: a name) calls that agent in; use it deliberately —`,
+	`silent instead. A directed say (to: a name) wakes that participant; use it deliberately —`,
 	`attention costs money. When a colleague holds the answer, ask them directly with one`,
-	`directed say — never announce to the room what you are about to do, and never pose a`,
-	`question undirected that only one participant can answer: a say is a message, not a`,
+	`directed say. A seated colleague with no mark already reads the request; seating it is the`,
+	`hand-off. Never announce to the room what you are about to do, and`,
+	`never pose a question undirected that only one participant can answer: a say is a message, not a`,
 	`thought. Messages arriving during your activation are marked [new]; fold them into what you are`,
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
-	`the room moved while you were speaking: the failure lists what you missed — read`,
-	`it, and speak again only if your reply still adds something.`,
+	`the room moved while you were speaking: the failure lists what you missed. Read it,`,
+	`then call say again with your message unless the new messages already say it or make it unnecessary.`,
 ].join('\n');
 
 /**
@@ -233,9 +255,9 @@ export function renderDelta(view: ActivationView, after: Seq): string | undefine
 /** How a room works. No definition and no pass shapes it. */
 const MECHANISM = [
 	`You are an agent seated in a room: a shared room with a record. Every participant sees`,
-	`what is said; nobody sees your tool use. A room has a URI, and a message has the URI`,
+	`The record shows what is said and not your tool use. A room has a URI, and a message has the URI`,
 	`<room URI>/message/<seq>. The context gives the room's URI. Each line of the record`,
-	`starts with the seq of its message, such as #12. The ask line at the end gives the`,
+	`starts with the seq of its message, such as #12. The last paragraph of your context names the`,
 	`message that opened the current exchange.`,
 ].join('\n');
 
@@ -294,12 +316,7 @@ function renderContext(
 		renderClock(context.now),
 		``,
 		...renderSetting(view),
-		`The agents. Each is seated at one point of a scale — the widest kind of message`,
-		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
-		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-		`nothing reaches it and you cannot address it. A summary assignment writes the one`,
-		`message a person reads when their exchange closes.`,
-		`(active: in an activation now; idle: at rest.)`,
+		...renderLegend(context.participants),
 		renderAgents(context.participants),
 		...(view.spec.purpose.kind === 'summarize' || context.reserve === undefined
 			? []
@@ -378,20 +395,18 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		return (
 			`${purpose.person}'s exchange is over: it holds the messages from seq ` +
 			`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
-			`${messageUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
+			`${messageUri(context.name, purpose.exchange)}. These messages are your only source. ` +
+			`${action(purpose.kind)}`
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = openingLine(view, def.name);
 	return (
 		`${open}Begin your activation, ${def.name}: this is a respond activation. ` +
-		`Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed ` +
-		`and speak only to add something the record lacks. ` +
+		`Follow your instructions, and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
-		`A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. ` +
-		`These speech defaults yield to explicit instructions in your agent definition. ` +
-		`Closing summaries require a separate summary assignment.`
+		`These speech defaults yield to explicit instructions in your agent definition.`
 	);
 }
 
@@ -405,8 +420,8 @@ const AUDIENCE_PARAGRAPH = [
 	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
 	`actually reading now, say the part that needs them while they are still there, and`,
 	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
-	`activation, ignore it. When nobody is in the room, work for the record: state what you`,
-	`decided and why, and do not wait for an answer that nobody is there to give.`,
+	`activation, ignore it. When nobody is in the room, keep to your speaking policy, and do not`,
+	`wait for an answer that nobody is there to give.`,
 ];
 
 /** How a seat hands an artifact to a colleague, and where its own work stops. */
@@ -416,23 +431,32 @@ const HANDOFF_PARAGRAPH = [
 	`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
 	`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
 	`identity on the roster names your work. When a task falls under a colleague's identity,`,
-	`hand it to them with a directed say. Seat them first if they are in the reserve. Do not do`,
-	`their work, and do not copy what they already hold into the record. Put the URI of what`,
+	`hand it to them with a directed say if the roster marks their seat "named only". Seat them first`,
+	`if they are in the reserve; a seated colleague with no mark reads the record and needs no`,
+	`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
 	`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
 ];
 
 /** What the closing seat does: write the one message for a closed exchange. */
 const SUMMARY_DUTIES = [
 	`The exchange is over. Write the one message the assigned person reads instead of the working,`,
-	`using the say tool. Answer what they asked, and keep only facts that change what they do next.`,
-	`Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns that matter.`,
-	`Leave out the discussion, who said what, and facts that do not change the answer.`,
+	`using the say tool. Report what the exchange established, and keep only facts that change what`,
+	`they do next. Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns`,
+	`that matter. Leave out the discussion, who said what, and facts that do not change the answer.`,
+	``,
+	`The messages of the exchange are your source. Every fact, value, and recommendation in your`,
+	`message must come from a message of the exchange. A reported failure, an unknown, or a question`,
+	`to the person is a fact of the exchange: report it. Add nothing from your own knowledge.`,
+	`Messages above the divider are background. They give you no facts for this message.`,
+	`Copy each value as a message states it. Do not calculate, convert, or derive a value.`,
+	`Keep the source paths and URIs that a message cites.`,
+	`A ref on a message is a URI to carry into your refs. You cannot read it.`,
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
 	`Put the URI of the message that opened the exchange, and of any result that the exchange`,
 	`made, in the refs of the say.`,
-	`Ending your activation without calling say leaves the range whole for whoever reads it.`,
+	`If you end your activation without calling say, the person reads the exchange itself and no summary.`,
 ];
 
 /** The description of the `say` tool that a closing seat holds. Every executor gives this one. */
@@ -482,5 +506,5 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
 		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
-		: 'Write the one message with say, or end your activation.';
+		: 'Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, with its sources, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report.';
 }

@@ -173,16 +173,10 @@ describe('the workspace bundle', () => {
 		await workspace.dispose();
 	});
 
-	it.each([
-		[9, 'nine'],
-		[10, 'ten'],
-		[16, 'sixteen'],
-		[8, '8'],
-		[17, '17'],
-	])('counts %i tools in the tool line as %s', (count, word) => {
-		const names = Array.from({ length: count }, (_, index) => `tool${index}`);
+	it('names the tools in the tool line and gives no count', () => {
+		const names = Array.from({ length: 12 }, (_, index) => `tool${index}`);
 		expect(defaultToolGuidance(names)).toBe(
-			`Your workspace gives you ${word} tools: ${names.slice(0, -1).join(', ')} and tool${count - 1}.`,
+			`Your workspace tools are ${names.slice(0, -1).join(', ')} and tool11.`,
 		);
 	});
 

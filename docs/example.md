@@ -34,10 +34,11 @@ person joins a room, asks a question, and reads the summary.
 
 ### The assistant and the specialists
 
-**One assistant coordinates three specialists.** The assistant answers
-ordinary messages, seats a specialist, and writes the closing summary. It
+**One assistant coordinates three specialists.** The assistant seats
+a specialist, routes a request to a named specialist, and writes the closing
+summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
-`broadcast`. It writes the closing summary.
+`broadcast`.
 
 | Agent           | Scope                                                      | Kind   |
 | --------------- | ---------------------------------------------------------- | ------ |
@@ -46,7 +47,7 @@ uses `defineAssistant` from `@ambionframework/assistant`, seated at
 | **Experiments** | Turns a question into a short, repeatable test plan        | Codex  |
 
 Each room seats the specialists it needs. The reserve holds the rest. The
-specialists collaborate through directed messages and report back once.
+specialists collaborate through directed messages and report once to the room.
 
 **The team runs on three executor kinds.** The `seatKinds` table names the
 kind of each seat, the assistant included. The assistant and the
@@ -140,8 +141,8 @@ can change or delete one. The host opens the database at its start, so
 the terminal shows the tables before the first question.
 
 **Two simulated instruments sit on the lab database.** `led-current` has a
-limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist and
-the assistant call `operate`.
+limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist calls
+`operate`.
 
 - A setpoint at or below the limit runs. The tool appends a `done` row with
   the reading. The reading equals the setpoint.

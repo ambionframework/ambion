@@ -128,6 +128,18 @@ describe('the room runs the verified rules', () => {
 		});
 	});
 
+	it('names the summary writer in a close only when owesSummary says an agent reported', () => {
+		const state = () => replayState([writerNamed, person, quietQuestion], options);
+		const close = { type: 'close', person: 'priya', from: 3, through: 3 } as const;
+		bind.once(rules.owesSummary, true);
+		expect(decide(state(), close, now)).toMatchObject({
+			entry: { kind: 'close', body: { person: 'priya', summaryWriter: 'product' } },
+		});
+		const unowed = decide(state(), close, now);
+		expect(unowed).toMatchObject({ entry: { kind: 'close', body: { person: 'priya' } } });
+		expect(unowed).not.toMatchObject({ entry: { body: { summaryWriter: expect.anything() } } });
+	});
+
 	it('holds the lease applyChange answers', () => {
 		const sentinel = {
 			id,

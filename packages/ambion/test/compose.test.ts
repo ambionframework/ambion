@@ -2,12 +2,12 @@
  * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
  * the catalog, the approval, the ledger, the limits, the nested context, the
  * declared output check, and the result and the error that the model reads.
- * The code runs in the evaluator of `test/support`.
+ * The code runs in the runtime of `test/support`.
  */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
-import type { AmbionTool, ToolContext } from '../src/bundle.ts';
+import { type AmbionTool, contentText, type ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
 import type { RoomCall } from '../src/compose-tool.ts';
 import { describeExecutor } from '../src/define.ts';
@@ -15,16 +15,17 @@ import { invokeTool } from '../src/hosting.ts';
 import {
 	type ComposeOptions,
 	type ComposeResult,
+	type ComposeRuntime,
 	createRuntime,
 	defineAgent,
 	defineTool,
-	type Evaluator,
 	type Step,
 	startRoom,
 	systemClock,
 } from '../src/index.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
+import { functionRuntime } from './support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -36,7 +37,6 @@ import {
 	text,
 	total,
 } from './support/compose-tools.ts';
-import { functionEvaluator } from './support/evaluator.ts';
 import { faulty } from './support/ports.ts';
 import {
 	andrei,
@@ -59,16 +59,16 @@ const hidden = defineTool({
 	execute: () => 'hidden',
 });
 
-/** An evaluator that counts its runs. A refused compose call never reaches it. */
+/** A runtime that counts its runs. A refused compose call never reaches it. */
 function neverRuns() {
 	let runs = 0;
-	const evaluator: Evaluator = {
+	const runtime: ComposeRuntime = {
 		evaluate: async () => {
 			runs += 1;
 			return undefined;
 		},
 	};
-	return { evaluator, evaluated: () => runs };
+	return { runtime, evaluated: () => runs };
 }
 
 interface Ran {
@@ -85,7 +85,8 @@ interface RunOptions {
 	readonly record?: boolean;
 }
 
-function composeOf(
+function toolOf(
+	name: string,
 	tools: readonly AmbionTool[],
 	options: Partial<ComposeOptions> = {},
 ): AmbionTool {
@@ -93,12 +94,33 @@ function composeOf(
 		kind: 'test',
 		instructions: 'Test.',
 		tools,
-		compose: { evaluator: functionEvaluator, ...options },
+		compose: { runtime: functionRuntime, ...options },
 	});
-	const tool = executor.tools.find((one) => one.name === 'compose');
-	if (tool === undefined) throw new Error('The executor has no compose tool.');
+	const tool = executor.tools.find((one) => one.name === name);
+	if (tool === undefined) throw new Error(`The executor has no ${name} tool.`);
 	return tool;
 }
+
+const composeOf = (tools: readonly AmbionTool[], options: Partial<ComposeOptions> = {}) =>
+	toolOf('compose', tools, options);
+
+/** What the `describe` tool of a seat returns for `names`, or the message of its error. */
+async function describedAs(
+	tools: readonly AmbionTool[],
+	names: readonly string[],
+): Promise<string> {
+	const result = await invokeTool(toolOf('describe', tools), { tools: names }, callContext());
+	return typeof result === 'string' ? result : contentText(result.content);
+}
+
+const callContext = (): ToolContext => ({
+	agent: { name: 'worker', identity: 'Worker.' },
+	callId: 'd1',
+	room: 'lab',
+	activation: 'message:1:worker:1',
+	exchange: { person: 'priya', from: 1 },
+	deadline: Date.now() + 60_000,
+});
 
 /** Run one compose call, and read the result whether it completed or failed. */
 async function run(
@@ -299,6 +321,11 @@ describe('a failed compose call', () => {
 				'- c1.1 echo: completed',
 				'  result: "a"',
 				'- c1.2 broken: failed',
+				'Signatures of the tools that the failure names:',
+				'declare const tools: {',
+				'  /** Always fails. */',
+				'  broken(args: {}): Promise<string>;',
+				'};',
 			].join('\n'),
 		);
 		expect(ran.steps.at(-1)).toMatchObject({
@@ -369,19 +396,42 @@ describe('a failed compose call', () => {
 		stuck.open();
 	});
 
-	it('tells the evaluator which tools of the seat the call leaves unbound', async () => {
+	it('tells the runtime which tools of the seat the call leaves unbound', async () => {
 		const seen: (readonly string[] | undefined)[] = [];
-		const evaluator: Evaluator = {
+		const runtime: ComposeRuntime = {
 			evaluate: async (input) => {
 				seen.push(input.unlisted);
 				return undefined;
 			},
 		};
-		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { evaluator } });
+		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { runtime } });
 		// The room tools of the seat are in the catalog, and a tool with compose: false is not.
 		expect(seen[0]).toContain('table');
 		expect(seen[0]).not.toContain('echo');
 		expect(seen[0]).not.toContain('hidden');
+	});
+
+	it.each([
+		[
+			'a tool that the call left unbound',
+			'tools.table is not bound. This call binds echo. Add table to uses.',
+			true,
+		],
+		[
+			'a tool that the seat lacks',
+			'tools.nope does not exist. This seat has no tool named nope. This call binds echo.',
+			false,
+		],
+	])('shows the signature of %s only when the seat has the tool', async (_name, message, shown) => {
+		const runtime: ComposeRuntime = {
+			evaluate: async () => {
+				throw new Error(message);
+			},
+		};
+		const ran = await run([echo, table], { uses: ['echo'], code: '' }, { compose: { runtime } });
+		expect(ran.read.startsWith(`The compose call failed: ${message}\nNo call started.`)).toBe(true);
+		expect(ran.read.includes('  table(args: { count: number }): Promise<{')).toBe(shown);
+		expect(ran.read.includes('Signatures of the tools that the failure names:')).toBe(shown);
 	});
 
 	it('gives the code the details of a failed call, so it can return a partial value', async () => {
@@ -628,7 +678,7 @@ describe('the cut of a compose call', () => {
 			[echo],
 			{ uses: [], code: '' },
 			{
-				compose: { evaluator: never.evaluator },
+				compose: { runtime: never.runtime },
 				ctx: { signal: controller.signal },
 			},
 		);
@@ -646,7 +696,7 @@ describe('the checks before the code runs', () => {
 			{ uses: ['echo', 'hidden', 'compose', 'nothing'], code: '' },
 			{
 				compose: {
-					evaluator: never.evaluator,
+					runtime: never.runtime,
 					approve: () => {
 						asked += 1;
 						return 'allow';
@@ -710,7 +760,7 @@ describe('the checks before the code runs', () => {
 			[echo],
 			{ uses: ['echo'], code: `await tools.echo({ text: 'x' });` },
 			{
-				compose: { evaluator: never.evaluator, approve },
+				compose: { runtime: never.runtime, approve },
 			},
 		);
 		expect(ran.result).toEqual({ status: 'failed', error: { message }, calls: [] });
@@ -745,22 +795,66 @@ describe('the declared output of a tool', () => {
 });
 
 describe('the compose tool of an executor', () => {
-	it('describes itself with its uses, the limits of the seat, and the catalog', () => {
-		const tool = composeOf([echo, table, hidden], { limits: { calls: 32, time: 90_000 } });
+	it('describes itself with its contract, the limits of the seat, and the compact list of its bindings', () => {
+		const point = defineTool({
+			name: 'point',
+			description: 'Give a point.',
+			parameters: Type.Object({}),
+			compose: { output: Type.Object({ x: Type.Number() }, { $id: 'Point' }) },
+			execute: () => ({ content: [], details: { x: 1 } }),
+		});
+		const names = defineTool({
+			name: 'names',
+			description: 'Give names.',
+			parameters: Type.Object({}),
+			compose: { output: Type.Array(Type.String()) },
+			execute: () => ({ content: [], details: [] }),
+		});
+		const tool = composeOf([echo, table, point, names, hidden], {
+			limits: { calls: 32, time: 90_000 },
+		});
 		expect(tool.description).toBe(
 			[
-				'Run JavaScript in one call. It joins your tools: code calls them as tools.<name>. Code with no tools also calculates and transforms data. You read only the value that the code returns.',
+				'Run JavaScript that calls your tools as tools.<name>, in one call. Use it for a plan of two or more tool calls, and to explore large results. You read only the value that the code returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
 				'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 				'',
+				'Tools that code can bind, each with the type of its result (string is text): echo -> string, table -> object, point -> Point, names -> array, say -> string, schedule -> string, recall -> string, seat -> string, unseat -> string, dismiss -> string.',
+				'Call describe with the names of tools for their signatures and types before you write code that reads fields of a result.',
+			].join('\n'),
+		);
+	});
+
+	it('returns the signatures and the named types of the tools that it names, in the order named, and runs nothing', async () => {
+		let runs = 0;
+		const counted = defineTool({
+			name: 'counted',
+			description: 'Count the runs.',
+			parameters: Type.Object({}),
+			execute: () => {
+				runs += 1;
+				return 'ran';
+			},
+		});
+		const point = defineTool({
+			name: 'point',
+			description: 'Give a point.',
+			parameters: Type.Object({ to: Type.Object({ x: Type.Number() }, { $id: 'Point' }) }),
+			compose: { output: Type.Object({ x: Type.Number() }, { $id: 'Point' }) },
+			execute: () => ({ content: [], details: { x: 1 } }),
+		});
+		const tools = [echo, counted, point, hidden];
+		expect(await describedAs(tools, ['point', 'counted', 'point', 'say'])).toBe(
+			[
+				'type Point = { x: number };',
 				'declare const tools: {',
-				'  /** Return the text. */',
-				'  echo(args: { text: string }): Promise<string>;',
-				'  /** Give a count of rows. */',
-				'  table(args: { count: number }): Promise<{ rows: { id: number; label: string }[] }>;',
-				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`. */',
+				'  /** Give a point. */',
+				'  point(args: { to: Point }): Promise<Point>;',
+				'  /** Count the runs. */',
+				'  counted(args: {}): Promise<string>;',
+				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI. */',
 				'  say(args: {',
 				'    /** A participant name from the roster. */',
 				'    to?: string;',
@@ -768,41 +862,42 @@ describe('the compose tool of an executor', () => {
 				'    text: string;',
 				'    refs?: string[];',
 				'  }): Promise<string>;',
-				'  /** Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person of the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it. */',
-				'  schedule(args: {',
-				'    /** Seconds until the room wakes you with this message. */',
-				'    delaySeconds: number;',
-				'    /** What to do when the room wakes you. */',
-				'    text: string;',
-				'    refs?: string[];',
-				'  }): Promise<string>;',
-				'  /** Read messages of this room by seq, as #12, or by URI, ambion://room/<room>/message/<seq>: a message that your context leaves out or that a summary folds, or one that a say cites. The result gives one line for each ref. */',
-				'  recall(args: { refs: string[] }): Promise<string>;',
-				'  /** Seat one agent from the reserve. It joins the room and reads the record. */',
-				'  seat(args: {',
-				'    /** An agent name from the reserve. */',
-				'    name: string;',
-				'  }): Promise<string>;',
-				"  /** Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays. */",
-				'  unseat(args: {',
-				'    /** A seated agent name. */',
-				'    name: string;',
-				'  }): Promise<string>;',
-				'  /** Drop a message you scheduled, by its seq. The room does not wake you with it. */',
-				'  dismiss(args: {',
-				'    /** The seq of the scheduled message, as the record shows it: 41 for #41. */',
-				'    message: number;',
-				'  }): Promise<string>;',
 				'};',
 			].join('\n'),
 		);
+		expect(runs).toBe(0);
 	});
 
-	/** The catalog of one tool, without the room tools that every catalog lists after it. */
-	const catalogOf = (tool: AmbionTool) => {
-		const text = composeOf([tool]).description.split('\n\n').slice(2).join('\n\n');
-		return `${text.slice(0, text.indexOf('  /** Speak on the record.'))}};`;
-	};
+	it.each([
+		['an unknown name', ['nope']],
+		['a tool with compose: false', ['echo', 'hidden']],
+		['the compose tool', ['compose']],
+		['the describe tool', ['describe']],
+	])('refuses %s and lists the bindable tools', async (_name, names) => {
+		const message = await describedAs([echo, hidden], names).catch((error: Error) => error.message);
+		const bad = names.filter((name) => name !== 'echo');
+		expect(message).toBe(
+			`The catalog holds no tool named ${bad.map((name) => `'${name}'`).join(', ')}. The bindable tools are echo, say, schedule, recall, seat, unseat, dismiss.`,
+		);
+	});
+
+	it('refuses an empty list of names', async () => {
+		await expect(describedAs([echo], [])).rejects.toThrow(
+			"Invalid arguments for tool 'describe': tools must not have fewer than 1 items.",
+		);
+	});
+
+	it('is an ordinary tool: not bindable, and the same in every activation', () => {
+		const tool = toolOf('describe', [echo]);
+		expect(tool.compose).toBe(false);
+		expect(tool.description).toContain(
+			'Call it before you write compose code that reads the fields',
+		);
+		expect(toolOf('describe', [echo])).toEqual({ ...tool, invoke: expect.any(Function) });
+	});
+
+	/** The catalog of one tool, as the `describe` tool renders it. */
+	const catalogOf = (tool: AmbionTool) => describedAs([tool], [tool.name]);
 
 	it.each<[string, TSchema, string]>([
 		[
@@ -832,7 +927,7 @@ describe('the compose tool of an executor', () => {
 			'unknown',
 		],
 		['a union with an unknown member', Type.Union([Type.String(), Type.Unknown()]), 'unknown'],
-	])('renders %s as TypeScript', (_name, schema, expected) => {
+	])('renders %s as TypeScript', async (_name, schema, expected) => {
 		const declared = defineTool({
 			name: 'shape',
 			description: 'Give a shape.',
@@ -840,19 +935,19 @@ describe('the compose tool of an executor', () => {
 			compose: { output: schema },
 			execute: () => ({ content: [], details: null }),
 		});
-		expect(catalogOf(declared)).toContain(
+		expect(await catalogOf(declared)).toContain(
 			`shape(args: { value: ${expected} }): Promise<${expected}>;`,
 		);
 	});
 
-	it('writes a many-line description as a doc comment, and keeps a comment end out of it', () => {
+	it('writes a many-line description as a doc comment, and keeps a comment end out of it', async () => {
 		const tool = defineTool({
 			name: 'note-pad',
 			description: 'First line.\n\nSecond line */ ends.',
 			parameters: Type.Object({}),
 			execute: () => '',
 		});
-		expect(catalogOf(tool)).toBe(
+		expect(await catalogOf(tool)).toBe(
 			[
 				'declare const tools: {',
 				'  /**',
@@ -866,7 +961,7 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('writes the description of a field as a doc comment, nested in the block of its tool', () => {
+	it('writes the description of a field as a doc comment, nested in the block of its tool', async () => {
 		const tool = defineTool({
 			name: 'find',
 			description: 'Find rows.',
@@ -882,7 +977,7 @@ describe('the compose tool of an executor', () => {
 			},
 			execute: () => ({ content: [], details: { rows: [] } }),
 		});
-		expect(catalogOf(tool)).toBe(
+		expect(await catalogOf(tool)).toBe(
 			[
 				'declare const tools: {',
 				'  /** Find rows. */',
@@ -905,7 +1000,7 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('renders a schema with an $id once, as a type before the tools', () => {
+	it('renders a schema with an $id once, as a type before the tools', async () => {
 		const Point = Type.Object(
 			{ x: Type.Number({ description: 'East.' }), y: Type.Number() },
 			{ $id: 'Point', description: 'A place.' },
@@ -917,7 +1012,7 @@ describe('the compose tool of an executor', () => {
 			compose: { output: Type.Object({ path: Type.Array(Point), at: Point }) },
 			execute: () => ({ content: [], details: { path: [], at: { x: 0, y: 0 } } }),
 		});
-		expect(catalogOf(tool)).toBe(
+		expect(await catalogOf(tool)).toBe(
 			[
 				'/** A place. */',
 				'type Point = {',
@@ -933,7 +1028,7 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('renders a second, different schema with a taken $id inline', () => {
+	it('renders a second, different schema with a taken $id inline', async () => {
 		const tool = defineTool({
 			name: 'clash',
 			description: 'Clash.',
@@ -943,20 +1038,20 @@ describe('the compose tool of an executor', () => {
 			}),
 			execute: () => '',
 		});
-		expect(catalogOf(tool)).toContain(
+		expect(await catalogOf(tool)).toContain(
 			'clash(args: { a: Box; b: { y: string } }): Promise<string>;',
 		);
-		expect(catalogOf(tool)).toContain('type Box = { x: string };');
+		expect(await catalogOf(tool)).toContain('type Box = { x: string };');
 	});
 
-	it('renders a schema whose $id is no identifier inline', () => {
+	it('renders a schema whose $id is no identifier inline', async () => {
 		const tool = defineTool({
 			name: 'urn',
 			description: 'Urn.',
 			parameters: Type.Object({ a: Type.Object({ x: Type.String() }, { $id: 'urn:x' }) }),
 			execute: () => '',
 		});
-		expect(catalogOf(tool)).toBe(
+		expect(await catalogOf(tool)).toBe(
 			[
 				'declare const tools: {',
 				'  /** Urn. */',
@@ -966,18 +1061,13 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('lists the room tools after its own tools, and no compose tool', () => {
-		const names = (tool: AmbionTool) =>
-			[...tool.description.matchAll(/^ {2}(\w+)\(/gm)].map((m) => m[1]);
-		expect(names(composeOf([echo, hidden]))).toEqual([
-			'echo',
-			'say',
-			'schedule',
-			'recall',
-			'seat',
-			'unseat',
-			'dismiss',
-		]);
+	it('lists the room tools after its own tools, and no compose or describe tool', () => {
+		const listed = composeOf([echo, hidden]).description.match(
+			/result \(string is text\): (.*)\.$/m,
+		);
+		expect(listed?.[1]).toBe(
+			'echo -> string, say -> string, schedule -> string, recall -> string, seat -> string, unseat -> string, dismiss -> string',
+		);
 	});
 });
 
@@ -990,7 +1080,7 @@ describe('a compose call in a room', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				tools: [table, total, later('later', false)],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		});
 		const logged: Step[] = [];
@@ -1062,7 +1152,7 @@ function composer(
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			compose: { evaluator: functionEvaluator, ...options },
+			compose: { runtime: functionRuntime, ...options },
 		}),
 	});
 }
@@ -1169,6 +1259,38 @@ describe('a compose call over the room tools', () => {
 		expect(lines.some((message) => message.from === 'worker')).toBe(false);
 	});
 
+	it('returns the error of a failed compose call to the script, keeps its say, and makes no retry', async () => {
+		const read: string[] = [];
+		let requests = 0;
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-error'),
+				agents: [composer('worker')],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, _seat, request) => {
+					requests = request;
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['say'],
+							code: `await tools.say({ text: 'Done.' }); throw new Error('stop');`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Say it, then fail.' });
+		await settled(room);
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said).toHaveLength(1);
+		expect(read[0]).toMatch(/say: completed/);
+		expect(read[0]).toContain('The compose call failed: stop');
+		// The error reaches the script as a result, so the activation does not fail and the room retries nothing.
+		expect(requests).toBe(2);
+	});
+
 	it('seats two agents and recalls a message in one compose call', async () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
@@ -1243,7 +1365,7 @@ describe('a compose call over the room tools', () => {
 				name: roomName('compose-time'),
 				agents: [
 					scriptedAgent('worker', 'worker.', {
-						compose: { evaluator: functionEvaluator, limits: { time: 40 } },
+						compose: { runtime: functionRuntime, limits: { time: 40 } },
 					}),
 				],
 				seats: { worker: 'broadcast' },
@@ -1355,7 +1477,7 @@ describe('a compose call over the room tools', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				compose: {
-					evaluator: functionEvaluator,
+					runtime: functionRuntime,
 					approve: (request) => {
 						requests.push(request);
 						return 'allow';
@@ -1419,8 +1541,8 @@ describe('a compose call over the room tools', () => {
 	});
 
 	it('refuses a room tool in a direct invoke, at call time, with no code run', async () => {
-		const { evaluator, evaluated } = neverRuns();
-		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { evaluator } });
+		const { runtime, evaluated } = neverRuns();
+		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { runtime } });
 		expect(ran.read).toContain("The room tools 'say' need an activation");
 		expect(ran.result).toMatchObject({ status: 'failed', calls: [] });
 		expect(evaluated()).toBe(0);

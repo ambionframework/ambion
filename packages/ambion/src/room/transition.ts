@@ -37,6 +37,7 @@ import {
 	leaseExpiry,
 	mayEnd,
 	onRecord,
+	owesSummary,
 	stampedSummary,
 } from './rules.verified.ts';
 import { dismissal, returning, scheduleRefusal } from './scheduled.ts';
@@ -668,7 +669,8 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 /**
  * The close of the exchange that the pass saw, as `admitsClose` admits it
  * where the write lands. The close names the `person` of the exchange, and
- * the configured summary writer when it has one.
+ * the configured summary writer when it has one and an agent said a message
+ * inside the range.
  */
 function closing(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'> {
 	const exchange = state.exchange;
@@ -676,7 +678,9 @@ function closing(state: RoomState, command: CloseCommand, now: number): RoomDeci
 		return { entry: undefined };
 	const { from, through } = command;
 	const person = exchange?.person;
-	const writer = person === undefined ? undefined : summaryWriter(state.composition, state.roster);
+	const reported = owesSummary(state.messages, [...state.people.keys()], from, through);
+	const writer =
+		person === undefined || !reported ? undefined : summaryWriter(state.composition, state.roster);
 	const owed =
 		person === undefined || writer === undefined ? {} : { person, summaryWriter: writer };
 	return {

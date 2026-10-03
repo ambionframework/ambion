@@ -15,7 +15,6 @@
  */
 
 import type { WorkspaceEnv } from './backend.ts';
-import { formatBytes } from './format-bytes.ts';
 import {
 	appendOnly,
 	bestEffort,
@@ -154,9 +153,7 @@ export function auditGuidance(log: AuditLog): string {
 		`Every tool call on this workspace is recorded at ${log.path}, one JSON line per`,
 		`call: the room, the agent, the tool, the activation and the exchange it ran in,`,
 		`its full arguments, and its full result or error. Read it to see what happened`,
-		`here, including calls other agents and other rooms made. Filter it with jq:`,
-		`select on room, tool, agent, or activation to find one call among many. Past`,
-		`${formatBytes(log.rotateBytes)} the file rotates: it moves beside itself under a`,
-		`timestamped name, and a new file starts at ${log.path}.`,
+		`here. Filter it with jq: select on room, tool, agent, or activation to find one`,
+		`call among many.`,
 	].join('\n');
 }

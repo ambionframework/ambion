@@ -65,11 +65,11 @@ again in the complete `agents` definitions when calling `resumeRoom`.
 
 The default assistant is passive when the specialists are seated at
 broadcast or presence attention. It speaks during an exchange only when a
-person or a specialist addresses it, or when an idle specialist at named
-attention needs one
-directed request. The closing summary reports corrections, conflicts, and
-questions for the person. Behavioral
-defaults are model instructions; the kernel enforces collaboration authority.
+participant asks it a question, when a seated specialist at named attention
+needs one directed request, when the application instructions require a
+message, or, rarely, to stop a forbidden action. The closing summary reports
+corrections, conflicts, and questions for the person. Behavioral defaults are
+model instructions; the kernel enforces collaboration authority.
 
 Explicit user constraints apply across seating and specialist handoffs,
 including scope, output limits, and permissions such as “do not edit files.”

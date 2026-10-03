@@ -58,19 +58,47 @@ explicit summary writer is refused. This shorthand preserves the summary
 activation and seating rules described here. See
 [Default assistant](assistant.md) for the built-in implementation.
 
-Every exchange where a person spoke is eligible for a summary. Eligibility
-does not depend on the number of messages or speakers. An exchange where no
-person spoke, such as a returned say that nobody answers, owes no summary. A
-room with no configured summary writer still closes exchanges and retains
-their source messages.
+Every exchange where a person spoke and an agent said a message is eligible
+for a summary. Eligibility does not depend on the number of messages or
+speakers. An exchange where no person spoke, such as a returned say that
+nobody answers, owes no summary. A room with no configured summary writer
+still closes exchanges and retains their source messages.
 
 ## Summary activation
 
 When the room records a close, it assigns a dedicated activation only when
-`summaryWriter` names a seated agent and the close names a `person`. The
+`summaryWriter` names a seated agent, the close names a `person`, and an
+agent said a message inside the range. The
 activation fixes the exchange range and that person. It receives that
 person's current preferences.
 Later messages do not change the source range or recipient.
+
+**An exchange that no agent answered owes no summary.** The room checks one
+fact when it records the close: an agent said a message with a seq from the
+start of the range through its end. A
+range that holds only the words of people, such as a request that no
+specialist answered, gets a close with no summary writer. The close keeps its
+messages whole, and the outcome of the summary is `silent`. A seat change, a
+dismissal, and a post of the system are no agent message. The room cannot
+judge whether an agent message reports anything, because an agent message
+can be a routing request. The writer judges that case, and it ends the
+activation without `say` when the messages report nothing.
+
+**A complete answer in the record owes no second copy.** The summary prompt
+checks this case first. When one message of the exchange already answers the
+request in full, the writer ends the activation without `say`. The person reads
+every message, so the answer stays on the record.
+
+**The messages of the exchange are the only source of a summary.** The
+prompt says so. Every fact, value, and recommendation in the summary must come
+from a message of the exchange. A reported failure, an unknown, or a question
+to the person is a fact of the exchange, and the summary reports it. The writer
+adds nothing from its own knowledge. It copies each value as a message states
+it and does not calculate, convert, or derive a value. It keeps the source paths
+and URIs that a message cites. Messages above the divider are
+background and give no facts. When the messages after the request report
+nothing, the writer ends the activation without `say`. An unsupported
+summary would replace its source messages in later prompts.
 
 The closing `say` may carry `refs`. The room stores them on the summary. The
 prompt gives the writer the URI of the message that opened the exchange it

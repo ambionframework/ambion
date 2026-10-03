@@ -1,15 +1,15 @@
-import { evaluatorConformance } from '@ambionframework/ambion/conformance';
-import { DEBUG_SYNC } from 'quickjs-emscripten';
+import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
+import { DEBUG_SYNC, RELEASE_SYNC } from 'quickjs-emscripten';
 import { describe, expect, it, vi } from 'vitest';
-import { quickjsEvaluator } from '../src/runtime.ts';
+import { quickjsRuntime } from '../src/runtime.ts';
 
 const limits = { memoryLimit: 16 * 1024 * 1024, cpuLimit: 500 };
 
-describe('quickjsEvaluator', () => {
-	for (const c of evaluatorConformance(() => quickjsEvaluator(limits))) it(c.name, c.run);
+describe('quickjsRuntime', () => {
+	for (const c of composeRuntimeConformance(() => quickjsRuntime(limits))) it(c.name, c.run);
 });
 
-describe('quickjsEvaluator on the debug build', () => {
+describe('quickjsRuntime on the debug build', () => {
 	/**
 	 * The debug build prints each leaked handle when it frees a runtime, and aborts on a leaked
 	 * object. The test runs 38 cases, and each case takes about 0.7 s on an idle core. The busy
@@ -26,9 +26,9 @@ describe('quickjsEvaluator on the debug build', () => {
 			.mockImplementation((text) => void printed.push(String(text)));
 		try {
 			// The runtime of the case that catches an out-of-memory error cannot be freed, by design.
-			const cases = evaluatorConformance(() =>
+			const cases = composeRuntimeConformance(() =>
 				// The debug build is slow, so its CPU limit is longer than the limit of the release build.
-				quickjsEvaluator({ ...limits, cpuLimit: 5000, variant: DEBUG_SYNC }),
+				quickjsRuntime({ ...limits, cpuLimit: 5000, variant: DEBUG_SYNC }),
 			);
 			for (const c of cases.filter((one) => !one.name.includes('catches an out-of-memory')))
 				await c.run();
@@ -40,17 +40,17 @@ describe('quickjsEvaluator on the debug build', () => {
 	}, 300_000);
 });
 
-describe('the limits of quickjsEvaluator', () => {
+describe('the limits of quickjsRuntime', () => {
 	it('returns the value of code that catches an out-of-memory error, and serves the next evaluation', async () => {
-		const evaluator = quickjsEvaluator({ memoryLimit: 4 * 1024 * 1024 });
+		const runtime = quickjsRuntime({ memoryLimit: 4 * 1024 * 1024 });
 		const call = async () => null;
 		const code = `await tools.keep({}); try { const a = []; for (;;) a.push(new Array(1e4).fill(1)); } catch (e) { return 'caught ' + e.message; }`;
-		const value = await evaluator.evaluate(
+		const value = await runtime.evaluate(
 			{ code, bindings: ['keep'], call },
 			new AbortController().signal,
 		);
 		expect(value).toBe('caught out of memory');
-		const next = await evaluator.evaluate(
+		const next = await runtime.evaluate(
 			{ code: 'return 1;', bindings: [], call },
 			new AbortController().signal,
 		);
@@ -58,27 +58,44 @@ describe('the limits of quickjsEvaluator', () => {
 	});
 
 	it('names the memory limit and the CPU limit in the error', async () => {
-		const evaluator = quickjsEvaluator({ memoryLimit: 4 * 1024 * 1024, cpuLimit: 200 });
+		const runtime = quickjsRuntime({ memoryLimit: 4 * 1024 * 1024, cpuLimit: 200 });
 		const input = { bindings: [], call: async () => null };
 		const signal = new AbortController().signal;
 		await expect(
-			evaluator.evaluate(
+			runtime.evaluate(
 				{ ...input, code: 'const a = []; for (;;) a.push(new Array(1e4).fill(1));' },
 				signal,
 			),
 		).rejects.toThrow('memory limit of 4194304 bytes');
-		await expect(evaluator.evaluate({ ...input, code: 'for (;;) {}' }, signal)).rejects.toThrow(
+		await expect(runtime.evaluate({ ...input, code: 'for (;;) {}' }, signal)).rejects.toThrow(
 			'CPU limit of 200 ms',
 		);
 	});
 
 	it('counts only the time of the code, not the wait for a call', async () => {
-		const evaluator = quickjsEvaluator({ cpuLimit: 150 });
+		const runtime = quickjsRuntime({ cpuLimit: 150 });
 		const call = () => new Promise<null>((resolve) => setTimeout(() => resolve(null), 400));
-		const value = await evaluator.evaluate(
+		const value = await runtime.evaluate(
 			{ code: 'await tools.wait({}); return 1;', bindings: ['wait'], call },
 			new AbortController().signal,
 		);
 		expect(value).toBe(1);
+	});
+});
+
+describe('a runtime that cannot load the WebAssembly', () => {
+	it('fails the evaluation with an error that names the module and the way out', async () => {
+		const variant = {
+			...RELEASE_SYNC,
+			importModuleLoader: () => Promise.reject(new Error('Wasm code generation disallowed')),
+		};
+		const runtime = quickjsRuntime({ variant });
+		const failed = runtime.evaluate(
+			{ code: 'return 1;', bindings: [], call: async () => null },
+			new AbortController().signal,
+		);
+		await expect(failed).rejects.toThrow(
+			'QuickJS could not load its WebAssembly in this runtime (Wasm code generation disallowed). Pass compose: { runtime } with a compose runtime that this host can run.',
+		);
 	});
 });

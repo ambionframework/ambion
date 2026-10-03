@@ -512,7 +512,7 @@ describe('a workspace with no SQL backend and no audit log', () => {
 		]);
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'nine tools: read, write, edit, bash, ps, wait, cancel, snapshot and restore.',
+			'Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot and restore.',
 		);
 		expect(guidance).not.toMatch(/\bsql\b/);
 		expect(guidance).not.toContain('audit');

@@ -82,7 +82,7 @@ describe('the tools and the guidance', () => {
 			guidance.startsWith(defaultToolGuidance(workspace.tools().tools.map((t) => t.name))),
 		).toBe(true);
 		expect(guidance).toContain(
-			'twelve tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.',
+			'Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.',
 		);
 		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
 		expect(git).toBeGreaterThan(-1);
@@ -94,19 +94,16 @@ describe('the tools and the guidance', () => {
 	it('states the full guidance of a bundle with sql, git and audit', async () => {
 		const { workspace } = await lab({ sql: true, audit: true });
 		expect(workspace.tools().guidance).toMatchInlineSnapshot(`
-			"Your workspace gives you twelve tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.
+			"Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.
 			read, write, edit and bash work on shared files. Other agents connected to this
 			workspace read and write the same files.
 
 			bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
 			Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
-			The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
+			The call waits up to its \`wait\` argument, 30 seconds by default, and then gives the state of the process and its output.
 			The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
 			Each process has a directory, ~/.processes/<handle>/, with its spec, its out, and its exit code when it ends.
 			ls ~/.processes lists every process you started that the workspace still keeps.
-			wait takes a list of handles and waits for the first of them to end.
-			wait with one handle and timeout 0 gives the state and the new output of that process at once.
-			cancel takes a handle and stops its process. ps lists your running processes.
 			A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 			A stop sends SIGTERM, then SIGKILL after grace seconds, 10 by default. Raise grace for a process that must clean up.
 			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
@@ -158,9 +155,8 @@ describe('the tools and the guidance', () => {
 			tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run a
 			script with js-exec (JavaScript) or python3 (Python).
 
-			git is available: init, clone, add, commit, status, log, diff, show, branch, checkout,
-			switch, merge, rebase, cherry-pick, stash, tag, reset, fetch, pull, push, and more. Each
-			command supports a subset of the flags of real git. Your commits carry your name as the
+			git is available with the common subcommands. Each supports a subset of the flags of real
+			git. Your commits carry your name as the
 			author, and git config does not change it. A remote is a path in this filesystem, or a URL
 			that this guidance names. git reaches no other host.
 
@@ -170,10 +166,8 @@ describe('the tools and the guidance', () => {
 			Every tool call on this workspace is recorded at /workspace/audit.jsonl, one JSON line per
 			call: the room, the agent, the tool, the activation and the exchange it ran in,
 			its full arguments, and its full result or error. Read it to see what happened
-			here, including calls other agents and other rooms made. Filter it with jq:
-			select on room, tool, agent, or activation to find one call among many. Past
-			5 MiB the file rotates: it moves beside itself under a
-			timestamped name, and a new file starts at /workspace/audit.jsonl.
+			here. Filter it with jq: select on room, tool, agent, or activation to find one
+			call among many.
 
 			This workspace may hold /rooms/<room name>/messages.jsonl for any room
 			that mirrors its record here. Read a room's file with read or bash
@@ -181,7 +175,7 @@ describe('the tools and the guidance', () => {
 			into a summary, and the history of a room you are not seated in.
 			Each line carries the message's own seq. A message ref names the
 			same seq: ambion://room/<name>/message/<seq>. Filter it with jq:
-			jq 'select(.seq == <seq>)' finds the line a ref or the ask line
+			jq 'select(.seq == <seq>)' finds the line a ref or the last paragraph of your context
 			names. jq also filters by kind or from."
 		`);
 	});
@@ -190,7 +184,7 @@ describe('the tools and the guidance', () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'eleven tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, repos and fork.',
+			'Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, repos and fork.',
 		);
 		expect(guidance).toContain(
 			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',

@@ -56,7 +56,7 @@ export function roomMirrorGuidance(root: string): string {
 		`into a summary, and the history of a room you are not seated in.`,
 		`Each line carries the message's own seq. A message ref names the`,
 		`same seq: ambion://room/<name>/message/<seq>. Filter it with jq:`,
-		`jq 'select(.seq == <seq>)' finds the line a ref or the ask line`,
+		`jq 'select(.seq == <seq>)' finds the line a ref or the last paragraph of your context`,
 		`names. jq also filters by kind or from.`,
 	].join('\n');
 }
