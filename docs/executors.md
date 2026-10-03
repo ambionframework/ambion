@@ -339,6 +339,13 @@ The driver keeps the answer beside each result, for the scripted executor
 alone. The hosting entry does not export it, and no other executor reads
 it.
 
+**The scripted executor returns a tool error to the script.** An own tool
+of the seat can throw. The scripted executor records the `tool_result` step
+with the error, and the script reads the message in `step.results` as the
+text of the result. The activation goes on, as it does with Pi, Claude, and
+Codex. A script that throws a `ScriptedFailure` ends the pass with the
+cause it names.
+
 **`say` commits a `said` intent.** It carries `readThrough` and takes the
 tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
 result names the message, as `said #41` or `said #41 to priya`, so the
