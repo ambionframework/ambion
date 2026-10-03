@@ -7,6 +7,21 @@ workspace gives nine tools, from ten. A workspace with a SQL backend and a
 git backend gives twelve, from fourteen. The agent reaches the same facts
 through the tools that stay.
 
+### Assistant
+
+**The assistant stays silent in the exchange.** In a respond activation it
+sends a message for two reasons only: a directed request to an idle specialist
+at `named` attention, and an answer to a participant that asks it a question.
+A specialist result, report, failure, or acknowledgment is not a question,
+even when it is addressed to the assistant. The assistant sends no message
+about it, and the closing summary reports it. In the live run, the assistant
+posted a specialist result to the person and added a wiring step that no
+specialist had stated. The assistant may steer in one case: a specialist is
+about to act against an explicit constraint of the person. Then it sends that
+specialist one short directed say. The guidance states the rule once. It
+shrinks from 4,671 to 3,644 characters. The workbench specialists report with
+an undirected say, or with a directed say to the specialist that asked them.
+
 ### Summaries
 
 **A summary rests on the messages of its exchange.** The summary prompt names

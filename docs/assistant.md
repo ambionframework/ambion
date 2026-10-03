@@ -21,13 +21,13 @@ activation authority, freshness checks, exchange closure, and summary
 provenance. Other agents retain their existing seats and speech tools.
 The package introduces no privileged role or separate execution lifecycle.
 
-| Responsibility | Default behavior                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.    |
-| Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force.    |
-| Answers        | Answer a person or a specialist that addresses the assistant. The summary answers a question to the room.              |
-| Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.      |
-| Silence        | Call no `say` at `broadcast` or `presence` attention: no correction, no relay, no question to the person, no steering. |
+| Responsibility | Default behavior                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope. |
+| Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force. |
+| Answers        | Answer a participant that asks the assistant a question. A report is not a question. The summary answers the room.  |
+| Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.   |
+| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop an action against a constraint.  |
 
 Specialists own domain judgments. The assistant must not invent extra work
 after the request is satisfied or require every specialist contribution to
@@ -193,17 +193,18 @@ coordination messages that create further work without advancing the
 request.
 
 **A specialist's answer needs no forwarding.** Even a result addressed to
-the assistant is visible in the shared record. During a respond activation, do not
-repeat that result or write a preliminary summary. End the activation when
-no useful work remains. The room runs the summary work in a separate
-summary activation.
+the assistant is visible in the shared record. A result, a report, a failure,
+or an acknowledgment is not a question. The assistant sends no message about
+it, to anyone, and the closing summary reports it. The assistant answers a
+participant only when that participant asks it a question. The room runs the
+summary work in a separate summary activation.
 
 **The guidance names the marker that a mid-activation result carries.** The
 core adds the `[new]` prefix to each message that lands while the assistant
 works, and every executor sends the line unchanged. The assistant
 reads a user message that starts with `[new]`, then the seq of the message. A specialist result
 reads `[new] #12 [specialist → assistant] text`. The ordinary guidance names this marker
-and says to end without a tool call. Change the marker and the guidance
+and says that the same rules apply to it. Change the marker and the guidance
 together.
 
 **A trial measured the effect.** The specialist answered after the assistant
@@ -219,18 +220,22 @@ default when the user has not renewed the work.
 
 ## Silence during the exchange
 
-**The assistant does not steer.** A specialist at `broadcast` or `presence`
+**The assistant steers only to protect a constraint.** A specialist at `broadcast` or `presence`
 attention receives every message, the person's corrections and constraints
 included. The person reads every message too. A correction from the
 assistant repeats what both already have, and it starts more work.
 
 The assistant does not correct, verify, or question a specialist during the
 exchange, and it does not ask the person a question. A specialist reports to
-the room, and it addresses the assistant only with a question for it. The
-assistant answers that question to the specialist, and it does not pass it on
-to the person. When a result relies on a superseded
-fact, breaks a constraint, or needs information from the person, the closing
-summary reports it. The person then decides what happens next.
+the room with an undirected say, or to the specialist that asked it with a
+directed say. When a result relies on a superseded fact, breaks a constraint,
+or needs information from the person, the closing summary reports it. The
+person then decides what happens next.
+
+**Steering is rare.** When a specialist is about to act against an explicit
+constraint of the person, for example to edit files after "do not edit
+files", the assistant sends that specialist one short directed say that names
+the constraint. The assistant steers in no other case.
 
 When a specialist report conflicts with evidence already in the record, the
 summary states both. It does not state the unsupported claim as fact.

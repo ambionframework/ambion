@@ -201,4 +201,7 @@ it('names the marker that the room puts on a specialist result steered into the 
 	// The guidance and the marker change together. A marker of [steer] raised the rate of
 	// relayed results from 5 in 30 to 18 in 30 in a live trial. Measure before a rename.
 	expect(system).toContain(`starts with \`${marker}\``);
+	// The guidance states the ban on a message about a report once, and it names the one steer.
+	expect(system.split('is not a question').length - 1).toBe(1);
+	expect(system).toContain('is about to act against an explicit constraint');
 });
