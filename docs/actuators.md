@@ -309,4 +309,4 @@ world before any `say` commits. The room does not run an effect once
 - A check of the goal by the workspace; the agent confirms convergence.
 - Hard real-time guarantees on any path through the workspace.
 - A cleanup that the workspace runs, and a status that the workspace reads
-  from the log. [D24](../planning/backlog.md#for-actuators) holds them.
+  from the log.

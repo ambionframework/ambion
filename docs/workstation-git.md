@@ -149,8 +149,8 @@ const lab = openWorkspace({
 loopback address.** `server`, `port`, and `hostKey` name the one server of
 both backends, and the host passes one value to both, as the example
 does. Nothing compares the two. A git backend on a server of another host
-key fails its first operation at the host key check. A git server on a second machine waits in
-[the backlog](../planning/backlog.md#designs-with-a-shape).
+key fails its first operation at the host key check. A git server on a second machine is not
+supported.
 
 ## The git account
 
@@ -718,7 +718,7 @@ is about fifteen lines of `bash`.
    The workstation installs no `just-git`.
 4. **0.3.0 landed the work,** in #312, #314, #316, and #317.
 5. **The git account is on the workstation, on the loopback address.** A
-   git server on a second machine waits in the backlog.
+   git server on a second machine is not supported.
 6. **The core knows no access type.** Each access type lives with its
    pair, a bash backend takes the git backend of its own package, and
    `gitConformance` calls fixture hooks.

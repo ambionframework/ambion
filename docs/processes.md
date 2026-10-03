@@ -808,10 +808,8 @@ To check a long process later, call schedule with delaySeconds. The room wakes y
 
 **A process has no link to the life of an activation, an exchange, or a
 room.** An exchange closes when no activation is live, so a cancel at the
-close ends a process at the first quiet moment.
-[Backlog](../planning/backlog.md#designs-with-a-shape) holds the linked
-lives, the kinds of process after `bash`, and the notice of the backlog's
-wake sources, which a process end can use later.
+close ends a process at the first quiet moment. `bash` is the one kind
+of process.
 
 **A new kind adds three parts.** It adds a name to `ProcessKind`, a
 runner that writes the same files, and a tool that starts it. The table,

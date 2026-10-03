@@ -73,8 +73,7 @@ at any history length.
 **The projection is a cache.** It is the one derivation of the room state
 that the room runs, and `foldRoom` is the oracle that the tests compare it
 with. A resumed room and `readRoom` rebuild the projection with `replay`.
-The projection writes no durable checkpoint. A durable checkpoint is
-backlog work.
+The projection writes no durable checkpoint.
 
 **One measurement shows the shape.** The run below used Node 26.9 on an
 Apple silicon laptop on 2026-09-20. Each closed exchange holds a question,

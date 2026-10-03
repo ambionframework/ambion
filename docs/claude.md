@@ -383,8 +383,7 @@ An alias exists only when the seat holds a tool of that name. **An alias
 redirects the name and converts no argument.** The model sends the arguments
 of the built-in tool, such as `file_path`. The tool of the seat validates them
 against its own schema. A mismatch is a tool error that the model reads.
-`Grep` and `Glob` have no alias, because the workspace has no such tool. The
-backlog holds the work.
+`Grep` and `Glob` have no alias, because the workspace has no such tool.
 
 **`maxBudgetUsd` caps one activation.** The SDK enforces it for the query.
 A spent budget is a permanent failure.

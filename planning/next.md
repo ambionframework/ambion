@@ -22,7 +22,8 @@ else.
 
 ## Status
 
-**In progress. CP1 to CP7 are complete.** The live run of CP6 found that
+**Every item is complete. The release remains.** CS1, CC1, CX1, and W5
+merged, and so did CP1 to CP7. The live run of CP6 found that
 the guidance steers `gpt-5.6-luna` and `claude-opus-5-5` to `compose` for
 a chain, and does not steer `claude-sonnet-5`. The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
@@ -98,10 +99,10 @@ runs beside the compose phases and blocks only the release.
 
 ### Phase 1. The fixes and the simplification
 
-- [ ] **1.** A late steer on Claude keeps its answer. (CS1)
-- [ ] **2.** The Camera Chat fixes. (CC1)
+- [x] **1.** A late steer on Claude keeps its answer. (CS1)
+- [x] **2.** The Camera Chat fixes. (CC1)
 - [x] **3.** Codex on a ChatGPT sign-in. (CX1)
-- [ ] **4.** The sensor path validates once. (W5)
+- [x] **4.** The sensor path validates once. (W5)
 
 **Evidence:** the `claude` tests steer during the final answer, and the
 answer to the line commits. Each Camera Chat fix has its test or its
@@ -307,12 +308,12 @@ macro runs it by name, and the comparison counts the output tokens of free
 code against the macro. A run costs money, so it runs when a person asks
 for release evidence.
 
-**Evidence:** a live evidence file beside this one records each run: the
-model, the tools that the seat chose, the input tokens, and the outcome.
-A family with no key is marked skipped.
+**Evidence:** [the compose evidence](#the-compose-evidence) records each
+run: the model, the tools that the seat chose, the input tokens, and the
+outcome. A family with no key is marked skipped.
 
-**Result:** [the compose evidence](compose-evidence.md) holds one run on
-each of Pi, Claude, and Codex. Item 1 and item 6 passed on each kind. Item
+**Result:** [the first run](#the-first-run) holds one run on each of Pi,
+Claude, and Codex. Item 1 and item 6 passed on each kind. Item
 7 passed its read case and failed its chain case on each kind: no seat
 called `compose` for a chain. The token comparison therefore measures the
 catalog only, and the run with `compose` cost more input tokens. The macro
@@ -339,7 +340,7 @@ tools directly, so the description keeps its text.
 **Third run: the chain case and the fan-out case.** A run with
 `AMBION_THINKING` unset ran the chain case, the token comparison, and the
 fan-out case once on each kind.
-[The fan-out evidence](compose-evidence-fanout.md) holds each run. In the
+[The third run](#the-third-run) holds each run. In the
 fan-out case, the seat reads the log of each drift run, finds the peak, and
 snapshots four logs.
 
@@ -366,3 +367,82 @@ the live token comparison of CP6 as its one pending item.
 
 **Evidence:** the docs checks pass, and no page describes a surface that
 the release does not export.
+
+## The compose evidence
+
+**Each table holds the runs of
+`packages/workspace/test/live/compose.test.ts`.**
+`scripts/compose-evidence.mjs` writes the tables from the JSON lines of a
+run. The tools column lists the direct calls of the seat, and the nested
+calls follow. `×3` counts three calls in a row of one tool. Input tokens
+count the prompt, the cache read, and the cache write. The table of the
+second run is in CP6.
+
+### The first run
+
+#### pi
+
+| Model                     | Case                             | Tools                                                                                | Input tokens | Output tokens | Wall time | Outcome                                                                                |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------ | ------------ | ------------- | --------- | -------------------------------------------------------------------------------------- |
+| anthropic/claude-sonnet-5 | chain                            | sql, snapshot, say                                                                   | 43729        | 851           | -         | failed: expected [ 'sql', 'snapshot', 'say' ] to include 'compose'                     |
+| anthropic/claude-sonnet-5 | read before deciding             | sql, say                                                                             | 31723        | 193           | -         | passed (chose direct calls)                                                            |
+| anthropic/claude-sonnet-5 | parallel processes               | compose ×2, say (nested: bash ×3, wait ×3, read ×3)                                  | 40148        | 830           | 3.1 s     | passed                                                                                 |
+| anthropic/claude-sonnet-5 | token comparison with compose    | sql ×2, snapshot, say                                                                | 55016        | 934           | -         | passed                                                                                 |
+| anthropic/claude-sonnet-5 | token comparison without compose | sql ×3, snapshot, say                                                                | 45861        | 1028          | -         | passed                                                                                 |
+| anthropic/claude-sonnet-5 | macro                            | compose ×2, read, compose ×2, bash ×3, read, compose ×2, say (nested: sql, snapshot) | 154377       | 1642          | 0.0 s     | failed: expected false to be true // Object.is equality (free code: 934 output tokens) |
+
+#### claude
+
+| Model                     | Case                             | Tools                                                         | Input tokens | Output tokens | Wall time | Outcome                                                             |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------- | ------------ | ------------- | --------- | ------------------------------------------------------------------- |
+| anthropic/claude-sonnet-5 | chain                            | sql ×3, snapshot, say                                         | 59317        | 749           | -         | failed: expected [ 'sql', 'sql', 'sql', …(2) ] to include 'compose' |
+| anthropic/claude-sonnet-5 | read before deciding             | sql, say                                                      | 28409        | 195           | -         | passed (chose direct calls)                                         |
+| anthropic/claude-sonnet-5 | parallel processes               | compose ×2, wait ×2, say (nested: bash ×3, wait ×61, bash ×3) | 70070        | 1480          | 3.3 s     | passed                                                              |
+| anthropic/claude-sonnet-5 | token comparison with compose    | sql ×4, snapshot, say                                         | 60065        | 828           | -         | passed                                                              |
+| anthropic/claude-sonnet-5 | token comparison without compose | sql, snapshot, say                                            | 33964        | 627           | -         | passed                                                              |
+| anthropic/claude-sonnet-5 | macro                            | compose ×2, say (nested: sql, snapshot)                       | 40245        | 592           | 0.0 s     | passed (free code: 828 output tokens)                               |
+
+#### codex
+
+| Model        | Case                             | Tools                                               | Input tokens | Output tokens | Wall time | Outcome                                                              |
+| ------------ | -------------------------------- | --------------------------------------------------- | ------------ | ------------- | --------- | -------------------------------------------------------------------- |
+| gpt-5.6-luna | chain                            | bash, sql ×2, snapshot, say                         | 41872        | 488           | -         | failed: expected [ 'bash', 'sql', 'sql', …(2) ] to include 'compose' |
+| gpt-5.6-luna | read before deciding             | sql, say                                            | 20000        | 102           | -         | passed (chose direct calls)                                          |
+| gpt-5.6-luna | parallel processes               | compose ×2, say (nested: bash ×3, wait ×3, read ×3) | 25601        | 554           | 3.1 s     | passed                                                               |
+| gpt-5.6-luna | token comparison with compose    | sql ×2, snapshot, say                               | 34575        | 439           | -         | passed                                                               |
+| gpt-5.6-luna | token comparison without compose | sql ×2, snapshot, say                               | 23767        | 442           | -         | passed                                                               |
+| gpt-5.6-luna | macro                            | compose ×2, say (nested: sql, snapshot)             | 28202        | 367           | 0.0 s     | passed (free code: 439 output tokens)                                |
+
+### The third run
+
+The model column holds the reasoning level in parentheses.
+
+#### pi
+
+| Model                           | Case                             | Tools                                                                                               | Input tokens | Output tokens | Wall time | Outcome          |
+| ------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | ------------- | --------- | ---------------- |
+| anthropic/claude-sonnet-5 (off) | chain                            | compose ×2, say (nested: sql ×2, snapshot)                                                          | 45119        | 762           | 0.0 s     | passed           |
+| anthropic/claude-sonnet-5 (off) | token comparison with compose    | sql, snapshot, say                                                                                  | 44290        | 568           | -         | passed           |
+| anthropic/claude-sonnet-5 (off) | token comparison without compose | sql ×2, snapshot, say                                                                               | 38354        | 937           | -         | passed           |
+| anthropic/claude-sonnet-5 (off) | fan-out with compose             | bash ×3, sql ×2, compose, bash, compose, bash, snapshot, say (nested: sql, bash ×16, sql, bash ×16) | 180508       | 2495          | 0.3 s     | passed (compose) |
+| anthropic/claude-sonnet-5 (off) | fan-out without compose          | bash ×4, sql ×3, bash, snapshot, say                                                                | 105117       | 1965          | -         | passed (bash)    |
+
+#### claude
+
+| Model                               | Case                             | Tools                                                     | Input tokens | Output tokens | Wall time | Outcome                                                            |
+| ----------------------------------- | -------------------------------- | --------------------------------------------------------- | ------------ | ------------- | --------- | ------------------------------------------------------------------ |
+| anthropic/claude-sonnet-5 (default) | chain                            | sql, snapshot, say                                        | 40103        | 624           | -         | failed: expected [ 'sql', 'snapshot', 'say' ] to include 'compose' |
+| anthropic/claude-sonnet-5 (default) | token comparison with compose    | sql ×3, snapshot, say                                     | 60573        | 746           | -         | passed                                                             |
+| anthropic/claude-sonnet-5 (default) | token comparison without compose | sql ×4, snapshot, say                                     | 52116        | 825           | -         | passed                                                             |
+| anthropic/claude-sonnet-5 (default) | fan-out with compose             | bash, sql ×3, compose, read, snapshot, say (nested: bash) | 99276        | 1928          | 0.1 s     | passed (compose)                                                   |
+| anthropic/claude-sonnet-5 (default) | fan-out without compose          | bash, sql ×2, bash, sql, bash, snapshot, say              | 61823        | 1324          | -         | passed (bash)                                                      |
+
+#### codex
+
+| Model                 | Case                             | Tools                                                        | Input tokens | Output tokens | Wall time | Outcome                                                                                     |
+| --------------------- | -------------------------------- | ------------------------------------------------------------ | ------------ | ------------- | --------- | ------------------------------------------------------------------------------------------- |
+| gpt-5.6-luna (medium) | chain                            | sql, compose, say (nested: sql, snapshot)                    | 28159        | 411           | 0.0 s     | passed                                                                                      |
+| gpt-5.6-luna (medium) | token comparison with compose    | compose ×2, say (nested: sql ×2, snapshot)                   | 28497        | 481           | 0.0 s     | passed                                                                                      |
+| gpt-5.6-luna (medium) | token comparison without compose | sql ×2, snapshot, say                                        | 23771        | 450           | -         | passed                                                                                      |
+| gpt-5.6-luna (medium) | fan-out with compose             | compose, bash ×5, sql ×2, bash, snapshot, say (nested: bash) | 238616       | 1037          | 0.1 s     | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (compose) |
+| gpt-5.6-luna (medium) | fan-out without compose          | bash ×10, snapshot, say ×2                                   | 305275       | 2209          | -         | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (bash)    |
