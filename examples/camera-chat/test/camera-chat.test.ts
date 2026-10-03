@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
-import type { SensorConnectionEvent, Workspace } from '@ambionframework/workspace';
-import { sensorConformance, workspaceConformance } from '@ambionframework/workspace/conformance';
+import type { Process, ProcessEvent, Workspace } from '@ambionframework/workspace';
+import { workspaceConformance } from '@ambionframework/workspace/conformance';
 import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,7 +23,6 @@ import {
 	HEIGHT,
 	WIDTH,
 } from '../templates/camera/frame.ts';
-import { openSensor } from '../templates/camera/server.ts';
 
 it('decodes split RGB frames and preserves 720p pixels in a valid PNG', async () => {
 	const frame = demoFrame();
@@ -93,7 +92,58 @@ it('lists video inputs separately from audio', () => {
 	).toEqual([{ index: '0', name: 'FaceTime HD Camera (Built-in)' }]);
 });
 
-it('clones and launches the actual template, connects through standard tools, and drives the preview lifecycle', async () => {
+/** The answer cites the observation and the frame, and the snapshots hold their bytes. */
+async function checkEvidence(
+	host: Awaited<ReturnType<typeof openHost>>,
+	refs: readonly string[] | undefined,
+) {
+	const [observationRef, frameRef] = refs ?? [];
+	if (!observationRef || !frameRef) throw new Error('The answer cites no observation and frame.');
+	const observation = JSON.parse(
+		Buffer.from(await host.workspace.readSnapshot(observationRef)).toString(),
+	);
+	expect(observation).toMatchObject({
+		api: 2,
+		observations: [
+			{ parts: [{ kind: 'frame', file: demoFrame().digest, mediaType: 'image/png' }] },
+		],
+	});
+	const frame = Buffer.from(await host.workspace.readSnapshot(frameRef));
+	expect(frame.equals(demoFrame().png)).toBe(true);
+}
+
+type Invoke = (name: string, args: object) => unknown;
+
+/** After a cancel, `fetch` refuses the name. A new process of that name restarts the preview, and `fetch` reads it twice. */
+async function startAgain(
+	invoke: Invoke,
+	host: Awaited<ReturnType<typeof openHost>>,
+	previous: string,
+): Promise<Process> {
+	await expect(invoke('fetch', { process: 'camera', path: '/camera/observe' })).rejects.toThrow(
+		"No running process is named 'camera'",
+	);
+	const started = await invoke('bash', {
+		command: 'cd ~/camera && AMBION_SENSOR_REPOSITORY=observer/camera node main.ts --demo',
+		name: 'camera',
+		wait: 1,
+		timeout: 86400,
+	});
+	const again = (started as { details: { process: Process } }).details.process;
+	expect(again.handle).not.toBe(previous);
+	await expect.poll(() => host.preview.latest?.digest).toBe(demoFrame().digest);
+	expect(host.preview.handle).toBe(again.handle);
+	const look = await invoke('fetch', { process: 'camera', path: '/camera/observe' });
+	expect((look as { details: { status: number; handle: string } }).details).toMatchObject({
+		status: 200,
+		handle: again.handle,
+	});
+	const frame = await invoke('fetch', { process: 'camera', path: `/files/${demoFrame().digest}` });
+	expect((frame as { details: { sha256: string } }).details.sha256).toBe(demoFrame().digest);
+	return again;
+}
+
+it('clones and launches the actual template, reads it with fetch, and drives the preview lifecycle', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'camera-chat-lifecycle-'));
 	const options = { directory, model: DEFAULT_MODEL, demo: true };
 	const host = await openHost(options);
@@ -136,15 +186,12 @@ it('clones and launches the actual template, connects through standard tools, an
 				command: `cd ~/camera && git push ${directory}/git/templates/camera.git HEAD:refs/heads/x`,
 			}),
 		).rejects.toThrow('A template is read-only');
-		const reference = answer && 'refs' in answer ? answer.refs?.[0] : undefined;
-		if (!reference) throw new Error('No retained observation manifest.');
-		const manifest = JSON.parse(
-			Buffer.from(await host.workspace.readSnapshot(reference)).toString(),
+		await checkEvidence(host, answer && 'refs' in answer ? answer.refs : undefined);
+		const camera = (await host.workspace.processes.list({ running: true })).find(
+			(process) => process.name === 'camera',
 		);
-		expect(manifest).toMatchObject({
-			sensor: 'camera/camera',
-			source: { repository: 'observer/camera', dirty: false },
-		});
+		if (!camera) throw new Error('No running camera process.');
+		expect(camera.port).toBeGreaterThan(0);
 		await expect.poll(() => host.preview.latest?.digest).toBe(demoFrame().digest);
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(true);
@@ -177,25 +224,20 @@ it('clones and launches the actual template, connects through standard tools, an
 		await expect.poll(() => modal?.visible).toBe(false);
 		await setup.renderOnce();
 		expect(chat?.width).toBe(fullWidth);
-		expect(host.preview.sensor).toBe('camera/camera');
+		expect(host.preview.handle).toBe(camera.handle);
 		setup.mockInput.pressKey('p', { ctrl: true });
 		await expect.poll(() => modal?.visible).toBe(true);
-		const link = (await host.workspace.sensors?.list())?.[0];
-		if (!link) throw new Error('No registered camera.');
-		await invoke('disconnect', { name: 'camera' });
+		await invoke('cancel', { handle: camera.handle });
+		await expect.poll(() => host.preview.handle).toBeUndefined();
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
 		expect(host.preview.latest).toBeUndefined();
 		expect(setup.renderer.root.findDescendantById(inlineId)).toBeDefined();
 		expect(
-			(await host.workspace.processes.list()).find((process) => process.handle === link.process)
+			(await host.workspace.processes.list()).find((process) => process.handle === camera.handle)
 				?.state,
-		).toBe('running');
-		await expect(invoke('observe', { sensor: 'camera/camera' })).rejects.toThrow(
-			'unknown or unavailable',
-		);
-		await invoke('connect', { name: 'camera', process: link.process, port: link.port });
-		await expect.poll(() => host.preview.latest?.digest).toBe(demoFrame().digest);
+		).toBe('exited');
+		const again = await startAgain(invoke, host, camera.handle);
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(true);
 		setup.resize(80, 25);
@@ -206,8 +248,8 @@ it('clones and launches the actual template, connects through standard tools, an
 			.toBe(modal?.width);
 		expect(setup.renderer.root.findDescendantById(inlineId)?.height).toBe(modal?.height);
 		expect((chat?.x ?? 0) + (chat?.width ?? 0)).toBeLessThan(modal?.x ?? 0);
-		await host.workspace.processes.cancel(link.process);
-		await expect.poll(() => host.preview.sensor).toBeUndefined();
+		await host.workspace.processes.cancel(again.handle);
+		await expect.poll(() => host.preview.handle).toBeUndefined();
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
 	} finally {
@@ -219,7 +261,7 @@ it('clones and launches the actual template, connects through standard tools, an
 	}
 	const reopened = await openHost(options);
 	try {
-		expect(reopened.preview.sensor).toBeUndefined();
+		expect(reopened.preview.handle).toBeUndefined();
 		expect(
 			(await reopened.room.read()).messages.some(
 				(message) => message.kind === 'said' && message.from === 'observer',
@@ -231,53 +273,57 @@ it('clones and launches the actual template, connects through standard tools, an
 	}
 }, 30000);
 
-it('keeps the frame on a refreshed link and downloads a frame once for one digest', async () => {
-	const listeners: ((event: SensorConnectionEvent) => void)[] = [];
-	let downloads = 0;
-	const client = {
-		observe: async () => ({
-			observations: [
-				{ at: new Date().toISOString(), parts: [{ kind: 'frame', file: 'digest-a' }] },
-			],
-		}),
-		file: async () => {
-			downloads++;
-			return { bytes: new Uint8Array([1]) };
-		},
-	};
+it('follows the camera process, adopts one that runs at open, and downloads a frame once for one digest', async () => {
+	const listeners: ((event: ProcessEvent) => void)[] = [];
+	const digest = 'a'.repeat(64);
+	const fetched: string[] = [];
+	let failing = false;
+	const process = (handle: string, name?: string) =>
+		({ handle, ...(name ? { name } : {}), state: 'running' }) as Process;
 	const workspace = {
-		sensors: {
-			subscribe: (listener: (event: SensorConnectionEvent) => void) => {
+		processes: {
+			subscribe: (listener: (event: ProcessEvent) => void) => {
 				listeners.push(listener);
 				return () => {};
 			},
-			get: async () => ({ available: true, client }),
+			list: async () => [process('bash-other', 'build'), process('bash-adopted', 'camera')],
+		},
+		fetch: async (handle: string, path: string) => {
+			fetched.push(`${handle} ${path}`);
+			if (failing) return new Response('no', { status: 503 });
+			return path.startsWith('/files/')
+				? new Response(new Uint8Array([1]))
+				: Response.json({
+						observations: [
+							{ at: new Date().toISOString(), parts: [{ kind: 'frame', file: digest }] },
+						],
+					});
 		},
 	} as unknown as Workspace;
 	const preview = cameraPreview(workspace, () => {});
-	const link = (type: SensorConnectionEvent['type']) =>
-		listeners[0]?.({
-			type,
-			connection: {
-				name: 'camera',
-				hostname: 'host',
-				port: 1,
-				process: 'p',
-				state: 'connected',
-				sensors: [{ name: 'camera', description: 'Camera.', spans: false }],
-			},
-		});
+	const emit = (type: ProcessEvent['type'], handle: string, name?: string) =>
+		listeners[0]?.({ type, process: process(handle, name) });
 	try {
-		link('connected');
-		await expect.poll(() => preview.latest?.digest).toBe('digest-a');
-		await expect.poll(() => downloads).toBe(1);
+		await expect.poll(() => preview.handle).toBe('bash-adopted');
+		await expect.poll(() => preview.latest?.digest).toBe(digest);
 		await new Promise((resolve) => setTimeout(resolve, 700));
-		expect(downloads).toBe(1);
-		link('refreshed');
-		expect(preview.sensor).toBe('camera/camera');
-		expect(preview.latest?.digest).toBe('digest-a');
-		await new Promise((resolve) => setTimeout(resolve, 500));
-		expect(downloads).toBe(1);
+		expect(fetched.filter((call) => call.includes('/files/'))).toEqual([
+			`bash-adopted /files/${digest}`,
+		]);
+		expect(fetched).toContain('bash-adopted /camera/observe');
+		emit('started', 'bash-build', 'build');
+		emit('ended', 'bash-build', 'build');
+		expect(preview.handle).toBe('bash-adopted');
+		failing = true;
+		await expect.poll(() => preview.failure).toBe('Camera starting');
+		expect(preview.latest?.digest).toBe(digest);
+		emit('ended', 'bash-adopted', 'camera');
+		expect(preview.handle).toBeUndefined();
+		expect(preview.latest).toBeUndefined();
+		failing = false;
+		emit('started', 'bash-next', 'camera');
+		expect(preview.handle).toBe('bash-next');
+		await expect.poll(() => preview.latest?.digest).toBe(digest);
 	} finally {
 		preview.close();
 	}
@@ -323,55 +369,6 @@ it('requires pixel dimensions for Sixel without a block fallback', async () => {
 		capabilities.mockRestore();
 		setup.renderer.destroy();
 	}
-});
-
-it('passes the standard sensor conformance cases with the standalone camera server', async () => {
-	const frame = demoFrame();
-	const source = { repository: 'observer/camera', commit: 'a'.repeat(40), dirty: false };
-	const cases = sensorConformance(
-		{
-			name: 'camera-template',
-			async open() {
-				const server = await openSensor(source);
-				server.receive(frame);
-				return {
-					async request(method, path, body) {
-						const reply = await fetch(`http://127.0.0.1:${server.port}${path}`, {
-							method,
-							...(body === undefined ? {} : { body: JSON.stringify(body) }),
-						});
-						const contentType = reply.headers.get('content-type');
-						return {
-							status: reply.status,
-							contentType,
-							...(contentType === 'image/png'
-								? { bytes: new Uint8Array(await reply.arrayBuffer()) }
-								: { body: await reply.json() }),
-						};
-					},
-					dispose: server.close,
-				};
-			},
-		},
-		{
-			span: { from: '2026-09-29T00:00:00.000Z', to: '2026-09-30T00:00:00.000Z' },
-			sensors: [
-				{
-					name: 'camera',
-					spans: false,
-					latest: [
-						{
-							at: frame.at,
-							parts: [{ kind: 'frame', file: frame.digest, mediaType: 'image/png' }],
-						},
-					],
-					withinSpan: [],
-				},
-			],
-			files: [{ digest: frame.digest, bytes: frame.png }],
-		},
-	);
-	for (const item of cases) await item.run();
 });
 
 describe('local bash backend', () => {

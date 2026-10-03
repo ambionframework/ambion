@@ -1,13 +1,13 @@
-import type {
-	RegisteredSensorConnection,
-	SensorConnectionEvent,
-	Workspace,
-} from '@ambionframework/workspace';
+import type { Process, ProcessEvent, Workspace } from '@ambionframework/workspace';
 
 /** The preview reads a frame at this interval. */
 const FRAME_MS = 200;
-/** The preview rechecks the owning process at this interval. Link events end it sooner. */
-const RECHECK_MS = 2000;
+/** One read of the camera may take this long. */
+const READ_MS = 2000;
+/** The name of the process that the preview follows. */
+const CAMERA = 'camera';
+/** The text of the status line while a read fails. */
+const STARTING = 'Camera starting';
 
 export interface PreviewFrame {
 	at: string;
@@ -15,107 +15,109 @@ export interface PreviewFrame {
 	png: Uint8Array;
 }
 
-/** Read preview frames through the standard registry and sensor HTTP client. */
+/** The part of an observation that the preview reads. */
+interface Observation {
+	readonly observations?: readonly {
+		readonly at: string;
+		readonly parts: readonly { readonly kind: string; readonly file?: string }[];
+	}[];
+}
+
+/** Read GET `path` of the process `handle`, and fail on any answer but 2xx. */
+async function read(workspace: Workspace, handle: string, path: string, signal: AbortSignal) {
+	if (!workspace.fetch) throw new Error('The workspace cannot read a process.');
+	const response = await workspace.fetch(handle, path, { signal });
+	if (!response.ok) throw new Error(`The camera answered ${response.status} for ${path}.`);
+	return response;
+}
+
+/** The latest frame of the camera `handle`. The frame of `previous` is kept when its digest is current. */
+async function readFrame(
+	workspace: Workspace,
+	handle: string,
+	previous: PreviewFrame | undefined,
+	signal: AbortSignal,
+): Promise<PreviewFrame> {
+	const body = (await (
+		await read(workspace, handle, '/camera/observe', signal)
+	).json()) as Observation;
+	const sample = body.observations?.at(-1);
+	const file = sample?.parts.find((part) => part.kind === 'frame')?.file;
+	if (!sample || !file || !/^[0-9a-f]{64}$/.test(file))
+		throw new Error('The camera returned no image.');
+	if (file === previous?.digest) return { ...previous, at: sample.at };
+	const bytes = await (await read(workspace, handle, `/files/${file}`, signal)).arrayBuffer();
+	return { at: sample.at, digest: file, png: new Uint8Array(bytes) };
+}
+
+/**
+ * Show the frames of the process named `camera`. The preview follows the
+ * process events of the workspace: a `started` event of that name starts a
+ * timer that reads the camera with `workspace.fetch`, with no retention,
+ * and its `ended` event stops the timer and clears the frame.
+ */
 export function cameraPreview(workspace: Workspace, changed: () => void) {
-	let sensor: string | undefined;
-	let connection: RegisteredSensorConnection | undefined;
-	let checked = 0;
+	let handle: string | undefined;
+	let timer: ReturnType<typeof setInterval> | undefined;
 	let latest: PreviewFrame | undefined;
 	let failure: string | undefined;
 	let controller = new AbortController();
 	let reading = false;
 	let stopped = false;
 	let revision = 0;
-	const detach = () => {
+	const stop = () => {
+		clearInterval(timer);
+		timer = undefined;
 		controller.abort();
 		controller = new AbortController();
-		sensor = undefined;
-		connection = undefined;
-		checked = 0;
+		handle = undefined;
 		latest = undefined;
 		failure = undefined;
 		changed();
 	};
-	const restart = () => {
-		controller.abort();
-		controller = new AbortController();
-		connection = undefined;
-		checked = 0;
-		failure = undefined;
-	};
-	const attach = (event: SensorConnectionEvent) => {
-		if (!event.connection.sensors.some((item) => item.name === 'camera')) return;
-		const next = `${event.connection.name}/camera`;
-		// A reconnect of the same sensor keeps the frame on screen.
-		if (event.type === 'refreshed' && sensor === next) restart();
-		else detach();
-		sensor = next;
+	async function poll() {
+		if (stopped || reading || !handle) return;
+		reading = true;
+		const { signal } = controller;
+		const frame = await readFrame(
+			workspace,
+			handle,
+			latest,
+			AbortSignal.any([signal, AbortSignal.timeout(READ_MS)]),
+		).catch(() => undefined);
+		reading = false;
+		if (signal.aborted || stopped) return;
+		if (frame) latest = frame;
+		failure = frame ? undefined : STARTING;
+		changed();
+	}
+	const follow = (process: Process) => {
+		if (stopped || handle === process.handle) return;
+		if (handle) stop();
+		handle = process.handle;
 		revision++;
+		timer = setInterval(() => void poll(), FRAME_MS);
 		changed();
 		void poll();
 	};
-	const linked = (event: SensorConnectionEvent) => {
-		if (event.type === 'connected' || event.type === 'refreshed') attach(event);
-		else if (sensor?.startsWith(`${event.connection.name}/`)) detach();
-	};
-	async function resolveLink(name: string, signal: AbortSignal) {
-		if (connection?.available && Date.now() - checked < RECHECK_MS) return connection;
-		const link = await workspace.sensors?.get(name, signal);
-		signal.throwIfAborted();
-		connection = link;
-		checked = Date.now();
-		return link;
-	}
-	async function fetchFrame(name: string, signal: AbortSignal) {
-		const previous = latest;
-		const link = await resolveLink(name, signal);
-		if (!link) return undefined;
-		const observation = await link.client.observe(
-			name.slice(name.indexOf('/') + 1),
-			{ api: 1 },
-			signal,
-		);
-		const sample = observation.observations.at(-1);
-		const part = sample?.parts.find((part) => part.kind === 'frame');
-		if (!sample || !part || part.kind !== 'frame') throw new Error('The camera returned no image.');
-		if (part.file === previous?.digest) return { ...previous, at: sample.at };
-		const file = await link.client.file(part.file, signal);
-		return { at: sample.at, digest: part.file, png: file.bytes };
-	}
-	function accept(frame: PreviewFrame | undefined, signal: AbortSignal) {
-		if (signal.aborted || stopped) return;
-		if (!frame) return detach();
-		latest = frame;
-		failure = undefined;
-		changed();
-	}
-	function report(error: unknown, signal: AbortSignal) {
-		if (signal.aborted || stopped) return;
-		failure = error instanceof Error ? error.message : String(error);
-		changed();
-	}
-	async function poll() {
-		if (stopped || reading || !sensor) return;
-		reading = true;
-		const name = sensor;
-		const signal = controller.signal;
-		try {
-			accept(await fetchFrame(name, AbortSignal.any([signal, AbortSignal.timeout(2000)])), signal);
-		} catch (error) {
-			report(error, signal);
-		} finally {
-			reading = false;
-		}
-	}
-
-	const unwatch = workspace.sensors?.subscribe(linked);
-	const timer = setInterval(() => void poll(), FRAME_MS);
+	const unwatch = workspace.processes.subscribe((event: ProcessEvent) => {
+		if (event.type === 'started' && event.process.name === CAMERA) follow(event.process);
+		else if (event.type === 'ended' && event.process.handle === handle) stop();
+	});
+	// A camera that started before the host opened is adopted: one list finds it.
+	void workspace.processes.list({ running: true }).then(
+		(running) => {
+			const found = running.find((process) => process.name === CAMERA);
+			if (found) follow(found);
+		},
+		() => {},
+	);
 	return {
 		get revision() {
 			return revision;
 		},
-		get sensor() {
-			return sensor;
+		get handle() {
+			return handle;
 		},
 		get latest() {
 			return latest;
@@ -126,7 +128,7 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		close() {
 			stopped = true;
 			clearInterval(timer);
-			unwatch?.();
+			unwatch();
 			controller.abort();
 		},
 	};
