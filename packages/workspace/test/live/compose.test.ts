@@ -301,9 +301,9 @@ const firstLine = (error: unknown) =>
 interface Evidence {
 	readonly record: (label: string, run: Run, note?: string) => void;
 	/**
-	 * Check the run of the seat that has this label. The check is synchronous. A failed check does not
-	 * stop the case, so the case checks every seat. The case fails at the end
-	 * with one error that names each failed seat.
+	 * Check the run of the seat that has this label. The check is synchronous.
+	 * A failed check does not stop the case, so the case checks every seat.
+	 * The case fails at the end with one error that names each failed seat.
 	 */
 	readonly verify: (label: string, check: () => void) => void;
 }
