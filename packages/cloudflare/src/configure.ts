@@ -69,7 +69,7 @@ export function configure(options: ConfigureOptions): void {
 	for (const agent of agents) {
 		if (names.has(agent.name)) throw new Error(`Worker definitions repeat agent '${agent.name}'.`);
 		names.add(agent.name);
-		// workerd loads WebAssembly only from the bundle, so no runtime runs a compose call there.
+		// workerd loads WebAssembly only from the bundle, so no compose runtime runs a compose call there.
 		if (agent.executor.tools.some((tool) => tool.name === 'compose'))
 			throw new Error(`Worker agent '${agent.name}' has a compose tool. Pass compose: false.`);
 	}

@@ -895,7 +895,7 @@ const analyst = defineAgent({
 });
 ```
 
-**The kernel imports no runtime.** An executor package imports the
+**The kernel imports no compose runtime.** An executor package imports the
 default one from `@ambionframework/compose/runtime`, and `describeExecutor`
 alone adds no tool for an absent option. A definition already holds the
 `invoke` function of each tool, so it can hold a runtime. No journal
@@ -944,7 +944,7 @@ every other file read, so a relative import fails with
 entry, and the entry imports only `node:` built-ins.
 `packages/claude/tsdown.config.ts` builds two entries in the same way.
 
-**Cloudflare has no runtime in the first version.** A worker cannot
+**Cloudflare has no compose runtime in the first version.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
 import of `quickjsRuntime` works in workerd, and an evaluation fails
 there. `configure` of `@ambionframework/cloudflare` refuses an agent with a

@@ -8,7 +8,7 @@
  *
  * `executorConformance` is the second suite. It lives in
  * `conformance-executor.ts` and is exported here. `composeRuntimeConformance` is
- * the third suite. It checks an `ComposeRuntime` of the `compose` tool, and it
+ * the third suite. It checks a `ComposeRuntime` of the `compose` tool, and it
  * lives in `conformance-compose.ts`.
  *
  * A case is a name and a `run` that throws on failure. The suite needs no

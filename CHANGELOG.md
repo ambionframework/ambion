@@ -9,7 +9,7 @@ tool. A host passes its own `compose` object to choose `processRuntime()`, an
 approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
 input tokens when a seat does not use it, so a seat that never chains tools
 can set `compose: false`. The Cloudflare `configure` refuses an agent with a
-`compose` tool, because workerd has no runtime yet.
+`compose` tool, because workerd has no compose runtime yet.
 
 **`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
 the runtime of its `compose` tool in the `runtime` field. The exports change
