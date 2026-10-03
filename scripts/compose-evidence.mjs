@@ -23,7 +23,7 @@ const toolsOf = (line) => {
 
 const row = (line) =>
 	`| ${[
-		line.model,
+		line.thinking ? `${line.model} (${line.thinking})` : line.model,
 		line.case,
 		toolsOf(line),
 		line.inputTokens,
@@ -59,6 +59,7 @@ export function evidenceOf(text) {
 		'# Compose live evidence',
 		'',
 		'Each table holds the runs of `packages/workspace/test/live/compose.test.ts`.',
+		'The model column holds the reasoning level in parentheses.',
 		'The tools column lists the direct calls of the seat. Nested calls follow.',
 		'Input tokens count the prompt, the cache read, and the cache write.',
 		'',

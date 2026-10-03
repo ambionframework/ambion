@@ -321,8 +321,10 @@ job per harness. The `pi` and `claude` jobs read `ANTHROPIC_API_KEY` and use
 `AMBION_MODEL` (the default is `anthropic/claude-sonnet-5`). The `codex` job
 reads `CODEX_API_KEY`. The `packages` job runs the live tier of every other
 package, with a limit of 90 minutes. It sets `AMBION_THINKING` and
-`JUDGE_THINKING` to `medium`. `AMBION_THINKING` sets the Pi executor's
-reasoning in the Ambion, workspace, assistant, and simulator live suites. `JUDGE_THINKING`
+`JUDGE_THINKING` to `medium`. `AMBION_THINKING` sets the reasoning level of
+each executor kind in the Ambion, workspace, assistant, and simulator live
+suites. Codex uses `medium` when it is unset. Claude accepts an effort level
+and ignores any other value. `JUDGE_THINKING`
 sets reasoning for assistant and simulator judges. If either variable is
 unset, each consumer uses its own default. With an
 `OPENAI_API_KEY` secret, it sets `JUDGE_MODEL` to `openai/gpt-5.6-luna`, so

@@ -3,7 +3,7 @@
  * imports this file, so it names no test runner.
  */
 import { claude, claudeExecution } from '../../../../claude/src/index.ts';
-import { codex, codexExecution } from '../../../../codex/src/index.ts';
+import { type CodexOptions, codex, codexExecution } from '../../../../codex/src/index.ts';
 import { type PiOptions, pi, piExecution } from '../../../../pi/src/index.ts';
 
 /** The executor kinds a live seat can run on. */
@@ -55,23 +55,41 @@ export const KEY_VAR =
 			? 'CODEX_API_KEY'
 			: `${MODEL.slice(0, MODEL.indexOf('/')).toUpperCase().replace(/-/g, '_')}_API_KEY`;
 
+/** The reasoning level that `AMBION_THINKING` sets for every executor kind. */
+const THINKING = process.env.AMBION_THINKING || undefined;
+
+/** The reasoning level of a live run for a report: the variable, or the default of the kind. */
+export const LIVE_THINKING: string =
+	THINKING ?? (LIVE_KIND === 'codex' ? 'medium' : LIVE_KIND === 'pi' ? 'off' : 'default');
+
+const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+type ClaudeEffort = (typeof CLAUDE_EFFORTS)[number];
+
+/** The Claude effort of the variable. A value that is no effort level gives nothing. */
+function claudeEffort(): { effort?: ClaudeEffort } {
+	const effort = CLAUDE_EFFORTS.find((level) => level === THINKING);
+	return effort === undefined ? {} : { effort };
+}
+
+const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+/** The Codex effort of the variable. A value that Codex does not take gives `medium`. */
+function codexEffort(): { modelReasoningEffort: CodexOptions['modelReasoningEffort'] } {
+	return { modelReasoningEffort: CODEX_EFFORTS.find((level) => level === THINKING) ?? 'medium' };
+}
+
+function piThinking(): Pick<PiOptions, 'thinking'> {
+	return THINKING === undefined ? {} : { thinking: THINKING as PiOptions['thinking'] };
+}
+
 /** The executor of one live seat on the executor kind of the run. */
 export function executorFor(options: Omit<PiOptions, 'model'> & { model?: string }) {
 	const { model, ...rest } = options;
-	if (LIVE_KIND === 'claude') return claude({ model: claudeModel(model ?? MODEL), ...rest });
-	if (LIVE_KIND === 'codex') {
-		return codex({
-			model: CODEX_MODEL,
-			modelReasoningEffort: 'medium',
-			...rest,
-		});
+	if (LIVE_KIND === 'claude') {
+		return claude({ model: claudeModel(model ?? MODEL), ...claudeEffort(), ...rest });
 	}
-	const thinking = rest.thinking ?? process.env.AMBION_THINKING;
-	return pi({
-		model: model ?? MODEL,
-		...rest,
-		...(thinking === undefined ? {} : { thinking: thinking as PiOptions['thinking'] }),
-	});
+	if (LIVE_KIND === 'codex') return codex({ model: CODEX_MODEL, ...codexEffort(), ...rest });
+	return pi({ model: model ?? MODEL, ...piThinking(), ...rest });
 }
 
 /** The execution services of the executor kind of the run. */
