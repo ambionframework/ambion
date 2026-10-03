@@ -2,7 +2,10 @@
  * The `compose` tool: one definition tool that joins the other tools of a
  * seat into one call. It checks `uses`, asks the approval, runs the code
  * (`compose-run.ts`), and renders the result and the error for the model
- * (`docs/compose.md`). `describeExecutor` appends the tool.
+ * (`docs/compose.md`). Its description lists the bindable tools and the type
+ * of each result. The `describe` tool is the counterpart: it renders the
+ * signatures and the types of the tools that a call names, and runs nothing.
+ * `describeExecutor` appends both tools.
  *
  * The tool needs the step sink of the activation, and no tool may hold a
  * sink. The core hands it over through `invokeTool`: a private table maps
@@ -34,7 +37,8 @@ import {
 	mismatchOf,
 	plainJson,
 } from './compose.ts';
-import { bindable, renderCatalog } from './compose-catalog.ts';
+import { bindable } from './compose-catalog.ts';
+import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
 import { macroGuidance } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
 import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
@@ -162,14 +166,25 @@ function resultLines(calls: readonly LedgerEntry[], shown: Shown): ReadonlyMap<s
 	return lines;
 }
 
-function failureText(result: ComposeResult, notes: readonly string[] = [], shown?: Shown): string {
+/** What a failed result renders besides the error: the completed calls, the room notes, and the signatures. */
+interface Failed {
+	readonly notes?: readonly string[];
+	readonly shown?: Shown;
+	readonly named?: readonly AmbionTool[];
+}
+
+function failureText(
+	result: ComposeResult,
+	{ notes = [], shown, named = [] }: Failed = {},
+): string {
 	const error = result.error;
 	const at = error?.call === undefined ? '' : ` at call ${error.call}`;
 	const head =
 		result.status === 'cancelled'
 			? `The compose call was cancelled${at}: ${error?.message}`
 			: `The compose call failed${at}: ${error?.message}`;
-	if (result.calls.length === 0) return `${head}\nNo call started.`;
+	if (result.calls.length === 0)
+		return [head, 'No call started.', ...signatureText(named)].join('\n');
 	const results =
 		shown === undefined ? new Map<string, string>() : resultLines(result.calls, shown);
 	const lines = result.calls.flatMap((call) => {
@@ -186,6 +201,7 @@ function failureText(result: ComposeResult, notes: readonly string[] = [], shown
 		...lines,
 		...pending,
 		...recordText(notes),
+		...signatureText(named),
 	].join('\n');
 }
 
@@ -211,11 +227,13 @@ function rendered(
 	outcome: ComposeOutcome,
 	notes: readonly string[],
 	limits: ComposeLimits,
+	catalog: ReadonlyMap<string, AmbionTool>,
 ): ToolResult<ComposeResult> {
 	const { result } = outcome;
 	if (result.status !== 'completed') {
 		const shown = { values: outcome.values, bytes: limits.bytes };
-		throw new ComposeFailure(failureText(result, notes, shown), result);
+		const named = namedTools(result, catalog);
+		throw new ComposeFailure(failureText(result, { notes, shown, named }), result);
 	}
 	return { content: [{ type: 'text', text: completedText(outcome, notes) }], details: result };
 }
@@ -445,15 +463,16 @@ function requestOf(program: Program): ComposeRequest {
 }
 
 /**
- * The `compose` tool over the tools of one definition. It binds each tool that
- * does not set `compose: false`. The catalog is built once, here.
+ * The `compose` tool and the `describe` tool over the tools of one
+ * definition. They bind each tool that does not set `compose: false`. The
+ * catalog is built once, here.
  */
-export function composeTool(
+export function composeTools(
 	options: ComposeOptions,
 	tools: readonly AmbionTool[],
 	macros: readonly ComposeMacro[] = [],
 	room: readonly RoomSpec[] = [],
-): AmbionTool {
+): readonly [compose: AmbionTool, describe: AmbionTool] {
 	const held = new Map(macros.map((macro) => [macro.name, macro]));
 	const entries = room.map((spec) => roomEntry(spec));
 	for (const entry of entries) ROOM_ENTRIES.add(entry);
@@ -484,19 +503,17 @@ export function composeTool(
 		const outcome = await run.run();
 		// The activation counts a nested result as read only when this result shows it.
 		calls?.find((one) => one.reported !== undefined)?.reported?.(ctx.callId, notes.calls);
-		return rendered(outcome, notes.lines, limits);
+		return rendered(outcome, notes.lines, limits, catalog);
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,
-		description: [DESCRIPTION, limitsText(limits), renderCatalog([...catalog.values()])].join(
-			'\n\n',
-		),
+		description: [DESCRIPTION, limitsText(limits), bindingsText(catalog)].join('\n\n'),
 		parameters: ARGUMENTS,
 		label: COMPOSE_TOOL_NAME,
 		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined, undefined),
 	});
 	ENTRIES.set(tool.invoke, entry);
-	return tool;
+	return [tool, describeTool(catalog)];
 }
 
 /**

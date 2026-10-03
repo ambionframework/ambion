@@ -1,9 +1,9 @@
 # Compose
 
 **Status: the current contract of 0.6.0.** Every Pi, Claude, and Codex seat
-has the `compose` tool with `quickjsEvaluator()` by default, and
-`compose: false` removes it. The main entry exports the types of the option
-and `COMPOSE_GUIDANCE`.
+has the `compose` tool and the `describe` tool, with `quickjsEvaluator()` by
+default. A seat cannot turn them off. The main entry exports the types of the
+option and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
 `@ambionframework/compose/runtime` holds `quickjsEvaluator` and `processEvaluator`,
 and both pass `evaluatorConformance`. The live run of CP6 is in
@@ -20,9 +20,10 @@ exploration calls.
 `compose` with the tools that it uses and short code. The code passes the
 result of one tool into the next, and returns one value to the model. The
 data between the calls stays out of the context of the model. The live runs
-measured no token saving for free code. The catalog and the exploration
+measured no token saving for free code. The full catalog and the exploration
 calls of the seat cost more input tokens than the data that the call kept
-out of the context ([Catalog](#the-catalog)).
+out of the context. The description of `compose` now holds a compact list,
+and `describe` gives the signatures on demand ([Catalog](#the-catalog)).
 
 **Code with no tools calculates and transforms data.** `compose` runs on a
 general JavaScript runtime. A call with `uses: []` binds no tool. It
@@ -67,15 +68,15 @@ return.
 The journal already uses `composition` for the entry that holds the
 roster. This page never uses that word.
 
-| Term         | Meaning                                                                         |
-| ------------ | ------------------------------------------------------------------------------- |
-| compose call | One call of the `compose` tool, and the run of the code that it carries.        |
-| nested call  | One call of a tool that the code of a compose call makes.                       |
-| binding      | One tool as an asynchronous function inside the code: `tools.<name>`.           |
-| catalog      | The signatures of the tools that a seat can bind, in the `compose` description. |
-| macro        | A compose program that a skill stores. A compose call runs it by name.          |
-| evaluator    | The pluggable backend that evaluates the code. It holds no tool.                |
-| ledger       | The nested calls of one compose call, in order, with the outcome of each.       |
+| Term         | Meaning                                                                             |
+| ------------ | ----------------------------------------------------------------------------------- |
+| compose call | One call of the `compose` tool, and the run of the code that it carries.            |
+| nested call  | One call of a tool that the code of a compose call makes.                           |
+| binding      | One tool as an asynchronous function inside the code: `tools.<name>`.               |
+| catalog      | The signatures of the tools that a seat can bind. The `describe` tool renders them. |
+| macro        | A compose program that a skill stores. A compose call runs it by name.              |
+| evaluator    | The pluggable backend that evaluates the code. It holds no tool.                    |
+| ledger       | The nested calls of one compose call, in order, with the outcome of each.           |
 
 ## The compose tool
 
@@ -168,7 +169,8 @@ interface LedgerEntry {
 ```
 
 **A failed or cancelled compose call throws.** Its message renders the error
-and the ledger. Every executor kind turns a thrown error into an error result
+and the ledger, and the signatures of the tools that the failure names
+([Catalog](#the-catalog)). Every executor kind turns a thrown error into an error result
 with that message. The model then knows which calls completed. It knows which
 effects can stand. The error is a `ComposeFailure`, an internal class of the
 core that the main entry does not export. Its `details` hold the
@@ -210,9 +212,9 @@ Claude and Codex, the model and the trace read the rendered content.
 **This section gathers what `compose` cannot do.** Each point links to the
 section that states it in full.
 
-- **Some tools never bind.** `compose` does not bind itself, and a tool
-  with `compose: false` does not bind. A summary activation has no
-  `compose` tool ([What a compose call binds](#what-a-compose-call-binds)).
+- **Some tools never bind.** `compose` and `describe` do not bind
+  themselves, and a tool with `compose: false` does not bind. A summary activation has no
+  `compose` or `describe` tool ([What a compose call binds](#what-a-compose-call-binds)).
 - **A room tool binds only in an activation.** A direct `invoke` of the
   `compose` tool refuses a call that uses a room tool
   ([What a compose call binds](#what-a-compose-call-binds)).
@@ -243,19 +245,85 @@ section that states it in full.
 - **A harness hook does not see a nested call.** Only the `approve` hook
   of the `compose` option sees the compose call ([Approval](#approval)).
 - **Free code saved no tokens in the live runs.** The runs held a chain
-  task and a fan-out task. The catalog and the exploration calls cost more
-  input tokens than the data that the code kept out of the context. A
+  task and a fan-out task. The full catalog and the exploration calls cost
+  more input tokens than the data that the code kept out of the context. A
   macro runs by name with no code and no exploration, so it is the main
   use ([Compose evidence](../planning/next.md#the-compose-evidence),
   [Catalog](#the-catalog)).
+- **The description of `compose` shows no signature.** It lists each tool
+  with the name of its result type. The model calls `describe` for the
+  signatures, and a failed compose call shows the signature of the tools
+  that it names ([Catalog](#the-catalog)).
+- **A compose call fails in workerd until an evaluator for workerd
+  exists.** A worker seat has both tools
+  ([The evaluator](#the-evaluator)).
 
 ## The catalog
 
-**The `compose` tool describes its bindings as TypeScript.** The core
-renders one signature for each tool that the seat can bind. It reads the
-input schema, the description, and the declared output of the tool. The
-catalog is part of the description of `compose`, so the model reads it
-once for each activation. The example below shortens the descriptions.
+**The description of `compose` lists the bindings by name and result type.**
+It holds no signature. The core builds one line for each tool that a seat can
+bind, in the order of the tools, with the room tools last:
+
+```text
+Tools that code can bind, each with the type of its result (string is text): read -> ReadResult, write -> string, sql -> SqlResult, say -> string.
+Call describe with the names of tools for their signatures and types before you write code that reads fields of a result.
+```
+
+| The tool declares       | The line shows                                          |
+| ----------------------- | ------------------------------------------------------- |
+| An output with an `$id` | The `$id`, such as `sql -> SqlResult`.                  |
+| An output with no `$id` | `object`, `array`, or the primitive type of the output. |
+| No output               | `string`. The binding gives the text.                   |
+
+**`describe` renders the signatures on demand.** It is a counterpart of
+`compose` on every seat that has `compose`. It takes `tools`, a non-empty
+list of bindable tool names, the room tools `say`, `schedule`, `recall`,
+`seat`, `unseat`, and `dismiss` included. It returns the TypeScript
+signature of each named tool, in the order named, and the named types before
+them. It runs no tool and has no effect. Its own description tells the model
+to call it before code that reads the fields of a result.
+
+```ts
+interface DescribeArguments {
+  /** The names of the tools to describe, such as ["sql", "snapshot"]. */
+  readonly tools: readonly string[];
+}
+```
+
+**`describe` refuses a name that code cannot bind.** An unknown name, a tool
+with `compose: false`, `compose`, and `describe` each fail the call. The
+error names the refused tools and lists the bindable names. The result of a
+refusal is an ordinary tool error, so the model corrects the list and calls
+again.
+
+**`describe` is fixed when the agent is defined.** The kernel builds it with
+`compose` from the same catalog, so the tool list of a seat is the same in
+every activation. The kernel reserves the name `describe` as it reserves
+`compose`. A definition that brings a tool of that name fails with
+`invalid_tool`. `describe` is not bindable: a compose call cannot call it.
+
+**A failed compose call appends the signatures that it needs.** A wrong
+guess surfaces where a compose call fails, so the failure text ends with the
+signature of the tool that the failure names. Two tools can appear: the tool
+of the nested call that failed, and the tool that the code read as
+`tools.<name>` while `uses` left it out. A name that the seat does not have
+adds no signature. A failure with no named tool adds none.
+
+```text
+The compose call failed at call c1.2: The archive is closed.
+Calls, in the order that the code made them:
+- c1.1 echo: completed
+  result: "a"
+- c1.2 broken: failed
+Signatures of the tools that the failure names:
+declare const tools: {
+  /** Always fails. */
+  broken(args: {}): Promise<string>;
+};
+```
+
+The example of the typed catalog follows. `describe` returns this form for
+the tools that a call names. The example shortens the descriptions.
 
 ```ts
 /** One order. */
@@ -299,40 +367,27 @@ the check of the schema needs no context. The renderer never throws, because
 it must not stop `defineAgent`. A schema with an `$id` that is no TypeScript
 identifier renders inline. When a different schema arrives under an `$id`
 that is taken, it renders inline, and the first schema keeps the name. The
-process and workspace tools use this for `Process`, `ProcessResult`,
-`Truncation`, and `SensorSource`, which several tools share.
+process and workspace tools use this for the type of each declared output,
+such as `SqlResult` and `ProcessResult`, and for `Process`, `Truncation`,
+and `SensorSource`, which several tools share
+([Workspace](workspace.md#declared-outputs)).
 
 **The renderer covers the JSON Schema that TypeBox writes.** An object, an
 array, a union, a literal, and the primitive types each have a TypeScript
 form. A schema with no form renders as `unknown`. The input schema stays
 the authority: `compose` checks every argument against it.
 
-**The catalog costs input tokens.** The model already reads the schema of
-each tool as a native tool. The catalog repeats each input schema, and
-adds each declared output. A seat with many tools pays that cost in every
-activation. The comparison that the status names counts the catalog in the
-input tokens of the seat.
-
-**A seat that never chains tools can set `compose: false`.** Every seat
-has `compose` by default. The CP6 runs measured that offering `compose`
-adds input tokens when the seat does not use it: about 9,000 to 26,000
-for each activation ([the table below](#the-catalog)). `compose: false`
-removes the tool, its catalog, and its guidance.
-
-**The live comparison measured the catalog only.** The seat ran the chain
-task once with `compose` and once without it, on each executor kind. No
-seat called `compose` for the chain task, so the comparison holds no
-saving. The run with `compose` cost more input tokens:
-
-| Kind   | Input with | Input without | Output with | Output without |
-| ------ | ---------- | ------------- | ----------- | -------------- |
-| Pi     | 55016      | 45861         | 934         | 1028           |
-| Claude | 60065      | 33964         | 828         | 627            |
-| Codex  | 34575      | 23767         | 439         | 442            |
-
-Each figure is one run. The Claude run with `compose` made four `sql`
-calls, and the run without it made one, so the calls of the seat also
-change the figure.
+**The compact list keeps the cost of an unused `compose` small.** One
+provider request repeats the whole tool list, and the live runs made 3 to 6
+requests for each activation. The full catalog of a workspace seat with files,
+processes, snapshots, SQL, and git held about 14,000 characters in the
+description of `compose`. The compact list of the same seat holds about 1,200
+characters with the contract and the limits, and `describe` holds about 200.
+The first live runs measured the full catalog at 9,000 to 26,000 input tokens
+more for each activation
+([the compose evidence](../planning/next.md#the-compose-evidence)). A model
+that composes pays one more call to `describe`, or reads the signature in a
+failure.
 
 ## Guidance
 
@@ -345,18 +400,25 @@ the guidance of `compose` after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the speaking
 policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
-`compose` holds its uses, the limits, and the catalog.
+`compose` holds its uses, the limits, and the list of bindings.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_SPEAKING`. The text follows:
+option replaces `DEFAULT_SPEAKING`. The text tells the model to call
+`describe` before it writes code that reads the fields of a result. The text
+follows:
 
 ```text
 compose joins your tools in one call. Put the tools that you use in
 uses, and the body of an async function in code. Each tool is
-tools.<name>, and the description of compose gives its signature. You
-read only the value that the code returns. compose runs JavaScript, so
-code with no tools also calculates and transforms data.
+tools.<name>. You read only the value that the code returns. compose
+runs JavaScript, so code with no tools also calculates and transforms
+data.
+
+Before you write code that reads the fields of a result, call describe
+with the names of the tools. It returns their signatures and types. The
+description of compose lists the tools and the type of each result.
+Read the fields, and do not parse text.
 
 Plan the tool calls of a task before you make the first call. When the
 plan has two or more tool calls, make them in one compose call. Each
@@ -386,27 +448,17 @@ The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
 compose result shows the new lines. Read them before you speak again.
 
-For example, "snapshot each file that a query finds" is one compose
-call. Do not call sql first to read the paths:
-  const found = await tools.sql({ sql: 'SELECT path FROM files' });
-  return tools.snapshot({ paths: found.rows.map((row) => row.path) });
-
-Write the code from the signatures. A typed result gives fields, such
-as rows of sql and text of bash: read the fields, and do not parse
-text. A tool that fails rejects with an Error. error.details holds its
-result when the tool gives one. bash rejects when the command exits
-with a code other than 0. When the task expects such a failure, catch
-it and read error.details:
-  const run = await tools
-    .bash({ command: 'pnpm test', wait: 300 })
-    .catch((error) => error.details);
-  const { refs } = await tools.snapshot({ paths: [run.process.output] });
-  return { exit: run.process.exitCode, tail: run.text.slice(-500), log: refs[0] };
+A tool that fails rejects with an Error. error.details holds its result
+when the tool gives one. bash rejects when the command exits with a code
+other than 0. When the task expects such a failure, catch it with
+.catch((error) => error.details) and read the details.
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
-call lists each call and its outcome. A completed call can have had an
-effect, so read the list before you call a tool again.
+call lists each call, its outcome, and the result of each completed
+call, such as a process handle. A completed call can have had an
+effect, so read the list before you call a tool again. A tool that the
+code reads as tools.<name> must be in uses.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.
@@ -424,8 +476,8 @@ The macros of your skills. Run one with compose({ macro, args }):
 - lab-drift/snapshot-drift: Snapshot the files of every run with a label. Returns the count and the refs.
 ```
 
-**The description of `compose` holds its uses, the limits, and the
-catalog.** The first lines are `Run JavaScript in one call. It joins your
+**The description of `compose` holds its uses, the limits, and the list of
+bindings.** The first lines are `Run JavaScript in one call. It joins your
 tools: code calls them as tools.<name>. Code with no tools also calculates
 and transforms data. You read only the value that the code returns.` A
 block of three lines follows it. The first line gives the limits of the seat:
@@ -435,7 +487,8 @@ binding rejects with an `Error` when its tool fails, and that
 cancels no other call. The third line states that a compose call cannot start
 a compose call, and that image parts do not reach the code. The guidance
 holds the other facts, including that a completed call keeps its effect, so
-no fact is in both places. The catalog follows the block.
+no fact is in both places. The list of bindings follows the block, and one
+line that names `describe` ends the description.
 
 ## Macros
 
@@ -476,7 +529,7 @@ that is not `false` or an object with a TypeBox `output`.
 
 **The binding returns one kind of value per tool.** A declared tool always
 gives its `details`, and an undeclared tool always gives a string. The
-catalog states which one. `details` with no declared schema has no
+list in the description of `compose` states which one. `details` with no declared schema has no
 contract, so no binding exposes it. Image parts of `content` do not reach
 the code.
 
@@ -507,7 +560,8 @@ interface ToolContext {
 
 **The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
 `restore`, `bash`, `cancel`, `wait`, `ps`, `repos`, `fork`,
-`connect`, and `observe` set `compose: { output }`. `write`, `edit`,
+`connect`, and `observe` set `compose: { output }`, and each output has an
+`$id` that names its type. `write`, `edit`,
 and `disconnect` bind as text, because the code needs only their success or
 their rejection. [Workspace](workspace.md#declared-outputs) states
 the shape of each output.
@@ -665,22 +719,24 @@ outcome of each call, so code that wants every result uses it.
 
 **`compose` is a definition tool.** The executor options take a `compose`
 option, beside `tools` and `bundles`. `describeExecutor` flattens the
-tools, then appends `compose` when the option is an object. An absent
-option and `false` add no tool. `pi()`, `claude()`, and `codex()` fill an
-absent option with `{ evaluator: quickjsEvaluator() }` once, when the
-agent is defined, so the tool list of a definition is the same in every
+tools, then appends `compose` and `describe` when the option is an object.
+An absent option adds no tool, because the kernel imports no evaluator.
+The option takes no `false`, and `assertComposeOptions` refuses it. `pi()`,
+`claude()`, and `codex()` fill an absent option with
+`{ evaluator: quickjsEvaluator() }` once, when the agent is defined, so every
+seat has both tools, and the tool list of a definition is the same in every
 activation. The frozen executor keeps no `compose` field: the tool closes
 over the option.
 
-**The name `compose` is reserved.** `appendTools` refuses a tool of that
-name while it flattens the tools of the options, before `compose` is
-appended. The check of the agent tools runs later, and its duplicate rule
+**The names `compose` and `describe` are reserved.** `appendTools` refuses a
+tool of either name while it flattens the tools of the options, before the
+two tools are appended. The check of the agent tools runs later, and its duplicate rule
 refuses a second `compose`.
 
-**Five files of the vocabulary layer hold the tool.** `compose.ts` holds
+**Six files of the vocabulary layer hold the tools.** `compose.ts` holds
 the types, the checks, and `COMPOSE_GUIDANCE`. `compose-tool.ts` holds the
 tool and the hosting exports. `compose-run.ts` holds the run of one compose
-call. `compose-catalog.ts` renders the catalog, and `compose-macros.ts`
+call. `compose-catalog.ts` renders the catalog, `compose-describe.ts` holds the `describe` tool, and `compose-macros.ts`
 checks the macros. `tool-call.ts` holds the one function that runs a tool
 call. The file list of the layer in `biome.jsonc` names each file
 ([Toolchain](toolchain.md)).
@@ -875,10 +931,9 @@ The Codex executor keeps it off in every seat. A Codex seat uses the `compose` t
 as every seat does.
 
 **A seat has `quickjsEvaluator()` by default.** The executor options take a
-`compose` option. With no option, the seat has the `compose` tool with
-`quickjsEvaluator()`. `compose: false` removes the tool. A host passes its
-own `compose` object to choose `processEvaluator()`, an approval hook,
-guidance, or limits.
+`compose` option. With no option, the seat has the `compose` and `describe`
+tools with `quickjsEvaluator()`. A host passes its own `compose` object to
+choose `processEvaluator()`, an approval hook, guidance, or limits.
 
 ```ts
 import { quickjsEvaluator } from '@ambionframework/compose/runtime';
@@ -947,8 +1002,12 @@ entry, and the entry imports only `node:` built-ins.
 **Cloudflare has no evaluator in the first version.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
 import of `quickjsEvaluator` works in workerd, and an evaluation fails
-there. `configure` of `@ambionframework/cloudflare` refuses an agent with a
-`compose` tool, so a worker seat sets `compose: false`.
+there. `quickjsEvaluator` catches the failure to load the module and throws
+an error. The error says that QuickJS could not load its WebAssembly in this
+runtime, and that a host passes `compose: { evaluator }` with an evaluator
+that this runtime can run. A worker seat has `compose` and `describe`, and
+`configure` of `@ambionframework/cloudflare` accepts it. A compose call fails
+with that error until an evaluator for workerd exists. `describe` works.
 
 ## Failure, cancellation, and effects
 

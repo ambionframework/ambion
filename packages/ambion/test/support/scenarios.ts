@@ -75,7 +75,6 @@ export const agent = (name: string, identity: string, extra: Partial<PiOptions> 
 		executor: pi({
 			instructions: `You are ${name}.`,
 			model: `scripted/${name}`,
-			compose: false,
 			...extra,
 		}),
 	});

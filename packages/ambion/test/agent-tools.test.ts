@@ -98,10 +98,16 @@ describe('the definition of agent tools', () => {
 		['unseat', { tools: [tool('unseat')] }, /room supplies it for an activation/],
 		['dismiss', { tools: [tool('dismiss')] }, /room supplies it for an activation/],
 		['compose', { tools: [tool('compose')] }, /the compose option reserves the name/],
+		['describe', { tools: [tool('describe')] }, /the compose option reserves the name/],
 		[
 			'compose in a bundle',
 			{ bundles: [{ tools: [tool('compose')] }] },
 			/A tool of the agent bundle is named 'compose'/,
+		],
+		[
+			'describe in a bundle',
+			{ bundles: [{ tools: [tool('describe')] }] },
+			/A tool of the agent bundle is named 'describe'/,
 		],
 		[
 			'a duplicate after a bundle',
@@ -170,6 +176,7 @@ describe('the definition of agent tools', () => {
 	const ok = { evaluate: async () => undefined };
 
 	it.each([
+		['the value false', false],
 		['an option with no evaluator', {}],
 		['an evaluator with no evaluate', { evaluator: {} }],
 		['an approve that is not a function', { evaluator: ok, approve: 'yes' }],
@@ -183,7 +190,7 @@ describe('the definition of agent tools', () => {
 		expect(() => worker({ compose: compose as never })).toThrow(/Agent compose/);
 	});
 
-	it('appends the compose tool after the tools and the bundles, and keeps the option off the frozen executor', () => {
+	it('appends the compose and describe tools after the tools and the bundles, and keeps the option off the frozen executor', () => {
 		const compose: ComposeOptions = {
 			evaluator: { evaluate: async () => undefined },
 			approve: () => 'allow',
@@ -204,12 +211,13 @@ describe('the definition of agent tools', () => {
 			'hidden',
 			'inspect',
 			'compose',
+			'describe',
 		]);
-		const description = agent.executor.tools.at(-1)?.description ?? '';
-		expect(description).toContain('lookup(args: {}): Promise<string>;');
-		expect(description).toContain('inspect(args: {}): Promise<string>;');
+		const description = agent.executor.tools.at(-2)?.description ?? '';
+		expect(description).toContain('lookup -> string, inspect -> string, say -> string');
 		expect(description).not.toContain('hidden');
-		expect(description).not.toContain('compose(');
+		expect(description).not.toContain('compose ->');
+		expect(description).not.toContain('describe ->');
 		// The guidance of the bundles comes first, and the guidance of compose follows it.
 		expect(agent.executor.guidance).toBe(`Use inspect.\n\n${COMPOSE_GUIDANCE}`);
 		expect(worker({ compose }).executor.guidance).toBe(COMPOSE_GUIDANCE);
@@ -221,34 +229,29 @@ describe('the definition of agent tools', () => {
 		);
 		expect(worker({ tools: [tool('lookup')] }).executor.tools.map((one) => one.name)).toEqual([
 			'lookup',
+			'compose',
+			'describe',
 		]);
 	});
 
-	it.each([
-		['absent', undefined],
-		['false', false as const],
-	])(
-		'adds no compose tool, no guidance, and no macro check when compose is %s',
-		(_name, compose) => {
-			const macro = composeMacro({
-				name: 'bundle/orphan',
-				description: 'Calls a tool that the catalog lacks.',
-				uses: ['missing'],
-				code: 'return 1;',
-				args: { type: 'object', properties: {} },
-				hash: 'orphan',
-			});
-			const executor = describeExecutor({
-				kind: 'scripted',
-				instructions: 'Work.',
-				tools: [tool('lookup')],
-				bundles: [{ tools: [], macros: [macro] }],
-				...(compose === undefined ? {} : { compose }),
-			});
-			expect(executor.tools.map((one) => one.name)).toEqual(['lookup']);
-			expect(executor).not.toHaveProperty('guidance');
-		},
-	);
+	it('adds no compose tool, no guidance, and no macro check to a bare describeExecutor with no compose option', () => {
+		const macro = composeMacro({
+			name: 'bundle/orphan',
+			description: 'Calls a tool that the catalog lacks.',
+			uses: ['missing'],
+			code: 'return 1;',
+			args: { type: 'object', properties: {} },
+			hash: 'orphan',
+		});
+		const executor = describeExecutor({
+			kind: 'scripted',
+			instructions: 'Work.',
+			tools: [tool('lookup')],
+			bundles: [{ tools: [], macros: [macro] }],
+		});
+		expect(executor.tools.map((one) => one.name)).toEqual(['lookup']);
+		expect(executor).not.toHaveProperty('guidance');
+	});
 
 	it('refuses a second compose tool in a definition, and treats a hand-built compose tool as an ordinary one', () => {
 		const withCompose = worker({ compose: { evaluator: { evaluate: async () => undefined } } });
@@ -283,7 +286,7 @@ describe('the definition of agent tools', () => {
 		(parameters.properties as Record<string, unknown>).query = Type.Number();
 
 		const captured = agent.executor.tools[0];
-		expect(agent.executor.tools).toHaveLength(1);
+		expect(agent.executor.tools.map((one) => one.name)).toEqual(['inspect', 'compose', 'describe']);
 		expect(captured).toMatchObject({ name: 'inspect', description: 'Inspects one thing.' });
 		expect(captured).not.toBe(supplied);
 		expect(captured?.parameters).not.toBe(parameters);
@@ -305,8 +308,12 @@ describe('the definition of agent tools', () => {
 		bundles.push({ tools: [tool('later')], guidance: 'Later guidance.' });
 		bundle.tools.length = 0;
 		bundle.guidance = 'Changed guidance.';
-		expect(agent.executor.tools.map((captured) => captured.name)).toEqual(['inspect']);
-		expect(agent.executor.guidance).toBe('Use inspect for this domain.');
+		expect(agent.executor.tools.map((captured) => captured.name)).toEqual([
+			'inspect',
+			'compose',
+			'describe',
+		]);
+		expect(agent.executor.guidance).toBe(`Use inspect for this domain.\n\n${COMPOSE_GUIDANCE}`);
 	});
 
 	it('preserves schema inference while composing heterogeneous tools', () => {
@@ -347,8 +354,10 @@ describe('the definition of agent tools', () => {
 		expect(worker({ bundles: [bundle] }).executor.tools.map((each) => each.name)).toEqual([
 			'lookup',
 			'count',
+			'compose',
+			'describe',
 		]);
-		expect(worker({ tools: [lookup, fromPiTool(native)] }).executor.tools).toHaveLength(2);
+		expect(worker({ tools: [lookup, fromPiTool(native)] }).executor.tools).toHaveLength(4);
 
 		// These calls are checked by tsc but deliberately never executed.
 		const authorPi = { instructions: 'Work.', model: 'scripted/worker' };

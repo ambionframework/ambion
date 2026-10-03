@@ -228,9 +228,14 @@ const snapshotSchema = Type.Object({
 type SnapshotParams = Static<typeof snapshotSchema>;
 
 /** The declared output of `snapshot`: one ref for each path, in order. */
-const SnapshotOutput = Type.Object({
-	refs: Type.Array(Type.String(), { description: 'One ref for each path, in the order of paths.' }),
-});
+const SnapshotOutput = Type.Object(
+	{
+		refs: Type.Array(Type.String(), {
+			description: 'One ref for each path, in the order of paths.',
+		}),
+	},
+	{ $id: 'SnapshotResult' },
+);
 
 /** What `snapshot` gives in `details`. */
 export type SnapshotDetails = Static<typeof SnapshotOutput>;
@@ -270,11 +275,14 @@ const restoreSchema = Type.Object({
 type RestoreParams = Static<typeof restoreSchema>;
 
 /** The declared output of `restore`: the ref, and the file that now holds its bytes. */
-const RestoreOutput = Type.Object({
-	ref: Type.String({ description: 'The snapshot ref that the call restored.' }),
-	path: Type.String({ description: 'The absolute path of the file that holds the bytes.' }),
-	bytes: Type.Integer({ description: 'The size of the file, in bytes.' }),
-});
+const RestoreOutput = Type.Object(
+	{
+		ref: Type.String({ description: 'The snapshot ref that the call restored.' }),
+		path: Type.String({ description: 'The absolute path of the file that holds the bytes.' }),
+		bytes: Type.Integer({ description: 'The size of the file, in bytes.' }),
+	},
+	{ $id: 'RestoreResult' },
+);
 
 /** What `restore` gives in `details`. */
 type RestoreDetails = Static<typeof RestoreOutput>;

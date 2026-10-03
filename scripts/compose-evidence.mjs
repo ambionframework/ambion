@@ -5,8 +5,10 @@
  *   node scripts/compose-evidence.mjs <lines.jsonl> [output.md]
  *
  * The live test appends one line for each run to the file that
- * `AMBION_LIVE_REPORT` names. The output holds one table for each executor
- * kind, under a heading of the level that `planning/next.md` uses for a run.
+ * `AMBION_LIVE_REPORT` names. A line holds `composeChars`, the length of the
+ * description of the `compose` tool, and the table shows it in characters.
+ * The output holds one table for each executor kind, under a heading of the
+ * level that `planning/next.md` uses for a run.
  * A kind with no line is marked skipped. A later line for the same kind and
  * case replaces an earlier one. With no output file, the script writes to
  * stdout.
@@ -41,6 +43,7 @@ const row = (line) =>
 		line.inputTokens,
 		line.outputTokens,
 		seconds(line.wallMs),
+		typeof line.composeChars === 'number' ? line.composeChars : '-',
 		line.note ? `${line.outcome} (${line.note})` : line.outcome,
 	]
 		// A pipe inside a cell ends the cell, so each pipe is escaped.
@@ -61,8 +64,8 @@ export function evidenceOf(text) {
 		return [
 			`#### ${kind}`,
 			'',
-			'| Model | Case | Tools | Input tokens | Output tokens | Wall time | Outcome |',
-			'| ----- | ---- | ----- | ------------ | ------------- | --------- | ------- |',
+			'| Model | Case | Tools | Input tokens | Output tokens | Wall time | Compose description | Outcome |',
+			'| ----- | ---- | ----- | ------------ | ------------- | --------- | ------------------- | ------- |',
 			...rows.map(row),
 			'',
 		].join('\n');

@@ -3,7 +3,8 @@
 The evaluators of the `compose` tool of an
 [Ambion](https://ambionframework.com) seat. An evaluator runs the code of one
 compose call. The code calls the tools of the seat as `tools.<name>(args)`.
-`pi()`, `claude()`, and `codex()` give every seat `quickjsEvaluator()` by default, and `compose: false` removes the tool.
+`pi()`, `claude()`, and `codex()` give every seat `quickjsEvaluator()` by default.
+A host passes `compose: { evaluator }` to choose another evaluator.
 
 ## Install
 

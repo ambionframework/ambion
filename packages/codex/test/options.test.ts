@@ -163,9 +163,8 @@ describe('threadParams', () => {
 	});
 
 	it.each([
-		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],
-		['false', false as const, [], undefined],
-		['an object', own, ['compose'], 'Own guidance.'],
+		['absent', undefined, ['compose', 'describe'], COMPOSE_GUIDANCE],
+		['an object', own, ['compose', 'describe'], 'Own guidance.'],
 	])('gives the tool list of the seat for compose %s', (_name, compose, names, guidance) => {
 		const executor = codex({
 			instructions: 'x',

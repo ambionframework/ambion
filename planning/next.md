@@ -72,6 +72,10 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - A failed or cancelled compose call throws, and its message holds the
   ledger. A call that outlives the code keeps the result.
 - The limits and the guidance live on the `compose` option.
+- The description of `compose` lists each bindable tool with the name of
+  its result type. The `describe` tool returns the signatures, and a failed
+  compose call shows the signatures of the tools that it names. The CP6
+  token numbers below measured the earlier full catalog.
 - The live token comparison is evidence of the release (CP6). It gates no
   phase before phase 5.
 - `ToolContext` has no public `record` and no public `ctx.call`. One
@@ -80,8 +84,9 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 
 ## Out of scope
 
-- **An evaluator for workerd.** `configure` of `@ambionframework/cloudflare`
-  refuses a seat with `compose`, so a worker seat sets `compose: false`.
+- **An evaluator for workerd.** A worker seat has `compose` and `describe`.
+  A compose call fails with an error that says QuickJS could not load its
+  WebAssembly, until an evaluator for workerd exists.
 - **Replay of a compose call from its trace.** The trace caps can cut a
   nested output.
 - **Room tools in a compose call.** `say`, `schedule`, `seat`, `unseat`,

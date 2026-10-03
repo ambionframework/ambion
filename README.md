@@ -196,7 +196,7 @@ the result. See [Actuators](docs/actuators.md).
 name with arguments, and it reads only the value that the macro returns.
 Every Pi, Claude, and Codex seat has the `compose` tool, which runs a macro
 or short code over the tools of the seat. `quickjsEvaluator()` runs the code
-by default, and `compose: false` removes the tool. See
+by default. Its `describe` tool returns the signatures of the tools. See
 [Macros](docs/macros.md) and [Compose](docs/compose.md).
 
 **Two packages provide the bash backend.** `@ambionframework/just-bash`

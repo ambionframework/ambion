@@ -47,7 +47,7 @@ tools, and bundles.
 application. The function returns an executor of any package. A spread of the
 parts is the whole adapter. The function sets the model, `thinking`, and every
 other option of its package. The executor packages give the assistant the
-`compose` tool by default, and `compose: false` removes it. The package of the assistant depends on
+`compose` and `describe` tools. The package of the assistant depends on
 `@ambionframework/ambion` only.
 
 The factory places participation guidance in the existing bundle guidance

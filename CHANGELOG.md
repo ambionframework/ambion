@@ -2,14 +2,36 @@
 
 ## Unreleased
 
-**The `compose` tool is on by default for Pi, Claude, and Codex seats.**
-`pi()`, `claude()`, and `codex()` give a seat `compose` with
-`quickjsEvaluator()` when the options name none. `compose: false` removes the
-tool. A host passes its own `compose` object to choose `processEvaluator()`, an
-approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
-input tokens when a seat does not use it, so a seat that never chains tools
-can set `compose: false`. The Cloudflare `configure` refuses an agent with a
-`compose` tool, because workerd has no evaluator yet.
+**The `compose` tool is on for every Pi, Claude, and Codex seat.**
+`pi()`, `claude()`, and `codex()` give a seat `compose` and `describe`, with
+`quickjsEvaluator()` when the options name no evaluator. A seat cannot turn
+the tools off. A host passes its own `compose` object to choose
+`processEvaluator()`, an approval hook, guidance, or limits. The Cloudflare
+`configure` accepts the tools. A compose call fails in workerd with an error
+that says QuickJS could not load its WebAssembly, until an evaluator for
+workerd exists. A host passes `compose: { evaluator }` with an evaluator that
+the runtime can run.
+
+**The `describe` tool returns the signatures that `compose` no longer lists.**
+`describe({ tools })` takes a non-empty list of bindable tool names, the room
+tools included. It returns their typed signatures and named types, and runs
+nothing. A name outside the catalog fails the call and lists the bindable
+names. The kernel reserves the name `describe` as it reserves `compose`.
+
+**The description of `compose` holds a compact list.** It keeps the
+contract, the limits, and the rejection rule. Each bindable tool appears as
+`name -> Type`, where `Type` names the declared output, `string` for a tool
+with no output, and `object` for an output with no `$id`. The full catalog
+moved to `describe`. The tool list of a full workspace seat shrinks from
+about 22,100 to about 9,600 characters in every request. The workspace
+outputs declare an `$id`, so the list names each type.
+
+**A failed compose call shows the signature of the tool that it names.** The
+message appends the signature of the tool of the failing nested call, and of
+a tool that the code read and `uses` left out.
+
+**`COMPOSE_GUIDANCE` is shorter.** It tells the model to call `describe` before
+code that reads the fields of a result, and it drops the two code examples.
 
 **A compose call that reads an unbound tool names the fix.** Code that
 reads `tools.<name>` for a name outside `uses` gets an error that names the
@@ -57,11 +79,18 @@ handles name `wait` in place of `status`.
 
 ### Breaking changes
 
-- **Set `compose: false` to keep a seat without `compose`.** The tool list
-  and the guidance of every Pi, Claude, and Codex seat gain `compose` and its
-  catalog. `ExecutorBaseOptions.compose` takes `ComposeOptions` or `false`, and
-  `@ambionframework/pi`, `@ambionframework/claude`, and
-  `@ambionframework/codex` now depend on `@ambionframework/compose`.
+- **Every seat has `compose` and `describe`.** The tool list and the
+  guidance of every Pi, Claude, and Codex seat gain both tools.
+  `ExecutorBaseOptions.compose` takes `ComposeOptions` only, and
+  `assertComposeOptions` refuses `false`. The name `describe` is reserved,
+  so a user tool of that name is refused. `@ambionframework/pi`,
+  `@ambionframework/claude`, and `@ambionframework/codex` now depend on
+  `@ambionframework/compose`.
+- **The `$id` of a workspace output names its type.** `ReadResult`,
+  `SqlResult`, `SnapshotResult`, `RestoreResult`, `WaitResult`,
+  `WaitedResult`, `PsResult`, `ReposResult`, `ForkResult`, `ConnectResult`,
+  and `ObserveResult` join `Process`, `ProcessResult`, `Truncation`, and
+  `SensorSource`.
 - **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
   `timeout: 0`. The result has the same text and the same details. In a
   compose call, `tools.status` is gone, and `tools.wait` binds the same

@@ -403,7 +403,9 @@ describe('a seat that takes the skill set with and without compose', () => {
 		const plain = describeExecutor(options);
 		const composing = describeExecutor({ ...options, compose: { evaluator: functionEvaluator } });
 		expect(plain.tools.map((tool) => tool.name)).toEqual(
-			composing.tools.map((tool) => tool.name).filter((name) => name !== 'compose'),
+			composing.tools
+				.map((tool) => tool.name)
+				.filter((name) => name !== 'compose' && name !== 'describe'),
 		);
 		expect(plain.guidance).not.toContain(MACRO);
 		expect(plain.guidance).not.toContain(COMPOSE_GUIDANCE);
