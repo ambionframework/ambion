@@ -193,6 +193,7 @@ interface Run {
 }
 
 const composed = { compose: { evaluator: quickjsEvaluator() } };
+const uncomposed = { compose: false as const };
 
 function seat(
 	name: string,
@@ -405,7 +406,7 @@ live('compose', () => {
 				(spent) => record('with compose', spent),
 			);
 			const without = await ask(
-				seat('without', await lab(), { instructions: 'Answer with one say.' }),
+				seat('without', await lab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				CHAIN_TASK,
 				(spent) => record('without compose', spent),
 			);
@@ -451,7 +452,7 @@ live('compose', () => {
 				(spent) => record('with compose', spent, wayOf(spent)),
 			);
 			const without = await ask(
-				seat('without', await fanLab(), { instructions: 'Answer with one say.' }),
+				seat('without', await fanLab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				FAN_TASK,
 				(spent) => record('without compose', spent, wayOf(spent)),
 			);

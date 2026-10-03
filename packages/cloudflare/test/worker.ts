@@ -10,25 +10,33 @@ import { scripted } from './scripted.ts';
 export const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
+	executor: pi({
+		instructions: 'Answer what was asked, once.',
+		model: 'scripted/assistant',
+		compose: false,
+	}),
 });
 
 export const product = defineAgent({
 	name: 'product',
 	identity: 'The product.',
-	executor: pi({ instructions: 'Answer what is asked.', model: 'scripted/product' }),
+	executor: pi({
+		instructions: 'Answer what is asked.',
+		model: 'scripted/product',
+		compose: false,
+	}),
 });
 
 export const slow = defineAgent({
 	name: 'slow',
 	identity: 'Answers, but not at once.',
-	executor: pi({ instructions: 'Answer what is asked.', model: 'scripted/slow' }),
+	executor: pi({ instructions: 'Answer what is asked.', model: 'scripted/slow', compose: false }),
 });
 
 export const checker = defineAgent({
 	name: 'checker',
 	identity: 'Checks the work later.',
-	executor: pi({ instructions: 'Check later.', model: 'scripted/checker' }),
+	executor: pi({ instructions: 'Check later.', model: 'scripted/checker', compose: false }),
 });
 
 /** A seat with a token limit that names the estimator the worker registers. */
@@ -38,6 +46,7 @@ export const reader = defineAgent({
 	executor: pi({
 		instructions: 'Read.',
 		model: 'scripted/reader',
+		compose: false,
 		activationTokenLimit: 40,
 		estimateTokens: 'chars',
 	}),

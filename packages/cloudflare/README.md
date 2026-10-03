@@ -73,9 +73,10 @@ seated or in reserve, through `configure`. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 **A worker seat sets `compose: false`.** `pi()` gives every seat the `compose`
-tool with `quickjsEvaluator()`. The import works in workerd, and a compose
-call fails there: a worker loads WebAssembly only from its bundle. Pass
-`compose: false` to `pi()` until an evaluator for workerd exists
+tool with `quickjsEvaluator()`. A compose call fails in workerd, because a
+worker loads WebAssembly only from its bundle. `configure` refuses an agent
+with a `compose` tool. Pass `compose: false` to `pi()` until an evaluator for
+workerd exists
 ([Compose](../../docs/compose.md#the-evaluator)).
 
 `read()` returns the detached coherent room projection, including stopped

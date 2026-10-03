@@ -8,8 +8,8 @@
 tool. A host passes its own `compose` object to choose `processEvaluator()`, an
 approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
 input tokens when a seat does not use it, so a seat that never chains tools
-can set `compose: false`. A seat on Cloudflare sets `compose: false`, because
-workerd has no evaluator yet.
+can set `compose: false`. The Cloudflare `configure` refuses an agent with a
+`compose` tool, because workerd has no evaluator yet.
 
 **The workspace drops the `status` and `clone` tools.** The smallest
 workspace gives nine tools, from ten. A workspace with a SQL backend and a

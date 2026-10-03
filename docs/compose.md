@@ -905,8 +905,8 @@ entry, and the entry imports only `node:` built-ins.
 **Cloudflare has no evaluator in the first version.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
 import of `quickjsEvaluator` works in workerd, and an evaluation fails
-there. A seat on `@ambionframework/cloudflare` sets `compose: false` until
-an evaluator for workerd exists.
+there. `configure` of `@ambionframework/cloudflare` refuses an agent with a
+`compose` tool, so a worker seat sets `compose: false`.
 
 ## Failure, cancellation, and effects
 
