@@ -99,7 +99,7 @@ runs beside the compose phases and blocks only the release.
 
 - [ ] **1.** A late steer on Claude keeps its answer. (CS1)
 - [ ] **2.** The Camera Chat fixes. (CC1)
-- [ ] **3.** Codex on a ChatGPT sign-in. (CX1)
+- [x] **3.** Codex on a ChatGPT sign-in. (CX1)
 - [ ] **4.** The sensor path validates once. (W5)
 
 **Evidence:** the `claude` tests steer during the final answer, and the

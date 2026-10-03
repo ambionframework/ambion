@@ -96,6 +96,9 @@ function session(inner: RunningActivation, seen: Seen): RunningActivation {
 			entry.session = inner.session;
 			return result;
 		},
+		...(inner.steer === undefined
+			? {}
+			: { steer: (after, seq, line) => inner.steer?.(after, seq, line) }),
 		close: () => inner.close?.(),
 	};
 }

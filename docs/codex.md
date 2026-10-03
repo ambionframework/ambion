@@ -840,6 +840,16 @@ CODEX_API_KEY=... pnpm --filter @ambionframework/codex run test:live
 pnpm --filter @ambionframework/codex run test:live   # on the login
 ```
 
+**The full live tier passed once on a ChatGPT login.** On 3 October 2026
+the owner's Mac ran every live file on the `login` mode, with Codex 0.159.2
+and no `CODEX_API_KEY`. The `session` step of each seat reported `chatgpt`.
+The first run passed 19 of 20 tests. The steer case of the suite
+failed, because the wrapper of `AMBION_LIVE_DUMP` did not pass the steer to
+the executor. After the fix, the conformance file passed all 10 cases. The
+run did not exercise a token refresh
+(`account/chatgptAuthTokens/refresh`), because no token expired. No test
+covers the refresh.
+
 The mixed file also needs the key of the Pi model (`AMBION_MODEL`, default
 `anthropic/claude-sonnet-5`). A live run costs money: run one file with
 `pnpm --filter @ambionframework/codex exec vitest run --config
