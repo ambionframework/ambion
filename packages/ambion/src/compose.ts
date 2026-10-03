@@ -136,15 +136,20 @@ Use compose when:
   few fields of it;
 - you call one tool for many inputs;
 - you start several processes and wait for each;
+- you speak to many participants, seat several agents, or recall many
+  refs. say, schedule, seat, unseat, dismiss, and recall are tools of
+  compose;
 - you calculate, or you sort, group, or reshape data that you already
   hold. Give uses: [] and put the data in the code.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
   no rule for it;
-- you make one call and need its whole result;
-- you speak. say, schedule, seat, unseat, dismiss, and recall are not
-  in compose.
+- you make one call and need its whole result.
+
+The say calls of one compose call run one after another. When the room
+refuses a say because the record moved, the binding rejects, and the
+compose result shows the new lines. Read them before you speak again.
 
 For example, "snapshot each file that a query finds" is one compose
 call. Do not call sql first to read the paths:

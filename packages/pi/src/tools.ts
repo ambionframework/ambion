@@ -101,6 +101,7 @@ export function fromAmbionTool(
 	tool: AmbionTool,
 	contextOf: ContextOf,
 	record?: (step: Step) => void,
+	room?: readonly BoundTool[],
 ): PiTool {
 	return {
 		name: tool.name,
@@ -122,7 +123,7 @@ export function fromAmbionTool(
 			};
 			try {
 				const ctx = contextOf(api.callId, signal, onUpdate);
-				return toExecution(await invokeChecked(tool, args, ctx, record));
+				return toExecution(await invokeChecked(tool, args, ctx, record, room));
 			} catch (error) {
 				if (signal?.aborted) throw error;
 				return failure(messageOf(error));
@@ -140,11 +141,13 @@ function toPiTool(
 	agent: AgentDefinition,
 	sink: StepSink,
 	current: () => ActivationView,
+	room: readonly BoundTool[],
 ): PiTool {
 	return fromAmbionTool(
 		tool,
 		(call, signal, onUpdate) => toolContext(agent, current(), call, signal, onUpdate),
 		(step) => sink.record(step),
+		room,
 	);
 }
 
@@ -168,7 +171,7 @@ function toPiTool(
  *
  * The context of each call comes from `toolContext`, as it does in the core.
  * `sink` is the step sink of the activation. Only the `compose` tool
- * receives it, through `invokeChecked`.
+ * receives it, through `invokeChecked`, with the room tools of `tools`.
  */
 export function toolsFor(
 	view: ActivationView,
@@ -178,7 +181,8 @@ export function toolsFor(
 	current: () => ActivationView = () => view,
 ): PiTool[] {
 	const own = new Set(def.executor.tools.map((tool) => tool.name));
-	const room = tools.filter((tool) => !own.has(tool.name)).map(fromRoomTool);
-	if (view.spec.purpose.kind === 'summarize') return room;
-	return [...room, ...def.executor.tools.map((tool) => toPiTool(tool, def, sink, current))];
+	const room = tools.filter((tool) => !own.has(tool.name));
+	const hosted = room.map(fromRoomTool);
+	if (view.spec.purpose.kind === 'summarize') return hosted;
+	return [...hosted, ...def.executor.tools.map((tool) => toPiTool(tool, def, sink, current, room))];
 }

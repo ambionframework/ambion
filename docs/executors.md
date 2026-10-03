@@ -197,7 +197,7 @@ internal. Participant views omit `sessionId`.
 | `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                             |
 | `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                       |
 | `describeExecutor`       | The neutral half of an executor definition, which an executor kind extends with its fields. It appends the `compose` tool when the options hold `compose`      |
-| `invokeTool`             | Runs one direct call of a tool: prepares and checks the arguments, then invokes. It hands the step sink to the `compose` tool alone                            |
+| `invokeTool`             | Runs one direct call of a tool: prepares and checks the arguments, then invokes. It hands the step sink and the room tools to the `compose` tool alone         |
 | `invokeChecked`          | The same call for a harness that prepared and checked the arguments already, as Pi does                                                                        |
 | `present`, `pickPresent` | The option fields that hold a value, which an executor kind spreads into its executor                                                                          |
 | `Executor`               | The value in an agent definition: `kind`, `instructions`, `tools`, and the fields that the room reads                                                          |

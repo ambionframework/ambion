@@ -170,8 +170,9 @@ export type CommitResult =
 	| {
 			committed: Message;
 			/**
-			 * The messages a scheduled say landed past: after its `readThrough` and
-			 * before the say. The room takes a scheduled say at any position.
+			 * The messages that a scheduled say, a seating, or a dismissal landed
+			 * past: after its `readThrough` and before the entry. The room takes
+			 * each of them at any position.
 			 */
 			unread?: Message[];
 	  }

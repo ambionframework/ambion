@@ -193,7 +193,7 @@ class ScriptedActivation implements RunningActivation {
 		}
 		const text = ROOM_CALLS.has(call.tool)
 			? await this.commit(call, pass)
-			: await this.invoke(call, pass.view);
+			: await this.invoke(call, pass);
 		this.results.push({ tool: call.tool, text });
 	}
 
@@ -220,7 +220,8 @@ class ScriptedActivation implements RunningActivation {
 	}
 
 	/** An agent's own tool: record its steps, and give it the context a model loop would. */
-	private async invoke(call: ScriptCall, view: ActivationView): Promise<string> {
+	private async invoke(call: ScriptCall, pass: Pass): Promise<string> {
+		const view = pass.view;
 		const tool = this.definition.executor.tools.find((candidate) => candidate.name === call.tool);
 		if (tool === undefined) throw new Error(`The seat has no tool '${call.tool}'.`);
 		const id = this.callId();
@@ -237,11 +238,17 @@ class ScriptedActivation implements RunningActivation {
 		});
 		trace.record({ type: 'tool_call', call: id, name: tool.name, input: call.args });
 		try {
-			const text = textOf(await invokeTool(tool, call.args, context, (step) => trace.record(step)));
+			const own = this.definition.executor.tools;
+			const room = pass.tools.filter((one) => !own.some((mine) => mine.name === one.name));
+			const result = await invokeTool(tool, call.args, context, (step) => trace.record(step), room);
+			const text = textOf(result);
+			// The script reads each result, so a nested call that carries record reached the model.
+			this.activation.delivered(id);
 			trace.record({ type: 'tool_result', call: id, output: text });
 			return text;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			this.activation.delivered(id);
 			trace.record({ type: 'tool_result', call: id, output: null, error: message });
 			throw error;
 		}

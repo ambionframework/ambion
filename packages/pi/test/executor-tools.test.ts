@@ -331,6 +331,7 @@ describe('executor tool authority', () => {
 			{
 				activation: 'message:4:worker:1',
 				key: 'seat-call',
+				readThrough: 0,
 				intent: { kind: 'seated', name: 'surveyor' },
 			},
 		]);
