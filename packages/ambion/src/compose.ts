@@ -20,6 +20,14 @@ export interface EvaluatorInput {
 	/** The names of the tools that the code can call as `tools.<name>`. */
 	readonly bindings: readonly string[];
 	/**
+	 * The names of the tools that the seat has and this call does not bind.
+	 * The code that reads `tools.<name>` for an unbound name gets an error that
+	 * names the tool and the bound names. For a name in this list, the error
+	 * says to add the name to `uses`. For any other name, it says that the seat
+	 * has no such tool. Absent, the error does not tell the two apart.
+	 */
+	readonly unlisted?: readonly string[];
+	/**
 	 * The arguments of a macro, already checked against its schema. The code
 	 * reads them as the global `args`. Absent for free code, where `args` is
 	 * not defined.
@@ -170,8 +178,10 @@ it and read error.details:
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
-call lists each call and its outcome. A completed call can have had an
-effect, so read the list before you call a tool again.
+call lists each call, its outcome, and the result of each completed
+call, such as a process handle. A completed call can have had an effect,
+so read the list before you call a tool again. A tool that the code
+reads as tools.<name> must be in uses.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.`;

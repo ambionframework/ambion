@@ -26,6 +26,7 @@ import {
 	open,
 	person,
 	saidBy,
+	within,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { quickjsEvaluator } from '../../../compose/src/runtime.ts';
@@ -46,9 +47,11 @@ const DRIFTED = RUNS.filter((run) => run.label === 'drift');
 const digestOf = (text: string) => createHash('sha256').update(text).digest('hex');
 
 const CHAIN_TASK =
+	'The table runs holds the label and the path of each run. ' +
 	'Snapshot the files of every run with the label drift. Say how many runs it was and cite the snapshot refs.';
 
 const FAN_TASK =
+	'The table runs holds the label of each run. ' +
 	'For each run with the label drift, read its log and find the peak_temp line. ' +
 	'Snapshot the logs of the drifted runs whose peak is over 900. ' +
 	'Say how many there were and cite the snapshot refs.';
@@ -192,6 +195,9 @@ interface Run {
 	readonly composeInputs: unknown[];
 }
 
+/** The longest wait for one seat. Two seats in one case end before the test timeout. */
+const SEAT_DEADLINE_MS = 150_000;
+
 const composed = { compose: { evaluator: quickjsEvaluator() } };
 const uncomposed = { compose: false as const };
 
@@ -238,7 +244,11 @@ async function ask(
 		const visit = await enter(session, person);
 		const exchange = await visit.send({ text });
 		try {
-			await exchange.waitForSummary();
+			await within(
+				exchange.waitForSummary(),
+				SEAT_DEADLINE_MS,
+				`The summary of ${definition.name}`,
+			);
 		} finally {
 			// A run that times out still spent, so it is recorded before the error goes up.
 			record(await spentBy(session, definition.name, records));
@@ -284,21 +294,51 @@ interface Entry {
 	readonly note?: string;
 }
 
+/** The first line of an error, which is the line of the outcome. */
+const firstLine = (error: unknown) =>
+	(error instanceof Error ? error.message : String(error)).split('\n')[0];
+
+/** What a case body records, and how it checks the run of one seat. */
+interface Evidence {
+	readonly record: (label: string, run: Run, note?: string) => void;
+	/**
+	 * Check the run of the seat that has this label. The check is synchronous.
+	 * A failed check does not stop the case, so the case checks every seat.
+	 * The case fails at the end with one error that names each failed seat.
+	 */
+	readonly verify: (label: string, check: () => void) => void;
+}
+
 /**
  * Run one case. Each recorded run becomes one JSON line in the file that
- * `AMBION_LIVE_REPORT` names, with the outcome of the case. A failed case
- * writes its lines too, because the spend happened.
+ * `AMBION_LIVE_REPORT` names. A line holds the outcome of its own seat, when
+ * the case verified that seat. A line with no verdict takes the outcome of
+ * the case. A failed case writes its lines too, because the spend happened.
  */
-async function evidence(
-	name: string,
-	body: (record: (label: string, run: Run, note?: string) => void) => Promise<void>,
-): Promise<void> {
+async function evidence(name: string, body: (tools: Evidence) => Promise<void>): Promise<void> {
 	const entries: Entry[] = [];
+	const verdicts = new Map<string, string>();
 	let outcome = 'passed';
 	try {
-		await body((label, run, note) => void entries.push({ label, run, ...(note ? { note } : {}) }));
+		await body({
+			record: (label, run, note) => void entries.push({ label, run, ...(note ? { note } : {}) }),
+			verify: (label, check) => {
+				try {
+					check();
+					verdicts.set(label, 'passed');
+				} catch (error) {
+					verdicts.set(label, `failed: ${firstLine(error)}`);
+				}
+			},
+		});
+		const failed = [...verdicts].filter(([, verdict]) => verdict !== 'passed');
+		if (failed.length > 0) {
+			throw new Error(
+				failed.map(([label, verdict]) => `${label === '' ? name : label}: ${verdict}`).join('\n'),
+			);
+		}
 	} catch (error) {
-		outcome = `failed: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
+		outcome = `failed: ${firstLine(error)}`;
 		throw error;
 	} finally {
 		for (const { label, run, note } of entries) {
@@ -312,7 +352,7 @@ async function evidence(
 				inputTokens: run.input,
 				outputTokens: run.output,
 				wallMs: run.wallMs ?? null,
-				outcome,
+				outcome: verdicts.get(label) ?? outcome,
 				...(note === undefined ? {} : { note }),
 			};
 			process.stdout.write(`live · compose · ${JSON.stringify(line)}\n`);
@@ -324,7 +364,7 @@ async function evidence(
 
 live('compose', () => {
 	it('chain: the result of sql feeds snapshot, and the seat calls compose', async () => {
-		await evidence('chain', async (record) => {
+		await evidence('chain', async ({ record }) => {
 			const store = await lab();
 			const run = await ask(
 				seat('chain', store, {
@@ -345,7 +385,7 @@ live('compose', () => {
 	});
 
 	it('read before deciding: the seat reads a gate row, and its verdict decides what it does', async () => {
-		await evidence('read before deciding', async (record) => {
+		await evidence('read before deciding', async ({ record }) => {
 			const store = await lab();
 			const run = await ask(
 				seat('gate', store, {
@@ -372,7 +412,7 @@ live('compose', () => {
 	});
 
 	it('parallel processes: three processes of 3 seconds end in about 3 seconds', async () => {
-		await evidence('parallel processes', async (record) => {
+		await evidence('parallel processes', async ({ record }) => {
 			const store = openWorkspace({
 				name: roomName('live-compose-wait'),
 				backend: { bash: memoryBackend() },
@@ -399,26 +439,29 @@ live('compose', () => {
 	});
 
 	it('token comparison: the same chain task with compose and without it', async () => {
-		await evidence('token comparison', async (record) => {
+		await evidence('token comparison', async ({ record, verify }) => {
 			const withCompose = await ask(
 				seat('with', await lab(), { instructions: 'Answer with one say.', ...composed }),
 				CHAIN_TASK,
 				(spent) => record('with compose', spent),
 			);
+			// Each seat is checked before the next one starts, so a later failure hides no verdict.
+			verify('with compose', () => holdsDigests(withCompose.answer, DRIFTED));
 			const without = await ask(
 				seat('without', await lab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				CHAIN_TASK,
 				(spent) => record('without compose', spent),
 			);
 			// The case asserts the answers. The token numbers are recorded as evidence only.
-			holdsDigests(withCompose.answer, DRIFTED);
-			holdsDigests(without.answer, DRIFTED);
-			expect(without.tools).not.toContain('compose');
+			verify('without compose', () => {
+				holdsDigests(without.answer, DRIFTED);
+				expect(without.tools).not.toContain('compose');
+			});
 		});
-	});
+	}, 360_000);
 
 	it('macro: the seat runs the macro of its skill by name and writes no code', async () => {
-		await evidence('macro', async (record) => {
+		await evidence('macro', async ({ record }) => {
 			const store = await lab();
 			const skills = await loadSkills(DRIFT_SKILLS);
 			const run = await ask(
@@ -441,7 +484,7 @@ live('compose', () => {
 
 	// Two seats run in turn, and the seat without compose can make many calls.
 	it('fan-out: many logs are read and only the digests of a few matter', async () => {
-		await evidence('fan-out', async (record) => {
+		await evidence('fan-out', async ({ record, verify }) => {
 			const wayOf = (spent: Run) => {
 				if (spent.tools.includes('compose')) return 'compose';
 				return [...spent.tools, ...spent.nested].includes('bash') ? 'bash' : 'direct calls';
@@ -451,16 +494,19 @@ live('compose', () => {
 				FAN_TASK,
 				(spent) => record('with compose', spent, wayOf(spent)),
 			);
+			// The case does not assert the way of the seat. The way is the evidence.
+			const holdsAnswer = (run: Run) => {
+				expect(run.text).toMatch(new RegExp(`\\b${FAN_HOT.length}\\b|four`, 'i'));
+				holdsDigests(run.answer, FAN_HOT);
+			};
+			// Each seat is checked before the next one starts, so a later failure hides no verdict.
+			verify('with compose', () => holdsAnswer(withCompose));
 			const without = await ask(
 				seat('without', await fanLab(), { instructions: 'Answer with one say.', ...uncomposed }),
 				FAN_TASK,
 				(spent) => record('without compose', spent, wayOf(spent)),
 			);
-			// The case does not assert the way of the seat. The way is the evidence.
-			for (const run of [withCompose, without]) {
-				expect(run.text).toMatch(new RegExp(`\\b${FAN_HOT.length}\\b|four`, 'i'));
-				holdsDigests(run.answer, FAN_HOT);
-			}
+			verify('without compose', () => holdsAnswer(without));
 		});
 	}, 360_000);
 });

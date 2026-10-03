@@ -29,12 +29,20 @@ interface CallError {
 /** One compose call, as the run reports it. `late` holds the calls that outlived the code. */
 export interface ComposeOutcome {
 	readonly result: ComposeResult;
+	/**
+	 * The binding value of each completed call, by call id, for a compose call
+	 * that did not complete. A room tool has none: its result reaches the model
+	 * through the room notes. The ledger holds none.
+	 */
+	readonly values: ReadonlyMap<string, JsonValue>;
 	readonly late: readonly LedgerEntry[];
 }
 
 export interface ComposeRunInput {
 	/** The tools that the compose call binds, by name. */
 	readonly tools: ReadonlyMap<string, AmbionTool>;
+	/** The names of the tools that the seat has and the call does not bind. */
+	readonly unlisted?: readonly string[];
 	readonly code: string;
 	/** The checked arguments of a macro. The evaluator gives them to the code as `args`. */
 	readonly args?: JsonValue;
@@ -60,6 +68,8 @@ interface Call {
 	readonly params: unknown;
 	state: CallState;
 	error?: string;
+	/** The binding value, once the call completed. */
+	value?: JsonValue;
 	resolve(value: JsonValue): void;
 	reject(error: CallError): void;
 }
@@ -204,11 +214,12 @@ export class ComposeRun {
 	}
 
 	private async evaluate(): Promise<Ending> {
-		const { evaluator, code, tools, args } = this.input;
+		const { evaluator, code, tools, args, unlisted } = this.input;
 		try {
 			const input = {
 				code,
 				bindings: [...tools.keys()],
+				...(unlisted === undefined ? {} : { unlisted }),
 				...(args === undefined ? {} : { args }),
 				call: (name: string, args: JsonValue) => this.call(name, args),
 			};
@@ -271,15 +282,19 @@ export class ComposeRun {
 	private outcome(ending: Ending): ComposeOutcome {
 		const calls = this.ledger();
 		const late = [...this.late].map((call) => entryOf(call));
+		const settled = ending.status === 'completed' ? [] : this.calls;
+		const values = new Map(
+			settled.flatMap((call) => (call.value === undefined ? [] : [[call.id, call.value] as const])),
+		);
 		if (ending.status === 'completed') {
 			const value = ending.value === undefined ? {} : { value: ending.value };
-			return { result: { status: 'completed', ...value, calls }, late };
+			return { result: { status: 'completed', ...value, calls }, values, late };
 		}
 		const error = {
 			message: ending.message,
 			...(ending.call === undefined ? {} : { call: ending.call }),
 		};
-		return { result: { status: ending.status, error, calls }, late };
+		return { result: { status: ending.status, error, calls }, values, late };
 	}
 
 	/** One binding call of the code. It returns a promise at once, and rejects with a `CallError`. */
@@ -307,6 +322,7 @@ export class ComposeRun {
 		const { tools, limits } = this.input;
 		if (this.refusing) throw new Error('The compose call has ended: it starts no further call.');
 		const tool = tools.get(name);
+		// An evaluator that conforms throws before it reaches this line. The line guards one that does not.
 		if (tool === undefined) throw new Error(`The compose call binds no tool '${name}'.`);
 		if (this.calls.length >= limits.calls)
 			throw new Error(`The compose call passed compose.limits.calls (${limits.calls}).`);
@@ -365,7 +381,10 @@ export class ComposeRun {
 		}
 		call.state = 'completed';
 		try {
-			call.resolve(this.valueOf(call, result));
+			const value = this.valueOf(call, result);
+			// The result of a room tool reaches the model through the room notes, once.
+			if (!this.input.commits?.(call.tool)) call.value = value;
+			call.resolve(value);
 		} catch (error) {
 			call.error = messageOf(error);
 			call.reject(crossing(error));

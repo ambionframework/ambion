@@ -106,8 +106,24 @@ checks the two forms. A call that gives `uses` and `code`, or `macro` and
 name that the catalog does not hold. It checks `uses` first, then asks
 the [approval](#approval), then evaluates the code. A macro holds its own
 `uses`, so a macro call gives none. A refusal at either
-step has no ledger and no effect. `compose` binds only the named tools,
-so a call to another tool fails as an unknown binding.
+step has no ledger and no effect. `compose` binds only the named tools.
+
+**Code that reads an unbound name gets an error that names the fix.** The
+evaluator wraps `tools` so that a read of `tools.<name>` for any other name
+throws. The message names the tool and
+the bound names. It differs for three cases:
+
+| Case                                       | Message                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| The seat has the tool, and `uses` omits it | `tools.wait is not bound. This call binds bash. Add wait to uses.`                         |
+| The seat has no tool of that name          | `tools.kill does not exist. This seat has no tool named kill. This call binds bash, wait.` |
+| The call binds nothing                     | The same two messages, with `This call binds no tool.`                                     |
+
+`compose` gives the evaluator the names of the seat tools that the call
+leaves out in `unlisted`. The two evaluators share one guest script, so
+both give the same message. The read of `then` and `toJSON` does not throw,
+so `await tools` and `JSON.stringify(tools)` work. `'wait' in tools` is
+false for an unbound name.
 
 **`code` is a function body.** It runs as the body of an `async` function
 with fresh local state. `await` works at the top level. `return` gives the
@@ -158,6 +174,30 @@ effects can stand. The error is a `ComposeFailure`, an internal class of the
 core that the main entry does not export. Its `details` hold the
 `ComposeResult`, and no executor passes them on. The ledger never holds the
 input or the output of a call.
+
+**The message shows the result of each completed call.** The code that
+failed has lost the values that its calls returned, such as the handles of
+processes that it started. The message gives each completed call a line
+`  result: <JSON>` under its ledger line, so the model can recover what the
+code started. The value is the binding value that the code received. A
+failed or pending call shows no result. A room tool shows none either: its
+result reaches the model only under `Room tools reported:`. A cancelled compose call, a time limit, and
+a failure show their results in the same way.
+
+```text
+The compose call failed: tools.wait is not bound. This call binds bash. Add wait to uses.
+Calls, in the order that the code made them:
+- c1.1 bash: completed
+  result: {"process":{"id":"p1"}}
+- c1.2 bash: completed
+  result: {"process":{"id":"p2"}}
+```
+
+**The results have two bounds.** One result shows at most 4096 bytes of
+JSON. All results together show at most `compose.limits.bytes`. A cut result
+reads `result: cut to at most <shown> of <full> bytes:` and then its first bytes,
+cut at a character. A result past the total reads `result: omitted, because
+the results above fill <bytes> bytes.`
 
 **The content is the contract.** Claude and Codex host a definition tool as
 a `BoundTool`, and a `BoundTool` keeps the content alone
@@ -783,6 +823,8 @@ interface Evaluator {
 interface EvaluatorInput {
   readonly code: string;
   readonly bindings: readonly string[];
+  /** The tools of the seat that the call does not bind. It sharpens the error for an unbound name. */
+  readonly unlisted?: readonly string[];
   /** The checked arguments of a macro. Absent for free code. */
   readonly args?: JsonValue;
   /** Calls one binding. It resolves to the binding value, or rejects with `{ message, details? }`. */
@@ -966,10 +1008,9 @@ smaller value.
 
 **The `calls` limit rejects the binding, so code can catch it.** The call
 past the limit gets no id, no ledger entry, and no step. Its binding
-rejects with an error that names `compose.limits.calls`. A name that the
-compose call does not bind, and arguments that break the schema, reject in
-the same way. Code that catches the error can return what it has. The other
-limits end the compose call.
+rejects with an error that names `compose.limits.calls`. Arguments that
+break the schema reject in the same way. Code that catches the error can
+return what it has. The other limits end the compose call.
 
 **The time limit covers the drain of late calls.** The timer starts before
 the code and stops after every call settles. It can fire while `compose`

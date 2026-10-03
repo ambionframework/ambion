@@ -37,12 +37,23 @@ import {
 	LIVE_THINKING,
 	MODEL,
 	REPORTS_COST,
+	refusingExecutionFor,
+	signIn,
 } from './support/kind.ts';
 
-export { executionFor, executorFor, KEY_VAR, LIVE_KIND, LIVE_THINKING, MODEL, REPORTS_COST };
+export {
+	executionFor,
+	executorFor,
+	KEY_VAR,
+	LIVE_KIND,
+	LIVE_THINKING,
+	MODEL,
+	REPORTS_COST,
+	refusingExecutionFor,
+};
 
-/** `describe` when the key is set; a skipped block when it is not. */
-export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);
+/** `describe` when the seats can sign in, on the key or on a login; a skipped block when they cannot. */
+export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(signIn() === undefined);
 
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;
@@ -90,11 +101,12 @@ export async function open(
 	prefix: string,
 	options: RoomOptions,
 	limits?: CreateRuntimeOptions['limits'],
+	execution: CreateRuntimeOptions['execution'] = executionFor(),
 ) {
 	const log = collectSteps();
 	const runtime = createRuntime({
 		storage: memoryJournals(),
-		execution: executionFor(),
+		execution,
 		logger: log.logger,
 		...(limits === undefined ? {} : { limits }),
 	});

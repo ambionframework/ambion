@@ -10,6 +10,7 @@
 		"paths": {
 			"@ambionframework/ambion": ["../ambion/src/index.ts"],
 			"@ambionframework/ambion/conformance": ["../ambion/src/conformance.ts"],
+			"@ambionframework/ambion/hosting": ["../ambion/src/hosting.ts"],
 			"@ambionframework/journal/conformance": ["../journal/src/conformance.ts"],
 			"@ambionframework/journal": ["../journal/src/index.ts"]
 		}
