@@ -3,7 +3,7 @@
 **Status: the current contract of 0.6.0.** The `compose` option adds the
 `compose` tool, and the main entry exports its types and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
-`@ambionframework/evaluator` holds `quickjsEvaluator` and `processEvaluator`,
+`@ambionframework/compose/runtime` holds `quickjsEvaluator` and `processEvaluator`,
 and both pass `evaluatorConformance`. The live run of CP6 is in
 [the compose evidence](../planning/compose-evidence.md).
 [The 0.6.0 plan](../planning/next.md) holds the work.
@@ -673,7 +673,7 @@ as every seat does.
 `compose` option. With no option, the seat has no `compose` tool.
 
 ```ts
-import { quickjsEvaluator } from '@ambionframework/evaluator';
+import { quickjsEvaluator } from '@ambionframework/compose/runtime';
 
 const analyst = defineAgent({
   name: 'analyst',
@@ -693,7 +693,7 @@ an executor package provides an execution. A definition already holds the
 entry holds a definition, and `@ambionframework/cloudflare` finds each
 definition by name in the worker, so no function crosses a wire.
 
-**`@ambionframework/evaluator` holds the first two evaluators.** Both pass
+**`@ambionframework/compose/runtime` holds the first two evaluators.** Both pass
 one conformance suite, `evaluatorConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
 the kernel.

@@ -47,7 +47,7 @@ executor options -> describeExecutor appends compose -> catalog and guidance
   model reads only the returned value, or the error and the ledger.
 - **Declared outputs** give the code typed `details`. `defineTool` checks
   them at compile time, and `compose` checks them at every call.
-- **`@ambionframework/evaluator`** holds `quickjsEvaluator` and
+- **`@ambionframework/compose/runtime`** holds `quickjsEvaluator` and
   `processEvaluator`. Both pass `evaluatorConformance`.
 - **Pi, Claude, and Codex** host `compose` as one more definition tool.
 - **Three fixes** close defects that 0.5.0 left open: a late steer on
@@ -289,7 +289,7 @@ of `~/.skills` does not change the body that runs. A seat without
 `compose` takes the same skill set and lists no macro.
 
 **CP5. The evaluators.** `@ambionframework/ambion/conformance` exports
-`evaluatorConformance`. `@ambionframework/evaluator` holds
+`evaluatorConformance`. `@ambionframework/compose/runtime` holds
 `quickjsEvaluator`, on the synchronous QuickJS build, and
 `processEvaluator`, with a bundled child entry that speaks JSON lines over
 stdio. `scripts/import-rules.test.mjs` gains the cases of the new package.

@@ -677,7 +677,7 @@
 				"packages/pi/src/**",
 				"packages/claude/src/**",
 				"packages/codex/src/**",
-				"packages/evaluator/src/**",
+				"packages/compose/src/**",
 				"packages/workspace/src/**",
 				"packages/simulator/src/**",
 				"examples/**/src/**"
@@ -717,7 +717,7 @@
 			// `node:` built-ins, and nothing else. A Biome override replaces the
 			// options of an earlier one for the same rule, so this entry repeats
 			// the refusal of the core's files.
-			"includes": ["packages/evaluator/src/child.ts"],
+			"includes": ["packages/compose/src/child.ts"],
 			"linter": {
 				"rules": {
 					"style": {

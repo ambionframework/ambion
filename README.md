@@ -195,7 +195,7 @@ the result. See [Actuators](docs/actuators.md).
 **A seat can join its tools in one call.** The `compose` option adds a tool
 that runs short code over the tools of the seat. The model reads only the
 value that the code returns. A skill can store the code as a macro, and
-`@ambionframework/evaluator` runs it. See [Compose](docs/compose.md).
+`@ambionframework/compose/runtime` runs it. See [Compose](docs/compose.md).
 
 **Two packages provide the bash backend.** `@ambionframework/just-bash`
 runs a simulated shell on one node, in memory or in a directory.

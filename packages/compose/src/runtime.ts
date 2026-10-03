@@ -6,4 +6,4 @@
 export { type ProcessOptions, processEvaluator, type SpawnChild } from './process.ts';
 export { type QuickjsOptions, quickjsEvaluator } from './quickjs.ts';
 
-export const PACKAGE_NAME = '@ambionframework/evaluator';
+export const PACKAGE_NAME = '@ambionframework/compose';

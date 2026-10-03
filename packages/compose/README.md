@@ -1,4 +1,4 @@
-# @ambionframework/evaluator
+# @ambionframework/compose
 
 The evaluators of the `compose` tool of an
 [Ambion](https://ambionframework.com) seat. An evaluator runs the code of one
@@ -8,7 +8,7 @@ The kernel imports no evaluator, so a seat opts in with one.
 ## Install
 
 ```sh
-pnpm add @ambionframework/ambion @ambionframework/evaluator
+pnpm add @ambionframework/ambion @ambionframework/compose
 ```
 
 Every package needs Node 22.19 or newer. `processEvaluator` needs Node 26 or
@@ -20,7 +20,7 @@ Pass an evaluator in the `compose` option of an executor.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
-import { quickjsEvaluator } from '@ambionframework/evaluator';
+import { quickjsEvaluator } from '@ambionframework/compose/runtime';
 import { pi } from '@ambionframework/pi';
 
 const analyst = defineAgent({
@@ -123,7 +123,7 @@ limit.
 
 ```ts
 import { evaluatorConformance } from '@ambionframework/ambion/conformance';
-import { quickjsEvaluator } from '@ambionframework/evaluator';
+import { quickjsEvaluator } from '@ambionframework/compose/runtime';
 import { it } from 'vitest';
 
 for (const c of evaluatorConformance(() => quickjsEvaluator({ cpuLimit: 500 }))) {

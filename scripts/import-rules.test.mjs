@@ -128,15 +128,15 @@ const CASES = [
 	['packages/assistant/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/assistant/src', '../../ambion/src/room.ts', true],
 	// The evaluators reach the core the same way.
-	['packages/evaluator/src', '@ambionframework/ambion', false],
-	['packages/evaluator/src', '@ambionframework/ambion/conformance', false],
-	['packages/evaluator/src', '@ambionframework/ambion/testing', true],
-	['packages/evaluator/src', '@ambionframework/ambion/src/room.ts', true],
-	['packages/evaluator/src', '../../ambion/src/room.ts', true],
+	['packages/compose/src', '@ambionframework/ambion', false],
+	['packages/compose/src', '@ambionframework/ambion/conformance', false],
+	['packages/compose/src', '@ambionframework/ambion/testing', true],
+	['packages/compose/src', '@ambionframework/ambion/src/room.ts', true],
+	['packages/compose/src', '../../ambion/src/room.ts', true],
 	// The child of `processEvaluator` imports `node:` built-ins and the setup
 	// script, and no other file.
 	[
-		'packages/evaluator/src',
+		'packages/compose/src',
 		[
 			['node:readline', false],
 			['node:vm', false],
