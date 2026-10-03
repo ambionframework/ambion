@@ -22,8 +22,8 @@ else.
 
 ## Status
 
-**In progress. CP1 to CP5 and CP7 are complete. CP6 is open: it waits for
-a person to approve the spend.** The compose design passed two design
+**In progress. CP1 to CP7 are complete.** The live run of CP6 found that
+the guidance does not steer a seat to `compose` for a chain. The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
@@ -143,7 +143,7 @@ SQLite file. A skill macro runs by name over the same workspace and file.
 
 ### Phase 5. Live evidence and release
 
-- [ ] **1.** The live cases and the token comparison. Needs phase 4.
+- [x] **1.** The live cases and the token comparison. Needs phase 4.
       (CP6)
 - [x] **2.** The pages, the changelog, and the status of the design.
       Done before 1, because 1 waits for a person to approve the spend.
@@ -309,6 +309,14 @@ for release evidence.
 **Evidence:** a live evidence file beside this one records each run: the
 model, the tools that the seat chose, the input tokens, and the outcome.
 A family with no key is marked skipped.
+
+**Result:** [the compose evidence](compose-evidence.md) holds one run on
+each of Pi, Claude, and Codex. Item 1 and item 6 passed on each kind. Item
+7 passed its read case and failed its chain case on each kind: no seat
+called `compose` for a chain. The token comparison therefore measures the
+catalog only, and the run with `compose` cost more input tokens. The macro
+case passed on Claude and Codex. On Pi the seat ran the macro and also
+wrote code.
 
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own
