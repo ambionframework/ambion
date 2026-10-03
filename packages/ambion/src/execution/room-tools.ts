@@ -289,7 +289,7 @@ function sayResult(
 	response: CommitResult,
 	closing: Summarizing | undefined,
 ): BoundToolResult {
-	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
+	if ('missed' in response) return missedSay(binding, call, response.missed);
 	if ('committed' in response) accepted(binding, response.committed, closing);
 	const result = landed(binding, response);
 	if (closing === undefined || result.isError) return result;
@@ -363,20 +363,18 @@ function missedSay(
 	binding: RoomToolBinding,
 	call: string,
 	missed: readonly Message[],
-	closing: Summarizing | undefined,
 ): BoundToolResult {
-	if (closing === undefined) {
-		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
-	}
+	// A closing say states no read position, so only an ordinary say reaches here.
+	binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
 	const result = text(
 		refusal(
 			'Not delivered: the room moved while you were speaking. New on the record:',
 			[...missed],
-			'Read it, then call say again with your message unless the new messages already say it.',
+			'Read it, then call say again with your message unless the new messages already say it or make it unnecessary.',
 		),
 		true,
 	);
-	return closing === undefined ? { ...result, carriesRecord: true } : result;
+	return { ...result, carriesRecord: true };
 }
 
 /** The tool that seats or removes one agent. */

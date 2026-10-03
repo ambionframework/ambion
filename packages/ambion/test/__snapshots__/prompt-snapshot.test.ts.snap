@@ -53,7 +53,7 @@ The record of 'site' so far:
 #2 [priya] Is the pour on?  (5 minutes ago)
 #3 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. These messages are your only source. Write the one message with say from what they report. When no message after the opening one reports anything, end your activation."
+priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. These messages are your only source. Write the one message with say from what they report. When no message after the request reports anything, end your activation."
 `;
 
 exports[`the rendered prompt > renders a respond activation > agent 1`] = `
@@ -71,7 +71,7 @@ question undirected that only one participant can answer: a say is a message, no
 thought. Messages arriving during your activation are marked [new]; fold them into what you are
 doing — and if a colleague has just made your point, let it stand. A say fails if
 the room moved while you were speaking: the failure lists what you missed. Read it,
-then call say again with your message unless the new messages already say it.
+then call say again with your message unless the new messages already say it or make it unnecessary.
 
 Who is reading can change while you work. An arrival or a departure reaches you as a
 [new] line during your activation, and wakes you outright if your seat watches for it. It is never a

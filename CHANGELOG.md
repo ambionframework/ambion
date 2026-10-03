@@ -12,24 +12,32 @@ through the tools that stay.
 **The assistant routes first and stays silent after that.** In a respond
 activation its job is to get the request to the specialists who need it. To
 route to a seated specialist at `named` attention, it calls `say` with `to` set
-to the name of that specialist. The `seat` tool routes nothing. A live run
+to the name of that specialist. The `seat` tool routes nothing, and the
+guidance now states first that a seated specialist needs `say`. A live run
 showed the failure: the assistant called `seat` for two specialists that were
 already seated, ended with no directed `say`, and no specialist received the
-request. For everything else the assistant calls `say` in three cases only: a
+request.
+
+For everything else the assistant calls `say` in three cases only: a
 participant asks it a question, the application instructions require a
-message, or it steers a forbidden action (below). A specialist result, report, failure,
+message, or it steers a forbidden action. A specialist result, report, failure,
 or acknowledgment is not a question, even when it is addressed to the
 assistant. The assistant sends no message about it, and the closing summary
 reports it. In an earlier live run, the assistant posted a specialist result
-to the person and added a wiring step that no specialist had stated. The
-assistant may steer in one case: a specialist writes that it will now take an
-action that the person forbade in words. Then it sends that specialist one
+to the person and added a wiring step that no specialist had stated.
+
+The assistant may steer in one case: a specialist writes that it will now take
+an action that the person forbade in words. Then it sends that specialist one
 short directed `say` that names the constraint. A result that already
 happened, a plan, a proposal, or an estimate is no such action. The guidance
-states the rule once, in about the same length as before. The workbench
-specialists report with a `say` that has no `to`, and answer a question that
-another specialist addressed to them with a directed `say`. A live run showed
-specialists that sent a result to a seat that never asked for it. The new guidance has no live trial on record yet.
+states the rule once, in about the same length as before.
+
+The workbench specialists report with a `say` that has no `to`. They answer a
+question that another specialist addressed to them with a directed `say`. They
+hand an artifact that a colleague continues to that colleague with a directed
+`say`. A live run showed specialists that sent a result to a seat that never
+asked for it. A live workbench run on a ChatGPT login checked the routing, the
+refused say, and the summary.
 
 **The `seat` tool says what to do for a seated agent.** The result for an agent
 that the record already seats is now `<name> is already seated. Seating it
@@ -44,24 +52,29 @@ come from a message of the exchange. A reported failure, an unknown, or a
 question to the person is a fact of the exchange, and the summary reports it.
 The writer adds nothing from its own knowledge. When no message after the
 request reports anything, the writer ends the activation without `say`, and the
-source messages stay in later prompts. The room checks the clear case itself:
-when no agent said a message inside the range of a closed exchange, the close
-names no summary writer and the room assigns no summary activation. The rule
-is `owesSummary` in `rules.verified.ts`. The prompt no longer says "Answer what
-they asked". The assistant no longer publishes a summary for every closed
-exchange or a summary that states a gap. Its identity no longer says that it
-summarizes each exchange, and now says that it routes each request. The writer
-copies each value as a message states it, derives none, and keeps the source
-paths and URIs that a message cites. The assistant writes no summary when its
-only agent messages are its own answer to the person or its own routing
-requests that no specialist answered. A live run showed a summary with
+source messages stay in later prompts.
+
+The room checks the clear case itself: when no agent said a message inside the
+range of a closed exchange, the close names no summary writer and the room
+assigns no summary activation. The rule is `owesSummary` in
+`rules.verified.ts`. The prompt no longer says "Answer what they asked". The
+assistant no longer publishes a summary for every closed exchange or a summary
+that states a gap. Its identity no longer says that it summarizes each
+exchange, and now says that it routes each request.
+
+The writer copies each value as a message states it, derives none, and keeps
+the source paths and URIs that a message cites. The assistant writes no summary
+when its only agent messages are its own answer to the person or its own
+routing requests that no specialist answered. A live run showed a summary with
 "9.3–10.7 mA" computed from a formula and the datasheet paths dropped.
 
-**A refused `say` tells the model what to do.** The result of a `say` that the
-freshness rule refuses reads `Not delivered: the room moved while you were
-speaking. New on the record:`, the new lines, and `Read it, then call say again
-with your message unless the new messages already say it.` A live run showed
-the old advice end an activation and lose the answer of a specialist.
+### A refused `say` tells the model what to do
+
+The result of a `say` that the freshness rule refuses reads `Not delivered: the
+room moved while you were speaking. New on the record:`, the new lines, and
+`Read it, then call say again with your message unless the new messages already
+say it or make it unnecessary.` A live run showed the old advice end an
+activation and lose the answer of a specialist.
 
 ### Simplification
 

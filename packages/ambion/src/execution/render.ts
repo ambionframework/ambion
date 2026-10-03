@@ -151,8 +151,9 @@ function renderClock(now: number): string {
 }
 
 /**
- * What a refused author is told. The runtime states what it missed; the
- * sentences around that belong to the kind of writing it was doing.
+ * What a refused author is told: the opening, the missed lines, then the
+ * advice. The caller supplies the opening and the advice for its kind of
+ * writing, and the runtime supplies the missed lines.
  */
 export function refusal(opening: string, missed: Message[], advice: string): string {
 	return [opening, ...missed.map(renderLine), advice].join('\n');
@@ -190,7 +191,7 @@ export const DEFAULT_SPEAKING = [
 	`thought. Messages arriving during your activation are marked [new]; fold them into what you are`,
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
 	`the room moved while you were speaking: the failure lists what you missed. Read it,`,
-	`then call say again with your message unless the new messages already say it.`,
+	`then call say again with your message unless the new messages already say it or make it unnecessary.`,
 ].join('\n');
 
 /**
@@ -492,5 +493,5 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
 		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
-		: 'Write the one message with say from what they report. When no message after the opening one reports anything, end your activation.';
+		: 'Write the one message with say from what they report. When no message after the request reports anything, end your activation.';
 }

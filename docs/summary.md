@@ -60,10 +60,8 @@ activation and seating rules described here. See
 
 Every exchange where a person spoke and an agent said a message is eligible
 for a summary. Eligibility does not depend on the number of messages or
-speakers. An exchange where no person spoke, such as a returned say that
-nobody answers, owes no summary. A
-room with no configured summary writer still closes exchanges and retains
-their source messages.
+speakers. A room with no configured summary writer still closes exchanges
+and retains their source messages.
 
 ## Summary activation
 
