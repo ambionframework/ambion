@@ -183,9 +183,13 @@ class ProcessRun {
 		return new Error(`The code passed the memory limit of ${this.memoryLimit} bytes.`);
 	}
 
-	/** The error of a child that ends before the code returns. */
+	/**
+	 * The error of a child that ends before the code returns. V8 aborts the
+	 * child when the heap reaches its limit. Under load the abort can come
+	 * before V8 prints its line, so SIGABRT alone also names the limit.
+	 */
 	private closed(code: number | null, by: NodeJS.Signals | null): Error {
-		if (this.tail.includes(OUT_OF_MEMORY)) return this.memoryError();
+		if (this.tail.includes(OUT_OF_MEMORY) || by === 'SIGABRT') return this.memoryError();
 		const how = by === null ? `exit code ${code}` : `signal ${by}`;
 		return new Error(`The runtime process ended before the code returned (${how}).`, {
 			cause: this.tail,

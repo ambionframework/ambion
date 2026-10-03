@@ -53,6 +53,17 @@ a tool that the code read and `uses` left out.
 **`COMPOSE_GUIDANCE` is shorter.** It tells the model to call `describe` before
 code that reads the fields of a result, and it drops the two code examples.
 
+**`COMPOSE_GUIDANCE` leads with the plan.** It tells the model to plan the
+tool calls first, and to make a plan of two or more calls, say included, in
+one compose call. A compose call has two steps: `describe`, then `compose`.
+The guidance tells the model to explore large results with compose, and to
+return a count or a sample. The list of cases is gone. The description of
+`compose` names the same two uses.
+
+**`processRuntime` names the memory limit when the child aborts.** V8 can
+abort the child before it prints its out-of-memory line. A child that ends
+on SIGABRT now gives the memory-limit error.
+
 **`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
 the runtime of its `compose` tool in the `runtime` field. The exports change
 as follows: `Evaluator` becomes `ComposeRuntime`, `EvaluatorInput` becomes

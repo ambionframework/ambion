@@ -801,7 +801,7 @@ describe('the compose tool of an executor', () => {
 		});
 		expect(tool.description).toBe(
 			[
-				'Run JavaScript in one call. It joins your tools: code calls them as tools.<name>. Code with no tools also calculates and transforms data. You read only the value that the code returns.',
+				'Run JavaScript that calls your tools as tools.<name>, in one call. Use it for a plan of two or more tool calls, and to explore large results. You read only the value that the code returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
