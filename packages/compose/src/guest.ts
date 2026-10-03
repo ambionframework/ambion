@@ -1,6 +1,6 @@
 /**
  * The script that sets up one JavaScript context for the code of a compose
- * call. Both evaluators run it in a fresh context, so both apply one globals
+ * call. Both runtimes run it in a fresh context, so both apply one globals
  * table (`docs/compose.md`). The script evaluates to a function. The host
  * calls that function once with three arguments:
  *

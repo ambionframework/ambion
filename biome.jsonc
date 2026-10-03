@@ -711,7 +711,7 @@
 			}
 		},
 		{
-			// The child of `processEvaluator` runs under --permission with no allow
+			// The child of `processRuntime` runs under --permission with no allow
 			// flag: Node loads its entry file and no other file. The build bundles
 			// the setup script into the entry, so the source imports that script and
 			// `node:` built-ins, and nothing else. A Biome override replaces the

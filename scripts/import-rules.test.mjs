@@ -127,13 +127,13 @@ const CASES = [
 	['packages/assistant/src', '@ambionframework/ambion/testing', true],
 	['packages/assistant/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/assistant/src', '../../ambion/src/room.ts', true],
-	// The evaluators reach the core the same way.
+	// The runtimes reach the core the same way.
 	['packages/compose/src', '@ambionframework/ambion', false],
 	['packages/compose/src', '@ambionframework/ambion/conformance', false],
 	['packages/compose/src', '@ambionframework/ambion/testing', true],
 	['packages/compose/src', '@ambionframework/ambion/src/room.ts', true],
 	['packages/compose/src', '../../ambion/src/room.ts', true],
-	// The child of `processEvaluator` imports `node:` built-ins and the setup
+	// The child of `processRuntime` imports `node:` built-ins and the setup
 	// script, and no other file.
 	[
 		'packages/compose/src',

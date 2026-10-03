@@ -1,13 +1,13 @@
 /**
  * What the model reads when a compose call fails, through the real `compose`
- * tool and each real evaluator: the error for a name that the call does not
+ * tool and each real runtime: the error for a name that the call does not
  * bind, and the results of the calls that completed.
  */
-import { defineTool, type Evaluator, type ToolContext } from '@ambionframework/ambion';
+import { type ComposeRuntime, defineTool, type ToolContext } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { processEvaluator, quickjsEvaluator } from '../src/runtime.ts';
+import { processRuntime, quickjsRuntime } from '../src/runtime.ts';
 
 const bash = defineTool({
 	name: 'bash',
@@ -23,13 +23,13 @@ const wait = defineTool({
 	execute: () => 'done',
 });
 
-/** Node 22 has no `--allow-net`, so `processEvaluator` refuses it. */
+/** Node 22 has no `--allow-net`, so `processRuntime` refuses it. */
 const permitted = process.allowedNodeEnvironmentFlags.has('--allow-net');
 
 const memoryLimit = 64 * 1024 * 1024;
 
 /** The message of the compose call that fails, with the tools of the seat. */
-async function failure(evaluator: Evaluator, uses: string[], code: string): Promise<string> {
+async function failure(runtime: ComposeRuntime, uses: string[], code: string): Promise<string> {
 	const ctx: ToolContext = {
 		agent: { name: 'worker', identity: 'Worker.' },
 		callId: 'c1',
@@ -39,7 +39,7 @@ async function failure(evaluator: Evaluator, uses: string[], code: string): Prom
 		kind: 'test',
 		instructions: 'Test.',
 		tools: [bash, wait],
-		compose: { evaluator },
+		compose: { runtime },
 	});
 	const compose = executor.tools.find((tool) => tool.name === 'compose');
 	if (compose === undefined) throw new Error('The executor has no compose tool.');
@@ -52,14 +52,14 @@ async function failure(evaluator: Evaluator, uses: string[], code: string): Prom
 }
 
 describe.each([
-	['quickjsEvaluator', true, () => quickjsEvaluator({ memoryLimit, cpuLimit: 500 })],
-	['processEvaluator', permitted, () => processEvaluator({ memoryLimit })],
-])('%s in a compose call that fails', (_name, runs, evaluator) => {
+	['quickjsRuntime', true, () => quickjsRuntime({ memoryLimit, cpuLimit: 500 })],
+	['processRuntime', permitted, () => processRuntime({ memoryLimit })],
+])('%s in a compose call that fails', (_name, runs, runtime) => {
 	it.runIf(runs)(
 		'names the tool that the call leaves out of uses, and shows the results of the completed calls',
 		async () => {
 			const message = await failure(
-				evaluator(),
+				runtime(),
 				['bash'],
 				`for (const command of ['a', 'b', 'c']) await tools.bash({ command });
 				 await tools.wait({ process: 'a' });`,

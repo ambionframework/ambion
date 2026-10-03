@@ -1,7 +1,7 @@
 /**
  * The `compose` tool on the Pi executor, in a room on the scripted stream.
  * The seat calls `compose` once, and the script reads the tool result that the
- * model reads. The code runs in the test evaluator of the core.
+ * model reads. The code runs in the test runtime of the core.
  */
 
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
@@ -15,6 +15,7 @@ import {
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -23,7 +24,6 @@ import {
 	table,
 	total,
 } from '../../ambion/test/support/compose-tools.ts';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
 import {
 	callTool,
@@ -47,7 +47,7 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 	const read: string[] = [];
 	const seat = scriptedAgent('worker', 'Composes tools.', {
 		tools,
-		compose: { evaluator: functionEvaluator, ...compose },
+		compose: { runtime: functionRuntime, ...compose },
 	});
 	const room = stopAtEnd(
 		await startRoom({
@@ -73,7 +73,7 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 const nestedOf = (logged: readonly Step[]) => logged.filter((step) => 'parent' in step);
 
 describe('compose on a Pi seat', () => {
-	const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
+	const own: ComposeOptions = { runtime: functionRuntime, guidance: 'Own guidance.' };
 
 	it.each([
 		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],

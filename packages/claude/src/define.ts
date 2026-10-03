@@ -10,7 +10,7 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /**
  * What the harness may spend and how hard it thinks. A Claude seat has no
@@ -41,7 +41,7 @@ export function claude(options: ClaudeOptions): ClaudeExecutor {
 	return Object.freeze({
 		...describeExecutor({
 			...options,
-			compose: options.compose ?? { evaluator: quickjsEvaluator() },
+			compose: options.compose ?? { runtime: quickjsRuntime() },
 			kind: 'claude',
 		}),
 		...pickPresent(options, POLICY),

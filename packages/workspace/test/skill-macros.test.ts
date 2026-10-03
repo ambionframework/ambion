@@ -19,7 +19,7 @@ import {
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { andrei, roomName } from '../../ambion/test/support/room.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
@@ -263,7 +263,7 @@ describe('a seat that runs a macro by name', () => {
 				instructions: 'Run macros.',
 				bundles: [workspace.tools({ skills })],
 				compose: {
-					evaluator: functionEvaluator,
+					runtime: functionRuntime,
 					approve: (request) => {
 						asked.push(request);
 						return 'allow';
@@ -316,7 +316,7 @@ describe('a seat that runs a macro by name', () => {
 			instructions: 'Run macros.',
 			bundles: [workspace.tools({ skills })],
 			compose: {
-				evaluator: functionEvaluator,
+				runtime: functionRuntime,
 				approve: (request) => {
 					asked.push(request);
 					return 'allow';
@@ -354,7 +354,7 @@ describe('a seat that runs a macro by name', () => {
 				kind: 'scripted',
 				instructions: 'Run macros.',
 				bundles: [workspace.tools({ skills })],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		});
 		const read: string[] = [];
@@ -401,7 +401,7 @@ describe('a seat that takes the skill set with and without compose', () => {
 		const bundle = workspace.tools({ skills });
 		const options = { kind: 'scripted', instructions: 'Run.', bundles: [bundle] };
 		const plain = describeExecutor(options);
-		const composing = describeExecutor({ ...options, compose: { evaluator: functionEvaluator } });
+		const composing = describeExecutor({ ...options, compose: { runtime: functionRuntime } });
 		expect(plain.tools.map((tool) => tool.name)).toEqual(
 			composing.tools.map((tool) => tool.name).filter((name) => name !== 'compose'),
 		);
@@ -423,12 +423,12 @@ describe('a seat that takes the skill set with and without compose', () => {
 			bundles: [workspace.tools({ skills })],
 		};
 		expect(() => describeExecutor(options)).not.toThrow();
-		expect(() =>
-			describeExecutor({ ...options, compose: { evaluator: functionEvaluator } }),
-		).toThrow(AmbionError);
-		expect(() =>
-			describeExecutor({ ...options, compose: { evaluator: functionEvaluator } }),
-		).toThrow("The macro 'lab-drift/snapshot-drift' uses 'sql'");
+		expect(() => describeExecutor({ ...options, compose: { runtime: functionRuntime } })).toThrow(
+			AmbionError,
+		);
+		expect(() => describeExecutor({ ...options, compose: { runtime: functionRuntime } })).toThrow(
+			"The macro 'lab-drift/snapshot-drift' uses 'sql'",
+		);
 	});
 
 	it('refuses two bundles that carry one macro name', async () => {
@@ -439,7 +439,7 @@ describe('a seat that takes the skill set with and without compose', () => {
 				kind: 'scripted',
 				instructions: 'Run.',
 				bundles: [workspace.tools({ skills }), { tools: [], macros: skills.macros }],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		).toThrow("Two macros are named 'lab-drift/snapshot-drift'");
 	});

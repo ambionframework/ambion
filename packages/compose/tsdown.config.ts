@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown';
 
 /**
- * Two builds. The child of `processEvaluator` runs under `--permission` with
+ * Two builds. The child of `processRuntime` runs under `--permission` with
  * no allow flag, so Node loads its entry file and no other file. The child
  * build bundles the setup script that the library shares with it, and it
  * imports only `node:` built-ins. One build with two entries would put the
