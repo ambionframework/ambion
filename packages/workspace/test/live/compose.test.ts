@@ -5,8 +5,8 @@
  * is short.
  *
  * When `AMBION_LIVE_REPORT` names a file, each case appends one JSON line
- * for each run. `scripts/compose-evidence.mjs` turns the lines into
- * `planning/compose-evidence.md`.
+ * for each run. `scripts/compose-evidence.mjs` turns the lines into the
+ * tables of the compose evidence in `planning/next.md`.
  */
 
 import { createHash } from 'node:crypto';

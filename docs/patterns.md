@@ -18,7 +18,7 @@ mechanism. The [repository README](../README.md) holds the positioning.
 | Approve before an agent acts        | `say({ to })` a person, the `awaiting` outcome                         | The directed question is the request. The `awaiting` outcome is the wait. No entry kind is new.       |
 | Stop one agent, keep the room       | `room.unseat`, the `unseat` tool, [fixed seats](roster.md#fixed-seats) | The seat leaves and the room continues. See below.                                                    |
 | Consult privately                   | Every message is visible to every seat                                 | A second room, by reference. The room has no private channel.                                         |
-| Delegate to a working group         | None in the kernel                                                     | Not built. The backlog holds it.                                                                      |
+| Delegate to a working group         | None in the kernel                                                     | Not built.                                                                                            |
 | Vote, sign off, structured decision | Application tools and artifacts                                        | Outside the kernel by design. A tool can write the record of the decision.                            |
 | Scheduled check-in                  | A scheduled say ([Exchange](exchange.md#6-a-scheduled-say))            | The agent calls `schedule` with `delaySeconds`. The room returns the say when it is due.              |
 

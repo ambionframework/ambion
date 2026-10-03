@@ -826,7 +826,7 @@ const sql = sqliteBackend('./data/lab.db', {
   example one with a comment inside it. The call stops at that statement.
   A statement outside this list can still lift the guard, for example
   `PRAGMA temp_store`. [Trust](trust.md) states the limit, and backlog
-  item K2 holds the allow-list that closes it.
+  item F1 holds the allow-list that closes it.
 - **The backend also checks the engine.** SQLite changes a flag PRAGMA
   when it compiles the statement, also under `EXPLAIN`. So after each
   compile the backend reads `recursive_triggers`, `writable_schema`, and

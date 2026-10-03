@@ -835,9 +835,7 @@ tool call that repeats after a timeout is safe.
 
 **A clone or a push holds the bash resource.** On the just-bash backends, the
 pack work runs in the host's process. While one agent clones a large
-template, every other agent's file tools wait. The backlog item
-[A backend profile and concurrent operations](../planning/backlog.md#designs-with-a-shape)
-removes this wait.
+template, every other agent's file tools wait.
 
 **Disposal runs in order.** The SQL resource goes first, then the bash
 resource, then the git resource. The bash resource waits for its active

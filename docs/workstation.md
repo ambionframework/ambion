@@ -492,11 +492,9 @@ path the agent names, with that account's permissions.
 reads the CSV file over SFTP as that account. An agent imports only a file
 that its account reads.
 
-**A database server waits in the backlog.** The
-[backlog](../planning/backlog.md#designs-with-a-shape) entry for a SQL
-backend over a database server pairs it with a workstation. That backend
-connects as each agent with its own database credential, so the server
-enforces the grants. `sqliteBackend` gives every agent one handle and one
+**No SQL backend over a database server exists yet.** Such a backend
+would connect as each agent with its own database credential, so the
+server would enforce the grants. `sqliteBackend` gives every agent one handle and one
 set of grants.
 
 ## A git backend
@@ -543,9 +541,7 @@ result depends on the server's permissions.
 
 **Every agent can change the audit log.** Each agent writes its own
 entries through its own account, so the group has write access to the
-file. An agent can edit or remove earlier entries through `bash`. The
-[backlog](../planning/backlog.md#designs-with-a-shape) decides which
-identity writes the audit log.
+file. An agent can edit or remove earlier entries through `bash`.
 
 **No agent can change the room mirror or a snapshot copy.** Only the host
 account writes `layout.rooms` and `layout.snapshots`, and the agents read
@@ -636,9 +632,7 @@ the script writes. It proves what only OpenSSH can:
 - OpenSSH certificates.
 - A workspace across two or more servers.
 - A workstation under workerd.
-- Concurrent operations on the bash resource. The
-  [backlog](../planning/backlog.md#designs-with-a-shape) holds the backend
-  profile that allows them.
+- Concurrent operations on the bash resource.
 
 Sources for the client facts: the published `ssh2` 1.17.0 and
 `@microsoft/dev-tunnels-ssh` 3.12.42 packages, the

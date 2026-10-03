@@ -5,7 +5,7 @@
 Skill [macros](macros.md) run by name. The package
 `@ambionframework/evaluator` holds `quickjsEvaluator` and `processEvaluator`,
 and both pass `evaluatorConformance`. The live run of CP6 is in
-[the compose evidence](../planning/compose-evidence.md).
+[the compose evidence](../planning/next.md#the-compose-evidence).
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
 **The `compose` tool joins the tools of a seat into one call.** The agent
@@ -823,7 +823,7 @@ test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
 Items 1, 6, and 7 add a live run, which CP6 holds.
-[The compose evidence](../planning/compose-evidence.md) records it.
+[The compose evidence](../planning/next.md#the-compose-evidence) records it.
 
 1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
    `compose` as one more definition tool. A workspace test binds `sql` and
@@ -865,5 +865,5 @@ Items 1, 6, and 7 add a live run, which CP6 holds.
    cost more input tokens on Pi and Claude, because it made many direct
    calls before it composed. Codex failed the fan-out case with and
    without `compose`: it omitted a filter of the task.
-   [The fan-out evidence](../planning/compose-evidence-fanout.md) holds
-   each run.
+   [The third run](../planning/next.md#the-third-run) holds each fan-out
+   run.
