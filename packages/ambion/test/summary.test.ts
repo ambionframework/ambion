@@ -177,16 +177,12 @@ const writesEach =
 	(_context, _name, request) =>
 		summarise(`${text} ${request}`);
 
-/** A product that is still reading when the room changes under it. */
+/** A product that is still reading when the room changes under it, then answers once. */
 function heldUntil(held: Promise<void>): PiScript {
 	return async (_context, _name, request) => {
-		if (request === 1) {
-			await held;
-			return quiet();
-		}
-		if (request === 2) return say('answer 1');
-		if (request === 3) return say('answer 2');
-		return quiet();
+		if (request !== 1) return quiet();
+		await held;
+		return say('answer 1');
 	};
 }
 

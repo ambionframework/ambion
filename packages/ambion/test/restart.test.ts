@@ -39,6 +39,7 @@ import {
 } from './support/room.ts';
 import {
 	byAgent,
+	contextText,
 	isClosingContext,
 	type PiScript,
 	quiet,
@@ -302,7 +303,12 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 	it('keeps an owed close after a restart', async () => {
 		const { clock, runtime } = await world(storage);
 		const script = byAgent({
-			alpha: says(['alpha one', 'alpha two', 'alpha three']),
+			alpha: (context, name, request) =>
+				says(
+					contextText(context).includes('Second?')
+						? ['alpha second']
+						: ['alpha one', 'alpha two', 'alpha three'],
+				)(context, name, request),
 			beta: says(['beta one']),
 			assistant: writes('Both questions, answered.', 2),
 		});

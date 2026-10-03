@@ -93,21 +93,48 @@ async function claimedWorker(storage: Storage, agents = [worker]) {
 	return { ...world, exchange, activation, say, first };
 }
 
-/** A room with a summary writer where the test claims the summary activation. */
+/**
+ * A room with a summary writer where the test claims the summary activation.
+ * The worker answers the question first, because an exchange that no agent
+ * answered owes no summary.
+ */
 async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOptions = {}) {
 	const world = await openWorld(
 		storage,
-		{ agents: [writer], summaryWriter: writer.name, seats: { [writer.name]: 'none' } },
+		{
+			agents: [worker, writer],
+			summaryWriter: writer.name,
+			seats: { [worker.name]: 'broadcast', [writer.name]: 'none' },
+		},
 		runtimeOptions,
 	);
 	const exchange = await (await world.room.visit(person)).send({ text: 'Question?' });
+	const answering = `message:${exchange.from}:${worker.name}:1`;
+	expect(await world.peer.lease({ activation: answering, operation: 'claim' })).toHaveProperty(
+		'ok',
+	);
+	const view = await world.peer.view(answering);
+	if (!('view' in view)) throw new Error('The respond activation is absent.');
+	const answer = await world.peer.commit({
+		activation: answering,
+		key: 'answer',
+		readThrough: view.view.through,
+		intent: { kind: 'said', text: 'Answer.' },
+	});
+	if (!('committed' in answer)) throw new Error('The answer did not land.');
+	await world.peer.lease({
+		activation: answering,
+		operation: 'release',
+		reason: 'released',
+		readThrough: answer.committed.seq,
+	});
 	await world.room.reconcile();
 	const owed = stateOf(world.room).due.find((work) => work.source === 'closed');
 	if (owed === undefined) throw new Error('The room has no summary activation.');
 	expect(await world.peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
 	const say = (key: string, text: string, extra: { refs?: string[]; to?: string } = {}) =>
 		world.peer.commit({ activation: owed.id, key, intent: { kind: 'said', text, ...extra } });
-	return { ...world, exchange, activation: owed.id, say };
+	return { ...world, exchange, last: answer.committed.seq, activation: owed.id, say };
 }
 
 const keyed = async (world: { room: Parameters<typeof messagesOf>[0] }, key: string) =>
@@ -350,7 +377,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 	it.each(blankTexts)(
 		'rejects blank closing summary %j without consuming its key, then accepts a corrected retry',
 		async (blank) => {
-			const { room, runtime, exchange, say } = await claimedSummary(storage);
+			const { room, runtime, exchange, last, say } = await claimedSummary(storage);
 			const key = 'summary-blank';
 			const before = await readRoom(room.name, { runtime });
 			expect(await say(key, blank)).toMatchObject({
@@ -367,7 +394,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 					text: preserved,
 					key,
 					to: person.name,
-					covers: { from: exchange.from, through: exchange.from },
+					covers: { from: exchange.from, through: last },
 				},
 			});
 			expect(await say(key, preserved, { to: person.name })).toEqual(accepted);
@@ -403,13 +430,13 @@ describe('the room protocol on a lease', () => {
 	});
 
 	it('releases a live activation with its usage, and refuses a summary activation nobody claimed', async () => {
-		const { opened, room, peer, activation, exchange } = await claimedSummary(memory, {
+		const { opened, room, peer, activation, exchange, last } = await claimedSummary(memory, {
 			limits: { context: { messages: 1 } },
 		});
-		// The room cap holds the summary view to its last message and counts the rest.
+		// The room cap pins the closing exchange whole and counts the rest.
 		const view = await peer.view(activation);
 		if (!('view' in view)) throw new Error('The summary activation is absent.');
-		expect(view.view.context.messages.map((message) => message.seq)).toEqual([exchange.from]);
+		expect(view.view.context.messages.map((message) => message.seq)).toEqual([exchange.from, last]);
 		expect(view.view.context.omitted).toBe(
 			(await messagesOf(room)).filter((message) => message.seq < exchange.from).length,
 		);

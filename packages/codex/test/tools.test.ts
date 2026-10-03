@@ -190,7 +190,11 @@ describe('say, seat and unseat', () => {
 				results.push(textOf(await turn.call('seat', { name: ' ada ' })));
 			},
 		);
-		expect(results).toEqual(['ada is already seated', 'ada is already seated']);
+		expect(results).toEqual(
+			Array(2).fill(
+				'ada is already seated. Seating it again does not activate it. To give it the request, call say with to set to ada.',
+			),
+		);
 		expect(commits[1]?.intent).toEqual({ kind: 'seated', name: 'ada' });
 	});
 

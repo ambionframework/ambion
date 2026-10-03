@@ -25,7 +25,13 @@ import {
 } from '../src/index.ts';
 import { portExecution } from './support/ports.ts';
 import { andrei, messagesOf, participantsOf, roomName, scriptedAgent } from './support/room.ts';
-import { isClosingContext, quiet, say, scriptedStream } from './support/scripted.ts';
+import {
+	answersLastQuestion,
+	isClosingContext,
+	quiet,
+	say,
+	scriptedStream,
+} from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
@@ -45,6 +51,7 @@ async function expectReplayed(room: Room, runtime: Runtime, opened: OpenedStorag
 
 describe.each(storages)('room value ownership on $name', (storage) => {
 	const writer = scriptedAgent('writer');
+	const worker = scriptedAgent('worker');
 
 	async function open(options: Omit<Parameters<typeof startRoom>[0], 'name' | 'runtime'> = {}) {
 		const opened = await openFor(storage);
@@ -113,14 +120,15 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 
 	it('detaches each summary response and its nested source range', async () => {
 		const { room } = await open({
-			agents: [writer],
-			seats: { writer: 'none' },
+			agents: [worker, writer],
+			seats: { worker: 'broadcast', writer: 'none' },
 			summaryWriter: writer.name,
 			execution: piExecution({
 				sessions: 'memory',
-				stream: scriptedStream((context) =>
-					isClosingContext(context) ? say('Original result.') : quiet(),
-				),
+				stream: scriptedStream((context, name, request) => {
+					if (isClosingContext(context)) return say('Original result.');
+					return answersLastQuestion([andrei.name])(context, name, request);
+				}),
 			}),
 		});
 		const exchange = await (await room.visit(andrei)).send({ text: 'Question?' });

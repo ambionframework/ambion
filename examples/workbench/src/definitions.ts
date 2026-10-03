@@ -83,7 +83,7 @@ export function team(workspace: Workspace, instrument: Instrument) {
 	});
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
 		const options = {
-			instructions: `${shared}${instructions} Report your result with an undirected say. When a specialist asked you, report to that specialist with a directed say. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+			instructions: `${shared}${instructions} Report your result with an undirected say. When a specialist asked you, report to that specialist with a directed say. Reply once when your assignment is done. When another specialist continues the work, hand it to that specialist with a directed say. Stay silent on acknowledgments and when there is no new work.`,
 			bundles,
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });

@@ -203,5 +203,10 @@ it('names the marker that the room puts on a specialist result steered into the 
 	expect(system).toContain(`starts with \`${marker}\``);
 	// The guidance states the ban on a message about a report once, and it names the one steer.
 	expect(system.split('is not a question').length - 1).toBe(1);
-	expect(system).toContain('is about to act against an explicit constraint');
+	expect(system).toContain('will now take an action that the person forbade in words');
+	// Routing comes before the silence rule, and the guidance says that seat routes nothing.
+	expect(system.indexOf('call say with BOTH to set')).toBeLessThan(
+		system.indexOf('Silence is the default for everything else'),
+	);
+	expect(system).toContain('The seat tool routes nothing');
 });

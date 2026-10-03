@@ -204,7 +204,7 @@ function landedLine(response: { committed: Message } | { unchanged: Unchanged })
 		const { unchanged } = response;
 		if (unchanged.kind === 'dismissed') return `#${unchanged.message} no longer waits`;
 		return unchanged.kind === 'seated'
-			? `${unchanged.name} is already seated`
+			? `${unchanged.name} is already seated. Seating it again does not activate it. To give it the request, call say with to set to ${unchanged.name}.`
 			: `${unchanged.name} is not seated`;
 	}
 	const message = response.committed;

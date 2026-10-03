@@ -325,7 +325,11 @@ describe('executor tool authority', () => {
 			unchanged: { kind: 'seated', name: 'surveyor' },
 		});
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
-			content: [{ text: 'surveyor is already seated' }],
+			content: [
+				{
+					text: 'surveyor is already seated. Seating it again does not activate it. To give it the request, call say with to set to surveyor.',
+				},
+			],
 		});
 		expect(commits).toEqual([
 			{

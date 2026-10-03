@@ -13,8 +13,8 @@ summarizes closed exchanges.** It seats a reserve specialist when the request
 needs one. It unseats a specialist when the person asks or the scope no longer
 needs it. It is passive when the specialists are seated at `broadcast`
 or `presence` attention. It speaks during an exchange only when a
-participant addresses it, or when an idle specialist at `named` attention
-needs a directed request.
+participant asks it a question, when an idle specialist at `named` attention
+needs a directed request, or, rarely, to stop a forbidden action.
 
 The assistant is an ordinary agent. The kernel continues to own the roster,
 activation authority, freshness checks, exchange closure, and summary
@@ -27,7 +27,7 @@ The package introduces no privileged role or separate execution lifecycle.
 | Routing        | Send one directed request to an idle specialist at `named` attention, with every constraint that is still in force. |
 | Answers        | Answer a participant that asks the assistant a question. A report is not a question. The summary answers the room.  |
 | Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.   |
-| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop an action against a constraint.  |
+| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop a forbidden action.              |
 
 Specialists own domain judgments. The assistant must not invent extra work
 after the request is satisfied or require every specialist contribution to
@@ -175,9 +175,10 @@ Set the tool's `to` field to activate a named specialist:
 say({ to: 'builder', text: 'Implement the requested prototype change.' });
 ```
 
-A name inside `text` does not route the message. Seating an agent that is
-already seated does not activate it. Check the roster before choosing the
-operation.
+A name inside `text` does not route the message. The `seat` tool routes
+nothing: for an agent that is already seated, it answers
+`<name> is already seated` and does not activate the agent. Check the roster
+before choosing the operation.
 
 | Situation                                                       | Assistant behavior                                                      |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -187,6 +188,7 @@ operation.
 | A person addresses a named specialist directly                  | Stay silent. The message already activates the specialist.              |
 | A specialist result relies on a superseded fact or a constraint | Stay silent. The summary states the conflict and the fact that applies. |
 | A specialist asks for information that only the person can give | Stay silent. The summary asks the person for it.                        |
+| A specialist writes that it will now take a forbidden action    | Send it one short directed say that names the constraint.               |
 
 Avoid announcements, acknowledgements, repeated assignments, and
 coordination messages that create further work without advancing the
@@ -220,7 +222,7 @@ default when the user has not renewed the work.
 
 ## Silence during the exchange
 
-**The assistant steers only to protect a constraint.** A specialist at `broadcast` or `presence`
+**A correction from the assistant repeats the record.** A specialist at `broadcast` or `presence`
 attention receives every message, the person's corrections and constraints
 included. The person reads every message too. A correction from the
 assistant repeats what both already have, and it starts more work.
@@ -232,10 +234,12 @@ directed say. When a result relies on a superseded fact, breaks a constraint,
 or needs information from the person, the closing summary reports it. The
 person then decides what happens next.
 
-**Steering is rare.** When a specialist is about to act against an explicit
-constraint of the person, for example to edit files after "do not edit
-files", the assistant sends that specialist one short directed say that names
-the constraint. The assistant steers in no other case.
+**The assistant steers only to protect a constraint.** Steering is rare. One
+exception holds: a specialist writes that it will now take an action that the
+person forbade in words, for example "I will edit the files" after "do not
+edit files". The assistant sends that specialist one short directed say that
+names the constraint. A result that already happened, a plan, a proposal, or
+an estimate is no such action: it is evidence for the closing summary.
 
 When a specialist report conflicts with evidence already in the record, the
 summary states both. It does not state the unsupported claim as fact.

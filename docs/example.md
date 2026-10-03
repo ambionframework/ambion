@@ -34,8 +34,9 @@ person joins a room, asks a question, and reads the summary.
 
 ### The assistant and the specialists
 
-**One assistant coordinates three specialists.** The assistant answers
-ordinary messages, seats a specialist, and writes the closing summary. It
+**One assistant coordinates three specialists.** The assistant seats
+a specialist, routes a request to a named specialist, and writes the closing
+summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
 `broadcast`. It writes the closing summary.
 

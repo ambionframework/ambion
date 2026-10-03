@@ -9,18 +9,31 @@ through the tools that stay.
 
 ### Assistant
 
-**The assistant stays silent in the exchange.** In a respond activation it
-sends a message for two reasons only: a directed request to an idle specialist
-at `named` attention, and an answer to a participant that asks it a question.
-A specialist result, report, failure, or acknowledgment is not a question,
-even when it is addressed to the assistant. The assistant sends no message
-about it, and the closing summary reports it. In the live run, the assistant
-posted a specialist result to the person and added a wiring step that no
-specialist had stated. The assistant may steer in one case: a specialist is
-about to act against an explicit constraint of the person. Then it sends that
-specialist one short directed say. The guidance states the rule once. It
-shrinks from 4,671 to 3,644 characters. The workbench specialists report with
-an undirected say, or with a directed say to the specialist that asked them.
+**The assistant routes first and stays silent after that.** In a respond
+activation its job is to get the request to the specialists who need it. To
+route to a seated specialist at `named` attention, it calls `say` with `to` set
+to the name of that specialist. The `seat` tool routes nothing. A live run
+showed the failure: the assistant called `seat` for two specialists that were
+already seated, ended with no directed `say`, and no specialist received the
+request. For everything else the assistant sends a message for one reason
+only: a participant asks it a question. A specialist result, report, failure,
+or acknowledgment is not a question, even when it is addressed to the
+assistant. The assistant sends no message about it, and the closing summary
+reports it. In an earlier live run, the assistant posted a specialist result
+to the person and added a wiring step that no specialist had stated. The
+assistant may steer in one case: a specialist writes that it will now take an
+action that the person forbade in words. Then it sends that specialist one
+short directed `say` that names the constraint. A result that already
+happened, a plan, a proposal, or an estimate is no such action. The guidance
+states the rule once, in about the same length as before. The workbench
+specialists report with an undirected `say`, or with a directed `say` to the
+specialist that asked them, and hand the work to the next specialist with a
+directed `say`. The new guidance has no live trial on record yet.
+
+**The `seat` tool says what to do for a seated agent.** The result for an agent
+that the record already seats is now `<name> is already seated. Seating it
+again does not activate it. To give it the request, call say with to set to
+<name>.`
 
 ### Summaries
 
@@ -30,7 +43,10 @@ come from a message of the exchange. A reported failure, an unknown, or a
 question to the person is a fact of the exchange, and the summary reports it.
 The writer adds nothing from its own knowledge. When no message after the
 request reports anything, the writer ends the activation without `say`, and the
-source messages stay in later prompts. The prompt no longer says "Answer what
+source messages stay in later prompts. The room checks the clear case itself:
+when no agent said a message inside the range of a closed exchange, the close
+names no summary writer and the room assigns no summary activation. The rule
+is `owesSummary` in `rules.verified.ts`. The prompt no longer says "Answer what
 they asked". The assistant no longer publishes a summary for every closed
 exchange or a summary that states a gap. Its identity no longer says that it
 summarizes each exchange.

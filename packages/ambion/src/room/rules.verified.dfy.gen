@@ -780,6 +780,29 @@ lemma stampedSummary_ensures(person: string, from: int, through: int)
 {
 }
 
+function reports(message: Message, people: seq<string>, from: int, through: int): bool
+{
+  ((((message.kind == "said") && !((message.from in people))) && (from <= message.seq_)) && (message.seq_ <= through))
+}
+
+lemma reports_ensures(message: Message, people: seq<string>, from: int, through: int)
+  ensures (reports(message, people, from, through) <==> ((((message.kind == "said") && !((message.from in people))) && (from <= message.seq_)) && (message.seq_ <= through)))
+  ensures ((message.kind != "said") ==> !(reports(message, people, from, through)))
+  ensures (((message.seq_ < from) || (through < message.seq_)) ==> !(reports(message, people, from, through)))
+{
+}
+
+function owesSummary(messages: seq<Message>, people: seq<string>, from: int, through: int): bool
+{
+  (exists message :: message in messages && reports(message, people, from, through))
+}
+
+lemma owesSummary_ensures(messages: seq<Message>, people: seq<string>, from: int, through: int)
+  ensures (owesSummary(messages, people, from, through) <==> exists i: int :: (((0 <= i) && (i < |messages|)) && reports(messages[i], people, from, through)))
+  ensures ((|messages| == 0) ==> !(owesSummary(messages, people, from, through)))
+{
+}
+
 function opensExchange(message: Message, people: seq<string>, closedThrough: int): bool
 {
   if (message.seq_ <= closedThrough) then
