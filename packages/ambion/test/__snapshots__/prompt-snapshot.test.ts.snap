@@ -4,9 +4,14 @@ exports[`the rendered prompt > renders a closing activation > agent 1`] = `
 "You are 'worker'.
 
 The exchange is over. Write the one message the assigned person reads instead of the working,
-using the say tool. Answer what they asked, and keep only facts that change what they do next.
-Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns that matter.
-Leave out the discussion, who said what, and facts that do not change the answer.
+using the say tool. Report what the exchange established, and keep only facts that change what
+they do next. Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns
+that matter. Leave out the discussion, who said what, and facts that do not change the answer.
+
+The messages of the exchange are your source. Every fact, value, and recommendation in your
+message must come from a message of the exchange or from evidence that a message cites, such as
+a ref or a tool result in the record. Add nothing from your own knowledge. When the messages do
+not answer the request, do not write a summary: end your activation without calling say.
 
 Use the fixed recipient and range in this activation. Do not answer another person, extend the
 exchange, or mention private context. Write one short message with no preamble or sign-off.
@@ -44,7 +49,7 @@ The record of 'site' so far:
 #2 [priya] Is the pour on?  (5 minutes ago)
 #3 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. Write the one message with say, or end your activation."
+priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. These messages are your only source. Write the one message with say when the exchange answers the request. Otherwise end your activation."
 `;
 
 exports[`the rendered prompt > renders a respond activation > agent 1`] = `

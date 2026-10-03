@@ -241,6 +241,11 @@ describe('closing summaries', () => {
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// it is told whom it writes for, and how that person reads
 		expect(prompts[0]).toContain('You are writing for priya.');
+		// the exchange messages are the only source, and no answer means no summary
+		expect(prompts[0]).toContain('The messages of the exchange are your source.');
+		expect(prompts[0]).toContain('Add nothing from your own knowledge.');
+		expect(prompts[0]).toContain('end your activation without calling say');
+		expect(contexts[0]).toContain('These messages are your only source.');
 		expect(prompts[0]).toContain('Leave out who said what.');
 		// The last line names the range this activation closes, in the journal's
 		// own seq: the same number a workspace mirror writes for each message,
