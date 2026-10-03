@@ -314,6 +314,18 @@ call. Do not call sql first to read the paths:
   const found = await tools.sql({ sql: 'SELECT path FROM files' });
   return tools.snapshot({ paths: found.rows.map((row) => row.path) });
 
+Write the code from the signatures. A typed result gives fields, such
+as rows of sql and text of bash: read the fields, and do not parse
+text. A tool that fails rejects with an Error. error.details holds its
+result when the tool gives one. bash rejects when the command exits
+with a code other than 0. When the task expects such a failure, catch
+it and read error.details:
+  const run = await tools
+    .bash({ command: 'pnpm test', wait: 300 })
+    .catch((error) => error.details);
+  const { refs } = await tools.snapshot({ paths: [run.process.output] });
+  return { exit: run.process.exitCode, tail: run.text.slice(-500), log: refs[0] };
+
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call and its outcome. A completed call can have had an
