@@ -218,9 +218,11 @@ process, or a room. The host draws the widgets and keeps the data
 current with no activation. A press or a submit by a person returns to
 the room as a `visit.send` from that person. The canvas is a folder of
 the workspace, outside the journal, with a revision on each widget.
-[The canvas](../docs/canvas.md) states the design and seven open
-decisions. The first step adds a package and no kernel change.
-**Condition:** the owner picks a first host for the canvas.
+[The canvas](../docs/canvas.md) states the design. The owner settled
+four decisions on 2026-10-03: one canvas for each room, an act as a
+`visit.send`, the workbench first, and no code from an agent. Three
+stay open. The first step adds a package and no kernel change.
+**Condition:** the owner schedules the canvas for a release.
 
 ## Considered and kept
 

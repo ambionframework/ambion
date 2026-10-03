@@ -122,7 +122,8 @@ catalogs, and an agent places only a kind that the host can draw. A
 widget of a kind that the host no longer draws shows as one line that
 names its id and kind.
 
-**A first catalog has nine kinds.**
+**The full catalog has nine kinds.** The workbench starts with four of
+them (see [Decisions](#decisions)).
 
 | Kind       | Shows                                            |
 | ---------- | ------------------------------------------------ |
@@ -308,29 +309,26 @@ source can show a file in the home of another agent. A `sql` source runs
 agent text as the host on each refresh. The host allows a list of paths
 and tables, and it runs each query under `PRAGMA query_only`.
 
+## Decisions
+
+**The owner accepted the recommendations of the review on 2026-10-03.**
+Each one holds for now, and a later review can reopen it.
+
+| Decision              | Choice                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| The scope of a canvas | One canvas for each room. The per-person arrangement in [Layout](#layout) covers the rest |
+| The record of an act  | A `visit.send` with the `canvas:` label. No kind of entry for acts                        |
+| The first host        | The workbench, with four kinds: file text, a table, an image, and a process log           |
+| Code from an agent    | Out of scope. If it comes later, it starts as a Git template                              |
+
 ## Open decisions
 
-Each decision gives the recommendation of the review of 2026-10-03.
-
-1. **The scope of a canvas.** One canvas for each room, which every
-   visitor sees. The alternative is one view for each person.
-   Recommended: one canvas for each room. The per-person arrangement in
-   [Layout](#layout) covers the rest.
-2. **What a person can change.** A person can arrange and act. The
+1. **What a person can change.** A person can arrange and act. The
    question is whether a person can also place a widget, such as a note.
-   Recommended: keep it open, or allow `markdown` alone, with the host as
-   the author.
-3. **The record of an act.** An act as a `visit.send` needs no kernel
-   change. A kind of entry for acts would keep typed words apart from
-   presses on the record. Recommended: `visit.send` with the `canvas:`
-   label.
-4. **The first host.** Recommended: the workbench, with the four kinds
-   that its panels already draw: file text, a table, an image, and a
-   process log. A web host is the second step.
-5. **Code from an agent in a widget.** Out of scope for the first step.
-   If it comes later, it starts as a Git template.
-6. **Bounds.** A cap on the widgets of a canvas and on the bytes of an
+   It stays open for now. One option allows `markdown` alone, with the
+   host as the author.
+2. **Bounds.** A cap on the widgets of a canvas and on the bytes of an
    `inline` source. [D1](../planning/backlog.md#designs-with-a-shape)
    holds the accounting.
-7. **The widgets of an unseated author.** They can stay, go with the
+3. **The widgets of an unseated author.** They can stay, go with the
    author, or pass to the host.
