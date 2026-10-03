@@ -279,8 +279,8 @@ login in `auth.json` decides billing.
 
 **No journal body and no stored format changes.** The golden journals, the
 snapshot manifest, and the sensor wire API stay as they are. A journal of
-0.5.0 opens on 0.6.0. The new `approval` step belongs to the trace and not
-to the journal.
+0.5.0 opens on 0.6.0. The new `approval` step belongs to the trace. No
+journal body carries a step.
 
 #### Exports
 
