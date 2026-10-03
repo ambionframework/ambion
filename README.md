@@ -192,10 +192,11 @@ tools.
 with `bash` drives a device and stops safe on `SIGTERM`. A sensor confirms
 the result. See [Actuators](docs/actuators.md).
 
-**A seat can join its tools in one call.** The `compose` option adds a tool
-that runs short code over the tools of the seat. The model reads only the
-value that the code returns. A skill can store the code as a macro, and
-`@ambionframework/evaluator` runs it. See [Compose](docs/compose.md).
+**A skill can store a procedure as a macro.** The model runs the macro by
+name with arguments, and it reads only the value that the macro returns.
+The `compose` option adds the tool that runs a macro, or short code over
+the tools of the seat. `@ambionframework/evaluator` runs the code. See
+[Macros](docs/macros.md) and [Compose](docs/compose.md).
 
 **Two packages provide the bash backend.** `@ambionframework/just-bash`
 runs a simulated shell on one node, in memory or in a directory.

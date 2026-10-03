@@ -8,11 +8,19 @@ and both pass `evaluatorConformance`. The live run of CP6 is in
 [the compose evidence](../planning/compose-evidence.md).
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
-**The `compose` tool joins the tools of a seat into one call.** The agent
-calls `compose` with the tools that it uses and short code. The code passes
-the result of one tool into the next, and returns one value to the model.
-The data between the calls never enters the context of the model, so it
-costs no inference tokens.
+**Macros are the main use of `compose`.** A skill stores a procedure as a
+[macro](macros.md), and the model runs it by name with arguments. The model
+writes no code, and it reads only the value that the macro returns. In the
+live runs, the seats of Claude and Codex ran the macro with no code and no
+exploration calls.
+
+**Free code serves precision and chains of typed tools.** The agent calls
+`compose` with the tools that it uses and short code. The code passes the
+result of one tool into the next, and returns one value to the model. The
+data between the calls stays out of the context of the model. The live runs
+measured no token saving for free code. The catalog and the exploration
+calls of the seat cost more input tokens than the data that the call kept
+out of the context ([Catalog](#the-catalog)).
 
 ```js
 // compose({ uses: ['sql', 'snapshot'], code })

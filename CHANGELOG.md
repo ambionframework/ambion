@@ -20,6 +20,11 @@ Codex and Claude now send the marked line.
 
 ### The compose vocabulary
 
+**Macros are the main use of `compose`.** A skill stores a procedure as a
+macro, and the model runs it by name. Free code serves precision and chains
+of typed tools. The live evidence in `planning/` shows no token saving for
+free code, and the docs claim none.
+
 **A tool can declare its output for `compose`.** `AmbionTool` gains the
 field `compose`: `false`, or `{ output }` with a TypeBox schema. The check
 of a tool refuses any other value. `captureTool` copies the field.
