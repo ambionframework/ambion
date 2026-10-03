@@ -10,7 +10,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
  *
  * The debug build of QuickJS runs WebAssembly frames that are larger than
  * the frames of the release build. On arm64, a call from the code to the
- * host passes the default V8 stack of 984 KB. The worker gets 4 MB, below
+ * host passes the default V8 stack of 984 KB. The test process gets 4 MB, below
  * the 8 MB stack of the main thread.
  */
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
