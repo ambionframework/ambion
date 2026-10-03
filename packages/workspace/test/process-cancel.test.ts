@@ -138,13 +138,13 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 			invoke(workspace, 'cancel', { handle }),
 			invoke(workspace, 'cancel', { handle: 'bash-0000000000b1' }, 'bob'),
 		]);
-		// While the grace runs, the status reads running, and names the cancel that waits.
+		// While the grace runs, a read of the process reads running, and names the cancel that waits.
 		let listed: Process | undefined;
 		for (let reads = 0; listed?.stopping !== true && reads < 50; reads += 1) {
 			[listed] = await workspace.processes.list({ agent: 'ada' });
 		}
 		expect(listed).toMatchObject({ handle, state: 'running', stopping: true });
-		expect((await invoke(workspace, 'status', { handle })).text).toContain(
+		expect((await invoke(workspace, 'wait', { handles: [handle], timeout: 0 })).text).toContain(
 			'is running, and the table stopped it. It has not ended yet.',
 		);
 		const [ownedEnd, adoptedEnd] = await cancels;

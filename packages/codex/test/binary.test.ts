@@ -516,7 +516,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'schedule',
 							'seat',
 							'snapshot',
-							'status',
 							'unseat',
 							'wait',
 							'write',

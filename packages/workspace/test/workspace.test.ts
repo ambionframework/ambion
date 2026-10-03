@@ -38,18 +38,7 @@ import { FILES_NOTE, wrapped } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const ROOM_MIRROR_GUIDANCE = roomMirrorGuidance('/rooms');
-const BASE_TOOLS = [
-	'read',
-	'write',
-	'edit',
-	'bash',
-	'ps',
-	'status',
-	'wait',
-	'cancel',
-	'snapshot',
-	'restore',
-];
+const BASE_TOOLS = ['read', 'write', 'edit', 'bash', 'ps', 'wait', 'cancel', 'snapshot', 'restore'];
 
 /** Every line of one JSONL file, parsed. */
 async function linesOf(env: WorkspaceEnv, path: string): Promise<Record<string, unknown>[]> {
@@ -185,9 +174,10 @@ describe('the workspace bundle', () => {
 	});
 
 	it.each([
+		[9, 'nine'],
 		[10, 'ten'],
 		[16, 'sixteen'],
-		[9, '9'],
+		[8, '8'],
 		[17, '17'],
 	])('counts %i tools in the tool line as %s', (count, word) => {
 		const names = Array.from({ length: count }, (_, index) => `tool${index}`);

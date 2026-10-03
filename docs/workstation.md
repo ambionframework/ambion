@@ -72,7 +72,7 @@ workspace supplies everything that holds on every backend
 | `guidance` about the shell and hostname     | The workstation                                                 |
 | `endpoints.forward()` for loopback services | The workstation                                                 |
 | `read`, `write`, `edit`                     | The workspace: the three file tools                             |
-| `bash`, `ps`, `status`, `wait`, `cancel`    | The workspace: the process tools ([Processes](processes.md))    |
+| `bash`, `ps`, `wait`, `cancel`              | The workspace: the process tools ([Processes](processes.md))    |
 | `snapshot`, `restore`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
 | `sql`                                       | The workspace, when `backend.sql` is set                        |
 | Path rule, deadline, output view            | The workspace: the environment helpers                          |

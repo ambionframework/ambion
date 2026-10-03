@@ -21,7 +21,7 @@ bash({
 
 Use your own fork ID in `AMBION_SENSOR_REPOSITORY`. The process stays in the
 foreground; do not use `&`, `nohup`, or daemonize it. Capture starts at launch.
-Read `status({ handle })` until output contains `READY {"port":...}`. READY is
+Read `wait({ handles: [handle], timeout: 0 })` until output contains `READY {"port":...}`. READY is
 printed only after the first usable frame. A permission request can delay it.
 Then call `connect({ name: 'camera', process: handle, port })`, followed by
 `observe({ sensor: 'camera/camera' })`. Cite the returned manifest snapshot ref.

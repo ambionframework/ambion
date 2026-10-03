@@ -351,7 +351,7 @@ function openSqlResource(
  * defines. `use` and `mirror()` reach the bash resource, `sql` exposes the
  * SQL resource, and `git` the git resource. The bash backend's `layout` names where
  * the audit log and the room mirrors live. A workspace with no SQL backend
- * has no `sql` tool, and one with no git backend has no `repos`, `clone` or
+ * has no `sql` tool, and one with no git backend has no `repos` or
  * `fork` tool. Set `audit.path` to record every bound tool call at a path
  * of your own; the default is `layout.audit`. Tool guidance then tells
  * every agent the log exists and where to read it, and always names the

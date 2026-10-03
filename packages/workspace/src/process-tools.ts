@@ -1,12 +1,12 @@
 /**
- * The `bash`, `ps`, `status`, `wait` and `cancel` tools over the process
- * table.
+ * The `bash`, `ps`, `wait` and `cancel` tools over the process table.
  *
  * `bash` starts every command as a background process and returns its
  * handle. The call waits up to `wait` seconds for the process to end. A
  * process that ends in that time gives its exit code and its output in the
  * same result. A process that runs longer gives its handle, and the agent
- * reaches it again through `status`, `wait` and `cancel`. `ps` lists the
+ * reaches it again through `wait` and `cancel`. A `wait` with `timeout: 0`
+ * reads the state and the new output without a wait. `ps` lists the
  * running processes. The whole output of a process goes to a file in the
  * agent's home, which `read` reaches.
  *
@@ -85,8 +85,11 @@ export function processToolGuidance(): string {
 		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
 		`The call waits up to wait seconds, ${DEFAULT_BASH_WAIT_SECONDS} by default, and then gives the state of the process and its output.`,
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
-		`status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,`,
-		`wait waits for the first of them to end, and cancel stops one. ps lists your running processes.`,
+		`Each process has a directory, ${PROCESSES_DIR}/<handle>/, with its spec, its out, and its exit code when it ends.`,
+		`ls ${PROCESSES_DIR} lists every process you started that the workspace still keeps.`,
+		`wait takes a list of handles and waits for the first of them to end.`,
+		`wait with one handle and timeout 0 gives the state and the new output of that process at once.`,
+		`cancel takes a handle and stops its process. ps lists your running processes.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
@@ -138,7 +141,7 @@ const waitSchema = Type.Object({
 	}),
 	timeout: Type.Optional(
 		Type.Number({
-			description: `Seconds to wait for the process to end. The default is ${DEFAULT_WAIT_SECONDS}.`,
+			description: `Seconds to wait for the process to end. The default is ${DEFAULT_WAIT_SECONDS}. Set 0 to read the state and the new output without a wait.`,
 		}),
 	),
 });
@@ -147,7 +150,7 @@ type BashParams = Static<typeof bashSchema>;
 type HandleParams = Static<typeof handleSchema>;
 type WaitParams = Static<typeof waitSchema>;
 
-/** The process capability: the five process tools, their note, and the reminder of the table. */
+/** The process capability: the four process tools, their note, and the reminder of the table. */
 export function processCapability(options: ProcessToolOptions): Capability {
 	return {
 		tools: createProcessTools(options),
@@ -156,14 +159,14 @@ export function processCapability(options: ProcessToolOptions): Capability {
 	};
 }
 
-/** Build the `bash`, `ps`, `status`, `wait` and `cancel` tools over the process table. */
+/** Build the `bash`, `ps`, `wait` and `cancel` tools over the process table. */
 function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] {
 	const table = options.processes;
 	return Object.freeze([
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash, status, and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
+			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to wait seconds for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
 			parameters: bashSchema,
 			compose: { output: ProcessOutput },
 			execute: (params: BashParams, ctx) => started(options, params, ctx),
@@ -177,23 +180,10 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			execute: async (_params: object, ctx) => listed(table, ctx),
 		}),
 		defineTool({
-			name: 'status',
-			label: 'Process status',
-			description:
-				'Give the state of a process and its new output: the output after your last result for it.',
-			parameters: handleSchema,
-			compose: { output: ProcessOutput },
-			execute: async (params: HandleParams, ctx) => {
-				const process = await table.find(ctx.agent, params.handle, ctx.signal);
-				const note = deadlineLine(NOT_CUT, process, [process], ctx);
-				return failedOr(await described(options, process, ctx, note), [process]);
-			},
-		}),
-		defineTool({
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. A process that has ended makes a wait return at once, so drop its handle from handles.',
+				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. With one handle and timeout 0, the call does not wait: it gives the state and the new output of that process at once. A process that has ended makes a wait on several handles return at once, so drop its handle from handles.',
 			parameters: waitSchema,
 			compose: { output: WaitOutput },
 			execute: (params: WaitParams, ctx) => waited(options, params, ctx),
@@ -314,7 +304,8 @@ async function started(
 
 /**
  * Wait for the first of the processes in `handles` to end. For one process,
- * the result is the result of `status`. For several, see `waitedOnSeveral`.
+ * the result is the state and the new output of that process. For several,
+ * see `waitedOnSeveral`.
  * A handle that repeats counts once.
  */
 async function waited(
@@ -370,13 +361,14 @@ async function waitedOnSeveral(
 const WAIT_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
 
 /** What a process that ended says when its output does not fit the result. */
-const HELD = 'Its new output did not fit this result: call status with its handle to read it.';
+const HELD =
+	'Its new output did not fit this result: call wait with its handle and timeout 0 to read it.';
 
 /**
  * Describe the processes that ended, in the order of the handles, until the
  * text holds `WAIT_OUTPUT_BYTES`. Each one adds at most one view of 50 KB, so
  * the text holds at most about twice the budget. A process past the budget is not described, so its
- * cursor stays and a later `status` gives its output.
+ * cursor stays and a later `wait` with timeout 0 gives its output.
  */
 async function describedWithin(
 	options: ProcessToolOptions,
@@ -398,7 +390,7 @@ async function describedWithin(
 	return { shown, held };
 }
 
-/** The line that tells the agent to drop each handle that ended from its next wait. */
+/** The line that tells the agent to drop each handle that ended from its next wait on several handles. */
 function dropLine(ended: readonly Process[]): string {
 	const handles = ended.map((process) => process.handle).join(', ');
 	const which = ended.length === 1 ? 'it has ended' : 'they have ended';

@@ -2,11 +2,11 @@
  * The neutral layer's file tools, read, write and edit, and the tool line
  * of the guidance.
  *
- * Every workspace gets these three tools, the five process tools
- * (`./process-tools.ts`: bash, ps, status, wait and cancel), and `snapshot`
+ * Every workspace gets these three tools, the four process tools
+ * (`./process-tools.ts`: bash, ps, wait and cancel), and `snapshot`
  * and `restore` (`./snapshots.ts`) before any tool its bash backend adds of
  * its own. A workspace with a SQL backend also gets
- * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos`, `clone`
+ * `sql` (`./sql-tool.ts`), and one with a git backend gets `repos`
  * and `fork` (`./git-tools.ts`). The file tools run over the port of the bash
  * backend alone, so this module names no just-bash type.
  */
@@ -16,8 +16,9 @@ import type { Capability } from './capability.ts';
 import { fileTools } from './file-tools.ts';
 import type { WorkspaceResource } from './resource.ts';
 
-/** The number words of the tool line, by the number of tools, from ten. */
+/** The number words of the tool line, by the number of tools, from nine. */
 const COUNT_WORDS: Readonly<Record<number, string>> = {
+	9: 'nine',
 	10: 'ten',
 	11: 'eleven',
 	12: 'twelve',
@@ -34,7 +35,7 @@ function listOf(names: readonly string[]): string {
 
 /**
  * The tool line of the guidance. `names` holds the name of each tool of the
- * bundle, in order. The count is a word from ten to sixteen, and digits
+ * bundle, in order. The count is a word from nine to sixteen, and digits
  * outside that range.
  */
 export function defaultToolGuidance(names: readonly string[]): string {

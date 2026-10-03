@@ -11,8 +11,9 @@
 call until its command ends, and a workspace has four tools.
 
 **`bash` starts every command as a background process.** The call gives a
-handle for the process. `status` and `cancel` take that handle, `wait` takes a
-list of handles, and `ps` lists the processes. Every workspace has these five
+handle for the process. `cancel` takes that handle, `wait` takes a list of
+handles, and `ps` lists the processes. `wait` with one handle and `timeout:
+0` reads the state and the new output at once. Every workspace has these four
 tools, on every bash backend.
 
 **The files of the bash backend are the source of truth.** Each process
@@ -37,7 +38,7 @@ the processes of the agents of this run through `workspace.processes`
 | `processes.ts`      | The table: starts, reads, adoptions, and the host's view             |
 | `process-cancel.ts` | The cancels: the chain of steps for each agent, and the waits        |
 | `process-run.ts`    | One run of a process, and the waits                                  |
-| `process-tools.ts`  | The five tools, and the read of the end of an output                 |
+| `process-tools.ts`  | The four tools, and the read of the end of an output                 |
 | `process-text.ts`   | The state line, the `ps` table, and the reminder text                |
 
 The journal holds no entry for a process. [Workspace](workspace.md)
@@ -63,15 +64,14 @@ states the resources and the backends that a process runs on.
 | -------- | ------------------------------------------------- | ----------------------------------------------------------------- |
 | `bash`   | `command`, `name?`, `timeout?`, `wait?`, `grace?` | Starts a process, waits up to `wait` seconds, and gives its state |
 | `ps`     | None                                              | Lists the caller's running processes                              |
-| `status` | `handle`                                          | Gives the state of the process and its new output                 |
 | `wait`   | `handles`, `timeout?`                             | Waits up to `timeout` seconds for the first process to end        |
-| `cancel` | `handle`                                          | Cancels a running process, waits for it to end, then as status    |
+| `cancel` | `handle`                                          | Cancels a running process, waits for it to end, then as `wait`    |
 
 | Value                | Default | Range                                        |
 | -------------------- | ------- | -------------------------------------------- |
 | `bash` `timeout`     | 600 s   | Above 0, up to 2,147,483 s                   |
 | `bash` `wait`        | 30 s    | 0 to 600 s. 0 returns at once                |
-| `wait` `timeout`     | 30 s    | 0 to 600 s                                   |
+| `wait` `timeout`     | 30 s    | 0 to 600 s. 0 reads without a wait           |
 | `bash` `grace`       | 10 s    | 1 to 300 s                                   |
 | The wait of `cancel` | 15 s    | At most 15 s: the grace, up to 10 s, and 5 s |
 
@@ -179,13 +179,12 @@ lost when `/proc` has no directory for its pid. Shell builtins read that
 `stop` and test the directory, so the skip starts no program. A read
 costs one `exec` on every backend, and just-bash reads a table of 64
 processes in about 30 ms. `ps` and the reminder read the whole table.
-`status` and `cancel` read the one process. `wait` reads the one process
-when `handles` holds one, and the whole table on each read when it holds
-several.
+`cancel` reads the one process. `wait` reads the one process when `handles`
+holds one, and the whole table on each read when it holds several.
 
 ## The result
 
-**Each result of `bash`, `status`, `wait`, and `cancel` is the new output,
+**Each result of `bash`, `wait`, and `cancel` is the new output,
 then one bracketed line.** The new output is the output after the cursor: the
 part that no earlier result of the agent showed. The line states the process,
 its handle, its name when it has one, and its output file. A `wait` on several
@@ -217,20 +216,20 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call status or cancel with its handle, wait with it in handles, or ps to list your processes.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes.]
 ```
 
-| State       | The bracketed line, where `<h>` is the handle and the name |
-| ----------- | ---------------------------------------------------------- |
-| `running`   | `Process <h> is running. ... Call status or cancel ...`    |
-| `running`   | `Process <h> is running, and the table stopped it. ...`    |
-| `exited`    | `Process <h> exited with code <n>.`                        |
-| `timed_out` | `Process <h> timed out after <timeout> seconds.`           |
-| `cancelled` | `Process <h> is cancelled.`                                |
-| `failed`    | `Process <h> failed: <message>.`                           |
+| State       | The bracketed line, where `<h>` is the handle and the name  |
+| ----------- | ----------------------------------------------------------- |
+| `running`   | `Process <h> is running. ... Call wait with its handle ...` |
+| `running`   | `Process <h> is running, and the table stopped it. ...`     |
+| `exited`    | `Process <h> exited with code <n>.`                         |
+| `timed_out` | `Process <h> timed out after <timeout> seconds.`            |
+| `cancelled` | `Process <h> is cancelled.`                                 |
+| `failed`    | `Process <h> failed: <message>.`                            |
 
-**The result of a running process can point to a scheduled say.** `bash`,
-`status` and `wait` add one note when three facts hold:
+**The result of a running process can point to a scheduled say.** `bash`
+and `wait` add one note when three facts hold:
 
 - **The activation ends in 120 seconds or less.** Earlier, a `wait` still
   has time, and the note would show on most results.
@@ -286,8 +285,8 @@ same value.
 | `stopping`  | `true` while the state is `running` and `stop` names a cancel or a timeout |
 
 **A process that ended badly fails the call that reports it.** An exit
-code other than 0, a timeout, and a failed process make `bash`, `status`,
-and `wait` a tool error. The error text is the result text: the new
+code other than 0, a timeout, and a failed process make `bash` and
+`wait` a tool error. The error text is the result text: the new
 output, then the bracketed line that names the handle and the state. On
 several handles, `wait` fails when a process that it reports as ended
 ended badly. `cancel` gives the state of the process it cancelled, and
@@ -296,7 +295,7 @@ handle and the limit of running processes fail too
 ([Workspace](workspace.md#give-the-resource-to-an-agent)).
 
 **In a compose call, the binding of a failed call rejects.** The binding of
-`bash`, `status`, or `wait` rejects with an `Error`, and `error.details`
+`bash` or `wait` rejects with an `Error`, and `error.details`
 holds the same result as a completed call: the `Process`, the new output in
 `text`, and `read`. The binding of `cancel` and of `ps` never rejects on a
 state ([Compose](compose.md#bindings)).
@@ -483,8 +482,8 @@ The command shows its first line, cut to 80 characters.
 ```
 
 **A caller with no running process gets one line:** `No running
-processes.` A finished process stays in the files, and `status` reaches
-it by its handle.
+processes.` A finished process stays in the files, and `wait` with its
+handle and `timeout: 0` reaches it.
 
 ## The host's view
 
@@ -541,7 +540,7 @@ Your background processes in the workspace:
 - tests, bash-3f9a2c1d0b7e, is running for 2m 14s: npm test
 - server-log, bash-5e7b20c4f1d9, is running for 40s in the room review: tail -f server.log
 - bash-9c01d4e2aa31 exited with code 1 at 14:02:11 UTC: make build
-Call status or cancel with a handle, and wait with a list of handles. Call ps to list processes.
+Call wait with a list of handles, and timeout 0 to read at once. Call cancel with a handle. Call ps to list processes.
 ```
 
 **Each line starts with the name when the process has one.** The handle
@@ -599,7 +598,7 @@ agent's home on every backend.
 
 **A reminder can mark a finished process as shown that no model read.**
 An activation that fails between the reminder and its first request to
-the provider loses that one notice. `ps` and `status` still reach the
+the provider loses that one notice. `ps` and `wait` still reach the
 process.
 
 ## The end of a process
@@ -627,7 +626,7 @@ then, the end stays in the files.
 `delaySeconds` before its activation ends. The room gives the say
 back when it is due, and the returned say starts an activation for the
 same seat ([Exchange](exchange.md#6-a-scheduled-say)). That activation
-reads the process in its reminder, and `status` gives the output. When the
+reads the process in its reminder, and `wait` with `timeout: 0` gives the output. When the
 process still runs, the agent can schedule another say. The guidance
 states this to the agent, and the result of a process past the reach of a
 wait states it again.
@@ -641,7 +640,7 @@ process before it returns the say.
 `workspace.processes.subscribe` gives an `ended` event. The host calls
 `room.post` to the owner agent, under a key that names the handle. The post
 starts an activation, so the owner seat reads the end in its reminder, and
-`status` gives the output. The kernel adds nothing else for this.
+`wait` with `timeout: 0` gives the output. The kernel adds nothing else for this.
 
 ```ts
 workspace.processes.subscribe((event) => {
@@ -650,7 +649,7 @@ workspace.processes.subscribe((event) => {
   room
     .post({
       to: agent,
-      text: `lab: process ${name ?? handle} is ${state}. Call status with ${handle} for its output.`,
+      text: `lab: process ${name ?? handle} is ${state}. Call wait with ${handle} and timeout 0 for its output.`,
       key: `process-ended:${handle}`,
     })
     .catch((error: unknown) => log.error(error));
@@ -686,11 +685,15 @@ host cancels it, or the workspace disposes.
 process that is still running gives `running`. An abort of the call stops
 the wait, and the process keeps running.
 
+**`wait` with one handle and `timeout: 0` reads the process.** The call does
+not wait. It gives the state of the process and its new output, the output
+after the last result for it, and a process that ended badly fails it.
+
 **`wait` returns when the first process in `handles` ends.** It takes 1 to 16
 handles, and counts a handle that repeats once. For one process, the result is
-the result of `status`. For several, the result gives the new output and the
+the state and the new output of that process. For several, the result gives the new output and the
 bracketed line of each process that ended, then the bracketed line of each one
-that still runs, within a budget. `details.processes` holds every status in
+that still runs, within a budget. `details.processes` holds every state in
 the order of the handles, and `details.ended` holds the details of each
 process that it shows.
 
@@ -714,8 +717,9 @@ an `error`, on each harness.
 ended in the order of the handles, until its text holds 50 KB. One view holds
 at most 50 KB, so a result holds at most about 100 KB. Each process after that
 gives its bracketed line and `Its new output did not fit this
-result: call status with its handle to read it.` The wait does not read the
-output of that process, so its cursor stays, and `status` gives the output.
+result: call wait with its handle and timeout 0 to read it.` The wait does not read
+the output of that process, so its cursor stays, and a `wait` with `timeout: 0`
+gives the output.
 
 **A process that already ended makes `wait` return at once.** An agent
 that runs a parameter sweep as four processes calls `wait` with the four
@@ -741,7 +745,7 @@ seat's host.
 The state becomes `cancelled`, or `exited` for a command that ended inside
 the grace ([The cancel](#the-cancel)). A process that has not ended after 15
 seconds still reads `running` with `stopping: true`, for example when its
-grace is 30 seconds. Its cancel goes on, and a later `status` gives its end. A
+grace is 30 seconds. Its cancel goes on, and a later `wait` with `timeout: 0` gives its end. A
 `cancel` of a process in a final state gives that state again.
 
 **A shell that outlives its run becomes adopted.** A process can outlive
@@ -803,8 +807,11 @@ bash starts each command as a background process and returns its handle, such as
 Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
 The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
 The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
-status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,
-wait waits for the first of them to end, and cancel stops one. ps lists your running processes.
+Each process has a directory, ~/.processes/<handle>/, with its spec, its out, and its exit code when it ends.
+ls ~/.processes lists every process you started that the workspace still keeps.
+wait takes a list of handles and waits for the first of them to end.
+wait with one handle and timeout 0 gives the state and the new output of that process at once.
+cancel takes a handle and stops its process. ps lists your running processes.
 A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
@@ -822,7 +829,7 @@ of process.
 **A new kind adds three parts.** It adds a name to `ProcessKind`, a
 runner that writes the same files, and a tool that starts it. The table,
 the handle format, the files, `ps`, the host's view, the reminder, and
-the three handle tools stay as they are.
+the two handle tools stay as they are.
 
 ## Decisions taken
 

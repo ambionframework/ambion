@@ -64,9 +64,9 @@ command. The guidance tells each agent the same.
 
 **`justGitBackend(options)` runs a `just-git` server in the host's
 process.** Pass it as the `git` option of `memoryBackend` or
-`directoryBackend`. The workspace then gives each agent the `repos`, `clone`
-and `fork` tools, and the `git` of each agent's shell reaches the backend's
-repositories. An agent can clone any repository into its home
+`directoryBackend`. The workspace then gives each agent the `repos` and
+`fork` tools, and the `git` of each agent's shell reaches the backend's
+repositories. An agent can run `git clone` in `bash` to check out any repository
 without creating a fork. To make changes it can push, it forks a template,
 clones the fork, edits, commits, and pushes. A push persists the edits
 across a restart of the host.

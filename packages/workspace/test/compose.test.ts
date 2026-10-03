@@ -162,11 +162,11 @@ return { quick, long };`,
 		expect(value.long.truncation).toMatchObject({ truncated: true, truncatedBy: 'lines' });
 	});
 
-	it('gives the processes of ps, and the details of status, cancel, and wait for one and for several handles', async () => {
+	it('gives the processes of ps, and the details of cancel and wait, for one handle, for one handle with timeout 0, and for several', async () => {
 		const { workspace } = await lab();
 		const value = (await returned(
 			workspace,
-			['bash', 'ps', 'status', 'cancel', 'wait'],
+			['bash', 'ps', 'cancel', 'wait'],
 			`const sleeper = await tools.bash({ command: 'sleep 30', wait: 0 });
 const quick = await tools.bash({ command: 'echo done', wait: 0 });
 const one = await tools.wait({ handles: [quick.process.handle], timeout: 20 });
@@ -175,7 +175,7 @@ const several = await tools.wait({
   handles: [sleeper.process.handle, quick.process.handle],
   timeout: 20,
 });
-const status = await tools.status({ handle: sleeper.process.handle });
+const read = await tools.wait({ handles: [sleeper.process.handle], timeout: 0 });
 let cancelled;
 try {
   cancelled = await tools.cancel({ handle: sleeper.process.handle });
@@ -186,14 +186,14 @@ return {
   running: running.processes.map((p) => p.state),
   one: one.process.state,
   several: { processes: several.processes.map((p) => p.state), ended: several.ended.length },
-  status: status.process.state,
+  read: read.process.state,
   cancelled: cancelled.process.state,
 };`,
 		)) as Record<string, unknown>;
 		expect(value.running).toEqual(['running']);
 		expect(value.one).toBe('exited');
 		expect(value.several).toEqual({ processes: ['running', 'exited'], ended: 1 });
-		expect(value.status).toBe('running');
+		expect(value.read).toBe('running');
 		expect(value.cancelled).toBe('cancelled');
 	});
 
@@ -270,25 +270,18 @@ return { whole, limited, big, wide, pic };`,
 		).rejects.toThrow('offset must be integer');
 	});
 
-	it('gives restore the ref, the path, and the size, and clone and repos their facts', async () => {
+	it('gives restore the ref, the path, and the size, and repos its facts', async () => {
 		const { workspace } = await lab();
 		await put(workspace, '/home/ada/a.md', 'alpha\n');
 		const value = (await returned(
 			workspace,
-			['snapshot', 'restore', 'clone', 'repos'],
+			['snapshot', 'restore', 'repos'],
 			`const { refs } = await tools.snapshot({ paths: ['/home/ada/a.md'] });
 const restored = await tools.restore({ ref: refs[0], path: '~/back.md' });
-const cloned = await tools.clone({ source: 'templates/weekly-report', path: '~/copy' });
 const listed = await tools.repos({ namespace: 'templates' });
-return { ref: refs[0], restored, cloned, listed };`,
-		)) as { ref: string; restored: unknown; cloned: unknown; listed: unknown };
+return { ref: refs[0], restored, listed };`,
+		)) as { ref: string; restored: unknown; listed: unknown };
 		expect(value.restored).toEqual({ ref: value.ref, path: '/home/ada/back.md', bytes: 6 });
-		expect(value.cloned).toEqual({
-			repository: 'templates/weekly-report',
-			source: 'templates/weekly-report',
-			url: expect.stringContaining('weekly-report'),
-			clone: '/home/ada/copy',
-		});
 		expect(value.listed).toEqual({
 			server: expect.any(String),
 			repositories: [
@@ -328,7 +321,6 @@ describe('the compose field of the workspace tools', () => {
 		expect(Object.keys(plain).sort()).toEqual([
 			'bash',
 			'cancel',
-			'clone',
 			'fork',
 			'ps',
 			'read',
@@ -336,7 +328,6 @@ describe('the compose field of the workspace tools', () => {
 			'restore',
 			'snapshot',
 			'sql',
-			'status',
 			'wait',
 		]);
 		expect(declared(audited.tools())).toEqual(plain);

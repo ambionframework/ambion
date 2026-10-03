@@ -1,8 +1,8 @@
 /**
- * A workspace with a git backend: the `repos`, `clone` and `fork` tools and
- * their texts, the host's `commitRef`, the tool line and the order of the
- * notes, the audit entry of a call, and a room in which a seat forks a
- * template, clones it, edits, commits, and pushes. The backend is `justGitBackend`, reached by
+ * A workspace with a git backend: the `repos` and `fork` tools and their
+ * texts, a clone made with `bash`, the host's `commitRef`, the tool line and
+ * the order of the notes, the audit entry of a call, and a room in which a
+ * seat forks a template, clones it, edits, commits, and pushes. The backend is `justGitBackend`, reached by
  * relative path the same way as the just-bash source; its own package runs
  * the conformance cases.
  */
@@ -61,7 +61,7 @@ const text = (
 ) => invokeText(toolOf(workspace, tool), params, callAs(who));
 
 describe('the tools and the guidance', () => {
-	it('adds repos, clone and fork after sql, counts the tools, and places the git note after the SQL notes', async () => {
+	it('adds repos and fork after sql, counts the tools, and places the git note after the SQL notes', async () => {
 		const { workspace } = await lab({ sql: true });
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual([
 			'read',
@@ -69,14 +69,12 @@ describe('the tools and the guidance', () => {
 			'edit',
 			'bash',
 			'ps',
-			'status',
 			'wait',
 			'cancel',
 			'snapshot',
 			'restore',
 			'sql',
 			'repos',
-			'clone',
 			'fork',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
@@ -84,7 +82,7 @@ describe('the tools and the guidance', () => {
 			guidance.startsWith(defaultToolGuidance(workspace.tools().tools.map((t) => t.name))),
 		).toBe(true);
 		expect(guidance).toContain(
-			'fourteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos, clone and fork.',
+			'twelve tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.',
 		);
 		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
 		expect(git).toBeGreaterThan(-1);
@@ -96,7 +94,7 @@ describe('the tools and the guidance', () => {
 	it('states the full guidance of a bundle with sql, git and audit', async () => {
 		const { workspace } = await lab({ sql: true, audit: true });
 		expect(workspace.tools().guidance).toMatchInlineSnapshot(`
-			"Your workspace gives you fourteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, sql, repos, clone and fork.
+			"Your workspace gives you twelve tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.
 			read, write, edit and bash work on shared files. Other agents connected to this
 			workspace read and write the same files.
 
@@ -104,8 +102,11 @@ describe('the tools and the guidance', () => {
 			Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
 			The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
 			The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
-			status and cancel take a handle, and wait takes a list of handles. status gives the state of a process,
-			wait waits for the first of them to end, and cancel stops one. ps lists your running processes.
+			Each process has a directory, ~/.processes/<handle>/, with its spec, its out, and its exit code when it ends.
+			ls ~/.processes lists every process you started that the workspace still keeps.
+			wait takes a list of handles and waits for the first of them to end.
+			wait with one handle and timeout 0 gives the state and the new output of that process at once.
+			cancel takes a handle and stops its process. ps lists your running processes.
 			A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 			A stop sends SIGTERM, then SIGKILL after grace seconds, 10 by default. Raise grace for a process that must clean up.
 			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
@@ -138,14 +139,16 @@ describe('the tools and the guidance', () => {
 			that begins it. sqlite_master holds the definition of each view. A call stops after 30
 			seconds.
 
-			repos, clone and fork reach the git server of this workspace, http://git.ambion.invalid.
+			repos and fork reach the git server of this workspace, http://git.ambion.invalid.
 			templates/<name> is a read-only template. shared/<name> is a repository every agent can write.
 			<agent>/<name> belongs to that agent. You can read every repository.
 			You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
 			If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
-			Use clone to make a local checkout of any repository without creating a fork. Its
-			origin is the source, with the source's push permissions. To make work you can push, fork a
-			template and set clone. In that clone, make a branch, commit, and push to origin with git in bash.
+			To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
+			Its origin is the source, with the source's push permissions: a clone of shared/<name> pushes back to it,
+			and a clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
+			To make work of your own that you can push, call fork with clone.
+			In that clone, make a branch, commit, and push to origin with git in bash.
 			An edit persists only after you commit it and push it. Push before you finish.
 			To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
 			ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>. Use
@@ -183,19 +186,17 @@ describe('the tools and the guidance', () => {
 		`);
 	});
 
-	it('counts thirteen tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
+	it('counts eleven tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
 		expect(guidance).toContain(
-			'thirteen tools: read, write, edit, bash, ps, status, wait, cancel, snapshot, restore, repos, clone and fork.',
+			'eleven tools: read, write, edit, bash, ps, wait, cancel, snapshot, restore, repos and fork.',
 		);
 		expect(guidance).toContain(
 			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',
 		);
 		expect(guidance).toContain('or a URL\nthat this guidance names. git reaches no other host.');
-		expect(guidance).toContain(
-			`repos, clone and fork reach the git server of this workspace, ${SERVER}.`,
-		);
+		expect(guidance).toContain(`repos and fork reach the git server of this workspace, ${SERVER}.`);
 		const plain = openWorkspace({ name: 'plain', backend: { bash: memoryBackend() } });
 		expect(plain.tools().guidance).toContain('git reaches no other host.');
 		expect(plain.tools().tools.map((tool) => tool.name)).not.toContain('fork');
@@ -309,7 +310,7 @@ describe('fork', () => {
 		);
 	});
 
-	it('keeps the fork when the clone fails, and says how to clone it', async () => {
+	it('keeps the fork when the clone fails, and says how to clone it with bash', async () => {
 		const { workspace } = await lab();
 		await workspace.use({ name: 'analyst' }, (env) =>
 			env.writeFile('/home/analyst/busy/file.txt', 'in the way'),
@@ -325,7 +326,7 @@ describe('fork', () => {
 		);
 		const [, failure] = forked.split('\n');
 		expect(failure).toMatch(
-			/^The clone into \/home\/analyst\/busy failed: .+\. The fork stays; clone http:\/\/git\.ambion\.invalid\/analyst\/report\.$/s,
+			/^The clone into \/home\/analyst\/busy failed: .+\. The fork stays\. Run git clone http:\/\/git\.ambion\.invalid\/analyst\/report \/home\/analyst\/busy with bash\.$/s,
 		);
 		const fork = await workspace.git?.use({ name: 'analyst' }, (env) => env.get('analyst/report'));
 		expect(fork?.source).toBe('templates/weekly-report');
@@ -351,63 +352,28 @@ describe('fork', () => {
 	});
 });
 
-describe('clone', () => {
+describe('a clone made with bash', () => {
+	const pushOf = (workspace: Awaited<ReturnType<typeof lab>>['workspace'], command: string) =>
+		workspace.use({ name: 'analyst' }, (env) => env.exec(command, undefined));
+
 	it('checks out a repository without making a fork and keeps the source as origin', async () => {
-		const { workspace } = await lab({ audit: true });
+		const { workspace } = await lab();
 		const before = await text(workspace, 'repos', {});
-		const result = await toolOf(workspace, 'clone').invoke(
-			{ source: 'templates/weekly-report', path: '~/weekly report' },
-			callAs('analyst'),
-		);
-		if (typeof result === 'string')
-			throw new Error('The clone tool must return a structured result.');
-		const cloned = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
-		expect(result.details).toMatchObject({
-			repository: 'templates/weekly-report',
-			source: 'templates/weekly-report',
-			url: `${SERVER}/templates/weekly-report`,
-			clone: '/home/analyst/weekly report',
-		});
-		expect(cloned).toBe(
-			'Cloned templates/weekly-report into /home/analyst/weekly report on branch main. origin is the source.',
-		);
-		expect(await text(workspace, 'repos', {})).toBe(before);
 		const checkout = await text(workspace, 'bash', {
-			command: `cd '/home/analyst/weekly report' && git remote get-url origin && git branch --show-current && cat report.md`,
+			command: `git clone ${SERVER}/templates/weekly-report ~/weekly-report && cd ~/weekly-report && git remote get-url origin && git branch --show-current && cat report.md`,
 		});
 		expect(checkout).toContain(`${SERVER}/templates/weekly-report`);
 		expect(checkout).toContain('main');
 		expect(checkout).toContain('# Week');
-		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl'),
-		);
-		const entry = (log.ok ? log.value : '')
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line))
-			.find((candidate) => candidate.tool === 'clone');
-		expect(entry).toMatchObject({
-			tool: 'clone',
-			result: {
-				details: {
-					repository: 'templates/weekly-report',
-					source: 'templates/weekly-report',
-					url: `${SERVER}/templates/weekly-report`,
-					clone: '/home/analyst/weekly report',
-				},
-			},
-		});
+		expect(await text(workspace, 'repos', {})).toBe(before);
 	});
 
-	it('can clone an existing agent repository and push with its inherited permissions', async () => {
+	it('pushes to a clone of the repository of an agent with the permissions of the source', async () => {
 		const { workspace } = await lab();
 		await text(workspace, 'fork', { source: 'templates/weekly-report', name: 'report' });
-		await text(workspace, 'clone', { source: 'analyst/report', path: '~/copy' });
-		const pushed = await workspace.use({ name: 'analyst' }, (env) =>
-			env.exec(
-				'cd ~/copy && git switch -c cloned-work && git commit --allow-empty -m copied && git push origin cloned-work',
-				undefined,
-			),
+		const pushed = await pushOf(
+			workspace,
+			`git clone ${SERVER}/analyst/report ~/copy && cd ~/copy && git switch -c cloned-work && git commit --allow-empty -m copied && git push origin cloned-work`,
 		);
 		expect(pushed.ok && pushed.value.exitCode).toBe(0);
 		const repository = await workspace.git?.use({ name: 'analyst' }, (env) =>
@@ -416,47 +382,22 @@ describe('clone', () => {
 		expect(repository?.branches['cloned-work']).toMatch(/^[0-9a-f]{40}$/);
 	});
 
-	it('fails for a missing source or busy path and audits standalone clone calls', async () => {
-		const { workspace } = await lab({ audit: true });
-		await expect(
-			text(workspace, 'clone', { source: 'templates/none', path: '~/missing' }),
-		).rejects.toThrow('templates/none does not exist. Call repos to list the repositories.');
-		await workspace.use({ name: 'analyst' }, (env) =>
-			env.writeFile('/home/analyst/busy/file.txt', 'in the way'),
+	it('refuses a push from a clone of a template', async () => {
+		const { workspace } = await lab();
+		const pushed = await pushOf(
+			workspace,
+			`git clone ${SERVER}/templates/weekly-report ~/template && cd ~/template && git switch -c edit && git commit --allow-empty -m edit && git push origin edit`,
 		);
-		await expect(
-			text(workspace, 'clone', { source: 'templates/weekly-report', path: '~/busy' }),
-		).rejects.toThrow(/^The clone into \/home\/analyst\/busy failed: .+\.$/s);
-		const log = await workspace.use({ name: 'analyst' }, (env) =>
-			env.readTextFile('/workspace/audit.jsonl'),
-		);
-		const entries = (log.ok ? log.value : '')
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line));
-		expect(entries).toMatchObject([
-			{
-				tool: 'clone',
-				arguments: { source: 'templates/none', path: '~/missing' },
-				error: { message: expect.any(String) },
-			},
-			{
-				tool: 'clone',
-				arguments: { source: 'templates/weekly-report', path: '~/busy' },
-				error: { message: expect.any(String) },
-			},
-		]);
-		expect(await text(workspace, 'repos', {})).toContain('1 repository.');
+		expect(pushed.ok && pushed.value.exitCode).not.toBe(0);
 	});
 
-	it('rejects an aborted clone without creating a destination or changing repositories', async () => {
+	it('rejects an aborted fork with a clone, and creates no destination', async () => {
 		const { workspace } = await lab();
-		const before = await text(workspace, 'repos', {});
 		const controller = new AbortController();
 		controller.abort(new Error('cut'));
 		await expect(
-			toolOf(workspace, 'clone').invoke(
-				{ source: 'templates/weekly-report', path: '~/aborted' },
+			toolOf(workspace, 'fork').invoke(
+				{ source: 'templates/weekly-report', name: 'report', clone: '~/aborted' },
 				callAs('analyst', { signal: controller.signal }),
 			),
 		).rejects.toThrow();
@@ -464,7 +405,6 @@ describe('clone', () => {
 			env.exists('/home/analyst/aborted'),
 		);
 		expect(destination.ok && destination.value).toBe(false);
-		expect(await text(workspace, 'repos', {})).toBe(before);
 	});
 });
 

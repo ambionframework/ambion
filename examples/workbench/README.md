@@ -149,7 +149,7 @@ the list again, and the slow poll updates the times.
 - **The just-bash backend writes the output when the command ends.** A
   running process shows `No output yet.`
 - **The panel reads an output file up to 1 MiB.** A larger output shows
-  its size and its path. The agent's `status` tool reads the end of any size.
+  its size and its path. The agent's `wait` tool with `timeout: 0` reads the end of any size.
 - **The first `x` chooses the process, and the second `x` cancels it.** The
   cancel waits for the process to end up to the grace of its
   call, 10 seconds at most, and 5 seconds more. The file reads of
