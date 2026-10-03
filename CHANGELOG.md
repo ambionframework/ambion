@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**A compose call that reads an unbound tool names the fix.** Code that
+reads `tools.<name>` for a name outside `uses` gets an error that names the
+tool and the bound names. The error says to add the tool to `uses`, or that
+the seat has no such tool. `EvaluatorInput` gains the optional `unlisted`.
+`'x' in tools` is false for an unbound name. The evaluator conformance
+suite requires the throw, so an evaluator that does not run the shared
+guest script fails it.
+
+**A failed compose call shows the result of each completed call.** The
+message gives one `result:` line under each completed call, so the model
+recovers what the code started, such as process handles. One result shows
+at most 4096 bytes, and all results show at most `compose.limits.bytes`.
+
 **The workspace drops the `status` and `clone` tools.** The smallest
 workspace gives nine tools, from ten. A workspace with a SQL backend and a
 git backend gives twelve, from fourteen. The agent reaches the same facts

@@ -29,8 +29,13 @@ export function failureOf(failure: unknown): Failure {
 	}
 }
 
-/** The setup of the context: the code, the binding names, and `args` when the input has them. */
+/** The setup of the context: the code, the binding names, and `unlisted` and `args` when the input has them. */
 export function configText(input: EvaluatorInput): string {
-	const { code, bindings, args } = input;
-	return JSON.stringify(args === undefined ? { code, bindings } : { code, bindings, args });
+	const { code, bindings, unlisted, args } = input;
+	return JSON.stringify({
+		code,
+		bindings,
+		...(unlisted === undefined ? {} : { unlisted }),
+		...(args === undefined ? {} : { args }),
+	});
 }
