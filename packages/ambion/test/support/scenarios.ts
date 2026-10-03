@@ -72,7 +72,12 @@ export const agent = (name: string, identity: string, extra: Partial<PiOptions> 
 	defineAgent({
 		name,
 		identity,
-		executor: pi({ instructions: `You are ${name}.`, model: `scripted/${name}`, ...extra }),
+		executor: pi({
+			instructions: `You are ${name}.`,
+			model: `scripted/${name}`,
+			compose: false,
+			...extra,
+		}),
 	});
 
 const product = agent('product', 'The product.');

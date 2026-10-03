@@ -1,11 +1,12 @@
 /**
  * The `compose` tool on the Pi executor, in a room on the scripted stream.
  * The seat calls `compose` once, and the script reads the tool result that the
- * model reads. The code runs in the test evaluator of the core.
+ * model reads. The code runs in the test runtime of the core.
  */
 
 import type { AmbionTool, ToolContext } from '@ambionframework/ambion';
 import {
+	COMPOSE_GUIDANCE,
 	type ComposeOptions,
 	createRuntime,
 	defineTool,
@@ -14,6 +15,7 @@ import {
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -22,7 +24,6 @@ import {
 	table,
 	total,
 } from '../../ambion/test/support/compose-tools.ts';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
 import {
 	callTool,
@@ -32,7 +33,7 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
-import { piExecution } from '../src/index.ts';
+import { pi, piExecution } from '../src/index.ts';
 
 interface Call {
 	readonly uses: readonly string[];
@@ -46,7 +47,7 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 	const read: string[] = [];
 	const seat = scriptedAgent('worker', 'Composes tools.', {
 		tools,
-		compose: { evaluator: functionEvaluator, ...compose },
+		compose: { runtime: functionRuntime, ...compose },
 	});
 	const room = stopAtEnd(
 		await startRoom({
@@ -72,6 +73,22 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 const nestedOf = (logged: readonly Step[]) => logged.filter((step) => 'parent' in step);
 
 describe('compose on a Pi seat', () => {
+	const own: ComposeOptions = { runtime: functionRuntime, guidance: 'Own guidance.' };
+
+	it.each([
+		['absent', undefined, ['compose'], COMPOSE_GUIDANCE],
+		['false', false as const, [], undefined],
+		['an object', own, ['compose'], 'Own guidance.'],
+	])('gives the tool list of the seat for compose %s', (_name, compose, names, guidance) => {
+		const executor = pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			...(compose === undefined ? {} : { compose }),
+		});
+		expect(executor.tools.map((tool) => tool.name)).toEqual(names);
+		expect(executor.guidance).toBe(guidance);
+	});
+
 	it('binds tools with a declared output, hands the large result on, and shows the model the returned value alone', async () => {
 		const seen: ToolContext[] = [];
 		const spy = defineTool({

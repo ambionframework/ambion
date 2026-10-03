@@ -181,6 +181,7 @@ describe('the harness of an activation', () => {
 			'recall',
 			'book',
 			'inspect',
+			'compose',
 		]);
 		// The prompt reaches the model as the executor built it: no tag wraps it.
 		const rendered = renderActivation(view, definition);

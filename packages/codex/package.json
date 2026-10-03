@@ -43,6 +43,7 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/compose": "workspace:*",
 		"@openai/codex": "0.159.2"
 	},
 	"devDependencies": {

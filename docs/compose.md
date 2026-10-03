@@ -1,10 +1,12 @@
 # Compose
 
-**Status: the current contract of 0.6.0.** The `compose` option adds the
-`compose` tool, and the main entry exports its types and `COMPOSE_GUIDANCE`.
+**Status: the current contract of 0.6.0.** Every Pi, Claude, and Codex seat
+has the `compose` tool with `quickjsRuntime()` by default, and
+`compose: false` removes it. The main entry exports the types of the option
+and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
-`@ambionframework/compose/runtime` holds `quickjsEvaluator` and `processEvaluator`,
-and both pass `evaluatorConformance`. The live run of CP6 is in
+`@ambionframework/compose/runtime` holds `quickjsRuntime` and `processRuntime`,
+and both pass `composeRuntimeConformance`. The live run of CP6 is in
 [the compose evidence](../planning/next.md#the-compose-evidence).
 [The 0.6.0 plan](../planning/next.md) holds the work.
 
@@ -72,7 +74,7 @@ roster. This page never uses that word.
 | binding      | One tool as an asynchronous function inside the code: `tools.<name>`.           |
 | catalog      | The signatures of the tools that a seat can bind, in the `compose` description. |
 | macro        | A compose program that a skill stores. A compose call runs it by name.          |
-| evaluator    | The pluggable backend that evaluates the code. It holds no tool.                |
+| runtime      | The pluggable backend that evaluates the code. It holds no tool.                |
 | ledger       | The nested calls of one compose call, in order, with the outcome of each.       |
 
 ## The compose tool
@@ -104,8 +106,24 @@ checks the two forms. A call that gives `uses` and `code`, or `macro` and
 name that the catalog does not hold. It checks `uses` first, then asks
 the [approval](#approval), then evaluates the code. A macro holds its own
 `uses`, so a macro call gives none. A refusal at either
-step has no ledger and no effect. `compose` binds only the named tools,
-so a call to another tool fails as an unknown binding.
+step has no ledger and no effect. `compose` binds only the named tools.
+
+**Code that reads an unbound name gets an error that names the fix.** The
+runtime wraps `tools` so that a read of `tools.<name>` for any other name
+throws. The message names the tool and
+the bound names. It differs for three cases:
+
+| Case                                       | Message                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| The seat has the tool, and `uses` omits it | `tools.wait is not bound. This call binds bash. Add wait to uses.`                         |
+| The seat has no tool of that name          | `tools.kill does not exist. This seat has no tool named kill. This call binds bash, wait.` |
+| The call binds nothing                     | The same two messages, with `This call binds no tool.`                                     |
+
+`compose` gives the runtime the names of the seat tools that the call
+leaves out in `unlisted`. The two runtimes share one guest script, so
+both give the same message. The read of `then` and `toJSON` does not throw,
+so `await tools` and `JSON.stringify(tools)` work. `'wait' in tools` is
+false for an unbound name.
 
 **`code` is a function body.** It runs as the body of an `async` function
 with fresh local state. `await` works at the top level. `return` gives the
@@ -157,6 +175,30 @@ core that the main entry does not export. Its `details` hold the
 `ComposeResult`, and no executor passes them on. The ledger never holds the
 input or the output of a call.
 
+**The message shows the result of each completed call.** The code that
+failed has lost the values that its calls returned, such as the handles of
+processes that it started. The message gives each completed call a line
+`  result: <JSON>` under its ledger line, so the model can recover what the
+code started. The value is the binding value that the code received. A
+failed or pending call shows no result. A room tool shows none either: its
+result reaches the model only under `Room tools reported:`. A cancelled compose call, a time limit, and
+a failure show their results in the same way.
+
+```text
+The compose call failed: tools.wait is not bound. This call binds bash. Add wait to uses.
+Calls, in the order that the code made them:
+- c1.1 bash: completed
+  result: {"process":{"id":"p1"}}
+- c1.2 bash: completed
+  result: {"process":{"id":"p2"}}
+```
+
+**The results have two bounds.** One result shows at most 4096 bytes of
+JSON. All results together show at most `compose.limits.bytes`. A cut result
+reads `result: cut to at most <shown> of <full> bytes:` and then its first bytes,
+cut at a character. A result past the total reads `result: omitted, because
+the results above fill <bytes> bytes.`
+
 **The content is the contract.** Claude and Codex host a definition tool as
 a `BoundTool`, and a `BoundTool` keeps the content alone
 ([Executors](executors.md#the-room-tools)). The `ComposeResult` of a
@@ -181,14 +223,14 @@ section that states it in full.
   8 calls at a time, 65,536 bytes of returned JSON, and 120,000 ms of wall
   time. The activation deadline ends a call sooner. The description of
   `compose` shows the values of the seat ([Limits](#limits)).
-- **Each evaluator adds limits of its own.** `quickjsEvaluator` limits the
-  heap to 64 MiB and the code to 10,000 ms of CPU. `processEvaluator`
+- **Each runtime adds limits of its own.** `quickjsRuntime` limits the
+  heap to 64 MiB and the code to 10,000 ms of CPU. `processRuntime`
   limits the old space of the child heap to 64 MiB. The description of
-  `compose` does not state them ([The evaluator](#the-evaluator)).
+  `compose` does not state them ([The runtime](#the-runtime)).
 - **The code has no ambient authority.** It has no clock, no random
   source, no timer, no import, and no I/O except through tools
-  ([The evaluator](#the-evaluator)).
-- **The evaluator is not a security boundary.** Hostile code can pass the
+  ([The runtime](#the-runtime)).
+- **The runtime is not a security boundary.** Hostile code can pass the
   limits of its names ([Trust](trust.md#what-the-kernel-does-not-defend)).
 - **A completed nested call keeps its effect.** A failure or a cut undoes
   nothing, and a rejected call cancels no sibling
@@ -270,6 +312,12 @@ each tool as a native tool. The catalog repeats each input schema, and
 adds each declared output. A seat with many tools pays that cost in every
 activation. The comparison that the status names counts the catalog in the
 input tokens of the seat.
+
+**A seat that never chains tools can set `compose: false`.** Every seat
+has `compose` by default. The CP6 runs measured that offering `compose`
+adds input tokens when the seat does not use it: about 9,000 to 26,000
+for each activation ([the table below](#the-catalog)). `compose: false`
+removes the tool, its catalog, and its guidance.
 
 **The live comparison measured the catalog only.** The seat ran the chain
 task once with `compose` and once without it, on each executor kind. No
@@ -444,8 +492,8 @@ the message that the model reads for a direct call. A workspace tool
 throws a `ToolFailure` with `details`, such as the exit status of a
 process that `wait` saw fail. The binding copies those `details` to
 `error.details`, so the code reads the status without parsing text. The
-error crosses to the evaluator as the JSON `{ message, details? }`, and
-the evaluator builds the `Error` from it.
+error crosses to the runtime as the JSON `{ message, details? }`, and
+the runtime builds the `Error` from it.
 
 **`compose` sets `ToolContext.composeCall` on each nested call.**
 [Definitions and tools](agent.md#tools) states the field.
@@ -617,10 +665,12 @@ outcome of each call, so code that wants every result uses it.
 
 **`compose` is a definition tool.** The executor options take a `compose`
 option, beside `tools` and `bundles`. `describeExecutor` flattens the
-tools, then appends `compose` when the option is present. `pi()`,
-`claude()`, and `codex()` each call `describeExecutor`, so every executor kind
-gets the tool the same way. The frozen executor keeps no `compose` field:
-the tool closes over the option.
+tools, then appends `compose` when the option is an object. An absent
+option and `false` add no tool. `pi()`, `claude()`, and `codex()` fill an
+absent option with `{ runtime: quickjsRuntime() }` once, when the
+agent is defined, so the tool list of a definition is the same in every
+activation. The frozen executor keeps no `compose` field: the tool closes
+over the option.
 
 **The name `compose` is reserved.** `appendTools` refuses a tool of that
 name while it flattens the tools of the options, before `compose` is
@@ -660,7 +710,7 @@ actions in this order:
    `composeCall` to the call id of `compose`.
 4. It calls `invoke`, and waits for the result.
 5. It checks a declared output, and hands the binding value to the
-   evaluator.
+   runtime.
 
 **Pi coerces primitive arguments of a direct call, and `compose` does not.**
 The Pi harness converts a primitive to the type that the schema names
@@ -736,7 +786,7 @@ of the catalog, and records no `approval` step.
 
 ```ts
 interface ComposeOptions {
-  readonly evaluator: Evaluator;
+  readonly runtime: ComposeRuntime;
   readonly approve?: (
     request: ComposeRequest,
     ctx: ToolContext,
@@ -759,20 +809,22 @@ interface ComposeLimits {
 }
 ```
 
-## The evaluator
+## The runtime
 
-**The evaluator evaluates code against a set of bindings.** It holds no
+**The runtime evaluates code against a set of bindings.** It holds no
 tool, no room, and no `ToolContext`. `compose` gives it the code, the
 names, one function to call a binding, and the abort signal.
 
 ```ts
-interface Evaluator {
-  evaluate(input: EvaluatorInput, signal: AbortSignal): Promise<JsonValue | undefined>;
+interface ComposeRuntime {
+  evaluate(input: ComposeRuntimeInput, signal: AbortSignal): Promise<JsonValue | undefined>;
 }
 
-interface EvaluatorInput {
+interface ComposeRuntimeInput {
   readonly code: string;
   readonly bindings: readonly string[];
+  /** The tools of the seat that the call does not bind. It sharpens the error for an unbound name. */
+  readonly unlisted?: readonly string[];
   /** The checked arguments of a macro. Absent for free code. */
   readonly args?: JsonValue;
   /** Calls one binding. It resolves to the binding value, or rejects with `{ message, details? }`. */
@@ -780,7 +832,7 @@ interface EvaluatorInput {
 }
 ```
 
-**The evaluator gives code no ambient authority.** The global scope holds
+**The runtime gives code no ambient authority.** The global scope holds
 `tools` and the ECMAScript built-ins, except those that read the clock or
 a random source. The code of a macro also reads `args`, the JSON value
 that `compose` checked. Free code has no `args`, and the name is
@@ -806,27 +858,30 @@ order of parallel calls that settle can differ between runs, so code that
 depends on that order is not deterministic.
 
 **Every value that crosses is JSON.** Arguments cross from the code to
-`compose`, and binding values and errors cross back, as JSON. An evaluator
+`compose`, and binding values and errors cross back, as JSON. A runtime
 can then run in the same process, in a separate process, or on a remote
 host with one contract. A value that JSON cannot hold fails the call that
 carries it.
 
-**An evaluator states its isolation.** A separate JavaScript context in
+**A runtime states its isolation.** A separate JavaScript context in
 the same process limits the names that code reaches. It is not a security
-boundary against hostile code. Each evaluator states its memory limit, its
+boundary against hostile code. Each runtime states its memory limit, its
 CPU limit, and its isolation. [Trust](trust.md) states what the kernel does
 not defend.
 
-**The evaluator is separate from Codex Code Mode.** Codex Code Mode reads
+**The runtime is separate from Codex Code Mode.** Codex Code Mode reads
 host files outside the sandbox ([Codex](codex.md#the-trust-boundary)).
 The Codex executor keeps it off in every seat. A Codex seat uses the `compose` tool,
 as every seat does.
 
-**A seat opts in with an evaluator.** The executor options take a
-`compose` option. With no option, the seat has no `compose` tool.
+**A seat has `quickjsRuntime()` by default.** The executor options take a
+`compose` option. With no option, the seat has the `compose` tool with
+`quickjsRuntime()`. `compose: false` removes the tool. A host passes its
+own `compose` object to choose `processRuntime()`, an approval hook,
+guidance, or limits.
 
 ```ts
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 const analyst = defineAgent({
   name: 'analyst',
@@ -835,28 +890,29 @@ const analyst = defineAgent({
     instructions: 'Compose the lab tools when one result feeds another.',
     model: 'anthropic/claude-sonnet-5',
     bundles: [lab.tools()],
-    compose: { evaluator: quickjsEvaluator(), limits: { calls: 32 } },
+    compose: { runtime: quickjsRuntime(), limits: { calls: 32 } },
   }),
 });
 ```
 
-**The kernel imports no evaluator.** An evaluator package provides one, as
-an executor package provides an execution. A definition already holds the
-`invoke` function of each tool, so it can hold an evaluator. No journal
+**The kernel imports no compose runtime.** An executor package imports the
+default one from `@ambionframework/compose/runtime`, and `describeExecutor`
+alone adds no tool for an absent option. A definition already holds the
+`invoke` function of each tool, so it can hold a runtime. No journal
 entry holds a definition, and `@ambionframework/cloudflare` finds each
 definition by name in the worker, so no function crosses a wire.
 
-**`@ambionframework/compose/runtime` holds the first two evaluators.** Both pass
-one conformance suite, `evaluatorConformance`, which
+**`@ambionframework/compose/runtime` holds the first two runtimes.** Both pass
+one conformance suite, `composeRuntimeConformance`, which
 `@ambionframework/ambion/conformance` exports beside the other suites of
 the kernel.
 
-| Evaluator            | Runs the code                                           | Memory and CPU                                                                                                                                   | Isolation                                                                                                  |
-| -------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches           | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
-| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap (64 MiB). An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
+| Runtime            | Runs the code                                           | Memory and CPU                                                                                                                                   | Isolation                                                                                                  |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit on the QuickJS heap (64 MiB), and a CPU limit on the time of the code (10,000 ms). A cut ends the run between stretches           | A fresh QuickJS runtime for each compose call. It shares the process of the host.                          |
+| `processRuntime()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the old space of the child heap (64 MiB). An ArrayBuffer is outside that bound. The host kills the child at the signal | The child runs under `--permission` with no allow flag: no file, network, child process, worker, or addon. |
 
-**`quickjsEvaluator` uses the synchronous QuickJS build.** The asyncify
+**`quickjsRuntime` uses the synchronous QuickJS build.** The asyncify
 build of `quickjs-emscripten` runs one host call at a time, so
 `Promise.all` would run its calls one after the other. The synchronous
 build binds each tool as a host function that returns `ctx.newPromise()`.
@@ -867,19 +923,19 @@ CPU limit sums the time of the code over every stretch between two settled
 calls, and the wait for a call does not count. The interrupt handler ends
 code that runs past the limit. The host thread cannot see the signal while
 code runs, so a cut takes effect between two stretches of code.
-The evaluator disposes each promise and each value handle that it makes.
+The runtime disposes each promise and each value handle that it makes.
 QuickJS aborts the process when it frees a runtime that still holds one.
 The package is MIT, it has no native part, and the lockfile already holds
 it through `just-bash`.
 
-**`processEvaluator` needs the network permission of Node.** Node 22 has
+**`processRuntime` needs the network permission of Node.** Node 22 has
 no `--allow-net`, so its permission model does not refuse the network.
-`processEvaluator()` throws at construction on a Node whose
+`processRuntime()` throws at construction on a Node whose
 `process.allowedNodeEnvironmentFlags` has no `--allow-net`. The package
-keeps the floor of Node 22.19, and `quickjsEvaluator` runs on every
+keeps the floor of Node 22.19, and `quickjsRuntime` runs on every
 supported Node.
 
-**The child of `processEvaluator` speaks JSON lines over stdio.** Each
+**The child of `processRuntime` speaks JSON lines over stdio.** Each
 binding call carries an id, so several calls run together, and each
 answer names the call that it settles. The child entry is one file.
 Under `--permission` with no allow flag, Node loads the entry and refuses
@@ -888,10 +944,11 @@ every other file read, so a relative import fails with
 entry, and the entry imports only `node:` built-ins.
 `packages/claude/tsdown.config.ts` builds two entries in the same way.
 
-**Cloudflare has no evaluator in the first version.** A worker cannot
-start a process, and a worker loads WebAssembly only from its bundle. A
-seat on `@ambionframework/cloudflare` has no `compose` option until an
-evaluator for workerd exists.
+**Cloudflare has no compose runtime in the first version.** A worker cannot
+start a process, and a worker loads WebAssembly only from its bundle. The
+import of `quickjsRuntime` works in workerd, and an evaluation fails
+there. `configure` of `@ambionframework/cloudflare` refuses an agent with a
+`compose` tool, so a worker seat sets `compose: false`.
 
 ## Failure, cancellation, and effects
 
@@ -920,7 +977,7 @@ The content names each such call and its outcome.
 ledger marks that call `pending`, and its effect can still happen.
 
 **The cut cancels the compose call.** `compose` passes the signal of the
-activation to the evaluator and to each nested call. It starts no queued
+activation to the runtime and to each nested call. It starts no queued
 call after the cut. A call that has started can complete its effect. The
 error has the status `cancelled`.
 
@@ -951,10 +1008,9 @@ smaller value.
 
 **The `calls` limit rejects the binding, so code can catch it.** The call
 past the limit gets no id, no ledger entry, and no step. Its binding
-rejects with an error that names `compose.limits.calls`. A name that the
-compose call does not bind, and arguments that break the schema, reject in
-the same way. Code that catches the error can return what it has. The other
-limits end the compose call.
+rejects with an error that names `compose.limits.calls`. Arguments that
+break the schema reject in the same way. Code that catches the error can
+return what it has. The other limits end the compose call.
 
 **The time limit covers the drain of late calls.** The timer starts before
 the code and stops after every call settles. It can fire while `compose`
@@ -987,8 +1043,8 @@ Items 1, 6, and 7 add a live run, which CP6 holds.
 2. **The data stays out of the context.** A test passes a large result
    from one tool into another. The model receives only the returned value,
    and the trace holds the nested calls with their `parent`.
-3. **Two evaluators run the same code.** `quickjsEvaluator()` and
-   `processEvaluator()` pass `evaluatorConformance`, with no change to a
+3. **Two runtimes run the same code.** `quickjsRuntime()` and
+   `processRuntime()` pass `composeRuntimeConformance`, with no change to a
    tool. The suite covers the globals table, a memory limit, a cut,
    concurrent binding calls, and JSON at each crossing.
 4. **Failure keeps its facts.** An error, a cut, a limit, a denial, an

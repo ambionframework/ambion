@@ -2,25 +2,27 @@
  * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
  * the catalog, the approval, the ledger, the limits, the nested context, the
  * declared output check, and the result and the error that the model reads.
- * The code runs in the evaluator of `test/support`.
+ * The code runs in the runtime of `test/support`.
  */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { AmbionTool, ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
+import type { RoomCall } from '../src/compose-tool.ts';
 import { describeExecutor } from '../src/define.ts';
 import { invokeTool } from '../src/hosting.ts';
 import {
 	type ComposeOptions,
 	type ComposeResult,
+	type ComposeRuntime,
 	createRuntime,
 	defineAgent,
 	defineTool,
-	type Evaluator,
 	type Step,
 	startRoom,
 } from '../src/index.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
+import { functionRuntime } from './support/compose-runtime.ts';
 import {
 	broken,
 	echo,
@@ -32,7 +34,6 @@ import {
 	text,
 	total,
 } from './support/compose-tools.ts';
-import { functionEvaluator } from './support/evaluator.ts';
 import { andrei, collect, messagesOf, participantsOf, roomName } from './support/room.ts';
 import { stopAtEnd } from './support/stop.ts';
 
@@ -44,16 +45,16 @@ const hidden = defineTool({
 	execute: () => 'hidden',
 });
 
-/** An evaluator that counts its runs. A refused compose call never reaches it. */
+/** A runtime that counts its runs. A refused compose call never reaches it. */
 function neverRuns() {
 	let runs = 0;
-	const evaluator: Evaluator = {
+	const runtime: ComposeRuntime = {
 		evaluate: async () => {
 			runs += 1;
 			return undefined;
 		},
 	};
-	return { evaluator, evaluated: () => runs };
+	return { runtime, evaluated: () => runs };
 }
 
 interface Ran {
@@ -78,7 +79,7 @@ function composeOf(
 		kind: 'test',
 		instructions: 'Test.',
 		tools,
-		compose: { evaluator: functionEvaluator, ...options },
+		compose: { runtime: functionRuntime, ...options },
 	});
 	const tool = executor.tools.find((one) => one.name === 'compose');
 	if (tool === undefined) throw new Error('The executor has no compose tool.');
@@ -282,6 +283,7 @@ describe('a failed compose call', () => {
 				'The compose call failed at call c1.2: The archive is closed.',
 				'Calls, in the order that the code made them:',
 				'- c1.1 echo: completed',
+				'  result: "a"',
 				'- c1.2 broken: failed',
 			].join('\n'),
 		);
@@ -291,6 +293,81 @@ describe('a failed compose call', () => {
 			error: 'The archive is closed.',
 			parent: 'c1',
 		});
+	});
+
+	it('shows the result of each completed call, cut to a bound that it names', async () => {
+		const ran = await run([echo, broken], {
+			uses: ['echo', 'broken'],
+			code: `
+				await tools.echo({ text: 'a'.repeat(5000) });
+				await tools.echo({ text: 'é'.repeat(3000) });
+				await tools.broken({});
+			`,
+		});
+		const lines = ran.read.split('\n');
+		const first = lines.find((line) =>
+			line.startsWith('  result: cut to at most 4096 of 5002 bytes: '),
+		);
+		expect(first?.length).toBe('  result: cut to at most 4096 of 5002 bytes: '.length + 4096);
+		// A character is never split: the second value cuts at a whole 'é' of two bytes.
+		const second = lines.find((line) =>
+			line.startsWith('  result: cut to at most 4096 of 6002 bytes: '),
+		);
+		expect(second?.endsWith('é')).toBe(true);
+		expect(ran.read).toContain('- c1.3 broken: failed');
+	});
+
+	it('holds the results of a failed call to the byte limit of the return value', async () => {
+		const ran = await run(
+			[echo, broken],
+			{
+				uses: ['echo', 'broken'],
+				code: `
+				await tools.echo({ text: 'a'.repeat(3000) });
+				await tools.echo({ text: 'b'.repeat(3000) });
+				await tools.echo({ text: 'c' });
+				await tools.broken({});
+			`,
+			},
+			{ compose: { limits: { bytes: 4000 } } },
+		);
+		expect(ran.read).toContain('  result: cut to at most 998 of 3002 bytes: ');
+		expect(ran.read).toContain('  result: omitted, because the results above fill 4000 bytes.');
+	});
+
+	it('shows the results of the calls that finished before a cut and before the time limit', async () => {
+		const stuck = held('stuck');
+		const ran = await run(
+			[echo, stuck.tool],
+			{ uses: ['echo', 'stuck'], code: `await tools.echo({ text: 'p1' }); await tools.stuck({});` },
+			{ compose: { limits: { time: 30 } } },
+		);
+		expect(ran.read).toBe(
+			[
+				'The compose call failed: The compose call passed compose.limits.time (30 ms).',
+				'Calls, in the order that the code made them:',
+				'- c1.1 echo: completed',
+				'  result: "p1"',
+				'- c1.2 stuck: pending',
+				'A pending call did not settle, and its effect can still happen.',
+			].join('\n'),
+		);
+		stuck.open();
+	});
+
+	it('tells the runtime which tools of the seat the call leaves unbound', async () => {
+		const seen: (readonly string[] | undefined)[] = [];
+		const runtime: ComposeRuntime = {
+			evaluate: async (input) => {
+				seen.push(input.unlisted);
+				return undefined;
+			},
+		};
+		await run([echo, table, hidden], { uses: ['echo'], code: '' }, { compose: { runtime } });
+		// The room tools of the seat are in the catalog, and a tool with compose: false is not.
+		expect(seen[0]).toContain('table');
+		expect(seen[0]).not.toContain('echo');
+		expect(seen[0]).not.toContain('hidden');
 	});
 
 	it('gives the code the details of a failed call, so it can return a partial value', async () => {
@@ -537,7 +614,7 @@ describe('the cut of a compose call', () => {
 			[echo],
 			{ uses: [], code: '' },
 			{
-				compose: { evaluator: never.evaluator },
+				compose: { runtime: never.runtime },
 				ctx: { signal: controller.signal },
 			},
 		);
@@ -555,7 +632,7 @@ describe('the checks before the code runs', () => {
 			{ uses: ['echo', 'hidden', 'compose', 'nothing'], code: '' },
 			{
 				compose: {
-					evaluator: never.evaluator,
+					runtime: never.runtime,
 					approve: () => {
 						asked += 1;
 						return 'allow';
@@ -619,7 +696,7 @@ describe('the checks before the code runs', () => {
 			[echo],
 			{ uses: ['echo'], code: `await tools.echo({ text: 'x' });` },
 			{
-				compose: { evaluator: never.evaluator, approve },
+				compose: { runtime: never.runtime, approve },
 			},
 		);
 		expect(ran.result).toEqual({ status: 'failed', error: { message }, calls: [] });
@@ -899,7 +976,7 @@ describe('a compose call in a room', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				tools: [table, total, later('later', false)],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		});
 		const logged: Step[] = [];
@@ -967,7 +1044,7 @@ function composer(name: string, tools: readonly AmbionTool[] = []) {
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			compose: { evaluator: functionEvaluator },
+			compose: { runtime: functionRuntime },
 		}),
 	});
 }
@@ -1064,6 +1141,38 @@ describe('a compose call over the room tools', () => {
 		expect(lines.some((message) => message.from === 'worker')).toBe(false);
 	});
 
+	it('returns the error of a failed compose call to the script, keeps its say, and makes no retry', async () => {
+		const read: string[] = [];
+		let requests = 0;
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-error'),
+				agents: [composer('worker')],
+				seats: { worker: 'broadcast' },
+				execution: scripted((step, _seat, request) => {
+					requests = request;
+					if (request === 1)
+						return callTool('compose', {
+							uses: ['say'],
+							code: `await tools.say({ text: 'Done.' }); throw new Error('stop');`,
+						});
+					read.push(...step.results.map((result) => result.text));
+					return quiet();
+				}),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Say it, then fail.' });
+		await settled(room);
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said).toHaveLength(1);
+		expect(read[0]).toMatch(/say: completed/);
+		expect(read[0]).toContain('The compose call failed: stop');
+		// The error reaches the script as a result, so the activation does not fail and the room retries nothing.
+		expect(requests).toBe(2);
+	});
+
 	it('seats two agents and recalls a message in one compose call', async () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
@@ -1139,7 +1248,7 @@ describe('a compose call over the room tools', () => {
 				kind: 'scripted',
 				instructions: 'Compose.',
 				compose: {
-					evaluator: functionEvaluator,
+					runtime: functionRuntime,
 					approve: (request) => {
 						requests.push(request);
 						return 'allow';
@@ -1175,9 +1284,36 @@ describe('a compose call over the room tools', () => {
 		]);
 	});
 
+	it('shows the result of a room tool once in a failed call, under the room notes', async () => {
+		const room: RoomCall = {
+			name: 'say',
+			run: async () => ({ content: text('said #9 to ana. Missed: #8 ben'), carriesRecord: true }),
+		};
+		const tool = composeOf([echo]);
+		const ctx: ToolContext = { agent: { name: 'worker', identity: 'Worker.' }, callId: 'c1' };
+		const error = await invokeTool(
+			tool,
+			{
+				uses: ['echo', 'say'],
+				code: `await tools.echo({ text: 'a' }); await tools.say({ text: 'Hi.' }); throw new Error('stop');`,
+			},
+			ctx,
+			() => {},
+			[room],
+		).catch((thrown: unknown) => thrown);
+		expect(error).toBeInstanceOf(ComposeFailure);
+		const message = (error as ComposeFailure).message;
+		expect(message).toContain('- c1.1 echo: completed\n  result: "a"\n- c1.2 say: completed');
+		expect(message).toContain(
+			'Room tools reported:\nCall c1.2 (say): said #9 to ana. Missed: #8 ben',
+		);
+		// The room tool shows no result line: its text appears once, under the notes.
+		expect(message.split('said #9 to ana').length).toBe(2);
+	});
+
 	it('refuses a room tool in a direct invoke, at call time, with no code run', async () => {
-		const { evaluator, evaluated } = neverRuns();
-		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { evaluator } });
+		const { runtime, evaluated } = neverRuns();
+		const ran = await run([echo], { uses: ['say'], code: `return 1;` }, { compose: { runtime } });
 		expect(ran.read).toContain("The room tools 'say' need an activation");
 		expect(ran.result).toMatchObject({ status: 'failed', calls: [] });
 		expect(evaluated()).toBe(0);

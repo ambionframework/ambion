@@ -74,6 +74,7 @@ describe('the tool list and domain tools', () => {
 		);
 		expect(tools.map((tool) => tool.name).sort()).toEqual([
 			'broken',
+			'compose',
 			'dismiss',
 			'lookup',
 			'recall',

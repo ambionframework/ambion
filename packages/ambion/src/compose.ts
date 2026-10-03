@@ -1,6 +1,6 @@
 /**
  * The vocabulary of the `compose` tool: the option that a seat opts in with,
- * the evaluator that runs the code, and the result and the ledger that a
+ * the runtime that runs the code, and the result and the ledger that a
  * compose call reports. The tool joins the tools of a seat into one call
  * (`docs/compose.md`). The checks of the option and of the tool field live
  * here too.
@@ -13,12 +13,20 @@ import type { ToolContext } from './bundle.ts';
 export type JsonValue =
 	null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-/** What `compose` gives an evaluator for one compose call. */
-export interface EvaluatorInput {
+/** What `compose` gives a runtime for one compose call. */
+export interface ComposeRuntimeInput {
 	/** The body of an asynchronous function. */
 	readonly code: string;
 	/** The names of the tools that the code can call as `tools.<name>`. */
 	readonly bindings: readonly string[];
+	/**
+	 * The names of the tools that the seat has and this call does not bind.
+	 * The code that reads `tools.<name>` for an unbound name gets an error that
+	 * names the tool and the bound names. For a name in this list, the error
+	 * says to add the name to `uses`. For any other name, it says that the seat
+	 * has no such tool. Absent, the error does not tell the two apart.
+	 */
+	readonly unlisted?: readonly string[];
 	/**
 	 * The arguments of a macro, already checked against its schema. The code
 	 * reads them as the global `args`. Absent for free code, where `args` is
@@ -33,8 +41,8 @@ export interface EvaluatorInput {
  * The backend that evaluates the code of a compose call. It holds no tool,
  * no room, and no `ToolContext`. It gives the code no ambient authority.
  */
-export interface Evaluator {
-	evaluate(input: EvaluatorInput, signal: AbortSignal): Promise<JsonValue | undefined>;
+export interface ComposeRuntime {
+	evaluate(input: ComposeRuntimeInput, signal: AbortSignal): Promise<JsonValue | undefined>;
 }
 
 /** The bounds of one compose call. */
@@ -80,7 +88,7 @@ export interface ComposeMacro {
 
 /** The `compose` option of the executor options. With no option, the seat has no `compose` tool. */
 export interface ComposeOptions {
-	readonly evaluator: Evaluator;
+	readonly runtime: ComposeRuntime;
 	/**
 	 * Called after `compose` checks `uses` or the macro and its `args`, and
 	 * before it evaluates any code. A denial fails the compose call with no
@@ -170,8 +178,10 @@ it and read error.details:
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
-call lists each call and its outcome. A completed call can have had an
-effect, so read the list before you call a tool again.
+call lists each call, its outcome, and the result of each completed
+call, such as a process handle. A completed call can have had an effect,
+so read the list before you call a tool again. A tool that the code
+reads as tools.<name> must be in uses.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.`;
@@ -264,13 +274,13 @@ export function assertToolCompose(compose: unknown): void {
 
 /** Refuse a malformed `compose` option, when the agent is defined. */
 export function assertComposeOptions(compose: unknown): void {
-	if (compose === undefined) return;
+	if (compose === undefined || compose === false) return;
 	if (
 		!isRecord(compose) ||
-		!isRecord(compose.evaluator) ||
-		typeof compose.evaluator.evaluate !== 'function'
+		!isRecord(compose.runtime) ||
+		typeof compose.runtime.evaluate !== 'function'
 	) {
-		throw new Error('Agent compose must be an object with an evaluator.');
+		throw new Error('Agent compose must be false or an object with a runtime.');
 	}
 	if (compose.approve !== undefined && typeof compose.approve !== 'function') {
 		throw new Error('Agent compose approve must be a function.');

@@ -11,10 +11,23 @@ it('builds the default ordinary assistant definition', () => {
 
 	expect(assistant).toMatchObject({
 		name: 'assistant',
-		executor: { model: 'scripted/assistant', tools: [] },
+		executor: {
+			model: 'scripted/assistant',
+			tools: [expect.objectContaining({ name: 'compose' })],
+		},
 	});
 	expect(assistant.identity).toContain('routes each request');
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
+});
+
+it('gives the assistant the compose tool unless the executor turns it off', () => {
+	const on = defineAssistant({ executor: onPi });
+	const off = defineAssistant({
+		executor: (parts) => pi({ ...parts, model: 'scripted/assistant', compose: false }),
+	});
+
+	expect(on.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
+	expect(off.executor.tools).toEqual([]);
 });
 
 it('keeps application instructions after and alongside maintained defaults', () => {
@@ -39,7 +52,7 @@ it('passes tool bundles through the ordinary agent definition', () => {
 		bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.' }],
 	});
 
-	expect(assistant.executor.tools).toEqual([]);
+	expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
 	expect(assistant.executor.guidance).toContain('This is a respond activation.');
 	expect(assistant.executor.guidance).toContain(
 		'The presence of the person who asked does not change the work.',
@@ -63,7 +76,7 @@ it.each([
 
 		expect(assistant.executor.kind).toBe(kind);
 		expect(assistant.executor.instructions).toContain('Prefer small changes.');
-		expect(assistant.executor.tools).toEqual([]);
+		expect(assistant.executor.tools.map((tool) => tool.name)).toEqual(['compose']);
 		expect(assistant.executor.guidance).toContain('This is a respond activation.');
 		expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 		expect(assistant.executor.reminders).toEqual([remind]);

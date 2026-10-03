@@ -24,10 +24,10 @@ newer, the OpenTUI floor.
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run
   the real binary on a scripted model, and its live tier runs a real model.
-- `packages/compose`: the evaluators of the `compose` tool, in the `/runtime`
-  entry. `quickjsEvaluator` runs the code in QuickJS, and `processEvaluator`
+- `packages/compose`: the runtimes of the `compose` tool, in the `/runtime`
+  entry. `quickjsRuntime` runs the code in QuickJS, and `processRuntime`
   runs it in a child Node process under `--permission`. Both pass
-  `evaluatorConformance`.
+  `composeRuntimeConformance`.
 - `packages/cloudflare`: a room as Durable Objects, one for each room and one
   for each seat. Tests run in workerd.
 - `packages/workspace`: the workspace resource and its tools, the helpers of
@@ -52,7 +52,7 @@ newer, the OpenTUI floor.
 | A `rules.verified.ts`                   | `docs/formal.md`                                                 |
 | The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
 | The simulator                           | `docs/simulator.md`                                              |
-| The `compose` tool or an evaluator      | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
+| The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
 | The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
 | The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
 | Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |
@@ -121,6 +121,13 @@ vitest.live.config.ts test/live/<file>.test.ts`. Run the full live suite
 `pi` reads `<PROVIDER>_API_KEY` for the provider of `AMBION_MODEL`
 (`ANTHROPIC_API_KEY` by default). `claude` reads `ANTHROPIC_API_KEY`, and
 `codex` reads `CODEX_API_KEY`.
+
+A live file of `ambion` or `workspace` runs on the key, or else on the host
+login: `~/.codex/auth.json` for `codex`, and a stored sign-in for the provider
+of `AMBION_MODEL` in `~/.ambion/pi/credentials.json` for `pi`, such as
+`openai-codex` with `AMBION_MODEL=openai-codex/<model>`. A host with a login
+runs and bills those files. The live files of `assistant` and `simulator`
+need the key. Read neither login file.
 
 ## Product rules
 

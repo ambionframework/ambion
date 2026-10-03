@@ -1,9 +1,9 @@
 # @ambionframework/compose
 
-The evaluators of the `compose` tool of an
-[Ambion](https://ambionframework.com) seat. An evaluator runs the code of one
+The runtimes of the `compose` tool of an
+[Ambion](https://ambionframework.com) seat. A runtime runs the code of one
 compose call. The code calls the tools of the seat as `tools.<name>(args)`.
-The kernel imports no evaluator, so a seat opts in with one.
+`pi()`, `claude()`, and `codex()` give every seat `quickjsRuntime()` by default, and `compose: false` removes the tool.
 
 ## Install
 
@@ -11,16 +11,16 @@ The kernel imports no evaluator, so a seat opts in with one.
 pnpm add @ambionframework/ambion @ambionframework/compose
 ```
 
-Every package needs Node 22.19 or newer. `processEvaluator` needs Node 26 or
+Every package needs Node 22.19 or newer. `processRuntime` needs Node 26 or
 newer.
 
 ## Use
 
-Pass an evaluator in the `compose` option of an executor.
+Pass a `compose` object to an executor to choose the runtime, an approval hook, guidance, or limits.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import { pi } from '@ambionframework/pi';
 
 const analyst = defineAgent({
@@ -29,26 +29,26 @@ const analyst = defineAgent({
   executor: pi({
     instructions: 'Compose the lab tools when one result feeds another.',
     model: 'anthropic/claude-sonnet-5',
-    compose: { evaluator: quickjsEvaluator() },
+    compose: { runtime: quickjsRuntime() },
   }),
 });
 ```
 
-## The two evaluators
+## The two runtimes
 
-| Evaluator            | Runs the code                                           | Memory and CPU                                                        | Isolation                                                                                     |
-| -------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `quickjsEvaluator()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options                   | A runtime and a WebAssembly memory for each compose call. It shares the process of the host.  |
-| `processEvaluator()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the child. The host kills it at the signal. | The child runs under `--permission` with no allow flag: no file, network, process, or worker. |
+| Runtime            | Runs the code                                           | Memory and CPU                                                        | Isolation                                                                                     |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `quickjsRuntime()` | In QuickJS compiled to WebAssembly, in the host process | A memory limit and a CPU limit, both in the options                   | A runtime and a WebAssembly memory for each compose call. It shares the process of the host.  |
+| `processRuntime()` | In a `node:vm` context, in a child Node process         | `--max-old-space-size` on the child. The host kills it at the signal. | The child runs under `--permission` with no allow flag: no file, network, process, or worker. |
 
-**Neither evaluator is a defense against hostile code.** A separate context
-limits the names that code reaches. `processEvaluator` adds the permission
+**Neither runtime is a defense against hostile code.** A separate context
+limits the names that code reaches. `processRuntime` adds the permission
 model of Node, which gives the child no file, no network, no child process,
-and no worker. The code of a model is not hostile, and the evaluators bound
+and no worker. The code of a model is not hostile, and the runtimes bound
 its mistakes. [Trust](https://github.com/ambionframework/ambion/blob/main/docs/trust.md)
 states what the kernel does not defend.
 
-**The code has no ambient authority.** Both evaluators run one setup script
+**The code has no ambient authority.** Both runtimes run one setup script
 in a fresh context. It makes these names throw or absent.
 
 | Name                                          | In the code                                        |
@@ -71,7 +71,7 @@ that is not finite fails the call with an error that names the place. An
 error of a binding reaches the code as an `Error` with the same message and
 `details`.
 
-## `quickjsEvaluator(options)`
+## `quickjsRuntime(options)`
 
 | Option        | Meaning                                                           | Default |
 | ------------- | ----------------------------------------------------------------- | ------- |
@@ -95,7 +95,7 @@ Code that catches an out-of-memory error leaves the same objects. The free of
 the runtime then aborts, the evaluation keeps the value of the code, and
 Emscripten can print an `Aborted(...)` line to stderr.
 
-## `processEvaluator(options)`
+## `processRuntime(options)`
 
 | Option        | Meaning                                                     | Default |
 | ------------- | ----------------------------------------------------------- | ------- |
@@ -106,7 +106,7 @@ Emscripten can print an `Aborted(...)` line to stderr.
 old space of the heap. Memory of an ArrayBuffer is not in it.
 
 **The constructor throws on Node 22.** Node 22 has no `--allow-net`, so its
-permission model does not refuse the network. Use `quickjsEvaluator` there.
+permission model does not refuse the network. Use `quickjsRuntime` there.
 
 **The child speaks JSON lines over stdio.** Each call carries an id, so
 several calls run together. The host kills the child at the signal and at the
@@ -114,19 +114,19 @@ end of the code. The child entry is one bundled file that imports only `node:`
 built-ins, because Node loads that file and no other. A relative import in
 the child fails with `ERR_ACCESS_DENIED`.
 
-## Test an evaluator
+## Test a runtime
 
-`@ambionframework/ambion/conformance` exports `evaluatorConformance(make)`.
+`@ambionframework/ambion/conformance` exports `composeRuntimeConformance(make)`.
 It returns a list of cases, and each case has a `name` and a `run` function.
-Pass `make` a function that returns a fresh evaluator with a small memory
+Pass `make` a function that returns a fresh runtime with a small memory
 limit.
 
 ```ts
-import { evaluatorConformance } from '@ambionframework/ambion/conformance';
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { composeRuntimeConformance } from '@ambionframework/ambion/conformance';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import { it } from 'vitest';
 
-for (const c of evaluatorConformance(() => quickjsEvaluator({ cpuLimit: 500 }))) {
+for (const c of composeRuntimeConformance(() => quickjsRuntime({ cpuLimit: 500 }))) {
   it(c.name, c.run);
 }
 ```

@@ -22,7 +22,7 @@ top of its section.
 | [Release and CI](#release-and-ci)             | R1     | R1, a billing failure reads as one       |
 | [Rules and proofs](#rules-and-proofs)         | P1     | P1, `returnable` into the verified rules |
 | [Simplification](#simplification)             | S1–S7  | S1, one name rule                        |
-| [Designs with a shape](#designs-with-a-shape) | D1–D4  | D1, bounds on unattended work            |
+| [Designs with a shape](#designs-with-a-shape) | D1–D5  | D1, bounds on unattended work            |
 | [Considered and kept](#considered-and-kept)   | None   | None                                     |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
 
@@ -210,6 +210,19 @@ recomposition resets the roster, so it drops a seating that a seat made.
 The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
+
+**D5. The canvas.** Agents arrange the surface that people see. An
+agent places widgets from a catalog that the host declares, and binds
+each widget to a source: a sensor, a query, a file, a snapshot, a
+process, or a room. The host draws the widgets and keeps the data
+current with no activation. A press or a submit by a person returns to
+the room as a `visit.send` from that person. The canvas is a folder of
+the workspace, outside the journal, with a revision on each widget.
+[The canvas](../docs/canvas.md) states the design. The owner settled
+four decisions on 2026-10-03: one canvas for each room, an act as a
+`visit.send`, the workbench first, and no code from an agent. Three
+stay open. The first step adds a package and no kernel change.
+**Condition:** the owner schedules the canvas for a release.
 
 ## Considered and kept
 

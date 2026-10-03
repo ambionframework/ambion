@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+**The scripted executor returns a tool error to the script.** When an own
+tool of a seat throws, for example a failed `compose` call, the script reads
+the message in `step.results` and the activation goes on. Before, the pass
+failed as transient and the room retried it after a delay. A script that
+needs a failed pass throws a `ScriptedFailure`.
+
+**The `compose` tool is on by default for Pi, Claude, and Codex seats.**
+`pi()`, `claude()`, and `codex()` give a seat `compose` with
+`quickjsRuntime()` when the options name none. `compose: false` removes the
+tool. A host passes its own `compose` object to choose `processRuntime()`, an
+approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
+input tokens when a seat does not use it, so a seat that never chains tools
+can set `compose: false`. The Cloudflare `configure` refuses an agent with a
+`compose` tool, because workerd has no compose runtime yet.
+
+**`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
+the runtime of its `compose` tool in the `runtime` field. The exports change
+as follows: `Evaluator` becomes `ComposeRuntime`, `EvaluatorInput` becomes
+`ComposeRuntimeInput`, `quickjsEvaluator` becomes `quickjsRuntime`,
+`processEvaluator` becomes `processRuntime`, and `evaluatorConformance`
+becomes `composeRuntimeConformance`.
+
+**A compose call that reads an unbound tool names the fix.** Code that
+reads `tools.<name>` for a name outside `uses` gets an error that names the
+tool and the bound names. The error says to add the tool to `uses`, or that
+the seat has no such tool. `ComposeRuntimeInput` gains the optional `unlisted`.
+`'x' in tools` is false for an unbound name. The runtime conformance
+suite requires the throw, so a runtime that does not run the shared
+guest script fails it.
+
+**A failed compose call shows the result of each completed call.** The
+message gives one `result:` line under each completed call, so the model
+recovers what the code started, such as process handles. One result shows
+at most 4096 bytes, and all results show at most `compose.limits.bytes`.
+
 **The workspace drops the `status` and `clone` tools.** The smallest
 workspace gives nine tools, from ten. A workspace with a SQL backend and a
 git backend gives twelve, from fourteen. The agent reaches the same facts
@@ -106,6 +141,11 @@ handles name `wait` in place of `status`.
 
 ### Breaking changes
 
+- **Set `compose: false` to keep a seat without `compose`.** The tool list
+  and the guidance of every Pi, Claude, and Codex seat gain `compose` and its
+  catalog. `ExecutorBaseOptions.compose` takes `ComposeOptions` or `false`, and
+  `@ambionframework/pi`, `@ambionframework/claude`, and
+  `@ambionframework/codex` now depend on `@ambionframework/compose`.
 - **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
   `timeout: 0`. The result has the same text and the same details. In a
   compose call, `tools.status` is gone, and `tools.wait` binds the same

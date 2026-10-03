@@ -1,6 +1,6 @@
 /**
  * The script that sets up one JavaScript context for the code of a compose
- * call. Both evaluators run it in a fresh context, so both apply one globals
+ * call. Both runtimes run it in a fresh context, so both apply one globals
  * table (`docs/compose.md`). The script evaluates to a function. The host
  * calls that function once with three arguments:
  *
@@ -9,10 +9,11 @@
  *                         string of `{ message, details? }`.
  *   hostDone(json)        reports the end of the code, as the JSON string of
  *                         `{ ok: true, value? }` or `{ ok: false, message }`.
- *   config                the JSON string of `{ code, bindings, args? }`: the body
- *                         of an asynchronous function, the binding names, and the
- *                         macro arguments. With no `args` key, the code has no
- *                         global `args`.
+ *   config                the JSON string of `{ code, bindings, unlisted?, args? }`:
+ *                         the body of an asynchronous function, the binding names,
+ *                         the names of the tools that the seat has and the call
+ *                         does not bind, and the macro arguments. With no `args`
+ *                         key, the code has no global `args`.
  *
  * The script is plain JavaScript in a string. It runs inside the context, so
  * it imports nothing and shares no value with the host except the two
@@ -31,6 +32,7 @@ export const GUEST = `(function (hostCall, hostDone, configJson) {
 	var getPrototypeOf = Object.getPrototypeOf;
 	var config = parse(configJson);
 	var names = config.bindings;
+	var unlisted = config.unlisted;
 
 	function refuse(what, fix) {
 		return function () {
@@ -138,12 +140,36 @@ export const GUEST = `(function (hostCall, hostDone, configJson) {
 		};
 	}
 
+	// The text of a read of a name that the call does not bind. It names the tool and the bound names.
+	function unbound(name) {
+		var bound = names.length === 0 ? 'This call binds no tool.' : 'This call binds ' + names.join(', ') + '.';
+		if (unlisted === undefined) return 'tools.' + name + ' is not bound. ' + bound + ' Add the name to uses.';
+		if (unlisted.indexOf(name) !== -1) {
+			return 'tools.' + name + ' is not bound. ' + bound + ' Add ' + name + ' to uses.';
+		}
+		return 'tools.' + name + ' does not exist. This seat has no tool named ' + name + '. ' + bound;
+	}
+
+	// A read of a name that is not bound throws. A promise check and JSON encoding read these two names.
+	var QUIET = ['then', 'toJSON'];
+
+	function guarded(tools) {
+		return new Proxy(tools, {
+			get: function (target, key, receiver) {
+				if (typeof key === 'string' && !(key in target) && QUIET.indexOf(key) === -1) {
+					throw new Error(unbound(key));
+				}
+				return Reflect.get(target, key, receiver);
+			},
+		});
+	}
+
 	function globals() {
 		var tools = Object.create(null);
 		names.forEach(function (name) {
 			tools[name] = bind(name);
 		});
-		var scope = { tools: Object.freeze(tools) };
+		var scope = { tools: guarded(Object.freeze(tools)) };
 		if ('args' in config) scope.args = config.args;
 		return scope;
 	}

@@ -3,7 +3,7 @@
  * text of a binding value, and the text of a failure that a binding raised.
  * The code sees a failure as an `Error` with the same message and `details`.
  */
-import type { EvaluatorInput, JsonValue } from '@ambionframework/ambion';
+import type { ComposeRuntimeInput, JsonValue } from '@ambionframework/ambion';
 
 /** What a rejected binding carries: the message, and the details when JSON can hold them. */
 export interface Failure {
@@ -29,8 +29,13 @@ export function failureOf(failure: unknown): Failure {
 	}
 }
 
-/** The setup of the context: the code, the binding names, and `args` when the input has them. */
-export function configText(input: EvaluatorInput): string {
-	const { code, bindings, args } = input;
-	return JSON.stringify(args === undefined ? { code, bindings } : { code, bindings, args });
+/** The setup of the context: the code, the binding names, and `unlisted` and `args` when the input has them. */
+export function configText(input: ComposeRuntimeInput): string {
+	const { code, bindings, unlisted, args } = input;
+	return JSON.stringify({
+		code,
+		bindings,
+		...(unlisted === undefined ? {} : { unlisted }),
+		...(args === undefined ? {} : { args }),
+	});
 }

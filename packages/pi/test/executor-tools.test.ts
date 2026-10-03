@@ -46,6 +46,7 @@ const worker = defineAgent({
 	executor: pi({
 		instructions: 'Use the tool that the room gives you.',
 		model: 'scripted/assistant',
+		compose: false,
 		tools: [
 			defineTool({
 				name: 'record_decision',

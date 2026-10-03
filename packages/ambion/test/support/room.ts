@@ -26,6 +26,7 @@ export const andrei = definePerson({ name: 'andrei', identity: 'Founder. Owns th
 /**
  * A Pi agent on the scripted model `scripted/<name>`. A scripted stream
  * routes on the seat name. The options go to `pi()` and replace the defaults.
+ * The seat has no `compose` tool unless the options give one.
  */
 export function scriptedAgent(
 	name: string,
@@ -35,7 +36,12 @@ export function scriptedAgent(
 	return defineAgent({
 		name,
 		identity,
-		executor: pi({ instructions: 'Answer.', model: `scripted/${name}`, ...options }),
+		executor: pi({
+			instructions: 'Answer.',
+			model: `scripted/${name}`,
+			compose: false,
+			...options,
+		}),
 	});
 }
 

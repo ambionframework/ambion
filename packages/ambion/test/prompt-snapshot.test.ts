@@ -45,7 +45,7 @@ const context = {
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Works.',
-	executor: pi({ instructions: 'Work carefully.', model: 'scripted/worker' }),
+	executor: pi({ instructions: 'Work carefully.', model: 'scripted/worker', compose: false }),
 });
 const respond: ActivationView = {
 	spec: { id: 'a', seat: 'worker', attempt: 1, purpose: { kind: 'respond', message: 2 } },

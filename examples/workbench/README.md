@@ -256,7 +256,8 @@ need takes the default execution of each executor kind.
 
 **Every agent holds the same tools and reaches the same filesystem, and no
 native tool of any harness is on.** One list of bundles serves every seat:
-the workspace, the lab, and the instrument tools, in that order. All three
+the workspace, the lab, and the instrument tools, in that order. Each seat
+also has the `compose` tool, which is the default of the executor packages. All three
 executor kinds share one workspace instance, so a file that one agent writes is
 the file that another agent reads.
 

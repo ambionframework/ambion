@@ -14,7 +14,7 @@ packages/
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
-  compose/       the evaluators of compose: quickjsEvaluator() and processEvaluator()
+  compose/       the runtimes of compose: quickjsRuntime() and processRuntime()
   journal/      append-only journal storage
   just-bash/    workspace bash backends over just-bash, and a git backend in the process
   pi/           Pi executor: pi() and piExecution()
@@ -34,9 +34,9 @@ Examples are private. The package graph is:
 
 ```text
 ambion ──▶ journal
-pi ──▶ ambion
-claude ──▶ ambion
-codex ──▶ ambion
+pi ──▶ ambion, compose
+claude ──▶ ambion, compose
+codex ──▶ ambion, compose
 compose ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
@@ -343,6 +343,17 @@ A harness whose secret is empty skips. One separate job runs the live tier of
 every other package once, with both keys. Run one harness by hand with
 `AMBION_EXECUTOR=codex pnpm test:live`. The `codex` harness reads
 `CODEX_API_KEY` and runs the model `gpt-5.6-luna`.
+
+A live file of `@ambionframework/ambion` or `@ambionframework/workspace` runs
+on the key, or else on the login of the host. The key wins when it is set.
+The login of a `codex` seat is `~/.codex/auth.json`. The login of a `pi` seat
+is a stored sign-in for the provider of `AMBION_MODEL` in
+`~/.ambion/pi/credentials.json`, such as `openai-codex` with
+`AMBION_MODEL=openai-codex/<model>`. A `claude` seat has no login path and
+needs `ANTHROPIC_API_KEY`. The live files of `@ambionframework/assistant` and
+`@ambionframework/simulator` need the key. A file skips when the host has
+neither the key nor the login. A host with a login runs those files, and the
+provider account of the login pays for them.
 
 `@ambionframework/codex` has a live tier of its own. Its files run on
 `CODEX_API_KEY` or on the ChatGPT login of the host, and skip without either.
