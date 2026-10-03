@@ -216,9 +216,9 @@ agent places widgets from a catalog that the host declares, and binds
 each widget to a source: a sensor, a query, a file, a snapshot, a
 process, or a room. The host draws the widgets and keeps the data
 current with no activation. A press or a submit by a person returns to
-the room as a `visit.send` from that person. The canvas is a resource
-beside the workspace, outside the journal, with a revision on each
-widget. [The canvas](../docs/canvas.md) states the design and five open
+the room as a `visit.send` from that person. The canvas is a folder of
+the workspace, outside the journal, with a revision on each widget.
+[The canvas](../docs/canvas.md) states the design and seven open
 decisions. The first step adds a package and no kernel change.
 **Condition:** the owner picks a first host for the canvas.
 
