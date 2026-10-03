@@ -1,7 +1,7 @@
 import { evaluatorConformance } from '@ambionframework/ambion/conformance';
 import { DEBUG_SYNC } from 'quickjs-emscripten';
 import { describe, expect, it, vi } from 'vitest';
-import { quickjsEvaluator } from '../src/index.ts';
+import { quickjsEvaluator } from '../src/runtime.ts';
 
 const limits = { memoryLimit: 16 * 1024 * 1024, cpuLimit: 500 };
 

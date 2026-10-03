@@ -139,7 +139,7 @@ type `SqlParam` is new.
 
 ### The evaluators
 
-**The new package `@ambionframework/evaluator` holds two evaluators.** It is
+**The new package `@ambionframework/compose` holds two evaluators.** It is
 the twelfth publishable package, and it depends on `@ambionframework/ambion`.
 `quickjsEvaluator()` runs the code of a compose call in QuickJS, on the
 synchronous build, in the host process. It gives each evaluation a runtime and
