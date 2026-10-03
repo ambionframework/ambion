@@ -46,3 +46,23 @@ describe('the live executor kind switch', () => {
 		);
 	});
 });
+
+describe('how the live seats sign in', () => {
+	it.each([
+		{ key: 'sk-test', login: true, signIn: 'key' },
+		{ key: 'sk-test', login: false, signIn: 'key' },
+		{ key: undefined, login: true, signIn: 'login' },
+		{ key: '', login: true, signIn: 'login' },
+		{ key: undefined, login: false, signIn: undefined },
+	])('key $key and login $login give $signIn', async ({ key, login, signIn }) => {
+		const live = await liveWith(undefined);
+		expect(live.signInOf(key, () => login)).toBe(signIn);
+	});
+
+	it('reads no login when a key is set', async () => {
+		const live = await liveWith(undefined);
+		const reads: boolean[] = [];
+		live.signInOf('sk-test', () => reads.push(true) > 0);
+		expect(reads).toEqual([]);
+	});
+});
