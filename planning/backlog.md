@@ -16,6 +16,7 @@ top of its section.
 
 | Section                                       | Items  | First item                               |
 | --------------------------------------------- | ------ | ---------------------------------------- |
+| [The 0.7.0 theme](#the-070-theme)             | B1     | B1, breakout rooms                       |
 | [Pending decisions](#pending-decisions)       | Q1, Q2 | Q1, the `assistant` option               |
 | [Known defects](#known-defects)               | F1     | F1, the allow-list of the SQL guard      |
 | [Release and CI](#release-and-ci)             | R1     | R1, a billing failure reads as one       |
@@ -24,6 +25,56 @@ top of its section.
 | [Designs with a shape](#designs-with-a-shape) | D1–D4  | D1, bounds on unattended work            |
 | [Considered and kept](#considered-and-kept)   | None   | None                                     |
 | [Deferred by decision](#deferred-by-decision) | None   | None                                     |
+
+## The 0.7.0 theme
+
+**B1 is the likely theme of 0.7.0.** The owner named it on 2026-10-03. It
+moves to [next.md](next.md) when 0.7.0 planning starts.
+
+**B1. Breakout rooms.** An agent opens a room for background work. A
+person can visit the room and read its exchanges. The room is the room
+equivalent of a background `bash` process, with messages in both
+directions.
+
+**The executors' native subagents stay off.** Claude runs with `tools:
+[]`, so it has no `Task` tool (`packages/claude/src/options.ts`). Codex
+runs with `multi_agent` off and no `spawn_agent` tool
+(`packages/codex/src/catalog.ts`). A native subagent lives in the vendor
+session and writes no entry. A crash loses it, and the host cannot see
+or bound its spend.
+
+**A worker seat in the same room costs every other seat.** Its directed
+says are entries of the parent room. They fill the window of each seat,
+and the undirected ones wake each `broadcast` seat. A breakout room keeps
+the work in a journal of its own. That journal is durable, replays, and
+takes visits.
+
+**The kernel holds every part except the open.**
+
+| Need                    | Part that exists                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Make the room           | The host makes rooms. The workbench does.                                                                                 |
+| Seat the workers        | `room.seat` from the reserve                                                                                              |
+| Send the goal and notes | `room.post` with `to` and `key` wakes or steers the target and lands once across a restart                                |
+| Read the exchanges      | [The room mirror](../docs/workspace.md#mirror-a-rooms-messages) on a shared workspace. `recall` reads its own room alone. |
+| Return the result       | The host posts the closing summary of the breakout room into the parent room, with a ref to the room                      |
+
+**The first step is a host tool bundle with no change to the kernel.**
+`breakout({ goal, agents })` opens a room, seats the agents, and posts the
+goal. `tell({ room, text })` posts to a room that the caller opened. The
+mirror serves reads. Each journal holds its own entries, and the posts
+carry the refs between them.
+
+**Two decisions come first:**
+
+1. **Who may open a breakout room.** An open is spend, so the host bounds
+   it: the count, the depth, and the agents that a breakout room may
+   seat. D1 holds the accounting.
+2. **A post has no author.** A seat in the breakout room tells the parent
+   agent from another source by a label in the text. An author across
+   rooms is a new trust surface, and the first step adds none.
+
+**Condition:** the owner starts 0.7.0 planning.
 
 ## Pending decisions
 
