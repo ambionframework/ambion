@@ -361,11 +361,12 @@ recommendation must come from them. A reported failure, an unknown, or a
 question to the person is a fact of the exchange, and the summary reports it.
 The assistant adds nothing from its own knowledge, even when the answer is
 common. It copies each value as a message states it and does not calculate,
-convert, or derive a value. When no message after the request reports anything, the assistant
-writes no summary and ends the activation without `say`. The same holds when
+convert, or derive a value. When no message after the request reports
+anything, the assistant writes no summary and ends the activation without `say`. The same holds when
 the only agent messages of the exchange are its own answer to a question that
 the person addressed to it, or its own routing requests that no specialist
-answered. The source messages then stay in later prompts.
+answered. It also holds when one specialist message already answers the request
+in full, with its sources. The source messages then stay in later prompts.
 
 A summary activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.

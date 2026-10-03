@@ -65,7 +65,8 @@ exchange, and now says that it routes each request.
 The writer copies each value as a message states it, derives none, and keeps
 the source paths and URIs that a message cites. The assistant writes no summary
 when its only agent messages are its own answer to the person or its own
-routing requests that no specialist answered. A live run showed a summary with
+routing requests that no specialist answered. It also writes none when one
+specialist message already answers the request in full. A live run showed a summary with
 "9.3–10.7 mA" computed from a formula and the datasheet paths dropped.
 
 ### A refused `say` tells the model what to do
