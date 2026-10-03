@@ -18,6 +18,7 @@ import {
 	open,
 	person,
 	REPORTS_COST,
+	refusingExecutionFor,
 	report,
 	saidBy,
 	spent,
@@ -84,7 +85,12 @@ live('the model and the loop', () => {
 
 	it('a refused model call reaches the host as an error and leaves no mark', async () => {
 		// Only the clerk runs in this provider-failure probe.
-		const { session, events } = await open('refused', { agents: [clerk()] });
+		const { session, events } = await open(
+			'refused',
+			{ agents: [clerk()] },
+			undefined,
+			refusingExecutionFor(),
+		);
 		const key = process.env[KEY_VAR];
 		process.env[KEY_VAR] = 'not-a-key';
 		try {
