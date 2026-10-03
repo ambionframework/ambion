@@ -20,6 +20,11 @@ export interface BoundToolResult {
 	readonly content: readonly ToolContent[];
 	/** The model reads the content as an error. */
 	readonly isError?: true;
+	/**
+	 * The content carries lines of the record that the model has not read. A
+	 * `compose` call that ran the tool then shows the content in its own result.
+	 */
+	readonly carriesRecord?: true;
 	/** The activation has nothing more to do: the executor may end its model loop. */
 	readonly terminate?: true;
 }
@@ -31,6 +36,12 @@ export interface BoundTool {
 	readonly parameters: AmbionTool['parameters'];
 	/** Run one call. `call` is the id the harness gave it, and the idempotency key of a commit. */
 	run(args: unknown, call: string): Promise<BoundToolResult>;
+	/**
+	 * A room tool only. The `compose` call `compose` shows the results of the
+	 * nested calls `calls` in its own result, so the model reads them when it
+	 * reads that result.
+	 */
+	reported?(compose: string, calls: readonly string[]): void;
 }
 
 /** What the driver and the executor write to. One sink serves one activation. */

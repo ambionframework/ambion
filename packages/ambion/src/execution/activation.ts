@@ -307,16 +307,20 @@ export class ActivationState {
 			},
 			acknowledgeThrough: (seq) => freshness.acknowledgeThrough(seq),
 			resultExpected: (call, seq) => freshness.resultExpected(call, seq),
+			reported: (compose, calls) => freshness.reported(compose, calls),
+			ownEntry: (after, seq) => freshness.consumedRange({ after, through: seq }),
 			cut: () => this.cut(),
 		};
+		const room = roomTools(view, binding);
 		this.tools = [
-			...roomTools(view, binding),
+			...room,
 			...agentTools(
 				view,
 				this.input.definition,
 				this.controller.signal,
 				this.steps,
 				() => this.view ?? view,
+				room,
 			),
 		];
 		return this.tools;

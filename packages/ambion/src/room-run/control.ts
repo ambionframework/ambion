@@ -99,8 +99,8 @@ export async function writeCommit(
 }
 
 /**
- * The messages a scheduled say landed past, from the record: after its
- * `readThrough` and before the say. A retry under the same key reads the
+ * The messages a scheduled say, a seating, or a dismissal landed past, from
+ * the record: after its `readThrough` and before the entry. A retry under the same key reads the
  * same record, so it hands back the same messages.
  */
 function unreadBefore(
@@ -109,8 +109,8 @@ function unreadBefore(
 	message: Message,
 ): { unread?: Message[] } {
 	const { readThrough, intent } = commit;
-	if (intent.kind !== 'said' || intent.delaySeconds === undefined || readThrough === undefined)
-		return {};
+	const ordinarySay = intent.kind === 'said' && intent.delaySeconds === undefined;
+	if (ordinarySay || readThrough === undefined) return {};
 	const unread = run
 		.state()
 		.messages.filter((entry) => entry.seq > readThrough && entry.seq < message.seq);

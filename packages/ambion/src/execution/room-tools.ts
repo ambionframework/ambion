@@ -39,6 +39,10 @@ export interface RoomToolBinding {
 	acknowledgeThrough(seq: Seq): void;
 	/** The result of call `call` carries the record through `seq` to the model. */
 	resultExpected(call: string, seq: Seq): void;
+	/** The result of the `compose` call `compose` shows the results of the nested calls `calls`. */
+	reported(compose: string, calls: readonly string[]): void;
+	/** The entry `seq` is the activation's own act, so the record after `after` through it counts as read. */
+	ownEntry(after: Seq, seq: Seq): void;
 	/** End the activation. */
 	cut(): void;
 }
@@ -97,7 +101,7 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 		const closing = { person: purpose.person, people: purpose.people, answered: 0 };
 		return [sayTool(binding, closing)];
 	}
-	return [
+	const tools = [
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
 		seatingTool(binding, 'seated'),
@@ -105,12 +109,18 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 		dismissTool(binding),
 		recallTool(view.context.name, binding),
 	];
+	// Any of them can run in a `compose` call, which then shows the results of the nested calls.
+	return tools.map((tool) => ({
+		...tool,
+		reported: (compose, calls) => binding.reported(compose, calls),
+	}));
 }
 
 /**
  * The agent's own tools, as room tools. A summary activation holds none. Each
  * call reads the view of the pass that runs it, so the room and the open
- * exchange it names are current. A tool that throws gives the model its
+ * exchange it names are current. `room` holds the room tools of the
+ * activation, which a `compose` call binds. A tool that throws gives the model its
  * message as an error result.
  */
 export function agentTools(
@@ -119,6 +129,7 @@ export function agentTools(
 	signal: AbortSignal,
 	sink: StepSink,
 	current: () => ActivationView,
+	room: readonly BoundTool[],
 ): BoundTool[] {
 	if (view.spec.purpose.kind === 'summarize') return [];
 	return agent.executor.tools.map((one) => ({
@@ -129,7 +140,7 @@ export function agentTools(
 			const running = current();
 			try {
 				const ctx = toolContext(agent, running, call, signal);
-				const value = await invokeTool(one, args, ctx, (step) => sink.record(step));
+				const value = await invokeTool(one, args, ctx, (step) => sink.record(step), room);
 				return toolResultOf(value);
 			} catch (error) {
 				return text(error instanceof Error ? error.message : String(error), true);
@@ -140,8 +151,8 @@ export function agentTools(
 
 /**
  * The context an agent's tool receives for one call: the agent, the call, and
- * full provenance. It holds no step sink. `invokeTool` hands the sink of
- * the activation to the `compose` tool, and to no other tool.
+ * full provenance. It holds no step sink. `invokeTool` hands the sink and the
+ * room tools of the activation to the `compose` tool, and to no other tool.
  */
 export function toolContext(
 	agent: AgentDefinition,
@@ -328,7 +339,10 @@ function scheduleResult(
 		return text(line);
 	}
 	binding.resultExpected(call, message.seq);
-	return text([`${line}. New on the record before it:`, ...unread.map(renderLine)].join('\n'));
+	return {
+		...text([`${line}. New on the record before it:`, ...unread.map(renderLine)].join('\n')),
+		carriesRecord: true,
+	};
 }
 
 /** A say the room took. An ordinary say confirms the read position. A closing say counts as an answer. */
@@ -354,7 +368,7 @@ function missedSay(
 	if (closing === undefined) {
 		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
 	}
-	return text(
+	const result = text(
 		refusal(
 			'Not delivered — the room moved while you were speaking. New on the record:',
 			[...missed],
@@ -362,6 +376,7 @@ function missedSay(
 		),
 		true,
 	);
+	return closing === undefined ? { ...result, carriesRecord: true } : result;
 }
 
 /** The tool that seats or removes one agent. */
@@ -372,14 +387,32 @@ function seatingTool(binding: RoomToolBinding, kind: 'seated' | 'unseated'): Bou
 		description: spec.description,
 		parameters: spec.parameters,
 		run: async (args, call) => {
+			const readThrough = binding.readThrough;
 			const response = await binding.room.commit({
 				activation: binding.id,
 				key: call,
+				readThrough,
 				intent: { kind, name: (args as { name: string }).name.trim() },
 			});
+			if ('committed' in response) ownEntry(binding, readThrough, response);
 			return answered(landed(binding, response), response);
 		},
 	};
+}
+
+/**
+ * A seat or a dismissal that landed is the own act of the activation. With
+ * no message of another participant between the read position and the entry, the
+ * record through the entry counts as read. Otherwise the lines wait for a read.
+ */
+function ownEntry(
+	binding: RoomToolBinding,
+	readThrough: Seq,
+	response: { committed: Message; unread?: Message[] },
+): void {
+	const { seq } = response.committed;
+	const own = (response.unread ?? []).length === 0;
+	binding.ownEntry(own ? readThrough : seq - 1, seq);
 }
 
 /** The room tool that dismisses one scheduled say of the seat, by its seq. */
@@ -390,15 +423,15 @@ function dismissTool(binding: RoomToolBinding): BoundTool {
 		parameters: DISMISS.parameters,
 		run: async (args, call) => {
 			const message = (args as { message: number }).message;
+			const readThrough = binding.readThrough;
 			const response = await binding.room.commit({
 				activation: binding.id,
 				key: call,
+				readThrough,
 				intent: { kind: 'dismissed', message },
 			});
 			if ('committed' in response) {
-				// The result shows the entry, so a record read up to it is read through it.
-				const { seq } = response.committed;
-				if (binding.readThrough === seq - 1) binding.resultExpected(call, seq);
+				ownEntry(binding, readThrough, response);
 				return answered(text(`dismissed #${message}`), response);
 			}
 			return answered(landed(binding, response), response);

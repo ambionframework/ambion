@@ -63,8 +63,10 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - `uses` is required. `compose` checks it, then asks `approve`, then
   evaluates the code.
 - A declared tool gives its `details`. An undeclared tool gives its text.
-- The room tools do not bind. A compose call computes a value, and the
-  agent decides what to say.
+- The room tools bind in a respond activation: `say`, `schedule`,
+  `recall`, `seat`, `unseat`, and `dismiss`. They bind as text. A direct
+  `invoke` has no activation and refuses them. The say calls of one compose
+  call run one after another.
 - The code has no clock, no random source, no timer, and no I/O except
   through its bindings.
 - A failed or cancelled compose call throws, and its message holds the

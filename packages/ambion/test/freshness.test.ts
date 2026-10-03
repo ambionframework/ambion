@@ -147,3 +147,16 @@ it('advances on a delivered tool result only for the call that expects it, once'
 	freshness.delivered('call-3');
 	expect(freshness.readThrough).toBe(6);
 });
+
+it('releases a nested result only when the compose result shows it', () => {
+	const freshness = new Freshness();
+	freshness.resultExpected('compose-1.1', 3);
+	freshness.resultExpected('compose-1.2', 5);
+	// The compose result shows the first nested call alone.
+	freshness.reported('compose-1', ['compose-1.1']);
+	freshness.delivered('compose-1');
+	expect(freshness.readThrough).toBe(3);
+	// A later delivery of the compose call releases nothing more.
+	freshness.delivered('compose-1');
+	expect(freshness.readThrough).toBe(3);
+});

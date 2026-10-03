@@ -6,12 +6,19 @@
  *
  * The tool needs the step sink of the activation, and no tool may hold a
  * sink. The core hands it over through `invokeTool`: a private table maps
- * the `invoke` of each compose tool to an entry that takes the sink. The
- * `invoke` field itself runs with no sink and records no step.
+ * the `invoke` of each compose tool to an entry that takes the sink and the
+ * room tools of the activation. The `invoke` field itself runs with no sink
+ * and no room tool, and records no step.
  */
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
-import type { AmbionTool, ToolContext, ToolResult } from './bundle.ts';
+import {
+	type AmbionTool,
+	contentText,
+	type ToolContent,
+	type ToolContext,
+	type ToolResult,
+} from './bundle.ts';
 import {
 	COMPOSE_GUIDANCE,
 	COMPOSE_TOOL_NAME,
@@ -105,7 +112,7 @@ function refusal(message: string): ComposeFailure {
 	return new ComposeFailure(failureText(details), details);
 }
 
-function failureText(result: ComposeResult): string {
+function failureText(result: ComposeResult, notes: readonly string[] = []): string {
 	const error = result.error;
 	const at = error?.call === undefined ? '' : ` at call ${error.call}`;
 	const head =
@@ -117,11 +124,22 @@ function failureText(result: ComposeResult): string {
 	const pending = result.calls.some((call) => call.status === 'pending')
 		? ['A pending call did not settle, and its effect can still happen.']
 		: [];
-	return [head, 'Calls, in the order that the code made them:', ...lines, ...pending].join('\n');
+	return [
+		head,
+		'Calls, in the order that the code made them:',
+		...lines,
+		...pending,
+		...recordText(notes),
+	].join('\n');
 }
 
-/** The content of a completed compose call: the value, and a line for each late call. */
-function completedText({ result, late }: ComposeOutcome): string {
+/** The lines that the room tools of a compose call report: what the model must read. */
+function recordText(notes: readonly string[]): string[] {
+	return notes.length === 0 ? [] : ['Room tools reported:', ...notes];
+}
+
+/** The content of a completed compose call: the value, a line for each late call, and the room notes. */
+function completedText({ result, late }: ComposeOutcome, notes: readonly string[]): string {
 	const value =
 		result.value === undefined
 			? 'The compose call completed with no value.'
@@ -129,14 +147,14 @@ function completedText({ result, late }: ComposeOutcome): string {
 	const lines = late.map(
 		(call) => `Call ${call.call} (${call.tool}) ${call.status} after the code returned.`,
 	);
-	return [value, ...lines].join('\n');
+	return [value, ...lines, ...recordText(notes)].join('\n');
 }
 
 /** The tool result of a completed call. A failed or cancelled call throws. */
-function rendered(outcome: ComposeOutcome): ToolResult<ComposeResult> {
+function rendered(outcome: ComposeOutcome, notes: readonly string[]): ToolResult<ComposeResult> {
 	const { result } = outcome;
-	if (result.status !== 'completed') throw new ComposeFailure(failureText(result), result);
-	return { content: [{ type: 'text', text: completedText(outcome) }], details: result };
+	if (result.status !== 'completed') throw new ComposeFailure(failureText(result, notes), result);
+	return { content: [{ type: 'text', text: completedText(outcome, notes) }], details: result };
 }
 
 /** Ask the approval hook. A denial, and a hook that fails, refuse the compose call. */
@@ -160,6 +178,98 @@ async function approve(
 	throw refusal(failed ?? 'The approval refused this compose call. No code ran.');
 }
 
+/**
+ * The part of a room tool that a compose call reads: the commit and the
+ * content it returns. It restates `BoundTool`, because `execution/contract.ts`
+ * sits above this file in the layers.
+ */
+export interface RoomCall {
+	readonly name: string;
+	/** The compose call `compose` shows the results of the nested calls `calls` in its own result. */
+	reported?(compose: string, calls: readonly string[]): void;
+	run(
+		args: unknown,
+		call: string,
+	): Promise<{
+		readonly content: readonly ToolContent[];
+		readonly isError?: true;
+		readonly carriesRecord?: true;
+	}>;
+}
+
+/** The entries of the room tools, so a program can tell them from the tools of the definition. */
+const ROOM_ENTRIES = new WeakSet<AmbionTool>();
+
+/** The room tool that the catalog lists, with the fields that the catalog reads. */
+export type RoomSpec = Pick<AmbionTool, 'name' | 'description' | 'parameters'>;
+
+/** A room tool in the catalog. Its `invoke` has no activation, so it refuses. */
+function roomEntry(spec: RoomSpec): AmbionTool {
+	return Object.freeze({
+		...spec,
+		label: spec.name,
+		// Two says that start together carry the same read position, so the room refuses the second.
+		...(spec.name === 'say' ? { executionMode: 'sequential' as const } : {}),
+		invoke: () => {
+			throw new Error(`The room tool '${spec.name}' needs an activation.`);
+		},
+	});
+}
+
+/** What the room tools of one compose call report to the model: the lines it must read, and the nested calls they came from. */
+interface RoomNotes {
+	readonly lines: string[];
+	readonly calls: string[];
+}
+
+/**
+ * The room tool, run through its call of the activation. A result that the
+ * room refuses rejects the binding with the text of the refusal. A result that
+ * carries record, or an error, adds a note, because the model reads no
+ * nested result.
+ */
+function liveEntry(entry: AmbionTool, call: RoomCall, notes: RoomNotes): AmbionTool {
+	const live: AmbionTool = Object.freeze({
+		...entry,
+		invoke: async (params: unknown, ctx: ToolContext) => {
+			const result = await call.run(params, ctx.callId);
+			const value = contentText(result.content);
+			if (result.carriesRecord === true || result.isError === true) {
+				notes.lines.push(`Call ${ctx.callId} (${entry.name}): ${value}`);
+				notes.calls.push(ctx.callId);
+			}
+			if (result.isError === true) throw new Error(value);
+			return value;
+		},
+	});
+	ROOM_ENTRIES.add(live);
+	return live;
+}
+
+/** The room tools that `names` use, bound to the calls of the activation. A tool with no call refuses the compose call. */
+function liveRoom(
+	program: Program,
+	room: readonly RoomCall[] | undefined,
+	notes: RoomNotes,
+): Program {
+	const used = [...program.tools.values()].filter((tool) => ROOM_ENTRIES.has(tool));
+	if (used.length === 0) return program;
+	const missing = used.filter(
+		(tool) => room?.find((call) => call.name === tool.name) === undefined,
+	);
+	if (missing.length > 0)
+		throw refusal(
+			`The room tools ${missing.map((tool) => `'${tool.name}'`).join(', ')} need an activation. This call has none.`,
+		);
+	const tools = new Map(
+		[...program.tools].map(([name, tool]) => {
+			const call = ROOM_ENTRIES.has(tool) ? room?.find((one) => one.name === name) : undefined;
+			return [name, call === undefined ? tool : liveEntry(tool, call, notes)] as const;
+		}),
+	);
+	return { ...program, tools };
+}
+
 /** The program of one compose call: the tools it names, and the code that calls them. */
 interface Program {
 	readonly uses: readonly string[];
@@ -170,11 +280,12 @@ interface Program {
 	readonly macro?: { readonly macro: ComposeMacro; readonly args: JsonValue };
 }
 
-/** The entry that runs a compose call with the step sink of the activation. */
+/** The entry that runs a compose call with the step sink and the room tools of the activation. */
 type ComposeEntry = (
 	params: unknown,
 	ctx: ToolContext,
 	record: ((step: Step) => void) | undefined,
+	room?: readonly RoomCall[],
 ) => Promise<ToolResult<ComposeResult>>;
 
 /**
@@ -278,19 +389,23 @@ export function composeTool(
 	options: ComposeOptions,
 	tools: readonly AmbionTool[],
 	macros: readonly ComposeMacro[] = [],
+	room: readonly RoomSpec[] = [],
 ): AmbionTool {
 	const held = new Map(macros.map((macro) => [macro.name, macro]));
+	const entries = room.map((spec) => roomEntry(spec));
+	for (const entry of entries) ROOM_ENTRIES.add(entry);
 	const catalog = new Map(
-		tools
-			.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME)
-			.map((tool) => [tool.name, tool]),
+		[...tools.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME), ...entries].map(
+			(tool) => [tool.name, tool],
+		),
 	);
 	const limits = limitsOf(options);
-	const entry: ComposeEntry = async (params, ctx, record) => {
+	const entry: ComposeEntry = async (params, ctx, record, calls) => {
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
 		if (!Check(ARGUMENTS, params))
 			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(ARGUMENTS, params)}.`);
-		const program = resolveProgram(params, catalog, held);
+		const notes: RoomNotes = { lines: [], calls: [] };
+		const program = liveRoom(resolveProgram(params, catalog, held), calls, notes);
 		await approve(options, requestOf(program), ctx, record);
 		const run = new ComposeRun({
 			tools: program.tools,
@@ -300,8 +415,12 @@ export function composeTool(
 			limits,
 			ctx,
 			...(record === undefined ? {} : { record }),
+			commits: (nested) => ROOM_ENTRIES.has(nested),
 		});
-		return rendered(await run.run());
+		const outcome = await run.run();
+		// The activation counts a nested result as read only when this result shows it.
+		calls?.find((one) => one.reported !== undefined)?.reported?.(ctx.callId, notes.calls);
+		return rendered(outcome, notes.lines);
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,
@@ -310,7 +429,7 @@ export function composeTool(
 		),
 		parameters: ARGUMENTS,
 		label: COMPOSE_TOOL_NAME,
-		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined),
+		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined, undefined),
 	});
 	ENTRIES.set(tool.invoke, entry);
 	return tool;
@@ -329,9 +448,10 @@ export function invokeChecked(
 	params: unknown,
 	ctx: ToolContext,
 	record?: (step: Step) => void,
+	room?: readonly RoomCall[],
 ): Promise<string | ToolResult> | string | ToolResult {
 	const entry = record === undefined ? undefined : ENTRIES.get(tool.invoke);
-	return entry === undefined ? tool.invoke(params, ctx) : entry(params, ctx, record);
+	return entry === undefined ? tool.invoke(params, ctx) : entry(params, ctx, record, room);
 }
 
 /**
@@ -345,7 +465,8 @@ export async function invokeTool(
 	args: unknown,
 	ctx: ToolContext,
 	record?: (step: Step) => void,
+	room?: readonly RoomCall[],
 ): Promise<string | ToolResult> {
 	if (record === undefined || !ENTRIES.has(tool.invoke)) return runToolCall(tool, args, ctx);
-	return invokeChecked(tool, checkedArguments(tool, args), ctx, record);
+	return invokeChecked(tool, checkedArguments(tool, args), ctx, record, room);
 }

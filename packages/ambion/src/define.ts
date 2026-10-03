@@ -136,7 +136,7 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	const tools = Object.freeze(
 		options.compose === undefined
 			? own
-			: [...own, captureTool(composeTool(options.compose, own, macros))],
+			: [...own, captureTool(composeTool(options.compose, own, macros, ROOM_COMPOSE))],
 	);
 	return Object.freeze({
 		kind: options.kind,
@@ -400,6 +400,9 @@ export const ROOM_TOOL_NAMES: readonly string[] = [
 	UNSEAT.name,
 	DISMISS.name,
 ];
+
+/** The room tools that a compose call binds. The catalog lists them for every seat that composes. */
+const ROOM_COMPOSE = [SAY, SCHEDULE, RECALL, SEAT, UNSEAT, DISMISS];
 
 function flattenTools(
 	tools: readonly AmbionTool[] | undefined,

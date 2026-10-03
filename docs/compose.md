@@ -168,11 +168,15 @@ Claude and Codex, the model and the trace read the rendered content.
 **This section gathers what `compose` cannot do.** Each point links to the
 section that states it in full.
 
-- **Some tools never bind.** The room tools `say`, `schedule`, `seat`,
-  `unseat`, `dismiss`, and `recall` are not in the catalog. `compose` does
-  not bind itself, and a tool with `compose: false` does not bind. A
-  summary activation has no `compose` tool
+- **Some tools never bind.** `compose` does not bind itself, and a tool
+  with `compose: false` does not bind. A summary activation has no
+  `compose` tool ([What a compose call binds](#what-a-compose-call-binds)).
+- **A room tool binds only in an activation.** A direct `invoke` of the
+  `compose` tool refuses a call that uses a room tool
   ([What a compose call binds](#what-a-compose-call-binds)).
+- **The say calls of one compose call run one after another.** The room
+  refuses a say that starts before the previous say lands
+  ([Parallel calls](#parallel-calls)).
 - **Four limits bound a compose call.** The defaults are 64 nested calls,
   8 calls at a time, 65,536 bytes of returned JSON, and 120,000 ms of wall
   time. The activation deadline ends a call sooner. The description of
@@ -319,15 +323,20 @@ Use compose when:
   few fields of it;
 - you call one tool for many inputs;
 - you start several processes and wait for each;
+- you speak to many participants, seat several agents, or recall many
+  refs. say, schedule, seat, unseat, dismiss, and recall are tools of
+  compose;
 - you calculate, or you sort, group, or reshape data that you already
   hold. Give uses: [] and put the data in the code.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
   no rule for it;
-- you make one call and need its whole result;
-- you speak. say, schedule, seat, unseat, dismiss, and recall are not
-  in compose.
+- you make one call and need its whole result.
+
+The say calls of one compose call run one after another. When the room
+refuses a say because the record moved, the binding rejects, and the
+compose result shows the new lines. Read them before you speak again.
 
 For example, "snapshot each file that a query finds" is one compose
 call. Do not call sql first to read the paths:
@@ -492,18 +501,41 @@ that the definition holds after it flattens `tools` and `bundles`, and
 omits each tool that sets `compose: false`. `compose` builds the catalog
 once, when the definition is made.
 
-**The room tools do not bind.** They are bound to the activation, and a
-definition tool cannot reach them. `say`, `schedule`, `seat`, `unseat`,
-and `dismiss` commit an entry. A say carries the read position of the
-activation, and the room can answer `missed` with new messages that the
-model must read. A compose call computes a value, and the agent decides
-what to say about it.
+**The room tools bind in a respond activation.** The catalog lists
+`say`, `schedule`, `recall`, `seat`, `unseat`, and `dismiss` for every seat
+that has `compose`, with the schemas that the room gives them. The
+catalog does not change between activations. Code binds them as text, as it
+binds a tool with no declared output. Use them to say to many
+participants, seat several agents, or recall many refs in one call.
 
-**Code reads the record through the workspace mirror.** `recall` is a
-room tool, so it does not bind. A workspace mirror writes the messages of
-a room to `/rooms/<name>/messages.jsonl`
-([Workspace](workspace.md#mirror-a-rooms-messages)). Code reads that file
-through its bindings.
+**The driver hands the room tools to the compose call.** It passes the
+room tools of the activation to `invokeTool` and `invokeChecked`,
+beside the step sink. The room tools stay bound to the activation, so a
+nested call commits with the read position of the activation. A direct
+`invoke` of `compose` has no activation. A call that uses a room tool then
+fails before the code runs: the refusal states that the room tools need an
+activation.
+
+**A room tool that fails rejects its binding.** The error message holds the
+text that the model reads for a direct call. A say that the room refuses
+because the record moved rejects with the refusal and the missed lines.
+Code can catch it.
+
+**The model reads the record through the compose result.** The model reads
+no nested result. After the value, the content of the compose result lists
+each nested room-tool result that carries lines of the record or is an
+error, under `Room tools reported:`. A failed or cut compose call lists
+them too. The activation counts the record as read through a nested call
+when the compose result reaches the model. A nested call id is the call id
+of `compose`, a dot, and the place of the call. It is the commit key of
+the nested call. The compose result lists the ids that it shows, and the
+activation counts only those nested calls as read. A nested `say` has no
+cancel, so the compose call waits for each running room-tool call to settle
+before it builds the result, also after a time limit or a cut.
+
+**Code reads the record with `recall`.** A workspace mirror also writes the
+messages of a room to `/rooms/<name>/messages.jsonl`
+([Workspace](workspace.md#mirror-a-rooms-messages)).
 
 **`compose` does not bind itself.** A compose call cannot start a compose
 call.
@@ -532,6 +564,15 @@ order that the code made them.
 `compose` runs the calls of such a tool one after another, inside one
 compose call, in the order that the code makes them. Calls of other tools
 still run beside them.
+
+**`say` is sequential.** Two says that start together carry the same read
+position, and the say lock of the room refuses the second. `compose` starts
+the next say after the previous say lands, and the landed say raises the
+read position. Code can use `Promise.all` over `say` calls, and the says
+land in the order that the code made them. `schedule`, `seat`, `unseat`,
+`dismiss`, and `recall` run together, up to the cap. A seating or a dismissal that lands counts as read, because it is the own
+act of the activation. A line of another participant that lands before a say
+still makes the room refuse that say as missed.
 
 **A resource can serialize what `compose` runs together.** `compose`
 starts the calls. The resource behind a tool decides whether their work
@@ -665,8 +706,10 @@ arrives while the model streams closes the block, as a direct tool step
 does. The trace keeps the text. It keeps it in two blocks.
 
 **Only the `compose` result reaches the model.** A nested result does not
-call `delivered(call)`, and it does not move `readThrough`. The model read
-the `compose` result alone.
+call `delivered(call)`. When a nested room-tool call expects its result to
+carry the record, the compose result carries it, and `delivered` of the
+compose call counts the nested call as delivered. A nested result moves
+`readThrough` only through that rule, or through the accepted say.
 
 **A nested `terminate` does not end the activation.** The flag says that a
 batch of the model has nothing more to do. The code is not a batch of the
