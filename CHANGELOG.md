@@ -2,19 +2,19 @@
 
 ## 0.6.0 (2026-10-03)
 
-<img alt="Ambion 0.6.0, six things new in this release. Macros: a skill stores a procedure as a macro, and the model runs it by name with arguments and reads only the value that the macro returns. Declared outputs: a tool declares the shape of its details, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with QuickJS and child process evaluators, nested calls in the trace, and bound SQL params. Fixes: a Claude seat answers a late steer, and Camera Chat keeps a steady preview." src="docs/assets/ambion-0.6.0.png" width="800">
+<img alt="Ambion 0.6.0: code mode and macros. A seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with QuickJS and child process evaluators, nested calls in the trace, and bound SQL params. Fixes: a Claude seat answers a late steer, and Camera Chat keeps a steady preview." src="docs/assets/ambion-0.6.0.png" width="800">
 
-**Macros are the main use of `compose`.** A skill stores a procedure as a
-macro, and the model runs it by name with arguments. The model writes no
-code, and it reads only the value that the macro returns. Free code serves
+**0.6.0 brings code mode and macros.** The `compose` tool gives a seat code
+mode: the model writes short code over the tools of the seat, and the core
+runs it in one call. A skill stores a procedure as a macro, and the model
+runs the macro by name with arguments. The core checks each nested call
+against the schema of its tool and records it in the trace. See
+[Compose](docs/compose.md) and [Macros](docs/macros.md).
+
+**Macros are the main use of code mode.** With a macro, the model writes no
+code and reads only the value that the macro returns. Free code serves
 precision and chains of typed tools. The live evidence in `planning/` shows
-no token saving for free code, and the docs claim none. See
-[Macros](docs/macros.md) and [Compose](docs/compose.md).
-
-**0.6.0 gives a seat the `compose` tool.** The `compose` option adds a tool
-that runs short code over the tools of the seat. The core checks each nested
-call against the schema of its tool and records it in the trace. The model
-reads the returned value, or the error and the ledger. The new package
+no token saving for free code, and the docs claim none. The new package
 `@ambionframework/compose` runs the code in QuickJS or in a child Node
 process.
 
