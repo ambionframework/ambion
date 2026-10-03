@@ -33,7 +33,7 @@ import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
 import type { Step } from './types.ts';
 
 const DESCRIPTION =
-	'Run JavaScript in one call. Its main use joins your tools: code calls them as tools.<name>. Code with no tools calculates and transforms data. You read only the value that the code returns.';
+	'Run JavaScript in one call. It joins your tools: code calls them as tools.<name>. Code with no tools also calculates and transforms data. You read only the value that the code returns.';
 
 /**
  * What a model must know about the bounds and the failures of a compose
