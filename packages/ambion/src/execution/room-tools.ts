@@ -204,7 +204,7 @@ function landedLine(response: { committed: Message } | { unchanged: Unchanged })
 		const { unchanged } = response;
 		if (unchanged.kind === 'dismissed') return `#${unchanged.message} no longer waits`;
 		return unchanged.kind === 'seated'
-			? `${unchanged.name} is already seated. Seating it again does not activate it. To give it the request, call say with to set to ${unchanged.name}.`
+			? `${unchanged.name} is already seated. Seating it again does not activate it. At named attention it gets the request through say with to set to ${unchanged.name}. At broadcast or presence attention it already has the request.`
 			: `${unchanged.name} is not seated`;
 	}
 	const message = response.committed;

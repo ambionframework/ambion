@@ -840,7 +840,7 @@ describe('the compose tool of an executor', () => {
 				'  point(args: { to: Point }): Promise<Point>;',
 				'  /** Count the runs. */',
 				'  counted(args: {}): Promise<string>;',
-				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`. */',
+				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI. */',
 				'  say(args: {',
 				'    /** A participant name from the roster. */',
 				'    to?: string;',

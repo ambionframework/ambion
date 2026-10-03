@@ -194,7 +194,7 @@ describe('say, seat and unseat', () => {
 		);
 		expect(results).toEqual(
 			Array(2).fill(
-				'ada is already seated. Seating it again does not activate it. To give it the request, call say with to set to ada.',
+				'ada is already seated. Seating it again does not activate it. At named attention it gets the request through say with to set to ada. At broadcast or presence attention it already has the request.',
 			),
 		);
 		expect(commits[1]?.intent).toEqual({ kind: 'seated', name: 'ada' });

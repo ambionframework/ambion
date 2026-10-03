@@ -16,11 +16,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -36,7 +32,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a cap serves the closing exchange whole to a summary purpose 1`] = `
@@ -44,11 +40,7 @@ exports[`the room windows the record > a cap serves the closing exchange whole t
 
 The room is 'window'. Its URI is ambion://room/window.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -62,7 +54,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, with its sources, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
 `;
 
 exports[`the room windows the record > a cap serves the newest messages and counts what it drops 1`] = `
@@ -72,11 +64,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -90,7 +78,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a cap serves the open exchange whole 1`] = `
@@ -100,11 +88,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -120,7 +104,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a long record by the default estimate 1`] = `
@@ -130,11 +114,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -192,7 +172,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a long record cut deep by the token limit 1`] = `
@@ -202,11 +182,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -255,7 +231,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a long record for a summary purpose 1`] = `
@@ -272,11 +248,7 @@ or conflicting concrete evidence take precedence over a summarized claim. The su
 you for nothing and addresses one person, not you.
 If you need a fact it left out, do not ask the room to repeat itself.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -307,7 +279,7 @@ The record of 'window' so far:
 #117 [priya] xxxxxxxxxxxxxxx  (just now)
 #118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange is over: it holds the messages from seq 101 to seq 118. The opening message's URI is ambion://room/window/message/101. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
+priya's exchange is over: it holds the messages from seq 101 to seq 118. The opening message's URI is ambion://room/window/message/101. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, with its sources, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
 `;
 
 exports[`the room windows the record > a long record that fits the token limit 1`] = `
@@ -326,11 +298,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -441,7 +409,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a long record under a cap and a token limit 1`] = `
@@ -460,11 +428,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -537,7 +501,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a long record under a cap below the open exchange 1`] = `
@@ -547,11 +511,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -595,7 +555,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit counts a summarised range once 1`] = `
@@ -614,11 +574,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -636,7 +592,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit keeps a summarised range whole 1`] = `
@@ -655,11 +611,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -676,7 +628,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit keeps at least the newest line 1`] = `
@@ -686,11 +638,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -703,7 +651,7 @@ The record of 'window' so far:
 ── 3 earlier messages not shown ──
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit keeps the exchange of a summary purpose whole 1`] = `
@@ -711,11 +659,7 @@ exports[`the room windows the record > a token limit keeps the exchange of a sum
 
 The room is 'window'. Its URI is ambion://room/window.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -729,7 +673,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, with its sources, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
 `;
 
 exports[`the room windows the record > a token limit keeps the newest lines that fit 1`] = `
@@ -739,11 +683,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -757,7 +697,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit pins the open exchange whole 1`] = `
@@ -767,11 +707,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -787,7 +723,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit stops above a summarised range that does not fit 1`] = `
@@ -806,11 +742,7 @@ If you need a fact it left out, do not ask the room to repeat itself.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -826,7 +758,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > a token limit stops at the cap 1`] = `
@@ -836,11 +768,7 @@ The room is 'window'. Its URI is ambion://room/window.
 
 A message out of view is still on the record: call recall with its seq, as #12, to read it.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -855,7 +783,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > an infinite cap reports nothing 1`] = `
@@ -863,11 +791,7 @@ exports[`the room windows the record > an infinite cap reports nothing 1`] = `
 
 The room is 'window'. Its URI is ambion://room/window.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -882,7 +806,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;
 
 exports[`the room windows the record > the whole record with no bound 1`] = `
@@ -890,11 +814,7 @@ exports[`the room windows the record > the whole record with no bound 1`] = `
 
 The room is 'window'. Its URI is ambion://room/window.
 
-The agents. Each is seated at one point of a scale — the widest kind of message
-that wakes it. Unmarked: anything said. "named only": a say addressed to it.
-"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":
-nothing reaches it and you cannot address it. A summary assignment writes the one
-message a person reads when their exchange closes.
+The agents. Each is seated at one point of a scale — the widest kind of message that wakes it. Unmarked: anything said.
 (active: in an activation now; idle: at rest.)
 - worker (active): Works.
 
@@ -909,5 +829,5 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your configured instructions. Unless they require otherwise, use your tools or seating operations when needed and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. A specialist result after your directed assignment is already visible to the human; do not forward it during a respond activation. These speech defaults yield to explicit instructions in your agent definition. Closing summaries require a separate summary assignment."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
 `;

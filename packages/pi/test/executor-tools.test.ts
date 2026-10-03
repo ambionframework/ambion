@@ -331,7 +331,7 @@ describe('executor tool authority', () => {
 		await expect(call(tool(2), 'seat-call', { name: 'surveyor' })).resolves.toMatchObject({
 			content: [
 				{
-					text: 'surveyor is already seated. Seating it again does not activate it. To give it the request, call say with to set to surveyor.',
+					text: 'surveyor is already seated. Seating it again does not activate it. At named attention it gets the request through say with to set to surveyor. At broadcast or presence attention it already has the request.',
 				},
 			],
 		});
