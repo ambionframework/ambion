@@ -1002,11 +1002,13 @@ declare none, because code needs only their success or their rejection.
 that the result shows, and the notice lines of a direct call stay out of it.
 `from` and `to` are the first and the last line of `text`, counted from 1.
 `lines` is the count of lines in the file. `next` is the offset that
-continues the read, and it is present when lines remain after a `limit` or
-after the cut at 2000 lines or 50 KB. `truncation` is present with that
+continues the read. It is present when lines remain after a `limit` or after
+the cut at 2000 lines or 50 KB. `truncation` is present with that
 cut. When the first line alone exceeds 50 KB, `text` is empty, and
 `truncation.firstLineExceedsLimit` is true. For an image, `text` is empty,
-`image.mimeType` names the format, and the other line fields are absent.
+`image.mimeType` names the format, and the other line fields are absent. The `text` of a `read` and of a process tool
+is also in the content of the result, so a record that keeps both with
+`toolOutput: 'full'` holds the shown output twice.
 
 **The git, snapshot, and sensor tools declare the facts that they already
 report.** `repos` gives `repositories` as data, with the branches and the
@@ -1026,10 +1028,10 @@ as text, and a number that is not finite is its text.
 ([Processes](processes.md)).** `process` holds the handle, the
 state, the command, and the times of one process. `text` holds the new
 output that the result shows, with no bracketed line. `read` holds the
-`from` and `to` of those bytes as offsets in the output file. `wait` on several
-handles gives `processes`, with every status in the order of the handles,
-and `ended`, with the details of each process that ended.
-A call that fails on a process that ended badly throws a `ToolFailure` with
+`from` and `to` of those bytes as offsets in the output file. `wait` on
+several handles gives `processes`, with every status in the order of the
+handles, and `ended`, with the details of each process that ended. A call
+that fails on a process that ended badly throws a `ToolFailure` with
 the same facts in `details`. A binding copies them to `error.details`. The
 `bash` description states this rule for the model.
 

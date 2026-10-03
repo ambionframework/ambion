@@ -43,7 +43,7 @@ const DESCRIPTION =
 function limitsText(limits: ComposeLimits): string {
 	return [
 		`Limits of this seat: at most ${limits.calls} nested calls, ${limits.concurrent} at a time. The return value holds at most ${limits.bytes} bytes of JSON. The call lasts at most ${limits.time / 1000} seconds, and the end of your activation cuts it sooner.`,
-		'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call, and a call that completed keeps its effect.',
+		'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
 		'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 	].join('\n');
 }

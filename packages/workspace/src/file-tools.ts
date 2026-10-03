@@ -34,9 +34,9 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '
 const readSchema = Type.Object({
 	path: Type.String({ description: 'Path to the file to read (relative or absolute)' }),
 	offset: Type.Optional(
-		Type.Number({ description: 'Line number to start reading from (1-indexed)' }),
+		Type.Integer({ description: 'Line number to start reading from (1-indexed)' }),
 	),
-	limit: Type.Optional(Type.Number({ description: 'Maximum number of lines to read' })),
+	limit: Type.Optional(Type.Integer({ description: 'Maximum number of lines to read' })),
 });
 
 /** The declared output of `read`: the text with no notice, and where it sits in the file. */

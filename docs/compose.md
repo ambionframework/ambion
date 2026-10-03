@@ -226,15 +226,18 @@ declare const tools: {
 `description` of a property before the field, in the input and in the
 output schema. An object with a described field renders one field on each
 line, and the indentation follows the nesting. An object with no described
-field renders on one line. A comment end in a description is escaped.
+field renders on one line. A comment end in a description is escaped. An
+array item and a record value show no description.
 
 **A schema with an `$id` becomes a named type.** The renderer writes it
 once as `type <Id> = ...;` before `declare const tools`, and every use shows
 the name. TypeBox writes the `$id` on the node where the schema is used, so
-the check of the schema needs no context. Two schemas with one `$id` must be
-equal, and the renderer throws when they differ. The `$id` must be a
-TypeScript identifier. The process tools use this for `Process`,
-`ProcessResult`, and `Truncation`, which several tools share.
+the check of the schema needs no context. The renderer never throws, because
+it must not stop `defineAgent`. A schema with an `$id` that is no TypeScript
+identifier renders inline. When a different schema arrives under an `$id`
+that is taken, it renders inline, and the first schema keeps the name. The
+process and workspace tools use this for `Process`, `ProcessResult`,
+`Truncation`, and `SensorSource`, which several tools share.
 
 **The renderer covers the JSON Schema that TypeBox writes.** An object, an
 array, a union, a literal, and the primitive types each have a TypeScript
@@ -339,9 +342,9 @@ three lines follows it. The first line gives the limits of the seat:
 `compose.limits` after the defaults. The second line states that a
 binding rejects with an `Error` when its tool fails, and that
 `error.details` holds the details of the tool. It states that a rejection
-cancels no other call, and that a completed call keeps its effect. The
-third line states that a compose call cannot start a compose call, and that
-image parts do not reach the code. The guidance holds the other facts, so
+cancels no other call. The third line states that a compose call cannot start
+a compose call, and that image parts do not reach the code. The guidance
+holds the other facts, including that a completed call keeps its effect, so
 no fact is in both places. The catalog follows the block.
 
 ## Macros

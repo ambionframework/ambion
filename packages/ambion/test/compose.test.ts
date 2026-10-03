@@ -661,7 +661,7 @@ describe('the compose tool of an executor', () => {
 				'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
-				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call, and a call that completed keeps its effect.',
+				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
 				'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 				'',
 				'declare const tools: {',
@@ -711,7 +711,7 @@ describe('the compose tool of an executor', () => {
 			description: 'Give a shape.',
 			parameters: Type.Object({ value: schema }),
 			compose: { output: schema },
-			execute: () => ({ content: [], details: undefined as never }),
+			execute: () => ({ content: [], details: null }),
 		});
 		expect(catalogOf(declared)).toContain(
 			`shape(args: { value: ${expected} }): Promise<${expected}>;`,
@@ -753,7 +753,7 @@ describe('the compose tool of an executor', () => {
 					rows: Type.Array(Type.Object({ n: Type.Number({ description: 'Row count.' }) })),
 				}),
 			},
-			execute: () => ({ content: [], details: undefined as never }),
+			execute: () => ({ content: [], details: { rows: [] } }),
 		});
 		expect(catalogOf(tool)).toBe(
 			[
@@ -788,7 +788,7 @@ describe('the compose tool of an executor', () => {
 			description: 'Move.',
 			parameters: Type.Object({ to: Point }),
 			compose: { output: Type.Object({ path: Type.Array(Point), at: Point }) },
-			execute: () => ({ content: [], details: undefined as never }),
+			execute: () => ({ content: [], details: { path: [], at: { x: 0, y: 0 } } }),
 		});
 		expect(catalogOf(tool)).toBe(
 			[
@@ -806,7 +806,7 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('refuses two different schemas with one $id', () => {
+	it('renders a second, different schema with a taken $id inline', () => {
 		const tool = defineTool({
 			name: 'clash',
 			description: 'Clash.',
@@ -816,7 +816,27 @@ describe('the compose tool of an executor', () => {
 			}),
 			execute: () => '',
 		});
-		expect(() => composeOf([tool])).toThrow('Two different schemas share the $id Box.');
+		expect(catalogOf(tool)).toContain(
+			'clash(args: { a: Box; b: { y: string } }): Promise<string>;',
+		);
+		expect(catalogOf(tool)).toContain('type Box = { x: string };');
+	});
+
+	it('renders a schema whose $id is no identifier inline', () => {
+		const tool = defineTool({
+			name: 'urn',
+			description: 'Urn.',
+			parameters: Type.Object({ a: Type.Object({ x: Type.String() }, { $id: 'urn:x' }) }),
+			execute: () => '',
+		});
+		expect(catalogOf(tool)).toBe(
+			[
+				'declare const tools: {',
+				'  /** Urn. */',
+				'  urn(args: { a: { x: string } }): Promise<string>;',
+				'};',
+			].join('\n'),
+		);
 	});
 
 	it('binds no room tool and no compose tool of its own', () => {

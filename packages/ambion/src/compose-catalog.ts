@@ -3,7 +3,9 @@
  * that code can bind. The renderer reads the JSON Schema that TypeBox
  * writes. A schema with no TypeScript form renders as `unknown`. A field
  * description becomes a doc comment, and a schema with an `$id` becomes a
- * named type. The input schema stays the authority, because `compose`
+ * named type. A schema whose `$id` is no identifier, or whose `$id` another
+ * schema already holds, renders inline. The renderer never throws, because
+ * it must not stop `defineAgent`. The input schema stays the authority, because `compose`
  * checks every argument against it (`docs/compose.md`).
  */
 import type { AmbionTool } from './bundle.ts';
@@ -127,17 +129,16 @@ function formOf(schema: Node, catalog: Catalog, indent: string): string {
 
 /**
  * The name of a schema that carries an `$id`. The first use adds the
- * declaration to the catalog. Two different schemas with one id are a
- * programming error.
+ * declaration to the catalog. A schema that is no identifier, and a second
+ * different schema with an id in use, render inline.
  */
-function nameOf(schema: Node, id: string, catalog: Catalog): string {
-	if (!IDENTIFIER.test(id)) throw new Error(`The $id ${JSON.stringify(id)} is not a type name.`);
+function nameOf(schema: Node, id: string, catalog: Catalog, indent: string): string {
 	const { $id: _id, ...body } = schema;
+	if (!IDENTIFIER.test(id)) return formOf(body, catalog, indent);
 	const key = JSON.stringify(body);
 	const known = catalog.named.get(id);
 	if (known !== undefined) {
-		if (known.key !== key) throw new Error(`Two different schemas share the $id ${id}.`);
-		return id;
+		return known.key === key ? id : formOf(body, catalog, indent);
 	}
 	const entry = { key, text: '' };
 	catalog.named.set(id, entry);
@@ -151,7 +152,7 @@ function nameOf(schema: Node, id: string, catalog: Catalog): string {
 function typeOf(schema: unknown, catalog: Catalog, indent: string): string {
 	if (!isNode(schema)) return 'unknown';
 	return typeof schema.$id === 'string'
-		? nameOf(schema, schema.$id, catalog)
+		? nameOf(schema, schema.$id, catalog, indent)
 		: formOf(schema, catalog, indent);
 }
 

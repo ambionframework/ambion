@@ -200,10 +200,11 @@ cursor to the size of `out` when the read began, and writes that size to
 `cursor`. A result that starts past the start of the output adds `The text
 above starts at byte <n> of the output. An earlier result showed the bytes
 before it.` `details.text` holds the new output with no bracketed line, and
-`details.read` holds `from` and `to`, the byte offsets of the output file. Ten polls of a long build
-give ten new parts, and no part twice. One read takes at most 200 KB, so a
-burst past that shows only its end, and `read` reaches the rest. The cursor is a file, so a new run
-of the host reads on from the same byte. A failed write of `cursor` gives
+`details.read` holds `from` and `to`, the byte offsets of the output file.
+Ten polls of a long build give ten new parts, and no part twice. One read
+takes at most 200 KB, so a burst past that shows only its end, and `read`
+reaches the rest. The cursor is a file, so a new run of the host reads on
+from the same byte. A failed write of `cursor` gives
 the same bytes again on the next read.
 
 ```text

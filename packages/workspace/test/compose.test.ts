@@ -261,6 +261,13 @@ return { whole, limited, big, wide, pic };`,
 			text: '',
 			image: { mimeType: 'image/gif' },
 		});
+		await expect(
+			composed(
+				workspace.tools(),
+				['read'],
+				`return tools.read({ path: 'five.txt', offset: 2.5 });`,
+			),
+		).rejects.toThrow('offset must be integer');
 	});
 
 	it('gives restore the ref, the path, and the size, and clone and repos their facts', async () => {
