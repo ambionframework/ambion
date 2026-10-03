@@ -257,7 +257,8 @@ describe('steer', () => {
 		const passing = state.pass(input());
 		await until(() => room.fake.requestsOf('turn/start').length > 0, 'the turn start');
 		await until(() => room.steps.some((step) => step.type === 'session'), 'the thread');
-		state.steer(1, 2, 'Also name the owner.');
+		const line = '[new] #2 [andrei] Also name the owner.';
+		state.steer(1, 2, line);
 		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the steer');
 		release();
 		expect(await passing).toEqual({ failed: false });
@@ -269,7 +270,7 @@ describe('steer', () => {
 		}[];
 		expect(steer).toMatchObject({
 			expectedTurnId: 'turn-1',
-			input: [{ type: 'text', text: 'Also name the owner.' }],
+			input: [{ type: 'text', text: line }],
 		});
 		expect(steer?.clientUserMessageId).toEqual(expect.any(String));
 		expect(room.steps).toContainEqual({ type: 'steer', seq: 2, consumed: true });
@@ -282,7 +283,7 @@ describe('steer', () => {
 		const state = room.activate();
 		const passing = state.pass(input());
 		// The core calls steer before the body of the pass reaches its first await.
-		state.steer(1, 2, 'Early line.');
+		state.steer(1, 2, '[new] #2 [andrei] Early line.');
 		expect(room.fake.requestsOf('turn/steer')).toEqual([]);
 		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the held steer');
 		const order = room.fake.seen.requests.map((request) => request.method);
@@ -306,7 +307,7 @@ describe('steer', () => {
 		const state = room.activate();
 		const passing = state.pass(input());
 		await until(() => room.steps.some((step) => step.type === 'text'), 'the reply');
-		state.steer(1, 2, 'Too late.');
+		state.steer(1, 2, '[new] #2 [andrei] Too late.');
 		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the refused steer');
 		release.resolve();
 		await passing;
@@ -321,7 +322,7 @@ describe('steer', () => {
 		const state = room.activate();
 		const passing = state.pass(input());
 		await until(() => room.steps.some((step) => step.type === 'session'), 'the thread');
-		state.steer(1, 2, 'No echo.');
+		state.steer(1, 2, '[new] #2 [andrei] No echo.');
 		await until(() => room.fake.requestsOf('turn/steer').length > 0, 'the steer');
 		release();
 		await passing;

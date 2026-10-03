@@ -521,7 +521,7 @@ describe('the harness of an activation', () => {
 		const session = seat(stream).open('message:1:worker:1');
 		const running = session.pass({ kind: 'view', view: respond([said(1, 'Go.')], 1) });
 		await started.promise;
-		session.steer?.(1, 2, '[priya] Late.');
+		session.steer?.(1, 2, '[new] [priya] Late.');
 		session.close?.();
 		expect(await running).toEqual({ failed: false });
 	});

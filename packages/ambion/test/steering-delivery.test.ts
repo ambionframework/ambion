@@ -188,6 +188,9 @@ describe.each(storages)('steering on $name', (storage) => {
 		await waitForRoom(room);
 		expect(first.contexts.at(-1)).toContain('First correction.');
 		expect(first.contexts.at(-1)).toContain('Second correction.');
+		// The runner marks each steered line, so every executor sends the marker.
+		expect(first.contexts.at(-1)).toMatch(/\[new\] #\d+ .*First correction\./);
+		expect(first.contexts.at(-1)).toMatch(/\[new\] #\d+ .*Second correction\./);
 		expect(observed.wakes).toHaveLength(1);
 		expect(
 			events.filter((event) => event.type === 'activation_start').map((event) => event.seat),

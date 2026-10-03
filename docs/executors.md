@@ -226,8 +226,9 @@ an adapter places it where it caches best.
 
 **A later pass reads the delta.** `record()` marks each message beyond
 `after` with the `[new]` prefix, and gives `undefined` when nothing is new.
-The driver then counts the view read. The driver renders each steered line and
-each room refusal for the model.
+The driver then counts the view read. The runner marks each steered line with
+the same `[new]` prefix, and an executor sends the line unchanged. The driver
+renders each room refusal for the model.
 
 **A resumed session reads the delta on its first pass.** `record(after)`
 takes the position that the vendor session read through. The first pass

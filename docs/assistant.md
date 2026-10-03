@@ -189,8 +189,9 @@ no useful work remains. The room runs the summary work in a separate
 summary activation.
 
 **The guidance names the marker that a mid-activation result carries.** The
-room delivers a message that lands while the assistant works as a user message
-that starts with `[new]`, then the seq of the message. A specialist result
+core adds the `[new]` prefix to each message that lands while the assistant
+works, and every executor sends the line unchanged. The assistant
+reads a user message that starts with `[new]`, then the seq of the message. A specialist result
 reads `[new] #12 [specialist → assistant] text`. The ordinary guidance names this marker
 and says to end without a tool call. Change the marker and the guidance
 together.
