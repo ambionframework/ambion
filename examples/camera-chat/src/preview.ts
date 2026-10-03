@@ -36,15 +36,27 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		failure = undefined;
 		changed();
 	};
+	const restart = () => {
+		controller.abort();
+		controller = new AbortController();
+		connection = undefined;
+		checked = 0;
+		failure = undefined;
+	};
+	const attach = (event: SensorConnectionEvent) => {
+		if (!event.connection.sensors.some((item) => item.name === 'camera')) return;
+		const next = `${event.connection.name}/camera`;
+		// A reconnect of the same sensor keeps the frame on screen.
+		if (event.type === 'refreshed' && sensor === next) restart();
+		else detach();
+		sensor = next;
+		revision++;
+		changed();
+		void poll();
+	};
 	const linked = (event: SensorConnectionEvent) => {
-		if (event.type === 'connected' || event.type === 'refreshed') {
-			if (!event.connection.sensors.some((item) => item.name === 'camera')) return;
-			detach();
-			sensor = `${event.connection.name}/camera`;
-			revision++;
-			changed();
-			void poll();
-		} else if (sensor?.startsWith(`${event.connection.name}/`)) detach();
+		if (event.type === 'connected' || event.type === 'refreshed') attach(event);
+		else if (sensor?.startsWith(`${event.connection.name}/`)) detach();
 	};
 	async function resolveLink(name: string, signal: AbortSignal) {
 		if (connection?.available && Date.now() - checked < RECHECK_MS) return connection;
@@ -55,6 +67,7 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		return link;
 	}
 	async function fetchFrame(name: string, signal: AbortSignal) {
+		const previous = latest;
 		const link = await resolveLink(name, signal);
 		if (!link) return undefined;
 		const observation = await link.client.observe(
@@ -65,6 +78,7 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		const sample = observation.observations.at(-1);
 		const part = sample?.parts.find((part) => part.kind === 'frame');
 		if (!sample || !part || part.kind !== 'frame') throw new Error('The camera returned no image.');
+		if (part.file === previous?.digest) return { ...previous, at: sample.at };
 		const file = await link.client.file(part.file, signal);
 		return { at: sample.at, digest: part.file, png: file.bytes };
 	}

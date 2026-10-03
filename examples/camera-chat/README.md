@@ -33,9 +33,10 @@ The seat runs on [Codex](../../docs/codex.md) and reuses the Codex login of
 your Mac. Run `codex login` once, and sign in with ChatGPT or an API key. The
 app needs no key of its own, reads no key file, and sets no environment
 variable. The seat ignores `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, and
-`OPENAI_API_KEY` in your shell, so it never bills an API account. Startup
-exits with a message when `~/.codex/auth.json` (or `auth.json` in
-`CODEX_HOME`) does not exist. Codex must store the login in that file, because
+`OPENAI_API_KEY` in your shell. The login in `auth.json` decides billing. A
+ChatGPT login uses your subscription. An API key login (`codex login
+--api-key`) bills that key. Startup exits with a message when
+`~/.codex/auth.json` (or `auth.json` in `CODEX_HOME`) does not exist. Codex must store the login in that file, because
 a login in the macOS keyring does not reach the seat. Startup computes that
 login path once, checks it, and passes the same path to the seat. The seat
 keeps its own Codex home in `<directory>/codex` and links that login file. It
@@ -54,6 +55,14 @@ available. There is no text-cell fallback. Capture and model observations use
 second with no audio. Preview polling alone makes no model requests. Scene
 questions send a sampled frame to Codex; they do not send a continuous video
 stream.
+
+**Capture costs CPU and bandwidth.** On the owner's Mac at 1280 × 720, Node
+uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
+frame is a PNG of about 700 KB. The host tells the agent to start the server
+with a `bash` timeout of 86400 seconds. `bash` ends the process after that
+timeout, so capture stops after 24 hours. Ask the agent to start the server
+and connect again. The camera server accepts `--framerate <n>` for the
+device input rate (default 30).
 
 `pnpm start --list-cameras` lists AVFoundation devices without starting the
 room. `pnpm start --device <index>` tells the agent which device to use.
