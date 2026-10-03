@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/compose",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"type": "module",
 	"description": "The evaluators of the compose tool for Ambion: quickjsEvaluator() in QuickJS, and processEvaluator() in a child Node process.",
 	"license": "Apache-2.0",
