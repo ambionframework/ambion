@@ -387,10 +387,10 @@ calls before the answer, so the run did not check the answer.
 - **The token counts do not compare with the earlier tables.** The prompts
   name the table now.
 
-On the same login, with the login support of #525 applied before it
-merged, the run on `a439aef4` (before #522) passed 4 of 6 cases on Codex
-and 5 of 6 on Pi. The run on `1f5e6df1` (after #522) passed 5 of 6 on
-Codex and 4 of 6 on Pi.
+Two earlier runs used the same login, with the login support of #525
+before it merged. On `a439aef4` (before #522), Codex passed 4 of 6 cases
+and Pi passed 5 of 6. On `1f5e6df1` (after #522), Codex passed 5 of 6 and
+Pi passed 4 of 6.
 
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own
