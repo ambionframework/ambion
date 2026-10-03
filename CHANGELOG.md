@@ -10,13 +10,13 @@ needs a failed pass throws a `ScriptedFailure`.
 
 **The `compose` tool is on for every Pi, Claude, and Codex seat.**
 `pi()`, `claude()`, and `codex()` give a seat `compose` and `describe`, with
-`quickjsEvaluator()` when the options name no evaluator. A seat cannot turn
+`quickjsRuntime()` when the options name no runtime. A seat cannot turn
 the tools off. A host passes its own `compose` object to choose
-`processEvaluator()`, an approval hook, guidance, or limits. The Cloudflare
+`processRuntime()`, an approval hook, guidance, or limits. The Cloudflare
 `configure` accepts the tools. A compose call fails in workerd with an error
-that says QuickJS could not load its WebAssembly, until an evaluator for
-workerd exists. A host passes `compose: { evaluator }` with an evaluator that
-the runtime can run.
+that says QuickJS could not load its WebAssembly, until a compose runtime
+for workerd exists. A host passes `compose: { runtime }` with a compose
+runtime that the host can run.
 
 **The `describe` tool returns the signatures that `compose` no longer lists.**
 `describe({ tools })` takes a non-empty list of bindable tool names, the room

@@ -999,15 +999,15 @@ every other file read, so a relative import fails with
 entry, and the entry imports only `node:` built-ins.
 `packages/claude/tsdown.config.ts` builds two entries in the same way.
 
-**Cloudflare has no runtime in the first version.** A worker cannot
+**Cloudflare has no compose runtime in the first version.** A worker cannot
 start a process, and a worker loads WebAssembly only from its bundle. The
 import of `quickjsRuntime` works in workerd, and an evaluation fails
 there. `quickjsRuntime` catches the failure to load the module and throws
 an error. The error says that QuickJS could not load its WebAssembly in this
-runtime, and that a host passes `compose: { runtime }` with a runtime
-that this runtime can run. A worker seat has `compose` and `describe`, and
+runtime, and that a host passes `compose: { runtime }` with a compose
+runtime that this host can run. A worker seat has `compose` and `describe`, and
 `configure` of `@ambionframework/cloudflare` accepts it. A compose call fails
-with that error until a runtime for workerd exists. `describe` works.
+with that error until a compose runtime for workerd exists. `describe` works.
 
 ## Failure, cancellation, and effects
 

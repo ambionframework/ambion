@@ -95,7 +95,7 @@ describe('a runtime that cannot load the WebAssembly', () => {
 			new AbortController().signal,
 		);
 		await expect(failed).rejects.toThrow(
-			'QuickJS could not load its WebAssembly in this runtime (Wasm code generation disallowed). Pass compose: { runtime } with a runtime that this runtime can run.',
+			'QuickJS could not load its WebAssembly in this runtime (Wasm code generation disallowed). Pass compose: { runtime } with a compose runtime that this host can run.',
 		);
 	});
 });
