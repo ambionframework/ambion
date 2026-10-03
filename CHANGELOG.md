@@ -120,6 +120,13 @@ defines it.
 `{ macro, hash, args }` for a macro. A host can allow its own macros and
 deny free code.
 
+**`COMPOSE_GUIDANCE` makes compose the default for a plan of two or more
+tool calls.** The live evidence showed that no seat chose `compose` for a
+two-step chain. The text now tells the model to plan the calls first and to
+make a plan of two or more calls in one compose call. A direct call is for
+a step that needs the judgment of the model when the task gives no rule. An
+example shows a query that feeds a snapshot.
+
 **`COMPOSE_GUIDANCE` gains a paragraph.** It tells the model to run a macro
 when a skill names one. A seat with macros also gets one guidance block
 after the text, with one line for each macro: the name and the description.
