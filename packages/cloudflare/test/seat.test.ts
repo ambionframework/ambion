@@ -403,15 +403,17 @@ it('rebuilds a seat from its name on the resent wake, and runs the activation it
 	const seat = seatOf(name);
 	await seat.hold(true);
 	const { room } = await asked(name);
-	// The seat holds the wake and runs nothing. The hold lifts in storage and
-	// the platform takes the object away. The room resends the wake every
-	// 50 ms, so an RPC rebuilds the object from its name before the alarm
-	// falls. The alarm then runs the activation that the object holds.
-	await inside<unknown, void>(seat, async (_object, state) => {
+	// The seat holds the wake and runs nothing, so the platform takes the
+	// object away with no activation in flight. A lift of the hold before the
+	// eviction lets a wake that the room resends every 50 ms set an alarm at
+	// once, and the eviction then cuts the activation that this alarm runs.
+	// The hold lifts on the object that an RPC rebuilds from its name. The
+	// alarm then runs the activation that this object holds.
+	await evict(seat, 'the test takes the seat while it holds the wake');
+	await inside<unknown, void>(seatOf(name), async (_object, state) => {
 		seatMetadata(state).change(() => ({ patch: { hold: false } }));
 		await state.storage.setAlarm(Date.now() + 300);
 	});
-	await evict(seat, 'the test takes the seat while its alarm waits');
 	const said = await until(async () =>
 		(await room.read()).messages.find((m) => m.kind === 'said' && m.from === 'product'),
 	);

@@ -1,99 +1,112 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-03)
 
-### A harness-neutral assistant
+<img alt="Ambion 0.6.0: code mode and macros. A seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with QuickJS and child process evaluators, nested calls in the trace, and bound SQL params. Fixes: a Claude seat answers a late steer, and Camera Chat keeps a steady preview." src="docs/assets/ambion-0.6.0.png" width="800">
 
-**`defineAssistant` takes a required `executor` function.** The function
-receives `AssistantParts` (`instructions`, `tools`, and `bundles`) and
-returns an executor of any package. The options `model` and `thinking` are
-gone. Pass them to the executor in the function: `executor: (parts) =>
-pi({ ...parts, model, thinking })`. The package exports the new type
-`AssistantParts`.
+**0.6.0 brings code mode and macros.** The `compose` tool gives a seat code
+mode: the model writes short code over the tools of the seat, and the core
+runs it in one call. A skill stores a procedure as a macro, and the model
+runs the macro by name with arguments. The core checks each nested call
+against the schema of its tool and records it in the trace. See
+[Compose](docs/compose.md) and [Macros](docs/macros.md).
 
-**`@ambionframework/assistant` no longer depends on `@ambionframework/pi`.**
-It depends on `@ambionframework/ambion` only.
+**Macros are the main use of code mode.** With a macro, the model writes no
+code and reads only the value that the macro returns. Free code serves
+precision and chains of typed tools. The live evidence in `planning/` shows
+no token saving for free code, and the docs claim none. The new package
+`@ambionframework/compose` runs the code in QuickJS or in a child Node
+process.
 
-**The core adds the `[new]` marker to a steered line.** The runner marks the
-line with the prefix of `renderDelta`. Pi no longer adds its own prefix.
-Codex and Claude now send the marked line.
+**A tool declares its output.** `defineTool` types `details` from a TypeBox
+schema, and `compose` checks each result against it. The workspace tools
+`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
+declare theirs.
 
-### The compose vocabulary
+**The assistant runs on any harness.** `defineAssistant` takes an
+`executor` function, and `@ambionframework/assistant` no longer depends on
+`@ambionframework/pi`. The core marks a steered line with `[new]` for every
+executor.
 
-**Macros are the main use of `compose`.** A skill stores a procedure as a
-macro, and the model runs it by name. Free code serves precision and chains
-of typed tools. The live evidence in `planning/` shows no token saving for
-free code, and the docs claim none.
+**The release fixes two defects.** A Claude seat answers a line that lands
+during its final answer. Camera Chat keeps its preview frame on a refresh,
+and `disconnect` leaves a link whose process ended as it is.
 
-**A tool can declare its output for `compose`.** `AmbionTool` gains the
-field `compose`: `false`, or `{ output }` with a TypeBox schema. The check
-of a tool refuses any other value. `captureTool` copies the field.
+**No journal body and no stored format changes.** A journal of 0.5.0 opens
+on 0.6.0. The breaking changes are in the TypeScript API. See
+[Breaking changes](#breaking-changes).
 
-**`defineTool` has two overloads.** With `compose: { output }`, `execute`
-must return a `ToolResult` whose `details` is `Static` of the schema.
-`ToolResult` takes the type of its details. The new types
-`BaseToolOptions`, `PlainToolOptions`, and `DeclaredToolOptions` replace
-the export `DefineToolOptions`.
+### Packages
 
-**The tool context and the trace name a compose call.** `ToolContext`
-gains `composeCall`. The `tool_call` and `tool_result` steps gain
-`parent`. `ToolContext` has no `record`: no tool can write a step.
+**The eleven packages of 0.5.0 ship at 0.6.0, and one package joins.**
+`@ambionframework/compose` is the twelfth publishable package. The examples
+`examples/workbench` and `examples/camera-chat` stay private. Every library
+package needs Node 22.19 or newer. `processEvaluator` needs Node 26 or newer.
 
-**The core records the steps of a nested call.** The hosting export
-`invokeTool` runs one direct call and hands the step sink of the activation
-to the `compose` tool, and to no other tool. `invokeChecked` does the same
-for a harness that prepared and checked the arguments, as Pi does.
-`toolContext` takes no sink. `toolsFor` of `@ambionframework/pi` keeps its
-sink for `invokeChecked`. `callId` skips a step with a `parent`. The
-scripted executor gives each tool call a signal and the deadline.
+- **Compose.** `@ambionframework/compose` has one entry point,
+  `@ambionframework/compose/runtime`, and no root export. It exports
+  `quickjsEvaluator` and `processEvaluator`. It depends on
+  `@ambionframework/ambion` and on `quickjs-emscripten` 0.32.0, pinned
+  exactly.
+- **Assistant.** `@ambionframework/assistant` drops `@ambionframework/pi`
+  from its dependencies and depends on `@ambionframework/ambion` only. Its
+  tests take `@ambionframework/pi`, `@ambionframework/claude`, and
+  `@ambionframework/codex` as development dependencies.
+- **Entry points.** No other package adds or removes an entry point. No
+  other package changes a dependency.
 
-**A direct call checks the full schema.** One function runs each tool call.
-A direct call on Claude, Codex, and the scripted executor now checks the
-arguments against the schema after `prepareArguments`. A hand-built tool
-whose `invoke` checks nothing no longer gets bad arguments. Pi keeps the
-check of its harness.
+### New
 
-**The executor options take `compose`.** The main entry exports the types
-`ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
-`Evaluator`, `EvaluatorInput`, and `JsonValue`. A definition refuses a user
-tool named `compose`.
+#### Compose
 
 **The `compose` option adds the `compose` tool.** `describeExecutor`
 appends the tool after the tools and the bundles, and the guidance of the
-tool follows the guidance of the bundles. `COMPOSE_GUIDANCE` is the new
-export of the text, and `ComposeOptions.guidance` replaces it. The tool
-checks `uses`, asks `approve`, and runs the code in the evaluator of the
-option, within the four limits. A failed or cancelled compose call throws,
-and its message renders the error and the ledger. The step vocabulary gains
-the `approval` step, which records the answer of `approve`. A tool named
-`compose` in a hand-built executor stays an ordinary tool.
+tool follows the guidance of the bundles. The tool checks `uses`, asks
+`approve`, and runs the code in the evaluator of the option, within four
+limits. A failed or cancelled compose call throws, and its message renders
+the error and the ledger. A tool named `compose` in a hand-built executor
+stays an ordinary tool. A definition refuses a user tool named `compose`.
 
-### The declared outputs of the workspace tools
+**The executor options take `compose`.** The main entry exports the types
+`ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
+`Evaluator`, `EvaluatorInput`, and `JsonValue`. `COMPOSE_GUIDANCE` is the
+export of the guidance text, and `ComposeOptions.guidance` replaces it.
 
-**`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
-declare their outputs.** Each tool sets `compose: { output }` with a
-TypeBox schema, and its details type is `Static` of that schema. `compose`
-checks every result against the schema. `process-tools` no longer declares
-`ProcessDetails`, `WaitDetails`, and `PsDetails` by hand.
+**`COMPOSE_GUIDANCE` makes compose the default for a plan of two or more
+tool calls.** The live evidence showed that no seat chose `compose` for a
+two-step chain. The text now tells the model to plan the calls first and to
+make a plan of two or more calls in one compose call. A direct call is for
+a step that needs the judgment of the model when the task gives no rule. An
+example shows a query that feeds a snapshot. A paragraph tells the model to
+run a macro when a skill names one. A seat with macros also gets one
+guidance block after the text, with one line for each macro: the name and
+the description.
 
-**The `sql` details change.** `rows` becomes `count`: the count of every
-row of the last statement. `rows` now holds the preview rows, up to the
-limit `rows`, and `columns` names the columns. A blob is lowercase hex, a
-`bigint` is decimal text, and a number that is not finite is its text.
-`database`, `export`, `import`, and `imported` stay.
+**The core records the steps of a nested call.** The step vocabulary gains
+the `approval` step, which records the answer of `approve`. The `tool_call`
+and `tool_result` steps gain `parent`, the id of the compose call. The
+hosting export `invokeTool` runs one direct call and hands the step sink of
+the activation to the `compose` tool, and to no other tool. `invokeChecked`
+does the same for a harness that prepared and checked the arguments, as Pi
+does. `callId` skips a step with a `parent`. The scripted executor gives
+each tool call a signal and the deadline.
 
-**`wait` declares one union.** A `wait` on one handle gives the details of
-`status`. A `wait` on several handles gives `processes` and `ended`.
+**The tool context names a compose call.** `ToolContext` gains
+`composeCall`. `ToolContext` has no `record`: no tool can write a step.
 
-### Skill macros
+**The `approve` request is a union.** `ComposeOptions.approve` reads a
+`ComposeRequest`: `{ uses, code }` for free code, and
+`{ macro, hash, args }` for a macro. A host can allow its own macros and
+deny free code.
+
+#### Skill macros
 
 **A skill stores a compose program that the model runs by name.**
 `loadSkills` reads each `<skill>/macros/<name>.js`: a `/*---` YAML header
 with `description`, `uses`, and `args` (a JSON Schema), and then the body.
 It refuses a bad header, a bad `uses`, an `args` schema that the check
 cannot read, and a bad file name, with the error `Skill set:` and the
-path. `SkillSet` gains `macros`. The helper `skill-text.ts` holds the text
-rules that `skills.ts` and the new `skill-macros.ts` share.
+path. `SkillSet` gains `macros`.
 
 **`ToolBundle` gains `macros`.** The field holds `ComposeMacro` values: the
 name `<skill>/<macro>`, the description, `uses`, the `args` schema, the
@@ -120,21 +133,31 @@ are refusals with no ledger.
 the global `args`. Free code has none. The test evaluator of the core
 defines it.
 
-**The `approve` request is a union.** `ComposeOptions.approve` reads a
-`ComposeRequest`: `{ uses, code }` for free code, and
-`{ macro, hash, args }` for a macro. A host can allow its own macros and
-deny free code.
+#### Declared outputs
 
-**`COMPOSE_GUIDANCE` makes compose the default for a plan of two or more
-tool calls.** The live evidence showed that no seat chose `compose` for a
-two-step chain. The text now tells the model to plan the calls first and to
-make a plan of two or more calls in one compose call. A direct call is for
-a step that needs the judgment of the model when the task gives no rule. An
-example shows a query that feeds a snapshot.
+**A tool can declare its output for `compose`.** `AmbionTool` gains the
+field `compose`: `false`, or `{ output }` with a TypeBox schema. The check
+of a tool refuses any other value. `captureTool` copies the field.
 
-**`COMPOSE_GUIDANCE` gains a paragraph.** It tells the model to run a macro
-when a skill names one. A seat with macros also gets one guidance block
-after the text, with one line for each macro: the name and the description.
+**`defineTool` has two overloads.** With `compose: { output }`, `execute`
+must return a `ToolResult` whose `details` is `Static` of the schema.
+`ToolResult` takes the type of its details. The new types
+`BaseToolOptions`, `PlainToolOptions`, and `DeclaredToolOptions` replace
+the export `DefineToolOptions`.
+
+**`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
+declare their outputs.** Each tool sets `compose: { output }` with a
+TypeBox schema, and its details type is `Static` of that schema. `compose`
+checks every result against the schema.
+
+**The `sql` details change.** `rows` becomes `count`: the count of every
+row of the last statement. `rows` now holds the preview rows, up to the
+limit `rows`, and `columns` names the columns. A blob is lowercase hex, a
+`bigint` is decimal text, and a number that is not finite is its text.
+`database`, `export`, `import`, and `imported` stay.
+
+**`wait` declares one union.** A `wait` on one handle gives the details of
+`status`. A `wait` on several handles gives `processes` and `ended`.
 
 **`sql` gains `params`.** The optional array binds text, numbers, and
 `null` to the `?` placeholders of one statement. A whole number binds as an
@@ -142,10 +165,9 @@ integer. `SqlRunOptions` gains `params`, and the SQLite backend binds the
 values and fails a run that has `params` and more than one statement. The
 type `SqlParam` is new.
 
-### The evaluators
+#### Evaluators
 
-**The new package `@ambionframework/compose` holds two evaluators.** It is
-the twelfth publishable package, and it depends on `@ambionframework/ambion`.
+**The new package `@ambionframework/compose` holds two evaluators.**
 `quickjsEvaluator()` runs the code of a compose call in QuickJS, on the
 synchronous build, in the host process. It gives each evaluation a runtime and
 a WebAssembly memory of its own, a memory limit, and a CPU limit.
@@ -159,6 +181,123 @@ pass one conformance suite.
 The suite covers the globals table, the JSON at each crossing, errors with
 `details`, parallel calls, a memory limit, and a cut. It takes a function
 that returns a fresh evaluator.
+
+#### The assistant
+
+**`defineAssistant` takes a required `executor` function.** The function
+receives `AssistantParts` (`instructions`, `tools`, and `bundles`) and
+returns an executor of any package. The options `model` and `thinking` are
+gone. Pass them to the executor in the function: `executor: (parts) =>
+pi({ ...parts, model, thinking })`. The package exports the new type
+`AssistantParts`.
+
+**`@ambionframework/assistant` no longer depends on `@ambionframework/pi`.**
+It depends on `@ambionframework/ambion` only.
+
+### Simplification
+
+**The sensor response has one check.** The sensor client checks the response
+schema and each file digest once. The retention trusts the client result. It
+still refuses a referenced file that is missing and a received file that no
+observation references.
+
+**The process tools derive their details.** `process-tools` no longer
+declares `ProcessDetails`, `WaitDetails`, and `PsDetails` by hand. They
+derive from the output schemas.
+
+**The skill text rules have one home.** The helper `skill-text.ts` holds
+the text rules that `skills.ts` and the new `skill-macros.ts` share.
+
+**One function runs each tool call.** A direct call and a nested call go
+through the same function. It prepares the arguments, checks the full
+schema, invokes the tool, and records the steps of a nested call.
+
+**The executor packages name their definition file `execution.ts`.** The
+file held `compose.ts` before. The public exports do not change.
+
+### Fixes
+
+**A Claude seat answers a line steered during its final answer.** The
+Claude executable runs such a line as a turn of its own after the first
+`result`. The executor parked that result behind the echo grace of 5 s, and
+the echo of the line did not cancel the timer. The pass settled on the first
+result, and the close stopped the turn that answers the line. Now an echo
+that arrives while a result that did not fail waits on the timer cancels
+the timer. The pass settles on the result of the next turn, and the say of
+that turn commits after the line. A failed result keeps its timer for the
+standard error.
+
+**The core adds the `[new]` marker to a steered line.** The runner marks the
+line with the prefix of `renderDelta`. Pi no longer adds its own prefix.
+Codex and Claude now send the marked line.
+
+**A direct call checks the full schema.** A direct call on Claude, Codex,
+and the scripted executor now checks the arguments against the schema after
+`prepareArguments`. A hand-built tool whose `invoke` checks nothing no
+longer gets bad arguments. Pi keeps the check of its harness.
+
+**`disconnect` leaves a link whose process ended as it is.** The link stays
+unavailable. Before, `disconnect` relabelled it as disconnected.
+
+**Camera Chat keeps its preview frame.** On a refresh of the same sensor
+the preview keeps its frame, where it blanked for one poll. It skips the
+download of a frame with an unchanged digest. The host no longer tells the
+agent to edit and push `fps=5` on every connect. The camera template
+accepts `--framerate`. Both READMEs state the CPU cost, the frame size, and
+the 24 hour `bash` timeout that the host passes. The README states that the
+login in `auth.json` decides billing.
+
+### Breaking changes
+
+#### What to change
+
+**Each bullet names an action.**
+
+- **Pass an `executor` function to `defineAssistant`.** There is no Pi
+  default. Write `executor: (parts) => pi({ ...parts, model })`, or use
+  `codex` or `claude` in place of `pi`.
+- **Move `model` and `thinking` into the executor call.**
+  `DefineAssistantOptions` no longer holds them.
+- **Install the executor package yourself.** `@ambionframework/assistant`
+  no longer pulls in `@ambionframework/pi`.
+- **Replace `DefineToolOptions`.** Use `PlainToolOptions` for a tool with no
+  declared output, `DeclaredToolOptions` for a tool with `compose: {
+  output }`, and `BaseToolOptions` for the shared fields.
+- **Read the new `sql` details.** `rows` was the count of rows. It is the
+  preview rows now, and `count` holds the count.
+- **Handle the `approval` step.** A switch over `Step` meets it, and it
+  carries the `answer` of a compose call.
+- **Handle `parent` on `tool_call` and `tool_result`.** A nested call has
+  it, and a direct call does not.
+- **Remove a `[new]` prefix that your executor adds.** The core adds it to
+  each steered line.
+- **Expect a checked direct call.** A tool whose `invoke` assumed unchecked
+  arguments now meets the full schema check on Claude, Codex, and the
+  scripted executor.
+
+#### Journal and stored data
+
+**No journal body and no stored format changes.** The golden journals, the
+snapshot manifest, and the sensor wire API stay as they are. A journal of
+0.5.0 opens on 0.6.0. The new `approval` step belongs to the trace. No
+journal body carries a step.
+
+#### Exports
+
+- **`@ambionframework/ambion`.** Adds `composeMacro`, `COMPOSE_GUIDANCE`, and
+  the types `BaseToolOptions`, `PlainToolOptions`, `DeclaredToolOptions`,
+  `ComposeLimits`, `ComposeMacro`, `ComposeOptions`, `ComposeRequest`,
+  `ComposeResult`, `Evaluator`, `EvaluatorInput`, `JsonValue`, and
+  `LedgerEntry`. Removes the type `DefineToolOptions`.
+- **`@ambionframework/ambion/hosting`.** Adds `invokeTool` and
+  `invokeChecked`.
+- **`@ambionframework/ambion/conformance`.** Adds `evaluatorConformance`.
+- **`@ambionframework/workspace`.** Adds the type `SqlParam`.
+- **`@ambionframework/assistant`.** Adds the type `AssistantParts`.
+- **`@ambionframework/compose`.** Is a new package with the entry
+  `@ambionframework/compose/runtime`: `quickjsEvaluator`, `processEvaluator`,
+  and their option types.
+- **The other entries keep their exports.**
 
 ## 0.5.0 (2026-10-02)
 

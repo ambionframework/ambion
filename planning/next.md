@@ -22,7 +22,7 @@ else.
 
 ## Status
 
-**Every item is complete. The release remains.** CS1, CC1, CX1, and W5
+**Every item is complete. The 0.6.0 release is prepared.** CS1, CC1, CX1, and W5
 merged, and so did CP1 to CP7. The live run of CP6 found that
 the guidance steers `gpt-5.6-luna` and `claude-opus-5-5` to `compose` for
 a chain, and does not steer `claude-sonnet-5`. The compose design passed two design
@@ -85,7 +85,7 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 - **Room tools in a compose call.** `say`, `schedule`, `seat`, `unseat`,
   `dismiss`, and `recall` stay direct calls.
 - **Concurrent operations in one workspace.** Parallel calls of file tools
-  still run one operation at a time. D9 holds concurrent operations.
+  still run one operation at a time. Concurrent operations are not supported.
 - **A compose call inside a compose call.**
 - **Every backlog item.**
 
