@@ -62,7 +62,7 @@ export function describeTool(catalog: Catalog): AmbionTool {
 }
 
 /** The pattern of the message that a runtime gives for a tool that the seat has and the call did not bind. */
-const UNBOUND = /\btools\.([\w$]+) is not bound\./;
+const UNBOUND = /\btools\.([\w$-]+) is not bound\./;
 
 /**
  * The tools of the catalog that a failed result names: the tool of the call

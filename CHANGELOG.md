@@ -27,7 +27,7 @@ names. The kernel reserves the name `describe` as it reserves `compose`.
 **The description of `compose` holds a compact list.** It keeps the
 contract, the limits, and the rejection rule. Each bindable tool appears as
 `name -> Type`, where `Type` names the declared output, `string` for a tool
-with no output, and `object` for an output with no `$id`. The full catalog
+with no output, and `object`, `array`, or the primitive type for an output with no `$id`. The full catalog
 moved to `describe`. The tool list of a full workspace seat shrinks from
 about 22,100 to about 9,600 characters in every request. The workspace
 outputs declare an `$id`, so the list names each type.
