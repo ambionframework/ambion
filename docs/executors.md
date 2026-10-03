@@ -350,8 +350,10 @@ cause it names.
 tool call id as its commit key. It accepts `text`, `to`, and `refs`. The
 result names the message, as `said #41` or `said #41 to priya`, so the
 agent can cite it. `seat` and `unseat` give `seated surveyor (#42)`, and a
-seating the record already holds gives `surveyor is already seated` and the
-instruction to call `say` with `to` set to the name.
+seating the record already holds gives `surveyor is already seated`. The result tells the agent to read the
+mark in the roster. A seat marked "named only" gets the request through `say`
+with `to` set to the name. A seat with no mark, or marked "watches arrivals",
+already has it.
 
 **`schedule` commits a `said` intent with `delaySeconds`.** The intent goes to the
 seat itself. It carries `readThrough`, and the room takes it at any

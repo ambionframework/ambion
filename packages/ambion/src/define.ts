@@ -316,7 +316,7 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 const CITED = Type.Array(
 	Type.String({
 		description:
-			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
+			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, never by its path, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
 	}),
 );
 
@@ -324,7 +324,7 @@ const CITED = Type.Array(
 export const SAY = {
 	name: 'say' as const,
 	description:
-		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. To come back to your work later, call `schedule`.',
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String({ description: 'What you say, as the record shows it.' }),
@@ -367,7 +367,7 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text, for the person of the current exchange. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
+		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. The message then opens an exchange for the person of the exchange in which you scheduled it. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		delaySeconds: Type.Integer({
 			minimum: 1,

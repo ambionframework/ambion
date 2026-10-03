@@ -76,8 +76,8 @@ opens a later exchange once the room is quiet.
 
 **A post opens an exchange with no author.** Its exchange has no
 `person` until a person speaks in the range. The first person who speaks
-becomes its `person` and receives its summary. An exchange where no person
-spoke owes no summary.
+becomes its `person`. That person receives its summary when an agent said a
+message in the range. An exchange where no person spoke owes no summary.
 
 **The room derives `person` from the record.** `exchangeAfter` reads the
 first said message of a person at or after `from`, and the close stamps

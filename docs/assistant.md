@@ -22,13 +22,13 @@ activation authority, freshness checks, exchange closure, and summary
 provenance. Other agents retain their existing seats and speech tools.
 The package introduces no privileged role or separate execution lifecycle.
 
-| Responsibility | Default behavior                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.  |
-| Routing        | Send one directed request to a seated specialist at `named` attention, with every constraint that is still in force. |
-| Answers        | Answer a participant that asks the assistant a question. A report is not a question. The summary answers the room.   |
-| Summaries      | Answer the opening question, and report corrections, conflicts, constraints, open questions, and unresolved work.    |
-| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop a forbidden action.               |
+| Responsibility | Default behavior                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Seating        | Seat specialists whose expertise can materially affect the result. Unseat on request or on a clear change of scope.                                                     |
+| Routing        | Send one directed request to a seated specialist at `named` attention, with every constraint that is still in force.                                                    |
+| Answers        | Answer a participant that asks the assistant a question. A report is not a question. A question to the room is for the specialists. The summary reports what they said. |
+| Summaries      | Report what the specialists established, with corrections, conflicts, constraints, open questions, and unresolved work.                                                 |
+| Silence        | Send no message about a result, a report, or an acknowledgment. Steer only to stop a forbidden action.                                                                  |
 
 Specialists own domain judgments. The assistant must not invent extra work
 after the request is satisfied or require every specialist contribution to
