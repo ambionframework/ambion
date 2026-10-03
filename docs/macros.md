@@ -1,7 +1,8 @@
 # Macros
 
-**A macro is a compose program that a skill stores as data.** The model
-runs it by name with arguments. It writes no code. The macro declares the
+**A macro is a compose program that a skill stores as data.** Macros are
+the main use of `compose`. The model runs a macro by name with arguments.
+It writes no code. The macro declares the
 tools that it uses, and the room checks the arguments before anything runs.
 [Compose](compose.md) holds the tool that runs it. [Skills](skills.md) holds
 the folder that stores it.
