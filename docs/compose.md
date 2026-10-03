@@ -425,7 +425,8 @@ Write a compose call in two steps:
 Use compose also to explore. To learn the size or the shape of data,
 return a count, a few fields, or a short sample from code. Do not read
 large results one direct call at a time. Code with uses: [] calculates,
-sorts, groups, and reshapes data that you already hold.
+sorts, groups, and reshapes data that you already hold. When the code
+starts processes, call wait on each handle before the code returns.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
