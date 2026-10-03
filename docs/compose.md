@@ -824,4 +824,6 @@ pending item of this page.
 7. **The guidance steers the choice.** The live comparison holds two cases
    on each executor kind. In the first, the result of one tool feeds
    another, and the seat calls `compose`. In the second, the seat must
-   read a result before it decides, and it calls the tool directly.
+   read a result before it decides, and the result decides what it does.
+   Code that branches on the result is a valid compose call too. So the
+   run records whether the seat called the tool directly.
