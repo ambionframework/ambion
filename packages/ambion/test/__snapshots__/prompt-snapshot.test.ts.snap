@@ -53,7 +53,7 @@ The record of 'site' so far:
 #2 [priya] Is the pour on?  (5 minutes ago)
 #3 [worker → priya] Yes, at nine.  (5 minutes ago)
 
-priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. These messages are your only source. Write the one message with say from what they report. When no message after the request reports anything, end your activation."
+priya's exchange is over: it holds the messages from seq 2 to seq 3. The opening message's URI is ambion://room/site/message/2. These messages are your only source. Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report."
 `;
 
 exports[`the rendered prompt > renders a respond activation > agent 1`] = `

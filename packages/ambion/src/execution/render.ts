@@ -493,5 +493,5 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
 		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
-		: 'Write the one message with say from what they report. When no message after the request reports anything, end your activation.';
+		: 'Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report.';
 }

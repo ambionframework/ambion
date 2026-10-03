@@ -13,7 +13,7 @@ through the tools that stay.
 activation its job is to get the request to the specialists who need it. To
 route to a seated specialist at `named` attention, it calls `say` with `to` set
 to the name of that specialist. The `seat` tool routes nothing, and the
-guidance now states first that a seated specialist needs `say`. A live run
+guidance now states before the `seat` rule that a seated specialist needs `say`. A live run
 showed the failure: the assistant called `seat` for two specialists that were
 already seated, ended with no directed `say`, and no specialist received the
 request.
@@ -66,7 +66,8 @@ The writer copies each value as a message states it, derives none, and keeps
 the source paths and URIs that a message cites. The assistant writes no summary
 when its only agent messages are its own answer to the person or its own
 routing requests that no specialist answered. It also writes none when one
-specialist message already answers the request in full. A live run showed a summary with
+specialist message already answers the request in full. The summary prompt
+of every writer checks this case and the empty case first. A live run showed a summary with
 "9.3–10.7 mA" computed from a formula and the datasheet paths dropped.
 
 ### A refused `say` tells the model what to do

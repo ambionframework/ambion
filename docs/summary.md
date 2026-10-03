@@ -84,6 +84,11 @@ judge whether an agent message reports anything, because an agent message
 can be a routing request. The writer judges that case, and it ends the
 activation without `say` when the messages report nothing.
 
+**A complete answer in the record owes no second copy.** The summary prompt
+checks this case first. When one message of the exchange already answers the
+request in full, the writer ends the activation without `say`. The person reads
+every message, so the answer stays on the record.
+
 **The messages of the exchange are the only source of a summary.** The
 prompt says so. Every fact, value, and recommendation in the summary must come
 from a message of the exchange. A reported failure, an unknown, or a question
