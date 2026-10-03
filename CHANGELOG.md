@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+**The workspace drops the `status` and `clone` tools.** The smallest
+workspace gives nine tools, from ten. A workspace with a SQL backend and a
+git backend gives twelve, from fourteen. The agent reaches the same facts
+through the tools that stay.
+
+### Simplification
+
+**`wait` with one handle and `timeout: 0` reads a process.** The call does
+not wait. It gives the state and the new output of the process, as `status`
+did. The description of `wait` and its `timeout` parameter state this. The
+behavior of `wait` on several handles does not change.
+
+**The process note gains two lines.** Each process has a directory,
+`~/.processes/<handle>/`, with its spec, its out, and its exit code when it
+ends. `ls ~/.processes` lists every process that the agent started and the
+workspace still keeps. `ps` stays.
+
+**The git note teaches a clone with `bash`.** To check out a repository
+without a fork, the agent takes its clone URL from `repos` and runs `git
+clone <url> <path>` with `bash`. The `origin` is the source, with the push
+permissions of the source. A clone of `shared/<name>` pushes back to it, and
+a clone of a template or of another agent's fork is read-only. The agent
+raises `wait` for a large repository. `fork` keeps its `clone` option. A
+failed clone of a fork now says `Run git clone <url> <path> with bash, at a path
+that does not exist yet.`
+
+**The reminder and the state line name `wait`.** A running process reads
+`Call wait with its handle, and timeout 0 to read it at once.` The reminder
+of the processes and the hint of the held output of a wait on several
+handles name `wait` in place of `status`.
+
+### Breaking changes
+
+- **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
+  `timeout: 0`. The result has the same text and the same details. In a
+  compose call, `tools.status` is gone, and `tools.wait` binds the same
+  output.
+- **Replace `clone` with `bash`.** Run `git clone <url> <path>` in `bash`,
+  or call `fork` with `clone`. The `compose` binding `tools.clone` is gone.
+- **Expect a new count in the tool line.** The smallest workspace names nine
+  tools, and the number word starts at nine.
+- **No journal body and no stored format changes.** The golden journals
+  stay as they are.
+
 ## 0.6.0 (2026-10-03)
 
 <img alt="Ambion 0.6.0: code mode and macros. A seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with QuickJS and child process evaluators, nested calls in the trace, and bound SQL params. Fixes: a Claude seat answers a late steer, and Camera Chat keeps a steady preview." src="docs/assets/ambion-0.6.0.png" width="800">

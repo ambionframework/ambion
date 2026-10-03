@@ -23,17 +23,17 @@ be stateful. The API prescribes no internal storage or checkpoint format.
 
 ## The functional core
 
-| Stage          | Agent action                                           | Result                                               |
-| -------------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| Fork           | Use `repos` and `fork` on a sensor template            | An agent-owned repository and checkout               |
-| Customize      | Create a branch and edit acquisition or reduction code | A working implementation for the task                |
-| Validate       | Run template tests and `sensorConformance`             | Evidence from the server and protocol checks         |
-| Save           | Commit and push the branch to the owned fork           | A saved version that can be run again                |
-| Start          | Run its launch command through `bash`; read `status`   | Acquisition runs under a process handle              |
-| Connect        | Call `connect` with that handle and port               | Qualified sensor names in the workspace              |
-| Observe        | Call `observe`, then cite its snapshot ref             | Retained measurements and files                      |
-| Revise or stop | Cancel; edit, validate, save, and start again          | An explicit replacement or an inactive sensor        |
-| Roll back      | Cancel; check out a previous commit and start it       | A previous implementation, with a new process handle |
+| Stage          | Agent action                                                                | Result                                               |
+| -------------- | --------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Fork           | Use `repos` and `fork` on a sensor template                                 | An agent-owned repository and checkout               |
+| Customize      | Create a branch and edit acquisition or reduction code                      | A working implementation for the task                |
+| Validate       | Run template tests and `sensorConformance`                                  | Evidence from the server and protocol checks         |
+| Save           | Commit and push the branch to the owned fork                                | A saved version that can be run again                |
+| Start          | Run its launch command through `bash`; read it with `wait` and `timeout: 0` | Acquisition runs under a process handle              |
+| Connect        | Call `connect` with that handle and port                                    | Qualified sensor names in the workspace              |
+| Observe        | Call `observe`, then cite its snapshot ref                                  | Retained measurements and files                      |
+| Revise or stop | Cancel; edit, validate, save, and start again                               | An explicit replacement or an inactive sensor        |
+| Roll back      | Cancel; check out a previous commit and start it                            | A previous implementation, with a new process handle |
 
 **A branch holds ongoing work; a commit identifies a saved version.**
 Pushing code does not change an already-running server. Template updates
@@ -119,7 +119,7 @@ unwatch?.();
 **Templates are ordinary repositories in the existing Git backend.**
 The host supplies `templates/sensor-server` as it supplies other templates.
 The agent forks it and works in its own repository. It creates a checkout
-through `fork` with `clone`, or uses `clone` on an existing fork. [Git](git.md) owns naming, branches, and push authority.
+through `fork` with `clone`, or runs `git clone` in `bash` on an existing fork. [Git](git.md) owns naming, branches, and push authority.
 An agent needs no new sensor installation or configuration tool.
 
 **Each template documents one complete lifecycle.** Its README states:
@@ -165,7 +165,7 @@ bash({
   timeout: 86400,
 });
 // Result: process bash-1a2b3c4d5e6f.
-status({ handle: 'bash-1a2b3c4d5e6f' });
+wait({ handles: ['bash-1a2b3c4d5e6f'], timeout: 0 });
 // Suppose the output says READY http://127.0.0.1:43127.
 connect({ name: 'bench', process: 'bash-1a2b3c4d5e6f', port: 43127 });
 observe({ sensor: 'bench/room-temperature' });
@@ -624,7 +624,7 @@ schema has no image option.
 
 | Event                                           | Result                                                                            |
 | ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| Server is not ready                             | `connect` fails; use `status`, then retry                                         |
+| Server is not ready                             | `connect` fails; use `wait` with `timeout: 0`, then retry                         |
 | Process ends or is cancelled                    | Its connection becomes unavailable; retained snapshots still work                 |
 | SSH session ends                                | The request fails; repeat `connect` to check the process and open a new transport |
 | Server returns invalid data or wrong file bytes | The observation fails validation                                                  |

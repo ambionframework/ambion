@@ -20,7 +20,7 @@ from GitHub Packages; see [the toolchain guide](https://github.com/ambionframewo
 ## Use
 
 `drive.tools()` returns three file tools — `read`, `write`, and `edit` —
-and five process tools — `bash`, `ps`, `status`, `wait`, and `cancel` — plus `sql`
+and four process tools — `bash`, `ps`, `wait`, and `cancel` — plus `sql`
 when the workspace has a SQL backend, plus any tool the bash backend adds of
 its own, and their guidance. Pass it in `bundles`; each tool reaches the
 environment the backend built for that agent, rooted at

@@ -20,7 +20,7 @@ SQL binding, and the rules for references and provenance.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. status and cancel take its handle, and wait takes 1 to 16 handles. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files and objects. read, write, and edit reach the files. snapshot puts the bytes of a file in an object store, and restore gives them back. The store is a folder of the workspace or an S3 bucket. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. cancel takes its handle, and wait takes 1 to 16 handles. A wait with timeout 0 reads a process at once. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files and objects. read, write, and edit reach the files. snapshot puts the bytes of a file in an object store, and restore gives them back. The store is a folder of the workspace or an S3 bucket. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="assets/ambion-capabilities.svg">
 </picture>
 
 ## Open one resource
@@ -83,8 +83,8 @@ console.log(drive.mirrorAgent); // { name: 'town-host' }
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds three file tools first: `read`, `write`, and `edit`. The five process
-tools come next: `bash`, `ps`, `status`, `wait`, and `cancel`. `bash` starts
+binds three file tools first: `read`, `write`, and `edit`. The four process
+tools come next: `bash`, `ps`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle reminds each seat of its processes
 and lists captured sensor discovery when the backend has endpoints. `snapshot`
@@ -117,7 +117,7 @@ The workspace tools share these rules:
 - **A failure is a tool error.** A harness and a host tell it from a
   success by the error flag of the result. A bad path, an unknown handle,
   and the limit of running processes are failures. A bad ref, a refused
-  statement, a refused fork or clone, and a process that ended badly are
+  statement, a refused fork or a failed clone, and a process that ended badly are
   failures too. So are an abort, a fault of a backend, and an invalid
   argument.
 - **The text of a failure states the problem and the next step.** A
@@ -975,28 +975,27 @@ backend exists. That backend moves them back to the conformance entry
 
 ## Declared outputs
 
-**Fourteen tools declare their output for `compose`.** Each sets
+**Twelve tools declare their output for `compose`.** Each sets
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares
 none, so `compose` binds it as text. `write`, `edit`, and `disconnect`
 declare none, because code needs only their success or their rejection.
 
-| Tool               | Declared output                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `sql`              | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them. |
-| `snapshot`         | `refs`: one ref for each path, in order.                                                                |
-| `restore`          | `ref`, `path` of the file, and `bytes`.                                                                 |
-| `read`             | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.       |
-| `bash`             | `process`, `text`, `read`, and `truncation` when the result cut the output.                             |
-| `status`, `cancel` | The same facts as `bash`.                                                                               |
-| `ps`               | `processes`: the facts of each process of the caller.                                                   |
-| `wait`             | On one handle, the facts of `status`. On several, `processes` and `ended`.                              |
-| `repos`            | `server`, and `repositories` with the id, branches, and clone URL of each.                              |
-| `clone`            | `repository`, `source`, `url`, and the `clone` path.                                                    |
-| `fork`             | `repository`, `source`, `url`, and `clone` when the call made a working copy.                           |
-| `connect`          | `name`, `hostname`, `port`, `process`, `owner`, `source`, and the qualified names in `sensors`.         |
-| `observe`          | `sensor`, `request`, `manifestRef`, `manifestPath`, `directory`, `files`, and the connection facts.     |
+| Tool       | Declared output                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| `sql`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them. |
+| `snapshot` | `refs`: one ref for each path, in order.                                                                |
+| `restore`  | `ref`, `path` of the file, and `bytes`.                                                                 |
+| `read`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.       |
+| `bash`     | `process`, `text`, `read`, and `truncation` when the result cut the output.                             |
+| `cancel`   | The same facts as `bash`.                                                                               |
+| `ps`       | `processes`: the facts of each process of the caller.                                                   |
+| `wait`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                |
+| `repos`    | `server`, and `repositories` with the id, branches, and clone URL of each.                              |
+| `fork`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                           |
+| `connect`  | `name`, `hostname`, `port`, `process`, `owner`, `source`, and the qualified names in `sensors`.         |
+| `observe`  | `sensor`, `request`, `manifestRef`, `manifestPath`, `directory`, `files`, and the connection facts.     |
 
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.
@@ -1012,8 +1011,8 @@ is also in the content of the result, so a record that keeps both with
 
 **The git, snapshot, and sensor tools declare the facts that they already
 report.** `repos` gives `repositories` as data, with the branches and the
-hash of each, so code reads no table. `restore` and `clone` give the
-absolute path that they wrote. `connect` gives the connection and the names
+hash of each, so code reads no table. `restore` gives the
+absolute path that it wrote. `connect` gives the connection and the names
 of its sensors, and its `details` hold no copy of the server index.
 `observe` gives the paths and refs of the retained evidence.
 
@@ -1029,7 +1028,7 @@ as text, and a number that is not finite is its text.
 state, the command, and the times of one process. `text` holds the new
 output that the result shows, with no bracketed line. `read` holds the
 `from` and `to` of those bytes as offsets in the output file. `wait` on
-several handles gives `processes`, with every status in the order of the
+several handles gives `processes`, with every state in the order of the
 handles, and `ended`, with the details of each process that ended. A call
 that fails on a process that ended badly throws a `ToolFailure` with
 the same facts in `details`. A binding copies them to `error.details`. The
@@ -1056,7 +1055,7 @@ optional guidance about the backend's own shell and a required `layout` (see
 backend adds no tool: the workspace binds the same tools over every backend.
 `openWorkspace` opens the bash resource, builds the three file tools, and
 binds them to its `use` method. It also opens
-the process table and builds the five process tools over it
+the process table and builds the four process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
 processes of this run ([The host's view](processes.md#the-hosts-view)).
 `Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
@@ -1064,7 +1063,7 @@ Direct operations and tool calls share one queue and one lifecycle.
 
 **A new backend implements `connect()` and a `WorkspaceEnv`, over the
 shared helpers below, and names its own `layout`.** It adds only the tools
-and the guidance beyond the ten tools every workspace has, passes
+and the guidance beyond the nine tools every workspace has, passes
 `@ambionframework/workspace/conformance`, and loads no just-bash.
 
 **The root entry also exports the environment helpers a new `WorkspaceEnv`
@@ -1248,7 +1247,7 @@ second operation queue.
 **A new backend follows one recipe.** It implements `connect()` and a
 `WorkspaceEnv` over the shared helpers (see [The resource
 contract](#the-resource-contract)), names its own `layout`, and adds only
-the tools and the shell guidance beyond the ten tools every workspace
+the tools and the shell guidance beyond the nine tools every workspace
 already has. It passes `@ambionframework/workspace/conformance` and loads
 no just-bash.
 

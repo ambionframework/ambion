@@ -449,8 +449,8 @@ interface ToolContext {
 ```
 
 **The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
-`restore`, `bash`, `status`, `cancel`, `wait`, `ps`, `repos`, `clone`,
-`fork`, `connect`, and `observe` set `compose: { output }`. `write`, `edit`,
+`restore`, `bash`, `cancel`, `wait`, `ps`, `repos`, `fork`,
+`connect`, and `observe` set `compose: { output }`. `write`, `edit`,
 and `disconnect` bind as text, because the code needs only their success or
 their rejection. [Workspace](workspace.md#declared-outputs) states
 the shape of each output.

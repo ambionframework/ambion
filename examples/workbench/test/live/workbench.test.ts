@@ -134,7 +134,7 @@ async function processCalls(workspace: string) {
 					result?: { details?: { process?: { handle: string; state: string } } };
 				},
 		)
-		.filter((entry) => ['bash', 'ps', 'status', 'wait', 'cancel'].includes(entry.tool));
+		.filter((entry) => ['bash', 'ps', 'wait', 'cancel'].includes(entry.tool));
 }
 
 /**

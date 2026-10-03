@@ -52,7 +52,7 @@ export interface WorkstationOptions {
 	/**
 	 * The repositories that `git` in each agent's shell reaches. The
 	 * workspace opens it under a resource of its own. Absent, the workspace has
-	 * no `repos`, `clone` or `fork` tool.
+	 * no `repos` or `fork` tool.
 	 */
 	readonly git?: WorkstationGitBackend;
 	/** The account and the key of one agent, and of the workspace's host identity. */

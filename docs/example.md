@@ -108,14 +108,14 @@ this file beside the workspace directory, and the shell does not reach it.
 one read-only template, `templates/firmware-sketch`: a pin map, an
 Arduino sketch, and a sweep of the LED resistor, from
 `examples/workbench/templates`. An agent forks it with `fork`, clones the
-fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and uses `clone` to review. A push
+fork into its home, and pushes a branch with `git` in `bash`. A peer finds the fork with `repos` and uses `git clone` in `bash` to review. A push
 survives a restart of the host. [Git](git.md) holds the contract.
 
 **The template's sweep runs as a background process.** `sweep/sweep.sh`
 steps the series resistor of the LED through ten values, one every 3
 seconds, and writes `sweep/results.csv`. An agent starts it with `bash`
 and a `name`, and the sweep runs past the exchange. A later exchange in the
-same room reads its state with `ps`, `status`, or `wait`, and the reminder
+same room reads its state with `ps` or `wait`, and the reminder
 of each activation names it ([Processes](processes.md)).
 
 **The sensor server uses the workstation backend.** The running Workbench

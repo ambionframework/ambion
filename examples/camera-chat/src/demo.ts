@@ -1,6 +1,6 @@
 import { callTool, quiet, type ScriptStep, scripted } from '@ambionframework/ambion/testing';
 
-/** The demo reads status this many times, 100 ms apart, before it reports a failed start. */
+/** The demo reads the process this many times, 100 ms apart, before it reports a failed start. */
 const READY_READS = 100;
 
 function notReady(status: string) {
@@ -47,7 +47,7 @@ export function demoExecution() {
 				}
 				phase--;
 				await new Promise<void>((resolve) => setTimeout(resolve, 100));
-				return callTool('status', { handle });
+				return callTool('wait', { handles: [handle], timeout: 0 });
 			}
 			case 4:
 				return callTool('observe', { sensor: 'camera/camera' });

@@ -108,7 +108,7 @@ export interface BashBackend extends ResourceBackend<WorkspaceEnv> {
 	 * The repositories that the shell reaches. The package of the bash
 	 * backend takes a git backend of its own type, so `git` of each agent
 	 * reaches it. `openWorkspace` opens it under a resource of its own. Absent,
-	 * the workspace has no `repos`, `clone` or `fork` tool.
+	 * the workspace has no `repos` or `fork` tool.
 	 */
 	readonly git?: GitBackend;
 	/** Optional private transport to services on the backend machine. */

@@ -100,13 +100,14 @@ export async function recoverSensorCrash(input: {
 	const { workspace, bash, git } = await makeWorkspace();
 	try {
 		const run = await runToolRoom(workspace, 'analyst', [
-			action(
-				'clone',
-				{ source: 'analyst/sensor-server', path: '~/sensor-server-mover' },
-				(text) => {
-					if (!text.includes('Cloned'))
-						throw new Error(`Could not create the separate checkout: ${text}`);
-				},
+			action('repos', { namespace: 'analyst' }),
+			dynamicAction(
+				'bash',
+				(results) => ({
+					command: `git clone ${shellQuote(cloneUrlOf(latest(results, 'repos'), 'analyst/sensor-server'))} ~/sensor-server-mover`,
+					wait: 120,
+				}),
+				expectSuccess('Create the separate checkout'),
 			),
 			action(
 				'bash',
@@ -325,7 +326,7 @@ async function cleanupOrphan(
 		}
 		if (discovered !== undefined) {
 			const status = await runToolRoom(workspace, 'analyst', [
-				action('status', { handle: discovered }, (text) => {
+				action('wait', { handles: [discovered], timeout: 0 }, (text) => {
 					if (!text.includes(`Process ${discovered} (sensor-server-crash-host) is running.`)) {
 						throw new Error(`The orphan was not still running for cleanup: ${text}`);
 					}
@@ -333,7 +334,7 @@ async function cleanupOrphan(
 				dynamicAction(
 					'bash',
 					(results) => {
-						const path = outputPath(latest(results, 'status'));
+						const path = outputPath(latest(results, 'wait'));
 						return { command: `cat -- ${shellQuote(path)}`, wait: 30 };
 					},
 					expectSuccess('Read the retained orphan process output'),
@@ -365,6 +366,16 @@ async function cleanupOrphan(
 
 function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** The clone URL that the `repos` table gives for `repository`. */
+function cloneUrlOf(table: string, repository: string): string {
+	const row = table.split('\n').find((line) => line.startsWith(`| ${repository} |`));
+	const url = row?.split('|').at(-2)?.trim();
+	if (url === undefined || url === '') {
+		throw new Error(`The repos table has no clone URL for ${repository}: ${table}`);
+	}
+	return url;
 }
 
 function outputPath(text: string): string {

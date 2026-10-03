@@ -1,6 +1,6 @@
 /**
  * The declared outputs of the process tools, as TypeBox schemas. Each
- * `compose` binding of `bash`, `status`, `cancel`, `wait`, and `ps` returns
+ * `compose` binding of `bash`, `cancel`, `wait`, and `ps` returns
  * `details` that match one of them. The details types of the tools are the
  * `Static` types of these schemas, so a schema and its type cannot drift.
  */
@@ -95,7 +95,7 @@ export const ProcessOutput = Type.Object(
 	{ $id: 'ProcessResult', description: 'One process, and the new output of its result.' },
 );
 
-/** What `wait` on several handles gives: every status in the order of the handles, and each process it shows. */
+/** What `wait` on several handles gives: every state in the order of the handles, and each process it shows. */
 const WaitedOutput = Type.Object({
 	processes: Type.Array(ProcessFacts, {
 		description: 'Every process, in the order of the handles.',
@@ -105,7 +105,7 @@ const WaitedOutput = Type.Object({
 	}),
 });
 
-/** What `wait` gives: the output of `status` for one handle, and `WaitedOutput` for several. */
+/** What `wait` gives: the result of `bash` for one handle, and `WaitedOutput` for several. */
 export const WaitOutput = Type.Union([ProcessOutput, WaitedOutput]);
 
 /** The running processes of the caller. */

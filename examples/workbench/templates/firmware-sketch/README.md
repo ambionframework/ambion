@@ -11,4 +11,4 @@ one HC-SR04 distance unit.
 4. Sweep the series resistor of the LED with `bash sweep/sweep.sh`. The
    sweep takes about 30 seconds and writes `sweep/results.csv`. Start it
    with a `name`, such as `sweep`. `bash` then returns while the sweep
-   runs. Read its state later with `status` and its handle.
+   runs. Read its state later with `wait`, its handle, and `timeout: 0`.

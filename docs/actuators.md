@@ -7,7 +7,7 @@
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
-exits. An agent starts it with `bash`, reads it with `status`, and cancels
+exits. An agent starts it with `bash`, reads it with `wait`, and cancels
 it with `cancel`. Ambion adds no actuator tool, API, or server.
 
 **The primary job of the agent is to establish a control loop.** The agent
@@ -168,7 +168,7 @@ vocabulary across every controller.
 ## Read the end of a controller
 
 **The state of the process gives the safety of the world.** The agent
-reads it with `status`.
+reads it with `wait` and `timeout: 0`.
 
 | The process ended                                 | The world                                       | The agent                          |
 | ------------------------------------------------- | ----------------------------------------------- | ---------------------------------- |
@@ -246,14 +246,14 @@ schedule({
 
 **A loop uses five workspace capabilities and the actuator pattern.**
 
-| Part         | Tools                                    | Role in a loop                                               |
-| ------------ | ---------------------------------------- | ------------------------------------------------------------ |
-| Files        | `read`, `write`, `edit`                  | The common medium: logs, exports, working copies, and plans  |
-| Processes    | `bash`, `ps`, `status`, `wait`, `cancel` | The life of every command, and the checks of the agent       |
-| Repositories | `repos`, `fork`                          | The versions of the controller                               |
-| Tables       | `sql`                                    | Shared plans, schedules, and results                         |
-| Sensors      | `connect`, `observe`                     | The agent's own view of the stock, retained as evidence      |
-| Actuators    | `bash` and the actuator template         | The controller: a command that stops safe and logs its state |
+| Part         | Tools                            | Role in a loop                                               |
+| ------------ | -------------------------------- | ------------------------------------------------------------ |
+| Files        | `read`, `write`, `edit`          | The common medium: logs, exports, working copies, and plans  |
+| Processes    | `bash`, `ps`, `wait`, `cancel`   | The life of every command, and the checks of the agent       |
+| Repositories | `repos`, `fork`                  | The versions of the controller                               |
+| Tables       | `sql`                            | Shared plans, schedules, and results                         |
+| Sensors      | `connect`, `observe`             | The agent's own view of the stock, retained as evidence      |
+| Actuators    | `bash` and the actuator template | The controller: a command that stops safe and logs its state |
 
 **An agent builds a new loop while the application runs.** A new loop
 needs no restart of the host and no new host code. An agent can build

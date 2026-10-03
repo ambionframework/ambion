@@ -90,7 +90,7 @@ bash({
   timeout: 86400,
 });
 // Result: process bash-1a2b3c4d5e6f.
-status({ handle: 'bash-1a2b3c4d5e6f' });
+wait({ handles: ['bash-1a2b3c4d5e6f'], timeout: 0 });
 // Read READY http://127.0.0.1:<port> from the process output.
 ```
 

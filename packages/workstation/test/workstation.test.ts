@@ -472,14 +472,14 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 			['bash-00000000000d', 'running'],
 			['bash-00000000000c', 'running'],
 		]);
-		expect(await call('status', { handle: 'bash-00000000000c' })).toBe('running');
+		expect(await call('wait', { handles: ['bash-00000000000c'], timeout: 0 })).toBe('running');
 		// The read that found the lost process wrote its stop. Its pid is not in /proc, so no later
 		// listing runs ps for it.
 		expect(await readFile(join(lost, 'stop'), 'utf8')).toMatch(
 			/^failed \S+ The host run ended before the process did\.\n$/,
 		);
-		// A lost process ended badly, so its status fails, and the text states the loss.
-		await expect(call('status', { handle: 'bash-00000000000e' })).rejects.toThrow(
+		// A lost process ended badly, so a read of it fails, and the text states the loss.
+		await expect(call('wait', { handles: ['bash-00000000000e'], timeout: 0 })).rejects.toThrow(
 			/Process bash-00000000000e failed: The host run ended before the process did\./,
 		);
 		// A spec with no pid gets no stop, so the read after its shell writes the pid adopts it.
@@ -488,12 +488,12 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		const otherEnv = await other.connect({ name: 'ada' });
 		cleanups.push(() => otherEnv.cleanup());
 		const slowPid = await shell(slow, otherEnv);
-		expect(await call('status', { handle: 'bash-00000000000f' })).toBe('running');
+		expect(await call('wait', { handles: ['bash-00000000000f'], timeout: 0 })).toBe('running');
 		expect(await call('cancel', { handle: 'bash-00000000000f' })).toBe('cancelled');
 		expect(ended(slowPid)).toBe(true);
 		await until(() => ended(late), 15_000);
-		// A process that timed out fails the status call, and the text states the timeout.
-		await expect(call('status', { handle: 'bash-00000000000d' })).rejects.toThrow(
+		// A process that timed out fails the read, and the text states the timeout.
+		await expect(call('wait', { handles: ['bash-00000000000d'], timeout: 0 })).rejects.toThrow(
 			/Process bash-00000000000d timed out/,
 		);
 		expect(await call('cancel', { handle: 'bash-00000000000c' })).toBe('cancelled');
@@ -524,13 +524,15 @@ describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 		);
 		// Each read gives the output after the last one. The test writes the next part itself.
 		await appendFile(process.output, 'second\n');
-		const later = await call('status', { handle: process.handle });
+		const later = await call('wait', { handles: [process.handle], timeout: 0 });
 		expect(later).toMatch(
 			/^second\n\n\[Process .* is running\..* starts at byte 6 of the output\./s,
 		);
-		expect(await call('status', { handle: process.handle })).toMatch(/^\(no new output\)\n\n/);
+		expect(await call('wait', { handles: [process.handle], timeout: 0 })).toMatch(
+			/^\(no new output\)\n\n/,
+		);
 		expect(await call('cancel', { handle: process.handle })).toContain('is cancelled.');
-		// A wait on one handle gives the result of status, at once for a process that ended.
+		// A wait on one handle gives the result of a read, at once for a process that ended.
 		expect(await call('wait', { handles: [process.handle], timeout: 5 })).toMatch(
 			/^\(no new output\)\n\n\[Process .* is cancelled\./,
 		);
