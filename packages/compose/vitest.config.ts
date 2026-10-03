@@ -7,6 +7,11 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * so the conformance suite and the types of the core are one module each.
  * `processEvaluator` runs the built child entry, `dist/child.mjs`, so a run of
  * this suite needs a build first: `pnpm build`.
+ *
+ * The debug build of QuickJS runs WebAssembly frames that are larger than
+ * the frames of the release build. On arm64, a call from the code to the
+ * host passes the default V8 stack of 984 KB. The worker gets 4 MB, below
+ * the 8 MB stack of the main thread.
  */
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -25,5 +30,9 @@ export default defineConfig({
 			{ find: '@ambionframework/journal', replacement: source('../journal/src/index.ts') },
 		],
 	},
-	test: { exclude: [...configDefaults.exclude], testTimeout: 30_000 },
+	test: {
+		exclude: [...configDefaults.exclude],
+		testTimeout: 30_000,
+		execArgv: ['--stack-size=4000'],
+	},
 });
