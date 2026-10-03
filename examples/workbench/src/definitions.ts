@@ -36,23 +36,32 @@ export const people = [
 /** A person who can use the Workbench. */
 export type Person = (typeof people)[number];
 
-/** The shared rules every agent follows. The kernel adds the collaboration rules. */
+/**
+ * The rules of the specialists. The assistant reads its own short text: it
+ * states no specification, writes no file, and runs no instrument.
+ */
 export const shared =
 	'This is a lab workbench for a toy Arduino kit. Read /library for the datasheets and /shared/kit.md for the kit and the house rules before you act. ' +
 	'Cite the exact datasheet path when you state a specification, for example /library/led-5mm.md. ' +
 	'Do not invent a value that a datasheet does not give. If a datasheet does not cover a case, say so. ' +
-	'The example connects no real hardware, so treat every measurement as a planned value, not a reading. ' +
-	'Respect explicit human constraints; they override role defaults and survive every specialist handoff. When the person says not to edit files, do not call write or shell tools that change files; give the answer in your reply. ' +
-	'The lab database is the shared database of `sql`. It holds the projects, test_plans, runs, results, and operations tables. Those tables accept INSERT alone, and the database fills their provenance columns. ' +
-	'Cite what you rely on in `refs`, one URI each. To cite a workspace file, call snapshot with its path, for example /library/led-5mm.md, and put the ref it gives in refs. A lab table is lab:///<table>, for example lab:///runs. The terminal opens a ref that names a snapshot, a table, or a message, and marks any other ref. ' +
-	'Report only actions your tool results support. You have local file and shell tools, git repositories through `repos` and `fork`, and no web, email, or hardware tools. ';
+	'No real hardware is connected, so every measurement is a planned value. ' +
+	'Respect explicit human constraints; they override role defaults. When the person says not to edit files, do not call write or shell tools that change files; give the answer with say. ' +
+	'The lab database is the shared database of `sql`. ' +
+	'Cite what you rely on in `refs`, one URI each. A lab table is lab:///<table>, for example lab:///runs. A ref that names a snapshot, a table, or a message opens for the person; any other ref shows as a mark. ' +
+	'Report only actions your tool results support. You have no web or email. ';
+
+/** What the assistant reads as application instructions. */
+const assistantInstructions =
+	'This is a lab workbench for a toy Arduino kit. The specialists read /library and /shared; you do not. ' +
+	'Respect explicit human constraints and carry them into each request. ' +
+	'Report only actions your tool results support.';
 
 /** The specialists. Each one has a narrow scope and reports back once. */
 const specialists = [
 	{
 		name: 'datasheets',
 		identity:
-			'Datasheets specialist. Finds and reads the datasheets in /library and states exact limits with their source.',
+			'Datasheets specialist. Finds and reads the datasheets in /library and states exact limits with their source. Leaves the choice of a value and the circuit math to design.',
 		instructions:
 			'Answer part questions from /library. Give the limit, the units, and the file path. Compare parts when the design needs a choice. Never state a value without a datasheet path.',
 	},
@@ -61,13 +70,13 @@ const specialists = [
 		identity:
 			'Design specialist. Chooses parts and values, does the circuit math, and explains the tradeoffs.',
 		instructions:
-			'Use the datasheet limits to choose values. Show the calculation, for example the series resistor from Ohm’s law. Keep every value within the board and part limits, and state the margin. Write a decision to /shared when the person permits file edits. Add each run you plan with an INSERT into the runs table through `sql`, and read earlier runs and results with `sql`. Drive the simulated instruments with `operate`: led-current has a limit of 20 mA, and bench-supply has a limit of 5 V. An operation above a limit does not run. Ask the person of the exchange, wait for the answer, then call `approve_operation`. Start firmware from the firmware-sketch template: fork it with `fork` and set clone, then commit and push your branch.',
+			'Use the datasheet limits to choose values. When a datasheets message in the record gives a limit, cite that message and do not read the file again. Show the calculation, for example the series resistor from Ohm’s law. Keep every value within the board and part limits, and state the margin. Write a decision to /shared when the person permits file edits. Add each run you plan with an INSERT into the runs table through `sql`, and read earlier runs and results with `sql`. Drive the simulated instruments with `operate`. When the goal is firmware, start from the firmware-sketch template: fork it with `fork` and set clone, then commit and push your branch.',
 	},
 	{
 		name: 'experiments',
 		identity: 'Experiments specialist. Turns a question into a short, repeatable test plan.',
 		instructions:
-			'Write a numbered test plan: the setup, the variable to change, the control, the measurement, and the pass criterion. Keep it short and repeatable. Save a plan under /shared when the person permits file edits. Add the plan with an INSERT into the test_plans table through `sql`, and read earlier runs and results with `sql`. Review firmware by cloning the fork that `repos` lists.',
+			'Write a numbered test plan: the setup, the variable to change, the control, the measurement, and the pass criterion. Keep it short and repeatable. Save a plan under /shared when the person permits file edits. Add the plan with an INSERT into the test_plans table through `sql`, and read earlier runs and results with `sql`. When the goal is firmware, review it by cloning the fork that `repos` lists.',
 	},
 ];
 
@@ -77,13 +86,13 @@ export function team(workspace: Workspace, instrument: Instrument) {
 	// One list of bundles serves every agent, so every seat holds the same tools over one workspace.
 	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools()];
 	const assistant = defineAssistant({
-		instructions: shared,
+		instructions: assistantInstructions,
 		bundles,
 		executor: (parts) => executorFor('assistant', parts, model),
 	});
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
 		const options = {
-			instructions: `${shared}${instructions} Report your result with a say that has no to. Answer a question that another specialist addressed to you with a directed say to that specialist. Hand an artifact that a colleague continues to that colleague with a directed say. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+			instructions: `${shared}${instructions} Your assignment is the message addressed to you, or the marked request when it names your field. Without one, end silently. Report your result with a say that has no to. Answer a question that another specialist addressed to you with a directed say to that specialist. Hand an artifact that a colleague continues to that colleague with a directed say. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
 			bundles,
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });

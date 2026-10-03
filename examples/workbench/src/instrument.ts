@@ -24,9 +24,9 @@ export interface Instrument {
 
 const GUIDANCE =
 	'The bench has simulated instruments. Drive one with `operate`. ' +
-	'An operation above the safe limit of an instrument does not run. The tool records a request.' +
-	'Ask the person of the exchange to allow or deny that request. ' +
-	'When that person answers, call `approve_operation` with the request id and the decision. ' +
+	'An operation above the safe limit of an instrument does not run. The tool records it as requested, with its operation id. ' +
+	'Ask the person of the exchange with a directed say, then end your activation. ' +
+	'When the answer reaches you in a later message, call `approve_operation` with the operation id and the decision. ' +
 	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of that person. ' +
 	'Every operation lands in the operations table with its provenance.';
 
