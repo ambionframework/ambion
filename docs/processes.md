@@ -516,10 +516,15 @@ export type ProcessEvent =
 
 **`list` reads the tables of the agents that used the workspace in this
 run.** An agent joins that set on its first process tool call or
-reminder. A `read`, `write`, or `edit` call adds no agent. A new run of the
-host shows an agent's processes once that agent acts again.
-`running: true` gives the running processes alone, and `agent` gives one
-agent.
+reminder. A `read`, `write`, or `edit` call adds no agent.
+`running: true` gives the running processes alone.
+
+**`list({ agent })` reads the table of the named agent.** It reads the files
+of that agent even when the agent has not acted in this run, so the read
+adopts the live processes of an earlier run. A new run of the host calls it
+once for each agent that it follows, and it finds those processes before the
+agent acts again. The agent joins the set of the run. A name that the backend
+does not know rejects the call.
 
 **`subscribe` gives one event when a process starts and one when it
 ends.** It covers the processes of this run, and the adopted ones whose
@@ -573,11 +578,13 @@ fetch({ process: 'docs', path: '/index.html' });
 // Result: the status, the media type, the body, the export path, and a ref.
 ```
 
-**`fetch` finds the process in the tables of this run.** It uses the same
-list as `workspace.processes.list` with `running: true`. An agent joins that
-list when it first acts in this run. After a restart of the host, `fetch`
-finds a process of an agent once that agent has called a process tool or
-received a reminder.
+**`fetch` finds the process in the tables of this run.** A handle that the
+table holds live resolves from memory, with no read of files. A name uses
+the same list as `workspace.processes.list` with `running: true`. An agent
+joins that list when it first acts in this run. After a restart of the host,
+`fetch` finds a process of an agent once that agent has called a process
+tool or received a reminder, or once the host has called
+`workspace.processes.list({ agent })` for that agent.
 
 **The host reads a process with `workspace.fetch(process, path, init?)`.**
 It returns a `Response`. The host can use any method and any header, and the
@@ -787,8 +794,11 @@ workspace.processes.subscribe((event) => {
   restart of the host.
 - A process of an earlier run ends in a read. A host that bridges its
   ends calls `workspace.processes.list()` on an interval, so a read sees
-  them. `list` reads the agents that acted in this run. A process that
-  ended while no host ran gives no event, and the reminder names it.
+  them. `list` reads the agents that acted in this run. `list({ agent })`
+  reads that agent even when it has not acted in this run, and the read
+  adopts its live processes. A host that restarted calls it once for each
+  agent, so it finds a process of an earlier run. A process that ended
+  while no host ran gives no event, and the reminder names it.
 - `Process.room` names the room of the `bash` call, so a host with
   several rooms posts each end to the room that started the process.
 
@@ -964,7 +974,7 @@ the two handle tools stay as they are.
 | A lost process reads `failed`                                   | It left no end, and nothing runs it                                                                  |
 | The first read of a lost process with a pid writes its `stop`   | A later listing runs no `ps` for a process that nothing runs                                         |
 | The lost `stop` skips `ps` only for a pid gone from `/proc`     | A `ps` that fails once does not hide a live shell, and the skip starts no program                    |
-| The host's list covers this run's agents                        | The workspace keeps no roster                                                                        |
+| The host's list covers this run's agents, and a named agent     | The workspace keeps no roster, and a name reads the files of an agent that has not acted yet         |
 | The reminder resolves once per activation, and can read I/O     | Every render of one activation reads the same text                                                   |
 | The table holds the timeout, and adopts a live process          | A cancel goes through the cancels of its agent, in every run                                         |
 | A cancel writes no `stop` after `exit`                          | A command that ended reads its own end, whatever cancel came late                                    |

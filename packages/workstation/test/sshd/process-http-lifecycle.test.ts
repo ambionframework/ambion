@@ -68,7 +68,6 @@ describe.skipIf(configPath === undefined)('process HTTP on OpenSSH', () => {
 		).toBe(true);
 
 		await killChild(host.child);
-		await rig.dispose();
 
 		const recovery = await openRecovery();
 		onTestFinished(async () => {

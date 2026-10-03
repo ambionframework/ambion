@@ -45,18 +45,21 @@ export function httpEndpoints(
 }
 
 /** The memory backend of `wrapped`, with the endpoints of the fixture. */
-export const httpBackend = (records: ForwardRecord[] = []): BashBackend =>
-	wrapped(() => ({ endpoints: httpEndpoints(records) }));
+export const httpBackend = (records: ForwardRecord[] = [], fail: Error[] = []): BashBackend =>
+	wrapped(() => ({ endpoints: httpEndpoints(records, fail) }));
 
 let serial = 0;
 
 /** A workspace over `httpBackend`, and the forwards that its endpoints opened. */
-export function httpWorkspace(): { workspace: Workspace; forwards: ForwardRecord[] } {
+export function httpWorkspace(fail: Error[] = []): {
+	workspace: Workspace;
+	forwards: ForwardRecord[];
+} {
 	serial += 1;
 	const forwards: ForwardRecord[] = [];
 	const workspace = openWorkspace({
 		name: `http-${serial}`,
-		backend: { bash: httpBackend(forwards) },
+		backend: { bash: httpBackend(forwards, fail) },
 	});
 	return { workspace, forwards };
 }
@@ -82,6 +85,8 @@ export interface Reply {
 	readonly status?: number;
 	readonly type?: string;
 	readonly body: string | Uint8Array;
+	/** The `location` header, for a redirect status. */
+	readonly location?: string;
 	/** A function that runs before the reply, so a test can end the process first. */
 	readonly before?: () => Promise<void>;
 }
@@ -104,7 +109,10 @@ async function answer(routes: Routes, request: IncomingMessage, response: Server
 	}
 	const reply = typeof route === 'function' ? await route() : route;
 	await reply.before?.();
-	const headers = reply.type === undefined ? {} : { 'content-type': reply.type };
+	const headers = {
+		...(reply.type === undefined ? {} : { 'content-type': reply.type }),
+		...(reply.location === undefined ? {} : { location: reply.location }),
+	};
 	response.writeHead(reply.status ?? 200, headers).end(reply.body);
 }
 

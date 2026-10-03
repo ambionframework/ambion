@@ -188,7 +188,46 @@ async function assertRunning(
 	throw new Error(`Process ${handleOf(target)} ended during the read. Nothing was kept.`);
 }
 
-/** Send the GET. A refused connection and a refused forward say that nothing listens. */
+/** The `code` of an error, as the endpoints and the Node networking give it. */
+function codeOf(value: unknown): unknown {
+	return typeof value === 'object' && value !== null && 'code' in value ? value.code : undefined;
+}
+
+/** Whether `error` is a refused connection: the forward refused, or the local connect did. */
+const isRefused = (error: unknown): boolean =>
+	codeOf(error) === 'ECONNREFUSED' ||
+	codeOf(error instanceof Error ? error.cause : undefined) === 'ECONNREFUSED';
+
+/** Whether `error` is the rejection of `fetch` with `redirect: 'error'` for a redirect answer. */
+const isRedirect = (error: unknown): boolean =>
+	error instanceof TypeError &&
+	error.cause instanceof Error &&
+	error.cause.message === 'unexpected redirect';
+
+/** The message of an error, with the message of its cause when the cause adds one. */
+function messageOf(error: unknown): string {
+	if (!(error instanceof Error)) return String(error);
+	return error.cause instanceof Error ? `${error.message}: ${error.cause.message}` : error.message;
+}
+
+/** The error of a failed send: a refused connection, a redirect, or the message of the failure. */
+function sendFailure(error: unknown, target: Target): Error {
+	if (isRefused(error)) {
+		return new Error(
+			`Process ${handleOf(target)} does not listen on $PORT ${target.process.port}.`,
+		);
+	}
+	if (isRedirect(error)) {
+		return new Error(
+			`Process '${target.asked}' answered a redirect for ${target.path}. fetch does not follow redirects.`,
+		);
+	}
+	return new Error(
+		`The read of ${target.path} from ${handleOf(target)} failed: ${messageOf(error)}`,
+	);
+}
+
+/** Send the GET. A refused connection says that nothing listens, and a redirect says that fetch follows none. */
 async function requested(
 	processFetch: ProcessFetch,
 	target: Target,
@@ -199,9 +238,9 @@ async function requested(
 		signals.call === undefined ? signals.timeout : AbortSignal.any([signals.call, signals.timeout]);
 	try {
 		return await processFetch.send(target.process, target.path, { method: 'GET', signal });
-	} catch {
+	} catch (error) {
 		throwAbort(ctx, signals.timeout, target);
-		throw new Error(`Process ${handleOf(target)} does not listen on $PORT ${target.process.port}.`);
+		throw sendFailure(error, target);
 	}
 }
 

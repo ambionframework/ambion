@@ -182,6 +182,26 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(ended(pid)).toBe(true);
 	}, 20_000);
 
+	it('lists a named agent that has not acted in this run, and adopts its process', async () => {
+		const started = await server(['ada', 'bob']);
+		const { pid } = await earlierProcess(started, 'ada', 'bash-0000000000a3', 30, 'exit 0');
+		const workspace = workspaceOn(started);
+		const states: string[] = [];
+		workspace.processes.subscribe((event) => states.push(event.type));
+		// The list with no agent covers the agents that acted in this run: none yet.
+		expect(await workspace.processes.list({ running: true })).toEqual([]);
+		expect(await workspace.processes.list({ agent: 'bob', running: true })).toEqual([]);
+		const named = await workspace.processes.list({ agent: 'ada', running: true });
+		expect(named).toMatchObject([{ handle: 'bash-0000000000a3', agent: 'ada', state: 'running' }]);
+		// The read adopted the process, so the list of every agent holds it now, with no start event.
+		expect(await workspace.processes.list({ running: true })).toHaveLength(1);
+		expect(states).toEqual([]);
+		const cancelled = await workspace.processes.cancel('bash-0000000000a3');
+		expect(cancelled).toMatchObject({ state: 'exited', exitCode: 0 });
+		expect(ended(pid)).toBe(true);
+		expect(states).toEqual(['ended']);
+	}, 20_000);
+
 	it('returns at once for an adopted process that ends inside its grace', async () => {
 		const started = await server(['ada']);
 		const { pid } = await earlierProcess(started, 'ada', 'bash-0000000000a2', 30, 'exit 0');

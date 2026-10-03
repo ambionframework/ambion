@@ -249,6 +249,11 @@ describe('fetch', () => {
 			error: `Process 'camera' answered 500 for /boom. Process data: ${'x'.repeat(2048)}`,
 		},
 		{
+			name: 'a redirect answer',
+			params: { process: 'camera', path: '/moved' },
+			error: "Process 'camera' answered a redirect for /moved. fetch does not follow redirects.",
+		},
+		{
 			name: 'a path that the schema refuses',
 			params: { process: 'camera', path: 'no-slash' },
 			error: /^Invalid arguments for tool 'fetch'/,
@@ -264,7 +269,10 @@ describe('fetch', () => {
 			error: /^Invalid arguments for tool 'fetch'/,
 		},
 	])('fails for $name and keeps nothing', async ({ params, error }) => {
-		const { workspace } = await rig({ '/boom': { status: 500, body: 'x'.repeat(5000) } });
+		const { workspace } = await rig({
+			'/boom': { status: 500, body: 'x'.repeat(5000) },
+			'/moved': { status: 302, body: '', location: '/boom' },
+		});
 		const message = await failed(workspace, params);
 		if (typeof error === 'string') expect(message).toBe(error);
 		else expect(message).toMatch(error);
@@ -298,6 +306,26 @@ describe('fetch', () => {
 		expect(await failed(workspace, { process: 'camera', path: '/' })).toMatch(
 			/^No running process is named 'camera'\./,
 		);
+	});
+
+	it.each([
+		{
+			name: 'a refused forwarding',
+			error: Object.assign(new Error('SSH port forwarding was refused'), { code: 'ECONNREFUSED' }),
+			message: (process: Process) =>
+				`Process 'camera' (${process.handle}) does not listen on $PORT ${process.port}.`,
+		},
+		{
+			name: 'a forward that fails for another cause',
+			error: new Error('The session closed.'),
+			message: (process: Process) =>
+				`The read of /a from 'camera' (${process.handle}) failed: The session closed.`,
+		},
+	])('says $name as the endpoints give it', async ({ error, message }) => {
+		const { workspace } = httpWorkspace([error]);
+		onTestFinished(() => workspace.dispose());
+		const { process } = await mapped(workspace, 'ada', 'camera');
+		expect(await failed(workspace, { process: 'camera', path: '/a' })).toBe(message(process));
 	});
 
 	it('fails for a body past 64 MiB, and keeps nothing', async () => {

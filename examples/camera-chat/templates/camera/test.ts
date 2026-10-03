@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { demoFrame } from './frame.ts';
 import { API, openSensor, SENSOR } from './server.ts';
@@ -121,6 +122,102 @@ test('keeps the last ten frames and forgets the older ones', async () => {
 		for (const frame of frames) sensor.receive(frame);
 		assert.equal((await request(root, `/files/${frames[0]?.digest}`)).status, 404);
 		assert.equal((await request(root, `/files/${frames[10]?.digest}`)).status, 200);
+	} finally {
+		await sensor.close();
+	}
+});
+
+interface FetchParams {
+	process: string;
+	path: string;
+}
+
+interface Observed {
+	handle: string;
+	source: unknown;
+	at: string;
+	observation: { path: string; ref: string };
+	frame: { digest: string; path: string; ref: string };
+	refs: string[];
+}
+
+type Macro = (args: object, tools: object) => Promise<Observed>;
+
+/** The macro `camera/observe` as a function of `(args, tools)`, with its header cut off. */
+async function observeMacro(): Promise<Macro> {
+	const source = await readFile(
+		new URL('skills/camera/macros/observe.js', import.meta.url),
+		'utf8',
+	);
+	const body = source.replace(/^\/\*---[\s\S]*?---\*\//, '');
+	const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+		...parts: string[]
+	) => Macro;
+	return new AsyncFunction('args', 'tools', body);
+}
+
+/** The declared output of `fetch` for one answer, with the handle of the process. */
+function declared(path: string, status: number, reply: Buffer, mediaType: string, sha256: string) {
+	const extension = mediaType === 'image/png' ? 'png' : 'json';
+	return {
+		process: 'camera',
+		handle: 'bash-000000000001',
+		owner: 'observer',
+		path,
+		status,
+		mediaType,
+		bytes: reply.byteLength,
+		sha256,
+		ref: `snapshot:${sha256}`,
+		file: `/home/observer/.fetch/camera/${sha256.slice(0, 12)}.${extension}`,
+		...(extension === 'json' ? { json: JSON.parse(reply.toString()) as unknown } : {}),
+	};
+}
+
+/**
+ * A `fetch` of the workspace over the server at `root`: a GET that gives the
+ * declared output. `corrupt` changes the digest of a file body, as a swapped
+ * body would.
+ */
+function fetchOver(root: string, corrupt = false) {
+	const paths: string[] = [];
+	const fetchTool = async ({ path }: FetchParams) => {
+		paths.push(path);
+		const response = await fetch(`${root}${path}`);
+		if (!response.ok) throw new Error(`Process 'camera' answered ${response.status} for ${path}.`);
+		const bytes = Buffer.from(await response.arrayBuffer());
+		const mediaType = (response.headers.get('content-type') ?? '').split(';')[0] ?? '';
+		const digest = createHash('sha256').update(bytes).digest('hex');
+		const swapped = corrupt && path.startsWith('/files/');
+		return declared(path, response.status, bytes, mediaType, swapped ? '0'.repeat(64) : digest);
+	};
+	return { tools: { fetch: fetchTool }, paths };
+}
+
+test('the observe macro reads the latest frame, and checks its digest', async () => {
+	const observe = await observeMacro();
+	const sensor = await openSensor(SOURCE);
+	try {
+		const root = `http://127.0.0.1:${sensor.port}`;
+		const frame = demoFrame();
+		sensor.receive(frame);
+		const over = fetchOver(root);
+		const result = await observe({ process: 'camera' }, over.tools);
+		assert.deepEqual(over.paths, ['/', `/${SENSOR}/observe`, `/files/${frame.digest}`]);
+		assert.equal(result.handle, 'bash-000000000001');
+		assert.deepEqual(result.source, SOURCE);
+		assert.equal(result.at, frame.at);
+		assert.equal(result.frame.digest, frame.digest);
+		assert.equal(result.frame.ref, `snapshot:${frame.digest}`);
+		assert.match(result.frame.path, /\.png$/);
+		assert.match(result.observation.path, /\.json$/);
+		assert.deepEqual(result.refs, [result.observation.ref, result.frame.ref]);
+
+		// A body that arrives with another digest fails the read.
+		await assert.rejects(
+			observe({ process: 'camera' }, fetchOver(root, true).tools),
+			new RegExp(`File ${frame.digest} arrived as ${'0'.repeat(64)}\\.`),
+		);
 	} finally {
 		await sensor.close();
 	}

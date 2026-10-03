@@ -19,7 +19,7 @@
  *
  * An agent reads its own processes alone: each table is the agent's own
  * home. The host reads the tables of the agents that used the workspace in
- * this run.
+ * this run, and the table of any agent that its query names.
  *
  * `docs/processes.md` is the design contract.
  */
@@ -460,8 +460,19 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		await writeSeen(env, process.output.slice(0, process.output.lastIndexOf('/')));
 	};
 
+	const running: ProcessTable['running'] = (handle) => {
+		const process = live.get(handle);
+		return process === undefined
+			? undefined
+			: statusOf(
+					{ dir: process.dir, spec: process.spec, seen: false, pid: false, alive: false },
+					true,
+				);
+	};
+
 	const hostList: ProcessTable['hostList'] = async (query = {}) => {
-		const names = [...agents].filter((name) => query.agent === undefined || name === query.agent);
+		// A named agent is read even when it has not acted in this run: the read adopts its live processes.
+		const names = query.agent === undefined ? [...agents] : [query.agent];
 		const lists = await Promise.all(names.map((name) => list({ name })));
 		return Object.freeze(
 			lists
@@ -489,6 +500,7 @@ export function openProcessTable(options: ProcessTableOptions): ProcessTable {
 		markSeen,
 		remind,
 		hostList,
+		running,
 		ended: (agent: string, handle: string) => endedKeys.has(`${agent}\0${handle}`),
 		subscribe: (listener: (event: ProcessEvent) => void) => {
 			listeners.add(listener);

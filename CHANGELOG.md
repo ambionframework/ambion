@@ -45,7 +45,7 @@ through the tools that stay.
 **Every process has a port.** `bash` sets `$PORT` for each command. The
 table picks the port at random from 20000 to 29999 and excludes the ports of
 its running processes. A server that fails with `EADDRINUSE` starts again
-with a new port. `ps` gains a `Port` column, the state line of a running
+when the agent starts it, and the workspace picks a new port at that start. `ps` gains a `Port` column, the state line of a running
 process ends with `$PORT=<port>.`, and the `details` of `bash`, `wait`, `ps`,
 and `cancel` gain `port`. The note of the process tools states `$PORT`. See
 [Processes](docs/processes.md#processes-that-serve-http).
@@ -61,6 +61,12 @@ data, and an image returns as an image part. The body limit is 64 MiB. See
 **The host reads a process with `workspace.fetch`.** The method takes a name
 or a handle, a path, and a `RequestInit`. It returns a `Response` and keeps
 nothing.
+
+**The host list reads a named agent.** `workspace.processes.list({ agent })`
+reads the files of that agent even when the agent has not acted in this run,
+and the read adopts its live processes. A host that restarted finds a process
+of an earlier run. `fetch` resolves a live handle from memory, and it names a
+refused connection, a redirect, and any other failure of a read apart.
 
 **`loadSkills` takes several sources.** `loadSkills(...sources)` merges the
 files of its sources into one set, so a host loads the skills of a template
@@ -103,8 +109,8 @@ handles name `wait` in place of `status`.
 **The kernel stops knowing sensors.** The sensor wire client, the schemas,
 the connection registry, the reminder, the retention code, the conformance
 suite, and the `connect`, `disconnect`, and `observe` tools are gone, about
-2,100 lines of source and 3,700 lines of tests. `fetch` and the forward
-cache take about 330 lines. The protocol, its version, and its digest rule
+2,100 lines of source and 5,000 lines of tests. `fetch` and the forward
+cache take about 620 lines of source. The protocol, its version, and its digest rule
 live in the templates. This settles backlog Q2.
 
 ### Breaking changes
@@ -121,7 +127,9 @@ live in the templates. This settles backlog Q2.
 - **Replace `clone` with `bash`.** Run `git clone <url> <path>` in `bash`,
   or call `fork` with `clone`. The `compose` binding `tools.clone` is gone.
 - **Expect a new count in the tool line.** The smallest workspace names nine
-  tools, and the number word starts at nine.
+  tools, and the number word starts at nine. A workspace with endpoints names
+  one tool more than a workspace without endpoints. The three sensor tools
+  are gone.
 - **Replace `connect`, `disconnect`, and `observe` with `fetch`.** Start the
   server with `bash`, and call `fetch({ process, path })`. Run the `observe`
   macro of the template for the digest checks. In a compose call,
@@ -138,9 +146,6 @@ live in the templates. This settles backlog Q2.
 - **Make a sensor server listen on `$PORT`.** The `READY` line and a chosen
   port are gone. A server at protocol version 1 fails the macro of a template
   at version 2, because `api` differs.
-- **Expect a new count in the tool line.** A workspace with endpoints names
-  one tool more than a workspace without endpoints. The three sensor tools
-  are gone.
 - **Expect `port` in a process.** A `spec` written before ports has port 0,
   and `fetch` refuses it. The `Port` column of `ps` and the `$PORT` text of
   the state line are new.

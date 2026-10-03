@@ -51,12 +51,12 @@ async function readFrame(
 }
 
 /**
- * Show the frames of the process named `camera`. The preview follows the
+ * Show the frames of the process named `camera` of the agent `agent`. The preview follows the
  * process events of the workspace: a `started` event of that name starts a
  * timer that reads the camera with `workspace.fetch`, with no retention,
  * and its `ended` event stops the timer and clears the frame.
  */
-export function cameraPreview(workspace: Workspace, changed: () => void) {
+export function cameraPreview(workspace: Workspace, changed: () => void, agent: string) {
 	let handle: string | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let latest: PreviewFrame | undefined;
@@ -104,8 +104,9 @@ export function cameraPreview(workspace: Workspace, changed: () => void) {
 		if (event.type === 'started' && event.process.name === CAMERA) follow(event.process);
 		else if (event.type === 'ended' && event.process.handle === handle) stop();
 	});
-	// A camera that started before the host opened is adopted: one list finds it.
-	void workspace.processes.list({ running: true }).then(
+	// The list names the agent, so it reads the files of an agent that has not acted since the
+	// host started. The read adopts a camera of an earlier run, and one list finds it.
+	void workspace.processes.list({ agent, running: true }).then(
 		(running) => {
 			const found = running.find((process) => process.name === CAMERA);
 			if (found) follow(found);

@@ -14,7 +14,11 @@ import type { ProcessTable } from './process-table.ts';
 
 /** What the tool and the host use to read a process. */
 export interface ProcessFetch {
-	/** Resolve a name or handle to one running process of the workspace. */
+	/**
+	 * Resolve a name or handle to one running process of the workspace. A
+	 * handle that the table holds live resolves from memory. A name, and a
+	 * handle that the table does not hold, resolve through the host's list.
+	 */
 	resolve(process: string, signal?: AbortSignal): Promise<Process>;
 	/** Send a request to the port of a resolved process. */
 	send(process: Process, path: string, init?: RequestInit): Promise<Response>;
@@ -102,6 +106,8 @@ export function createProcessFetch(options: {
 
 	const resolve: ProcessFetch['resolve'] = async (process, signal) => {
 		signal?.throwIfAborted();
+		const live = isHandle(process) ? processes.running(process) : undefined;
+		if (live !== undefined) return live;
 		const running = await processes.hostList({ running: true });
 		const found = running.filter((one) =>
 			isHandle(process) ? one.handle === process : one.name === process,

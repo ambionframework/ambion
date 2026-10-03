@@ -17,7 +17,19 @@ function open(fail: Error[] = []) {
 	const bash = openResource({ name: 'fetch', backend });
 	const table = openProcessTable({ connect: (agent) => backend.connect(agent), bash: bash.use });
 	const forwards: ForwardRecord[] = [];
-	const cache = createProcessFetch({ processes: table, endpoints: httpEndpoints(forwards, fail) });
+	/** The reads of the host's list that the cache asked for. */
+	const lists: unknown[] = [];
+	const counted: typeof table = {
+		...table,
+		hostList: (query) => {
+			lists.push(query);
+			return table.hostList(query);
+		},
+	};
+	const cache = createProcessFetch({
+		processes: counted,
+		endpoints: httpEndpoints(forwards, fail),
+	});
 	onTestFinished(async () => {
 		await cache.close();
 		await table.close();
@@ -32,22 +44,26 @@ function open(fail: Error[] = []) {
 				grace: 1,
 			}),
 		);
-	return { table, cache, forwards, start };
+	return { table, cache, forwards, lists, start };
 }
 
 const text = async (response: Response): Promise<string> => response.text();
 
 describe('the forward cache of fetch', () => {
 	it('opens the forward at the first send on the owner session, keeps it, and finds a process by name or by handle', async () => {
-		const { cache, forwards, start } = open();
+		const { cache, forwards, lists, start } = open();
 		const camera = await start('ada', 'camera');
 		const server = await serve({ '/a': { body: 'one', type: 'text/plain' } }, camera.port);
 		onTestFinished(() => server.close());
 		expect(forwards).toEqual([]);
 		const byName = await cache.resolve('camera');
 		expect(byName.handle).toBe(camera.handle);
+		// A name reads the host's list once. A live handle resolves from memory and reads no file.
+		expect(lists).toHaveLength(1);
 		expect(await text(await cache.send(byName, '/a'))).toBe('one');
 		const byHandle = await cache.resolve(camera.handle);
+		expect(byHandle).toEqual(camera);
+		expect(lists).toHaveLength(1);
 		expect(await text(await cache.send(byHandle, '/a'))).toBe('one');
 		// The forward belongs to the agent that started the process, and one forward serves both reads.
 		expect(forwards).toEqual([{ agent: 'ada', port: camera.port, closed: false }]);

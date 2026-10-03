@@ -56,7 +56,11 @@ export interface WorkspaceToolsOptions {
 export interface WorkspaceProcesses {
 	/**
 	 * The processes of the agents that used the workspace in this run of the
-	 * host, read from each agent's files, in the order they started.
+	 * host, read from each agent's files, in the order they started. With
+	 * `query.agent`, the list reads that agent's files even when the agent has
+	 * not acted in this run: the read adopts the live processes of an earlier
+	 * run, and a host that restarted finds them. The call rejects when the
+	 * backend has no such agent.
 	 */
 	list(query?: ProcessQuery): Promise<readonly Process[]>;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */

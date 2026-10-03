@@ -6,7 +6,7 @@ args:
   additionalProperties: false
   required: [process]
   properties:
-    process: { type: string, pattern: '^[a-z][a-z0-9-]*$' }
+    process: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{0,39}$' }
 ---*/
 const get = (path) => tools.fetch({ process: args.process, path });
 const index = await get('/');

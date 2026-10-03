@@ -277,6 +277,7 @@ it('follows the camera process, adopts one that runs at open, and downloads a fr
 	const listeners: ((event: ProcessEvent) => void)[] = [];
 	const digest = 'a'.repeat(64);
 	const fetched: string[] = [];
+	const queries: unknown[] = [];
 	let failing = false;
 	const process = (handle: string, name?: string) =>
 		({ handle, ...(name ? { name } : {}), state: 'running' }) as Process;
@@ -286,7 +287,10 @@ it('follows the camera process, adopts one that runs at open, and downloads a fr
 				listeners.push(listener);
 				return () => {};
 			},
-			list: async () => [process('bash-other', 'build'), process('bash-adopted', 'camera')],
+			list: async (query: unknown) => {
+				queries.push(query);
+				return [process('bash-other', 'build'), process('bash-adopted', 'camera')];
+			},
 		},
 		fetch: async (handle: string, path: string) => {
 			fetched.push(`${handle} ${path}`);
@@ -300,11 +304,13 @@ it('follows the camera process, adopts one that runs at open, and downloads a fr
 					});
 		},
 	} as unknown as Workspace;
-	const preview = cameraPreview(workspace, () => {});
+	const preview = cameraPreview(workspace, () => {}, 'observer');
 	const emit = (type: ProcessEvent['type'], handle: string, name?: string) =>
 		listeners[0]?.({ type, process: process(handle, name) });
 	try {
 		await expect.poll(() => preview.handle).toBe('bash-adopted');
+		// The list names the agent, so the workspace reads an agent that has not acted yet.
+		expect(queries).toEqual([{ agent: 'observer', running: true }]);
 		await expect.poll(() => preview.latest?.digest).toBe(digest);
 		await new Promise((resolve) => setTimeout(resolve, 700));
 		expect(fetched.filter((call) => call.includes('/files/'))).toEqual([

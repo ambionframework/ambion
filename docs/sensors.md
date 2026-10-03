@@ -294,17 +294,17 @@ workspace can read any running process with GET
 
 ## Failure and lifecycle
 
-| Event                                   | Result                                                                |
-| --------------------------------------- | --------------------------------------------------------------------- |
-| The server has not bound its port yet   | `fetch` says the process does not listen on `$PORT`; wait, then retry |
-| The process ends or is cancelled        | `fetch` refuses its name; retained snapshots still restore            |
-| The SSH session ends                    | The next `fetch` opens a new forward                                  |
-| The server answers a status outside 2xx | `fetch` fails and shows the first 2 KiB of the body                   |
-| The macro finds another `api`           | The macro fails before it reads the observation                       |
-| A file does not match its digest        | The macro fails and names the digest                                  |
-| The object store write fails            | `fetch` fails with no claim of a retained result                      |
-| The host restarts                       | The owner calls `ps`; then `fetch` reads the adopted process          |
-| The workspace disposes                  | The forwards close and the process cleanup runs                       |
+| Event                                   | Result                                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| The server has not bound its port yet   | `fetch` says the process does not listen on `$PORT`; wait, then retry                     |
+| The process ends or is cancelled        | `fetch` refuses its name; retained snapshots still restore                                |
+| The SSH session ends                    | The next `fetch` opens a new forward                                                      |
+| The server answers a status outside 2xx | `fetch` fails and shows the first 2 KiB of the body                                       |
+| The macro finds another `api`           | The macro fails before it reads the observation                                           |
+| A file does not match its digest        | The macro fails and names the digest                                                      |
+| The object store write fails            | `fetch` fails with no claim of a retained result                                          |
+| The host restarts                       | The host lists the owner, or the owner calls `ps`; `fetch` then reads the adopted process |
+| The workspace disposes                  | The forwards close and the process cleanup runs                                           |
 
 **A read follows the cancellation of its call.** An abort closes the HTTP
 work. It does not cancel the server process. A server owns its own

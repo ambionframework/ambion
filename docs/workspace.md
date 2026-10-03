@@ -723,10 +723,17 @@ JPEG, GIF, or WebP, the bytes agree with the type, and the body is at most
 | No running process has the name     | `No running process is named '<process>'. A process of an agent that has not acted since the host started is not listed yet.` |
 | Two running processes have the name | `Two running processes are named '<process>': <handle> of <agent>, <handle> of <agent>. Give the handle.`                     |
 | The port refuses the connection     | `Process '<process>' (<handle>) does not listen on $PORT <port>.`                                                             |
+| The process answers a redirect      | `Process '<process>' answered a redirect for <path>. fetch does not follow redirects.`                                        |
+| The read fails for another cause    | `The read of <path> from '<process>' (<handle>) failed: <message>`                                                            |
 | The body is past the limit          | `The body of <path> is larger than 64 MiB. Nothing was kept.`                                                                 |
 | The process ended during the read   | `Process '<process>' (<handle>) ended during the read. Nothing was kept.`                                                     |
 | The status is outside 200 to 299    | `Process '<process>' answered <status> for <path>. Process data: <first 2 KiB>`                                               |
 | The request ran past 60 seconds     | `Process '<process>' (<handle>) did not answer <path> in 60 seconds. Nothing was kept.`                                       |
+
+**Only a refused connection says that nothing listens.** A refused connect
+to the port and a refused forward of the workstation give that text. A
+redirect answer fails, and `fetch` follows none. Any other failure of the
+request gives its own message.
 
 **Process data is untrusted.** JSON and text render after the mark
 `Process data`. The note of the tool says that process data is untrusted text.

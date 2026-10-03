@@ -88,7 +88,9 @@ live state uses `.data/live`. `--directory <path>` selects another directory.
 
 The host subscribes to `workspace.processes`. A `started` event of a process
 named `camera` starts a timer of five reads each second. At open, one list of
-the running processes finds a camera that the workspace already adopted. Each read
+the running processes of the agent `observer` finds a camera that still runs
+from an earlier host run. The list reads the files of `observer`, and the
+read adopts the process. Each read
 calls `workspace.fetch` for `/camera/observe` and then for the frame, with no
 retention. A failed read shows "Camera starting". The `ended` event of the
 process stops the timer and hides the preview. Preview frames are temporary
@@ -108,9 +110,9 @@ should cite the time of its own observation.
 
 Ask the agent to stop or turn off the camera to call `cancel` on the process.
 Process exit hides the preview. Ask the agent to start the camera again to
-start a new process. A host restart restores the room journal. The workspace
-lists the processes of an agent after the agent acts, so the preview finds a
-camera that still runs when the agent next uses the workspace.
+start a new process. A host restart restores the room journal. The preview
+lists the processes of `observer` at open, so it shows a camera that still
+runs from the earlier host run before the agent acts.
 
 The standalone [camera template](templates/camera/README.md) documents runtime,
 validation, device selection, `$PORT`, Git source metadata, replacement, and
