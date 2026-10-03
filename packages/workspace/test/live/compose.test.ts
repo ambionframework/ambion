@@ -20,6 +20,7 @@ import {
 	agent,
 	invariants,
 	LIVE_KIND,
+	LIVE_THINKING,
 	live,
 	MODEL,
 	open,
@@ -46,6 +47,39 @@ const digestOf = (text: string) => createHash('sha256').update(text).digest('hex
 
 const CHAIN_TASK =
 	'Snapshot the files of every run with the label drift. Say how many runs it was and cite the snapshot refs.';
+
+const FAN_TASK =
+	'For each run with the label drift, read its log and find the peak_temp line. ' +
+	'Snapshot the logs of the drifted runs whose peak is over 900. ' +
+	'Say how many there were and cite the snapshot refs.';
+
+/** The peak that decides a snapshot. */
+const PEAK_LIMIT = 900;
+
+/** One log of about 3 KB. Exactly one line holds `peak_temp`, at the given position. */
+function logOf(id: string, peak: number, at: number): string {
+	const lines = Array.from({ length: 60 }, (_, i) => {
+		const stage = ['ramp', 'hold', 'soak', 'cool'][(i * 7 + peak) % 4];
+		const reading = 200 + ((i * 37 + peak * 3) % 600);
+		return `2026-05-01T10:${String(i).padStart(2, '0')}:00Z run=${id} stage=${stage} temp=${reading} humidity=${30 + (i % 20)} status=ok`;
+	});
+	lines[at] = `2026-05-01T10:${String(at).padStart(2, '0')}:30Z run=${id} peak_temp=${peak}`;
+	return `${lines.join('\n')}\n`;
+}
+
+/** Forty runs. Sixteen drift. Four of them peak over 900. Some runs that do not drift peak over 900 too. */
+const FAN_RUNS = Array.from({ length: 40 }, (_, i) => {
+	const id = String(i + 1).padStart(2, '0');
+	const drift = i % 5 < 2;
+	const peak = i % 4 === 1 ? 910 + i : 400 + ((i * 53) % 480);
+	return {
+		path: `/logs/r${id}.log`,
+		text: logOf(id, peak, (i * 11) % 60),
+		label: drift ? 'drift' : 'ok',
+		peak,
+	};
+});
+const FAN_HOT = FAN_RUNS.filter((run) => run.label === 'drift' && run.peak > PEAK_LIMIT);
 
 const MACRO = 'lab-drift/snapshot-drift';
 
@@ -107,6 +141,34 @@ async function lab(): Promise<Workspace> {
 				" INSERT INTO gate VALUES ('release','reject','kiln-7 failed the cure test')",
 			{ maxRows: 1 },
 		),
+	);
+	if (seeded?.ok !== true)
+		throw new Error(`The lab data was not seeded: ${JSON.stringify(seeded)}`);
+	return store;
+}
+
+/** The lab of the fan-out case: forty runs, each with a log file of about 3 KB. */
+async function fanLab(): Promise<Workspace> {
+	const dir = await mkdtemp(join(tmpdir(), 'ambion-live-compose-'));
+	directories.push(dir);
+	const store = openWorkspace({
+		name: roomName('live-compose-fan'),
+		backend: { bash: memoryBackend(), sql: sqliteBackend(join(dir, 'lab.db')) },
+	});
+	stores.push(store);
+	await store.use({ name: 'seed' }, async (env) => {
+		const made = await env.createDir('/logs', undefined);
+		if (!made.ok) throw made.error;
+		for (const run of FAN_RUNS) {
+			const written = await env.writeFile(run.path, run.text);
+			if (!written.ok) throw written.error;
+		}
+	});
+	const values = FAN_RUNS.map((run) => `('${run.label}','${run.path}')`).join(',');
+	const seeded = await store.sql?.use({ name: 'seed' }, (env) =>
+		env.run(`CREATE TABLE runs(label TEXT, path TEXT); INSERT INTO runs VALUES ${values}`, {
+			maxRows: 1,
+		}),
 	);
 	if (seeded?.ok !== true)
 		throw new Error(`The lab data was not seeded: ${JSON.stringify(seeded)}`);
@@ -242,6 +304,7 @@ async function evidence(
 			const line = {
 				kind: LIVE_KIND,
 				model: MODEL,
+				thinking: LIVE_THINKING,
 				case: label === '' ? name : `${name} ${label}`,
 				tools: run.tools,
 				nested: run.nested,
@@ -257,9 +320,6 @@ async function evidence(
 		}
 	}
 }
-
-/** The output tokens of the free-code run of the token comparison, for the macro case. */
-let freeCodeOutput: number | undefined;
 
 live('compose', () => {
 	it('chain: the result of sql feeds snapshot, and the seat calls compose', async () => {
@@ -344,7 +404,6 @@ live('compose', () => {
 				CHAIN_TASK,
 				(spent) => record('with compose', spent),
 			);
-			freeCodeOutput = withCompose.output;
 			const without = await ask(
 				seat('without', await lab(), { instructions: 'Answer with one say.' }),
 				CHAIN_TASK,
@@ -361,10 +420,6 @@ live('compose', () => {
 		await evidence('macro', async (record) => {
 			const store = await lab();
 			const skills = await loadSkills(DRIFT_SKILLS);
-			const note =
-				freeCodeOutput === undefined
-					? 'free code not measured in this run'
-					: `free code: ${freeCodeOutput} output tokens`;
 			const run = await ask(
 				agent('macro', {
 					identity: 'Runs the lab.',
@@ -373,7 +428,7 @@ live('compose', () => {
 					...composed,
 				}),
 				CHAIN_TASK,
-				(spent) => record('', spent, note),
+				(spent) => record('', spent),
 			);
 			expect(run.tools).toContain('compose');
 			const inputs = run.composeInputs as { macro?: string; code?: string }[];
@@ -382,4 +437,29 @@ live('compose', () => {
 			holdsDigests(run.answer, DRIFTED);
 		});
 	});
+
+	// Two seats run in turn, and the seat without compose can make many calls.
+	it('fan-out: many logs are read and only the digests of a few matter', async () => {
+		await evidence('fan-out', async (record) => {
+			const wayOf = (spent: Run) => {
+				if (spent.tools.includes('compose')) return 'compose';
+				return [...spent.tools, ...spent.nested].includes('bash') ? 'bash' : 'direct calls';
+			};
+			const withCompose = await ask(
+				seat('with', await fanLab(), { instructions: 'Answer with one say.', ...composed }),
+				FAN_TASK,
+				(spent) => record('with compose', spent, wayOf(spent)),
+			);
+			const without = await ask(
+				seat('without', await fanLab(), { instructions: 'Answer with one say.' }),
+				FAN_TASK,
+				(spent) => record('without compose', spent, wayOf(spent)),
+			);
+			// The case does not assert the way of the seat. The way is the evidence.
+			for (const run of [withCompose, without]) {
+				expect(run.text).toMatch(new RegExp(`\\b${FAN_HOT.length}\\b|four`, 'i'));
+				holdsDigests(run.answer, FAN_HOT);
+			}
+		});
+	}, 360_000);
 });

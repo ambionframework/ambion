@@ -6,6 +6,7 @@ const line = (fields) =>
 	JSON.stringify({
 		kind: 'pi',
 		model: 'm',
+		thinking: 'medium',
 		case: 'chain',
 		tools: ['compose'],
 		nested: ['sql', 'snapshot'],
@@ -25,7 +26,7 @@ test('one table for each kind, and a kind with no line is skipped', () => {
 	assert.match(text, /## pi\n\n\| Model/);
 	assert.match(
 		text,
-		/\| m \| chain \| compose \(nested: sql, snapshot\) \| 100 \| 20 \| - \| passed \|/,
+		/\| m \(medium\) \| chain \| compose \(nested: sql, snapshot\) \| 100 \| 20 \| - \| passed \|/,
 	);
 	assert.match(text, /3\.2 s/);
 	assert.match(text, /## claude\n\n\| Model/);

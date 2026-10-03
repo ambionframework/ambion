@@ -23,7 +23,8 @@ else.
 ## Status
 
 **In progress. CP1 to CP7 are complete.** The live run of CP6 found that
-the guidance does not steer a seat to `compose` for a chain. The compose design passed two design
+the guidance steers `gpt-5.6-luna` and `claude-opus-5-5` to `compose` for
+a chain, and does not steer `claude-sonnet-5`. The compose design passed two design
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
@@ -317,6 +318,23 @@ called `compose` for a chain. The token comparison therefore measures the
 catalog only, and the run with `compose` cost more input tokens. The macro
 case passed on Claude and Codex. On Pi the seat ran the macro and also
 wrote code.
+
+**Second run of the chain case:** after that run, `COMPOSE_GUIDANCE`
+makes compose the default for a plan of two or more tool calls, and gives
+an example. The chain case then ran once on each kind:
+
+| Kind   | Model           | Effort | Tools                                | Input tokens | Outcome |
+| ------ | --------------- | ------ | ------------------------------------ | ------------ | ------- |
+| Codex  | gpt-5.6-luna    | medium | sql, compose, say                    | 28180        | passed  |
+| Codex  | gpt-5.6-luna    | high   | compose, bash, sql (3), compose, say | 58954        | passed  |
+| Pi     | claude-sonnet-5 | -      | sql, snapshot, say                   | 44613        | failed  |
+| Claude | claude-sonnet-5 | -      | sql (2), snapshot, say               | 50553        | failed  |
+| Pi     | claude-opus-5-5 | -      | sql, compose, say                    | 45322        | passed  |
+
+The guidance steers `gpt-5.6-luna` and `claude-opus-5-5`. It does not
+steer `claude-sonnet-5`. One more run gave the main rule in the
+description of `compose` too, and `claude-sonnet-5` still called the
+tools directly, so the description keeps its text.
 
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own

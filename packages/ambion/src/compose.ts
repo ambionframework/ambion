@@ -122,18 +122,31 @@ uses, and the body of an async function in code. Each tool is
 tools.<name>, and the description of compose gives its signature. You
 read only the value that the code returns.
 
+Plan the tool calls of a task before you make the first call. When the
+plan has two or more tool calls, make them in one compose call. Each
+result that you read costs tokens and one more turn.
+
 Use compose when:
-- the result of one tool is the input of another tool;
+- the result of one tool is the input of another tool, also when you
+  filter or map the result first;
+- the task gives the rule for the next step. Code can apply the rule
+  with if, filter, and map;
 - a tool gives a large result, and you need a count, a filter, or a
   few fields of it;
 - you call one tool for many inputs;
 - you start several processes and wait for each.
 
-Call a tool directly when:
-- you must read its result before you decide the next step;
+Call a tool directly only when:
+- the next step needs your judgment of the result, and the task gives
+  no rule for it;
 - you make one call and need its whole result;
 - you speak. say, schedule, seat, unseat, dismiss, and recall are not
   in compose.
+
+For example, "snapshot each file that a query finds" is one compose
+call. Do not call sql first to read the paths:
+  const found = await tools.sql({ sql: 'SELECT path FROM files' });
+  return tools.snapshot({ paths: found.rows.map((row) => row.path) });
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
