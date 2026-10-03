@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluatorConformance } from '@ambionframework/ambion/conformance';
 import { describe, expect, it, vi } from 'vitest';
-import { processEvaluator } from '../src/index.ts';
 import { startChild } from '../src/process.ts';
+import { processEvaluator } from '../src/runtime.ts';
 
 /** Node 22 has no `--allow-net`, so `processEvaluator` refuses it. */
 const permitted = process.allowedNodeEnvironmentFlags.has('--allow-net');

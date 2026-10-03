@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import * as entry from '../src/index.ts';
+import * as entry from '../src/runtime.ts';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -30,7 +30,7 @@ it('keeps the child entry free of any import but node: built-ins, built and in s
 });
 
 it('builds the library with one entry that imports the child by path only', () => {
-	expect(importsOf(read('../dist/index.mjs')).sort()).toEqual([
+	expect(importsOf(read('../dist/runtime.mjs')).sort()).toEqual([
 		'node:child_process',
 		'node:readline',
 		'node:url',

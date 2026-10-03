@@ -1,7 +1,7 @@
 import { evaluatorConformance } from '@ambionframework/ambion/conformance';
 import { DEBUG_SYNC } from 'quickjs-emscripten';
 import { describe, expect, it, vi } from 'vitest';
-import { quickjsEvaluator } from '../src/index.ts';
+import { quickjsEvaluator } from '../src/runtime.ts';
 
 const limits = { memoryLimit: 16 * 1024 * 1024, cpuLimit: 500 };
 
@@ -10,7 +10,12 @@ describe('quickjsEvaluator', () => {
 });
 
 describe('quickjsEvaluator on the debug build', () => {
-	/** The debug build prints each leaked handle when it frees a runtime, and aborts on a leaked object. */
+	/**
+	 * The debug build prints each leaked handle when it frees a runtime, and aborts on a leaked
+	 * object. The test runs 38 cases, and each case takes about 0.7 s on an idle core. The busy
+	 * loop takes 5 s, because a cut cannot reach code that blocks the thread. A busy CI runner
+	 * slows every case by the same ratio, so the limit is ten times the idle time.
+	 */
 	it('frees a clean runtime after a return, an error, a cut, and a limit', async () => {
 		const printed: string[] = [];
 		const log = vi
@@ -32,7 +37,7 @@ describe('quickjsEvaluator on the debug build', () => {
 			warn.mockRestore();
 		}
 		expect(printed.filter((text) => /leak/i.test(text))).toEqual([]);
-	}, 120_000);
+	}, 300_000);
 });
 
 describe('the limits of quickjsEvaluator', () => {
