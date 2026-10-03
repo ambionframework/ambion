@@ -33,7 +33,7 @@ import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
 import type { Step } from './types.ts';
 
 const DESCRIPTION =
-	'Join your tools in one call. Code calls them as tools.<name>, and you read only the value that it returns.';
+	'Run JavaScript in one call. It joins your tools: code calls them as tools.<name>. Code with no tools also calculates and transforms data. You read only the value that the code returns.';
 
 /**
  * What a model must know about the bounds and the failures of a compose
@@ -56,7 +56,8 @@ function limitsText(limits: ComposeLimits): string {
 const ARGUMENTS = Type.Object({
 	uses: Type.Optional(
 		Type.Array(Type.String(), {
-			description: 'The tools this compose call uses. Only these are bound. Give it with code.',
+			description:
+				'The tools this compose call uses. Only these are bound. Give it with code. An empty list binds no tool.',
 		}),
 	),
 	code: Type.Optional(

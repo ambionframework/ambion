@@ -22,6 +22,23 @@ measured no token saving for free code. The catalog and the exploration
 calls of the seat cost more input tokens than the data that the call kept
 out of the context ([Catalog](#the-catalog)).
 
+**Code with no tools calculates and transforms data.** `compose` runs on a
+general JavaScript runtime. A call with `uses: []` binds no tool. It
+calculates, and it sorts, groups, and reshapes data that the model already
+holds. The guidance names these uses to the model.
+
+```js
+// compose({ uses: [], code })
+const sales = [
+  { region: 'north', amount: 120.5 },
+  { region: 'south', amount: 80.25 },
+  { region: 'north', amount: 42 },
+];
+const totals = {};
+for (const { region, amount } of sales) totals[region] = (totals[region] ?? 0) + amount;
+return Object.entries(totals).sort((a, b) => b[1] - a[1]);
+```
+
 ```js
 // compose({ uses: ['sql', 'snapshot'], code })
 const drift = await tools.sql({ sql: "SELECT path FROM runs WHERE label = 'drift'", rows: 500 });
@@ -276,7 +293,7 @@ the guidance of `compose` after the guidance of the bundles, in the
 `guidance` field of the executor. The prompt renders it after the speaking
 policy, as it renders the guidance of every bundle
 ([Executors](executors.md#the-prompt-the-driver-renders)). The description of
-`compose` holds one sentence, the limits, and the catalog.
+`compose` holds its uses, the limits, and the catalog.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
@@ -286,7 +303,8 @@ option replaces `DEFAULT_SPEAKING`. The text follows:
 compose joins your tools in one call. Put the tools that you use in
 uses, and the body of an async function in code. Each tool is
 tools.<name>, and the description of compose gives its signature. You
-read only the value that the code returns.
+read only the value that the code returns. compose runs JavaScript, so
+code with no tools also calculates and transforms data.
 
 Plan the tool calls of a task before you make the first call. When the
 plan has two or more tool calls, make them in one compose call. Each
@@ -300,7 +318,9 @@ Use compose when:
 - a tool gives a large result, and you need a count, a filter, or a
   few fields of it;
 - you call one tool for many inputs;
-- you start several processes and wait for each.
+- you start several processes and wait for each;
+- you calculate, or you sort, group, or reshape data that you already
+  hold. Give uses: [] and put the data in the code.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
@@ -347,10 +367,11 @@ The macros of your skills. Run one with compose({ macro, args }):
 - lab-drift/snapshot-drift: Snapshot the files of every run with a label. Returns the count and the refs.
 ```
 
-**The description of `compose` holds one sentence, the limits, and the
-catalog.** The sentence is `Join your tools in one call. Code calls them
-as tools.<name>, and you read only the value that it returns.` A block of
-three lines follows it. The first line gives the limits of the seat:
+**The description of `compose` holds its uses, the limits, and the
+catalog.** The first lines are `Run JavaScript in one call. It joins your
+tools: code calls them as tools.<name>. Code with no tools also calculates
+and transforms data. You read only the value that the code returns.` A
+block of three lines follows it. The first line gives the limits of the seat:
 `compose.limits` after the defaults. The second line states that a
 binding rejects with an `Error` when its tool fails, and that
 `error.details` holds the details of the tool. It states that a rejection
