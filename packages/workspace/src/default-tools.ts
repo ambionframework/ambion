@@ -16,18 +16,6 @@ import type { Capability } from './capability.ts';
 import { fileTools } from './file-tools.ts';
 import type { WorkspaceResource } from './resource.ts';
 
-/** The number words of the tool line, by the number of tools, from nine. */
-const COUNT_WORDS: Readonly<Record<number, string>> = {
-	9: 'nine',
-	10: 'ten',
-	11: 'eleven',
-	12: 'twelve',
-	13: 'thirteen',
-	14: 'fourteen',
-	15: 'fifteen',
-	16: 'sixteen',
-};
-
 /** `a, b and c`. */
 function listOf(names: readonly string[]): string {
 	return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
@@ -35,11 +23,11 @@ function listOf(names: readonly string[]): string {
 
 /**
  * The tool line of the guidance. `names` holds the name of each tool of the
- * bundle, in order. The count is a word from nine to sixteen, and digits
- * outside that range.
+ * bundle, in order. The line gives no count, because a seat holds tools
+ * beyond the workspace.
  */
 export function defaultToolGuidance(names: readonly string[]): string {
-	return `Your workspace gives you ${COUNT_WORDS[names.length] ?? names.length} tools: ${listOf(names)}.`;
+	return `Your workspace tools are ${listOf(names)}.`;
 }
 
 /** The note on the file tools and the bash tool. */
