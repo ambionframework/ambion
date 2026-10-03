@@ -5,12 +5,13 @@ bodies.** The journal's fence, the activation lifecycle, and the exchange
 lifecycle each decide by rules: pure TypeScript functions with a
 contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
-stale. Two files hold every rule:
+stale. Three files hold every rule:
 
-| File                                                                                          | Concern                                                                                            | Obligations                   |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 39 in its proofs file |
+| File                                                                                                    | Concern                                                                                                                          | Obligations                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                  | 12, and 23 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 75, and 39 in its proofs file |
+| [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                  | 2                             |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, seating changes,
@@ -289,8 +290,8 @@ before the rules existed.
 
 **Every exported room rule but `exchangeOutcome` gates a write.** A rule stays in
 `room/rules.verified.ts` when a fault in it loses or duplicates the
-record: it decides an entry, an admission, or the `due` list that
-`admitsLease` reads. A rule that only shapes a read leaves the file, and
+record: it decides an entry, an admission, the `due` list that
+`admitsLease` reads, or the read position that the say lock reads. A rule that only shapes a read leaves the file, and
 it lives beside its caller with an ordinary test. The sweep for 0.2.0
 found no such rule.
 
@@ -321,4 +322,10 @@ found no such rule.
 | `openingQuestion`      | The open exchange that a close entry closes                                  |
 | `exchangeLive`         | A close entry                                                                |
 | `admitsClose`          | A close entry                                                                |
+| `unreadBy`             | The unread lines of a commit answer, and so the read position of a say       |
 | `exchangeOutcome`      | None; it shapes the outcome that a read reports                              |
+
+**One rule decides on the seat side.** `execution/` cannot import `room/`,
+so `ownEntryAfter` lives in `execution/rules.verified.ts`. It gates the read
+position that the next say of an activation carries, and so the say lock.
+`room-tools.ts` runs its body for a seating, an unseating, and a dismissal.

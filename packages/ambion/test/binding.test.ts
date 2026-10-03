@@ -7,6 +7,7 @@
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
+import * as seatRules from '../src/execution/rules.verified.ts';
 import { runningRoom } from '../src/hosting.ts';
 import { createRuntime, definePerson, startRoom } from '../src/index.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
@@ -18,14 +19,18 @@ import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
 import { owedOf, pendingOf, replayState } from './support/fold.ts';
 import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
-import { quiet, scriptedStream } from './support/scripted.ts';
+import { callTool, quiet, scriptedStream, seat, toolResultTexts } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const { mocked } = await import('./support/binding.ts');
 	return mocked(await importOriginal<typeof import('../src/room/rules.verified.ts')>());
 });
-const bind = bindings({ rules });
+vi.mock('../src/execution/rules.verified.ts', async (importOriginal) => {
+	const { mocked } = await import('./support/binding.ts');
+	return mocked(await importOriginal<typeof import('../src/execution/rules.verified.ts')>());
+});
+const bind = bindings({ rules, seatRules });
 afterAll(() => expect(bind.unbound()).toEqual([]));
 
 const at = '2026-01-01T09:00:00.000Z';
@@ -404,5 +409,69 @@ describe('the room runs the verified rules', () => {
 		await waitForRoom(room);
 		expect(closedExchange(room, first.from)).toBeDefined();
 		expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
+	});
+
+	it('reports a scheduled say the unread entries that unreadBy names', async () => {
+		const runtime = createRuntime({
+			clock: fakeClock(),
+			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
+		});
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('binding-unread'),
+				runtime,
+				agents: [scriptedAgent('product', 'Product.')],
+			}),
+		);
+		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Person.' }));
+		const first = await visit.send({ text: 'Question.' });
+		const peer = runningRoom(runtime, room.name);
+		if (peer === undefined) throw new Error('The room is absent.');
+		const activation = `message:${first.from}:product:1`;
+		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+		const later = (key: string): CommitRequest => ({
+			activation,
+			key,
+			readThrough: first.from - 1,
+			intent: { kind: 'said', to: 'product', text: `Later ${key}.`, delaySeconds: 60 },
+		});
+		// The rule answers by its body: the question lies past the read position.
+		expect(await peer.commit(later('record'))).toMatchObject({ unread: [{ seq: first.from }] });
+		bind.always(rules.unreadBy, () => false);
+		const none = await peer.commit(later('none'));
+		expect(none).toHaveProperty('committed');
+		expect(none).not.toHaveProperty('unread');
+		bind.always(rules.unreadBy, () => true);
+		expect(await peer.commit(later('all'))).toHaveProperty('unread');
+		bind.restore(rules.unreadBy);
+	});
+
+	it('counts a seating as read through the entry only as ownEntryAfter answers', async () => {
+		const results: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('binding-own-entry'),
+				runtime: createRuntime({
+					clock: fakeClock(),
+					execution: piExecution({
+						sessions: 'memory',
+						stream: scriptedStream((context) => {
+							const read = toolResultTexts(context);
+							if (read.length === 0) return seat('ana');
+							results.splice(0, results.length, ...read);
+							return read.length === 1 ? callTool('say', { text: 'Welcome.' }) : quiet();
+						}),
+					}),
+				}),
+				agents: [scriptedAgent('worker', 'Worker.'), scriptedAgent('ana', 'Ana.')],
+				seats: { worker: 'broadcast' },
+			}),
+		);
+		// A read position that no entry joins leaves the seating entry unread, so the say is missed.
+		bind.once(seatRules.ownEntryAfter, 1_000_000);
+		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Person.' }));
+		await visit.send({ text: 'Bring in ana.' });
+		await waitForRoom(room);
+		expect(results[1]).toContain('Not delivered');
 	});
 });

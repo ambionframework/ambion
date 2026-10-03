@@ -9,6 +9,7 @@ import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { CommitRequest, CommitResult, LeaseResponse } from '../protocol.ts';
 import { liveWork } from '../room/reconcile.ts';
+import { unreadBy } from '../room/rules.verified.ts';
 import {
 	decide,
 	type ReconcileDecision,
@@ -110,10 +111,10 @@ function unreadBefore(
 ): { unread?: Message[] } {
 	const { readThrough, intent } = commit;
 	const ordinarySay = intent.kind === 'said' && intent.delaySeconds === undefined;
-	if (ordinarySay || readThrough === undefined) return {};
+	// The rule decides which entries are unread.
 	const unread = run
 		.state()
-		.messages.filter((entry) => entry.seq > readThrough && entry.seq < message.seq);
+		.messages.filter((entry) => unreadBy(ordinarySay, readThrough, entry.seq, message.seq));
 	return unread.length === 0 ? {} : { unread: unread.map(copyMessage) };
 }
 

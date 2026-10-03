@@ -24,6 +24,7 @@ import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import type { BoundTool, BoundToolResult, StepSink } from './contract.ts';
 import { refusal, summaryToolDescription } from './render.ts';
+import { ownEntryAfter } from './rules.verified.ts';
 
 /** The name of the MCP server that serves the room tools to a harness. */
 export const ROOM_SERVER = 'ambion';
@@ -411,8 +412,8 @@ function ownEntry(
 	response: { committed: Message; unread?: Message[] },
 ): void {
 	const { seq } = response.committed;
-	const own = (response.unread ?? []).length === 0;
-	binding.ownEntry(own ? readThrough : seq - 1, seq);
+	// `seq` is a seq of the journal, so it is at least 1.
+	binding.ownEntry(ownEntryAfter(readThrough, seq, (response.unread ?? []).length), seq);
 }
 
 /** The room tool that dismisses one scheduled say of the seat, by its seq. */

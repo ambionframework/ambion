@@ -196,6 +196,26 @@ lemma speechFreshness_ensures(readThrough: Option<int>, lastSeq: int)
 {
 }
 
+function unreadBy(ordinarySay: bool, readThrough: Option<int>, seq_: int, entry: int): bool
+{
+  if ordinarySay then
+    false
+  else
+    match readThrough {
+      case Some(i_readThrough_val) =>
+        ((i_readThrough_val < seq_) && (seq_ < entry))
+      case None =>
+        false
+    }
+}
+
+lemma unreadBy_ensures(ordinarySay: bool, readThrough: Option<int>, seq_: int, entry: int)
+  ensures (ordinarySay ==> !(unreadBy(ordinarySay, readThrough, seq_, entry)))
+  ensures ((match readThrough { case Some(i_) => false case None => true }) ==> !(unreadBy(ordinarySay, readThrough, seq_, entry)))
+  ensures (match readThrough { case Some(i_readThrough_val) => (!(ordinarySay) ==> (unreadBy(ordinarySay, readThrough, seq_, entry) <==> ((i_readThrough_val < seq_) && (seq_ < entry)))) case None => true })
+{
+}
+
 function admitsClose(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): bool
 {
   match open {

@@ -160,6 +160,21 @@ export function speechFreshness(readThrough: number | undefined, lastSeq: number
 	return readThrough < lastSeq ? 'missed' : 'fresh';
 }
 
+//@ contract A commit that is no ordinary say reports each entry past its read position and before its own entry as unread. An ordinary say, and a commit with no read position, report none.
+export function unreadBy(
+	ordinarySay: boolean,
+	readThrough: number | undefined,
+	seq: number,
+	entry: number,
+): boolean {
+	//@ ensures ordinarySay ==> !\result
+	//@ ensures readThrough == undefined ==> !\result
+	//@ ensures !ordinarySay && readThrough != undefined ==> (\result <==> (readThrough < seq && seq < entry))
+	if (ordinarySay) return false;
+	if (readThrough === undefined) return false;
+	return readThrough < seq && seq < entry;
+}
+
 /** The open exchange, as the close admission reads it. */
 export interface OpenExchange {
 	readonly from: number;
