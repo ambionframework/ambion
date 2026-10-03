@@ -191,6 +191,7 @@ describe('startRoom', () => {
 		expect((await messagesOf(session)).at(-1)?.from).toBe('liar'); // whatever the content claimed
 		const roster = contexts.at(-1) ?? '';
 		expect(roster).toContain('- aside (idle, named only): Watches quietly.');
+		expect(roster).toContain('"named only": a say addressed to it.');
 		expect(roster).toContain('- andrei (present'); // the people, and how they are reading
 		expect(roster).toContain('Founder. Owns the room.');
 

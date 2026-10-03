@@ -31,7 +31,7 @@ export const SEAT_NOTE =
 	'Your final reply reaches no one. The room hears only the `say` tool. ' +
 	'When you have something to add, call `say`, then end your activation. ' +
 	'The sandbox and the working directory of this harness apply to no tool you hold. ' +
-	'Your tools reach the workspace, and every path is a workspace path.';
+	'A path in a tool call belongs to that tool.';
 
 /**
  * The seat text: the harness note, the mechanism, and the agent part. They

@@ -141,8 +141,8 @@ can change or delete one. The host opens the database at its start, so
 the terminal shows the tables before the first question.
 
 **Two simulated instruments sit on the lab database.** `led-current` has a
-limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist and
-the assistant call `operate`.
+limit of 20 mA. `bench-supply` has a limit of 5 V. The Design specialist calls
+`operate`.
 
 - A setpoint at or below the limit runs. The tool appends a `done` row with
   the reading. The reading equals the setpoint.

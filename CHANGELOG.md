@@ -3,12 +3,12 @@
 ## Unreleased
 
 **The guidance of a seat follows the review of the workbench prompts.**
-The speaking policy wakes a participant with a directed say and asks for one
-only when the roster marks the seat "named only". The hand-off paragraph says
-the same. The roster legend explains the marks that the roster shows. The
+The speaking policy states that a directed say wakes a participant. The
+hand-off paragraph asks for one only when the roster marks the seat "named
+only". The roster legend explains the marks that the roster shows. The
 ask line drops the sentences that only the assistant needs. The `say` tool
-states that a file path is no ref. The `schedule` tool states who the wake
-opens an exchange for. The assistant names attention by the marks of the
+states that a file path is no URI. The `schedule` tool states who the
+scheduled message opens an exchange for. The assistant names attention by the marks of the
 roster. The Codex seat note drops "answer with `say`, then stop" and states
 that the sandbox applies to no tool the seat holds. The workspace tool line
 gives no count. The audit note and the process note lose their recaps. The
@@ -130,8 +130,8 @@ range of a closed exchange, the close names no summary writer and the room
 assigns no summary activation. The rule is `owesSummary` in
 `rules.verified.ts`. The prompt no longer says "Answer what they asked". The
 assistant no longer publishes a summary for every closed exchange or a summary
-that states a gap that no message reports. Its identity no longer says that it summarizes each
-exchange, and now says that it routes each request.
+that states a gap that no message reports. Its identity no longer says that
+it summarizes each exchange, and now says that it routes each request.
 
 The writer copies each value as a message states it, derives none, and keeps
 the source paths and URIs that a message cites. The assistant writes no summary
