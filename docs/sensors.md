@@ -604,9 +604,11 @@ validated `ObserveResponse`, a `Map<string, Uint8Array>` of verified bytes
 keyed by digest (the client adapter supplies each `SensorFile.bytes`), and an
 optional `AbortSignal`. It receives the manifest object and snapshot ref,
 the published export directory and manifest path, and each file's digest,
-snapshot ref, and export path. The observe tool is responsible for acquiring and
-validating the connection and response, fetching the files, rendering the
-result, and recording its audit details.
+snapshot ref, and export path. The sensor client checks the response schema
+and each file digest once. The retention checks neither. It refuses a
+referenced file that is missing and a file that no observation references. The
+observe tool is responsible for acquiring and validating the connection,
+fetching the files, rendering the result, and recording its audit details.
 
 **The result states values, units, measurement times, and evidence.**
 Text renders as text; a frame renders as an image; a series renders a
