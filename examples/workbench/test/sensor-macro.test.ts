@@ -10,15 +10,17 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fromDirectory, loadSkills, type Workspace } from '@ambionframework/workspace';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { fromDirectory, loadSkills } from '../src/index.ts';
-import type { Workspace } from '../src/workspace.ts';
-import { composed } from './support/compose.ts';
-import { httpWorkspace, mapped, type Routes, serve } from './support/http-fixture.ts';
+import { composed } from '../../../packages/workspace/test/support/compose.ts';
+import {
+	httpWorkspace,
+	mapped,
+	type Routes,
+	serve,
+} from '../../../packages/workspace/test/support/http-fixture.ts';
 
-const template = fileURLToPath(
-	new URL('../../../examples/workbench/templates/sensor-server/', import.meta.url),
-);
+const template = fileURLToPath(new URL('../templates/sensor-server/', import.meta.url));
 const sha256 = (bytes: Uint8Array | string): string =>
 	createHash('sha256').update(bytes).digest('hex');
 
