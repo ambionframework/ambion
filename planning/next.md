@@ -361,6 +361,37 @@ peak over 900. The lab holds 4 drift runs with a peak over 900. The chain
 case on Claude chose direct calls again. On Pi it passed, so the choice of
 `claude-sonnet-5` changes from run to run.
 
+**Fourth run: the subscription login.** On 2026-10-03, on `e6d34c6f`, the
+live test ran once on each kind with no API key. Codex used the ChatGPT
+login of the host, `gpt-5.6-luna` at medium effort. Pi used
+`AMBION_MODEL=openai-codex/gpt-5.6-luna` with thinking off, on the stored
+`openai-codex` sign-in. The flags were `--retry=0` and
+`--testTimeout=300000`. Claude has no login path, so the run skipped it.
+[The fourth run](#the-fourth-run) holds each run.
+
+Codex passed 6 of 6 cases. Pi passed 5 of 6. The Pi chain case failed:
+the seat called `compose` for one `sql` query and took the snapshots with
+direct calls. The model made that choice. The case checks the nested
+calls before the answer, so the run did not check the answer.
+
+- **Seats with `compose` said from inside `compose` in 3 of 6 cases on
+  each kind.** On Codex, those cases are read before deciding, parallel
+  processes, and fan-out. On Pi, they are parallel processes, the token
+  comparison, and fan-out. The other cases used a direct `say`.
+- **The fan-out prompt names the table `runs`.** All four seats found the
+  4 hot runs. In the third run, the prompts did not name the table, and
+  both Codex seats counted 10 runs.
+- **Fan-out input tokens:** Codex used 105477 with `compose` and 40794
+  without. Pi used 89510 with `compose` and 206748 without. One run does
+  not support a general conclusion.
+- **The token counts do not compare with the earlier tables.** The prompts
+  name the table now.
+
+Two earlier runs used the same login, with the login support of #525
+before it merged. On `a439aef4` (before #522), Codex passed 4 of 6 cases
+and Pi passed 5 of 6. On `1f5e6df1` (after #522), Codex passed 5 of 6 and
+Pi passed 4 of 6.
+
 **CP7. Release documentation.** Update the pages that the compose change
 touches, the changelog, and the package count. Each page states its own
 facts, so [Compose](../docs/compose.md) holds no list of changes. Change
@@ -448,3 +479,37 @@ The model column holds the reasoning level in parentheses.
 | gpt-5.6-luna (medium) | token comparison without compose | sql ×2, snapshot, say                                        | 23771        | 450           | -         | passed                                                                                      |
 | gpt-5.6-luna (medium) | fan-out with compose             | compose, bash ×5, sql ×2, bash, snapshot, say (nested: bash) | 238616       | 1037          | 0.1 s     | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (compose) |
 | gpt-5.6-luna (medium) | fan-out without compose          | bash ×10, snapshot, say ×2                                   | 305275       | 2209          | -         | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (bash)    |
+
+### The fourth run
+
+The model column holds the reasoning level in parentheses.
+
+#### pi
+
+| Model                           | Case                             | Tools                                                        | Input tokens | Output tokens | Wall time | Outcome                                          |
+| ------------------------------- | -------------------------------- | ------------------------------------------------------------ | ------------ | ------------- | --------- | ------------------------------------------------ |
+| openai-codex/gpt-5.6-luna (off) | chain                            | sql, bash, compose, read ×2, snapshot ×2, say (nested: sql)  | 50506        | 491           | 0.0 s     | failed: expected [ 'sql' ] to include 'snapshot' |
+| openai-codex/gpt-5.6-luna (off) | read before deciding             | sql, say                                                     | 24159        | 89            | -         | passed (chose direct calls)                      |
+| openai-codex/gpt-5.6-luna (off) | parallel processes               | compose (nested: bash ×3, wait ×3, say)                      | 14474        | 167           | 3.1 s     | passed                                           |
+| openai-codex/gpt-5.6-luna (off) | token comparison with compose    | compose ×3 (nested: sql ×3, snapshot, say)                   | 32819        | 208           | 0.0 s     | passed                                           |
+| openai-codex/gpt-5.6-luna (off) | token comparison without compose | sql ×4, read ×4, snapshot ×4, say                            | 33145        | 792           | -         | passed                                           |
+| openai-codex/gpt-5.6-luna (off) | macro                            | compose, say (nested: sql, snapshot)                         | 25341        | 283           | 0.0 s     | passed                                           |
+| openai-codex/gpt-5.6-luna (off) | fan-out with compose             | sql, bash, compose ×2 (nested: sql, read ×16, snapshot, say) | 89510        | 369           | 0.1 s     | passed (compose)                                 |
+| openai-codex/gpt-5.6-luna (off) | fan-out without compose          | sql ×3, bash ×5, snapshot, say                               | 206748       | 785           | -         | passed (bash)                                    |
+
+#### claude
+
+Skipped. The run had no key for this executor kind.
+
+#### codex
+
+| Model                 | Case                             | Tools                                                   | Input tokens | Output tokens | Wall time | Outcome                |
+| --------------------- | -------------------------------- | ------------------------------------------------------- | ------------ | ------------- | --------- | ---------------------- |
+| gpt-5.6-luna (medium) | chain                            | compose, say (nested: sql, snapshot)                    | 25491        | 370           | 0.1 s     | passed                 |
+| gpt-5.6-luna (medium) | read before deciding             | compose (nested: sql, say)                              | 16565        | 194           | 0.0 s     | passed (chose compose) |
+| gpt-5.6-luna (medium) | parallel processes               | compose (nested: bash ×3, wait ×3, say)                 | 15006        | 339           | 3.2 s     | passed                 |
+| gpt-5.6-luna (medium) | token comparison with compose    | compose, say (nested: sql, snapshot)                    | 25560        | 383           | 0.1 s     | passed                 |
+| gpt-5.6-luna (medium) | token comparison without compose | sql, snapshot, say                                      | 19264        | 398           | -         | passed                 |
+| gpt-5.6-luna (medium) | macro                            | compose, say (nested: sql, snapshot)                    | 26079        | 371           | 0.0 s     | passed                 |
+| gpt-5.6-luna (medium) | fan-out with compose             | compose ×4 (nested: sql, read ×16, bash, snapshot, say) | 105477       | 575           | 0.0 s     | passed (compose)       |
+| gpt-5.6-luna (medium) | fan-out without compose          | sql ×2, bash ×2, snapshot, say                          | 40794        | 602           | -         | passed (bash)          |
