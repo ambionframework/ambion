@@ -3,7 +3,9 @@
 	"ignoreBinaries": ["setsid", "flock"],
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{check,version,publish,release,journal-smoke,projection-envelope}.mjs"],
+			"entry": [
+				"scripts/{check,version,publish,release,journal-smoke,projection-envelope,compose-evidence}.mjs"
+			],
 			"project": ["scripts/*.mjs"],
 			"ignoreDependencies": ["@vitest/coverage-v8", "vitest"]
 		},
