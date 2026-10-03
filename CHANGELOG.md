@@ -58,7 +58,8 @@ tool calls first, and to make a plan of two or more calls, say included, in
 one compose call. A compose call has two steps: `describe`, then `compose`.
 The guidance tells the model to explore large results with compose, and to
 return a count or a sample. The list of cases is gone, except the rule to
-wait on each process that the code starts. The description of `compose` names the same two uses.
+wait on each process that the code starts. The description of `compose`
+names the same two uses.
 
 **`processRuntime` names the memory limit when the child aborts.** V8 can
 abort the child before it prints its out-of-memory line. A child that ends
