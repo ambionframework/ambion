@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**The scripted executor returns a tool error to the script.** When an own
+tool of a seat throws, for example a failed `compose` call, the script reads
+the message in `step.results` and the activation goes on. Before, the pass
+failed as transient and the room retried it after a delay. A script that
+needs a failed pass throws a `ScriptedFailure`.
+
 **The `compose` tool is on by default for Pi, Claude, and Codex seats.**
 `pi()`, `claude()`, and `codex()` give a seat `compose` with
 `quickjsEvaluator()` when the options name none. `compose: false` removes the
