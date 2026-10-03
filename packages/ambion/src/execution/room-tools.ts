@@ -370,9 +370,9 @@ function missedSay(
 	}
 	const result = text(
 		refusal(
-			'Not delivered — the room moved while you were speaking. New on the record:',
+			'Not delivered: the room moved while you were speaking. New on the record:',
 			[...missed],
-			'Speak again only if your reply still adds something the room has not heard; otherwise end your activation.',
+			'Read it, then call say again with your message unless the new messages already say it.',
 		),
 		true,
 	);

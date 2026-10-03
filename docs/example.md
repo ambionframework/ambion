@@ -38,7 +38,7 @@ person joins a room, asks a question, and reads the summary.
 a specialist, routes a request to a named specialist, and writes the closing
 summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
-`broadcast`. It writes the closing summary.
+`broadcast`.
 
 | Agent           | Scope                                                      | Kind   |
 | --------------- | ---------------------------------------------------------- | ------ |

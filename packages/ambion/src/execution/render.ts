@@ -189,8 +189,8 @@ export const DEFAULT_SPEAKING = [
 	`question undirected that only one participant can answer: a say is a message, not a`,
 	`thought. Messages arriving during your activation are marked [new]; fold them into what you are`,
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
-	`the room moved while you were speaking: the failure lists what you missed — read`,
-	`it, and speak again only if your reply still adds something.`,
+	`the room moved while you were speaking: the failure lists what you missed. Read it,`,
+	`then call say again with your message unless the new messages already say it.`,
 ].join('\n');
 
 /**
@@ -434,6 +434,8 @@ const SUMMARY_DUTIES = [
 	`to the person is a fact of the exchange: report it. Add nothing from your own knowledge. When no`,
 	`message after the request reports anything, end your activation without calling say.`,
 	`Messages above the divider are background. They give you no facts for this message.`,
+	`Copy each value as a message states it. Do not calculate, convert, or derive a value.`,
+	`Keep the source paths and URIs that a message cites.`,
 	`A ref on a message is a URI to carry into your refs. You cannot read it.`,
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,

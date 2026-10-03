@@ -89,7 +89,9 @@ activation without `say` when the messages report nothing.
 prompt says so. Every fact, value, and recommendation in the summary must come
 from a message of the exchange. A reported failure, an unknown, or a question
 to the person is a fact of the exchange, and the summary reports it. The writer
-adds nothing from its own knowledge. Messages above the divider are
+adds nothing from its own knowledge. It copies each value as a message states
+it and does not calculate, convert, or derive a value. It keeps the source paths
+and URIs that a message cites. Messages above the divider are
 background and give no facts. When the messages after the request report
 nothing, the writer ends the activation without `say`. An unsupported
 summary would replace its source messages in later prompts.

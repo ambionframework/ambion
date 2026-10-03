@@ -13,7 +13,7 @@ it('builds the default ordinary assistant definition', () => {
 		name: 'assistant',
 		executor: { model: 'scripted/assistant', tools: [] },
 	});
-	expect(assistant.identity).toContain('Seats and unseats specialists');
+	expect(assistant.identity).toContain('routes each request');
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 

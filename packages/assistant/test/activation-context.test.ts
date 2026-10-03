@@ -206,7 +206,7 @@ it('names the marker that the room puts on a specialist result steered into the 
 	expect(system).toContain('will now take an action that the person forbade in words');
 	// Routing comes before the silence rule, and the guidance says that seat routes nothing.
 	expect(system.indexOf('call say with BOTH to set')).toBeLessThan(
-		system.indexOf('Silence is the default for everything else'),
+		system.indexOf('Silence is the default. Call say in these cases only'),
 	);
 	expect(system).toContain('The seat tool routes nothing');
 });
