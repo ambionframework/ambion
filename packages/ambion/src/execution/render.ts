@@ -151,8 +151,9 @@ function renderClock(now: number): string {
 }
 
 /**
- * What a refused author is told. The runtime states what it missed; the
- * sentences around that belong to the kind of writing it was doing.
+ * What a refused author is told: the opening, the missed lines, then the
+ * advice. The caller supplies the opening and the advice for its kind of
+ * writing, and the runtime supplies the missed lines.
  */
 export function refusal(opening: string, missed: Message[], advice: string): string {
 	return [opening, ...missed.map(renderLine), advice].join('\n');
@@ -189,8 +190,8 @@ export const DEFAULT_SPEAKING = [
 	`question undirected that only one participant can answer: a say is a message, not a`,
 	`thought. Messages arriving during your activation are marked [new]; fold them into what you are`,
 	`doing — and if a colleague has just made your point, let it stand. A say fails if`,
-	`the room moved while you were speaking: the failure lists what you missed — read`,
-	`it, and speak again only if your reply still adds something.`,
+	`the room moved while you were speaking: the failure lists what you missed. Read it,`,
+	`then call say again with your message unless the new messages already say it or make it unnecessary.`,
 ].join('\n');
 
 /**
@@ -378,7 +379,8 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		return (
 			`${purpose.person}'s exchange is over: it holds the messages from seq ` +
 			`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
-			`${messageUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
+			`${messageUri(context.name, purpose.exchange)}. These messages are your only source. ` +
+			`${action(purpose.kind)}`
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
@@ -424,9 +426,18 @@ const HANDOFF_PARAGRAPH = [
 /** What the closing seat does: write the one message for a closed exchange. */
 const SUMMARY_DUTIES = [
 	`The exchange is over. Write the one message the assigned person reads instead of the working,`,
-	`using the say tool. Answer what they asked, and keep only facts that change what they do next.`,
-	`Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns that matter.`,
-	`Leave out the discussion, who said what, and facts that do not change the answer.`,
+	`using the say tool. Report what the exchange established, and keep only facts that change what`,
+	`they do next. Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns`,
+	`that matter. Leave out the discussion, who said what, and facts that do not change the answer.`,
+	``,
+	`The messages of the exchange are your source. Every fact, value, and recommendation in your`,
+	`message must come from a message of the exchange. A reported failure, an unknown, or a question`,
+	`to the person is a fact of the exchange: report it. Add nothing from your own knowledge. When no`,
+	`message after the request reports anything, end your activation without calling say.`,
+	`Messages above the divider are background. They give you no facts for this message.`,
+	`Copy each value as a message states it. Do not calculate, convert, or derive a value.`,
+	`Keep the source paths and URIs that a message cites.`,
+	`A ref on a message is a URI to carry into your refs. You cannot read it.`,
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
@@ -482,5 +493,5 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
 		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
-		: 'Write the one message with say, or end your activation.';
+		: 'Check two cases first. When no message after the request reports anything, or when one message already answers the request in full, end your activation without calling say: the person reads every message. Otherwise write the one message with say from what they report.';
 }

@@ -9,7 +9,14 @@ import {
 } from '../src/index.ts';
 import { fakeClock } from '../src/testing.ts';
 import { roomName, scriptedAgent, storedOf, waitForRoom } from './support/room.ts';
-import { isClosingContext, quiet, say, scriptedStream, toolNames } from './support/scripted.ts';
+import {
+	isClosingContext,
+	quiet,
+	say,
+	says,
+	scriptedStream,
+	toolNames,
+} from './support/scripted.ts';
 import { openFor, stopAtEnd } from './support/stop.ts';
 import { memory, storages } from './support/storage.ts';
 
@@ -168,9 +175,12 @@ describe('assistant room shorthand', () => {
 					agents: [assistant, builder, reviewer],
 					execution: piExecution({
 						sessions: 'memory',
-						stream: scriptedStream((context) =>
-							isClosingContext(context) ? say('Resumed summary.') : quiet(),
-						),
+						stream: scriptedStream((context, name, request) => {
+							if (isClosingContext(context)) return say('Resumed summary.');
+							return name === reviewer.name
+								? says(['Status recorded.'])(context, name, request)
+								: quiet();
+						}),
 					}),
 				}),
 			);

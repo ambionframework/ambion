@@ -699,6 +699,36 @@ export function stampedSummary(person: string, from: number, through: number): S
 	return { to: person, covers: { from, through } };
 }
 
+//@ contract A message reports in a range when an agent said it inside the range. The words of a person, a post of the system, and a change of presence report nothing.
+function reports(
+	message: Message,
+	people: readonly string[],
+	from: number,
+	through: number,
+): boolean {
+	//@ ensures \result <==> (message.kind == 'said' && !people.includes(message.from) && from <= message.seq && message.seq <= through)
+	//@ ensures message.kind != 'said' ==> !\result
+	//@ ensures message.seq < from || through < message.seq ==> !\result
+	return (
+		message.kind === 'said' &&
+		!people.includes(message.from) &&
+		from <= message.seq &&
+		message.seq <= through
+	);
+}
+
+//@ contract A closed exchange owes a summary only when an agent said a message inside its range. A range that holds only the words of people has nothing to report.
+export function owesSummary(
+	messages: readonly Message[],
+	people: readonly string[],
+	from: number,
+	through: number,
+): boolean {
+	//@ ensures \result <==> exists(i, 0 <= i && i < messages.length && reports(messages[i], people, from, through))
+	//@ ensures messages.length == 0 ==> !\result
+	return messages.some((message) => reports(message, people, from, through));
+}
+
 //@ contract A message opens an exchange after the last close when a person spoke it, or when the system posted it: agent speech, arrivals and departures open nothing.
 function opensExchange(
 	message: Message,

@@ -327,7 +327,7 @@ is absent when the executor recorded none.
 ## 8. What reads one
 
 - The summary writer receives one dedicated summary activation and may write a
-  summary through `say`.
+  summary through `say` when an agent said a message in the closed range.
 - A client groups the fixed range under the question it answered.
 - A host can measure cost and completion per exchange. A closed exchange
   read carries `usage`: the sum of every activation in its range, the

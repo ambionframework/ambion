@@ -201,4 +201,12 @@ it('names the marker that the room puts on a specialist result steered into the 
 	// The guidance and the marker change together. A marker of [steer] raised the rate of
 	// relayed results from 5 in 30 to 18 in 30 in a live trial. Measure before a rename.
 	expect(system).toContain(`starts with \`${marker}\``);
+	// The guidance states the ban on a message about a report once, and it names the one steer.
+	expect(system.split('is not a question').length - 1).toBe(1);
+	expect(system).toContain('will now take an action that the person forbade in words');
+	// Routing comes before the silence rule, and the guidance says that seat routes nothing.
+	expect(system.indexOf('call say with BOTH to set')).toBeLessThan(
+		system.indexOf('Silence is the default. Call say in these cases only'),
+	);
+	expect(system).toContain('The seat tool routes nothing');
 });

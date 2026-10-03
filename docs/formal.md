@@ -316,6 +316,7 @@ found no such rule.
 | `activationGrant`      | A claim entry, a renewal entry, a commit entry, and a release entry          |
 | `speechFreshness`      | A message entry that an activation writes                                    |
 | `stampedSummary`       | The recipient and the range of a summary entry                               |
+| `owesSummary`          | The summary writer that a close entry names                                  |
 | `coversExchange`       | A second summary entry, and the summaries that the room owes                 |
 | `summaryVerdict`       | The summaries that the room owes                                             |
 | `openingQuestion`      | The open exchange that a close entry closes                                  |

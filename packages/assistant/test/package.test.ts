@@ -16,7 +16,7 @@ it('builds the default ordinary assistant definition', () => {
 			tools: [expect.objectContaining({ name: 'compose' })],
 		},
 	});
-	expect(assistant.identity).toContain('Seats and unseats specialists');
+	expect(assistant.identity).toContain('routes each request');
 	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 

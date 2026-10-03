@@ -204,7 +204,7 @@ function landedLine(response: { committed: Message } | { unchanged: Unchanged })
 		const { unchanged } = response;
 		if (unchanged.kind === 'dismissed') return `#${unchanged.message} no longer waits`;
 		return unchanged.kind === 'seated'
-			? `${unchanged.name} is already seated`
+			? `${unchanged.name} is already seated. Seating it again does not activate it. To give it the request, call say with to set to ${unchanged.name}.`
 			: `${unchanged.name} is not seated`;
 	}
 	const message = response.committed;
@@ -289,7 +289,7 @@ function sayResult(
 	response: CommitResult,
 	closing: Summarizing | undefined,
 ): BoundToolResult {
-	if ('missed' in response) return missedSay(binding, call, response.missed, closing);
+	if ('missed' in response) return missedSay(binding, call, response.missed);
 	if ('committed' in response) accepted(binding, response.committed, closing);
 	const result = landed(binding, response);
 	if (closing === undefined || result.isError) return result;
@@ -363,20 +363,18 @@ function missedSay(
 	binding: RoomToolBinding,
 	call: string,
 	missed: readonly Message[],
-	closing: Summarizing | undefined,
 ): BoundToolResult {
-	if (closing === undefined) {
-		binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
-	}
+	// A closing say states no read position, so only an ordinary say reaches here.
+	binding.resultExpected(call, missed.at(-1)?.seq ?? binding.readThrough);
 	const result = text(
 		refusal(
-			'Not delivered — the room moved while you were speaking. New on the record:',
+			'Not delivered: the room moved while you were speaking. New on the record:',
 			[...missed],
-			'Speak again only if your reply still adds something the room has not heard; otherwise end your activation.',
+			'Read it, then call say again with your message unless the new messages already say it or make it unnecessary.',
 		),
 		true,
 	);
-	return closing === undefined ? { ...result, carriesRecord: true } : result;
+	return { ...result, carriesRecord: true };
 }
 
 /** The tool that seats or removes one agent. */
