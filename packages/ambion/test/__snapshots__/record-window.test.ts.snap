@@ -62,7 +62,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Write the one message with say when the exchange answers the request. Otherwise end your activation."
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Write the one message with say from what they report. When no message after the opening one reports anything, end your activation."
 `;
 
 exports[`the room windows the record > a cap serves the newest messages and counts what it drops 1`] = `
@@ -307,7 +307,7 @@ The record of 'window' so far:
 #117 [priya] xxxxxxxxxxxxxxx  (just now)
 #118 [priya] xxxxxxxxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange is over: it holds the messages from seq 101 to seq 118. The opening message's URI is ambion://room/window/message/101. These messages are your only source. Write the one message with say when the exchange answers the request. Otherwise end your activation."
+priya's exchange is over: it holds the messages from seq 101 to seq 118. The opening message's URI is ambion://room/window/message/101. These messages are your only source. Write the one message with say from what they report. When no message after the opening one reports anything, end your activation."
 `;
 
 exports[`the room windows the record > a long record that fits the token limit 1`] = `
@@ -729,7 +729,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Write the one message with say when the exchange answers the request. Otherwise end your activation."
+priya's exchange is over: it holds the messages from seq 3 to seq 5. The opening message's URI is ambion://room/window/message/3. These messages are your only source. Write the one message with say from what they report. When no message after the opening one reports anything, end your activation."
 `;
 
 exports[`the room windows the record > a token limit keeps the newest lines that fit 1`] = `

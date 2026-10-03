@@ -74,12 +74,12 @@ Later messages do not change the source range or recipient.
 
 **The messages of the exchange are the only source of a summary.** The
 prompt says so. Every fact, value, and recommendation in the summary must come
-from a message of the exchange or from evidence that a message cites, such as a
-ref or a tool result in the record. The writer adds nothing from its own
-knowledge. When the messages do not answer the request, the writer writes no
-summary and ends the activation without `say`. A summary that nothing supports
-would also replace its source messages in later prompts, so no summary is
-better than an invented one.
+from a message of the exchange. A reported failure, an unknown, or a question
+to the person is a fact of the exchange, and the summary reports it. The writer
+adds nothing from its own knowledge. Messages above the divider are
+background and give no facts. When no message after the request reports
+anything, the writer ends the activation without `say`. An unsupported
+summary would replace its source messages in later prompts.
 
 The closing `say` may carry `refs`. The room stores them on the summary. The
 prompt gives the writer the URI of the message that opened the exchange it

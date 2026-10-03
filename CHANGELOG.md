@@ -11,9 +11,10 @@ through the tools that stay.
 
 **A summary rests on the messages of its exchange.** The summary prompt names
 those messages as the only source. Every fact, value, and recommendation must
-come from a message of the exchange or from evidence that a message cites.
-The writer adds nothing from its own knowledge. When the messages do not
-answer the request, the writer ends the activation without `say`, and the
+come from a message of the exchange. A reported failure, an unknown, or a
+question to the person is a fact of the exchange, and the summary reports it.
+The writer adds nothing from its own knowledge. When no message after the
+request reports anything, the writer ends the activation without `say`, and the
 source messages stay in later prompts. The prompt no longer says "Answer what
 they asked". The assistant no longer publishes a summary for every closed
 exchange or a summary that states a gap. Its identity no longer says that it

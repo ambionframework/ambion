@@ -430,9 +430,11 @@ const SUMMARY_DUTIES = [
 	`that matter. Leave out the discussion, who said what, and facts that do not change the answer.`,
 	``,
 	`The messages of the exchange are your source. Every fact, value, and recommendation in your`,
-	`message must come from a message of the exchange or from evidence that a message cites, such as`,
-	`a ref or a tool result in the record. Add nothing from your own knowledge. When the messages do`,
-	`not answer the request, do not write a summary: end your activation without calling say.`,
+	`message must come from a message of the exchange. A reported failure, an unknown, or a question`,
+	`to the person is a fact of the exchange: report it. Add nothing from your own knowledge. When no`,
+	`message after the request reports anything, end your activation without calling say.`,
+	`Messages above the divider are background. They give you no facts for this message.`,
+	`A ref on a message is a URI to carry into your refs. You cannot read it.`,
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
@@ -488,5 +490,5 @@ const RECALL_LINE = `A message out of view is still on the record: call recall w
 function action(purpose: 'respond' | 'summarize'): string {
 	return purpose === 'respond'
 		? 'Speak, seat or unseat a colleague, use your tools, or end your activation.'
-		: 'Write the one message with say when the exchange answers the request. Otherwise end your activation.';
+		: 'Write the one message with say from what they report. When no message after the opening one reports anything, end your activation.';
 }

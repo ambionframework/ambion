@@ -244,6 +244,7 @@ describe('closing summaries', () => {
 		// the exchange messages are the only source, and no answer means no summary
 		expect(prompts[0]).toContain('The messages of the exchange are your source.');
 		expect(prompts[0]).toContain('Add nothing from your own knowledge.');
+		expect(prompts[0]).toContain('is a fact of the exchange: report it.');
 		expect(prompts[0]).toContain('end your activation without calling say');
 		expect(contexts[0]).toContain('These messages are your only source.');
 		expect(prompts[0]).toContain('Leave out who said what.');

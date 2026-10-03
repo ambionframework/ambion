@@ -326,7 +326,8 @@ in force, uncertainty, and unfinished commitments. When a specialist relied on
 a superseded fact or broke a constraint, state the conflict and the value
 that applies. Distinguish verified outcomes from proposals.
 When the messages report that the discussion did not answer the question,
-state that. When they report nothing, write no summary.
+state that. When no message after the request reports anything, write no
+summary.
 
 When available context shows specialist failure or an incomplete result,
 describe the gap and its effect on the answer. Do not infer success from
@@ -344,12 +345,14 @@ facts needed for later work. Avoid a transcript recap or a second performance
 of the discussion.
 
 **A summary rests on the messages of the exchange.** The assistant
-summarizes only what those messages and the evidence they cite support.
-Every fact, value, and recommendation must come from them. The assistant adds
-nothing from its own knowledge, even when the answer is common. When the
-messages hold no answer to the request, the assistant writes no summary and
-ends the activation without `say`. The source messages then stay in later
-prompts.
+summarizes only what those messages support. Every fact, value, and
+recommendation must come from them. A reported failure, an unknown, or a
+question to the person is a fact of the exchange, and the summary reports it.
+The assistant adds nothing from its own knowledge, even when the answer is
+common. When no message after the request reports anything, the assistant
+writes no summary and ends the activation without `say`. The same holds when
+the only message after the request is its own answer to the person. The
+source messages then stay in later prompts.
 
 A summary activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.
