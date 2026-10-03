@@ -208,7 +208,7 @@ sequenceDiagram
   participant M as Model
   participant C as compose
   participant A as approve
-  participant E as Evaluator
+  participant E as Runtime
   participant T as Tools
   M->>C: macro, args
   C->>C: find the macro in the frozen set
@@ -224,16 +224,16 @@ sequenceDiagram
   C-->>M: the value as JSON
 ```
 
-**The evaluator gives the code a global `args`.** It is the JSON value that
+**The runtime gives the code a global `args`.** It is the JSON value that
 `compose` checked. Free code has no `args`, and the name is undefined
-there. `EvaluatorInput.args` carries it ([Compose](compose.md#the-evaluator)).
+there. `ComposeRuntimeInput.args` carries it ([Compose](compose.md#the-runtime)).
 
 **The guidance lists the macros of the seat.** One line for each macro, with
 the name and the description, follows the text of `COMPOSE_GUIDANCE`
 ([Compose](compose.md#guidance)).
 
 **`approve` can allow a macro and deny free code.** A host that denies free
-code runs only code that it wrote. The in-process evaluator is not a
+code runs only code that it wrote. The in-process runtime is not a
 security boundary, so this limits what it runs. The authority stays the
 same, because `compose` binds only tools that the seat holds. The request
 is `{ uses, code }` for free code and `{ macro, hash, args }` for a macro
@@ -283,7 +283,7 @@ hash alone:
 const reviewed = new Map([['lab-drift/snapshot-drift', blobHashOfReviewedFile]]);
 
 compose: {
-  evaluator,
+  runtime,
   approve: (request) =>
     'macro' in request && reviewed.get(request.macro) === request.hash ? 'allow' : 'deny',
 },
@@ -336,7 +336,7 @@ not defend.
   `approval` step holds the answer. Only `approve` reads the hash.
 - **The free `code` form stays.** The guidance asks the model to run a macro
   when a skill names one. The model can still write code.
-- **A seat on Cloudflare has no macro.** It has no evaluator for workerd,
+- **A seat on Cloudflare has no macro.** It has no runtime for workerd,
   so the seat sets `compose: false`.
 - **A seat with `compose: false` runs no macro.** The set loads, and the
   seat lists none.

@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMPOSE_GUIDANCE, type ComposeOptions } from '@ambionframework/ambion';
 import { afterAll, describe, expect, it } from 'vitest';
-import { functionEvaluator } from '../../ambion/test/support/evaluator.ts';
+import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import {
 	EXCLUSIVE_FEATURES,
 	exclusiveConfig,
@@ -39,7 +39,7 @@ import {
 } from '../src/options.ts';
 import { catalogFixture, recordedCatalog } from './support.ts';
 
-const own: ComposeOptions = { evaluator: functionEvaluator, guidance: 'Own guidance.' };
+const own: ComposeOptions = { runtime: functionRuntime, guidance: 'Own guidance.' };
 
 const luna = catalogFixture.models.find((entry) => entry.slug === 'gpt-5.6-luna');
 if (luna === undefined) throw new Error('The fixture lacks gpt-5.6-luna.');

@@ -4,19 +4,26 @@
 
 **The `compose` tool is on by default for Pi, Claude, and Codex seats.**
 `pi()`, `claude()`, and `codex()` give a seat `compose` with
-`quickjsEvaluator()` when the options name none. `compose: false` removes the
-tool. A host passes its own `compose` object to choose `processEvaluator()`, an
+`quickjsRuntime()` when the options name none. `compose: false` removes the
+tool. A host passes its own `compose` object to choose `processRuntime()`, an
 approval hook, guidance, or limits. The CP6 runs measured that `compose` adds
 input tokens when a seat does not use it, so a seat that never chains tools
 can set `compose: false`. The Cloudflare `configure` refuses an agent with a
-`compose` tool, because workerd has no evaluator yet.
+`compose` tool, because workerd has no runtime yet.
+
+**`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
+the runtime of its `compose` tool in the `runtime` field. The exports change
+as follows: `Evaluator` becomes `ComposeRuntime`, `EvaluatorInput` becomes
+`ComposeRuntimeInput`, `quickjsEvaluator` becomes `quickjsRuntime`,
+`processEvaluator` becomes `processRuntime`, and `evaluatorConformance`
+becomes `composeRuntimeConformance`.
 
 **A compose call that reads an unbound tool names the fix.** Code that
 reads `tools.<name>` for a name outside `uses` gets an error that names the
 tool and the bound names. The error says to add the tool to `uses`, or that
-the seat has no such tool. `EvaluatorInput` gains the optional `unlisted`.
-`'x' in tools` is false for an unbound name. The evaluator conformance
-suite requires the throw, so an evaluator that does not run the shared
+the seat has no such tool. `ComposeRuntimeInput` gains the optional `unlisted`.
+`'x' in tools` is false for an unbound name. The runtime conformance
+suite requires the throw, so a runtime that does not run the shared
 guest script fails it.
 
 **A failed compose call shows the result of each completed call.** The

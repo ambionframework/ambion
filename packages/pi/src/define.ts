@@ -7,7 +7,7 @@
 import type { AmbionTool, Executor, ToolContent } from '@ambionframework/ambion';
 import { defineTool } from '@ambionframework/ambion';
 import { describeExecutor, type ExecutorBaseOptions } from '@ambionframework/ambion/hosting';
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 import type { ModelThinkingLevel, Static, TSchema } from '@earendil-works/pi-ai';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
 
@@ -90,7 +90,7 @@ export function pi(options: PiOptions): PiExecutor {
 	return Object.freeze({
 		...describeExecutor({
 			...rest,
-			compose: rest.compose ?? { evaluator: quickjsEvaluator() },
+			compose: rest.compose ?? { runtime: quickjsRuntime() },
 			kind: 'pi',
 		}),
 		kind: 'pi' as const,

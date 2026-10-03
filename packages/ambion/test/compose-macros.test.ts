@@ -1,7 +1,7 @@
 /**
  * The macros of a seat: the check of one macro, the check of a definition
  * that carries macros, the guidance lines, and a compose call that runs a
- * macro by name. The code runs in the evaluator of `test/support`.
+ * macro by name. The code runs in the runtime of `test/support`.
  */
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -18,8 +18,8 @@ import {
 	composeMacro,
 	defineTool,
 } from '../src/index.ts';
+import { functionRuntime } from './support/compose-runtime.ts';
 import { echo, table, total } from './support/compose-tools.ts';
-import { functionEvaluator } from './support/evaluator.ts';
 
 const hidden = defineTool({
 	name: 'hidden',
@@ -58,13 +58,13 @@ const carrying = (...macros: ComposeMacro[]): ToolBundle => ({
 function seatOf(
 	bundle: ToolBundle,
 	approve?: (request: ComposeRequest) => 'allow' | 'deny',
-	evaluator = functionEvaluator,
+	runtime = functionRuntime,
 ) {
 	const executor = describeExecutor({
 		kind: 'test',
 		instructions: 'Test.',
 		bundles: [bundle],
-		compose: { evaluator, ...(approve === undefined ? {} : { approve }) },
+		compose: { runtime, ...(approve === undefined ? {} : { approve }) },
 	});
 	const tool = executor.tools.find((one) => one.name === 'compose');
 	if (tool === undefined) throw new Error('The executor has no compose tool.');
@@ -164,7 +164,7 @@ describe('the definition of a seat with macros', () => {
 				kind: 'test',
 				instructions: 'Test.',
 				bundles: [carrying(macro('a/b')), second],
-				compose: { evaluator: functionEvaluator },
+				compose: { runtime: functionRuntime },
 			}),
 		).toThrow("Two macros are named 'a/b'");
 	});
@@ -209,7 +209,7 @@ describe('the definition of a seat with macros', () => {
 			kind: 'test',
 			instructions: 'Test.',
 			bundles: [carrying(macro('a/b'))],
-			compose: { evaluator: functionEvaluator, guidance: '  ' },
+			compose: { runtime: functionRuntime, guidance: '  ' },
 		});
 		expect(executor.guidance).toMatch(/^The macros of your skills\./);
 	});

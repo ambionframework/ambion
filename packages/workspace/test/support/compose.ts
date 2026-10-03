@@ -1,13 +1,13 @@
 /**
  * One compose call over the tools of a workspace, for the tests that read
- * the declared output of a tool. The call runs in the `functionEvaluator`
+ * the declared output of a tool. The call runs in the `functionRuntime`
  * of the core's test support, and through the `compose` tool that
  * `describeExecutor` appends, so the check of the declared output runs on
  * the real result of each tool.
  */
 import type { ComposeResult, ToolBundle } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
-import { functionEvaluator } from '../../../ambion/test/support/evaluator.ts';
+import { functionRuntime } from '../../../ambion/test/support/compose-runtime.ts';
 import { callAs } from './backends.ts';
 
 /**
@@ -24,7 +24,7 @@ export async function composed(
 		kind: 'test',
 		instructions: 'Test.',
 		bundles: [bundle],
-		compose: { evaluator: functionEvaluator },
+		compose: { runtime: functionRuntime },
 	});
 	const tool = executor.tools.find((one) => one.name === 'compose');
 	if (tool === undefined) throw new Error('The executor has no compose tool.');

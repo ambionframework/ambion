@@ -10,7 +10,7 @@ import {
 	type ExecutorBaseOptions,
 	pickPresent,
 } from '@ambionframework/ambion/hosting';
-import { quickjsEvaluator } from '@ambionframework/compose/runtime';
+import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
 /** How much the model reasons before it answers. Codex 0.159.2 takes these values. */
 type ModelReasoningEffort =
@@ -45,7 +45,7 @@ export function codex(options: CodexOptions): CodexExecutor {
 	return Object.freeze({
 		...describeExecutor({
 			...options,
-			compose: options.compose ?? { evaluator: quickjsEvaluator() },
+			compose: options.compose ?? { runtime: quickjsRuntime() },
 			kind: 'codex',
 		}),
 		...pickPresent(options, ['modelReasoningEffort']),

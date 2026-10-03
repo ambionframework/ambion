@@ -29,7 +29,7 @@ a chain, and does not steer `claude-sonnet-5`. The compose design passed two des
 reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
 run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
 0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
-the `--allow-net` test of `processEvaluator`.
+the `--allow-net` test of `processRuntime`.
 
 ## The scope
 
@@ -39,7 +39,7 @@ model.**
 ```text
 executor options -> describeExecutor appends compose -> catalog and guidance
                                                             |
-            model -> compose({ uses, code }) -> approve -> evaluator
+            model -> compose({ uses, code }) -> approve -> runtime
                                                             |
                          nested calls -> declared outputs -> ledger -> value
 ```
@@ -48,8 +48,8 @@ executor options -> describeExecutor appends compose -> catalog and guidance
   model reads only the returned value, or the error and the ledger.
 - **Declared outputs** give the code typed `details`. `defineTool` checks
   them at compile time, and `compose` checks them at every call.
-- **`@ambionframework/compose/runtime`** holds `quickjsEvaluator` and
-  `processEvaluator`. Both pass `evaluatorConformance`.
+- **`@ambionframework/compose/runtime`** holds `quickjsRuntime` and
+  `processRuntime`. Both pass `composeRuntimeConformance`.
 - **Pi, Claude, and Codex** host `compose` as one more definition tool.
 - **Three fixes** close defects that 0.5.0 left open: a late steer on
   Claude (CS1), the Camera Chat findings (CC1), and Codex on a ChatGPT
@@ -80,7 +80,7 @@ executor options -> describeExecutor appends compose -> catalog and guidance
 
 ## Out of scope
 
-- **An evaluator for workerd.** `configure` of `@ambionframework/cloudflare`
+- **A runtime for workerd.** `configure` of `@ambionframework/cloudflare`
   refuses a seat with `compose`, so a worker seat sets `compose: false`.
 - **Replay of a compose call from its trace.** The trace caps can cut a
   nested output.
@@ -125,7 +125,7 @@ deadline, and a step sink.
 
 ### Phase 3. Compose on the scripted executor
 
-- [x] **1.** The `compose` tool with an evaluator for tests alone. Needs
+- [x] **1.** The `compose` tool with a runtime for tests alone. Needs
       phase 2. (CP3)
 - [x] **2.** The declared outputs of the workspace tools. Needs phase 2.
       (CP4)
@@ -136,13 +136,13 @@ deadline, and a step sink.
 A compose call binds `sql` and `snapshot` over a real workspace and a real
 SQLite file. A skill macro runs by name over the same workspace and file.
 
-### Phase 4. The evaluators
+### Phase 4. The runtimes
 
-- [x] **1.** `evaluatorConformance`, `quickjsEvaluator`, and
-      `processEvaluator`. Needs phase 3. (CP5)
+- [x] **1.** `composeRuntimeConformance`, `quickjsRuntime`, and
+      `processRuntime`. Needs phase 3. (CP5)
 
-**Evidence:** both evaluators pass `evaluatorConformance` on Node 26.
-`quickjsEvaluator` passes on Node 22.19. `processEvaluator` refuses Node
+**Evidence:** both runtimes pass `composeRuntimeConformance` on Node 26.
+`quickjsRuntime` passes on Node 22.19. `processRuntime` refuses Node
 22 at construction.
 
 ### Phase 5. Live evidence and release
@@ -256,7 +256,7 @@ arguments, calls `invoke`, and records the two steps of a nested call.
 `agentTools`, the scripted executor, and the nested calls of `compose` use
 it, so a direct call on Claude, Codex, and the scripted executor gets the
 full schema check. The hosting export `invokeTool` hands the step sink of
-the activation to the `compose` tool. A test evaluator in `test/support`
+the activation to the `compose` tool. A test runtime in `test/support`
 runs the code as an `AsyncFunction`, and only tests import it.
 
 **Evidence:** acceptance items 1, 2, 4, and 5 pass on the scripted Pi
@@ -291,16 +291,16 @@ header, a bad `uses`, a bad `args` schema, and a duplicate name. An edit
 of `~/.skills` does not change the body that runs. A seat without
 `compose` takes the same skill set and lists no macro.
 
-**CP5. The evaluators.** `@ambionframework/ambion/conformance` exports
-`evaluatorConformance`. `@ambionframework/compose/runtime` holds
-`quickjsEvaluator`, on the synchronous QuickJS build, and
-`processEvaluator`, with a bundled child entry that speaks JSON lines over
+**CP5. The runtimes.** `@ambionframework/ambion/conformance` exports
+`composeRuntimeConformance`. `@ambionframework/compose/runtime` holds
+`quickjsRuntime`, on the synchronous QuickJS build, and
+`processRuntime`, with a bundled child entry that speaks JSON lines over
 stdio. `scripts/import-rules.test.mjs` gains the cases of the new package.
 
 **Evidence:** the suite covers the globals table, a memory limit, a cut,
 concurrent binding calls, errors with `details`, and JSON at each
-crossing. `quickjsEvaluator` disposes every handle, so a runtime frees
-clean. `processEvaluator` kills its child at the signal, and a relative
+crossing. `quickjsRuntime` disposes every handle, so a runtime frees
+clean. `processRuntime` kills its child at the signal, and a relative
 import in the child fails.
 
 **CP6. Live evidence.** Run acceptance items 1, 6, and 7 once on each

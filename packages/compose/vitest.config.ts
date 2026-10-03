@@ -5,7 +5,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * Every test runs in process or in a child Node process, with no key and no
  * network. The core resolves to its source, as it does in the other packages,
  * so the conformance suite and the types of the core are one module each.
- * `processEvaluator` runs the built child entry, `dist/child.mjs`, so a run of
+ * `processRuntime` runs the built child entry, `dist/child.mjs`, so a run of
  * this suite needs a build first: `pnpm build`.
  *
  * The debug build of QuickJS runs WebAssembly frames that are larger than

@@ -73,11 +73,11 @@ seated or in reserve, through `configure`. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 **A worker seat sets `compose: false`.** `pi()` gives every seat the `compose`
-tool with `quickjsEvaluator()`. A compose call fails in workerd, because a
+tool with `quickjsRuntime()`. A compose call fails in workerd, because a
 worker loads WebAssembly only from its bundle. `configure` refuses an agent
-with a `compose` tool. Pass `compose: false` to `pi()` until an evaluator for
+with a `compose` tool. Pass `compose: false` to `pi()` until a runtime for
 workerd exists
-([Compose](../../docs/compose.md#the-evaluator)).
+([Compose](../../docs/compose.md#the-runtime)).
 
 `read()` returns the detached coherent room projection, including stopped
 records. Messages, participants, exchanges, and the read position `through` come from
