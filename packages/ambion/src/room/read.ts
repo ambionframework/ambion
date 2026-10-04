@@ -1,6 +1,13 @@
 /** Coherent, detached room reads built from one folded projection. */
 
-import { copyMessage, type Exchange, type Message, type RoomRead, type Seq } from '../types.ts';
+import {
+	copyMessage,
+	type Exchange,
+	type Message,
+	type MessageSnapshot,
+	type RoomRead,
+	type Seq,
+} from '../types.ts';
 import { exchangesOf } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
@@ -68,7 +75,7 @@ export function toRoomRead(
 
 /** Validate and select before cloning so status reads do not copy history. */
 function selectMessages(
-	all: readonly Message[],
+	all: readonly MessageSnapshot[],
 	selection: MessageSelection | undefined,
 ): readonly Message[] {
 	if (selection === false) return [];

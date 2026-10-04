@@ -40,6 +40,7 @@ import {
 	isSaid,
 	isSummary,
 	type Message,
+	type MessageSnapshot,
 	type Seq,
 	type SummaryMessage,
 	type SummaryOutcome,
@@ -61,13 +62,13 @@ import {
  * person. With a writer, only a summary by that writer counts.
  */
 export function coveringSummary(
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	person: string,
 	range: { readonly from: Seq; readonly through: Seq },
 	writer?: string,
-): SummaryMessage | undefined {
+): MessageSnapshot<SummaryMessage> | undefined {
 	return messages.find(
-		(message): message is SummaryMessage =>
+		(message): message is MessageSnapshot<SummaryMessage> =>
 			isSummary(message) &&
 			(writer === undefined || message.from === writer) &&
 			coversExchange(
@@ -91,10 +92,12 @@ export type SummaryClose = Pick<Close, 'from' | 'through'> &
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
 	close: SummaryClose,
-	messages: readonly Message[],
-	leases: ReadonlyMap<string, LeaseHold>,
+	messages: readonly MessageSnapshot[],
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 	cancelledAt?: number,
-): SummaryOutcome {
+):
+	| Exclude<SummaryOutcome, { kind: 'published' }>
+	| { kind: 'published'; summary: MessageSnapshot<SummaryMessage> } {
 	const writer = close.summaryWriter;
 	// A close with no writer has no summary to publish.
 	const summary =
@@ -122,10 +125,10 @@ export function summaryCompletion(
  * has no summary leases, and every activation id names a seat.
  */
 export function summaryLeasesOf(
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 	through: Seq,
 	writer: string | undefined,
-): LeaseHold[] {
+): Readonly<LeaseHold>[] {
 	if (writer === undefined) return [];
 	return [...leases.values()].filter((lease) => summarizesClose(lease.activation, through, writer));
 }
@@ -134,16 +137,16 @@ export function summaryLeasesOf(
 interface ExchangeFacts {
 	/** The people of the room, by name. The outcome and the recipients read them. */
 	readonly people: ReadonlySet<string>;
-	messages: readonly Message[];
-	summaries: readonly SummaryMessage[];
-	leases: ReadonlyMap<string, LeaseHold>;
+	messages: readonly MessageSnapshot[];
+	summaries: readonly MessageSnapshot<SummaryMessage>[];
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>;
 	/** The position of the last thing each person said. */
 	lastSaid: ReadonlyMap<string, Seq>;
 	cancelledAt: Seq | undefined;
 }
 
 /** The position of the first message at or after `seq` in an ordered record. */
-function indexAtOrAfter(messages: readonly Message[], seq: Seq): number {
+function indexAtOrAfter(messages: readonly MessageSnapshot[], seq: Seq): number {
 	let low = 0;
 	let high = messages.length;
 	while (low < high) {
@@ -155,7 +158,7 @@ function indexAtOrAfter(messages: readonly Message[], seq: Seq): number {
 }
 
 /** The messages of an inclusive range, from an ordered record. */
-function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message[] {
+function rangeOf(messages: readonly MessageSnapshot[], from: Seq, through: Seq): MessageSnapshot[] {
 	return messages.slice(indexAtOrAfter(messages, from), indexAtOrAfter(messages, through + 1));
 }
 
@@ -165,7 +168,7 @@ function rangeOf(messages: readonly Message[], from: Seq, through: Seq): Message
  * exchange.
  */
 export function recipientsOf(
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	from: Seq,
 	through: Seq,
 	people: ReadonlySet<string>,
@@ -185,7 +188,7 @@ export function recipientsOf(
  * author, so in its exchange every message to a person asks.
  */
 function awaitedPerson(
-	range: readonly Message[],
+	range: readonly MessageSnapshot[],
 	people: ReadonlySet<string>,
 	lastSaid: ReadonlyMap<string, Seq>,
 ): string | undefined {
@@ -200,7 +203,7 @@ function awaitedPerson(
 /** The outcome of one closed exchange. The rule fixes the priority; this reads the facts. */
 function exchangeOutcomeOf(
 	close: Close,
-	range: readonly Message[],
+	range: readonly MessageSnapshot[],
 	pass: ExchangeFacts,
 	exhausted: boolean,
 ): ExchangeOutcome {
@@ -214,7 +217,7 @@ function exchangeOutcomeOf(
 /** The summaries of a closed range, one per recipient, in recipient order. */
 function summariesOf(
 	close: Close,
-	range: readonly Message[],
+	range: readonly MessageSnapshot[],
 	pass: ExchangeFacts,
 ): SummaryMessage[] {
 	const recipients = recipientsOf(range, close.from, close.through, pass.people);
@@ -256,17 +259,17 @@ function closedExchangeOf(
  * which names `through`. Every attempt counts.
  */
 function activationsInRange(
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 	from: Seq,
 	through: Seq,
-): LeaseHold[] {
+): Readonly<LeaseHold>[] {
 	return [...leases.values()].filter(
 		({ activation }) => activation.position >= from && activation.position <= through,
 	);
 }
 
 /** What a lease says about how its activation stands. */
-function outcomeOf(lease: LeaseHold): ActivationOutcome {
+function outcomeOf(lease: Readonly<LeaseHold>): ActivationOutcome {
 	if (lease.phase === 'running') return { kind: 'running' };
 	return {
 		kind: lease.reason,
@@ -276,7 +279,7 @@ function outcomeOf(lease: LeaseHold): ActivationOutcome {
 }
 
 /** Map one lease to the activation that `Exchange` lists. */
-export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
+export function exchangeActivation(lease: Readonly<LeaseHold>): ExchangeActivation {
 	const { seat, attempt, source } = lease.activation;
 	return {
 		id: lease.id,
@@ -296,7 +299,7 @@ export function exchangeActivation(lease: LeaseHold): ExchangeActivation {
 function workOf(
 	from: Seq,
 	through: Seq,
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 ): { usage: Usage | undefined; exhausted: boolean } {
 	let usage: Usage | undefined;
 	let exhausted = false;
@@ -311,7 +314,7 @@ function workOf(
 /** Select the detached closed handle shared by waits and read views. */
 export function closedExchange(
 	close: Pick<Close, 'person' | 'from' | 'through' | 'at'>,
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 ): ExchangeRange {
 	return {
 		...(close.person === undefined ? {} : { person: close.person }),
@@ -323,7 +326,7 @@ export function closedExchange(
 
 /** Select and detach the non-summary discussion for one exchange's inclusive range. */
 export function discussionMessages(
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	from: number,
 	through: number,
 ): Message[] {
@@ -334,7 +337,10 @@ export function discussionMessages(
 }
 
 /** The position of the last thing each person said. */
-function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): Map<string, Seq> {
+function lastSaidBy(
+	messages: readonly MessageSnapshot[],
+	people: ReadonlySet<string>,
+): Map<string, Seq> {
 	const last = new Map<string, Seq>();
 	for (const message of messages) {
 		if (message.kind === 'said' && people.has(message.from)) last.set(message.from, message.seq);
@@ -345,9 +351,9 @@ function lastSaidBy(messages: readonly Message[], people: ReadonlySet<string>): 
 /** Build detached `Exchange` values in journal order, including the current open exchange. */
 export function exchangesOf(
 	closes: readonly Close[],
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	open: ExchangeRef | undefined,
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 	cancelledAt: number | undefined,
 	people: ReadonlySet<string>,
 ): Exchange[] {
@@ -396,7 +402,7 @@ export function exchangeSession(
 	id: string,
 	closes: readonly Close[],
 	open: ExchangeRef | undefined,
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 ): VendorSession | undefined {
 	const activation = seatAndExchange(id, closes, open);
 	if (activation?.exchange === undefined) return undefined;
@@ -411,7 +417,7 @@ export function exchangeSession(
 
 /** The ended leases that recorded a vendor session. */
 function withSession(
-	leases: ReadonlyMap<string, LeaseHold>,
+	leases: ReadonlyMap<string, Readonly<LeaseHold>>,
 ): { id: string; until: Seq; session: VendorSession }[] {
 	return [...leases.values()].flatMap((lease) =>
 		lease.phase === 'ended' && lease.session !== undefined
@@ -442,7 +448,7 @@ function seatAndExchange(
  * boundary.
  */
 export function exchangeAfter(
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	people: readonly string[],
 	closedThrough: Seq,
 ): ExchangeRef | undefined {

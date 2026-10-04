@@ -12,15 +12,23 @@ import {
 	type FoldOptions,
 	type RoomState,
 } from '../../src/room/fold.ts';
+import { copyMessage } from '../../src/types.ts';
 import { project } from './fold.ts';
 
 /** The facts of a state, copied so the fold writes none of the state's own collections. */
 const baseOf = (state: RoomState): BaseFacts => ({
-	messages: [...state.messages],
+	messages: state.messages.map(copyMessage),
 	closes: [...state.closes],
 	cancelledAt: state.cancelledAt,
 	leases: new Map(state.leases),
-	composition: state.composition,
+	composition:
+		state.composition === undefined
+			? undefined
+			: {
+					...state.composition,
+					seated: [...state.composition.seated],
+					reserve: [...state.composition.reserve],
+				},
 	deliveries: new Map(state.deliveries),
 });
 

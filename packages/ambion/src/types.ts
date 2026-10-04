@@ -228,20 +228,40 @@ export interface DismissedMessage extends Landed, Static<typeof dismissedSchema>
 export type Message =
 	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
 
+/** A shared message in a room snapshot. Its lists and summary range are read-only. */
+export type MessageSnapshot<T extends Message = Message> = T extends Message
+	? {
+			readonly [K in keyof T]: K extends 'refs' | 'wakes' | 'covers' ? Readonly<T[K]> : T[K];
+		}
+	: never;
+
+/** The concrete union that the verified rules read through their `Message` stub. */
+export type SharedMessage = MessageSnapshot;
+
 /** Copy a recorded message before it crosses an ownership boundary. */
-export function copyMessage<T extends Message>(message: T): T {
+export function copyMessage<T extends Message>(message: T): T;
+export function copyMessage<T extends MessageSnapshot>(
+	message: T,
+): Extract<Message, { kind: T['kind'] }>;
+export function copyMessage(message: unknown): unknown {
 	return structuredClone(message);
 }
 
-export function isSaid(message: Message): message is SaidMessage {
+export function isSaid<T extends Message | MessageSnapshot>(
+	message: T,
+): message is Extract<T, { kind: 'said' }> {
 	return message.kind === 'said';
 }
 
-export function isPosted(message: Message): message is PostedMessage {
+export function isPosted<T extends Message | MessageSnapshot>(
+	message: T,
+): message is Extract<T, { kind: 'posted' }> {
 	return message.kind === 'posted';
 }
 
-export function isSummary(message: Message): message is SummaryMessage {
+export function isSummary<T extends Message | MessageSnapshot>(
+	message: T,
+): message is Extract<T, { kind: 'summary' }> {
 	return message.kind === 'summary';
 }
 

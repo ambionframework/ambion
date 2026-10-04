@@ -30,7 +30,7 @@
 import type { Entry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { Lease } from '../journal/entries.ts';
-import type { Message, Seq, Usage, VendorSession } from '../types.ts';
+import type { Message, MessageSnapshot, Seq, Usage, VendorSession } from '../types.ts';
 import {
 	applyChange,
 	countsAgainst,
@@ -119,14 +119,17 @@ export interface DueActivationOptions {
 }
 
 /** The seqs of every durable removal of this seat. */
-const removalsOf = (messages: readonly Message[], seat: string): number[] =>
+const removalsOf = (messages: readonly MessageSnapshot[], seat: string): number[] =>
 	messages.flatMap((message) =>
 		message.kind === 'unseated' && message.subject === seat ? [message.seq] : [],
 	);
 
 /** A removal of the seat landed after the position, so work caused at or before it is stale. */
-export const removedAfter = (messages: readonly Message[], seat: string, seq: number): boolean =>
-	removalsOf(messages, seat).some((removal) => removal > seq);
+export const removedAfter = (
+	messages: readonly MessageSnapshot[],
+	seat: string,
+	seq: number,
+): boolean => removalsOf(messages, seat).some((removal) => removal > seq);
 
 /**
  * The activation that a message makes due for a seat, or nothing when a

@@ -13,11 +13,20 @@
  *
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { Close, Composition, Lease } from '../src/journal/entries.ts';
 import type { RoomEntry } from '../src/journal/journal.ts';
+import { seatAuthority } from '../src/room/activation.ts';
+import type { RoomState } from '../src/room/fold.ts';
 import { advance, emptyProjection, projectState, replay } from '../src/room/projection.ts';
 import { toRoomRead } from '../src/room/read.ts';
+import {
+	copyMessage,
+	isSaid,
+	type MessageSnapshot,
+	type SaidMessage,
+	type SummaryMessage,
+} from '../src/types.ts';
 import { freeze, mulberry32 } from './support/core-failure.ts';
 import { foldRoom } from './support/fold.ts';
 
@@ -230,6 +239,160 @@ class Walk {
 		});
 	}
 }
+
+/** The compiler rejects changes to shared containers and records. These functions never run. */
+function rejectContainerChanges(state: RoomState, entry: RoomEntry): void {
+	// @ts-expect-error A consumer cannot clear the people index.
+	state.people.clear();
+	// @ts-expect-error A consumer cannot delete a lease.
+	state.leases.delete('message:1:scout:1');
+	// @ts-expect-error A consumer cannot replace a delivery.
+	state.deliveries.set(1, { wakes: [], steers: [] });
+	// @ts-expect-error A consumer cannot append a seat.
+	state.roster.push({ name: 'extra', identity: '', attention: 'broadcast' });
+	// @ts-expect-error A consumer cannot clear the reserve.
+	state.reserve.length = 0;
+	// @ts-expect-error A consumer cannot remove a close.
+	state.closes.pop();
+	// @ts-expect-error A consumer cannot remove due work.
+	state.due.splice(0, 1);
+	// @ts-expect-error A consumer cannot append a message.
+	state.messages.push({ kind: 'posted', text: '', seq: 1, at: '' });
+	// @ts-expect-error A consumer cannot reorder scheduled says.
+	state.scheduled.reverse();
+	// @ts-expect-error Only replay can select the owned step.
+	advance(emptyProjection(), entry, retry, true);
+}
+
+function rejectRecordChanges(state: RoomState): void {
+	const composition = state.composition;
+	if (composition !== undefined) {
+		// @ts-expect-error A consumer cannot change the composition.
+		composition.goal = 'Changed';
+		// @ts-expect-error A consumer cannot remove a configured seat.
+		composition.seated.pop();
+		const configured = composition.reserve[0];
+		// @ts-expect-error A consumer cannot rename a configured reserve seat.
+		if (configured !== undefined) configured.name = 'Changed';
+	}
+	const seat = state.roster[0];
+	// @ts-expect-error A consumer cannot change a shared seat.
+	if (seat !== undefined) seat.attention = 'none';
+	const person = state.people.get('priya');
+	// @ts-expect-error A consumer cannot change a shared person.
+	if (person !== undefined) person.presence = 'absent';
+	const close = state.closes[0];
+	// @ts-expect-error A consumer cannot change a shared close.
+	if (close !== undefined) close.through = 100;
+	const due = state.due[0];
+	// @ts-expect-error A consumer cannot change shared due work.
+	if (due !== undefined) due.attempt = 100;
+	const lease = state.leases.get('message:1:scout:1');
+	if (lease !== undefined) {
+		// @ts-expect-error A consumer cannot change a shared lease.
+		lease.readThrough = 100;
+		// @ts-expect-error A consumer cannot change the lease's activation.
+		lease.activation.seat = 'Changed';
+		// @ts-expect-error A consumer cannot change recorded usage.
+		if (lease.usage !== undefined) lease.usage.input = 100;
+		// @ts-expect-error A consumer cannot change a recorded vendor session.
+		if (lease.session !== undefined) lease.session.id = 'Changed';
+	}
+	const authority = seatAuthority(state, 'message:1:scout:1', start);
+	// @ts-expect-error A decision cannot change the lease through the authority view.
+	if (!('stale' in authority)) authority.lease.readThrough = 100;
+}
+
+function rejectMessageChanges(state: RoomState): void {
+	const message = state.messages[0];
+	if (message !== undefined) {
+		// @ts-expect-error A consumer cannot change a shared message.
+		message.at = 'Changed';
+		// @ts-expect-error A consumer cannot change a message's wakes.
+		message.wakes?.push('extra');
+		if (message.kind === 'summary') {
+			expectTypeOf(copyMessage(message)).toEqualTypeOf<SummaryMessage>();
+			// @ts-expect-error A consumer cannot change a summary's range.
+			message.covers.through = 100;
+		}
+		if (isSaid(message)) {
+			expectTypeOf(message).toEqualTypeOf<MessageSnapshot<SaidMessage>>();
+			// @ts-expect-error A consumer cannot change a message's refs.
+			message.refs?.push('https://changed.example');
+		}
+	}
+	const scheduled = state.scheduled[0];
+	// @ts-expect-error A consumer cannot change a scheduled say's refs.
+	if (scheduled !== undefined) scheduled.refs?.push('https://changed.example');
+	const delivery = state.deliveries.get(1);
+	if (delivery !== undefined) {
+		// @ts-expect-error A consumer cannot change delivery wakes.
+		delivery.wakes.push('extra');
+		// @ts-expect-error A consumer cannot replace a delivery steer.
+		delivery.steers[0] = { seat: 'extra', activation: 'message:1:extra:1' };
+		const steer = delivery.steers[0];
+		// @ts-expect-error A consumer cannot change a delivery steer.
+		if (steer !== undefined) steer.activation = 'Changed';
+	}
+}
+
+it('types shared room snapshots as read-only', () => {
+	expectTypeOf(rejectContainerChanges).returns.toBeVoid();
+	expectTypeOf(rejectRecordChanges).returns.toBeVoid();
+	expectTypeOf(rejectMessageChanges).returns.toBeVoid();
+	expectTypeOf<
+		MessageSnapshot<SaidMessage & { refs: ['reference']; text: 'Words.' }>
+	>().toMatchTypeOf<{ readonly refs: readonly ['reference']; readonly text: 'Words.' }>();
+});
+
+it('shares untouched containers when a replayed projection advances', () => {
+	const arrived: RoomEntry = {
+		kind: 'message',
+		seq: 1,
+		body: {
+			kind: 'arrived',
+			subject: 'priya',
+			identity: 'Priya.',
+			at: new Date(start).toISOString(),
+		},
+	};
+	const posted: RoomEntry = {
+		kind: 'message',
+		seq: 2,
+		body: {
+			kind: 'posted',
+			text: 'Start.',
+			wakes: ['scout'],
+			refs: ['https://example.com'],
+			at: new Date(start).toISOString(),
+		},
+	};
+	const lease: RoomEntry = {
+		kind: 'lease',
+		seq: 3,
+		body: {
+			id: 'message:2:scout:1',
+			phase: 'running',
+			expiresAt: start + 1000,
+			readThrough: 2,
+			at: new Date(start).toISOString(),
+		},
+	};
+	const before = replay([arrived, posted], retry);
+	const held = projectState(before);
+	const snapshot = structuredClone(held);
+	const after = advance(before, lease, retry);
+	const next = projectState(after);
+	expect(next.leases).not.toBe(held.leases);
+	expect(next.leases.size).toBe(1);
+	expect(next.messages).toBe(held.messages);
+	expect(next.people).toBe(held.people);
+	expect(next.roster).toBe(held.roster);
+	expect(next.closes).toBe(held.closes);
+	expect(next.deliveries).toBe(held.deliveries);
+	expect(held).toEqual(snapshot);
+	expect(next).toEqual(foldRoom([arrived, posted, lease], retry));
+});
 
 describe('the incremental projection equals the fold', () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {

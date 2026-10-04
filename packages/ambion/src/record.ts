@@ -9,7 +9,7 @@ import {
 	isPosted,
 	isSaid,
 	isSummary,
-	type Message,
+	type MessageSnapshot as Message,
 	type Seq,
 	type SummaryMessage,
 } from './types.ts';
@@ -57,7 +57,7 @@ export function refsOf(message: { readonly refs?: readonly string[] }): string {
 }
 
 /** One block of the rendered record: a message on its own, or the run one summary stands for. */
-export type Block = { line: Message } | { fold: Message[]; by: SummaryMessage };
+export type Block = { line: Message } | { fold: Message[]; by: Message<SummaryMessage> };
 
 /**
  * The summary that stands for each seq one covers. A summary is never folded
@@ -67,9 +67,9 @@ export type Block = { line: Message } | { fold: Message[]; by: SummaryMessage };
  * A summary keeps the fixed range of its closed exchange. A message takes
  * the summary that covers it. Messages between two ranges stay visible.
  */
-function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
+function foldedBy(record: readonly Message[]): Map<Seq, Message<SummaryMessage>> {
 	const summaries = record.filter(isSummary);
-	const by = new Map<Seq, SummaryMessage>();
+	const by = new Map<Seq, Message<SummaryMessage>>();
 	if (summaries.length === 0) return by;
 	for (const message of record) {
 		if (isSummary(message)) continue;
