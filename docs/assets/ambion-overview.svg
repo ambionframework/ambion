@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="628" viewBox="0 0 1000 628" role="img" aria-labelledby="title desc">
   <title id="title">A room, its agents, and the workspace</title>
-  <desc id="desc">One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. Entry 3 wakes A. A reads entry 3 and stays silent. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A room started with summaryWriter adds an optional summary of entries 1 to 3, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and a process outlives the activation. Optional capabilities add tables, repositories, sensors, and skills. Each agent has a home of its own. A message cites a file with a ref.</desc>
+  <desc id="desc">One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. Entry 3 wakes A. A reads entry 3 and stays silent. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A room started with summaryWriter adds an optional summary of entries 1 to 3, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and the optional fetch. A process outlives the activation. A process can serve HTTP on $PORT, and fetch reads it. Optional capabilities add tables, repositories, and skills. The compose tool joins tools in one call. Each agent has a home of its own. A message cites a file with a ref.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#666d6b"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#2f817a"/></marker>
@@ -94,6 +94,7 @@
   <path d="M500 433 V476" class="flow-teal" marker-end="url(#arrow-teal)"/>
   <text x="282" y="466" text-anchor="start" class="sans teal s">calls tools</text>
   <text x="512" y="466" text-anchor="start" class="sans teal s">calls tools</text>
+  <text x="650" y="466" text-anchor="start" class="sans teal s"><tspan class="mono code c">compose</tspan> joins tools in one call</text>
   <g filter="url(#shadow)">
     <rect x="170" y="480" width="806" height="124" rx="12" fill="#fbfaf6" stroke="#bcd9d5" stroke-width="1.5"/>
   </g>
@@ -112,16 +113,17 @@
   <text x="491.0" y="538.5" text-anchor="middle" class="mono code c">ps</text>
   <rect x="514" y="522" width="48" height="24" rx="8" fill="#eef5f4" stroke="#bcd9d5"/>
   <text x="538.0" y="538.5" text-anchor="middle" class="mono code c">wait</text>
-  <text x="420" y="580" text-anchor="start" class="sans dim x">A process outlives the activation.</text>
+  <rect x="568" y="522" width="56" height="24" rx="8" fill="#eef5f4" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="596.0" y="538.5" text-anchor="middle" class="mono code c">fetch</text>
+  <text x="420" y="572" text-anchor="start" class="sans dim x">A process outlives the activation.</text>
+  <text x="420" y="590" text-anchor="start" class="sans dim x"><tspan class="mono code c">fetch</tspan> reads its HTTP on <tspan class="mono code c">$PORT</tspan>.</text>
   <text x="650" y="510" text-anchor="start" class="sans ink n">Optional</text>
   <rect x="650" y="522" width="58" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
   <text x="679.0" y="538.5" text-anchor="middle" class="sans ink x">tables</text>
   <rect x="714" y="522" width="96" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
   <text x="762.0" y="538.5" text-anchor="middle" class="sans ink x">repositories</text>
-  <rect x="650" y="552" width="66" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="683.0" y="568.5" text-anchor="middle" class="sans ink x">sensors</text>
-  <rect x="722" y="552" width="52" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="748.0" y="568.5" text-anchor="middle" class="sans ink x">skills</text>
+  <rect x="650" y="552" width="52" height="24" rx="8" fill="#fbfaf6" stroke="#d99a36" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="676.0" y="568.5" text-anchor="middle" class="sans ink x">skills</text>
   <text x="840" y="510" text-anchor="start" class="sans ink n">Homes</text>
   <rect x="840" y="522" width="44" height="24" rx="8" fill="#e8ecfa" stroke="#8fa8ef" stroke-width="1.5"/>
   <text x="862" y="538.5" text-anchor="middle" class="sans ink x" font-weight="700">A</text>
