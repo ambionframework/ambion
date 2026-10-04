@@ -22,10 +22,14 @@ type Catalog = ReadonlyMap<string, AmbionTool>;
 export function bindingsText(catalog: Catalog, optional: ReadonlySet<string> = new Set()): string {
 	const tools = [...catalog.values()];
 	const some = tools.filter((tool) => optional.has(tool.name)).map((tool) => tool.name);
-	const held = `Tools that code can bind, each with the type of its result (string is text): ${renderBindings(tools.filter((tool) => !optional.has(tool.name)))}.`;
+	const typed = renderBindings(tools.filter((tool) => !optional.has(tool.name)));
+	const held =
+		typed === ''
+			? 'Every tool that code can bind returns text.'
+			: `Tools that code can bind, each with the type of its result: ${typed}. The other tools return text.`;
 	return some.length === 0
 		? held
-		: `${held} ${some.join(' and ')} return text, and bind only when your tool list holds them.`;
+		: `${held} ${some.join(' and ')} bind only when your tool list holds them.`;
 }
 
 const ARGUMENTS = Type.Object({

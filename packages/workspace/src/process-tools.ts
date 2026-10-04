@@ -95,9 +95,7 @@ export function processToolGuidance(): string {
 	].join('\n');
 }
 
-const handle = Type.String({
-	description: 'The handle that bash returned, such as bash-1a2b3c4d5e6f.',
-});
+const handle = Type.String({ description: 'The handle that bash returned.' });
 
 const bashSchema = Type.Object({
 	command: Type.String({ description: 'The bash command to run.' }),
@@ -133,7 +131,8 @@ const waitSchema = Type.Object({
 	handles: Type.Array(handle, {
 		minItems: 1,
 		maxItems: MAX_WAIT_HANDLES,
-		description: 'The processes to wait for. The call returns when the first of them ends.',
+		description:
+			'The processes to wait for, such as ["bash-1a2b3c4d5e6f"]. The call returns when the first of them ends.',
 	}),
 	timeout: Type.Optional(
 		Type.Number({
@@ -189,7 +188,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
+				'Stop a running process, and give its state and its new output. The stop follows the grace of the process. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
 			compose: { output: ProcessOutput },
 			execute: async (params: HandleParams, ctx) => {

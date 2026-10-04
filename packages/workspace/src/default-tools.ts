@@ -16,20 +16,6 @@ import type { Capability } from './capability.ts';
 import { fileTools } from './file-tools.ts';
 import type { WorkspaceResource } from './resource.ts';
 
-/** `a, b and c`. */
-function listOf(names: readonly string[]): string {
-	return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-}
-
-/**
- * The tool line of the guidance. `names` holds the name of each tool of the
- * bundle, in order. The line gives no count, because a seat holds tools
- * beyond the workspace.
- */
-export function defaultToolGuidance(names: readonly string[]): string {
-	return `Your workspace tools are ${listOf(names)}.`;
-}
-
 /** The note on the file tools and the bash tool. */
 const FILES_NOTE = [
 	`read, write, edit and bash work on shared files. Other agents connected to this`,

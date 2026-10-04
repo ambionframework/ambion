@@ -29,7 +29,6 @@ import {
 	scriptedStream,
 } from '../../ambion/test/support/scripted.ts';
 import { directoryBackend, memoryBackend } from '../../just-bash/src/index.ts';
-import { defaultToolGuidance } from '../src/default-tools.ts';
 import { openWorkspace, type WorkspaceEnv } from '../src/index.ts';
 import { roomMirrorGuidance, roomMirrorPath } from '../src/mirror.ts';
 import { processToolGuidance } from '../src/process-tools.ts';
@@ -167,7 +166,7 @@ describe('the workspace bundle', () => {
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual(BASE_TOOLS);
 		// The /rooms guidance names no room. A workspace states it only when the host sets `rooms`.
-		const base = `${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}`;
+		const base = `${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}`;
 		expect(workspace.tools().guidance).toBe(base);
 		const mirroring = openWorkspace({
 			name: name('rooms-tools'),
@@ -175,17 +174,10 @@ describe('the workspace bundle', () => {
 			rooms: true,
 		});
 		expect(mirroring.tools().guidance).toBe(
-			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(mirroring.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(mirroring.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		await workspace.dispose();
 		await mirroring.dispose();
-	});
-
-	it('names the tools in the tool line and gives no count', () => {
-		const names = Array.from({ length: 12 }, (_, index) => `tool${index}`);
-		expect(defaultToolGuidance(names)).toBe(
-			`Your workspace tools are ${names.slice(0, -1).join(', ')} and tool11.`,
-		);
 	});
 
 	it('adds the guidance of the bash backend to the bundle', async () => {
@@ -194,7 +186,7 @@ describe('the workspace bundle', () => {
 			backend: { bash: wrapped(() => ({ guidance: 'Custom backend guidance.' })) },
 		});
 		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.`,
+			`${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.`,
 		);
 		await workspace.dispose();
 	});

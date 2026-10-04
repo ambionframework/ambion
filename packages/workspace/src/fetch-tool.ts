@@ -73,7 +73,7 @@ const FetchOutput = Type.Object(
 		mediaType: Type.String({ description: 'The media type of the body, in lower case.' }),
 		bytes: Type.Integer({ description: 'The bytes of the body.' }),
 		sha256: Type.String({ description: 'The SHA-256 digest of the body.' }),
-		ref: Type.String({ description: 'The snapshot ref of the body. Cite it.' }),
+		ref: Type.String({ description: 'The snapshot ref of the body.' }),
 		file: Type.String({ description: 'The absolute path of the exported file.' }),
 		json: Type.Optional(
 			Type.Unknown({ description: 'The JSON body, parsed. Set for a body of at most 4 MiB.' }),
@@ -455,7 +455,7 @@ function createFetchTool(options: {
 		name: 'fetch',
 		label: 'Fetch from a process',
 		description:
-			'Read a path of a running process with GET. The process serves HTTP on its $PORT. The workspace keeps the body as a snapshot. Cite its ref.',
+			'Read a path of a running process with GET. The process serves HTTP on its $PORT. The workspace keeps the body as a snapshot.',
 		parameters: fetchSchema,
 		compose: { output: FetchOutput },
 		execute: (params: FetchParams, ctx: ToolContext) => executeFetch(params, ctx, options),

@@ -354,18 +354,17 @@ describe('the compose field of the workspace tools', () => {
 		const names = [...bundle.tools.map((tool) => tool.name), ...room];
 		expect(compose?.description.length).toBeLessThan(1500);
 		// The catalog says that `seat` and `unseat` bind only when the seat holds them.
-		for (const name of names.filter((one) => one !== 'seat' && one !== 'unseat'))
-			expect(compose?.description).toContain(`${name} -> `);
 		expect(compose?.description).toContain(
-			'seat and unseat return text, and bind only when your tool list holds them.',
+			'The other tools return text. seat and unseat bind only when your tool list holds them.',
 		);
 		expect(compose?.description).not.toContain('seat -> ');
-		// A declared output names its type, and an undeclared one is text.
+		// A declared output names its type, and an undeclared one is text with no entry.
 		expect(compose?.description).toContain('read -> ReadResult');
 		expect(compose?.description).toContain('sql -> SqlResult');
 		expect(compose?.description).toContain('bash -> ProcessResult');
 		expect(compose?.description).toContain('wait -> WaitResult');
-		expect(compose?.description).toContain('write -> string');
+		expect(compose?.description).not.toContain('-> string');
+		expect(compose?.description).not.toContain('write ->');
 		const described = await describer?.invoke({ tools: names }, callAs('ada', { room: 'lobby' }));
 		expect(described).toContain('type SqlResult = {');
 		for (const name of names) expect(described).toMatch(new RegExp(`^ {2}${name}\\(args:`, 'm'));

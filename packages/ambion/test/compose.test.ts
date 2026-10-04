@@ -821,7 +821,7 @@ describe('the compose tool of an executor', () => {
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
 				'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 				'',
-				'Tools that code can bind, each with the type of its result (string is text): echo -> string, table -> object, point -> Point, names -> array, say -> string, schedule -> string, recall -> string, dismiss -> string. seat and unseat return text, and bind only when your tool list holds them.',
+				'Tools that code can bind, each with the type of its result: table -> object, point -> Point, names -> array. The other tools return text. seat and unseat bind only when your tool list holds them.',
 			].join('\n'),
 		);
 		// A seat with no macro gets no macro field.
@@ -858,7 +858,7 @@ describe('the compose tool of an executor', () => {
 				'  point(args: { to: Point }): Promise<Point>;',
 				'  /** Count the runs. */',
 				'  counted(args: {}): Promise<string>;',
-				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI. */',
+				'  /** Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. */',
 				'  say(args: {',
 				'    /** A participant name from the roster. */',
 				'    to?: string;',
@@ -1065,13 +1065,13 @@ describe('the compose tool of an executor', () => {
 		);
 	});
 
-	it('lists the room tools after its own tools, and no compose or describe tool', () => {
-		const listed = composeOf([echo, hidden]).description.match(
-			/result \(string is text\): (.*?)\. seat and unseat /m,
+	it('says once that tools with no typed result return text, and lists no compose or describe tool', () => {
+		const { description } = composeOf([echo, hidden]);
+		expect(description).toContain(
+			'Every tool that code can bind returns text. seat and unseat bind',
 		);
-		expect(listed?.[1]).toBe(
-			'echo -> string, say -> string, schedule -> string, recall -> string, dismiss -> string',
-		);
+		expect(description).not.toContain('->');
+		expect(description).not.toContain('hidden');
 	});
 });
 

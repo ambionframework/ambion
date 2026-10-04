@@ -930,8 +930,8 @@ files of a process are its record.
 
 ## The guidance
 
-**`openWorkspace` adds one note about the process tools after the tool
-line.** The two `$PORT` lines belong to the note on every backend. A backend
+**`openWorkspace` adds one note about the process tools after the files
+note.** The two `$PORT` lines belong to the note on every backend. A backend
 with no endpoints has no `fetch`, and the lines still state `$PORT`.
 
 ```text

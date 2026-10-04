@@ -2,7 +2,7 @@ import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
-import { defaultToolGuidance, fileCapability } from './default-tools.ts';
+import { fileCapability } from './default-tools.ts';
 import { fetchCapability } from './fetch-tool.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
@@ -222,11 +222,8 @@ function workspaceTools(
 ): ToolBundle {
 	const capabilities = capabilitiesOf(resource, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
-	const toolLine = defaultToolGuidance(tools.map((tool) => tool.name));
-	const [first = '', ...rest] = capabilities.flatMap((capability) => capability.notes);
 	const notes = [
-		`${toolLine}\n${first}`,
-		...rest,
+		...capabilities.flatMap((capability) => capability.notes),
 		bash.guidance,
 		audit && auditGuidance(audit),
 		rooms ? roomMirrorGuidance(bash.layout.rooms) : undefined,

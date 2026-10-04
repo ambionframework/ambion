@@ -139,9 +139,9 @@ directly when it stands alone, or when you must judge its result before
 the next call.
 
 To write a compose call, call describe for each tool whose result has
-fields that you read. Room tools return text. Put the tools in uses, and
-the body of an async function in code. Each tool is tools.<name>. Read
-the fields of each result, and do not parse text.
+fields that you read. Put the tools in uses, and the body of an async
+function in code. Each tool is tools.<name>. Read the fields of each
+result, and do not parse text.
 
 Use compose also to explore. To learn the size or the shape of data,
 return a count, a few fields, or a short sample from code. Do not read
