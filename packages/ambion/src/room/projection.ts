@@ -91,7 +91,7 @@ export function emptyProjection(): RoomProjection {
 /** The projection after every entry, built in place because no one else holds it. */
 export function replay(entries: readonly RoomEntry[], options: FoldOptions): RoomProjection {
 	let projection = emptyProjection();
-	for (const entry of entries) projection = advance(projection, entry, options, true);
+	for (const entry of entries) projection = advanceStep(projection, entry, { options, own: true });
 	return projection;
 }
 
@@ -121,9 +121,12 @@ export function advance(
 	projection: RoomProjection,
 	entry: RoomEntry,
 	options: FoldOptions,
-	own = false,
 ): RoomProjection {
-	const step: FoldStep = { options, own };
+	return advanceStep(projection, entry, { options, own: false });
+}
+
+/** Replay alone owns its containers while it builds the projection. */
+function advanceStep(projection: RoomProjection, entry: RoomEntry, step: FoldStep): RoomProjection {
 	switch (entry.kind) {
 		case 'message':
 			return onMessage(projection, placed(entry), step);

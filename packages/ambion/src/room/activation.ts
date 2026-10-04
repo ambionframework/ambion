@@ -20,7 +20,7 @@ export function seatAuthority(
 	state: RoomState,
 	id: string,
 	now: number,
-): { spec: ActivationSpec; lease: LeaseHold } | Stale {
+): { spec: ActivationSpec; lease: Readonly<LeaseHold> } | Stale {
 	const lease = state.leases.get(id);
 	if (lease === undefined || !isLive(lease, now)) return { stale: 'the lease ended' };
 	const spec = activationSpec(id, state);

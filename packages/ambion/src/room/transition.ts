@@ -109,7 +109,7 @@ type RefusalCode = Extract<
 >;
 
 export type Refusal =
-	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: Message[] };
+	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: RoomState['messages'] };
 
 export type RoomDecision<K extends Kind> =
 	| { entry: ProposedEntry<K> | undefined }
@@ -324,7 +324,7 @@ function presenceRefusal(
 function sameSeating(
 	seat: Seating,
 	change: PresenceDraft,
-	composition: Composition | undefined,
+	composition: RoomState['composition'],
 ): boolean {
 	if ((change.identity ?? '') !== seat.identity) return false;
 	if ((change.attention ?? 'broadcast') !== seat.attention) return false;

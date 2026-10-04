@@ -10,7 +10,7 @@
 
 import type { Body } from '../journal/journal.ts';
 import type { ScheduledSay, ScheduleLimits } from '../scheduling.ts';
-import type { Message, PostedMessage, Seq } from '../types.ts';
+import type { Message, MessageSnapshot, PostedMessage, Seq } from '../types.ts';
 
 /** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
 function returnsSay(
@@ -20,7 +20,9 @@ function returnsSay(
 }
 
 /** Whether a message is a scheduled say. */
-function isScheduled(message: Message): message is Extract<Message, { kind: 'said' }> {
+function isScheduled(
+	message: MessageSnapshot,
+): message is Extract<MessageSnapshot, { kind: 'said' }> {
 	return message.kind === 'said' && message.delaySeconds !== undefined;
 }
 
@@ -123,7 +125,7 @@ export function returning(
  */
 export function dismissal(
 	list: readonly ScheduledSay[],
-	messages: readonly Message[],
+	messages: readonly MessageSnapshot[],
 	seat: string | undefined,
 	seq: Seq,
 ): 'dismiss' | 'unchanged' | string {

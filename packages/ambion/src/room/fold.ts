@@ -13,28 +13,35 @@
 import type { Close, Composition, Seating } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { ScheduledSay } from '../scheduling.ts';
-import type { ExchangeRef, Message, Seq } from '../types.ts';
+import type { ExchangeRef, Message, MessageSnapshot, Seq } from '../types.ts';
 import { type MessageRecipients, messageDelivery } from './delivery.ts';
 import { applyLease, type DueActivation, type LeaseHold } from './lease.ts';
 import type { PersonState } from './presence.ts';
 import { cancelHold } from './rules.verified.ts';
 
+/** A composition shared with a room snapshot. */
+export type RoomComposition = Readonly<Omit<Composition, 'seated' | 'reserve'>> & {
+	readonly seated: readonly Readonly<Seating>[];
+	readonly reserve: readonly Readonly<Seating>[];
+};
+
+/** Shared room facts. Builders own mutable containers before they expose this view. */
 export interface RoomState {
-	readonly composition: Composition | undefined;
-	readonly roster: Seating[];
-	readonly reserve: Seating[];
-	readonly people: Map<string, PersonState>;
+	readonly composition: RoomComposition | undefined;
+	readonly roster: readonly Readonly<Seating>[];
+	readonly reserve: readonly Readonly<Seating>[];
+	readonly people: ReadonlyMap<string, Readonly<PersonState>>;
 	readonly exchange: ExchangeRef | undefined;
-	readonly closes: Close[];
+	readonly closes: readonly Readonly<Close>[];
 	/** The latest cancellation marker, whose journal position bounds old work. */
 	readonly cancelledAt?: Seq;
-	readonly leases: Map<string, LeaseHold>;
-	readonly deliveries: Map<Seq, MessageRecipients>;
+	readonly leases: ReadonlyMap<string, Readonly<LeaseHold>>;
+	readonly deliveries: ReadonlyMap<Seq, MessageRecipients>;
 	/** Every activation the room owes, whatever caused it: the message activations and the summary activations as one list. */
-	readonly due: DueActivation[];
+	readonly due: readonly Readonly<DueActivation>[];
 	/** The scheduled says that wait to return, in the order they landed. None of them is live work. */
 	readonly scheduled: readonly ScheduledSay[];
-	readonly messages: readonly Message[];
+	readonly messages: readonly MessageSnapshot[];
 	readonly lastSeq: Seq;
 }
 
@@ -162,5 +169,7 @@ export function reseat(roster: Seating[], message: Message): void {
 }
 
 /** A seat an agent cannot unseat. The summary writer's is fixed unless its seating said `fixed: false`. */
-export const isFixed = (seat: Seating, composition: Composition | undefined): boolean =>
-	seat.fixed ?? seat.name === composition?.summaryWriter;
+export const isFixed = (
+	seat: Readonly<Seating>,
+	composition: RoomComposition | undefined,
+): boolean => seat.fixed ?? seat.name === composition?.summaryWriter;

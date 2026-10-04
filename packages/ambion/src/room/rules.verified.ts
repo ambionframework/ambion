@@ -12,10 +12,10 @@
  * The string unions below are declared again beside the rules, because
  * LemmaScript lowers only the types in its own file. `rules.test.ts`
  * asserts each copy equals the public type in `types.ts`. `Message` is
- * the public union itself; the stub names the five fields the rules read.
+ * the read-only snapshot union; the stub names the five fields the rules read.
  */
 
-import type { Message } from '../types.ts';
+import type { SharedMessage as Message } from '../types.ts';
 //@ declare-type Message { kind: string, seq: number, from: string, at: string }
 
 /** The two phases a lease holds. */

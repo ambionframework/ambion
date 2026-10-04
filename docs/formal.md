@@ -10,7 +10,7 @@ stale. Three files hold every rule:
 | File                                                                                                    | Concern                                                                                                                          | Obligations                   |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                  | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 75, and 39 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 78, and 39 in its proofs file |
 | [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                  | 2                             |
 
 **Everything else is ordinary TypeScript under the scripted and chaos

@@ -291,7 +291,7 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 				const body = {
 					...prior,
 					...(joined ? { reserved: true } : {}),
-					seated: current.roster,
+					seated: [...current.roster],
 					reserve,
 					at: this.iso(),
 				};

@@ -8,7 +8,7 @@
 import { AmbionError } from '../errors.ts';
 import { closedExchange, discussionMessages, summaryCompletion } from '../room/exchange.ts';
 import type { ExchangeRange, ExchangeRef, Message, Seq, SummaryMessage } from '../types.ts';
-import { copyMessage } from '../types.ts';
+import { copyMessage, type MessageSnapshot } from '../types.ts';
 import type { ExchangeHandle, RoomRunState } from './core.ts';
 
 /** Reacquire an exchange by the source sequence of its opening question. */
@@ -104,7 +104,7 @@ async function responseFor(run: RoomRunState, from: Seq): Promise<SummaryMessage
 function responseResult(
 	run: RoomRunState,
 	close: ExchangeRange,
-): SummaryMessage | 'pending' | 'silent' | 'failed' {
+): MessageSnapshot<SummaryMessage> | 'pending' | 'silent' | 'failed' {
 	const state = run.state();
 	const recordedClose = state.closes.find((candidate) => candidate.from === close.from);
 	if (recordedClose === undefined) return 'silent';

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+**Notifications follow each journal transition.** The room derives lease
+and close notifications from the projection before and after each entry.
+The separate notification caches and their replay initialization are gone.
+Recovered entries publish once, in order, and initial replay stays silent.
+
+**A close decision carries its outcome.** One verified rule returns
+`admitted`, `obsolete`, or `replan`. Planning and commit validation use that
+rule. The runtime follows the queued outcome without reconstructing it.
+
+**Shared room snapshots have read-only types.** Collections and nested
+records reject mutation through typed access. Only replay can select the
+private step that mutates its own containers. Public reads keep detached
+values. These changes preserve the journal format and runtime behavior.
+
 ## 0.6.0 (2026-10-04)
 
 <img alt="Ambion 0.6.0: code mode and macros. Every seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, the room tools included, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, describe returns its signature, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with the QuickJS and child process runtimes, $PORT and fetch for processes, and seating: false for a room. Fixes: a Pi seat reads its prompt as the system prompt, and a Claude seat answers a late steer. Breaking: every seat holds compose, fetch replaces the sensor tools, and defineAssistant takes an executor function." src="docs/assets/ambion-0.6.0.png" width="800">

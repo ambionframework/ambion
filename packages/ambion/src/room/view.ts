@@ -9,7 +9,7 @@ import type {
 } from '../protocol.ts';
 import { type Block, blocks, renderLine } from '../record.ts';
 import type { AgentParticipant, ExchangeRef, Participant, Seq } from '../types.ts';
-import { isSummary, type Message } from '../types.ts';
+import { isSummary, type MessageSnapshot as Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
 /** The token limit of one seat, and the estimator that counts against it. */
@@ -94,7 +94,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		message === undefined
 			? windowOf(bounded, facts.limits, pin)
 			: bounded.filter((item) => item.seq === message);
-	const context: CollaborationContext = {
+	const context: Omit<CollaborationContext, 'messages'> & { messages: readonly Message[] } = {
 		name: facts.name,
 		now: facts.now,
 		...(goal === undefined ? {} : { goal }),
@@ -110,11 +110,12 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		...scheduledOf(spec, state),
 	};
 	// In-process executors receive the same detached snapshot as remote executors.
+	// The clone owns each message list and range in the view.
 	return structuredClone({
 		spec,
 		through: purpose.kind === 'summarize' ? purpose.through : state.lastSeq,
 		context,
-	});
+	}) as ActivationView;
 }
 
 /** The says of the seat that wait to return. A summary activation reads none. */
