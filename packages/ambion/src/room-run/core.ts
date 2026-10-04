@@ -63,10 +63,6 @@ export interface RoomRunState {
 	readonly sentAt: Map<string, number>;
 	/** The delivery in flight for each due or live activation. A token fences a late reply. */
 	readonly deliveryStates: Map<string, SendState>;
-	/** Every lease id this room has heard a change for. It says `activation_start` once. */
-	readonly heardLeases: Set<string>;
-	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
-	heardCloses: number;
 	cancelAlarm: () => void;
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	reconciling: Promise<void>;

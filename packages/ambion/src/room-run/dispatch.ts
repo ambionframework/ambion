@@ -9,20 +9,27 @@ import type { Close, Lease } from '../journal/entries.ts';
 import { placed, type RoomEntry } from '../journal/journal.ts';
 import type { AgentPort, Steer } from '../protocol.ts';
 import { activationSpec } from '../room/activation.ts';
+import type { RoomState } from '../room/fold.ts';
 import { seatOf } from '../room/lease.ts';
 import { isLive } from '../room/rules.verified.ts';
-import type { ExchangeRange, Seq } from '../types.ts';
+import type { ExchangeRange } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import type { RoomRunState, SendState } from './core.ts';
 
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
 /** What the room does with one entry. The journal calls it for every entry it takes after the replay. */
-export function hearEntry(run: RoomRunState, entry: RoomEntry): void {
-	if (entry.kind === 'message') queueMessage(run, entry);
-	else if (entry.kind === 'close') queueCloses(run);
-	else if (entry.kind === 'lease') queueLease(run, entry.body, opens(run, entry.body.id));
-	else if (entry.kind === 'cancel') queueCancellation(run, entry.seq);
+export function hearEntry(
+	run: RoomRunState,
+	entry: RoomEntry,
+	before: RoomState,
+	after: RoomState,
+): void {
+	if (entry.kind === 'message') queueMessage(run, entry, after);
+	else if (entry.kind === 'close') queueCloses(run, before, after);
+	else if (entry.kind === 'lease')
+		queueLease(run, entry.body, !before.leases.has(entry.body.id), after);
+	else if (entry.kind === 'cancel') queueCancellation(run, before, after);
 	// Membership, cancellation, and lease entries can make an earlier
 	// delivery obsolete without dispatching another message immediately.
 	pruneDeliveryErrors(run);
@@ -46,33 +53,17 @@ function publish(run: RoomRunState, effect: () => void): void {
 }
 
 /**
- * Whether this change starts an activation: the room has heard no earlier
- * change for the id. The room keeps the set, because the question is the room's:
- * it says `activation_start` once. The replay seeds it from the fold, so a
- * resumed room starts no activation the last run already started.
- */
-function opens(run: RoomRunState, id: string): boolean {
-	const first = !run.heardLeases.has(id);
-	run.heardLeases.add(id);
-	return first;
-}
-
-/** Every lease id and every close the room has heard, seeded by the replay. */
-export function seedHeard(run: RoomRunState): void {
-	const state = run.state();
-	for (const id of state.leases.keys()) run.heardLeases.add(id);
-	run.heardCloses = state.closes.length;
-}
-
-/**
  * A message on the record: the host hears about it, then what it opened,
  * steers every active ordinary seat, and asks reconciliation to dispatch
  * the due activations the projection derives. One message, one entry,
  * one order.
  */
-function queueMessage(run: RoomRunState, entry: Extract<RoomEntry, { kind: 'message' }>): void {
+function queueMessage(
+	run: RoomRunState,
+	entry: Extract<RoomEntry, { kind: 'message' }>,
+	state: RoomState,
+): void {
 	const message = copyMessage(placed(entry));
-	const state = run.state();
 	const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;
 	const delivery = state.deliveries.get(message.seq);
 	const after = state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
@@ -97,13 +88,11 @@ function queueMessage(run: RoomRunState, entry: Extract<RoomEntry, { kind: 'mess
 }
 
 /**
- * Every close the room has not heard yet. A close entry adds one to the
+ * Every close this entry adds to the projection. A close entry adds one to the
  * state, and a cancellation adds one when it finds an exchange open.
  */
-function queueCloses(run: RoomRunState): void {
-	const { closes } = run.state();
-	for (const close of closes.slice(run.heardCloses)) queueClose(run, close);
-	run.heardCloses = closes.length;
+function queueCloses(run: RoomRunState, before: RoomState, after: RoomState): void {
+	for (const close of after.closes.slice(before.closes.length)) queueClose(run, close, after);
 }
 
 /**
@@ -111,15 +100,15 @@ function queueCloses(run: RoomRunState): void {
  * before any closing summary. A question that landed
  * ahead of the close opens the next exchange, and the room says so.
  */
-function queueClose(run: RoomRunState, close: Close): void {
-	const question = run.state().messages.find((m) => m.seq === close.from);
+function queueClose(run: RoomRunState, close: Close, state: RoomState): void {
+	const question = state.messages.find((m) => m.seq === close.from);
 	const exchange: ExchangeRange = {
 		...(close.person === undefined ? {} : { person: close.person }),
 		from: close.from,
 		at: question?.at ?? close.at,
 		through: close.through,
 	};
-	const next = run.state().exchange;
+	const next = state.exchange;
 	const opened = next === undefined ? undefined : { ...next };
 	publish(run, () => {
 		run.emit({ type: 'exchange_closed', exchange });
@@ -128,25 +117,26 @@ function queueClose(run: RoomRunState, close: Close): void {
 }
 
 /** A cancellation closes its current exchange and cuts every lease it superseded. */
-function queueCancellation(run: RoomRunState, seq: Seq): void {
-	const state = run.state();
-	const revoked = [...state.leases.values()].filter(
-		(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.until === seq,
+function queueCancellation(run: RoomRunState, before: RoomState, after: RoomState): void {
+	const revoked = [...after.leases.values()].filter(
+		(lease) =>
+			lease.phase === 'ended' &&
+			lease.reason === 'revoked' &&
+			before.leases.get(lease.id)?.phase === 'running',
 	);
 	run.sentAt.clear();
-	queueCloses(run);
+	queueCloses(run, before, after);
 	publish(run, () => {
 		for (const lease of revoked) {
 			const seat = seatOf(lease.id);
 			if (seat === undefined) continue;
 			cutPort(run, seat, lease.id);
-			if (run.heardLeases.has(lease.id))
-				run.emit({
-					type: 'activation_end',
-					seat,
-					activation: lease.id,
-					said: state.messages.some((message) => message.activation === lease.id),
-				});
+			run.emit({
+				type: 'activation_end',
+				seat,
+				activation: lease.id,
+				said: after.messages.some((message) => message.activation === lease.id),
+			});
 		}
 	});
 }
@@ -156,7 +146,7 @@ function queueCancellation(run: RoomRunState, seq: Seq): void {
  * end ends one. A change that ends a lease the journal never held is a
  * wake written off, and starts nothing.
  */
-function queueLease(run: RoomRunState, lease: Lease, first: boolean): void {
+function queueLease(run: RoomRunState, lease: Lease, first: boolean, state: RoomState): void {
 	const seat = seatOf(lease.id) ?? '';
 	if (lease.phase === 'running') {
 		publish(run, () => {
@@ -183,7 +173,7 @@ function queueLease(run: RoomRunState, lease: Lease, first: boolean): void {
 		});
 		return;
 	}
-	const said = run.state().messages.some((m) => m.activation === lease.id);
+	const said = state.messages.some((m) => m.activation === lease.id);
 	publish(run, () => {
 		if (revoked) cutPort(run, seat, lease.id);
 		run.emit({
