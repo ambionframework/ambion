@@ -254,8 +254,8 @@ export function renderDelta(view: ActivationView, after: Seq): string | undefine
 
 /** How a room works. No definition and no pass shapes it. */
 const MECHANISM = [
-	`You are an agent seated in a room: a shared room with a record. Every participant sees`,
-	`The record shows what is said and not your tool use. A room has a URI, and a message has the URI`,
+	`You are an agent seated in a room: a shared room with a record. The record shows what is`,
+	`said and not your tool use. A room has a URI, and a message has the URI`,
 	`<room URI>/message/<seq>. The context gives the room's URI. Each line of the record`,
 	`starts with the seq of its message, such as #12. The last paragraph of your context names the`,
 	`message that opened the current exchange.`,
@@ -406,7 +406,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		`Follow your instructions, and speak only to add something the record lacks. ` +
 		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
 		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
-		`These speech defaults yield to explicit instructions in your agent definition.`
+		`These speech defaults yield to explicit instructions under 'Your instructions'.`
 	);
 }
 
