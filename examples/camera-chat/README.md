@@ -63,7 +63,7 @@ uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
 frame is a PNG of about 700 KB. The host tells the agent to start the server
 with a `bash` timeout of 86400 seconds. `bash` ends the process after that
 timeout, so capture stops after 24 hours. Ask the agent to start the server
-and connect again. The camera server accepts `--framerate <n>` for the
+again. The camera server accepts `--framerate <n>` for the
 device input rate (default 30).
 
 `pnpm start --list-cameras` lists AVFoundation devices without starting the
