@@ -1,481 +1,140 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-04)
 
-**A room offers `seat` only when the reserve held an agent as the room
-composed.** The presence of `seat` is fixed for the room, so the tool list
-of a seat does not change between its activations. The Codex executor drops
-a thread when the tool list differs. After the reserve empties, `seat` stays,
-and the room refuses a seating with "The reserve is empty." A room composed
-with an empty reserve never offers `seat` to an agent. The host seats with
-`room.seat`.
+<img alt="Ambion 0.6.0: code mode and macros. Every seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, the room tools included, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, describe returns its signature, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with the QuickJS and child process runtimes, $PORT and fetch for processes, and seating: false for a room. Fixes: a Pi seat reads its prompt as the system prompt, and a Claude seat answers a late steer. Breaking: every seat holds compose, fetch replaces the sensor tools, and defineAssistant takes an executor function." src="docs/assets/ambion-0.6.0.png" width="800">
 
-**The prompt shows the reserve only when it holds an agent.** Before, the
-prompt showed an empty reserve block, and every respond activation held
-`seat`.
+**0.6.0 brings code mode and macros.** Every Pi, Claude, and Codex seat
+holds the `compose` and `describe` tools. The model writes short code over
+the tools of the seat, the room tools included, and the core runs it in one
+call. The core checks each nested call against the schema of its tool and
+records it in the trace. See [Compose](docs/compose.md).
 
-**A host can turn seating off.** `StartRoomOptions` and the Cloudflare
-`StartOptions` take `seating`, which defaults to `true`. With
-`seating: false`, no activation holds `seat` or `unseat`, and the room
-refuses a `seated` or an `unseated` intent from a seat. `room.seat` and
-`room.unseat` work as before.
-
-**The composition entry records two optional fields.** It records
-`seating: false` when the host turned seating off, and `reserved: true` when
-the reserve held an agent. `CollaborationContext` gains the same two fields.
-Its `reserve` is empty when seating is off.
-
-**A `compose` call fails on a room tool that the activation lacks.** The
-call fails before the code runs, and the error states that the room does not
-offer the tool. The `describe` tool still lists every room tool. The
-description of `compose` lists `seat` and `unseat` apart, as tools that bind
-only when the tool list of the seat holds them.
-
-**A Pi seat receives the seat prompt as the system prompt.** The harness
-wrote the prompt after the first input, and a provider lifts only the first
-message into its system field. On a model that accepts system messages in the
-middle of a conversation (Claude 5 and `claude-opus-4-8`, GPT-5.4 and later
-on `openai`, GPT-5.5 and later on `openai-codex`), the seat
-prompt reached the model as an update item and the system field held a
-generic text. A hook now moves the first prompt entry to the head of each
-request. The stored session keeps its order. On Anthropic, `pi-ai` now also
-sends the tool list up front and turns on its beta for tool changes in the
-middle of a conversation.
-
-**The mechanism sentence reads whole again.** The first line of the room
-mechanism says "You are an agent seated in a room: a shared room with a
-record." The ask line says that the speech defaults yield to the
-instructions under "Your instructions", the label that the prompt uses. The
-workstation guidance drops the hostname, the SSH port, and the forwarded port
-sentence. The sensor tools name the hostname and the remote port when a seat
-connects a sensor. No tool shows the SSH port or the forwarded URL.
-
-**The guidance of a seat follows the review of the workbench prompts.**
-The speaking policy states that a directed say wakes a participant. The
-hand-off paragraph asks for one only when the roster marks the seat "named
-only". The roster legend explains the marks that the roster shows. The
-ask line drops the sentences that only the assistant needs. The `say` tool
-states that a file path is no URI. The `schedule` tool states who the
-scheduled message opens an exchange for. The assistant names attention by the marks of the
-roster. The Codex seat note drops "answer with `say`, then stop" and states
-that the sandbox applies to no tool the seat holds. The workspace tool line
-gives no count. The audit note and the process note lose their recaps. The
-shell note shortens the git list. The workbench gives the assistant its own
-short instructions, states the approval of an instrument across activations,
-and defines the assignment of a specialist.
-
-**The scripted executor returns a tool error to the script.** When an own
-tool of a seat throws, for example a failed `compose` call, the script reads
-the message in `step.results` and the activation goes on. Before, the pass
-failed as transient and the room retried it after a delay. A script that
-needs a failed pass throws a `ScriptedFailure`.
-
-**The `compose` tool is on for every Pi, Claude, and Codex seat.**
-`pi()`, `claude()`, and `codex()` give a seat `compose` and `describe`, with
-`quickjsRuntime()` when the options name no runtime. A seat cannot turn
-the tools off. A host passes its own `compose` object to choose
-`processRuntime()`, an approval hook, guidance, or limits. The Cloudflare
-`configure` accepts the tools. A compose call fails in workerd with an error
-that says QuickJS could not load its WebAssembly, until a compose runtime
-for workerd exists. A host passes `compose: { runtime }` with a compose
-runtime that the host can run.
-
-**The `describe` tool returns the signatures that `compose` no longer lists.**
-`describe({ tools })` takes a non-empty list of bindable tool names, the room
-tools included. It returns their typed signatures and named types, and runs
-nothing. A name outside the catalog fails the call and lists the bindable
-names. The kernel reserves the name `describe` as it reserves `compose`.
-
-**The description of `compose` holds a compact list.** It keeps the
-contract, the limits, and the rejection rule. Each bindable tool appears as
-`name -> Type`, where `Type` names the declared output, `string` for a tool
-with no output, and `object`, `array`, or the primitive type for an output with no `$id`. The full catalog
-moved to `describe`. The tool list of a full workspace seat shrinks from
-about 22,100 to about 9,600 characters in every request. The workspace
-outputs declare an `$id`, so the list names each type.
-
-**A failed compose call shows the signature of the tool that it names.** The
-message appends the signature of the tool of the failing nested call, and of
-a tool that the code read and `uses` left out.
-
-**`COMPOSE_GUIDANCE` is shorter.** It tells the model to call `describe` before
-code that reads the fields of a result, and it drops the two code examples.
-
-**`COMPOSE_GUIDANCE` leads with the plan.** It tells the model to plan the
-tool calls first, and to use one compose call when a result feeds a later
-call, or when the model needs a part of a large result. A single call, or a
-call whose result the model must judge before the next, goes direct. The
-guidance tells the model to call `describe` for a tool whose result has
-fields that the code reads. It tells the model to explore large results
-with compose, and to return a count or a sample. The description of
-`compose` names the same two uses.
-
-**The guidance of `compose` follows the tools of the seat.**
-`describeExecutor` builds the text from the tools of the definition. The
-rule to call `wait` on each process that the code starts joins the guidance
-only when the seat holds `bash`. A seat with no `bash` reads no word about
-processes. The macro paragraph states that a skill names a macro, and that
-the macro holds the code. It appears only for a seat with a macro, and the
-list of the macros follows it. The `compose` schema of a seat with no macro
-holds `uses` and `code` alone, with no `macro` and no `args`. The rule that
-a failed tool rejects and that `error.details` holds its result stands once,
-in the description of `compose`, and the guidance keeps the example that
-catches it. The description of the `bash` tool drops the sentences that its
-schema and the process note state. The `describe` sentence leaves the
-description of `compose`.
-
-**The prompt tells a seat to seat a colleague first only when it holds
-`seat`.** The hand-off paragraph names the reserve only when the room offers
-`seat`. With `seating: false`, or a room composed with an empty reserve,
-the paragraph ends at the roster mark.
-
-**`openWorkspace` takes `rooms`, and the room-mirror note follows it.** The
-note about `<layout.rooms>/<room name>/messages.jsonl` joins the guidance
-only when the host sets `rooms: true`. Before, every workspace stated it,
-and a model looked for a file that no host wrote. A host that calls
-`workspace.mirror()` sets the option. The workbench sets it.
-
-**The workspace notes drop the sentences that a tool description or a schema
-states.** The process note drops the default of `wait`, the default of
-`timeout`, and the stop signals, and keeps the directory of a process. The
-SQL note drops the sentences on `export`, on the table `import.rows`, and
-the `params` sentence that its schema now states. The `fetch` note drops the
-sentences that its description states. The snapshot note drops the sentence
-on the bytes of a ref. The git note drops one sentence on a clone. The
-descriptions of `wait`, `cancel`, `repos`, and `restore` drop the sentences
-that a schema or a note states.
-
-**The tool guidance of a seat states each fact once.** The citation rule
-stands on the `refs` field of `say` and in the description of `snapshot`.
-The `refs` field of `schedule` points to `say`, and the `say` description,
-the snapshot note, and the `fetch` description drop their copies. The
-snapshot note keeps the form of a ref. The workspace guidance drops the line
-"Your workspace tools are ...", because the tool list names them, and
-`defaultToolGuidance` is gone. The git note says "git fetch" and "git
-rebase", because a seat also holds the `fetch` tool for HTTP. The `edit`
-description and schema state the rules on unique, non-overlapping matches
-once. The grace of a stop stands in `bash`, and the example handle stands
-in `wait`. The description of `schedule` drops its sentence on a long
-process, which the process note states. The description of `compose` lists
-only the tools with a typed result, and says once that the other tools
-return text. `seat` and `unseat` bind only when the tool list holds them, as
-before. `COMPOSE_GUIDANCE` drops the sentence "Room tools return text."
-
-**`processRuntime` names the memory limit when the child aborts.** V8 can
-abort the child before it prints its out-of-memory line. A child that ends
-on SIGABRT now gives the memory-limit error.
-
-**`compose: { evaluator }` becomes `compose: { runtime }`.** A seat names
-the runtime of its `compose` tool in the `runtime` field. The exports change
-as follows: `Evaluator` becomes `ComposeRuntime`, `EvaluatorInput` becomes
-`ComposeRuntimeInput`, `quickjsEvaluator` becomes `quickjsRuntime`,
-`processEvaluator` becomes `processRuntime`, and `evaluatorConformance`
-becomes `composeRuntimeConformance`.
-
-**A compose call that reads an unbound tool names the fix.** Code that
-reads `tools.<name>` for a name outside `uses` gets an error that names the
-tool and the bound names. The error says to add the tool to `uses`, or that
-the seat has no such tool. `ComposeRuntimeInput` gains the optional `unlisted`.
-`'x' in tools` is false for an unbound name. The runtime conformance
-suite requires the throw, so a runtime that does not run the shared
-guest script fails it.
-
-**A failed compose call shows the result of each completed call.** The
-message gives one `result:` line under each completed call, so the model
-recovers what the code started, such as process handles. One result shows
-at most 4096 bytes, and all results show at most `compose.limits.bytes`.
-
-**The workspace drops the `status` and `clone` tools.** The smallest
-workspace gives nine tools, from ten. A workspace with a SQL backend and a
-git backend gives twelve, from fourteen. The agent reaches the same facts
-through the tools that stay.
-
-**Every process has a port.** `bash` sets `$PORT` for each command. The
-table picks the port at random from 20000 to 29999 and excludes the ports of
-its running processes. A server that fails with `EADDRINUSE` starts again
-when the agent starts it, and the workspace picks a new port at that start. `ps` gains a `Port` column, the state line of a running
-process ends with `$PORT=<port>.`, and the `details` of `bash`, `wait`, `ps`,
-and `cancel` gain `port`. The note of the process tools states `$PORT`. See
-[Processes](docs/processes.md#processes-that-serve-http).
-
-**The workspace gains `fetch`.** `fetch({ process, path })` reads a path of
-a running process with GET, by name or handle, on any backend with
-`endpoints`. Any agent of the workspace can read the process of any other
-agent. The workspace keeps the body as a snapshot, writes it to
-`~/.fetch/<process>/`, and returns the ref. JSON and text show as process
-data, and an image returns as an image part. The body limit is 64 MiB. See
-[Workspace](docs/workspace.md#read-a-process-with-fetch).
-
-**The host reads a process with `workspace.fetch`.** The method takes a name
-or a handle, a path, and a `RequestInit`. It returns a `Response` and keeps
-nothing.
-
-**The host list reads a named agent.** `workspace.processes.list({ agent })`
-reads the files of that agent even when the agent has not acted in this run,
-and the read adopts its live processes. A host that restarted finds a process
-of an earlier run. `fetch` resolves a live handle from memory, and it names a
-refused connection, a redirect, and any other failure of a read apart.
-
-**`loadSkills` takes several sources.** `loadSkills(...sources)` merges the
-files of its sources into one set, so a host loads the skills of a template
-beside its own. A skill folder in two sources fails with `Skill set: the
-skill '<name>' is in source <i> and source <j>.` See
-[Skills](docs/skills.md#several-sources).
-
-**Both sensor templates move to protocol version 2.** A server listens on
-`$PORT`, prints nothing, and answers `GET /<sensor>/observe` with a query
-for a span. Each template ships a skill with an `observe` macro over
-`fetch`. The macro checks `api` and the digest of each file. See
-[Sensors](docs/sensors.md).
-
-### Assistant
-
-**The assistant routes first and stays silent after that.** In a respond
-activation its job is to get the request to the specialists who need it. To
-route to a seated specialist at `named` attention, it calls `say` with `to` set
-to the name of that specialist. The `seat` tool routes nothing, and the
-guidance now states before the `seat` rule that a seated specialist needs `say`. A live run
-showed the failure: the assistant called `seat` for two specialists that were
-already seated, ended with no directed `say`, and no specialist received the
-request.
-
-For everything else the assistant calls `say` in three cases only: a
-participant asks it a question, the application instructions require a
-message, or it steers a forbidden action. A specialist result, report, failure,
-or acknowledgment is not a question, even when it is addressed to the
-assistant. The assistant sends no message about it, and the closing summary
-reports it. In an earlier live run, the assistant posted a specialist result
-to the person and added a wiring step that no specialist had stated.
-
-The assistant may steer in one case: a specialist writes that it will now take
-an action that the person forbade in words. Then it sends that specialist one
-short directed `say` that names the constraint. A result that already
-happened, a plan, a proposal, or an estimate is no such action. The guidance
-states the rule once, in about the same length as before.
-
-The workbench specialists report with a `say` that has no `to`. They answer a
-question that another specialist addressed to them with a directed `say`. They
-hand an artifact that a colleague continues to that colleague with a directed
-`say`. A live run showed specialists that sent a result to a seat that never
-asked for it. A live workbench run on a ChatGPT login checked the routing, the
-refused say, and the summary.
-
-**The `seat` tool says what to do for a seated agent.** The result for an agent
-that the record already seats is now `<name> is already seated. Seating it
-again does not activate it. To give it the request, call say with to set to
-<name>.`
-
-### Summaries
-
-**A summary rests on the messages of its exchange.** The summary prompt names
-those messages as the only source. Every fact, value, and recommendation must
-come from a message of the exchange. A reported failure, an unknown, or a
-question to the person is a fact of the exchange, and the summary reports it.
-The writer adds nothing from its own knowledge. When no message after the
-request reports anything, the writer ends the activation without `say`, and the
-source messages stay in later prompts.
-
-The room checks the clear case itself: when no agent said a message inside the
-range of a closed exchange, the close names no summary writer and the room
-assigns no summary activation. The rule is `owesSummary` in
-`rules.verified.ts`. The prompt no longer says "Answer what they asked". The
-assistant no longer publishes a summary for every closed exchange or a summary
-that states a gap that no message reports. Its identity no longer says that
-it summarizes each exchange, and now says that it routes each request.
-
-The writer copies each value as a message states it, derives none, and keeps
-the source paths and URIs that a message cites. The assistant writes no summary
-when its only agent messages are its own answer to the person or its own
-routing requests that no specialist answered. It also writes none when one
-specialist message already answers the request in full. The summary prompt
-of every writer checks this case and the empty case first. A live run showed a summary with
-"9.3–10.7 mA" computed from a formula and the datasheet paths dropped.
-
-### A refused `say` tells the model what to do
-
-The result of a `say` that the freshness rule refuses reads `Not delivered: the
-room moved while you were speaking. New on the record:`, the new lines, and
-`Read it, then call say again with your message unless the new messages already
-say it or make it unnecessary.` A live run showed the old advice end an
-activation and lose the answer of a specialist.
-
-### Simplification
-
-**`wait` with one handle and `timeout: 0` reads a process.** The call does
-not wait. It gives the state and the new output of the process, as `status`
-did. The description of `wait` and its `timeout` parameter state this. The
-behavior of `wait` on several handles does not change.
-
-**The process note gains two lines.** Each process has a directory,
-`~/.processes/<handle>/`, with its spec, its out, and its exit code when it
-ends. `ls ~/.processes` lists every process that the agent started and the
-workspace still keeps. `ps` stays.
-
-**The git note teaches a clone with `bash`.** To check out a repository
-without a fork, the agent takes its clone URL from `repos` and runs `git
-clone <url> <path>` with `bash`. The `origin` is the source, with the push
-permissions of the source. A clone of `shared/<name>` pushes back to it, and
-a clone of a template or of another agent's fork is read-only. The agent
-raises `wait` for a large repository. `fork` keeps its `clone` option. A
-failed clone of a fork now says `Run git clone <url> <path> with bash, at a path
-that does not exist yet.`
-
-**The reminder and the state line name `wait`.** A running process reads
-`Call wait with its handle, and timeout 0 to read it at once.` The reminder
-of the processes and the hint of the held output of a wait on several
-handles name `wait` in place of `status`.
-
-**The kernel stops knowing sensors.** The sensor wire client, the schemas,
-the connection registry, the reminder, the retention code, the conformance
-suite, and the `connect`, `disconnect`, and `observe` tools are gone, about
-2,100 lines of source and 5,000 lines of tests. `fetch` and the forward
-cache take about 620 lines of source. The protocol, its version, and its digest rule
-live in the templates. This settles backlog Q2.
-
-### Breaking changes
-
-- **Every seat has `compose` and `describe`.** The tool list and the
-  guidance of every Pi, Claude, and Codex seat gain both tools.
-  `ExecutorBaseOptions.compose` takes `ComposeOptions` only, and
-  `assertComposeOptions` refuses `false`. The name `describe` is reserved,
-  so a user tool of that name is refused. `@ambionframework/pi`,
-  `@ambionframework/claude`, and `@ambionframework/codex` now depend on
-  `@ambionframework/compose`.
-- **The `$id` of a workspace output names its type.** `ReadResult`,
-  `SqlResult`, `SnapshotResult`, `RestoreResult`, `WaitResult`,
-  `WaitedResult`, `PsResult`, `ReposResult`, `ForkResult`, `ConnectResult`,
-  and `ObserveResult` join `Process`, `ProcessResult`, `Truncation`, and
-  `SensorSource`.
-- **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
-  `timeout: 0`. The result has the same text and the same details. In a
-  compose call, `tools.status` is gone, and `tools.wait` binds the same
-  output.
-- **Replace `clone` with `bash`.** Run `git clone <url> <path>` in `bash`,
-  or call `fork` with `clone`. The `compose` binding `tools.clone` is gone.
-- **Expect a new count in the tool line.** The smallest workspace names nine
-  tools, and the number word starts at nine. A workspace with endpoints names
-  one tool more than a workspace without endpoints. The three sensor tools
-  are gone.
-- **Replace `connect`, `disconnect`, and `observe` with `fetch`.** Start the
-  server with `bash`, and call `fetch({ process, path })`. Run the `observe`
-  macro of the template for the digest checks. In a compose call,
-  `tools.connect`, `tools.disconnect`, and `tools.observe` are gone, and
-  `tools.fetch` binds a declared output.
-- **Replace `workspace.sensors` with `workspace.processes` and
-  `workspace.fetch`.** The types `RegisteredSensorConnection`,
-  `SensorConnectionEvent`, and `SensorDiscovery` leave the root export.
-- **Drop the `./sensors` and `./sensor-api.schema.json` exports of
-  `@ambionframework/workspace`.** The wire client, `createSensorClient`, and
-  the schemas are gone. A template owns its protocol.
-- **Drop `sensorConformance` and its types from `./conformance`.** A template
-  tests its own server.
-- **Make a sensor server listen on `$PORT`.** The `READY` line and a chosen
-  port are gone. A server at protocol version 1 fails the macro of a template
-  at version 2, because `api` differs.
-- **Expect `port` in a process.** A `spec` written before ports has port 0,
-  and `fetch` refuses it. The `Port` column of `ps` and the `$PORT` text of
-  the state line are new.
-- **No journal body and no stored format changes.** The golden journals
-  stay as they are.
-
-## 0.6.0 (2026-10-03)
-
-<img alt="Ambion 0.6.0: code mode and macros. A seat runs short code over its tools in one call, and a skill stores a procedure as a macro. Code mode: the compose tool runs short code over the tools of a seat, and the core checks and traces each call; the model runs a macro by name with arguments and reads one value. Declared outputs: a tool declares the shape of its details, and compose checks every result against it. Free code: short code joins tools in one call, for precision and typed chains, and the live runs measured no token saving for it. The assistant: defineAssistant takes an executor function and needs no Pi package. Also new: the twelfth package, compose, with QuickJS and child process evaluators, nested calls in the trace, and bound SQL params. Fixes: a Claude seat answers a late steer, and Camera Chat keeps a steady preview." src="docs/assets/ambion-0.6.0.png" width="800">
-
-**0.6.0 brings code mode and macros.** The `compose` tool gives a seat code
-mode: the model writes short code over the tools of the seat, and the core
-runs it in one call. A skill stores a procedure as a macro, and the model
-runs the macro by name with arguments. The core checks each nested call
-against the schema of its tool and records it in the trace. See
-[Compose](docs/compose.md) and [Macros](docs/macros.md).
-
-**Macros are the main use of code mode.** With a macro, the model writes no
-code and reads only the value that the macro returns. Free code serves
-precision and chains of typed tools. The live evidence in `planning/` shows
-no token saving for free code, and the docs claim none. The new package
-`@ambionframework/compose` runs the code in QuickJS or in a child Node
-process.
+**Macros are the main use of code mode.** A skill stores a procedure as a
+macro, and the model runs the macro by name with arguments. The model writes
+no code and reads only the value that the macro returns. Free code serves
+precision, the exploration of large results, and chains of typed tools. The
+live evidence in `planning/` shows no token saving for free code, and the
+docs claim none. See [Macros](docs/macros.md).
 
 **A tool declares its output.** `defineTool` types `details` from a TypeBox
-schema, and `compose` checks each result against it. The workspace tools
-`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
-declare theirs.
+schema, and `compose` checks each result against it. Every workspace tool
+except `write` and `edit` declares its output. `describe` returns the typed
+signatures that a compose call reads.
 
-**The assistant runs on any harness.** `defineAssistant` takes an
-`executor` function, and `@ambionframework/assistant` no longer depends on
-`@ambionframework/pi`. The core marks a steered line with `[new]` for every
-executor.
+**A process serves HTTP on its own port.** `bash` sets `$PORT` for each
+command, and the `fetch` tool reads a path of a running process. The sensor
+templates use both, so the kernel holds no sensor code.
 
-**The release fixes two defects.** A Claude seat answers a line that lands
-during its final answer. Camera Chat keeps its preview frame on a refresh,
-and `disconnect` leaves a link whose process ended as it is.
+**The assistant runs on any harness.** `defineAssistant` takes an `executor`
+function, and `@ambionframework/assistant` no longer depends on
+`@ambionframework/pi`. The assistant routes a request first, and a closing
+summary rests only on the messages of its exchange.
 
-**No journal body and no stored format changes.** A journal of 0.5.0 opens
-on 0.6.0. The breaking changes are in the TypeScript API. See
-[Breaking changes](#breaking-changes).
+**The host decides who seats agents.** A room offers `seat` only when its
+reserve held an agent as the room composed. `seating: false` keeps every
+seat from seating or unseating an agent.
+
+**The release fixes three defects.** A Pi seat reads the seat prompt as the
+system prompt. A Claude seat answers a line that lands during its final
+answer. Camera Chat keeps its preview frame on a refresh.
+
+**The composition entry gains two optional fields.** The other journal
+bodies and stored formats stay as they are, and a journal of 0.5.0 opens on
+0.6.0. See [Breaking changes](#breaking-changes).
 
 ### Packages
 
 **The eleven packages of 0.5.0 ship at 0.6.0, and one package joins.**
 `@ambionframework/compose` is the twelfth publishable package. The examples
 `examples/workbench` and `examples/camera-chat` stay private. Every library
-package needs Node 22.19 or newer. `processEvaluator` needs Node 26 or newer.
+package needs Node 22.19 or newer. `processRuntime` needs Node 26 or newer.
 
 - **Compose.** `@ambionframework/compose` has one entry point,
   `@ambionframework/compose/runtime`, and no root export. It exports
-  `quickjsEvaluator` and `processEvaluator`. It depends on
+  `quickjsRuntime` and `processRuntime`. It depends on
   `@ambionframework/ambion` and on `quickjs-emscripten` 0.32.0, pinned
   exactly.
+- **Executors.** `@ambionframework/pi`, `@ambionframework/claude`, and
+  `@ambionframework/codex` depend on `@ambionframework/compose`, for the
+  default runtime of a seat.
 - **Assistant.** `@ambionframework/assistant` drops `@ambionframework/pi`
   from its dependencies and depends on `@ambionframework/ambion` only. Its
   tests take `@ambionframework/pi`, `@ambionframework/claude`, and
   `@ambionframework/codex` as development dependencies.
-- **Entry points.** No other package adds or removes an entry point. No
-  other package changes a dependency.
+- **Workspace.** `@ambionframework/workspace` drops the entry points
+  `./sensors` and `./sensor-api.schema.json`.
+- **Other packages.** No other package adds or removes an entry point or a
+  dependency.
 
 ### New
 
 #### Compose
 
-**The `compose` option adds the `compose` tool.** `describeExecutor`
-appends the tool after the tools and the bundles, and the guidance of the
-tool follows the guidance of the bundles. The tool checks `uses`, asks
-`approve`, and runs the code in the evaluator of the option, within four
-limits. A failed or cancelled compose call throws, and its message renders
-the error and the ledger. A tool named `compose` in a hand-built executor
-stays an ordinary tool. A definition refuses a user tool named `compose`.
+**Every executor seat holds `compose` and `describe`.** `pi()`, `claude()`,
+and `codex()` give a seat both tools, with `quickjsRuntime()` when the
+options name no runtime. A host passes `compose: ComposeOptions` to choose
+`processRuntime()`, an approval hook, guidance, or limits. The Cloudflare
+`configure` accepts the tools. In workerd, a compose call fails with an
+error that says QuickJS could not load its WebAssembly. A host there passes
+`compose: { runtime }` with a runtime that it can run.
 
-**The executor options take `compose`.** The main entry exports the types
-`ComposeOptions`, `ComposeLimits`, `ComposeResult`, `LedgerEntry`,
-`Evaluator`, `EvaluatorInput`, and `JsonValue`. `COMPOSE_GUIDANCE` is the
-export of the guidance text, and `ComposeOptions.guidance` replaces it.
+**A compose call binds the tools of the seat.** The call is
+`{ uses, code }`: the tools that the code binds, and the body of an async
+function. Each tool is `tools.<name>`. The room tools bind too. `seat` and
+`unseat` bind only when the tool list of the activation holds them. A call
+that names a room tool that the activation lacks fails before the code
+runs.
 
-**`COMPOSE_GUIDANCE` makes compose the default for a plan of two or more
-tool calls.** The live evidence showed that no seat chose `compose` for a
-two-step chain. The text now tells the model to plan the calls first and to
-make a plan of two or more calls in one compose call. A direct call is for
-a step that needs the judgment of the model when the task gives no rule. An
-example shows a query that feeds a snapshot. A paragraph tells the model to
-run a macro when a skill names one. A seat with macros also gets one
-guidance block after the text, with one line for each macro: the name and
-the description.
+**The `compose` tool checks, asks, and runs within four limits.** It checks
+`uses`, asks `approve`, and runs the code in the runtime of the option. The
+defaults are 64 nested calls, 8 calls at a time, 65,536 bytes of returned
+JSON, and 120,000 ms of wall time. The description of `compose` states the
+limits of the seat and the rule that a failed tool rejects with its result
+in `error.details`.
 
-**The core records the steps of a nested call.** The step vocabulary gains
-the `approval` step, which records the answer of `approve`. The `tool_call`
-and `tool_result` steps gain `parent`, the id of the compose call. The
-hosting export `invokeTool` runs one direct call and hands the step sink of
-the activation to the `compose` tool, and to no other tool. `invokeChecked`
-does the same for a harness that prepared and checked the arguments, as Pi
-does. `callId` skips a step with a `parent`. The scripted executor gives
-each tool call a signal and the deadline.
+**The description of `compose` lists the bindable tools in one line each.**
+A tool with a typed result shows as `name -> Type`. The description says
+once that the other tools return text. The full catalog is in `describe`.
 
-**The tool context names a compose call.** `ToolContext` gains
-`composeCall`. `ToolContext` has no `record`: no tool can write a step.
+**`describe` returns typed signatures.** `describe({ tools })` takes a
+non-empty list of bindable tool names, the room tools included. It returns
+their signatures, with each field description as a doc comment and each
+schema with an `$id` as a named type. It runs nothing. A name outside the
+catalog fails the call, and the error lists the bindable names.
+
+**A failed compose call names the fix.** The message renders the error and
+the ledger of the nested calls:
+
+- **An unbound tool.** Code that reads `tools.<name>` for a name outside
+  `uses` gets an error that names the tool and the bound names.
+- **A failed nested call.** The message appends the signature of its tool,
+  and of a tool that the code read and `uses` left out.
+- **The completed calls.** Each one shows a `result:` line, so the model
+  recovers the process handles that the code started. One result shows at
+  most 4096 bytes, and all results show at most `compose.limits.bytes`.
+
+**`COMPOSE_GUIDANCE` leads with the plan.** It tells the model to plan the
+tool calls first. One compose call serves a result that feeds a later call
+and a part of a large result. A call that stands alone, or a result that
+the model must judge, goes direct. The text tells the model to call
+`describe` before code that reads fields, and to explore large results with
+a count or a sample.
+
+**The guidance follows the tools of the seat.** `describeExecutor` builds
+the text from the tools of the definition. The rule to call `wait` on each
+process that the code starts appears only for a seat that holds `bash`. The
+macro paragraph and the list of macros appear only for a seat with a macro.
+
+**The core records the steps of a nested call.** The `approval` step records
+the answer of `approve`. The `tool_call` and `tool_result` steps gain
+`parent`, the id of the compose call. The hosting exports `invokeTool` and
+`invokeChecked` run one direct call and hand the step sink of the activation
+to `compose` only. `ToolContext` gains `composeCall`.
 
 **The `approve` request is a union.** `ComposeOptions.approve` reads a
-`ComposeRequest`: `{ uses, code }` for free code, and
-`{ macro, hash, args }` for a macro. A host can allow its own macros and
-deny free code.
+`ComposeRequest`: `{ uses, code }` for free code, and `{ macro, hash, args }`
+for a macro. A host can allow its own macros and deny free code.
 
 #### Skill macros
 
@@ -483,147 +142,251 @@ deny free code.
 `loadSkills` reads each `<skill>/macros/<name>.js`: a `/*---` YAML header
 with `description`, `uses`, and `args` (a JSON Schema), and then the body.
 It refuses a bad header, a bad `uses`, an `args` schema that the check
-cannot read, and a bad file name, with the error `Skill set:` and the
-path. `SkillSet` gains `macros`.
+cannot read, and a bad file name, with the error `Skill set:` and the path.
+`SkillSet` gains `macros`.
 
 **`ToolBundle` gains `macros`.** The field holds `ComposeMacro` values: the
-name `<skill>/<macro>`, the description, `uses`, the `args` schema, the
-code, and the git blob hash of the file. `workspace.tools({ skills })` puts
-the macros of the set on its bundle. The main entry exports the types
-`ComposeMacro` and `ComposeRequest` and the new value `composeMacro`, which
-checks the fields of a macro and gives a frozen copy.
+name `<skill>/<macro>`, the description, `uses`, the `args` schema, the code,
+and the git blob hash of the file. `workspace.tools({ skills })` puts the
+macros of the set on its bundle. `composeMacro` checks the fields of a macro
+and gives a frozen copy.
 
-**`describeExecutor` checks the macros of a seat with `compose`.** It
-refuses a macro that names a tool of no catalog entry, one with
-`compose: false` included, and two macros of one name. The error is an
-`AmbionError` with the code `invalid_tool`. A seat without `compose`
-ignores the macros.
+**`describeExecutor` checks the macros of a seat.** It refuses a macro that
+names a tool outside the catalog, a tool with `compose: false` included,
+and two macros of one name. The error is an `AmbionError` with the code
+`invalid_tool`.
 
-**The compose arguments take a macro.** The call is `{ uses, code }` or
-`{ macro, args? }`. The schema of the tool is one object with four optional
-fields, because a provider accepts no `anyOf` at the top of a tool schema.
-`compose` looks the macro up in the frozen set of the definition, and never
-reads `~/.skills`. It checks `args` against the schema of the macro, and
-takes absent `args` as `{}`. A mismatch, an unknown macro, and a mixed call
-are refusals with no ledger.
+**A compose call runs a macro as `{ macro, args? }`.** `compose` looks the
+macro up in the frozen set of the definition, and never reads `~/.skills`.
+It checks `args` against the schema of the macro and takes absent `args` as
+`{}`. A mismatch, an unknown macro, and a mixed call are refusals with no
+ledger. The code of a macro reads the global `args`. The schema of a seat
+with a macro is one object with four optional fields, because a provider
+accepts no `anyOf` at the top of a tool schema. The schema of a seat with no
+macro holds `uses` and `code` alone.
 
-**`EvaluatorInput` gains `args`.** The evaluator gives the code of a macro
-the global `args`. Free code has none. The test evaluator of the core
-defines it.
+**`loadSkills` takes several sources.** `loadSkills(...sources)` merges the
+files of its sources into one set, so a host loads the skills of a template
+beside its own. A skill folder in two sources fails with `Skill set: the
+skill '<name>' is in source <i> and source <j>.` See
+[Skills](docs/skills.md#several-sources).
 
 #### Declared outputs
 
 **A tool can declare its output for `compose`.** `AmbionTool` gains the
-field `compose`: `false`, or `{ output }` with a TypeBox schema. The check
-of a tool refuses any other value. `captureTool` copies the field.
-
-**`defineTool` has two overloads.** With `compose: { output }`, `execute`
-must return a `ToolResult` whose `details` is `Static` of the schema.
-`ToolResult` takes the type of its details. The new types
+field `compose`: `false`, or `{ output }` with a TypeBox schema. With
+`compose: { output }`, `defineTool` requires `execute` to return a
+`ToolResult` whose `details` is `Static` of the schema. The types
 `BaseToolOptions`, `PlainToolOptions`, and `DeclaredToolOptions` replace
-the export `DefineToolOptions`.
+`DefineToolOptions`.
 
-**`sql`, `snapshot`, `bash`, `status`, `cancel`, `wait`, `ps`, and `fork`
-declare their outputs.** Each tool sets `compose: { output }` with a
-TypeBox schema, and its details type is `Static` of that schema. `compose`
-checks every result against the schema.
+**Eleven workspace tools declare their outputs.** They are `read`, `sql`,
+`snapshot`, `restore`, `bash`, `ps`, `wait`, `cancel`, `repos`, `fork`, and
+`fetch`. The `$id` of each output names its type. `compose` checks every
+result against the schema.
 
-**The `sql` details change.** `rows` becomes `count`: the count of every
-row of the last statement. `rows` now holds the preview rows, up to the
-limit `rows`, and `columns` names the columns. A blob is lowercase hex, a
-`bigint` is decimal text, and a number that is not finite is its text.
-`database`, `export`, `import`, and `imported` stay.
+**The details of five tools take a new shape.**
 
-**`wait` declares one union.** A `wait` on one handle gives the details of
-`status`. A `wait` on several handles gives `processes` and `ended`.
+- **`sql`.** `count` holds the count of every row of the last statement.
+  `rows` holds the preview rows, up to the limit `rows`, and `columns` names
+  the columns. A blob is lowercase hex, a `bigint` is decimal text, and a
+  number that is not finite is its text.
+- **`read`.** The details are `{ path, text, from, to, lines, next,
+  truncation, image }`. The model of a direct call reads the same text as
+  in 0.5.0.
+- **`repos`.** The details hold the server name and the list of
+  repositories.
+- **`bash`, `wait`, and `cancel`.** A process result carries its output
+  `text` and its `port`. A `wait` on several handles gives `processes` and
+  `ended`.
 
-**`sql` gains `params`.** The optional array binds text, numbers, and
-`null` to the `?` placeholders of one statement. A whole number binds as an
-integer. `SqlRunOptions` gains `params`, and the SQLite backend binds the
-values and fails a run that has `params` and more than one statement. The
-type `SqlParam` is new.
+**`sql` gains `params`.** The optional array binds text, numbers, and `null`
+to the `?` placeholders of one statement. A whole number binds as an
+integer. `SqlRunOptions` gains `params`, and the SQLite backend fails a run
+that has `params` and more than one statement.
 
-#### Evaluators
+#### Runtimes
 
-**The new package `@ambionframework/compose` holds two evaluators.**
-`quickjsEvaluator()` runs the code of a compose call in QuickJS, on the
-synchronous build, in the host process. It gives each evaluation a runtime and
-a WebAssembly memory of its own, a memory limit, and a CPU limit.
-`processEvaluator()` runs the code in a `node:vm` context in a child Node
-process under `--permission` with no allow flag. It needs `--allow-net`, so it
-throws at construction on Node 22. The child entry is a bundled file that
-imports only `node:` built-ins. Both evaluators apply one globals table and
-pass one conformance suite.
+**`@ambionframework/compose` holds two runtimes.** `quickjsRuntime()` runs
+the code in QuickJS, on the synchronous build, in the host process. Each
+evaluation has its own runtime and WebAssembly memory, a 64 MiB heap limit,
+and a CPU limit of 10,000 ms. `processRuntime()` runs the code in a
+`node:vm` context in a child Node process under `--permission` with no
+allow flag. It needs Node 26, and throws at construction on Node 22. A
+child that ends on SIGABRT gives the memory-limit error.
 
-**`@ambionframework/ambion/conformance` exports `evaluatorConformance`.**
-The suite covers the globals table, the JSON at each crossing, errors with
-`details`, parallel calls, a memory limit, and a cut. It takes a function
-that returns a fresh evaluator.
+**`composeRuntimeConformance` tests a runtime.** The suite in
+`@ambionframework/ambion/conformance` covers the globals table, the JSON at
+each crossing, errors with `details`, parallel calls, a memory limit, a
+cut, and the throw on an unbound tool. It takes a function that returns a
+fresh runtime. Both runtimes pass it.
+
+#### Processes and `fetch`
+
+**Every process has a port.** `bash` sets `$PORT` for each command. The
+table picks the port at random from 20000 to 29999 and excludes the ports of
+its running processes. A server that fails with `EADDRINUSE` gets a new
+port when the agent starts it again. `ps` shows a `Port` column, and the state line of a
+running process ends with `$PORT=<port>.` See
+[Processes](docs/processes.md#processes-that-serve-http).
+
+**The `fetch` tool reads a running process.** `fetch({ process, path })`
+sends a GET to the process, by name or handle, on any backend with
+`endpoints`. Any agent of the workspace can read the process of any other
+agent. The workspace keeps the body as a snapshot, writes it to
+`~/.fetch/<process>/`, and returns the ref. JSON and text show as process
+data, and an image returns as an image part. The error names a refused
+connection, a redirect, and any other failure apart. The body limit is
+64 MiB. See
+[Workspace](docs/workspace.md#read-a-process-with-fetch).
+
+**The host reads a process with `workspace.fetch`.** The method takes a
+name or a handle, a path, and a `RequestInit`. It returns a `Response` and
+keeps nothing. `workspace.processes.list({ agent })` reads the files of
+that agent and adopts its live processes, so a restarted host finds a
+process of an earlier run.
+
+**`wait` with one handle and `timeout: 0` reads a process.** The call gives
+the state and the new output of the process and does not wait. Each process
+has a directory, `~/.processes/<handle>/`, with its spec, its output, and
+its exit code.
+
+**The sensor templates speak protocol version 2.** A server listens on
+`$PORT`, prints nothing, and answers `GET /<sensor>/observe` with a query for
+a span. Each template ships a skill with an `observe` macro over `fetch`.
+The macro checks `api` and the digest of each file. See
+[Sensors](docs/sensors.md).
+
+#### The room
+
+**A room offers `seat` only when the reserve held an agent as the room
+composed.** The tool list of a seat stays the same across its activations,
+so a Codex thread survives. After the reserve empties, the room refuses a
+seating with "The reserve is empty." The prompt shows the reserve only when
+it holds an agent.
+
+**A host can turn seating off.** `StartRoomOptions` and the Cloudflare
+`StartOptions` take `seating`, which defaults to `true`. With
+`seating: false`, no activation holds `seat` or `unseat`, and the room
+refuses a `seated` or an `unseated` intent from a seat. `room.seat` and
+`room.unseat` work for the host.
+
+**`CollaborationContext` gains `seating` and `reserved`.** They mirror the
+composition entry. `reserve` is empty when seating is off.
+
+**The `seat` tool says what to do for a seated agent.** The result reads
+`<name> is already seated. Seating it again does not activate it. Read its
+mark in the roster: marked "named only", it gets the request through say
+with to set to <name>; with no mark or marked "watches arrivals", it already
+has the request.`
 
 #### The assistant
 
 **`defineAssistant` takes a required `executor` function.** The function
 receives `AssistantParts` (`instructions`, `tools`, and `bundles`) and
-returns an executor of any package. The options `model` and `thinking` are
-gone. Pass them to the executor in the function: `executor: (parts) =>
-pi({ ...parts, model, thinking })`. The package exports the new type
-`AssistantParts`.
+returns an executor of any package. `DefineAssistantOptions` holds no
+`model` and no `thinking`. Pass them to the executor:
+`executor: (parts) => pi({ ...parts, model, thinking })`.
 
-**`@ambionframework/assistant` no longer depends on `@ambionframework/pi`.**
-It depends on `@ambionframework/ambion` only.
+**The assistant routes first and then stays silent.** To route to a seated
+specialist at `named` attention, it calls `say` with `to` set to that
+specialist. After that, it speaks only when a participant asks it a
+question, the application instructions require a message, or a specialist
+announces an action that the person forbade. A specialist result is no
+question, and the closing summary reports it.
+
+**A summary rests on the messages of its exchange.** Every fact, value, and
+recommendation of a summary comes from a message of the exchange. The writer
+copies each value as the message states it and keeps the cited paths and
+URIs. The writer writes no summary when one specialist message already
+answers the request, or when no message after the request reports anything.
+
+**The room assigns no summary to a silent exchange.** When no agent said a
+message inside the range of a closed exchange, the close names no summary
+writer. The rule is `owesSummary` in `rules.verified.ts`.
+
+#### The guidance of a seat
+
+**Each fact of the tool guidance stands in one place.** A tool description
+holds what its schema does not state, and a note of the workspace holds
+what no description states. The citation rule stands on the `refs` field of
+`say` and in the description of `snapshot`. The workspace guidance names no
+tool count, the SSH port, or a forwarded URL.
+
+**The workspace states the room mirror only when the host writes it.**
+`openWorkspace` takes `rooms`. The note about
+`<layout.rooms>/<room name>/messages.jsonl` appears only with `rooms: true`.
+The workbench sets it.
+
+**The prompt asks a seat to seat a colleague only when it holds `seat`.**
+The hand-off paragraph names the reserve only when the room offers `seat`.
+
+**The scripted executor returns a tool error to the script.** When an own
+tool of a seat throws, the script reads the message in `step.results`, and
+the activation goes on. A script that needs a failed pass throws a
+`ScriptedFailure`.
 
 ### Simplification
 
-**The sensor response has one check.** The sensor client checks the response
-schema and each file digest once. The retention trusts the client result. It
-still refuses a referenced file that is missing and a received file that no
-observation references.
+**The kernel holds no sensor code.** The sensor wire client, the schemas,
+the connection registry, the reminder, the retention code, the conformance
+suite, and the `connect`, `disconnect`, and `observe` tools are gone. That
+is about 2,100 lines of source and 5,000 lines of tests. `fetch` and its
+cache take about 620 lines of source. The protocol, its version, and its
+digest rule live in the templates.
 
-**The process tools derive their details.** `process-tools` no longer
-declares `ProcessDetails`, `WaitDetails`, and `PsDetails` by hand. They
-derive from the output schemas.
+**The workspace drops the `status` and `clone` tools.** `wait` with
+`timeout: 0` reads a process. The git note teaches `git clone <url> <path>`
+with `bash`, and `fork` keeps its `clone` option. The smallest workspace
+gives nine tools.
 
-**The skill text rules have one home.** The helper `skill-text.ts` holds
-the text rules that `skills.ts` and the new `skill-macros.ts` share.
+**The process tools derive their details.** `ProcessDetails`,
+`WaitDetails`, and `PsDetails` derive from the output schemas.
+
+**The skill text rules have one home.** `skill-text.ts` holds the text
+rules that `skills.ts` and `skill-macros.ts` share.
 
 **One function runs each tool call.** A direct call and a nested call go
 through the same function. It prepares the arguments, checks the full
 schema, invokes the tool, and records the steps of a nested call.
 
 **The executor packages name their definition file `execution.ts`.** The
-file held `compose.ts` before. The public exports do not change.
+public exports do not change.
 
 ### Fixes
 
-**A Claude seat answers a line steered during its final answer.** The
-Claude executable runs such a line as a turn of its own after the first
-`result`. The executor parked that result behind the echo grace of 5 s, and
-the echo of the line did not cancel the timer. The pass settled on the first
-result, and the close stopped the turn that answers the line. Now an echo
-that arrives while a result that did not fail waits on the timer cancels
-the timer. The pass settles on the result of the next turn, and the say of
-that turn commits after the line. A failed result keeps its timer for the
-standard error.
+**A Pi seat reads the seat prompt as the system prompt.** In 0.5.0 the
+harness wrote the prompt after the first input. A provider lifts only the
+first message into its system field. On a model that accepts system
+messages in the middle of a conversation, the prompt reached the model as an
+update. A request hook moves the first prompt entry to the head of each
+request. The stored session keeps its order.
+
+**A Claude seat answers a line steered during its final answer.** The Claude
+executable runs such a line as a turn of its own after the first `result`.
+The echo of the line did not cancel the echo grace timer of 5 s, so the
+pass settled on the first result. In 0.6.0 an echo that arrives while a
+result waits on the timer cancels the timer, and the pass settles on the
+next result.
 
 **The core adds the `[new]` marker to a steered line.** The runner marks the
-line with the prefix of `renderDelta`. Pi no longer adds its own prefix.
-Codex and Claude now send the marked line.
+line with the prefix of `renderDelta` for every executor. In 0.5.0 only Pi
+added the prefix.
 
 **A direct call checks the full schema.** A direct call on Claude, Codex,
-and the scripted executor now checks the arguments against the schema after
-`prepareArguments`. A hand-built tool whose `invoke` checks nothing no
-longer gets bad arguments. Pi keeps the check of its harness.
+and the scripted executor checks the arguments against the schema after
+`prepareArguments`. Pi keeps the check of its harness.
 
-**`disconnect` leaves a link whose process ended as it is.** The link stays
-unavailable. Before, `disconnect` relabelled it as disconnected.
+**A refused `say` tells the model what to do.** The result reads `Not
+delivered: the room moved while you were speaking. New on the record:`, the
+new lines, and `Read it, then call say again with your message unless the
+new messages already say it or make it unnecessary.` In 0.5.0 the advice
+ended the activation and lost the answer of a specialist.
 
-**Camera Chat keeps its preview frame.** On a refresh of the same sensor
-the preview keeps its frame, where it blanked for one poll. It skips the
-download of a frame with an unchanged digest. The host no longer tells the
-agent to edit and push `fps=5` on every connect. The camera template
-accepts `--framerate`. Both READMEs state the CPU cost, the frame size, and
-the 24 hour `bash` timeout that the host passes. The README states that the
-login in `auth.json` decides billing.
+**Camera Chat keeps its preview frame.** On a refresh of the same frame the
+preview keeps its image, and the host skips the download of a frame with an
+unchanged digest. The camera template accepts `--framerate`. The README
+states the CPU cost, the frame size, and the 24 hour `bash` timeout.
 
 ### Breaking changes
 
@@ -633,48 +396,85 @@ login in `auth.json` decides billing.
 
 - **Pass an `executor` function to `defineAssistant`.** There is no Pi
   default. Write `executor: (parts) => pi({ ...parts, model })`, or use
-  `codex` or `claude` in place of `pi`.
-- **Move `model` and `thinking` into the executor call.**
-  `DefineAssistantOptions` no longer holds them.
+  `codex` or `claude`. Move `model` and `thinking` into that call.
 - **Install the executor package yourself.** `@ambionframework/assistant`
   no longer pulls in `@ambionframework/pi`.
-- **Replace `DefineToolOptions`.** Use `PlainToolOptions` for a tool with no
-  declared output, `DeclaredToolOptions` for a tool with `compose: {
-  output }`, and `BaseToolOptions` for the shared fields.
-- **Read the new `sql` details.** `rows` was the count of rows. It is the
-  preview rows now, and `count` holds the count.
-- **Handle the `approval` step.** A switch over `Step` meets it, and it
-  carries the `answer` of a compose call.
-- **Handle `parent` on `tool_call` and `tool_result`.** A nested call has
-  it, and a direct call does not.
-- **Remove a `[new]` prefix that your executor adds.** The core adds it to
-  each steered line.
+- **Expect `compose` and `describe` on every seat.** The tool list and the
+  guidance of every Pi, Claude, and Codex seat hold both tools.
+  `ExecutorBaseOptions` gains `compose`, which takes `ComposeOptions`. A
+  user tool named `compose` or `describe` is refused.
+- **Replace `DefineToolOptions`.** Use `PlainToolOptions`,
+  `DeclaredToolOptions`, or `BaseToolOptions`.
+- **Read the new details.** `sql` `rows` holds preview rows, and `count`
+  holds the count. `read` and `repos` give the shapes in
+  [Declared outputs](#declared-outputs).
+- **Handle the `approval` step and `parent`.** A switch over `Step` meets
+  `approval`. A nested `tool_call` or `tool_result` has `parent`.
+- **Remove a `[new]` prefix that your executor adds.** The core adds it.
 - **Expect a checked direct call.** A tool whose `invoke` assumed unchecked
-  arguments now meets the full schema check on Claude, Codex, and the
-  scripted executor.
+  arguments meets the full schema check on Claude, Codex, and the scripted
+  executor.
+- **Replace `status` with `wait`.** Call `wait` with `handles: [handle]` and
+  `timeout: 0`. The result has the same text and details.
+- **Replace `clone` with `bash`.** Run `git clone <url> <path>` in `bash`,
+  or call `fork` with `clone`.
+- **Replace `connect`, `disconnect`, and `observe` with `fetch`.** Start the
+  server with `bash`, and call `fetch({ process, path })`. Run the `observe`
+  macro of the template for the digest checks.
+- **Replace `workspace.sensors` with `workspace.processes` and
+  `workspace.fetch`.** The types `RegisteredSensorConnection`,
+  `SensorConnectionEvent`, and `SensorDiscovery` leave the root export.
+- **Drop the sensor exports.** `./sensors`, `./sensor-api.schema.json`,
+  `createSensorClient`, and `sensorConformance` with its types are gone. A
+  template owns and tests its protocol.
+- **Make a sensor server listen on `$PORT`.** The `READY` line and a chosen
+  port are gone. A server at protocol version 1 fails the macro of a
+  template at version 2.
+- **Expect `port` in a process.** A `spec` written before 0.6.0 has port 0,
+  and `fetch` refuses it.
+- **Seat from the host in a room with an empty reserve.** Such a room offers
+  no `seat` to an agent. Call `room.seat`.
+- **Throw `ScriptedFailure` for a failed scripted pass.** A tool that throws
+  in the scripted executor returns its error to the script.
 
 #### Journal and stored data
 
-**No journal body and no stored format changes.** The golden journals, the
-snapshot manifest, and the sensor wire API stay as they are. A journal of
-0.5.0 opens on 0.6.0. The new `approval` step belongs to the trace. No
-journal body carries a step.
+**The composition entry gains two optional fields.** It records
+`seating: false` when the host turns seating off, and `reserved: true` when
+the reserve held an agent. A composition of 0.5.0 has neither field.
+
+**A room that resumes a journal of 0.5.0 reads seating as on.** Its
+composition has no `reserved`, so its agents get no `seat` tool until a new
+agent joins the definitions. The host seats with `room.seat`.
+
+**The other journal bodies and stored formats stay as they are.** The golden
+journals and the snapshot manifest keep their form. The spec of a process
+gains `port`. The `approval` step belongs to the trace, and no journal body
+carries a step.
 
 #### Exports
 
 - **`@ambionframework/ambion`.** Adds `composeMacro`, `COMPOSE_GUIDANCE`, and
   the types `BaseToolOptions`, `PlainToolOptions`, `DeclaredToolOptions`,
   `ComposeLimits`, `ComposeMacro`, `ComposeOptions`, `ComposeRequest`,
-  `ComposeResult`, `Evaluator`, `EvaluatorInput`, `JsonValue`, and
+  `ComposeResult`, `ComposeRuntime`, `ComposeRuntimeInput`, `JsonValue`, and
   `LedgerEntry`. Removes the type `DefineToolOptions`.
 - **`@ambionframework/ambion/hosting`.** Adds `invokeTool` and
   `invokeChecked`.
-- **`@ambionframework/ambion/conformance`.** Adds `evaluatorConformance`.
-- **`@ambionframework/workspace`.** Adds the type `SqlParam`.
+- **`@ambionframework/ambion/conformance`.** Adds
+  `composeRuntimeConformance`.
+- **`@ambionframework/workspace`.** Adds the type `SqlParam`. Removes the
+  types `RegisteredSensorConnection`, `SensorConnectionEvent`, and
+  `SensorDiscovery`, and the entries `./sensors` and
+  `./sensor-api.schema.json`.
+- **`@ambionframework/workspace/conformance`.** Removes
+  `sensorConformance` and the types `SensorConformanceFixture`,
+  `SensorConformanceProbe`, and `SensorConformanceReply`.
 - **`@ambionframework/assistant`.** Adds the type `AssistantParts`.
 - **`@ambionframework/compose`.** Is a new package with the entry
-  `@ambionframework/compose/runtime`: `quickjsEvaluator`, `processEvaluator`,
-  and their option types.
+  `@ambionframework/compose/runtime`: `quickjsRuntime`, `processRuntime`,
+  `PACKAGE_NAME`, and the types `QuickjsOptions`, `ProcessOptions`, and
+  `SpawnChild`.
 - **The other entries keep their exports.**
 
 ## 0.5.0 (2026-10-02)
