@@ -1,8 +1,9 @@
 # The canvas
 
 > **Status: design. Nothing on this page exists yet.** The page states the
-> design of the canvas for review. The first step, rooms on a canvas and
-> breakout rooms, is the scope of 0.7.0 in [the plan](../planning/next.md).
+> design of the canvas, with its decisions settled. The first step, rooms
+> on a canvas and breakout rooms, is the scope of 0.7.0 in
+> [the plan](../planning/next.md).
 > Widgets are a later step. The package, the tools, the store, and the
 > host view do not exist yet. Every kernel part that the page names exists
 > today.
@@ -184,8 +185,8 @@ for (const exchange of closed) {
 ```
 
 **The report carries the last say of the exchange.** The text is cut to
-a fixed byte count. The opener reads the result in the report, and reads
-the full range only when it needs more. The range comes from the mirror
+`reportBytes`, 2,000 by default. The opener reads the result in the
+report, and reads the full range only when it needs more. The range comes from the mirror
 at `/rooms/<room>/messages.jsonl`, which is a best-effort copy
 ([Workspace](workspace.md#mirror-a-rooms-messages)).
 
@@ -239,17 +240,19 @@ bound of the canvas is that team.
 own attention, and the host owns every operation that adds activations.
 The canvas checks these bounds before it writes the row:
 
-- **Count.** The most breakout rooms that one opener holds open.
+- **Count.** The most running breakout rooms for one opener:
+  `perOpener`, 3 by default.
 - **Depth.** One. A worker has no opener bundle, so it cannot open a room.
-- **Agents.** The definitions that a breakout room may seat. A name
-  outside the list is a refusal.
+- **Agents.** The worker team, `team`. A name outside the team is a
+  refusal.
 
 **The canvas bounds the exchanges of a breakout room.** A returned say
 in a breakout room opens an exchange, and the canvas reports it. The
 count bound does not bound such a chain. The canvas therefore stops a
-breakout room after a fixed count of exchanges, and the last report
-says so. A kernel bound on the chain is a later design. [D1](../planning/backlog.md#designs-with-a-shape)
-holds the accounting and the enforcement.
+breakout room after `exchanges` closed exchanges, 20 by default, and the
+last report says so. A kernel bound on the chain is a later design.
+[D1](../planning/backlog.md#designs-with-a-shape) holds the accounting
+and the enforcement.
 
 **Spend is readable per exchange.** Each closed `Exchange` of a breakout
 room carries `usage`. An attempt that the room ends (`expired`,
@@ -380,35 +383,192 @@ paths and tables.
   `execution/render.ts` stays pure and stateless.
 - **Recall.** `recall` reads the room of the activation alone.
 
+## The interface
+
+**This section fixes the shape that the first step builds.** The names
+are final for 0.7.0. The defaults are the values of the first release.
+
+### The canvas
+
+```ts
+interface OpenCanvasOptions {
+  readonly name: string;
+  readonly runtime: Runtime;
+  /** Every definition that a room of the canvas may seat. */
+  readonly agents: readonly AgentDefinition[];
+  readonly store: CanvasStore;
+  /** The execution of every room, as StartRoomOptions.execution states. */
+  readonly execution?: Execution | readonly Execution[];
+  /** With a workspace, the canvas attaches the mirror of each room. */
+  readonly workspace?: Workspace;
+  readonly breakout?: BreakoutOptions;
+  readonly onError?: (error: CanvasError) => void;
+}
+
+interface Canvas {
+  readonly name: string;
+  /** Writes the row, then starts the room. A name that exists is a refusal. */
+  open(options: CanvasRoomOptions): Promise<Room>;
+  /** Resumes each room whose row is running. */
+  resume(): Promise<void>;
+  /** Stops each room. Each row keeps its state. */
+  stop(): Promise<void>;
+  /** The live handle of a room of this run, or undefined. */
+  room(name: string): Room | undefined;
+  rooms(): readonly CanvasRoom[];
+  subscribe(listener: (event: CanvasEvent) => void): () => void;
+  /** The opener bundle: breakout, tell, and the reminder. */
+  tools(): ToolBundle;
+}
+
+type CanvasRoomOptions = Omit<StartRoomOptions, 'name' | 'runtime' | 'agents' | 'execution'> & {
+  readonly name: string;
+  readonly goal: string;
+};
+
+interface CanvasRoom {
+  readonly name: string;
+  readonly goal: string;
+  readonly parent?: string;
+  readonly opener?: string;
+  readonly depth: 0 | 1;
+  readonly state: 'running' | 'stopped';
+}
+
+type CanvasEvent =
+  | { readonly type: 'opened'; readonly room: CanvasRoom }
+  | { readonly type: 'stopped'; readonly room: string }
+  | { readonly type: 'reported'; readonly room: string; readonly from: Seq; readonly to?: string };
+
+interface CanvasError {
+  readonly room: string;
+  readonly operation: 'mirror' | 'resume' | 'report' | 'stop';
+  readonly error: unknown;
+}
+```
+
+**The store row holds no start options.** The journal records the
+composition of each room, so a resume needs the definitions and the
+execution alone. `resumeRoom` takes the same two.
+
+**The canvas hears each room that it starts or resumes.** It calls
+`room.subscribe` once for each handle, and it reacts to
+`exchange_closed`. The handle of a run goes with the run.
+
+### The store
+
+```ts
+interface CanvasStore {
+  list(): Promise<readonly CanvasRoom[]>;
+  /** Writes the row when the name is free. A row of that name stays as it is. */
+  insert(room: CanvasRoom): Promise<'inserted' | 'exists'>;
+  setState(name: string, state: CanvasRoom['state']): Promise<void>;
+}
+
+function sqliteCanvas(path: string): CanvasStore;
+function memoryCanvas(): CanvasStore;
+```
+
+**`insert` is the idempotence of an open.** A repeat after a crash gets
+`exists` and continues with the row that it finds.
+`canvasStoreConformance` runs the same cases over both stores.
+
+### The breakout options
+
+```ts
+interface BreakoutOptions {
+  /** The worker team. No root room seats these definitions. */
+  readonly team: readonly string[];
+  /** The most running breakout rooms for one opener. Default 3. */
+  readonly perOpener?: number;
+  /** The closed exchanges after which the canvas stops a breakout room. Default 20. */
+  readonly exchanges?: number;
+  /** The most bytes of the last say in a report. Default 2,000. */
+  readonly reportBytes?: number;
+}
+```
+
+**`openCanvas` refuses a team name that it cannot resolve.** `canvas.open`
+refuses a root room that seats a team name.
+
+### The tools
+
+```ts
+breakout({
+  name: string,        // ^[a-z][a-z0-9-]*$; the room is <parent>-<name>
+  goal: string,
+  agents: string[],    // one or more names of the team
+  to?: string,         // a worker; omit to start every worker
+}) -> { room: string, uri: string, mirror?: string, created: boolean }
+
+tell({
+  room: string,        // a breakout room that the caller opened
+  text: string,
+  to?: string,
+  refs?: string[],
+}) -> { room: string, seq: Seq }
+```
+
+**The tools read the caller from `ToolContext`.** The opener is
+`ctx.agent.name`, and the parent is `ctx.room`. A call with no room, or
+from a room that is not on the canvas, is a refusal. A call from a
+breakout room is a refusal, so the depth stays one.
+
+**A refusal is a tool error that names the cause.** The causes are a bad
+name, a name that another opener holds, the count for the opener, a name
+outside the team, and a room that the caller did not open.
+
+### The text
+
+**A report is one line, then the last say.**
+
+```text
+breakout design-survey: exchange #41 is complete.
+The drift stays under 0.3% on all four runs; the table is runs-0412.
+```
+
+An exchange with no say reads `breakout design-survey: exchange #41 is
+complete, with no message.` The report that reaches the exchange cap adds
+`The canvas stopped the room after 20 exchanges.`
+
+**The reminder lists the breakout rooms of the seat.**
+
+```text
+Your breakout rooms:
+- design-survey: running, exchange #58 open, last message #61
+- design-tests: stopped, last message #12
+```
+
+It gives at most ten lines, then `and 3 more`. A seat with no breakout
+room gets no reminder text.
+
 ## Decisions
 
 **The owner set these on 2026-10-03 and 2026-10-04.** A later review can
-reopen each one.
+reopen each one. The breakout decisions follow the recommendations of the
+review of 2026-10-04.
 
-| Decision              | Choice                                                                     |
-| --------------------- | -------------------------------------------------------------------------- |
-| The scope of a canvas | One canvas holds the rooms of a deployment. Widgets belong to a room of it |
-| Delegated work        | A breakout room on the canvas. No `task()` or subagent tool                |
-| The record of an act  | A `visit.send` with the `canvas:` label. No kind of entry for acts         |
-| The first host        | The workbench                                                              |
-| Code from an agent    | Out of scope. If it comes later, it starts as a Git template               |
+| Decision                     | Choice                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| The scope of a canvas        | One canvas holds the rooms of a deployment. Widgets belong to a room of it                 |
+| Delegated work               | A breakout room on the canvas. No `task()` or subagent tool                                |
+| Who may open a breakout room | An agent that the host gives the opener bundle, within the bounds in [Bounds](#bounds)     |
+| An author across rooms       | None. A report carries the label `breakout <name>:`                                        |
+| The name of a breakout room  | `<parent>-<name>`, under the room name rule with one length bound (S1 in the plan)         |
+| The composition              | As [The composition](#the-composition) states, from the worker team                        |
+| A worker ends with no `say`  | The text stays lost, as on every executor today. The report names the exchange with no say |
+| What a person can change     | A person visits and speaks. Opening a room stays with the host and the opener bundle       |
+| The record of an act         | A `visit.send` with the `canvas:` label. No kind of entry for acts                         |
+| The first host               | The workbench                                                                              |
+| Code from an agent           | Out of scope. If it comes later, it starts as a Git template                               |
 
 ## Open decisions
 
-1. **Who may open a breakout room.** The recommendation: an agent that
-   the host gives the opener bundle, a count of three for each opener,
-   depth one, and a list of definitions to seat.
-2. **An author across rooms.** The recommendation: none in the first
-   step. A report carries the label `breakout <name>:`.
-3. **The name of a breakout room.** The recommendation: `<parent>-<name>`,
-   checked against the room name rule with one length bound (S1 in the
-   plan).
-4. **The composition of a breakout room.** The recommendation is in
-   [The composition](#the-composition).
-5. **A worker that ends with text and no `say`.** The recommendation: the
-   text stays lost, as on every executor today. The report names the
-   exchange with no message.
-6. **What a person can change.** A person can visit, speak, and act. The
-   question is whether a person can open a room or place a widget.
-7. **The widgets of an unseated author.** They can stay, go with the
+**Only the widget questions stay open.** They wait for the widget step.
+
+1. **What a person can place.** A person can arrange and act. The
+   question is whether a person can also place a widget, such as a note.
+2. **The widgets of an unseated author.** They can stay, go with the
    author, or pass to the host.
+3. **Bounds on widgets.** A cap on the widgets of a room and on the bytes
+   of an `inline` source.

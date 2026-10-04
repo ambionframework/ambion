@@ -26,9 +26,11 @@ everything else.
 
 ## Status
 
-**No item has started.** The owner set breakout rooms as the theme on
-2026-10-03, and the canvas as their container on 2026-10-04. The canvas
-decisions (CD1) come before the package.
+**The design is ready for implementation.** The owner set breakout rooms
+as the theme on 2026-10-03, and the canvas as their container on
+2026-10-04. The owner accepted the recommended canvas decisions (CD1) on
+2026-10-04. [The canvas](../docs/canvas.md#the-interface) fixes the
+interface. No code item has started.
 
 ## The scope
 
@@ -117,7 +119,7 @@ none in the file.
 
 ### Phase 2. The canvas decisions
 
-- [ ] **1.** The owner settles the open decisions of the canvas. (CD1)
+- [x] **1.** The owner settles the open decisions of the canvas. (CD1)
 
 **Evidence:** `docs/canvas.md` states each decision. Its open decisions
 hold only the widget questions.
@@ -190,10 +192,11 @@ of the opener, so the workbench logs the failure.
 the file. A workbench test with a failed attach finds the log line.
 
 **CD1. The canvas decisions.** Each decision changes the tool shape,
-the composition, or the store. [The canvas](../docs/canvas.md#open-decisions)
-gives the recommended choice for each one.
+the composition, or the store. The owner accepted each recommended
+choice on 2026-10-04. [The canvas](../docs/canvas.md#decisions) states
+them.
 
-| #   | Decision                                  | Recommended                                                                                                                                 |
+| #   | Decision                                  | Choice                                                                                                                                      |
 | --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Who may open a breakout room              | An agent that the host gives the opener bundle. The canvas bounds the count for each opener (3), the depth (1), and the definitions to seat |
 | 2   | An author across rooms                    | None in the first step. A report carries the label `breakout <name>:`                                                                       |
