@@ -115,6 +115,7 @@ agent is the agent's own home. A handle of another agent fails with
 trap : TERM 2>/dev/null
 echo "$$" > '<dir>/pid'
 (
+trap 'exit $?' TERM 2>/dev/null
 <command>
 ) < /dev/null > '<dir>/out' 2>&1
 echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > '<dir>/exit.tmp' && mv '<dir>/exit.tmp' '<dir>/exit'
@@ -369,18 +370,29 @@ export interface WorkspaceExecOptions extends ShellExecOptions {
 ```
 
 **The wrapper outlives the `SIGTERM`.** `trap : TERM` installs a handler.
-A handler resets to the default in the subshell, so the command gets the
-signal as usual. An ignored signal stays ignored in every program that
-the command runs, so the wrapper never ignores `TERM`. When the command
-ends, the wrapper writes `exit`. On the workstation, the script's shell
-has the same handler ([Workstation](workstation.md#commands-and-aborts)).
+A handler resets to the default in each program that the command runs, so
+each program gets the signal as usual. An ignored signal stays ignored in
+every program that the command runs, so the wrapper never ignores `TERM`.
+When the command ends, the wrapper writes `exit`. On the workstation, the
+script's shell has the same handler
+([Workstation](workstation.md#commands-and-aborts)).
+
+**The subshell waits for its last program.** The subshell traps `TERM`
+with `exit $?`. Bash 3.2 on macOS forks the last program of a list such as
+`cd app && node main.js`. The trap makes the subshell wait for that program
+and end with its code.
+
+**A command that runs no program at the signal ends with its last code.**
+The trap runs at once and exits with the code of the last command. A shell
+loop such as `while true; do :; done` reads `exited` with code 0, and
+`stop` alone records the cancel.
 
 **The files record how the command ended.**
 
 | The command                                                    | `exit` | State                   |
 | -------------------------------------------------------------- | ------ | ----------------------- |
 | Traps `TERM`, and exits in time with a code `n` other than 143 | `n`    | `exited`, with code `n` |
-| Ends on the `SIGTERM`: code 143                                | `143`  | The cause in `stop`     |
+| A program that the `SIGTERM` ended: code 143                   | `143`  | The cause in `stop`     |
 | Outlives the grace, and `SIGKILL` ends it                      | Absent | The cause in `stop`     |
 
 **A parent process can hide a clean cancel.** The group signal reaches
@@ -388,7 +400,7 @@ every process of the command. A parent that dies on `TERM` gives the
 wrapper 143 while its child cleans up. A probe showed it for a forking
 `flock`, and `flock -F` or `exec` passed the child's 0 through. A command
 that must report a clean cancel keeps its cleaning process last, with
-`exec`. The wrapper's own subshell passed the code through in every probe.
+`exec`. The trap of the wrapper's own subshell passes the code through.
 
 **A command that exits 0 inside the grace reads `exited` with code 0.**
 The code is the command's own answer: it cleaned up. `stop` still names

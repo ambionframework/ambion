@@ -78,6 +78,20 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(await readFile(join(dirname(timed.process?.output ?? ''), 'stop'), 'utf8')).toMatch(
 			/^timed_out /,
 		);
+		// A trailing statement makes bash fork the child, as bash 3.2 on macOS
+		// does for a list. The child's 0 shows because the subshell waits for it.
+		const forked = 'sh -c \'trap "exit 0" TERM; sleep 30 & wait\'; code=$?; exit $code';
+		const child = await invoke(workspace, 'bash', { command: forked, wait: 0 });
+		const stopped = await invoke(workspace, 'cancel', { handle: child.process?.handle ?? '' });
+		expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		// A loop of builtins runs no program at the signal, so it ends with the
+		// code of its last command.
+		const loop = await invoke(workspace, 'bash', { command: 'while true; do :; done', wait: 0 });
+		const looped = await invoke(workspace, 'cancel', { handle: loop.process?.handle ?? '' });
+		expect(looped.process).toMatchObject({ state: 'exited', exitCode: 0 });
+		expect(await readFile(join(dirname(looped.process?.output ?? ''), 'stop'), 'utf8')).toMatch(
+			/^cancelled /,
+		);
 	});
 
 	it('sends SIGKILL after the grace to an owned and an adopted process that ignore TERM, and shows the cancel while it waits', async () => {
