@@ -332,10 +332,10 @@ replayed. A host reads the same boundary through `workspace.sensors`, which
 
 ## Workstation endpoints
 
-**The backend names where commands run.** Its guidance and tool results
-give the configured workstation hostname. They distinguish the remote
-sensor port from the SSH login port and any local transport address.
-The agent does not need to construct a tunnel command.
+**The sensor tools name where a sensor runs.** The `connect` result and the
+sensor reminder give the workstation hostname and the remote sensor port.
+No tool shows the SSH login port or the local transport address. The agent
+does not need to construct a tunnel command.
 
 **The bash backend exposes one optional endpoint capability.** This transport
 contract is separate from its existing environment `connect` method:

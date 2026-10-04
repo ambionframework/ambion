@@ -30,7 +30,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a cap serves the closing exchange whole to a summary purpose 1`] = `
@@ -74,7 +74,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a cap serves the open exchange whole 1`] = `
@@ -98,7 +98,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a long record by the default estimate 1`] = `
@@ -164,7 +164,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a long record cut deep by the token limit 1`] = `
@@ -221,7 +221,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a long record for a summary purpose 1`] = `
@@ -397,7 +397,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a long record under a cap and a token limit 1`] = `
@@ -487,7 +487,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a long record under a cap below the open exchange 1`] = `
@@ -539,7 +539,7 @@ The record of 'window' so far:
 #149 [priya] xxxxxxxxx  (just now)
 #150 [priya] xxxxxxxxxxxxxxxx  (just now)
 
-priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 120 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/120. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit counts a summarised range once 1`] = `
@@ -574,7 +574,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit keeps a summarised range whole 1`] = `
@@ -608,7 +608,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit keeps at least the newest line 1`] = `
@@ -629,7 +629,7 @@ The record of 'window' so far:
 ── 3 earlier messages not shown ──
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit keeps the exchange of a summary purpose whole 1`] = `
@@ -673,7 +673,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit pins the open exchange whole 1`] = `
@@ -697,7 +697,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+priya's exchange opened by message 3 is active; the marked request is the current human direction. The opening message's URI is ambion://room/window/message/3. Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit stops above a summarised range that does not fit 1`] = `
@@ -730,7 +730,7 @@ The record of 'window' so far:
 #9 [priya] aaaa  (just now)
 #10 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > a token limit stops at the cap 1`] = `
@@ -753,7 +753,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > an infinite cap reports nothing 1`] = `
@@ -774,7 +774,7 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;
 
 exports[`the room windows the record > the whole record with no bound 1`] = `
@@ -795,5 +795,5 @@ The record of 'window' so far:
 #4 [priya] aaaa  (just now)
 #5 [priya] aaaa  (just now)
 
-Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions in your agent definition."
+Begin your activation, worker: this is a respond activation. Follow your instructions, and speak only to add something the record lacks. If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. These speech defaults yield to explicit instructions under 'Your instructions'."
 `;

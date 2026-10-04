@@ -59,13 +59,14 @@ Application instructions follow the maintained defaults and take precedence
 when they conflict. The room still enforces seating, activation authority,
 freshness, recipients, exchange closure, and summary provenance.
 
-Omitting `seats` starts all defined agents at broadcast attention. Use
-`seats: {}` to start with only the assistant. Supply the assistant definition
-again in the complete `agents` definitions when calling `resumeRoom`.
+Omitting `seats` starts all defined agents with no roster mark, so anything
+said wakes them. Use `seats: {}` to start with only the assistant. Supply the
+assistant definition again in the complete `agents` definitions when calling
+`resumeRoom`.
 
 The default assistant is passive when the specialists are seated at
-broadcast or presence attention. It speaks during an exchange only when a
-participant asks it a question, when a seated specialist at named attention
+unmarked or at "watches arrivals". It speaks during an exchange only when a
+participant asks it a question, when a seated specialist marked "named only"
 needs one directed request, when the application instructions require a
 message, or, rarely, to stop a forbidden action. The closing summary reports
 corrections, conflicts, and questions for the person. Behavioral defaults are

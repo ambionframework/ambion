@@ -7,7 +7,10 @@
  *   holds them.
  * - **System prompt.** A prompt section with no tag renders the prompt of
  *   the pass that runs now. The model reads the text as the executor
- *   built it.
+ *   built it. The harness writes the prompt entry after the first input.
+ *   The request hook moves the first prompt entry to the head of each
+ *   request, so the provider sends it as its system prompt. Nothing before
+ *   that entry had a prompt.
  * - **Retries.** The retry policy of the harness is off, and so is the retry
  *   of the provider client. The room owns every retry of a failed request.
  * - **Overflow.** A context-overflow error makes the harness compact once and
@@ -43,6 +46,18 @@ import {
 } from '@earendil-works/pi-durable';
 import type { PiTool } from './tools.ts';
 import { abortLeftovers, resumeBase, rewind } from './transcript.ts';
+
+/**
+ * The messages with the first system message at the head, or `undefined` when
+ * it leads already or none exists. A provider lifts only the first message
+ * into its system field.
+ */
+function promptFirst<T extends { readonly role: string }>(messages: readonly T[]): T[] | undefined {
+	const at = messages.findIndex((message) => message.role === 'system');
+	const prompt = messages[at];
+	if (at <= 0 || prompt === undefined) return undefined;
+	return [prompt, ...messages.slice(0, at), ...messages.slice(at + 1)];
+}
 
 export interface HarnessInput {
 	readonly storage: Storage;
@@ -114,7 +129,8 @@ export async function openHarness(input: HarnessInput): Promise<OpenHarness> {
 			hook(GenerationTask, {
 				beforeRequest: async (request) => {
 					await input.beforeRequest(request.messages);
-					return undefined;
+					const messages = promptFirst(request.messages);
+					return messages === undefined ? undefined : { messages };
 				},
 			}),
 		],
