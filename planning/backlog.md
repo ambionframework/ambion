@@ -14,68 +14,15 @@ items that the pruning of 2026-10-03 removed.
 the first item comes first. An item whose condition holds moves to the
 top of its section.
 
-| Section                                       | Items | First item                               |
-| --------------------------------------------- | ----- | ---------------------------------------- |
-| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                       |
-| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option               |
-| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1    | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | S1–S7 | S1, one name rule                        |
-| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work            |
-| [Considered and kept](#considered-and-kept)   | None  | None                                     |
-| [Deferred by decision](#deferred-by-decision) | None  | None                                     |
-
-## The 0.7.0 theme
-
-**B1 is the likely theme of 0.7.0.** The owner named it on 2026-10-03. It
-moves to [next.md](next.md) when 0.7.0 planning starts.
-
-**B1. Breakout rooms.** An agent opens a room for background work. A
-person can visit the room and read its exchanges. The room is the room
-equivalent of a background `bash` process, with messages in both
-directions.
-
-**The executors' native subagents stay off.** Claude runs with `tools:
-[]`, so it has no `Task` tool (`packages/claude/src/options.ts`). Codex
-runs with `multi_agent` off and no `spawn_agent` tool
-(`packages/codex/src/catalog.ts`). A native subagent lives in the vendor
-session and writes no entry. A crash loses it, and the host cannot see
-or bound its spend.
-
-**A worker seat in the same room costs every other seat.** Its directed
-says are entries of the parent room. They fill the window of each seat,
-and the undirected ones wake each `broadcast` seat. A breakout room keeps
-the work in a journal of its own. That journal is durable, replays, and
-takes visits.
-
-**The kernel holds every part except the open.**
-
-| Need                    | Part that exists                                                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Make the room           | The host makes rooms. The workbench does.                                                                                 |
-| Seat the workers        | `room.seat` from the reserve                                                                                              |
-| Send the goal and notes | `room.post` with `to` and `key` wakes or steers the target and lands once across a restart                                |
-| Read the exchanges      | [The room mirror](../docs/workspace.md#mirror-a-rooms-messages) on a shared workspace. `recall` reads its own room alone. |
-| Return the result       | The host posts a line for each closed exchange of the breakout room into the parent room, with a ref to its range         |
-
-**[Breakout rooms](../docs/breakout.md) states the design.** The first
-step is a host tool bundle with no change to the kernel.
-`breakout({ goal, agents })` opens a room, seats the agents, and posts the
-goal. `tell({ room, text })` posts to a room that the caller opened. The
-mirror serves reads. Each journal holds its own entries, and the posts
-carry the refs between them.
-
-**Two decisions come first:**
-
-1. **Who may open a breakout room.** An open is spend, so the host bounds
-   it: the count, the depth, and the agents that a breakout room may
-   seat. D1 holds the accounting.
-2. **A post has no author.** A seat in the breakout room tells the parent
-   agent from another source by a label in the text. An author across
-   rooms is a new trust surface, and the first step adds none.
-
-**Condition:** the owner starts 0.7.0 planning.
+| Section                                       | Items | First item                          |
+| --------------------------------------------- | ----- | ----------------------------------- |
+| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option          |
+| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard |
+| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one  |
+| [Simplification](#simplification)             | S2–S7 | S2, one close rule                  |
+| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work       |
+| [Considered and kept](#considered-and-kept)   | None  | None                                |
+| [Deferred by decision](#deferred-by-decision) | None  | None                                |
 
 ## Pending decisions
 
@@ -114,17 +61,6 @@ billing or authentication refusal fails the job with an annotation that
 names the provider error, and the tests do not run. **Condition:** the
 next live run that fails on a provider refusal.
 
-## Rules and proofs
-
-[docs/formal.md](../docs/formal.md) states the mechanism and the line a
-proof must pay for.
-
-**P1. `returnable` moves into the verified rules.** The rule decides when
-the room returns a scheduled say, and `reconcile.ts` and `returning` call
-it. It lives in `packages/ambion/src/room/scheduled.ts`, outside
-`room/rules.verified.ts`, so it has no contract and no binding case.
-**Condition:** none.
-
 ## Simplification
 
 **This section lists the concepts that the repository holds twice.** A
@@ -133,15 +69,14 @@ the concepts removed times the confidence (high 3, medium 2, low 1).
 Twenty-six reductions and W5 have landed. The changelog and the git
 history record them.
 
-| ID  | Finding                                                            | Evidence                                                                                                                                                                                  | Rank |
-| --- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| S1  | One name rule is written six times                                 | Core: `NAME_PATTERN`, `SEAT`. Workspace: the literal in `resource.ts`, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 6    |
-| S2  | The close rule is written three times                              | `reconcile.ts` plans it with `admitsClose`, `transition.ts` checks it again, and `room-run/control.ts` writes its complement. `decide` can return written, not owed, or plan again        | 6    |
-| S3  | The publication tail keeps caches because it lacks the prior state | `heardLeases`, `heardCloses`, and `seedHeard` in `room-run/`. A step that hands the hearer the state before the entry derives both                                                        | 6    |
-| S4  | One in-doubt append is written four times                          | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                         | 6    |
-| S5  | A package import sets the default execution of its kind            | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                                | 6    |
-| S6  | `resources.md` overlaps `workspace.md` and states a false count    | `resources.md` says "two bindings"; seven backend factories exist                                                                                                                         | 3    |
-| S7  | "Envelope" has three meanings                                      | `envelope.md`, `durability.md`, `formal.md`                                                                                                                                               | 3    |
+| ID  | Finding                                                            | Evidence                                                                                                                                                                           | Rank |
+| --- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| S2  | The close rule is written three times                              | `reconcile.ts` plans it with `admitsClose`, `transition.ts` checks it again, and `room-run/control.ts` writes its complement. `decide` can return written, not owed, or plan again | 6    |
+| S3  | The publication tail keeps caches because it lacks the prior state | `heardLeases`, `heardCloses`, and `seedHeard` in `room-run/`. A step that hands the hearer the state before the entry derives both                                                 | 6    |
+| S4  | One in-doubt append is written four times                          | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                  | 6    |
+| S5  | A package import sets the default execution of its kind            | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                         | 6    |
+| S6  | `resources.md` overlaps `workspace.md` and states a false count    | `resources.md` says "two bindings"; seven backend factories exist                                                                                                                  | 3    |
+| S7  | "Envelope" has three meanings                                      | `envelope.md`, `durability.md`, `formal.md`                                                                                                                                        | 3    |
 
 **S2, S3, and S4 change nothing that a host sees.** They stay inside
 `room-run/` and `reconcile`, and one change can carry all three. S5
@@ -168,11 +103,10 @@ three bounds:
 
 **D2. Compaction with no person.** A summary goes to a person, so an
 exchange where no person spoke never folds. A monitor that ticks each ten
-minutes adds about 1,000 returned says in a week. The first step is a
-render rule: a closed exchange with no spoken message shows as one line,
-and `recall` still reads it. A later step lets a seat write a summary over
-its own range. **Condition:** a measured context cost from a
-self-scheduling seat.
+minutes adds about 1,000 returned says in a week. The first step, a
+render rule for a closed exchange with no spoken message, is CR1 in
+`next.md`. A later step lets a seat write a summary over its own range.
+**Condition:** a measured context cost from a self-scheduling seat.
 
 **The second step can make a close a message.** A close that routes to
 the summary writer makes the summary an ordinary respond activation. The
@@ -256,6 +190,7 @@ own.** A later review does not propose them again.
 
 ## Deferred by decision
 
+- A `task()` or subagent tool; breakout rooms carry delegated work.
 - Hot-loaded definitions; the definition set is fixed per run.
 - Multiple simultaneous discussions within one room; separate rooms.
 - Per-tab presence tokens and automatic departures; hosts reconcile.

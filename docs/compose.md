@@ -6,9 +6,8 @@ default. A seat cannot turn them off. The main entry exports the types of the
 option and `COMPOSE_GUIDANCE`.
 Skill [macros](macros.md) run by name. The package
 `@ambionframework/compose/runtime` holds `quickjsRuntime` and `processRuntime`,
-and both pass `composeRuntimeConformance`. The live run of CP6 is in
-[the compose evidence](../planning/next.md#the-compose-evidence).
-[The 0.6.0 plan](../planning/next.md) holds the work.
+and both pass `composeRuntimeConformance`.
+[Compose evidence](compose-evidence.md) holds the live runs.
 
 **Macros are the main use of `compose`.** A skill stores a procedure as a
 [macro](macros.md), and the model runs it by name with arguments. The model
@@ -250,7 +249,7 @@ section that states it in full.
   task and a fan-out task. The full catalog and the exploration calls cost
   more input tokens than the data that the code kept out of the context. A
   macro runs by name with no code and no exploration, so it is the main
-  use ([Compose evidence](../planning/next.md#the-compose-evidence),
+  use ([Compose evidence](compose-evidence.md),
   [Catalog](#the-catalog)).
 - **The description of `compose` shows no signature.** It lists each tool
   with a typed result by the name of its result type. The model calls
@@ -390,7 +389,7 @@ description of `compose`. The compact list of the same seat holds about 1,200
 characters with the contract and the limits, and `describe` holds about 200.
 The first live runs measured the full catalog at 9,000 to 26,000 input tokens
 more for each activation
-([the compose evidence](../planning/next.md#the-compose-evidence)). A model
+([the compose evidence](compose-evidence.md)). A model
 that composes pays one more call to `describe`, or reads the signature in a
 failure.
 
@@ -1103,8 +1102,8 @@ signal and the deadline. It hands the step sink to `compose` through
 test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
-Items 1, 6, and 7 add a live run, which CP6 holds.
-[The compose evidence](../planning/next.md#the-compose-evidence) records it.
+Items 1, 6, and 7 add a live run, which [Compose evidence](compose-evidence.md) holds.
+[The compose evidence](compose-evidence.md) records it.
 
 1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
    `compose` as one more definition tool. A workspace test binds `sql` and
@@ -1146,5 +1145,5 @@ Items 1, 6, and 7 add a live run, which CP6 holds.
    cost more input tokens on Pi and Claude, because it made many direct
    calls before it composed. Codex failed the fan-out case with and
    without `compose`: it omitted a filter of the task.
-   [The third run](../planning/next.md#the-third-run) holds each fan-out
+   [The third run](compose-evidence.md#the-third-run) holds each fan-out
    run.

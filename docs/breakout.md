@@ -1,8 +1,8 @@
 # Breakout rooms
 
 > **Status: design. Nothing on this page exists yet.** The page states the
-> design of backlog item B1 for review. It names each kernel part that the
-> design uses, and each of those parts exists today. The tools, the catalog,
+> design of B1, the theme of 0.7.0 in the plan. It names each kernel part
+> that the design uses, and each of those parts exists today. The tools, the catalog,
 > and the bridge that this page describes do not exist yet.
 
 **A breakout room is a room that an agent opens for background work.** The

@@ -39,8 +39,8 @@ agree.
 
 This page states the mechanism: what a rule is, how its proof reaches the
 running code, what the generated files are, how the gate runs them, and
-what a contributor does to change one. [The backlog](../planning/backlog.md)
-lists the proofs still open.
+what a contributor does to change one. [The plan](../planning/next.md)
+and [the backlog](../planning/backlog.md) list the proofs still open.
 
 ## 1. What a rule is
 

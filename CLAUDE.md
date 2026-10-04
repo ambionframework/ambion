@@ -40,7 +40,7 @@ newer, the OpenTUI floor.
 - `examples/workbench`: rooms and an OpenTUI terminal in one process.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   sensor and a preview.
-- `planning/`: `next.md` is the 0.6.0 scope and plan, and `backlog.md` is
+- `planning/`: `next.md` is the 0.7.0 scope and plan, and `backlog.md` is
   everything else, the open simplification findings included.
 
 ## Read before you change
@@ -176,7 +176,8 @@ need the key. Read neither login file.
   binding case. A hand-written proof goes in the `.proofs.dfy` beside the
   rules.
   [`docs/formal.md`](docs/formal.md) holds the mechanism;
-  [`planning/backlog.md`](planning/backlog.md) holds the open proofs.
+  [`planning/next.md`](planning/next.md) and
+  [`planning/backlog.md`](planning/backlog.md) hold the open proofs.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons). Biome lints.
 
