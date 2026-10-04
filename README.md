@@ -197,10 +197,6 @@ reads only the returned value. A skill can store a procedure as a macro,
 and the model runs the macro by name. See [Compose](docs/compose.md) and
 [Macros](docs/macros.md).
 
-**The kernel knows no sensor and no actuator.** A sensor is a template
-process that serves HTTP, and an actuator is a controller command under
-`bash`. See [Sensors](docs/sensors.md) and [Actuators](docs/actuators.md).
-
 ## Where a room runs
 
 - **One Node process runs a room over a journal in memory or in SQLite.**
@@ -239,6 +235,8 @@ process that serves HTTP, and an actuator is a controller command under
   `pnpm start`. [`examples/camera-chat`](examples/camera-chat) connects a
   Mac camera to a room through a sensor template. Both need Node 26.4 or
   later.
+- [Sensors](docs/sensors.md) and [Actuators](docs/actuators.md) build
+  devices from processes and Git templates.
 - [Workbench](https://github.com/fastforwardengine/workbench) is the first
   application on Ambion.
 - [Contributing](CONTRIBUTING.md) covers builds and checks.
