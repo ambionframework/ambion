@@ -3,25 +3,30 @@
 ## Unreleased
 
 **A room offers `seat` only when the reserve held an agent as the room
-composed, and a host can turn seating off.** The presence of `seat` is fixed
-for the room, so the tool list of a seat does not change between its
-activations. The Codex executor drops a thread when the tool list differs,
-and a changed list costs the prompt cache of other harnesses. After the
-reserve empties, `seat` stays and answers "The reserve is empty." A room
-composed with an empty reserve never offers `seat` to an agent, and the host
-seats with `room.seat`. The prompt shows the reserve of the moment, and it
-shows no block when the reserve is empty. Before, every respond activation
-held `seat`, and the prompt showed an empty reserve. `StartRoomOptions` takes
-`seating`, which defaults to `true`. With `seating: false`, no activation
-holds `seat` or `unseat`, and the room refuses a `seated` or an `unseated`
-intent from a seat. `room.seat` and `room.unseat` work as before. The
-composition entry records `seating: false` and `reserved: true`. A default
-room with no reserve writes neither field. `CollaborationContext` gains
-`seating`, which is `false` when the host turned seating off, and `reserved`,
-which is `true` when the reserve held an agent as the room composed. Its
-`reserve` is empty when seating is off. The Cloudflare `StartOptions` takes
-`seating`. A `compose` call that uses a room tool that the activation lacks
-fails before the code runs, and the error states that the room does not
+composed.** The presence of `seat` is fixed for the room, so the tool list
+of a seat does not change between its activations. The Codex executor drops
+a thread when the tool list differs. After the reserve empties, `seat` stays,
+and the room refuses a seating with "The reserve is empty." A room composed
+with an empty reserve never offers `seat` to an agent. The host seats with
+`room.seat`.
+
+**The prompt shows the reserve only when it holds an agent.** Before, the
+prompt showed an empty reserve block, and every respond activation held
+`seat`.
+
+**A host can turn seating off.** `StartRoomOptions` and the Cloudflare
+`StartOptions` take `seating`, which defaults to `true`. With
+`seating: false`, no activation holds `seat` or `unseat`, and the room
+refuses a `seated` or an `unseated` intent from a seat. `room.seat` and
+`room.unseat` work as before.
+
+**The composition entry records two optional fields.** It records
+`seating: false` when the host turned seating off, and `reserved: true` when
+the reserve held an agent. `CollaborationContext` gains the same two fields.
+Its `reserve` is empty when seating is off.
+
+**A `compose` call fails on a room tool that the activation lacks.** The
+call fails before the code runs, and the error states that the room does not
 offer the tool. The catalog and the `describe` tool still list every room
 tool.
 
