@@ -24,8 +24,8 @@ import {
 	untilQuiet,
 } from './support.ts';
 
-/** The tools of the room. */
-const ROOM = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
+/** The tools of the room. A room with no reserve offers no `seat`. */
+const ROOM = ['say', 'schedule', 'unseat', 'dismiss', 'recall'];
 
 /** The tools of the room, the one tool of the application, and the compose tools of every seat. */
 const ALLOWED = [...ROOM, 'lookup', 'compose', 'describe'];
