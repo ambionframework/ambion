@@ -19,8 +19,11 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
+import { type Bodies, type Kind, roomJournal } from '../src/journal/journal.ts';
+import type { RoomRun } from '../src/room-run/room.ts';
 import { fakeClock } from '../src/testing.ts';
-import { observed, type Tap, tapped } from './support/core-failure.ts';
+import { protocolOf } from './support/core-exchange.ts';
+import { flush, observed, type Tap, tapped } from './support/core-failure.ts';
 import { portExecution } from './support/ports.ts';
 import {
 	collect,
@@ -157,43 +160,78 @@ describe('a room in doubt', () => {
 		expect((await messagesOf(session)).filter((m) => m.key === 'q1')).toHaveLength(1);
 	});
 
-	it('keeps a question queued before close in the current exchange', async () => {
-		const opened = await openFor(memory);
-		let failNextClose = false;
-		const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
-			if (failNextClose && phase === 'after' && customType === 'close') {
-				failNextClose = false;
-				throw new Error('the disk is full');
-			}
-		});
-		const { clock, session, events } = await summarisedRoom(journals, answers);
-		const visit = await session.visit(person);
-		await waitForRoom(session);
-		// The second question is delivered the moment alpha's activation ends, so its
-		// commit is queued ahead of the close the reconcile decides, and that close
-		// lands and loses its confirmation.
-		let delivered: Promise<unknown> | undefined;
-		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
-				failNextClose = true;
-				delivered = visit.send({ text: 'Second?', key: 'q2' });
-			}
-		});
-		await visit.send({ text: 'First?', key: 'q1' });
-		await waitForRoom(session);
-		await delivered;
-		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
-		await waitForRoom(session);
-		const closes = (await storedOf(opened.journals, session.name)).filter(
-			(r) => r.kind === 'close',
+	describe.each(storages)('a delivery races a close on $name', (storage) => {
+		it.each(['activation_end', 'exchange_closed'] as const)(
+			'places a delivery submitted at %s inside the recorded range',
+			async (boundary) => {
+				const opened = await openFor(storage);
+				const { session } = await summarisedRoom(opened.storage, answers);
+				const visit = await session.visit(person);
+				await waitForRoom(session);
+				let delivered: ReturnType<typeof visit.send> | undefined;
+				session.subscribe((event) => {
+					if (event.type === boundary && delivered === undefined)
+						delivered = visit.send({ text: 'Second?', key: 'race-q2' });
+				});
+				const first = await visit.send({ text: 'First?', key: 'race-q1' });
+				await waitForRoom(session);
+				const second = await delivered;
+				expect(second).toBeDefined();
+				const closes = stateOf(session).closes;
+				expect(closes).toHaveLength(boundary === 'activation_end' ? 1 : 2);
+				expect(second?.from).toBe(boundary === 'activation_end' ? first.from : closes[1]?.from);
+				const questions = (await messagesOf(session)).filter((message) =>
+					message.key?.startsWith('race-q'),
+				);
+				expect(questions).toHaveLength(2);
+				for (const question of questions)
+					expect(
+						closes.filter((close) => close.from <= question.seq && question.seq <= close.through),
+					).toHaveLength(1);
+			},
 		);
-		expect(closes).toHaveLength(1);
-		expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
-		const exchanges = events.filter(
-			(e) => e.type === 'exchange_opened' || e.type === 'exchange_closed',
-		);
-		expect(exchanges.map((e) => e.type)).toEqual(['exchange_opened', 'exchange_closed']);
 	});
+
+	it.each(storages)(
+		'keeps a question queued before close in the current exchange on $name',
+		async (storage) => {
+			const opened = await openFor(storage);
+			let failNextClose = false;
+			const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
+				if (failNextClose && phase === 'after' && customType === 'close') {
+					failNextClose = false;
+					throw new Error('the disk is full');
+				}
+			});
+			const { clock, session, events } = await summarisedRoom(journals, answers);
+			const visit = await session.visit(person);
+			await waitForRoom(session);
+			// The second question is delivered the moment alpha's activation ends, so its
+			// commit is queued ahead of the close the reconcile decides, and that close
+			// lands and loses its confirmation.
+			let delivered: Promise<unknown> | undefined;
+			session.subscribe((event) => {
+				if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
+					failNextClose = true;
+					delivered = visit.send({ text: 'Second?', key: 'q2' });
+				}
+			});
+			await visit.send({ text: 'First?', key: 'q1' });
+			await waitForRoom(session);
+			await delivered;
+			for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
+			await waitForRoom(session);
+			const closes = (await storedOf(opened.journals, session.name)).filter(
+				(r) => r.kind === 'close',
+			);
+			expect(closes).toHaveLength(1);
+			expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
+			const exchanges = events.filter(
+				(e) => e.type === 'exchange_opened' || e.type === 'exchange_closed',
+			);
+			expect(exchanges.map((e) => e.type)).toEqual(['exchange_opened', 'exchange_closed']);
+		},
+	);
 });
 
 /**
@@ -350,8 +388,25 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			key: 'submission-cut-start',
 		});
 		held.resolve();
-		const resumed = await resume(throwingConnect).room;
+		const next = resume(throwingConnect);
+		const resumed = await next.room;
+		const events = collect(resumed);
+		const inherited = [...stateOf(resumed).leases.values()].find(
+			(lease) => lease.phase === 'running',
+		);
+		if (inherited === undefined) throw new Error('The inherited lease is absent.');
+		await expect(
+			protocolOf(next.runtime, resumed.name).lease({
+				activation: inherited.id,
+				operation: 'renew',
+			}),
+		).resolves.toMatchObject({ ok: {} });
 		await expect(observed(resumed.stop())).resolves.toBeUndefined();
+		await flush();
+		expect(events.filter((event) => event.type === 'activation_start')).toEqual([]);
+		expect(events.filter((event) => event.type === 'activation_end')).toEqual([
+			{ type: 'activation_end', seat: watcher.name, activation: inherited.id, said: false },
+		]);
 		expect(
 			(await participantsOf(resumed)).find((participant) => participant.name === watcher.name),
 		).toMatchObject({ status: 'idle' });
@@ -422,6 +477,172 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		await room.reconcile();
 		await messagesOf(room);
 		expect(events.map((event) => event.type)).toEqual(before);
+	});
+
+	it('captures each recovered entry before later entries and publishes the batch once in order', async () => {
+		const opened = await openFor(storage);
+		const clock = fakeClock();
+		const cuts: string[] = [];
+		const runtime = createRuntime({ storage: opened.storage, clock });
+		const execution = portExecution(() => ({
+			wake: async () => {},
+			steer: async () => {},
+			cut: async (id) => {
+				cuts.push(id);
+			},
+		}));
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('submission-recovered-batch'),
+				agents: [alpha],
+				seats: { [alpha.name]: 'broadcast' },
+				runtime,
+				execution,
+			}),
+		);
+		await room.visit(person);
+		await flush();
+		const events = collect(room);
+		const run = room as RoomRun;
+		const held = deferred();
+		run.publications = held.promise;
+		const writer = roomJournal(opened.journals.open(room.name));
+		const append = async <K extends Kind>(kind: K, body: Bodies[K]) => {
+			const result = await writer.append(kind, { decide: () => ({ body }) });
+			if (!('entry' in result)) throw new Error('The entry did not land.');
+			return result.entry.seq;
+		};
+		const at = new Date(clock.now()).toISOString();
+		const first = await append('message', {
+			kind: 'said',
+			from: person.name,
+			text: 'first',
+			at,
+			wakes: [alpha.name],
+		});
+		const firstId = `message:${first}:alpha:1`;
+		const claim = {
+			id: firstId,
+			phase: 'running' as const,
+			expiresAt: clock.now() + 60_000,
+			readThrough: first,
+			at,
+		};
+		await append('lease', claim);
+		await append('lease', { ...claim, expiresAt: claim.expiresAt + 1_000 });
+		await append('cancel', { at });
+		const second = await append('message', {
+			kind: 'said',
+			from: person.name,
+			text: 'second',
+			at,
+			wakes: [alpha.name],
+		});
+		const abandoned = `message:${second}:alpha:1`;
+		const unclaimed = `message:${second}:alpha:2`;
+		await append('lease', {
+			id: abandoned,
+			phase: 'ended',
+			reason: 'abandoned',
+			cause: 'permanent',
+			readThrough: second,
+			at,
+		});
+		await append('lease', {
+			id: unclaimed,
+			phase: 'ended',
+			reason: 'revoked',
+			readThrough: second,
+			at,
+		});
+		await append('cancel', { at });
+		const third = await append('message', {
+			kind: 'said',
+			from: person.name,
+			text: 'third',
+			at,
+			wakes: [alpha.name],
+		});
+		const thirdId = `message:${third}:alpha:1`;
+		await append('lease', { ...claim, id: thirdId, readThrough: third });
+		const said = await append('message', {
+			kind: 'said',
+			from: alpha.name,
+			activation: thirdId,
+			text: 'answer',
+			at,
+		});
+		const usage = { input: 4, output: 2, cacheRead: 0, cacheWrite: 0 };
+		await append('lease', {
+			id: thirdId,
+			phase: 'ended',
+			reason: 'released',
+			readThrough: said,
+			usage,
+			at,
+		});
+		await append('close', { from: third, through: said, person: person.name, at });
+
+		// A queued no-op reads the whole batch while its publications wait.
+		await run.journal.append('run', { decide: () => ({ result: undefined }) });
+		await room.read();
+		expect(stateOf(room).exchange).toBeUndefined();
+		expect(stateOf(room).closes).toHaveLength(3);
+		expect(events).toEqual([]);
+		held.resolve();
+		await run.publications;
+		expect(events.map((event) => event.type)).toEqual([
+			'message',
+			'exchange_opened',
+			'activation_start',
+			'exchange_closed',
+			'activation_end',
+			'message',
+			'exchange_opened',
+			'abandoned',
+			'exchange_closed',
+			'message',
+			'exchange_opened',
+			'activation_start',
+			'message',
+			'activation_end',
+			'exchange_closed',
+		]);
+		expect(
+			events.flatMap((event) => (event.type === 'exchange_opened' ? [event.exchange.from] : [])),
+		).toEqual([first, second, third]);
+		expect(
+			events.flatMap((event) => (event.type === 'exchange_closed' ? [event.exchange.from] : [])),
+		).toEqual([first, second, third]);
+		expect(events.filter((event) => event.type === 'activation_end')).toEqual([
+			{ type: 'activation_end', seat: alpha.name, activation: firstId, said: false },
+			{ type: 'activation_end', seat: alpha.name, activation: thirdId, said: true, usage },
+		]);
+		expect(events.find((event) => event.type === 'abandoned')).toMatchObject({
+			activation: abandoned,
+			cause: 'permanent',
+		});
+		expect(cuts).toEqual([firstId, unclaimed]);
+		const before = [...events];
+		await room.read();
+		await room.reconcile();
+		await run.publications;
+		expect(events).toEqual(before);
+
+		hostingOf(runtime).evict(room.name);
+		const resumed = stopAtEnd(
+			await resumeRoom(room.name, {
+				agents: [alpha],
+				runtime: createRuntime({ storage: opened.storage, clock }),
+				execution,
+			}),
+		);
+		const replayed = collect(resumed);
+		await flush();
+		expect(replayed).toEqual([]);
+		await resumed.post({ text: 'after replay' });
+		await flush();
+		expect(replayed.map((event) => event.type)).toEqual(['message', 'exchange_opened']);
 	});
 
 	it('publishes a recovered after-append message once and continues with later entries', async () => {

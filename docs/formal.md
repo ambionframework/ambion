@@ -10,7 +10,7 @@ stale. Three files hold every rule:
 | File                                                                                                    | Concern                                                                                                                          | Obligations                   |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                  | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 75, and 39 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 78, and 39 in its proofs file |
 | [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                  | 2                             |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
@@ -152,7 +152,7 @@ moves back. The room's proofs file proves these lemmas:
   overlap, and every question after the last close lands inside the
   closed range. The close the room admits and the close a cancellation
   derives both have that shape; `AdmittedCloseExtendsTheRecord` derives
-  the first from `admitsClose`.
+  the first from `closeAdmission`.
 - `StillExpired` and `EndingStands`: an expiry stays expired as the clock
   moves forward.
 
@@ -324,7 +324,7 @@ found no such rule.
 | `summaryVerdict`       | The summaries that the room owes                                             |
 | `openingQuestion`      | The open exchange that a close entry closes                                  |
 | `exchangeLive`         | A close entry                                                                |
-| `admitsClose`          | A close entry                                                                |
+| `closeAdmission`       | A close entry                                                                |
 | `unreadBy`             | The unread lines of a commit answer, and so the read position of a say       |
 | `exchangeOutcome`      | None; it shapes the outcome that a read reports                              |
 

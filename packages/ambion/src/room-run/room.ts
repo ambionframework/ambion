@@ -174,10 +174,6 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	readonly sentAt = new Map<string, number>();
 	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
 	readonly deliveryStates = new Map<string, SendState>();
-	/** Every lease id this room has heard a change for. It says `activation_start` once. */
-	readonly heardLeases = new Set<string>();
-	/** How many closes of the state this room has heard. It says `exchange_closed` once for each. */
-	heardCloses = 0;
 	cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	reconciling: Promise<void> = Promise.resolve();
@@ -247,7 +243,6 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	private async compose(composition: Without<Composition, 'seq'>): Promise<void> {
 		await this.journal.ready;
 		this.enter('running');
-		dispatch.seedHeard(this);
 		// The composition is decided before the fence, so a refused one writes nothing.
 		acceptedEntry(decide(this.state(), { type: 'compose', composition }, this.now()));
 		requireSubmission(await decideAndAppend(this, 'run', { type: 'run' }));
@@ -259,7 +254,6 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	private async recover(): Promise<void> {
 		await this.journal.ready;
 		this.enter('running');
-		dispatch.seedHeard(this);
 		const state = this.state();
 		this.validateDefinitions(state);
 		// The fence lands here: from here on, every earlier run's later writes are void.
@@ -501,7 +495,14 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	 * never a second one for the entries it wrote itself.
 	 */
 	private hear(entry: RoomEntry): void {
-		dispatch.hearEntry(this, entry);
+		// Replay initializes the fold before the first queued append. The journal
+		// calls hear synchronously after caching one entry, before any later entry.
+		const current = this.fold;
+		if (current === undefined) throw new Error('The room projection is not initialized.');
+		const projection = advance(current.projection, entry, this.runtime.limits.activation);
+		const state = projectState(projection);
+		this.fold = { length: current.length + 1, projection, state };
+		dispatch.hearEntry(this, entry, current.state, state);
 	}
 
 	/** One activation wake over the wire. */
