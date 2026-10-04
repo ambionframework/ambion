@@ -370,16 +370,22 @@ export interface WorkspaceExecOptions extends ShellExecOptions {
 ```
 
 **The wrapper outlives the `SIGTERM`.** `trap : TERM` installs a handler.
-A handler resets to the default in the subshell, so the command gets the
-signal as usual. An ignored signal stays ignored in every program that
-the command runs, so the wrapper never ignores `TERM`. When the command
-ends, the wrapper writes `exit`.
+A handler resets to the default in each program that the command runs, so
+each program gets the signal as usual. An ignored signal stays ignored in
+every program that the command runs, so the wrapper never ignores `TERM`.
+When the command ends, the wrapper writes `exit`. On the workstation, the
+script's shell has the same handler
+([Workstation](workstation.md#commands-and-aborts)).
 
 **The subshell waits for its last program.** The subshell traps `TERM`
 with `exit $?`. Bash 3.2 on macOS forks the last program of a list such as
-`cd app && node main.js`, where newer bash replaces the shell with it. The
-trap makes the subshell wait for that program and end with its code. On the workstation, the script's shell
-has the same handler ([Workstation](workstation.md#commands-and-aborts)).
+`cd app && node main.js`. The trap makes the subshell wait for that program
+and end with its code.
+
+**A command that runs no program at the signal ends with its last code.**
+The trap runs at once and exits with the code of the last command. A shell
+loop such as `while true; do :; done` reads `exited` with code 0, and
+`stop` alone records the cancel.
 
 **The files record how the command ended.**
 

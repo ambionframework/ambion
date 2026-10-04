@@ -376,8 +376,10 @@ added the prefix.
 **A cancel on macOS reads the code of the last program.** Bash 3.2 on
 macOS forks the last program of a list. On a cancel, the `SIGTERM` ended the
 subshell of the wrapper with code 143, so a program that ended cleanly
-inside the grace read as `cancelled`. In 0.6.0 the subshell traps `TERM`, waits
-for the program, and ends with its code.
+inside the grace read as `cancelled`. In 0.6.0 the subshell traps `TERM`,
+waits for the program, and ends with its code. A command that runs no
+program at the signal, such as a shell loop of builtins, ends with the code
+of its last command, and `stop` alone records the cancel.
 
 **A direct call checks the full schema.** A direct call on Claude, Codex,
 and the scripted executor checks the arguments against the schema after

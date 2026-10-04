@@ -151,7 +151,9 @@ export async function writeSpec(
  * The subshell traps `TERM` with `exit $?`. A shell that forks the last
  * program of a list, as bash 3.2 on macOS does, then waits for that program
  * and ends with its code. Without the trap, the `SIGTERM` ends the subshell
- * with code 143 before a program that ends cleanly inside the grace.
+ * with code 143 before a program that ends cleanly inside the grace. A
+ * command that runs no program when the signal arrives ends with the code
+ * of its last command, and `stop` alone records the cancel.
  */
 export function wrapped(command: string, dir: string): string {
 	const at = shellQuote(dir);
