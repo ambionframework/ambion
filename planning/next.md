@@ -79,8 +79,10 @@ opener -> breakout({ name, goal, agents }) -> row -> room opens -> start post
   `exchange_closed` event carries the range only. The canvas also reports
   over every closed exchange at each start, because a resume seeds the
   heard closes from the state.
-- **A breakout room lives while its opener sits in a running parent.**
-  When the opener leaves, the canvas stops the room and posts its pending
+- **A breakout room lives while its opener sits in its parent.** A host
+  shutdown keeps each row `running`, and the next start resumes the
+  parent and the breakout room together. The canvas finds a departure in
+  the roster of the parent. It then stops the room and posts its pending
   reports with no `to`.
 - **The reminder guards a retry.** It lists the rooms of the opener, so a
   retried activation sees the room that it opened.
@@ -196,16 +198,20 @@ gives the recommended choice for each one.
 | 1   | Who may open a breakout room              | An agent that the host gives the opener bundle. The canvas bounds the count for each opener (3), the depth (1), and the definitions to seat |
 | 2   | An author across rooms                    | None in the first step. A report carries the label `breakout <name>:`                                                                       |
 | 3   | The name of a breakout room               | `<parent>-<name>`, checked against one room name rule with one length bound (S1)                                                            |
-| 4   | The composition of a breakout room        | Workers alone at `broadcast`, no assistant, an empty reserve, `seating: false`, and only definitions that the parent does not seat          |
+| 4   | The composition of a breakout room        | Workers alone at `broadcast`, no assistant, an empty reserve, `seating: false`, from a worker team that no root room seats                  |
 | 5   | A worker that ends with text and no `say` | The text stays lost, as on every executor today. The report names the exchange with no message                                              |
 | 6   | What a person can change                  | A person visits and speaks. Opening a room stays with the host and the opener bundle in the first step                                      |
 
 **CV1. The canvas and its store.** `@ambionframework/canvas` exports
-`openCanvas({ name, runtime, agents, store })`, the `CanvasStore` port,
-`sqliteCanvas`, and `memoryCanvas`. The store keeps one row for each
-room: the name, the goal, the parent, the opener, the depth, and the
-state. `canvas.open` writes the row and starts the room.
-`canvas.resume()` resumes each running room. `canvas.rooms()` and
+`openCanvas({ name, runtime, agents, store, workspace? })`, the
+`CanvasStore` port, `sqliteCanvas`, and `memoryCanvas`. The store keeps
+one row for each room: the name, the goal, the parent, the opener, the
+depth, and the state. `canvas.open` takes the options of `startRoom`
+except the name, the runtime, and the agents. It writes the row and
+starts the room. `canvas.resume()` resumes each running room, and
+`canvas.stop()` stops each room and keeps its row `running`. With a
+workspace, the canvas attaches the mirror after each start and resume,
+and a failed attach goes to `onError`. `canvas.rooms()` and
 `canvas.subscribe` give the host the tree. A conformance suite runs over
 both stores.
 
@@ -229,18 +235,26 @@ bundle.
 - **The reminder** lists each open breakout room of the seat from the
   store, with its state, its open exchange, and the seq of its last
   message.
-- **The life of a room** follows its opener: when the opener leaves a
-  running parent, the canvas stops the room and posts its pending reports
-  with no `to`.
+- **The life of a room** follows its opener. Before each report, and at
+  each start, the canvas reads the roster of the parent. When the opener
+  is gone, the canvas sets the row to `stopped`, stops the room, and posts
+  its pending reports with no `to`. A report to an opener at `none` also
+  goes with no `to`.
+- **The exchange cap** stops a breakout room after a fixed count of
+  exchanges, so a chain of returned says ends.
 
 **Evidence:** tests over real rooms on the scripted executor: one report
 for each closed exchange, a refused open for each bound, a retried
-opener that finds its room in the reminder, and an opener that leaves.
+opener that finds its room in the reminder, an opener that leaves, a
+host shutdown that resumes the breakout room, and the exchange cap.
 
 **CV3. The workbench on the canvas.** The workbench opens one canvas over
 its SQLite file and drops `workbench_rooms`
-(`examples/workbench/src/rooms.ts:154`). It gives the opener bundle to
-the definitions that the host names. The room list of the terminal draws
+(`examples/workbench/src/rooms.ts:154`). Its root rooms keep their
+assistant and scenario seats through `canvas.open`. The workbench seats
+every definition in every root room today (`rooms.ts:184`), so it names a
+worker team that no root room seats. It gives the opener bundle to the
+definitions that the host names. The room list of the terminal draws
 the tree of the canvas, so a person can visit a breakout room.
 
 **Evidence:** a workbench test opens a breakout room, restarts the host,

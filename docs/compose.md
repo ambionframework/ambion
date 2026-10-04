@@ -1103,7 +1103,6 @@ test reads the nested steps. The scripted executor records the text of a
 result, so a room test reads the status and the ledger from the rendered
 content. A unit test of the `invoke` of `compose` reads the `ComposeResult`.
 Items 1, 6, and 7 add a live run, which [Compose evidence](compose-evidence.md) holds.
-[The compose evidence](compose-evidence.md) records it.
 
 1. **The tools compose unchanged.** Each of Pi, Claude, and Codex hosts
    `compose` as one more definition tool. A workspace test binds `sql` and

@@ -45,12 +45,12 @@ gives that list one owner.
 **Delegated work needs a room of its own.** An agent that delegates work
 has three options in Ambion today. Each option fails on one property.
 
-| Option                            | Where the work lives                     | What fails                                                                                                      |
-| --------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| A native subagent of the executor | The vendor session of one activation     | A crash loses the work. No entry records it. The host cannot see or bound its spend. Each executor turns it off |
-| A worker seat in the parent room  | The journal of the parent room           | Each note of the work is an entry of the parent room. It fills the window of every seat in that room            |
-| A `bash` process                  | A child process of the workspace backend | It runs a command. It cannot hold a conversation between agents                                                 |
-| **A breakout room on the canvas** | **A journal of its own**                 | **None of the above.** The work is durable, it replays, a person can visit it, and its spend is per exchange    |
+| Option                            | Where the work lives                     | What fails                                                                                                        |
+| --------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| A native subagent of the executor | The vendor session of one activation     | A crash loses the work. No entry records it. The host cannot see or bound its spend. Each executor turns it off   |
+| A worker seat in the parent room  | The journal of the parent room           | Each note of the work is an entry of the parent room. It fills the window of every seat in that room              |
+| A `bash` process                  | A child process of the workspace backend | It runs a command. It cannot hold a conversation between agents                                                   |
+| **A breakout room on the canvas** | **A journal of its own**                 | **It keeps each property.** The work is durable, it replays, a person can visit it, and its spend is per exchange |
 
 **The executors turn their native subagents off.** The Claude executor
 passes `tools: []`, so the executable has no `Task` tool
@@ -59,10 +59,10 @@ passes `tools: []`, so the executable has no `Task` tool
 only the tools that the room binds ([Pi](pi.md)). The canvas keeps that
 rule.
 
-**A breakout room is to a room what a `bash` process is to a command.** A
+**A breakout room runs work between agents in the background.** A `bash`
 process runs a command in the background and gives a handle
-([Processes](processes.md)). A breakout room runs work between agents in
-the background and gives a room name. The opener ends its activation, and
+([Processes](processes.md)). A breakout room gives a room name in the
+same way. The opener ends its activation, and
 a report from the breakout room activates it again.
 
 **Widgets need the same container.** A widget shows data to the people
@@ -102,16 +102,32 @@ exchange. A port defines it, and a SQLite store and a memory store
 implement it, as the workspace backends do.
 
 **The host opens one canvas and resumes it.** `openCanvas` takes the
-runtime, the agent definitions, and the store. `canvas.resume()` reads
-the store and resumes each room with the state `running`. A room that
-the host does not resume does no work: its pending work and its
-scheduled says wait in its journal.
+runtime, the agent definitions, the store, and an optional workspace.
+`canvas.resume()` reads the store and resumes each room with the state
+`running`. A room that the host does not resume does no work: its pending
+work and its scheduled says wait in its journal.
+
+**`canvas.open` takes the options of `startRoom`.** It takes every option
+except `name`, `runtime`, and `agents`, which the canvas supplies: the
+seats, the assistant, the summary writer, seating, and the execution. A
+root room of the workbench keeps its assistant and its scenario seats.
+
+**The canvas attaches the mirror of each room.** With a workspace, the
+canvas calls `workspace.mirror(room)` after each start and each resume.
+A failed attach goes to the `onError` of the canvas, and the room keeps
+running. The mirror is the read path of an opener, so the host sees the
+failure.
+
+**`canvas.stop()` stops every room and keeps each row `running`.** A host
+shutdown is no decision about a room. The next `canvas.resume()` starts
+each room again, the breakout rooms included.
 
 ```ts
 const canvas = openCanvas({
   name: 'lab',
   runtime,
   agents,
+  workspace,
   store: sqliteCanvas('./data/canvas.db'),
 });
 await canvas.resume();
@@ -213,7 +229,9 @@ gets no summary in the first step.
 **A breakout room seats only definitions that its parent does not
 seat.** The workspace keys homes, processes, and the process reminder by
 the agent name ([Workspace](workspace.md)). Two seats of one name in two
-rooms would share one home and one process list.
+rooms would share one home and one process list. A host therefore names
+a worker team: definitions that it seats in no root room. The `agents`
+bound of the canvas is that team.
 
 ### Bounds
 
@@ -226,9 +244,11 @@ The canvas checks these bounds before it writes the row:
 - **Agents.** The definitions that a breakout room may seat. A name
   outside the list is a refusal.
 
-**A chain of scheduled says is not bounded.** A returned say in a
-breakout room opens an exchange, and the canvas reports it. The count
-bound does not bound such a chain. [D1](../planning/backlog.md#designs-with-a-shape)
+**The canvas bounds the exchanges of a breakout room.** A returned say
+in a breakout room opens an exchange, and the canvas reports it. The
+count bound does not bound such a chain. The canvas therefore stops a
+breakout room after a fixed count of exchanges, and the last report
+says so. A kernel bound on the chain is a later design. [D1](../planning/backlog.md#designs-with-a-shape)
 holds the accounting and the enforcement.
 
 **Spend is readable per exchange.** Each closed `Exchange` of a breakout
@@ -238,12 +258,27 @@ so a sum reads less than the spend.
 
 ### The life of a breakout room
 
-**A breakout room lives while its opener sits in a running parent.** A
-room is ambient: it stays available between exchanges. When the opener
-leaves the parent, or the host stops the parent, the canvas stops the
-breakout room. It then posts each pending report to the parent with no
-`to`, under the same keys. A stopped room keeps its journal, and
-`readRoom` and the mirror still read it.
+**A breakout room lives while its opener sits in its parent.** A room is
+ambient: it stays available between exchanges. A host shutdown stops the
+parent and the breakout room together, and both resume at the next
+start (see [The model](#the-model)).
+
+**The canvas learns of a departure from the roster of the parent.**
+Before each report, the canvas reads the roster of the parent with
+`readRoom`. When the opener is no longer seated, the canvas sets the row
+to `stopped`, stops the breakout room, and posts each pending report to
+the parent with no `to`, under the same keys. The run at each start
+makes the same check, so a departure during a shutdown is found at the
+next start.
+
+**A report goes with no `to` when the opener cannot receive it.** A post
+to a seat with the attention `none` is a refusal
+([Exchange](exchange.md#7-the-edges-a-host-sees)). The canvas reads the
+attention of the opener with the roster and posts with no `to` in that
+case.
+
+**A stopped room keeps its journal.** `readRoom` and the mirror still
+read it.
 
 **Nothing deletes a breakout room.** A journal and its keys stay while
 the record is kept. A later design can retire a stopped room.
@@ -258,17 +293,18 @@ which reports landed. The canvas keeps no cursor.
 | -------------- | ---------------------------- | --------------------------- |
 | The row        | The room name                | Finds the row and continues |
 | The start post | `breakout-start:<name>`      | Returns the same handle     |
-| A `tell` post  | `tell:<activation>:<callId>` | Returns the same handle     |
+| A `tell` post  | `tell:<activation>:<callId>` | Lands once for one call     |
 | A report       | `breakout:<name>:<from>`     | Returns the same handle     |
 
 **A crash at any step leaves a state that the next start completes.**
 
-| Crash point                                  | What the next start does                            |
-| -------------------------------------------- | --------------------------------------------------- |
-| After the row, before the room starts        | `readRoom` finds no room, so the canvas starts it   |
-| After the room starts, before the start post | The canvas posts the start again under its key      |
-| After an exchange closes, before its report  | The run at the start posts the report under its key |
-| After the opener leaves, before the reports  | The canvas posts the pending reports with no `to`   |
+| Crash point                                  | What the next start does                                |
+| -------------------------------------------- | ------------------------------------------------------- |
+| After the row, before the room starts        | `readRoom` finds no room, so the canvas starts it       |
+| After the room starts, before the start post | The canvas posts the start again under its key          |
+| After an exchange closes, before its report  | The run at the start posts the report under its key     |
+| After the opener leaves, before the reports  | The roster check posts the pending reports with no `to` |
+| During a host shutdown                       | `canvas.resume()` starts each `running` room again      |
 
 **A retried opener reads the reminder first.** A `tell` key lands once
 for one tool call. An activation that expires and runs again makes new
