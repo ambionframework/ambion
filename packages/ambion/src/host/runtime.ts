@@ -133,7 +133,7 @@ export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
  */
 export interface Hosting extends ExecutionHost {
 	readonly journals: JournalOpener;
-	/** The executions that every room in this runtime uses before a default, after its own. */
+	/** The executions that every room in this runtime uses after its own. */
 	readonly executions: readonly Execution[];
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
@@ -146,8 +146,6 @@ export interface Hosting extends ExecutionHost {
 export interface RuntimeState extends Hosting {
 	/** The rooms that run in this runtime, by name. */
 	readonly running: Map<string, RunningRoom>;
-	/** One connector per executor kind, built on first use from the default of the kind. */
-	readonly defaults: Map<string, ExecutionConnector>;
 	/** The token estimators of the runtime, by name, with the built-in ones. */
 	readonly estimators: ReadonlyMap<string, TokenEstimator>;
 	/** Free the name of a room, when this run is the room that holds it. */
@@ -219,8 +217,8 @@ export interface CreateRuntimeOptions {
 	 * The execution every room in this runtime uses, such as `piExecution()`
 	 * from `@ambionframework/pi`, or one execution for each executor kind. A
 	 * room may name its own, and the room's serve first. A seat of a kind that
-	 * no execution here serves runs on the default of its kind. A seat of a
-	 * kind with no default fails with an error event.
+	 * no supplied execution serves fails with a permanent `no_execution`
+	 * error event.
 	 */
 	execution?: Execution | readonly Execution[];
 	/**
@@ -311,7 +309,6 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const runtime = { clock, storage } as unknown as Runtime;
 	stateFor.set(runtime, {
 		running,
-		defaults: new Map(),
 		journals,
 		clock,
 		storage,

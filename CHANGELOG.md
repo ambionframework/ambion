@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**Concurrent control calls share one operation.** Cancellation, departure,
+and stop use one promise lifecycle. Failed operations permit a retry.
+Cancellation and departure keep their own keys across uncertain writes.
+Arrival keeps its name and identity checks.
+
+**Names have one syntax.** `@ambionframework/ambion/names` exports
+`isName` and `NAME_SYNTAX`. The core, workspace, workstation, and workbench
+use that syntax. Names now reject trailing line terminators consistently.
+The workbench keeps its limit of 48 characters.
+
+**Execution configuration is explicit.** Pass an execution, such as
+`piExecution()`, to `createRuntime`, `startRoom`, or `resumeRoom`.
+Importing an executor package no longer configures rooms.
+The `defineExecution` export is removed. Custom executor packages build
+their execution values with `localExecution`. Room executions precede
+runtime executions, and the first matching execution serves each seat.
+
 **Notifications follow each journal transition.** The room derives lease
 and close notifications from the projection before and after each entry.
 The separate notification caches and their replay initialization are gone.

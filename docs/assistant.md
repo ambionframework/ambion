@@ -78,7 +78,7 @@ that definition without depending on `@ambionframework/assistant`.
 ```ts
 import { startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
   instructions: 'Prefer small, reversible changes.',
@@ -92,6 +92,7 @@ const room = await startRoom({
   assistant,
   agents: [builder, reviewer],
   seats: { builder: 'named', reviewer: 'named' },
+  execution: piExecution(),
 });
 ```
 
@@ -108,6 +109,7 @@ const room = await startRoom({
     reviewer: 'named',
   },
   summaryWriter: assistant.name,
+  execution: piExecution(),
 });
 ```
 
@@ -138,6 +140,7 @@ const room = await startRoom({
   assistant,
   agents: [builder, reviewer],
   seats: {},
+  execution: piExecution(),
 });
 ```
 

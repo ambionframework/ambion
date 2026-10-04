@@ -23,39 +23,18 @@ construct a model runner.
 every room of the runtime. `startRoom` and `resumeRoom` take an `execution`
 for one room run. Each takes one execution or a list, such as
 `[piExecution(), claudeExecution()]`. A seat runs on the first execution of
-the room that serves its kind, then on the first of the runtime, then on
-the default of its kind. An execution with no `kind` serves every kind. A
-seat that no execution serves fails at once with a `no_execution` error,
+the room that serves its kind, then on the first of the runtime. An
+execution with no `kind` serves every kind. A seat that no execution serves
+fails at once with a `no_execution` error,
 and the failure is permanent. A room with no execution still runs its
 people and its record.
 
-**`defineExecution(kind, build)` defines an executor kind.** It returns
-the function that gives an execution of the kind for a set of options, such
-as `piExecution(options)`. An execution with options serves only the rooms
-and the runtimes that it is passed to, and it changes no default. The call
-also makes the execution with no options the default of the kind. A later
-definition of the same kind replaces the default. Each executor package
-calls `defineExecution` once, when the host loads it.
-
-**The registry holds functions.** It stays outside the journal, the
-captured definition, and the JSON protocol. The kernel imports no executor
-package. The runtime builds the default of a kind once, on the first seat
-of that kind, over its own storage, clock, limits, and logger.
-
-**`localExecution(kind, build)` makes one execution of a kind.** It changes
-no default. `defineExecution` builds each execution with it. A host uses it
-for an execution that no package defines, such as a stub for a kind that is
-not available.
+**`localExecution(kind, build)` makes one execution of a kind.** An executor
+package uses it to build a value, such as `piExecution(options)`. The host
+supplies that value to a room or runtime. Importing a package or building an
+execution does not configure a room.
 
 ```ts
-export function defineExecution<Options = undefined>(
-  kind: string,
-  build: (
-    host: ExecutionHost,
-    options: Options | undefined,
-  ) => (request: ConnectorRequest) => ActivationOpener,
-): (options?: Options) => Execution<AgentRunner>;
-
 export function localExecution(
   kind: string,
   build: (host: ExecutionHost) => (request: ConnectorRequest) => ActivationOpener,
@@ -63,8 +42,8 @@ export function localExecution(
 ```
 
 **The port of a local execution is an `AgentRunner` in this process.**
-`build` runs once for each connector. The room builds the connector of
-its own execution when the first seat that the execution serves connects.
+`build` runs once for each connector. Each room builds the connector of
+a supplied execution when the first seat that the execution serves connects.
 `startRoom` does not build it. The function that `build` returns builds the
 opener of one seat. Every seat keeps the trace limits and the logger
 of the host. The runner receives a plain `RoomProtocol` facade with
@@ -192,7 +171,6 @@ internal. Participant views omit `sessionId`.
 | `AgentPort`              | The side that the room calls: `wake`, `steer`, and `cut`                                                                                                                                                                                                                         |
 | `RoomProtocol`           | The side that a seat calls: `view`, `commit`, and `lease`                                                                                                                                                                                                                        |
 | `AgentRunner`            | The driver, and the port of a seat in this process. `run(activation)` resolves when it ends. `recover(activation)` releases as failed a run that the host lost                                                                                                                   |
-| `defineExecution`        | Defines an executor kind: the executions of one kind by options, and the default of the kind                                                                                                                                                                                     |
 | `localExecution`         | Builds one execution of one kind, whose port is an `AgentRunner` in this process                                                                                                                                                                                                 |
 | `hostingOf`              | The state of a runtime: an `ExecutionHost` with the journal namespace, the executions, and `evict`                                                                                                                                                                               |
 | `visitOf`                | The visit of a person whom the record of a running room holds present. It writes nothing                                                                                                                                                                                         |
@@ -494,7 +472,7 @@ a `thinking` or `text` block into one step. `limits.trace.stepsPerPass`
 caps the steps of one pass, and an `end` step is always kept.
 `limits.trace.toolOutputBytes` cuts a tool output that is larger, and the
 step keeps the start of it with a note of the size. Every execution that
-`localExecution` or `defineExecution` builds applies the limits of the host.
+`localExecution` builds applies the limits of the host.
 
 **A definition sets its trace policy.** `defineAgent({ trace })` takes
 `thinking` (`omit`, `start`, or `full`) and `toolOutput` (`omit` or
@@ -664,14 +642,13 @@ executor kind. `@ambionframework/claude` is the worked example, and
    and the fresh start. A harness with no session records none.
 8. **Wrap the executor in an `Execution`.** Export a function that defines
    the executor of an agent and a function that gives the host its
-   execution. Claude offers `claude()` and `claudeExecution()`. Export the
-   result of `defineExecution` as the second function. The call defines the
-   default when the package loads, so a room with no `execution` serves the
-   seats of the executor kind.
+   execution. Claude offers `claude()` and `claudeExecution()`. Build the
+   value with `localExecution` in the second function. The host supplies it
+   through the `execution` option of the room or runtime.
 
 ```ts
 import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { claude } from '@ambionframework/claude';
+import { claude, claudeExecution } from '@ambionframework/claude';
 
 const reviewer = defineAgent({
   name: 'reviewer',
@@ -685,6 +662,7 @@ const reviewer = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   agents: [reviewer],
+  execution: claudeExecution(),
 });
 ```
 

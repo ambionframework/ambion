@@ -54,7 +54,7 @@ export interface StartRoomOptions {
 	/**
 	 * The execution for this room, such as `piExecution()`, or one for each
 	 * executor kind. A seat runs on the first that serves its kind, then on
-	 * the runtime's, then on the default of its kind.
+	 * the runtime's. With no match, the activation fails with `no_execution`.
 	 */
 	execution?: Execution | readonly Execution[];
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
@@ -78,10 +78,9 @@ export interface ResumeRoomOptions {
 }
 
 /**
- * The connector for one room: the room's executions, then the runtime's,
- * then the default of each seat's executor kind. A seat that none serves
- * fails when the room wakes it. A room with no execution still runs its
- * people and its record.
+ * The connector for one room: the room's executions, then the runtime's.
+ * A seat that none serves fails when the room wakes it. A room with no
+ * execution still runs its people and its record.
  */
 function connectorFor(
 	state: RuntimeState,
@@ -90,7 +89,6 @@ function connectorFor(
 	return route({
 		executions: [...executionsOf(own), ...state.executions],
 		host: state,
-		built: state.defaults,
 	});
 }
 

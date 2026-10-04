@@ -15,6 +15,7 @@ const room = await startRoom({
   agents: [inspector, surveyor, editor],
   summaryWriter: 'editor',
   seats: { inspector: 'broadcast' },
+  execution: piExecution(),
 });
 ```
 
@@ -88,7 +89,12 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 `startRoom`. The default is `true`.
 
 ```ts
-const room = await startRoom({ name: 'site', agents: [inspector, surveyor], seating: false });
+const room = await startRoom({
+  name: 'site',
+  agents: [inspector, surveyor],
+  seating: false,
+  execution: piExecution(),
+});
 ```
 
 - No activation holds `seat` or `unseat`, and the prompt shows no reserve.

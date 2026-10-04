@@ -49,7 +49,7 @@ holds the steps and the limits.
 
 ```ts
 import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
 const stock = defineTool({
@@ -75,6 +75,7 @@ const priya = definePerson({ name: 'priya', identity: 'Coordinates deliveries.' 
 const room = await startRoom({
   name: 'delivery',
   agents: [inventory],
+  execution: piExecution(),
 });
 
 try {
@@ -89,10 +90,9 @@ try {
 }
 ```
 
-**A room with no `execution` runs each Pi seat on the default Pi
-execution.** Importing the package defines it. A host that needs a
-scripted stream or its own session place passes `piExecution(options)` to a
-room or to `createRuntime`.
+**Pass `piExecution()` as `execution` to a room or runtime.** A host that
+needs a scripted stream or its own session place passes
+`piExecution(options)` to the room or to `createRuntime`.
 
 ## Options
 
@@ -233,7 +233,7 @@ registry, the price tables, or a real model. The live scenarios of
 
 ## Troubleshooting
 
-- **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
+- **`no_execution`.** No supplied execution serves the kind of the seat. Pass `piExecution()` to the room or runtime.
 - **`Unknown model`.** The id needs the form `provider/model-id` and a
   provider that the registry lists. The failure is permanent, so the room
   does not retry it.

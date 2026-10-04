@@ -101,6 +101,7 @@ const room = await startRoom({
   agents: [researcher, editor],
   seats: { researcher: 'broadcast', editor: 'none' },
   summaryWriter: 'editor',
+  execution: piExecution(),
 });
 ```
 

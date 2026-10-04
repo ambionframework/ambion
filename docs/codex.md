@@ -106,7 +106,7 @@ home: `CODEX_HOME=~/.ambion/codex codex login`.
 
 ```ts
 import { defineAgent, definePerson, isSaid, startRoom } from '@ambionframework/ambion';
-import { codex } from '@ambionframework/codex';
+import { codex, codexExecution } from '@ambionframework/codex';
 
 const planner = defineAgent({
   name: 'planner',
@@ -123,6 +123,7 @@ const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 const room = await startRoom({
   name: 'delivery',
   agents: [planner],
+  execution: codexExecution(),
 });
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'Is the plan ready?' });

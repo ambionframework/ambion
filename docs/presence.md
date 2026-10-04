@@ -45,6 +45,7 @@ const room = await startRoom({
   goal: 'Ship payments v2 this quarter; keep the plan of record current.',
   agents: [lead, designer, planner],
   seats: { lead: 'broadcast', designer: 'presence' },
+  execution: piExecution(),
 });
 ```
 

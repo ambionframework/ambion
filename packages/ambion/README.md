@@ -24,7 +24,8 @@ The main library includes its journal dependency. Add
 `@ambionframework/workspace` when agents need optional filesystem tools.
 Add `@ambionframework/assistant` for the default assistant implementation.
 Model execution comes from an executor package. `@ambionframework/pi` is the
-Pi executor: a room with no `execution` runs each Pi seat on the default Pi execution. Pass `execution` to `startRoom` or `createRuntime` for custom storage or limits.
+Pi executor. Pass `piExecution()` as `execution` to `startRoom` or
+`createRuntime`. The runtime supplies storage and limits.
 It needs credentials for the chosen provider.
 
 ## Use
@@ -35,7 +36,7 @@ summary.
 
 ```ts
 import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 
 const you = definePerson({
   name: 'you',
@@ -64,6 +65,7 @@ const room = await startRoom({
   goal: 'Check delivery promises against stock.',
   summaryWriter: 'editor',
   agents: [inventory, editor],
+  execution: piExecution(),
 });
 
 try {

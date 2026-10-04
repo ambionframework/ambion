@@ -62,7 +62,7 @@ never loads it and needs no key.
 
 ```ts
 import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
 const stock = defineTool({
@@ -88,6 +88,7 @@ const priya = definePerson({ name: 'priya', identity: 'Coordinates deliveries.' 
 const room = await startRoom({
   name: 'delivery',
   agents: [inventory],
+  execution: piExecution(),
 });
 
 try {
@@ -102,12 +103,12 @@ try {
 }
 ```
 
-**Importing `@ambionframework/pi` defines the default Pi execution.** It
-gives the steps of each activation to the logger of the runtime. A host that
-needs a scripted stream or its own session place passes
-`piExecution(options)` as `execution`. The runtime supplies the storage and
-the limits. [Executors](executors.md#the-executor-contract) states how a
-room resolves an execution.
+**Pass `piExecution()` as `execution` to a room or runtime.** It gives the
+steps of each activation to the logger of the runtime. A host that needs a
+scripted stream or its own session place passes `piExecution(options)`.
+The runtime supplies the storage and the limits.
+[Executors](executors.md#the-executor-contract) states how a room resolves
+an execution.
 
 ## Options
 
@@ -588,7 +589,7 @@ Pi seats.
 
 | Symptom                                                             | Cause                                                                                                                                                                   |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Each seat fails at once with `no_execution`                         | No loaded package serves the kind of the seat. Import the executor package, or pass `piExecution()`.                                                                    |
+| Each seat fails at once with `no_execution`                         | No supplied execution serves the kind of the seat. Pass `piExecution()` to the room or runtime.                                                                         |
 | `Unknown model '...' for agent '...': expected 'provider/model-id'` | The id has no provider prefix, or the registry lacks it. The failure is permanent.                                                                                      |
 | The seat is abandoned after one attempt                             | A permanent failure. Read the `error` event. Check `<PROVIDER>_API_KEY`, the credit, and the usage limit.                                                               |
 | `invalid_grant` or `Provider is not configured`                     | The provider revoked the stored sign-in, or the store holds none. Run `loginPi` again, and pass the same `credentials`. A refresh that fails on the network retries.    |
