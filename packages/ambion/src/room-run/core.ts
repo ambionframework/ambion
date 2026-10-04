@@ -206,6 +206,7 @@ export function compositionOf(cast: CompositionDraft, at: string): Without<Compo
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		...(cast.summaryWriter === undefined ? {} : { summaryWriter: cast.summaryWriter }),
 		...(cast.seating === false ? { seating: false } : {}),
+		...(cast.definitions.some((agent) => !cast.seats.has(agent.name)) ? { reserved: true } : {}),
 		seated: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))
 			.map((agent) => {

@@ -90,7 +90,8 @@ than 1 items`. The model reads this text as a tool error.
 
 Every respond activation receives `say`, `schedule`, `unseat`, `dismiss`, and
 `recall`, plus the tools from its definition. It receives `seat` only when
-the reserve holds an agent. When the host starts the room with
+the reserve held an agent as the room composed. The list does not change
+between activations of one seat. When the host starts the room with
 `seating: false`, it receives neither `seat` nor `unseat`
 ([Roster](roster.md#seating-operations)). A summary activation receives
 only `say`. `say` accepts `{ text, to?, refs? }`.

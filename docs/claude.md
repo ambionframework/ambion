@@ -232,8 +232,8 @@ activation.** It holds `say`, `schedule`, `seat`, `unseat`, `dismiss`,
 `mcp__ambion__say` and so on. Steps and events show the plain name. The
 handler of a call takes the id of the call with `callId`, from the
 `tool_use` block that the stream named. The server omits `seat` when the
-reserve is empty, and omits `seat` and `unseat` when the host turned seating
-off.
+reserve held no agent as the room composed, and omits `seat` and `unseat`
+when the host turned seating off.
 
 - The executable calls them over the SDK transport. The tool code never
   runs in the child process.

@@ -107,6 +107,12 @@ export interface CollaborationContext {
 	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
 	/** `false` when the host turned seating off: an agent cannot seat or unseat. Absent means on. */
 	readonly seating?: false;
+	/**
+	 * `true` when the reserve held an agent at the composition of the room. It
+	 * stays `true` after the reserve empties, so the tool list of a seat does
+	 * not change between its activations. Absent means the reserve held none.
+	 */
+	readonly reserved?: true;
 	/** Only the summary writer reads the preferences of the person it writes for. */
 	readonly preferences?: string;
 	/**

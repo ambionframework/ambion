@@ -62,8 +62,14 @@ checks the activation, lease, recipient, and consumed context for every write.
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
 also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
-- An activation holds `seat` only when the reserve holds an agent at its
-  start. The prompt shows the reserve under the same rule.
+- An activation holds `seat` only when the reserve held an agent as the room
+  composed. The tool list of a seat then stays the same for the whole room,
+  so a harness keeps its session and its prompt cache. After the reserve
+  empties, `seat` refuses with "The reserve is empty." A room composed with
+  an empty reserve never offers `seat` to an agent. The host seats with
+  `room.seat`.
+- The prompt shows the reserve of the moment, and shows no block when the
+  reserve is empty.
 - `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a person name is refused.
@@ -92,6 +98,9 @@ const room = await startRoom({ name: 'site', agents: [inspector, surveyor], seat
 - The composition entry records `seating: false`. A default room writes no
   `seating` field, and a missing field reads as `true`. A resumed room keeps
   the recorded value.
+- The composition entry records `reserved: true` when the reserve held an
+  agent. A resumed room keeps the value, and records it when a new
+  definition joins the reserve.
 - A `compose` call cannot bind `seat` or `unseat`. See
   [Compose](compose.md#what-a-compose-call-binds).
 

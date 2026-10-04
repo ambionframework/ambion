@@ -599,7 +599,7 @@ binds a tool with no declared output. Use them to say to many
 participants, seat several agents, or recall many refs in one call.
 
 **Only the room tools of the activation bind.** An activation holds `seat`
-only when the reserve holds an agent, and holds neither `seat` nor `unseat`
+only when the reserve held an agent as the room composed, and holds neither `seat` nor `unseat`
 in a room started with `seating: false`. The catalog and the `describe` tool
 still list both, because the executor fixes its description when it is
 defined. A call that uses a room tool that the activation lacks fails before

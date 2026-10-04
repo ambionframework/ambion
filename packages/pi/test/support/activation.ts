@@ -96,6 +96,7 @@ export function viewFor(
 			participants: [],
 			messages: [],
 			reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+			reserved: true,
 		},
 	};
 }

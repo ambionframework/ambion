@@ -281,16 +281,26 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 						(seat) => [seat.name, seat],
 					),
 				);
+				let joined = false;
 				for (const agent of this.defs.values())
-					if (!definitions.has(agent.name))
+					if (!definitions.has(agent.name)) {
+						joined = true;
 						definitions.set(agent.name, {
 							name: agent.name,
 							identity: agent.identity,
 							attention: 'broadcast',
 						});
+					}
 				const reserve = [...definitions.values()].filter((seat) => !roster.has(seat.name));
 				const { seq: _seq, at: _at, ...prior } = priorComposition;
-				const body = { ...prior, seated: current.roster, reserve, at: this.iso() };
+				// The reserve follows the roster, so only a new agent changes the rule that the seats read.
+				const body = {
+					...prior,
+					...(joined ? { reserved: true } : {}),
+					seated: current.roster,
+					reserve,
+					at: this.iso(),
+				};
 				return decide(current, { type: 'compose', composition: body }, this.now());
 			}),
 		);
