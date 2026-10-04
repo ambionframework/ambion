@@ -130,8 +130,7 @@ macro paragraph and the list of macros appear only for a seat with a macro.
 the answer of `approve`. The `tool_call` and `tool_result` steps gain
 `parent`, the id of the compose call. The hosting exports `invokeTool` and
 `invokeChecked` run one direct call and hand the step sink of the activation
-to `compose` only. `ToolContext` gains `composeCall`, and no tool can write
-a step.
+to `compose` only. `ToolContext` gains `composeCall`.
 
 **The `approve` request is a union.** `ComposeOptions.approve` reads a
 `ComposeRequest`: `{ uses, code }` for free code, and `{ macro, hash, args }`
@@ -161,7 +160,10 @@ and two macros of one name. The error is an `AmbionError` with the code
 macro up in the frozen set of the definition, and never reads `~/.skills`.
 It checks `args` against the schema of the macro and takes absent `args` as
 `{}`. A mismatch, an unknown macro, and a mixed call are refusals with no
-ledger. The schema of a seat with no macro holds `uses` and `code` alone.
+ledger. The code of a macro reads the global `args`. The schema of a seat
+with a macro is one object with four optional fields, because a provider
+accepts no `anyOf` at the top of a tool schema. The schema of a seat with no
+macro holds `uses` and `code` alone.
 
 **`loadSkills` takes several sources.** `loadSkills(...sources)` merges the
 files of its sources into one set, so a host loads the skills of a template
@@ -190,8 +192,10 @@ result against the schema.
   the columns. A blob is lowercase hex, a `bigint` is decimal text, and a
   number that is not finite is its text.
 - **`read`.** The details are `{ path, text, from, to, lines, next,
-  truncation, image }`. The text of a direct call is the same.
-- **`repos`.** The details hold the list of repositories.
+  truncation, image }`. The model of a direct call reads the same text as
+  in 0.5.0.
+- **`repos`.** The details hold the server name and the list of
+  repositories.
 - **`bash`, `wait`, and `cancel`.** A process result carries its output
   `text` and its `port`. A `wait` on several handles gives `processes` and
   `ended`.
@@ -221,7 +225,8 @@ fresh runtime. Both runtimes pass it.
 
 **Every process has a port.** `bash` sets `$PORT` for each command. The
 table picks the port at random from 20000 to 29999 and excludes the ports of
-its running processes. `ps` shows a `Port` column, and the state line of a
+its running processes. A server that fails with `EADDRINUSE` gets a new
+port when the agent starts it again. `ps` shows a `Port` column, and the state line of a
 running process ends with `$PORT=<port>.` See
 [Processes](docs/processes.md#processes-that-serve-http).
 
@@ -229,7 +234,10 @@ running process ends with `$PORT=<port>.` See
 sends a GET to the process, by name or handle, on any backend with
 `endpoints`. Any agent of the workspace can read the process of any other
 agent. The workspace keeps the body as a snapshot, writes it to
-`~/.fetch/<process>/`, and returns the ref. The body limit is 64 MiB. See
+`~/.fetch/<process>/`, and returns the ref. JSON and text show as process
+data, and an image returns as an image part. The error names a refused
+connection, a redirect, and any other failure apart. The body limit is
+64 MiB. See
 [Workspace](docs/workspace.md#read-a-process-with-fetch).
 
 **The host reads a process with `workspace.fetch`.** The method takes a
@@ -267,15 +275,18 @@ refuses a `seated` or an `unseated` intent from a seat. `room.seat` and
 composition entry. `reserve` is empty when seating is off.
 
 **The `seat` tool says what to do for a seated agent.** The result reads
-`<name> is already seated. Seating it again does not activate it. To give it
-the request, call say with to set to <name>.`
+`<name> is already seated. Seating it again does not activate it. Read its
+mark in the roster: marked "named only", it gets the request through say
+with to set to <name>; with no mark or marked "watches arrivals", it already
+has the request.`
 
 #### The assistant
 
 **`defineAssistant` takes a required `executor` function.** The function
 receives `AssistantParts` (`instructions`, `tools`, and `bundles`) and
-returns an executor of any package. Pass `model` and `thinking` to the
-executor: `executor: (parts) => pi({ ...parts, model, thinking })`.
+returns an executor of any package. `DefineAssistantOptions` holds no
+`model` and no `thinking`. Pass them to the executor:
+`executor: (parts) => pi({ ...parts, model, thinking })`.
 
 **The assistant routes first and then stays silent.** To route to a seated
 specialist at `named` attention, it calls `say` with `to` set to that
@@ -348,19 +359,19 @@ public exports do not change.
 harness wrote the prompt after the first input. A provider lifts only the
 first message into its system field. On a model that accepts system
 messages in the middle of a conversation, the prompt reached the model as an
-update. A hook now moves the first prompt entry to the head of each request.
-The stored session keeps its order.
+update. A request hook moves the first prompt entry to the head of each
+request. The stored session keeps its order.
 
 **A Claude seat answers a line steered during its final answer.** The Claude
 executable runs such a line as a turn of its own after the first `result`.
 The echo of the line did not cancel the echo grace timer of 5 s, so the
-pass settled on the first result. Now an echo that arrives while a result
-waits on the timer cancels the timer, and the pass settles on the next
-result.
+pass settled on the first result. In 0.6.0 an echo that arrives while a
+result waits on the timer cancels the timer, and the pass settles on the
+next result.
 
 **The core adds the `[new]` marker to a steered line.** The runner marks the
-line with the prefix of `renderDelta` for every executor. Pi no longer adds
-its own prefix.
+line with the prefix of `renderDelta` for every executor. In 0.5.0 only Pi
+added the prefix.
 
 **A direct call checks the full schema.** A direct call on Claude, Codex,
 and the scripted executor checks the arguments against the schema after
@@ -390,8 +401,8 @@ states the CPU cost, the frame size, and the 24 hour `bash` timeout.
   no longer pulls in `@ambionframework/pi`.
 - **Expect `compose` and `describe` on every seat.** The tool list and the
   guidance of every Pi, Claude, and Codex seat hold both tools.
-  `ExecutorBaseOptions.compose` takes `ComposeOptions` only, and refuses
-  `false`. A user tool named `compose` or `describe` is refused.
+  `ExecutorBaseOptions` gains `compose`, which takes `ComposeOptions`. A
+  user tool named `compose` or `describe` is refused.
 - **Replace `DefineToolOptions`.** Use `PlainToolOptions`,
   `DeclaredToolOptions`, or `BaseToolOptions`.
 - **Read the new details.** `sql` `rows` holds preview rows, and `count`
@@ -461,8 +472,9 @@ carries a step.
   `SensorConformanceProbe`, and `SensorConformanceReply`.
 - **`@ambionframework/assistant`.** Adds the type `AssistantParts`.
 - **`@ambionframework/compose`.** Is a new package with the entry
-  `@ambionframework/compose/runtime`: `quickjsRuntime`, `processRuntime`, and
-  the types `QuickjsOptions`, `ProcessOptions`, and `SpawnChild`.
+  `@ambionframework/compose/runtime`: `quickjsRuntime`, `processRuntime`,
+  `PACKAGE_NAME`, and the types `QuickjsOptions`, `ProcessOptions`, and
+  `SpawnChild`.
 - **The other entries keep their exports.**
 
 ## 0.5.0 (2026-10-02)
