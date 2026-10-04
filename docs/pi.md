@@ -232,8 +232,11 @@ with the `thinking` level of the definition.
 **The system prompt is the mechanism and the agent part.** A prompt section
 of the harness renders `pass.mechanism` and `pass.agent` before each
 request. The section has no tag, so the model reads the text as the executor
-built it. A later pass changes the prompt with the view in hand. The text
-of `pass.record()` is the first input.
+built it. The harness writes the prompt entry after the first input. A
+hook moves the first prompt entry to the head of each request, so the
+provider sends it as its system prompt. The stored session keeps its order.
+A later pass changes the prompt with the view in hand. The text of
+`pass.record()` is the first input.
 
 **Each range of the record goes into the session as a marker.** A view, a
 delta, and a steered line each write an entry of kind `ambion.record`. Its
@@ -361,9 +364,9 @@ process. Pi has no permission layer and no sandbox. The
 definition is the whole policy: a tool that the definition omits does not
 exist for the model.
 
-**What the model sees.** The model sees the system prompt, the record, and
-the tools that [Definitions and tools](agent.md#tools) lists for the
-activation. The model sees no environment variable and no key.
+**What the model sees.** The model sees the system prompt at the head of
+the request, the record, and the tools that
+[Definitions and tools](agent.md#tools) lists for the activation. The model sees no environment variable and no key.
 
 **What the host holds.** The registry stream reads the provider key in the
 host process, and it sends the key to the provider only. A tool that reads

@@ -60,16 +60,12 @@ export interface WorkstationOptions {
 }
 
 /** The facts that hold on every workstation. The application names the commands its server installs. */
-const guidance = (host: string, loginPort: number) =>
-	[
-		'Your workspace is a real server. You log in to it as your own Unix account, and your',
-		'home is your working directory. Other agents have accounts of their own, and the',
-		"server's permissions keep your home apart from theirs. bash is a real shell with open",
-		'network access, and the commands you can run are the ones the server installs.',
-		`Your workstation hostname is ${host}. SSH login uses port ${loginPort}.`,
-		'A forwarded service port targets remote 127.0.0.1. Its private HTTP URL uses a',
-		'temporary loopback port on the Ambion host.',
-	].join('\n');
+const guidance = [
+	'Your workspace is a real server. You log in to it as your own Unix account, and your',
+	'home is your working directory. Other agents have accounts of their own, and the',
+	"server's permissions keep your home apart from theirs. bash is a real shell with open",
+	'network access, and the commands you can run are the ones the server installs.',
+].join('\n');
 
 /** One agent's session, and the idle timer that closes it. */
 interface Entry {
@@ -250,7 +246,7 @@ export function workstationBackend(options: WorkstationOptions): BashBackend {
 
 	return {
 		layout: options.layout,
-		guidance: guidance(options.server, port),
+		guidance,
 		endpoints,
 		...(git === undefined ? {} : { git }),
 		async connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<WorkspaceEnv> {
