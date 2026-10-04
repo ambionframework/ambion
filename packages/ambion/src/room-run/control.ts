@@ -17,6 +17,7 @@ import {
 	type ReleaseCommand,
 	stopWork as stopWorkDecision,
 } from '../room/transition.ts';
+import { singleFlight } from '../single-flight.ts';
 import type { Intent, Message, Seq } from '../types.ts';
 import { copyMessage } from '../types.ts';
 import {
@@ -316,17 +317,12 @@ export async function dismissSay(run: RoomRunState, seq: Seq): Promise<boolean> 
 
 export async function cancel(run: RoomRunState): Promise<void> {
 	run.assertRunning();
-	if (run.cancelInFlight !== undefined) return run.cancelInFlight;
-	const key = run.cancelKey ?? crypto.randomUUID();
-	run.cancelKey = key;
-	const operation = appendCancel(run, key);
-	run.cancelInFlight = operation;
-	try {
-		await operation;
+	return singleFlight(run.cancellation, async () => {
+		const key = run.cancelKey ?? crypto.randomUUID();
+		run.cancelKey = key;
+		await appendCancel(run, key);
 		run.cancelKey = undefined;
-	} finally {
-		if (run.cancelInFlight === operation) run.cancelInFlight = undefined;
-	}
+	});
 }
 
 /** Append the cancellation marker after every earlier journal request. */

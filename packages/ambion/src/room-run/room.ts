@@ -55,6 +55,7 @@ import { captureMessageSelection, type MessageSelection, toRoomRead } from '../r
 import { liveWork } from '../room/reconcile.ts';
 import { decide, type Refusal, type ReleaseCommand } from '../room/transition.ts';
 import type { TokenWindow } from '../room/view.ts';
+import { type SingleFlight, singleFlight } from '../single-flight.ts';
 import type {
 	AgentDefinition,
 	Message,
@@ -180,9 +181,9 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void> = Promise.resolve();
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
-	private stopInFlight: Promise<void> | undefined;
+	private readonly shutdown: SingleFlight<void> = {};
 	/** A cancellation append in flight, with its key retained across uncertainty. */
-	cancelInFlight: Promise<void> | undefined;
+	readonly cancellation: SingleFlight<void> = {};
 	cancelKey: string | undefined;
 	private fold: { length: number; projection: RoomProjection; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
@@ -557,18 +558,16 @@ export class RoomRun implements Room, RunningRoom, RoomRunState {
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
 	async stop(): Promise<void> {
 		if (this.phase === 'evicted') return;
-		if (this.stopInFlight !== undefined) return this.stopInFlight;
-		// Stopped from here on: a visit that arrives during the shutdown is
-		// refused rather than seated into a room that is going away.
-		this.enter('stopped');
-		this.cancelAlarm();
-		let operation!: Promise<void>;
-		operation = control.stopRun(this).catch((error) => {
-			if (this.stopInFlight === operation) this.stopInFlight = undefined;
-			throw error;
-		});
-		this.stopInFlight = operation;
-		return operation;
+		return singleFlight(
+			this.shutdown,
+			() => {
+				// Close admission before the shutdown writes its revocations and departures.
+				this.enter('stopped');
+				this.cancelAlarm();
+				return control.stopRun(this);
+			},
+			true,
+		);
 	}
 
 	/**

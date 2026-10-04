@@ -20,6 +20,7 @@ import {
 	type Refusal,
 	type RoomDecision,
 } from '../room/transition.ts';
+import type { SingleFlight } from '../single-flight.ts';
 import type {
 	AgentDefinition,
 	ExchangeRef,
@@ -69,7 +70,7 @@ export interface RoomRunState {
 	/** Publications run in journal order after the confirmed entry has been folded. */
 	publications: Promise<void>;
 	/** A cancellation append in flight, with its key retained across uncertainty. */
-	cancelInFlight: Promise<void> | undefined;
+	readonly cancellation: SingleFlight<void>;
 	cancelKey: string | undefined;
 	now(): number;
 	/** Every fact about the room, folded over the journal as it stands. */

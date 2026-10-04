@@ -29,6 +29,7 @@ export const CORE_LAYERS = [
 			'refs.ts',
 			'scheduling.ts',
 			'session-facts.ts',
+			'single-flight.ts',
 			'tool-call.ts',
 			'types.ts',
 		],
