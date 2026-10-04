@@ -70,6 +70,18 @@ const entryAt = (decision: RoomDecision<Kind>, seq: number): RoomEntry => {
 const refused = (category: string) => ({ refusal: { category } });
 
 describe('room transition', () => {
+	it.each([
+		['no open exchange', fold(composition(), person()), 3, 3, 'obsolete'],
+		['another exchange', fold(composition(), person(), question()), 2, 3, 'obsolete'],
+		['a changed record', fold(composition(), person(), question(), person(4)), 3, 3, 'replan'],
+		['live work', answering(), 3, 4, 'replan'],
+		['a quiet exchange', fold(composition(), person(), question()), 3, 3, 'admitted'],
+	] as const)('decides a close against %s', (_name, state, from, through, admission) => {
+		const result = decide(state, { type: 'close', from, through }, now);
+		if (admission === 'admitted') expect(result).toMatchObject({ entry: { kind: 'close' } });
+		else expect(result).toEqual({ close: admission });
+	});
+
 	it('requires a recorded present human before accepting a delivery', () => {
 		const absent = fold(composition(), person(), left(3));
 		for (const from of ['priya', 'ghost']) {

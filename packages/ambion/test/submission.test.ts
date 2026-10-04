@@ -160,43 +160,78 @@ describe('a room in doubt', () => {
 		expect((await messagesOf(session)).filter((m) => m.key === 'q1')).toHaveLength(1);
 	});
 
-	it('keeps a question queued before close in the current exchange', async () => {
-		const opened = await openFor(memory);
-		let failNextClose = false;
-		const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
-			if (failNextClose && phase === 'after' && customType === 'close') {
-				failNextClose = false;
-				throw new Error('the disk is full');
-			}
-		});
-		const { clock, session, events } = await summarisedRoom(journals, answers);
-		const visit = await session.visit(person);
-		await waitForRoom(session);
-		// The second question is delivered the moment alpha's activation ends, so its
-		// commit is queued ahead of the close the reconcile decides, and that close
-		// lands and loses its confirmation.
-		let delivered: Promise<unknown> | undefined;
-		session.subscribe((event) => {
-			if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
-				failNextClose = true;
-				delivered = visit.send({ text: 'Second?', key: 'q2' });
-			}
-		});
-		await visit.send({ text: 'First?', key: 'q1' });
-		await waitForRoom(session);
-		await delivered;
-		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
-		await waitForRoom(session);
-		const closes = (await storedOf(opened.journals, session.name)).filter(
-			(r) => r.kind === 'close',
+	describe.each(storages)('a delivery races a close on $name', (storage) => {
+		it.each(['activation_end', 'exchange_closed'] as const)(
+			'places a delivery submitted at %s inside the recorded range',
+			async (boundary) => {
+				const opened = await openFor(storage);
+				const { session } = await summarisedRoom(opened.storage, answers);
+				const visit = await session.visit(person);
+				await waitForRoom(session);
+				let delivered: ReturnType<typeof visit.send> | undefined;
+				session.subscribe((event) => {
+					if (event.type === boundary && delivered === undefined)
+						delivered = visit.send({ text: 'Second?', key: 'race-q2' });
+				});
+				const first = await visit.send({ text: 'First?', key: 'race-q1' });
+				await waitForRoom(session);
+				const second = await delivered;
+				expect(second).toBeDefined();
+				const closes = stateOf(session).closes;
+				expect(closes).toHaveLength(boundary === 'activation_end' ? 1 : 2);
+				expect(second?.from).toBe(boundary === 'activation_end' ? first.from : closes[1]?.from);
+				const questions = (await messagesOf(session)).filter((message) =>
+					message.key?.startsWith('race-q'),
+				);
+				expect(questions).toHaveLength(2);
+				for (const question of questions)
+					expect(
+						closes.filter((close) => close.from <= question.seq && question.seq <= close.through),
+					).toHaveLength(1);
+			},
 		);
-		expect(closes).toHaveLength(1);
-		expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
-		const exchanges = events.filter(
-			(e) => e.type === 'exchange_opened' || e.type === 'exchange_closed',
-		);
-		expect(exchanges.map((e) => e.type)).toEqual(['exchange_opened', 'exchange_closed']);
 	});
+
+	it.each(storages)(
+		'keeps a question queued before close in the current exchange on $name',
+		async (storage) => {
+			const opened = await openFor(storage);
+			let failNextClose = false;
+			const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
+				if (failNextClose && phase === 'after' && customType === 'close') {
+					failNextClose = false;
+					throw new Error('the disk is full');
+				}
+			});
+			const { clock, session, events } = await summarisedRoom(journals, answers);
+			const visit = await session.visit(person);
+			await waitForRoom(session);
+			// The second question is delivered the moment alpha's activation ends, so its
+			// commit is queued ahead of the close the reconcile decides, and that close
+			// lands and loses its confirmation.
+			let delivered: Promise<unknown> | undefined;
+			session.subscribe((event) => {
+				if (event.type === 'activation_end' && event.seat === alpha.name && !delivered) {
+					failNextClose = true;
+					delivered = visit.send({ text: 'Second?', key: 'q2' });
+				}
+			});
+			await visit.send({ text: 'First?', key: 'q1' });
+			await waitForRoom(session);
+			await delivered;
+			for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
+			await waitForRoom(session);
+			const closes = (await storedOf(opened.journals, session.name)).filter(
+				(r) => r.kind === 'close',
+			);
+			expect(closes).toHaveLength(1);
+			expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
+			const exchanges = events.filter(
+				(e) => e.type === 'exchange_opened' || e.type === 'exchange_closed',
+			);
+			expect(exchanges.map((e) => e.type)).toEqual(['exchange_opened', 'exchange_closed']);
+		},
+	);
 });
 
 /**

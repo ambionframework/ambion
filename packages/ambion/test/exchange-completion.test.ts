@@ -101,6 +101,50 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 	};
 	const facts = says(['First fact.', 'Second fact.']);
 
+	it.each(['retry', 'resume'] as const)(
+		'keeps a failed close pending until %s',
+		async (recovery) => {
+			const opened = await openFor(storage);
+			const faulty = faultyJournals(opened.storage);
+			const clock = fakeClock();
+			const runtime = createRuntime({ clock, storage: faulty.journals });
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('exchange-close-retry'),
+					runtime,
+					execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
+				}),
+			);
+			const visit = await room.visit(priya);
+			faulty.fail('before', 'close');
+			const exchange = await visit.send({ text: 'First?', key: 'close-retry-1' });
+			const waiting = exchange.waitForClose();
+			const closed = settledFlag(waiting);
+			for (let i = 0; i < 4; i += 1) await turn();
+			expect(closed()).toBe(false);
+			faulty.fail(false);
+			let recovered = room;
+			if (recovery === 'resume') {
+				const stopped = expect(waiting).rejects.toMatchObject({ code: 'room_stopped' });
+				crash(runtime, room);
+				await stopped;
+				recovered = stopAtEnd(
+					await resumeRoom(room.name, {
+						runtime: createRuntime({ clock, storage: opened.storage }),
+						agents: [],
+					}),
+				);
+			} else await room.reconcile();
+			await expect(recovered.exchange(exchange.from)?.waitForClose()).resolves.toEqual(
+				expect.any(Array),
+			);
+			expect(closedExchange(recovered, exchange.from)).toMatchObject({ from: exchange.from });
+			expect(
+				(await storedOf(opened.journals, room.name)).filter((entry) => entry.kind === 'close'),
+			).toHaveLength(1);
+		},
+	);
+
 	it.each(outcomes)('retains a %s result without scheduling another summary', async (outcome) => {
 		const { clock, runtime } = await runtimeOver(1, 0);
 		const room = await summaryRoom(
@@ -228,32 +272,6 @@ describe('exchange completion handles', () => {
 			}),
 		);
 		expect(resumed.exchange(posted.from)).toMatchObject({ from: posted.from, opened: false });
-	});
-
-	it('keeps a close wait pending when the close append fails, then resolves after retry', async () => {
-		const opened = await openFor(memory);
-		const faulty = faultyJournals(opened.storage);
-		const room = stopAtEnd(
-			await startRoom({
-				name: roomName('exchange-close-retry'),
-				runtime: createRuntime({
-					clock: fakeClock(),
-					storage: faulty.journals,
-				}),
-				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
-			}),
-		);
-		const visit = await room.visit(priya);
-		faulty.fail('before', 'close');
-		const exchange = await visit.send({ text: 'First?', key: 'close-retry-1' });
-		const waiting = exchange.waitForClose();
-		const closed = settledFlag(waiting);
-		for (let i = 0; i < 4; i += 1) await turn();
-		expect(closed()).toBe(false);
-		faulty.fail(false);
-		await room.reconcile();
-		await expect(waiting).resolves.toEqual(expect.any(Array));
-		expect(closedExchange(room, exchange.from)).toMatchObject({ from: exchange.from });
 	});
 
 	it('resolves an earlier response while a later same-owner exchange is held', async () => {

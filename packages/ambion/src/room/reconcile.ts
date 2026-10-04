@@ -17,8 +17,8 @@ import type { RoomState } from './fold.ts';
 import { type DueActivation, removedAfter, seatOf } from './lease.ts';
 import {
 	type ActivationFields,
-	admitsClose,
 	type CloseRef,
+	closeAdmission,
 	endingOf,
 	exchangeLive,
 	isExpired,
@@ -206,14 +206,16 @@ function abandonments(state: RoomState, options: ReconcileOptions): LeaseEnd[] {
 
 /**
  * The exchange closes when nothing works on it: the open exchange, through
- * the record's last seq, as `admitsClose` admits it. The write decides
+ * the record's last seq, as `closeAdmission` admits it. The write decides
  * again with the same rule where it lands.
  */
 function closing(state: RoomState, work: LiveWork): CloseRef | undefined {
 	const exchange = state.exchange;
 	if (exchange === undefined) return undefined;
 	const close = { from: exchange.from, through: state.lastSeq };
-	return admitsClose(exchange, close, state.lastSeq, work.exchange) ? close : undefined;
+	return closeAdmission(exchange, close, state.lastSeq, work.exchange) === 'admitted'
+		? close
+		: undefined;
 }
 
 /** The activations the room still tries: what it owes, less what it gave up on. */

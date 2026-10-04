@@ -8,7 +8,6 @@ import { decodeActivationId } from '../activation-id.ts';
 import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { CommitRequest, CommitResult, LeaseResponse } from '../protocol.ts';
-import { liveWork } from '../room/reconcile.ts';
 import { unreadBy } from '../room/rules.verified.ts';
 import {
 	decide,
@@ -279,14 +278,9 @@ async function closeExchange(
 ): Promise<boolean> {
 	const written = await decideAndAppend(run, 'close', close, { whileRunning: true });
 	requireSubmission(written);
-	if ('entry' in written) return true;
-	const state = run.state();
-	// A close that did not land is progress when the same exchange is still open
-	// and the record moved or its work is live: the complement of what
-	// `admitsClose` admits, so the next pass decides the close again.
 	return (
-		state.exchange?.from === close.from &&
-		(state.lastSeq !== close.through || liveWork(state, run.now()).exchange)
+		'entry' in written ||
+		(written.result !== undefined && 'close' in written.result && written.result.close === 'replan')
 	);
 }
 

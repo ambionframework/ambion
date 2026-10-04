@@ -17,6 +17,7 @@ import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { fakeClock } from '../src/testing.ts';
 import { bindings } from './support/binding.ts';
+import { flush } from './support/core-failure.ts';
 import { owedOf, pendingOf, replayState } from './support/fold.ts';
 import { closedExchange, roomName, scriptedAgent, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scriptedStream, seat, toolResultTexts } from './support/scripted.ts';
@@ -118,11 +119,13 @@ describe('the room runs the verified rules', () => {
 		});
 	});
 
-	it('writes a close only when admitsClose says so', () => {
+	it('writes a close only when closeAdmission says so', () => {
 		const close = { type: 'close', person: 'priya', from: 3, through: 3 } as const;
-		bind.once(rules.admitsClose, false);
-		expect(decide(asked(), close, now)).toEqual({ entry: undefined });
-		bind.once(rules.admitsClose, true);
+		bind.once(rules.closeAdmission, 'replan');
+		expect(decide(asked(), close, now)).toEqual({ close: 'replan' });
+		bind.once(rules.closeAdmission, 'obsolete');
+		expect(decide(asked(), close, now)).toEqual({ close: 'obsolete' });
+		bind.once(rules.closeAdmission, 'admitted');
 		expect(decide(asked(), { ...close, through: 9 }, now)).toMatchObject({
 			entry: { kind: 'close', body: { through: 9, at } },
 		});
@@ -383,45 +386,59 @@ describe('the room runs the verified rules', () => {
 		expect(reconcile(quiet).steps).toEqual([]);
 	});
 
-	it('closes on a later pass when admitsClose refuses once', async () => {
-		const runtime = createRuntime({
-			clock: fakeClock(),
-			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
-		});
-		const room = stopAtEnd(
-			await startRoom({
-				name: roomName('binding-close'),
-				runtime,
-				agents: [scriptedAgent('product', 'Product.')],
-			}),
-		);
-		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Person.' }));
-		const first = await visit.send({ text: 'Question.' });
-		const peer = runningRoom(runtime, room.name);
-		if (peer === undefined) throw new Error('The room is absent.');
-		const activation = `message:${first.from}:product:1`;
-		expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
-		const request: CommitRequest = {
-			activation,
-			key: 'c',
-			readThrough: first.from,
-			intent: { kind: 'said', text: 'Answer.' },
-		};
-		expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
-		// The pass admits the close, and the write refuses it once. The refused
-		// close leaves the exchange open. A later pass asks admitsClose again,
-		// and the close lands.
-		await room.reconcile();
-		const body = vi.mocked(rules.admitsClose).getMockImplementation();
-		if (body === undefined) throw new Error('The rule has no body.');
-		bind.onceWith(rules.admitsClose, body);
-		bind.once(rules.admitsClose, false);
-		await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
-		await visit.send({ text: 'Again.' });
-		await waitForRoom(room);
-		expect(closedExchange(room, first.from)).toBeDefined();
-		expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
-	});
+	it.each(['admitted', 'replan', 'obsolete'] as const)(
+		'plans a close only for the admitted outcome: %s',
+		async (outcome) => {
+			const quiet = replayState([composition, person, quietQuestion], options);
+			bind.once(rules.closeAdmission, outcome);
+			expect(reconcile(quiet).steps).toEqual(
+				outcome === 'admitted' ? [{ type: 'close', from: 3, through: 3 }] : [],
+			);
+		},
+	);
+
+	it.each(['replan', 'obsolete'] as const)(
+		'follows the queued %s close outcome',
+		async (outcome) => {
+			const runtime = createRuntime({
+				clock: fakeClock(),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
+			});
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('binding-close'),
+					runtime,
+					agents: [scriptedAgent('product', 'Product.')],
+				}),
+			);
+			const visit = await room.visit(definePerson({ name: 'priya', identity: 'Person.' }));
+			const first = await visit.send({ text: 'Question.' });
+			const peer = runningRoom(runtime, room.name);
+			if (peer === undefined) throw new Error('The room is absent.');
+			const activation = `message:${first.from}:product:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const request: CommitRequest = {
+				activation,
+				key: 'c',
+				readThrough: first.from,
+				intent: { kind: 'said', text: 'Answer.' },
+			};
+			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
+			// Planning admits the close. The queued write returns the sentinel outcome.
+			// Only replan must close without another delivery or clock advance.
+			await room.reconcile();
+			const body = vi.mocked(rules.closeAdmission).getMockImplementation();
+			if (body === undefined) throw new Error('The rule has no body.');
+			bind.onceWith(rules.closeAdmission, body);
+			bind.once(rules.closeAdmission, outcome);
+			await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
+			await flush();
+			expect(closedExchange(room, first.from) !== undefined).toBe(outcome === 'replan');
+			await room.reconcile();
+			await flush();
+			expect(closedExchange(room, first.from)).toBeDefined();
+		},
+	);
 
 	it('reports a scheduled say the unread entries that unreadBy names', async () => {
 		const runtime = createRuntime({
