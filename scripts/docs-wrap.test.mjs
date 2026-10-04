@@ -43,7 +43,7 @@ test('docs/patterns.md does not restate rules that other pages own', () => {
 	assert.deepEqual(restated.filter((pattern) => pattern.test(text)).map(String), []);
 });
 
-test('docs/envelope.md prose wraps at about 78 columns', () => {
-	const text = readFileSync(new URL('../docs/envelope.md', import.meta.url), 'utf8');
+test('docs/limits.md prose wraps at about 78 columns', () => {
+	const text = readFileSync(new URL('../docs/limits.md', import.meta.url), 'utf8');
 	assert.deepEqual(longProse(text), []);
 });

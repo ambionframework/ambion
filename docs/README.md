@@ -44,7 +44,7 @@ each page.
 | [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                                    |
 | [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                                  |
 | [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits                                    |
-| [Envelope](envelope.md)               | Configurable limits and the measured cost of the fold                                         |
+| [Limits and fold cost](limits.md)     | Configurable limits and the measured cost of the fold                                         |
 | [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                                              |
 
 ## Navigation hints
@@ -70,7 +70,7 @@ specific to one adapter. Read `exchange.md` and
 `presence.md` for the two durable concepts built on the room. Read
 `trust.md` before you expose a room to untrusted agents. Read
 `durability.md` before choosing storage or recovery behavior, then
-`deployment.md` for host procedures. `envelope.md` lists every
+`deployment.md` for host procedures. `limits.md` lists every
 configurable limit and the cost of the fold. `formal.md` states how a rule is
 proven and how a change to one reaches the gate. `toolchain.md` is the repository guide;
 [the plan](../planning/next.md) and [the backlog](../planning/backlog.md)

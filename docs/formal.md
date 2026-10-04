@@ -227,8 +227,8 @@ made internal or deleted.
 
 ## 6. What LemmaScript 0.6.1 lowers
 
-**A rule stays inside these rows.** Each row was checked with `lsc gen`
-and `dafny verify` on this repository.
+**The table states which constructs LemmaScript can verify.** Each row
+was checked with `lsc gen` and `dafny verify` on this repository.
 
 | Construct                                                   | Result                                                                                                           |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -250,7 +250,7 @@ and `dafny verify` on this repository.
 | An import of a rule from another verified file              | Verifies when a body calls it; a call only inside a contract does not resolve                                    |
 | `switch` over a named string union                          | Verifies                                                                                                         |
 | The literal `'none'` as a return value                      | Lowers to `Option.None`; a scale returns a number                                                                |
-| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the envelope                                                                                             |
+| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the proof scope                                                                                          |
 
 ## 7. What the proofs say, and what they do not
 

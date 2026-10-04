@@ -4,7 +4,7 @@
  * It prints the cost of a full replay and the cost of one new question, for
  * the oracle fold in the tests and the incremental projection. It is a manual
  * bench: timing is too noisy for the gate. Run it with
- * `node scripts/projection-envelope.mjs [sizes...]`.
+ * `node scripts/projection-cost.mjs [sizes...]`.
  */
 import { advance, projectState, replay } from '../packages/ambion/src/room/projection.ts';
 import { evolve } from '../packages/ambion/test/support/evolve.ts';

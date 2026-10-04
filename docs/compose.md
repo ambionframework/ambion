@@ -1067,7 +1067,7 @@ limit of the runtime: `limits` goes to the executions, and the context of
 a tool call carries none. So `compose` reads its limits from its own
 option. An absent field keeps the default.
 
-[Envelope](envelope.md#the-limits-of-a-compose-call) names the four fields,
+[Limits and fold cost](limits.md#the-limits-of-a-compose-call) names the four fields,
 what each bounds, and its default.
 
 **The time limit ends at the earlier bound.** `compose` stops the code at
@@ -1093,7 +1093,7 @@ the status `failed`, and the ledger marks each call that has not settled
 **The trace caps bound what a nested call leaves.** Each nested call
 records two steps, and they count against `limits.trace.stepsPerPass`.
 Each output counts against `limits.trace.toolOutputBytes`
-([Envelope](envelope.md#the-limits)). The trace can cut a nested output.
+([Limits and fold cost](limits.md#the-limits)). The trace can cut a nested output.
 
 ## Acceptance
 

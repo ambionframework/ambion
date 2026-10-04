@@ -135,7 +135,7 @@ export const ObserveSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
-/** A strict error envelope schema, the body of every non-200 reply. */
+/** A strict error response schema, the body of every non-200 reply. */
 export const ErrorSchema = Type.Object(
 	{
 		api: Type.Literal(API),

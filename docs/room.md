@@ -223,7 +223,7 @@ line: `── N earlier messages not shown ──`. The line shows for summarise
 unsummarised history alike. The room does not record the cap. A room resumed
 under another cap serves a different view of the same record.
 
-[Envelope](envelope.md) holds the table of every limit and the measured
+[Limits and fold cost](limits.md) holds the table of every limit and the measured
 cost of the fold.
 
 Ambion does not promise bounded replay. The record window bounds model input
@@ -246,6 +246,6 @@ credentials, process lifetime, and recovery.
 - [Workspace](workspace.md): the workspace interface, its backends, and its tools.
 - [Durability](durability.md): journal guarantees, recovery, and leases.
 - [Deployment](deployment.md): host placement, storage, and reconnect.
-- [Envelope](envelope.md): configurable limits and the fold cost.
+- [Limits and fold cost](limits.md): configurable limits and the fold cost.
 - [Formal](formal.md): the verified rules and the proof gate.
 - [Toolchain](toolchain.md): package layout, checks, CI, and release.
