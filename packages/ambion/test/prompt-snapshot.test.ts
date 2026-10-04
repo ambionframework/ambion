@@ -42,6 +42,7 @@ const context = {
 	],
 	messages,
 	reserve: [{ name: 'surveyor', identity: 'Checks tonnage.' }],
+	reserved: true as const,
 };
 const worker = defineAgent({
 	name: 'worker',
@@ -87,6 +88,17 @@ describe('the rendered prompt', () => {
 		expect(mechanism).toMatchSnapshot('mechanism');
 		expect(agent).toMatchSnapshot('agent');
 		expect(read).toMatchSnapshot('context');
+	});
+
+	it('tells a seat to seat a colleague first only when the room offers seat', () => {
+		const handoff = (extra: object) =>
+			renderActivation({ ...respond, context: { ...respond.context, ...extra } }, worker).agent;
+		expect(handoff({})).toContain('Seat them first');
+		expect(handoff({ seating: false })).not.toContain('Seat them first');
+		expect(handoff({ reserved: undefined })).not.toContain('Seat them first');
+		expect(handoff({ seating: false })).toContain(
+			'A seated colleague with no mark reads the record',
+		);
 	});
 
 	it('renders a closing activation', () => {

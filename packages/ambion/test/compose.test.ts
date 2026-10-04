@@ -815,16 +815,20 @@ describe('the compose tool of an executor', () => {
 		});
 		expect(tool.description).toBe(
 			[
-				'Run JavaScript that calls your tools as tools.<name>, in one call. Use it for a plan of two or more tool calls, and to explore large results. You read only the value that the code returns.',
+				'Run JavaScript that calls your tools as tools.<name>, in one call. Use it when a result feeds a later call, or when you need a part of a large result. You read only the value that the code returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
 				'A compose call cannot start a compose call. Image parts of a result do not reach the code.',
 				'',
-				'Tools that code can bind, each with the type of its result (string is text): echo -> string, table -> object, point -> Point, names -> array, say -> string, schedule -> string, recall -> string, seat -> string, unseat -> string, dismiss -> string.',
-				'Call describe with the names of tools for their signatures and types before you write code that reads fields of a result.',
+				'Tools that code can bind, each with the type of its result (string is text): echo -> string, table -> object, point -> Point, names -> array, say -> string, schedule -> string, recall -> string, dismiss -> string. seat and unseat return text, and bind only when your tool list holds them.',
 			].join('\n'),
 		);
+		// A seat with no macro gets no macro field.
+		expect(Object.keys((tool.parameters as { properties: object }).properties)).toEqual([
+			'uses',
+			'code',
+		]);
 	});
 
 	it('returns the signatures and the named types of the tools that it names, in the order named, and runs nothing', async () => {
@@ -1063,10 +1067,10 @@ describe('the compose tool of an executor', () => {
 
 	it('lists the room tools after its own tools, and no compose or describe tool', () => {
 		const listed = composeOf([echo, hidden]).description.match(
-			/result \(string is text\): (.*)\.$/m,
+			/result \(string is text\): (.*?)\. seat and unseat /m,
 		);
 		expect(listed?.[1]).toBe(
-			'echo -> string, say -> string, schedule -> string, recall -> string, seat -> string, unseat -> string, dismiss -> string',
+			'echo -> string, say -> string, schedule -> string, recall -> string, dismiss -> string',
 		);
 	});
 });

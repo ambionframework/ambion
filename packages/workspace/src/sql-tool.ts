@@ -87,7 +87,7 @@ const sqlSchema = Type.Object({
 	params: Type.Optional(
 		Type.Array(Param, {
 			description:
-				'Values for the ? placeholders of one statement, in order. Write ? in the statement and give each value here. A whole number binds as an integer. Use 1 or 0 for a boolean. It needs a single statement.',
+				'Values for the ? placeholders, in order. The call takes a single statement. A whole number binds as an integer. Use 1 or 0 for a boolean.',
 		}),
 	),
 	rows: Type.Optional(
@@ -113,15 +113,11 @@ function sqlToolGuidance(database: string): string {
 		`sql runs statements on one shared database, ${database}. Every agent queries this`,
 		`database. Put structured data that a colleague needs here as a named table or view:`,
 		`the colleague queries it by its name at once, with no copy. Reach this database with`,
-		`sql alone. The`,
-		`tool shows the last result as a table and keeps the data in the database. Set export to`,
-		`write the full result as a CSV file in your workspace for another tool or script.`,
-		`Set import to read a CSV file with a header from your workspace, up to ${formatBytes(MAX_IMPORT_BYTES)}. Its rows`,
-		`are the table ${IMPORT_TABLE} for that call alone: every value is text, and \\N is NULL. Copy`,
-		`them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the`,
+		`sql alone. The tool shows the last result as a table and keeps the data in the database.`,
+		`Set import to read a CSV file with a header from your workspace, up to ${formatBytes(MAX_IMPORT_BYTES)}.`,
+		`Copy its rows in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the`,
 		`process that writes the file before you import it. Give a value that comes from outside, such`,
-		`as a name or a label, in params: write ? in the statement, and list the values in order.`,
-		`params takes one statement.`,
+		`as a name or a label, in params.`,
 	].join('\n');
 }
 

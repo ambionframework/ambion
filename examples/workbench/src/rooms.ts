@@ -169,6 +169,7 @@ export async function openRooms(
 			}),
 		},
 		audit: {},
+		rooms: true,
 	});
 	const lab = workspace.sql;
 	if (lab === undefined) fail('The workspace has no lab database.');

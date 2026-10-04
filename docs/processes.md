@@ -935,18 +935,13 @@ line.** The two `$PORT` lines belong to the note on every backend. A backend
 with no endpoints has no `fetch`, and the lines still state `$PORT`.
 
 ```text
-bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
-Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
-The call waits up to wait seconds, 30 by default, and then gives the state of the process and its output.
-The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
-Each process has a directory, ~/.processes/<handle>/, with its spec, its out, and its exit code when it ends.
+bash starts each command as a background process and returns its handle.
+Give a long-running process a name, so you can tell your processes apart.
+Each process has a directory, ~/.processes/<handle>/, with its spec, its exit code when it ends, and out, its whole output. Read out with read.
 ls ~/.processes lists every process you started that the workspace still keeps.
-wait takes a list of handles and waits for the first of them to end.
-wait with one handle and timeout 0 gives the state and the new output of that process at once.
-cancel takes a handle and stops its process. ps lists your running processes.
 The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.
 Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.
-A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
+A process keeps running after your activation ends, until its timeout.
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
 A process that outlives your activation shows in the reminder at the start of your next activation.

@@ -353,7 +353,13 @@ describe('the compose field of the workspace tools', () => {
 		const room = ['say', 'schedule', 'recall', 'seat', 'unseat', 'dismiss'];
 		const names = [...bundle.tools.map((tool) => tool.name), ...room];
 		expect(compose?.description.length).toBeLessThan(1500);
-		for (const name of names) expect(compose?.description).toContain(`${name} -> `);
+		// The catalog says that `seat` and `unseat` bind only when the seat holds them.
+		for (const name of names.filter((one) => one !== 'seat' && one !== 'unseat'))
+			expect(compose?.description).toContain(`${name} -> `);
+		expect(compose?.description).toContain(
+			'seat and unseat return text, and bind only when your tool list holds them.',
+		);
+		expect(compose?.description).not.toContain('seat -> ');
 		// A declared output names its type, and an undeclared one is text.
 		expect(compose?.description).toContain('read -> ReadResult');
 		expect(compose?.description).toContain('sql -> SqlResult');

@@ -166,11 +166,19 @@ describe('the workspace bundle', () => {
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools.map((tool) => tool.name)).toEqual(BASE_TOOLS);
-		// The /rooms guidance names no room, so a workspace states it with no other guidance.
-		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
+		// The /rooms guidance names no room. A workspace states it only when the host sets `rooms`.
+		const base = `${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}`;
+		expect(workspace.tools().guidance).toBe(base);
+		const mirroring = openWorkspace({
+			name: name('rooms-tools'),
+			backend: { bash: wrapped() },
+			rooms: true,
+		});
+		expect(mirroring.tools().guidance).toBe(
+			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(mirroring.name)}\n\n${ROOM_MIRROR_GUIDANCE}`,
 		);
 		await workspace.dispose();
+		await mirroring.dispose();
 	});
 
 	it('names the tools in the tool line and gives no count', () => {
@@ -186,7 +194,7 @@ describe('the workspace bundle', () => {
 			backend: { bash: wrapped(() => ({ guidance: 'Custom backend guidance.' })) },
 		});
 		expect(workspace.tools().guidance).toBe(
-			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`,
+			`${defaultToolGuidance(BASE_TOOLS)}\n${FILES_NOTE}\n\n${processToolGuidance()}\n\n${snapshotGuidance(workspace.name)}\n\nCustom backend guidance.`,
 		);
 		await workspace.dispose();
 	});
@@ -251,6 +259,7 @@ describe('a workspace beside a running room', () => {
 			name: name('own-layout'),
 			backend: { bash: wrapped(() => ({ layout: own })) },
 			audit: {},
+			rooms: true,
 		});
 		const guidance = site.tools().guidance ?? '';
 		expect(guidance).toContain(own.audit);

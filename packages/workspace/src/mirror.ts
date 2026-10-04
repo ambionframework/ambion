@@ -45,19 +45,18 @@ export interface RoomMirror {
 
 /**
  * Guidance for the room-mirror convention under `root`, the backend's own
- * layout for it. It names no room, so a workspace states it
- * unconditionally, with no option to set.
+ * layout for it. It names no room. A workspace states it when the host
+ * sets the `rooms` option, because the file exists only when the host calls
+ * `Workspace.mirror()`.
  */
 export function roomMirrorGuidance(root: string): string {
 	return [
-		`This workspace may hold ${root}/<room name>/messages.jsonl for any room`,
-		`that mirrors its record here. Read a room's file with read or bash`,
-		`cat. It can hold messages your own context has trimmed or folded`,
-		`into a summary, and the history of a room you are not seated in.`,
-		`Each line carries the message's own seq. A message ref names the`,
-		`same seq: ambion://room/<name>/message/<seq>. Filter it with jq:`,
-		`jq 'select(.seq == <seq>)' finds the line a ref or the last paragraph of your context`,
-		`names. jq also filters by kind or from.`,
+		`This workspace holds ${root}/<room name>/messages.jsonl for each room that mirrors`,
+		`its record here. Read it with read or jq. It can hold messages your own context has`,
+		`trimmed or folded into a summary, and the history of a room you are not seated in.`,
+		`Each line carries the message's own seq. A message ref names the same seq:`,
+		`ambion://room/<name>/message/<seq>. jq 'select(.seq == <seq>)' finds the line that a`,
+		`ref or the last paragraph of your context names. jq also filters by kind or from.`,
 	].join('\n');
 }
 

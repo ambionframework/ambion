@@ -27,8 +27,9 @@ Its `reserve` is empty when seating is off.
 
 **A `compose` call fails on a room tool that the activation lacks.** The
 call fails before the code runs, and the error states that the room does not
-offer the tool. The catalog and the `describe` tool still list every room
-tool.
+offer the tool. The `describe` tool still lists every room tool. The
+description of `compose` lists `seat` and `unseat` apart, as tools that bind
+only when the tool list of the seat holds them.
 
 **A Pi seat receives the seat prompt as the system prompt.** The harness
 wrote the prompt after the first input, and a provider lifts only the first
@@ -101,12 +102,47 @@ a tool that the code read and `uses` left out.
 code that reads the fields of a result, and it drops the two code examples.
 
 **`COMPOSE_GUIDANCE` leads with the plan.** It tells the model to plan the
-tool calls first, and to make a plan of two or more calls, say included, in
-one compose call. A compose call has two steps: `describe`, then `compose`.
-The guidance tells the model to explore large results with compose, and to
-return a count or a sample. The list of cases is gone, except the rule to
-wait on each process that the code starts. The description of `compose`
-names the same two uses.
+tool calls first, and to use one compose call when a result feeds a later
+call, or when the model needs a part of a large result. A single call, or a
+call whose result the model must judge before the next, goes direct. The
+guidance tells the model to call `describe` for a tool whose result has
+fields that the code reads. Room tools return text. It tells the model to
+explore large results with compose, and to return a count or a sample. The
+description of `compose` names the same two uses.
+
+**The guidance of `compose` follows the tools of the seat.**
+`describeExecutor` builds the text from the tools of the definition. The
+rule to call `wait` on each process that the code starts joins the guidance
+only when the seat holds `bash`. A seat with no `bash` reads no word about
+processes. The macro paragraph states that a skill names a macro, and that
+the macro holds the code. It appears only for a seat with a macro, and the
+list of the macros follows it. The `compose` schema of a seat with no macro holds `uses` and `code`
+alone, with no `macro` and no `args`. The rule that a failed tool rejects
+and that `error.details` holds its result stands once, in the description of
+`compose`, and the guidance keeps the example that catches it. The
+description of the `bash` tool drops the sentences that its schema and the
+process note state. The `describe` sentence leaves the description of
+`compose`.
+
+**The prompt tells a seat to seat a colleague first only when it holds
+`seat`.** The hand-off paragraph names the reserve only when the room offers
+`seat`. With `seating: false`, or a room composed with an empty reserve,
+the paragraph ends at the roster mark.
+
+**`openWorkspace` takes `rooms`, and the room-mirror note follows it.** The
+note about `<layout.rooms>/<room name>/messages.jsonl` joins the guidance
+only when the host sets `rooms: true`. Before, every workspace stated it,
+and a model looked for a file that no host wrote. A host that calls
+`workspace.mirror()` sets the option. The workbench sets it.
+
+**The workspace notes drop the sentences that a tool description or a schema
+states.** The process note drops the default of `wait`, the default of
+`timeout`, and the stop signals, and keeps the directory of a process. The
+SQL note drops the sentences on `export`, on the table `import.rows`, and
+on `params`. The `fetch` note drops the sentences that its description
+states. The snapshot note drops the sentence on the bytes of a ref. The git
+note drops one sentence on a clone. The descriptions of `wait`, `cancel`,
+`repos`, and `restore` drop the sentences that a schema or a note states.
 
 **`processRuntime` names the memory limit when the child aborts.** V8 can
 abort the child before it prints its out-of-memory line. A child that ends

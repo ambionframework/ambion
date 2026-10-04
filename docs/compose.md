@@ -98,10 +98,12 @@ type ComposeArguments =
     };
 ```
 
-**The tool schema is one object with four optional fields.** A model
+**The tool schema is one object with optional fields.** A model
 provider accepts no `anyOf` at the top of a tool schema. `resolveProgram`
 checks the two forms. A call that gives `uses` and `code`, or `macro` and
 `args`, is valid. Any other mix is a refusal with no ledger and no effect.
+A seat with no macro gets the fields `uses` and `code` alone, so its schema
+holds no field for a macro it cannot run.
 
 **`uses` declares the tools before the code runs.** `compose` refuses a
 name that the catalog does not hold. It checks `uses` first, then asks
@@ -265,8 +267,7 @@ It holds no signature. The core builds one line for each tool that a seat can
 bind, in the order of the tools, with the room tools last:
 
 ```text
-Tools that code can bind, each with the type of its result (string is text): read -> ReadResult, write -> string, sql -> SqlResult, say -> string.
-Call describe with the names of tools for their signatures and types before you write code that reads fields of a result.
+Tools that code can bind, each with the type of its result (string is text): read -> ReadResult, write -> string, sql -> SqlResult, say -> string, schedule -> string, recall -> string, dismiss -> string. seat and unseat return text, and bind only when your tool list holds them.
 ```
 
 | The tool declares       | The line shows                                          |
@@ -393,7 +394,9 @@ failure.
 
 **The model decides when to compose.** The name of the tool gives little
 of that decision. The guidance gives the rest. It states when a compose
-call helps, and when a direct call is the right call.
+call helps, and when a direct call is the right call. A compose call helps
+when a result feeds a later call, or when the model needs a part of a large
+result. The guidance names no count of calls.
 
 **`compose` adds guidance, as a bundle does.** `describeExecutor` joins
 the guidance of `compose` after the guidance of the bundles, in the
@@ -405,52 +408,51 @@ policy, as it renders the guidance of every bundle
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
 option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
-first, to compose a plan of two or more calls, and to call `describe`
-before it writes the code. The text follows:
+first, to compose when a result feeds a later call or the model needs a
+part of a large result, and to call `describe` for a tool whose result has
+fields that the code reads. The text follows:
 
 ```text
-Plan the tool calls of a task before you make the first call. When the
-plan has two or more tool calls, make them in one compose call. This
-includes say and the other room tools. Each direct call costs one more
-turn, and you read its whole result.
+Plan the tool calls of a task before you make the first call. Use one
+compose call when a result feeds a later call, or when you need a part of
+a large result. This includes say and the other room tools. Make a call
+directly when it stands alone, or when you must judge its result before
+the next call.
 
-Write a compose call in two steps:
-1. Call describe with the tools of the plan. It returns their
-   signatures and the fields of each result.
-2. Call compose. Put those tools in uses, and the body of an async
-   function in code. Each tool is tools.<name>. Read the fields of each
-   result, and do not parse text. You read only the value that the code
-   returns.
+To write a compose call, call describe for each tool whose result has
+fields that you read. Room tools return text. Put the tools in uses, and
+the body of an async function in code. Each tool is tools.<name>. Read
+the fields of each result, and do not parse text.
 
 Use compose also to explore. To learn the size or the shape of data,
 return a count, a few fields, or a short sample from code. Do not read
 large results one direct call at a time. Code with uses: [] calculates,
-sorts, groups, and reshapes data that you already hold. When the code
-starts processes, call wait on each handle before the code returns.
-
-Call a tool directly only when:
-- the next step needs your judgment of the result, and the task gives
-  no rule for it;
-- you make one call and need its whole result.
+sorts, groups, and reshapes data that you already hold.
 
 The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
 compose result shows the new lines. Read them before you speak again.
+A seat that starts before a say in one Promise.all lands first, and the
+room refuses the say. Await the seat, then say.
 
-A tool that fails rejects with an Error. error.details holds its result
-when the tool gives one. bash rejects when the command exits with a code
-other than 0. When the task expects such a failure, catch it with
+When the task expects a tool to fail, catch the failure with
 .catch((error) => error.details) and read the details.
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call, its outcome, and the result of each completed
-call, such as a process handle. A completed call can have had an
-effect, so read the list before you call a tool again.
-
-When a skill names a macro, call compose with the macro and its args,
-and write no code. The macro holds the code and names its own tools.
+call. A completed call can have had an effect, so read the list before
+you call a tool again.
 ```
+
+**The guidance follows the tools of the seat.** `describeExecutor` builds
+the text once, from the tools that the definition holds, so the tool list
+and the guidance of a seat do not change between its activations. A seat
+that holds `bash` gets one more paragraph. It tells the model to call
+`wait` on each process that the code starts, before the code returns. A seat
+with no `bash` gets no word about processes. The rule that a failed tool
+rejects, and that `error.details` holds its result, stays in the
+description of `compose`.
 
 **The guidance lists the macros of the seat.** A seat with macros gets
 one more block after the text. The block holds one line for each macro:
@@ -460,14 +462,15 @@ block, because the block is data of the skills. The description of
 `compose` and the guidance of the skills do not change.
 
 ```text
-The macros of your skills. Run one with compose({ macro, args }):
+The macros of your skills. When a skill names one, run it with compose({ macro, args }) and write no code. The macro holds the code and names its own tools:
 - lab-drift/snapshot-drift: Snapshot the files of every run with a label. Returns the count and the refs.
 ```
 
 **The description of `compose` holds its uses, the limits, and the list of
 bindings.** The first line is `Run JavaScript that calls your tools as
-tools.<name>, in one call. Use it for a plan of two or more tool calls, and
-to explore large results. You read only the value that the code returns.` A
+tools.<name>, in one call. Use it when a result feeds a later call, or when
+you need a part of a large result. You read only the value that the code
+returns.` A
 block of three lines follows it. The first line gives the limits of the seat:
 `compose.limits` after the defaults. The second line states that a
 binding rejects with an `Error` when its tool fails, and that
@@ -475,8 +478,9 @@ binding rejects with an `Error` when its tool fails, and that
 cancels no other call. The third line states that a compose call cannot start
 a compose call, and that image parts do not reach the code. The guidance
 holds the other facts, including that a completed call keeps its effect, so
-no fact is in both places. The list of bindings follows the block, and one
-line that names `describe` ends the description.
+no fact is in both places. The list of bindings ends the description. It
+lists `seat` and `unseat` apart, as tools that bind only when the tool list
+of the seat holds them.
 
 ## Macros
 
@@ -600,10 +604,12 @@ participants, seat several agents, or recall many refs in one call.
 
 **Only the room tools of the activation bind.** An activation holds `seat`
 only when the reserve held an agent as the room composed. It holds neither
-`seat` nor `unseat` in a room started with `seating: false`. The catalog and the `describe` tool
-still list both, because the executor fixes its description when it is
-defined. A call that uses a room tool that the activation lacks fails before
-the code runs. The error states that the room does not offer the tool.
+`seat` nor `unseat` in a room started with `seating: false`. The executor
+fixes its description when it is defined, before the room exists. The
+description lists every room tool, and says that `seat` and `unseat` bind
+only when the tool list holds them. The `describe` tool still renders both.
+A call that uses a room tool that the activation lacks fails before the
+code runs. The error states that the room does not offer the tool.
 
 **The driver hands the room tools to the compose call.** It passes the
 room tools of the activation to `invokeTool` and `invokeChecked`,

@@ -189,9 +189,16 @@ describe('the definition of a seat with macros', () => {
 	it('lists the macros in the guidance of compose, one line each, and not in the description', () => {
 		const { executor, tool } = seatOf(carrying(macro('a/b'), macro('c/d', ['table'])));
 		expect(executor.guidance).toBe(
-			`${COMPOSE_GUIDANCE}\n\nThe macros of your skills. Run one with compose({ macro, args }):\n- a/b: Echo the label. Second line of a/b.\n- c/d: Echo the label. Second line of c/d.`,
+			`${COMPOSE_GUIDANCE}\n\nThe macros of your skills. When a skill names one, run it with compose({ macro, args }) and write no code. The macro holds the code and names its own tools:\n- a/b: Echo the label. Second line of a/b.\n- c/d: Echo the label. Second line of c/d.`,
 		);
 		expect(tool.description).not.toContain('a/b');
+		// Only a seat with a macro gets the macro fields.
+		expect(Object.keys((tool.parameters as { properties: object }).properties)).toEqual([
+			'uses',
+			'code',
+			'macro',
+			'args',
+		]);
 	});
 
 	it('ignores macros on a seat without compose, and the guidance lists none', () => {

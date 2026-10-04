@@ -133,9 +133,9 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	// A seat without `compose` ignores the macros, so one skill set fits every seat.
 	const macros = compose === undefined ? [] : macrosOf(options.bundles);
 	assertMacros(macros, input);
-	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, macros)]);
-	const reminders = remindersOf(options.bundles);
 	const own = input.map((tool) => captureTool(tool));
+	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, own, macros)]);
+	const reminders = remindersOf(options.bundles);
 	// The `compose` tool closes over the option and the tools above. The executor keeps no field of it.
 	const tools = Object.freeze(
 		compose === undefined
@@ -406,7 +406,15 @@ export const ROOM_TOOL_NAMES: readonly string[] = [
 ];
 
 /** The room tools that a compose call binds. The catalog lists them for every seat that composes. */
-const ROOM_COMPOSE = [SAY, SCHEDULE, RECALL, SEAT, UNSEAT, DISMISS];
+const ROOM_COMPOSE = [
+	SAY,
+	SCHEDULE,
+	RECALL,
+	// The room offers `seat` and `unseat` to some rooms alone, so the catalog lists them apart.
+	{ ...SEAT, optional: true as const },
+	{ ...UNSEAT, optional: true as const },
+	DISMISS,
+];
 
 function flattenTools(
 	tools: readonly AmbionTool[] | undefined,

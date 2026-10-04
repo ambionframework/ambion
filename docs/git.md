@@ -566,7 +566,7 @@ holds the bundle, so the git note stays short.
 5. The git note.
 6. The bash backend's note about its shell.
 7. The audit note, when `audit` is set.
-8. The rooms note.
+8. The rooms note, when `rooms` is set.
 
 **The git note states the namespaces and the rule that persists an
 edit.** The workspace writes the backend's `label` into the first line, and
@@ -579,11 +579,11 @@ templates/<name> is a read-only template. shared/<name> is a repository every ag
 You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
 If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
 To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
-Its origin is the source, with the source's push permissions. A clone of shared/<name> pushes back to it.
+A clone of shared/<name> pushes back to it.
 A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
 To make work of your own that you can push, call fork with clone.
 In that clone, make a branch, commit, and push to origin with git in bash.
-An edit persists only after you commit it and push it. Push before you finish.
+An edit persists only after you commit and push it, so push before you finish.
 To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
 ambion://workspace/<workspace>/repo/<repository>/branch/<branch>/commit/<hash>. Use
 /tag/<tag> for a tag, or leave both out. Percent-encode the branch or tag name as one URI part, so / is %2F and # is %23.

@@ -329,8 +329,7 @@ function createRestoreTool(store: SnapshotStore): AmbionTool {
 	return defineTool({
 		name: 'restore',
 		label: 'Restore a snapshot',
-		description:
-			'Put the bytes of a snapshot ref in a file of your own, and give its path. The bytes are the ones the file held at the snapshot.',
+		description: 'Put the bytes of a snapshot ref in a file of your own, and give its path.',
 		parameters: restoreSchema,
 		compose: { output: RestoreOutput },
 		execute: async (params: RestoreParams, ctx) => {
@@ -365,9 +364,7 @@ export function snapshotCapability(store: SnapshotStore): Capability {
 export function snapshotGuidance(workspace: string): string {
 	return [
 		`To cite a file, call snapshot with its path, and put the ref it gives in the refs of a`,
-		`say. The ref has the form ambion://workspace/${workspace}/snapshot/<digest>/<path>. It`,
-		`names the bytes the file holds at the snapshot, and a later change to the file does not`,
-		`change them. To read a cited snapshot, call restore with its ref: restore puts the bytes in`,
-		`a file of your own and gives its path.`,
+		`say. The ref has the form ambion://workspace/${workspace}/snapshot/<digest>/<path>.`,
+		`To read a cited snapshot, call restore with its ref.`,
 	].join('\n');
 }

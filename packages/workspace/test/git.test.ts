@@ -88,7 +88,8 @@ describe('the tools and the guidance', () => {
 		expect(git).toBeGreaterThan(-1);
 		expect(git).toBeGreaterThan(guidance.indexOf('sql runs statements'));
 		expect(git).toBeLessThan(guidance.indexOf('The shell is a simulated Unix shell'));
-		expect(guidance.endsWith(roomMirrorGuidance('/rooms'))).toBe(true);
+		// No host called `mirror`, so the guidance names no room mirror.
+		expect(guidance).not.toContain(roomMirrorGuidance('/rooms'));
 	});
 
 	it('states the full guidance of a bundle with sql, git and audit', async () => {
@@ -98,39 +99,30 @@ describe('the tools and the guidance', () => {
 			read, write, edit and bash work on shared files. Other agents connected to this
 			workspace read and write the same files.
 
-			bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
-			Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.
-			The call waits up to its \`wait\` argument, 30 seconds by default, and then gives the state of the process and its output.
-			The whole output of a process goes to ~/.processes/<handle>/out. Read it with read.
-			Each process has a directory, ~/.processes/<handle>/, with its spec, its out, and its exit code when it ends.
+			bash starts each command as a background process and returns its handle.
+			Give a long-running process a name, so you can tell your processes apart.
+			Each process has a directory, ~/.processes/<handle>/, with its spec, its exit code when it ends, and out, its whole output. Read out with read.
 			ls ~/.processes lists every process you started that the workspace still keeps.
 			The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.
 			Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.
-			A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
-			A stop sends SIGTERM, then SIGKILL after grace seconds, 10 by default. Raise grace for a process that must clean up.
+			A process keeps running after your activation ends, until its timeout.
 			No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 			A wait stops before your activation ends.
 			A process that outlives your activation shows in the reminder at the start of your next activation.
 			To check a long process later, call schedule with delaySeconds. The room wakes you with it then.
 
 			To cite a file, call snapshot with its path, and put the ref it gives in the refs of a
-			say. The ref has the form ambion://workspace/lab/snapshot/<digest>/<path>. It
-			names the bytes the file holds at the snapshot, and a later change to the file does not
-			change them. To read a cited snapshot, call restore with its ref: restore puts the bytes in
-			a file of your own and gives its path.
+			say. The ref has the form ambion://workspace/lab/snapshot/<digest>/<path>.
+			To read a cited snapshot, call restore with its ref.
 
 			sql runs statements on one shared database, :memory:. Every agent queries this
 			database. Put structured data that a colleague needs here as a named table or view:
 			the colleague queries it by its name at once, with no copy. Reach this database with
-			sql alone. The
-			tool shows the last result as a table and keeps the data in the database. Set export to
-			write the full result as a CSV file in your workspace for another tool or script.
-			Set import to read a CSV file with a header from your workspace, up to 32 MiB. Its rows
-			are the table import.rows for that call alone: every value is text, and \\N is NULL. Copy
-			them in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the
+			sql alone. The tool shows the last result as a table and keeps the data in the database.
+			Set import to read a CSV file with a header from your workspace, up to 32 MiB.
+			Copy its rows in the same call with INSERT INTO ... SELECT, and CAST each value. Wait for the
 			process that writes the file before you import it. Give a value that comes from outside, such
-			as a name or a label, in params: write ? in the statement, and list the values in order.
-			params takes one statement.
+			as a name or a label, in params.
 
 			The database is SQLite: dates are functions, || joins text, and a column type is an
 			affinity. Attach a private scratch database with ATTACH ':memory:' inside one call;
@@ -144,11 +136,11 @@ describe('the tools and the guidance', () => {
 			You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
 			If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
 			To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
-			Its origin is the source, with the source's push permissions. A clone of shared/<name> pushes back to it.
+			A clone of shared/<name> pushes back to it.
 			A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
 			To make work of your own that you can push, call fork with clone.
 			In that clone, make a branch, commit, and push to origin with git in bash.
-			An edit persists only after you commit it and push it. Push before you finish.
+			An edit persists only after you commit and push it, so push before you finish.
 			To cite a commit you pushed, put its full hash from git rev-parse in the refs of a say:
 			ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>. Use
 			/tag/<tag> for a tag, or leave both out. Percent-encode the branch or tag name as one URI part, so / is %2F and # is %23.
@@ -169,16 +161,7 @@ describe('the tools and the guidance', () => {
 			call: the room, the agent, the tool, the activation and the exchange it ran in,
 			its full arguments, and its full result or error. Read it to see what happened
 			here. Filter it with jq: select on room, tool, agent, or activation to find one
-			call among many.
-
-			This workspace may hold /rooms/<room name>/messages.jsonl for any room
-			that mirrors its record here. Read a room's file with read or bash
-			cat. It can hold messages your own context has trimmed or folded
-			into a summary, and the history of a room you are not seated in.
-			Each line carries the message's own seq. A message ref names the
-			same seq: ambion://room/<name>/message/<seq>. Filter it with jq:
-			jq 'select(.seq == <seq>)' finds the line a ref or the last paragraph of your context
-			names. jq also filters by kind or from."
+			call among many."
 		`);
 	});
 

@@ -208,7 +208,7 @@ function capabilitiesOf(
  * Compose the bundle from the capabilities of the workspace. The tools keep
  * the order of the capabilities. The guidance holds the tool line, the notes
  * of each capability in order, the bash backend's note, the audit note when
- * one is set, and the rooms note. The tool line opens the first note, in the
+ * one is set, and the rooms note when the host sets `rooms`. The tool line opens the first note, in the
  * same paragraph. The bundle's reminder merges the reminders of the
  * capabilities, so it names each seat's processes.
  * When the workspace has an audit log, `audited` wraps every tool of the bundle.
@@ -218,6 +218,7 @@ function workspaceTools(
 	resource: WorkspaceResource<WorkspaceEnv>,
 	backends: WorkspaceBackings,
 	audit: AuditLog | undefined,
+	rooms: boolean,
 ): ToolBundle {
 	const capabilities = capabilitiesOf(resource, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
@@ -228,7 +229,7 @@ function workspaceTools(
 		...rest,
 		bash.guidance,
 		audit && auditGuidance(audit),
-		roomMirrorGuidance(bash.layout.rooms),
+		rooms ? roomMirrorGuidance(bash.layout.rooms) : undefined,
 	];
 	return Object.freeze({
 		tools: Object.freeze(
@@ -377,8 +378,9 @@ function openSqlResource(
  * has no `sql` tool, and one with no git backend has no `repos` or
  * `fork` tool. Set `audit.path` to record every bound tool call at a path
  * of your own; the default is `layout.audit`. Tool guidance then tells
- * every agent the log exists and where to read it, and always names the
- * room mirror convention at `layout.rooms`. `backend.objects` holds the
+ * every agent the log exists and where to read it. Set `rooms` when the
+ * host calls `mirror()`: the guidance then names the room mirror
+ * convention at `layout.rooms`. `backend.objects` holds the
  * bytes of each snapshot; absent, a file store at `layout.snapshots` holds
  * them, written through the bash resource as the host agent.
  */
@@ -386,6 +388,7 @@ export function openWorkspace(options: {
 	name: string;
 	backend: WorkspaceBackends;
 	audit?: AuditLogOptions;
+	rooms?: boolean;
 }): Workspace {
 	const { bash, sql: sqlBackend } = options.backend;
 	const gitBackend = bash.git;
@@ -434,6 +437,7 @@ export function openWorkspace(options: {
 		resource,
 		{ sql, git, processes: table, store, processFetch },
 		audit,
+		options.rooms === true,
 	);
 	const processes: WorkspaceProcesses = Object.freeze({
 		list: (query?: ProcessQuery) => table.hostList(query),
