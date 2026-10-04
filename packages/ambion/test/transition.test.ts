@@ -484,6 +484,28 @@ describe('a scheduled say', () => {
 		);
 	});
 
+	it.each([
+		['before', -1, false],
+		['at', 0, true],
+		['after', 1, true],
+	] as const)('admits planning and writing %s the return deadline', (_case, offset, eligible) => {
+		const state = waiting(released(6), quietClose(7, 6));
+		const clock = due + offset;
+		expect(reconcile(state, clock).steps).toEqual(eligible ? [{ type: 'return', message: 5 }] : []);
+		const written = decide(state, { type: 'return', message: 5 }, clock);
+		expect('entry' in written && written.entry !== undefined).toBe(eligible);
+	});
+
+	it('keeps an invalid due stamp ineligible in planning and writing', () => {
+		const state = waiting(released(6), quietClose(7, 6));
+		const invalid = {
+			...state,
+			scheduled: state.scheduled.map((say) => ({ ...say, due: 'invalid' })),
+		};
+		expect(reconcile(invalid, due).steps).toEqual([]);
+		expect(decide(invalid, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
+	});
+
 	it('waits outside live work, returns when due after the close, and opens an exchange with no person', () => {
 		const closedWaiting = waiting(released(6), quietClose(7, 6));
 		expect(closedWaiting.scheduled).toEqual([
@@ -554,6 +576,7 @@ describe('a scheduled say', () => {
 		const away = waiting(released(6), quietClose(7, 6), { ...empty, seq: 8 });
 		expect(away.scheduled).toHaveLength(1);
 		expect(reconcile(away, due).steps).toEqual([]);
+		expect(decide(away, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
 		const back = evolve(away, { ...composition(undefined, [product, watcher]), seq: 9 }, options);
 		expect(reconcile(back, due).steps.map((step) => step.type)).toEqual(['return']);
 	});
@@ -679,6 +702,7 @@ describe('a scheduled say', () => {
 	])('drops a say at %s', (_case, entry) => {
 		const state = waiting(entry);
 		expect(state.scheduled).toEqual([]);
+		expect(reconcile(state, due).steps.some((step) => step.type === 'return')).toBe(false);
 		expect(decide(state, { type: 'return', message: 5 }, due)).toEqual({ entry: undefined });
 	});
 });

@@ -11,6 +11,7 @@
 import type { Body } from '../journal/journal.ts';
 import type { ScheduledSay, ScheduleLimits } from '../scheduling.ts';
 import type { Message, MessageSnapshot, PostedMessage, Seq } from '../types.ts';
+import { returnable } from './rules.verified.ts';
 
 /** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
 function returnsSay(
@@ -83,18 +84,6 @@ export function scheduleRefusal(
 }
 
 /**
- * Whether the room returns one say now: it is due, and its seat is on the
- * roster. A say of a seat off the roster waits for the seat to return.
- */
-export function returnable(
-	say: ScheduledSay,
-	roster: readonly { readonly name: string }[],
-	now: number,
-): boolean {
-	return returnsAt(say) <= now && roster.some((seat) => seat.name === say.seat);
-}
-
-/**
  * The post that the room writes for one say now, or nothing: the say
  * no longer waits, or it is not `returnable`. A second write of the same
  * say finds it gone.
@@ -106,7 +95,15 @@ export function returning(
 	now: number,
 ): Body<PostedMessage> | undefined {
 	const say = list.find((candidate) => candidate.seq === seq);
-	if (say === undefined || !returnable(say, roster, now)) return undefined;
+	if (
+		say === undefined ||
+		!returnable(
+			returnsAt(say),
+			now,
+			roster.some((seat) => seat.name === say.seat),
+		)
+	)
+		return undefined;
 	return {
 		kind: 'posted',
 		at: new Date(now).toISOString(),

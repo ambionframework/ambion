@@ -76,6 +76,17 @@ lemma expired_ensures(expiry: int, now: int)
 {
 }
 
+function returnable(due: int, now: int, onRoster: bool): bool
+{
+  ((due <= now) && onRoster)
+}
+
+lemma returnable_ensures(due: int, now: int, onRoster: bool)
+  ensures (returnable(due, now, onRoster) <==> ((due <= now) && onRoster))
+  ensures (returnable(due, now, onRoster) ==> forall later: int :: ((now <= later) ==> returnable(due, later, onRoster)))
+{
+}
+
 function coversAttempt(lease: RuleLease, seq_: int): bool
 {
   match lease {
