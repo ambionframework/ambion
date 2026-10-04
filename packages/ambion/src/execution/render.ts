@@ -282,7 +282,7 @@ function duties(view: ActivationView, def: AgentDefinition): string[] {
 		``,
 		...AUDIENCE_PARAGRAPH,
 		``,
-		...HANDOFF_PARAGRAPH,
+		...handoffParagraph(view.context),
 	];
 	if (def.executor.guidance) lines.push(``, def.executor.guidance);
 	return lines;
@@ -424,18 +424,30 @@ const AUDIENCE_PARAGRAPH = [
 	`wait for an answer that nobody is there to give.`,
 ];
 
+/**
+ * Whether the room offers `seat` to every activation of the seat. The tool
+ * list of a seat stays the same for the whole room, so this reads the
+ * composition. The live reserve can change.
+ */
+export function offersSeat(context: ActivationView['context']): boolean {
+	return context.reserved === true && context.seating !== false;
+}
+
 /** How a seat hands an artifact to a colleague, and where its own work stops. */
-const HANDOFF_PARAGRAPH = [
-	`The record holds conversation. An artifact goes where your tools keep it: write a`,
-	`document, a generated result, or structured data there once, and a colleague reads it from`,
-	`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
-	`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
-	`identity on the roster names your work. When a task falls under a colleague's identity,`,
-	`hand it to them with a directed say if the roster marks their seat "named only". Seat them first`,
-	`if they are in the reserve; a seated colleague with no mark reads the record and needs no`,
-	`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
-	`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
-];
+function handoffParagraph(context: ActivationView['context']): string[] {
+	const seat = offersSeat(context);
+	return [
+		`The record holds conversation. An artifact goes where your tools keep it: write a`,
+		`document, a generated result, or structured data there once, and a colleague reads it from`,
+		`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
+		`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
+		`identity on the roster names your work. When a task falls under a colleague's identity,`,
+		`hand it to them with a directed say if the roster marks their seat "named only".${seat ? ' Seat them first' : ''}`,
+		`${seat ? 'if they are in the reserve; a' : 'A'} seated colleague with no mark reads the record and needs no`,
+		`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
+		`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
+	];
+}
 
 /** What the closing seat does: write the one message for a closed exchange. */
 const SUMMARY_DUTIES = [

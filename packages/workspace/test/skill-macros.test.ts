@@ -410,7 +410,7 @@ describe('a seat that takes the skill set with and without compose', () => {
 		expect(plain.guidance).not.toContain(MACRO);
 		expect(plain.guidance).not.toContain(COMPOSE_GUIDANCE);
 		expect(composing.guidance).toContain(
-			`The macros of your skills. Run one with compose({ macro, args }):\n- ${MACRO}: Snapshot the files of every run with a label. Returns the count and the refs.`,
+			`The macros of your skills. When a skill names one, run it with compose({ macro, args }) and write no code. The macro holds the code and names its own tools:\n- ${MACRO}: Snapshot the files of every run with a label. Returns the count and the refs.`,
 		);
 		// The skills guidance lists the skill, and has no macro line of its own.
 		expect(composing.guidance?.match(new RegExp(MACRO, 'g'))).toHaveLength(1);

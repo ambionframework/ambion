@@ -218,5 +218,8 @@ export function macroGuidance(macros: readonly ComposeMacro[]): string | undefin
 	const lines = macros.map(
 		(macro) => `- ${macro.name}: ${macro.description.trim().replace(/\s+/g, ' ')}`,
 	);
-	return ['The macros of your skills. Run one with compose({ macro, args }):', ...lines].join('\n');
+	return [
+		'The macros of your skills. When a skill names one, run it with compose({ macro, args }) and write no code. The macro holds the code and names its own tools:',
+		...lines,
+	].join('\n');
 }

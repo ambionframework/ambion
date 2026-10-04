@@ -25,7 +25,7 @@ import { renderLine } from '../record.ts';
 import { parseRoomUri, REF_LIMITS, roomUri } from '../refs.ts';
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import type { BoundTool, BoundToolResult, StepSink } from './contract.ts';
-import { refusal, summaryToolDescription } from './render.ts';
+import { offersSeat, refusal, summaryToolDescription } from './render.ts';
 import { ownEntryAfter } from './rules.verified.ts';
 
 /** The name of the MCP server that serves the room tools to a harness. */
@@ -108,9 +108,7 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
 		// The tool list of a seat stays the same for the whole room: both rules read the composition.
-		...(view.context.reserved === true && view.context.seating !== false
-			? [seatingTool(binding, 'seated')]
-			: []),
+		...(offersSeat(view.context) ? [seatingTool(binding, 'seated')] : []),
 		...(view.context.seating === false ? [] : [seatingTool(binding, 'unseated')]),
 		dismissTool(binding),
 		recallTool(view.context.name, binding),

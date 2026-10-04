@@ -313,7 +313,8 @@ remove it, the same as any other file on the workspace.
 **`workspace.mirror(room)` mirrors one room's message record to
 `<layout.rooms>/<room name>/messages.jsonl`, built on `openLog`.** The
 just-bash backends name `layout.rooms` `/rooms`. Call it once the room has
-started; it needs no other setup.
+started. Set `rooms: true` on `openWorkspace` as well, so the guidance
+of each seat names the mirror.
 
 ```ts
 import { startRoom } from '@ambionframework/ambion';
@@ -387,12 +388,14 @@ place a room name turns into a filesystem path. A name holding `..` or an
 extra `/` would resolve outside `layout.rooms`; `mirror()` refuses that name
 and writes nothing.
 
-**Every workspace's guidance names the room-mirror convention, whether or
-not anything mirrors there.** The note is generic — it names no room — so
-it costs nothing to state unconditionally, the same way an agent already
-learns its `/home/<name>` convention. An agent finds the field guide above
-by reading a room's own file; the guidance only points at the path, and
-names the backend's actual `layout.rooms`.
+**The guidance names the room mirror when the host sets `rooms: true`.**
+`openWorkspace` takes `rooms`, which defaults to `false`. The file exists
+only when the host calls `mirror()`, so a workspace with no mirror states
+nothing about it. A host that mirrors its rooms sets the option, and the
+guidance of every seat then points at the path. The note names no room. It
+names the backend's actual `layout.rooms`, and says that the file can hold
+messages that the context of the seat trimmed or folded. The option changes
+the guidance alone. `mirror()` works with or without it.
 
 **Directory-per-room organizes the data; it does not wall it off.** Every
 room sharing one workspace shares its filesystem boundary (see

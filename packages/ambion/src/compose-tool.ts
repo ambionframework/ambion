@@ -24,6 +24,7 @@ import {
 } from './bundle.ts';
 import {
 	COMPOSE_GUIDANCE,
+	COMPOSE_PROCESS_GUIDANCE,
 	COMPOSE_TOOL_NAME,
 	ComposeFailure,
 	type ComposeLimits,
@@ -45,7 +46,7 @@ import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
 import type { Step } from './types.ts';
 
 const DESCRIPTION =
-	'Run JavaScript that calls your tools as tools.<name>, in one call. Use it for a plan of two or more tool calls, and to explore large results. You read only the value that the code returns.';
+	'Run JavaScript that calls your tools as tools.<name>, in one call. Use it when a result feeds a later call, or when you need a part of a large result. You read only the value that the code returns.';
 
 /**
  * What a model must know about the bounds and the failures of a compose
@@ -60,23 +61,30 @@ function limitsText(limits: ComposeLimits): string {
 	].join('\n');
 }
 
+const USES = Type.Optional(
+	Type.Array(Type.String(), {
+		description:
+			'The tools this compose call uses. Only these are bound. Give it with code. An empty list binds no tool.',
+	}),
+);
+
+const CODE = Type.Optional(
+	Type.String({
+		description: 'The body of an asynchronous function. Its return value is the result.',
+	}),
+);
+
+/** The arguments of a seat with no macro: `uses` and `code`. */
+const FREE_ARGUMENTS = Type.Object({ uses: USES, code: CODE });
+
 /**
- * One object with four optional fields. The call is `uses` and `code`, or
- * `macro` and `args`. A provider takes no `anyOf` at the top of a tool
- * schema, so `resolveProgram` checks the two forms.
+ * The arguments of a seat with a macro: four optional fields. The call is
+ * `uses` and `code`, or `macro` and `args`. A provider takes no `anyOf` at
+ * the top of a tool schema, so `resolveProgram` checks the two forms.
  */
-const ARGUMENTS = Type.Object({
-	uses: Type.Optional(
-		Type.Array(Type.String(), {
-			description:
-				'The tools this compose call uses. Only these are bound. Give it with code. An empty list binds no tool.',
-		}),
-	),
-	code: Type.Optional(
-		Type.String({
-			description: 'The body of an asynchronous function. Its return value is the result.',
-		}),
-	),
+const MACRO_ARGUMENTS = Type.Object({
+	uses: USES,
+	code: CODE,
 	macro: Type.Optional(
 		Type.String({
 			description:
@@ -90,19 +98,24 @@ const ARGUMENTS = Type.Object({
 	),
 });
 
-type Arguments = Static<typeof ARGUMENTS>;
+type Arguments = Static<typeof MACRO_ARGUMENTS>;
 
 /**
  * The guidance that `compose` adds to the executor, or undefined for none:
- * the text, and one line for each macro of the seat.
+ * the text, the process lines for a seat that holds `bash`, and one line for
+ * each macro of the seat. The option `guidance` replaces the text and the
+ * process lines.
  */
 export function composeGuidance(
 	options: ComposeOptions | undefined,
+	tools: readonly AmbionTool[] = [],
 	macros: readonly ComposeMacro[] = [],
 ): string | undefined {
 	if (options === undefined) return undefined;
-	const text = (options.guidance ?? COMPOSE_GUIDANCE).trim();
-	return [text, macroGuidance(macros)].filter(Boolean).join('\n\n') || undefined;
+	const processes = tools.some((tool) => tool.name === 'bash' && bindable(tool));
+	const text =
+		options.guidance ?? [COMPOSE_GUIDANCE, processes ? COMPOSE_PROCESS_GUIDANCE : ''].join('\n\n');
+	return [text.trim(), macroGuidance(macros)].filter(Boolean).join('\n\n') || undefined;
 }
 
 /** The limits of the option, with the defaults for each field that it leaves out. */
@@ -282,10 +295,13 @@ export interface RoomCall {
 const ROOM_ENTRIES = new WeakSet<AmbionTool>();
 
 /** The room tool that the catalog lists, with the fields that the catalog reads. */
-export type RoomSpec = Pick<AmbionTool, 'name' | 'description' | 'parameters'>;
+export type RoomSpec = Pick<AmbionTool, 'name' | 'description' | 'parameters'> & {
+	/** The room offers this tool to some activations alone. The catalog says so. */
+	readonly optional?: true;
+};
 
 /** A room tool in the catalog. Its `invoke` has no activation, so it refuses. */
-function roomEntry(spec: RoomSpec): AmbionTool {
+function roomEntry({ optional: _optional, ...spec }: RoomSpec): AmbionTool {
 	return Object.freeze({
 		...spec,
 		label: spec.name,
@@ -454,7 +470,9 @@ function resolveProgram(
 ): Program {
 	if (params.macro !== undefined) return macroProgram(params.macro, params, catalog, macros);
 	if (params.uses === undefined || params.code === undefined)
-		throw refusal('Give uses and code, or macro and args.');
+		throw refusal(
+			macros.size === 0 ? 'Give uses and code.' : 'Give uses and code, or macro and args.',
+		);
 	if (params.args !== undefined) throw refusal('Give args with macro. Free code takes no args.');
 	return { ...bound(params.uses, catalog), code: params.code };
 }
@@ -483,6 +501,8 @@ export function composeTools(
 ): readonly [compose: AmbionTool, describe: AmbionTool] {
 	const held = new Map(macros.map((macro) => [macro.name, macro]));
 	const entries = room.map((spec) => roomEntry(spec));
+	const optional = new Set(room.filter((spec) => spec.optional === true).map((spec) => spec.name));
+	const parameters = macros.length === 0 ? FREE_ARGUMENTS : MACRO_ARGUMENTS;
 	for (const entry of entries) ROOM_ENTRIES.add(entry);
 	const catalog = new Map(
 		[...tools.filter((tool) => bindable(tool) && tool.name !== COMPOSE_TOOL_NAME), ...entries].map(
@@ -492,8 +512,8 @@ export function composeTools(
 	const limits = limitsOf(options);
 	const entry: ComposeEntry = async (params, ctx, record, calls) => {
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.
-		if (!Check(ARGUMENTS, params))
-			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(ARGUMENTS, params)}.`);
+		if (!Check(parameters, params))
+			throw new Error(`Invalid arguments for tool 'compose': ${mismatchOf(parameters, params)}.`);
 		const notes: RoomNotes = { lines: [], calls: [] };
 		const program = liveRoom(resolveProgram(params, catalog, held), calls, notes);
 		await approve(options, requestOf(program), ctx, record);
@@ -515,8 +535,8 @@ export function composeTools(
 	};
 	const tool: AmbionTool = Object.freeze({
 		name: COMPOSE_TOOL_NAME,
-		description: [DESCRIPTION, limitsText(limits), bindingsText(catalog)].join('\n\n'),
-		parameters: ARGUMENTS,
+		description: [DESCRIPTION, limitsText(limits), bindingsText(catalog, optional)].join('\n\n'),
+		parameters,
 		label: COMPOSE_TOOL_NAME,
 		invoke: (params: unknown, ctx: ToolContext) => entry(params, ctx, undefined, undefined),
 	});

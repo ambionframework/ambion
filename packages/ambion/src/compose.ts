@@ -131,30 +131,22 @@ export const COMPOSE_TOOL_NAME = 'compose';
 /** The name of the `describe` tool, which returns the signatures of bindable tools. A tool of the options cannot take it. */
 export const DESCRIBE_TOOL_NAME = 'describe';
 
-/** What `compose` guides a model with: when a compose call helps, and when a direct call does. */
-export const COMPOSE_GUIDANCE = `Plan the tool calls of a task before you make the first call. When the
-plan has two or more tool calls, make them in one compose call. This
-includes say and the other room tools. Each direct call costs one more
-turn, and you read its whole result.
+/** What `compose` guides a model with: when a compose call helps, and how to write one. */
+export const COMPOSE_GUIDANCE = `Plan the tool calls of a task before you make the first call. Use one
+compose call when a result feeds a later call, or when you need a part of
+a large result. This includes say and the other room tools. Make a call
+directly when it stands alone, or when you must judge its result before
+the next call.
 
-Write a compose call in two steps:
-1. Call describe with the tools of the plan. It returns their
-   signatures and the fields of each result.
-2. Call compose. Put those tools in uses, and the body of an async
-   function in code. Each tool is tools.<name>. Read the fields of each
-   result, and do not parse text. You read only the value that the code
-   returns.
+To write a compose call, call describe for each tool whose result has
+fields that you read. Room tools return text. Put the tools in uses, and
+the body of an async function in code. Each tool is tools.<name>. Read
+the fields of each result, and do not parse text.
 
 Use compose also to explore. To learn the size or the shape of data,
 return a count, a few fields, or a short sample from code. Do not read
 large results one direct call at a time. Code with uses: [] calculates,
-sorts, groups, and reshapes data that you already hold. When the code
-starts processes, call wait on each handle before the code returns.
-
-Call a tool directly only when:
-- the next step needs your judgment of the result, and the task gives
-  no rule for it;
-- you make one call and need its whole result.
+sorts, groups, and reshapes data that you already hold.
 
 The say calls of one compose call run one after another. When the room
 refuses a say because the record moved, the binding rejects, and the
@@ -162,19 +154,19 @@ compose result shows the new lines. Read them before you speak again.
 A seat that starts before a say in one Promise.all lands first, and the
 room refuses the say. Await the seat, then say.
 
-A tool that fails rejects with an Error. error.details holds its result
-when the tool gives one. bash rejects when the command exits with a code
-other than 0. When the task expects such a failure, catch it with
+When the task expects a tool to fail, catch the failure with
 .catch((error) => error.details) and read the details.
 
 Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call, its outcome, and the result of each completed
-call, such as a process handle. A completed call can have had an
-effect, so read the list before you call a tool again.
+call. A completed call can have had an effect, so read the list before
+you call a tool again.`;
 
-When a skill names a macro, call compose with the macro and its args,
-and write no code. The macro holds the code and names its own tools.`;
+/** What `compose` adds to its guidance for a seat that holds `bash`. */
+export const COMPOSE_PROCESS_GUIDANCE = `When the code starts processes, call wait on each handle before the code
+returns. A failed call shows the result of each bash call that completed,
+with its handle. ps lists the rest.`;
 
 /** The limits of a compose call that the option leaves unset. */
 export const DEFAULT_COMPOSE_LIMITS: ComposeLimits = Object.freeze({

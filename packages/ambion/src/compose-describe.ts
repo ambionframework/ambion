@@ -13,12 +13,19 @@ import { renderBindings, renderCatalog } from './compose-catalog.ts';
 
 type Catalog = ReadonlyMap<string, AmbionTool>;
 
-/** What the description of `compose` says about the tools that code binds, and about `describe`. */
-export function bindingsText(catalog: Catalog): string {
-	return [
-		`Tools that code can bind, each with the type of its result (string is text): ${renderBindings([...catalog.values()])}.`,
-		`Call ${DESCRIBE_TOOL_NAME} with the names of tools for their signatures and types before you write code that reads fields of a result.`,
-	].join('\n');
+/**
+ * What the description of `compose` says about the tools that code binds.
+ * The `optional` tools are the room tools that some activations lack: the
+ * text lists them apart, so the catalog claims no tool that the seat may
+ * not hold.
+ */
+export function bindingsText(catalog: Catalog, optional: ReadonlySet<string> = new Set()): string {
+	const tools = [...catalog.values()];
+	const some = tools.filter((tool) => optional.has(tool.name)).map((tool) => tool.name);
+	const held = `Tools that code can bind, each with the type of its result (string is text): ${renderBindings(tools.filter((tool) => !optional.has(tool.name)))}.`;
+	return some.length === 0
+		? held
+		: `${held} ${some.join(' and ')} return text, and bind only when your tool list holds them.`;
 }
 
 const ARGUMENTS = Type.Object({

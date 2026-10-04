@@ -81,16 +81,13 @@ export interface ProcessToolOptions {
 /** Guidance for the process tools. */
 export function processToolGuidance(): string {
 	return [
-		`bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.`,
-		`Give a long-running process a name, such as tests or dev-server, so you can tell your processes apart.`,
-		`The call waits up to its \`wait\` argument, ${DEFAULT_BASH_WAIT_SECONDS} seconds by default, and then gives the state of the process and its output.`,
-		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
-		`Each process has a directory, ${PROCESSES_DIR}/<handle>/, with its spec, its out, and its exit code when it ends.`,
+		`bash starts each command as a background process and returns its handle.`,
+		`Give a long-running process a name, so you can tell your processes apart.`,
+		`Each process has a directory, ${PROCESSES_DIR}/<handle>/, with its spec, its exit code when it ends, and out, its whole output. Read out with read.`,
 		`ls ${PROCESSES_DIR} lists every process you started that the workspace still keeps.`,
 		`The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.`,
 		`Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.`,
-		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
-		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
+		`A process keeps running after your activation ends, until its timeout.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,
 		`A wait stops before your activation ends.`,
 		`A process that outlives your activation shows in the reminder at the start of your next activation.`,
@@ -165,7 +162,8 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 		defineTool({
 			name: 'bash',
 			label: 'bash',
-			description: `Start a bash command as a background process in your home directory, and return its handle. The call waits up to the seconds of its \`wait\` argument for the process to end, and gives its state and its combined stdout and stderr. The whole output goes to ${PROCESSES_DIR}/<handle>/out. A process that exits with a code other than 0, times out, or fails makes bash and wait fail with the same text. In a compose call, the binding then rejects, and error.details holds the same result as a completed call.`,
+			description:
+				'Start a bash command as a background process in your home directory, and return its handle, its state, and its combined stdout and stderr. A process that exits with a code other than 0, times out, or fails makes bash and wait fail with the same text.',
 			parameters: bashSchema,
 			compose: { output: ProcessOutput },
 			execute: (params: BashParams, ctx) => started(options, params, ctx),
@@ -182,7 +180,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'wait',
 			label: 'Wait for a process',
 			description:
-				'Wait for the first of your processes in handles to end, up to timeout seconds. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the time ends first. With one handle and timeout 0, the call does not wait: it gives the state and the new output of that process at once. A process that has ended makes a wait on several handles return at once, so drop its handle from handles.',
+				'Wait for the first of your processes in handles to end. Give the state and the new output of each one that ended, and the state of each one that still runs. A process keeps running when the timeout ends first. A process that has ended makes a wait on several handles return at once, so drop its handle from handles.',
 			parameters: waitSchema,
 			compose: { output: WaitOutput },
 			execute: (params: WaitParams, ctx) => waited(options, params, ctx),
@@ -191,7 +189,7 @@ function createProcessTools(options: ProcessToolOptions): readonly AmbionTool[] 
 			name: 'cancel',
 			label: 'Cancel a process',
 			description:
-				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. A command can trap TERM, clean up, and exit in that time. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
+				'Stop a running process, and give its state and its new output. The stop sends SIGTERM to the process group, and SIGKILL after the grace of the process, 10 seconds by default. The call waits for the end up to 15 seconds. A process that has not ended by then still shows running, and the stop goes on.',
 			parameters: handleSchema,
 			compose: { output: ProcessOutput },
 			execute: async (params: HandleParams, ctx) => {

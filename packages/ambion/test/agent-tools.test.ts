@@ -14,6 +14,7 @@ import {
 	pi,
 	piExecution,
 } from '../../pi/src/index.ts';
+import { COMPOSE_PROCESS_GUIDANCE } from '../src/compose.ts';
 import { describeExecutor } from '../src/hosting.ts';
 import {
 	type AmbionTool,
@@ -221,6 +222,11 @@ describe('the definition of agent tools', () => {
 		// The guidance of the bundles comes first, and the guidance of compose follows it.
 		expect(agent.executor.guidance).toBe(`Use inspect.\n\n${COMPOSE_GUIDANCE}`);
 		expect(worker({ compose }).executor.guidance).toBe(COMPOSE_GUIDANCE);
+		// The process lines belong to a seat that holds bash, and to no other.
+		expect(COMPOSE_GUIDANCE).not.toMatch(/\bbash\b|\bwait\b|handle/);
+		expect(worker({ tools: [tool('bash')], compose }).executor.guidance).toBe(
+			`${COMPOSE_GUIDANCE}\n\n${COMPOSE_PROCESS_GUIDANCE}`,
+		);
 		expect(worker({ compose: { ...compose, guidance: 'Compose often.' } }).executor.guidance).toBe(
 			'Compose often.',
 		);
