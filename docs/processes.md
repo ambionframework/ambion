@@ -392,7 +392,7 @@ loop such as `while true; do :; done` reads `exited` with code 0, and
 | The command                                                    | `exit` | State                   |
 | -------------------------------------------------------------- | ------ | ----------------------- |
 | Traps `TERM`, and exits in time with a code `n` other than 143 | `n`    | `exited`, with code `n` |
-| Ends on the `SIGTERM`: code 143                                | `143`  | The cause in `stop`     |
+| A program that the `SIGTERM` ended: code 143                   | `143`  | The cause in `stop`     |
 | Outlives the grace, and `SIGKILL` ends it                      | Absent | The cause in `stop`     |
 
 **A parent process can hide a clean cancel.** The group signal reaches

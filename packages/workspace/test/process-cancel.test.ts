@@ -84,7 +84,8 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		const child = await invoke(workspace, 'bash', { command: forked, wait: 0 });
 		const stopped = await invoke(workspace, 'cancel', { handle: child.process?.handle ?? '' });
 		expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
-		// A loop of builtins runs no program at the signal, so it ends with the code of its last command.
+		// A loop of builtins runs no program at the signal, so it ends with the
+		// code of its last command.
 		const loop = await invoke(workspace, 'bash', { command: 'while true; do :; done', wait: 0 });
 		const looped = await invoke(workspace, 'cancel', { handle: loop.process?.handle ?? '' });
 		expect(looped.process).toMatchObject({ state: 'exited', exitCode: 0 });
