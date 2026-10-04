@@ -29,6 +29,7 @@ export const journalConformance = fileURLToPath(
  * be one module. The root alias matches only the bare package name.
  */
 export const core = fileURLToPath(new URL('./src/index.ts', import.meta.url));
+export const names = fileURLToPath(new URL('./src/names.ts', import.meta.url));
 export const hosting = fileURLToPath(new URL('./src/hosting.ts', import.meta.url));
 /** The Pi test entry reads the verbs of the core test entry by the same name. */
 export const testing = fileURLToPath(new URL('./src/testing.ts', import.meta.url));
@@ -38,6 +39,7 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
+			{ find: '@ambionframework/ambion/names', replacement: names },
 			{ find: /^@ambionframework\/ambion$/, replacement: core },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },

@@ -153,10 +153,14 @@ it('exports the neutral endpoint types from the root', async () => {
 	expect([endpoints.machine, endpoint.url]).toEqual(['lab.internal', 'http://127.0.0.1:43127']);
 });
 
-it('keeps the neutral resource contract free of imports, Pi among them', async () => {
+it('lets the neutral resource import only the dependency-free name syntax', async () => {
 	const contract = await read('src/resource.ts');
-	expect(contract).not.toMatch(/@earendil-works\/pi/);
-	expect(contract).not.toMatch(/^import /m);
+	expect(importsOf(contract)).toEqual(['@ambionframework/ambion/names']);
+	const names = await readFile(
+		fileURLToPath(new URL('../../ambion/src/names.ts', import.meta.url)),
+		'utf8',
+	);
+	expect(importsOf(names)).toEqual([]);
 });
 
 /** The specifiers one built file imports, whatever the quote or the form. */
