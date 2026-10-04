@@ -165,7 +165,8 @@ you call a tool again.`;
 
 /** What `compose` adds to its guidance for a seat that holds `bash`. */
 export const COMPOSE_PROCESS_GUIDANCE = `When the code starts processes, call wait on each handle before the code
-returns. A failed call shows the handle of each process that it started.`;
+returns. A failed call shows the result of each bash call that completed,
+with its handle. ps lists the rest.`;
 
 /** The limits of a compose call that the option leaves unset. */
 export const DEFAULT_COMPOSE_LIMITS: ComposeLimits = Object.freeze({

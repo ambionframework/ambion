@@ -406,8 +406,8 @@ policy, as it renders the guidance of every bundle
 `compose` holds its uses, the limits, and the list of bindings.
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
-entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
+entry exports it. `ComposeOptions.guidance` replaces it and the process
+paragraph, as the `speaking` option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
 first, to compose when a result feeds a later call or the model needs a
 part of a large result, and to call `describe` for a tool whose result has
 fields that the code reads. The text follows:

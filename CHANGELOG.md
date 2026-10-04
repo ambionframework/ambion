@@ -116,13 +116,13 @@ rule to call `wait` on each process that the code starts joins the guidance
 only when the seat holds `bash`. A seat with no `bash` reads no word about
 processes. The macro paragraph states that a skill names a macro, and that
 the macro holds the code. It appears only for a seat with a macro, and the
-list of the macros follows it. The `compose` schema of a seat with no macro holds `uses` and `code`
-alone, with no `macro` and no `args`. The rule that a failed tool rejects
-and that `error.details` holds its result stands once, in the description of
-`compose`, and the guidance keeps the example that catches it. The
-description of the `bash` tool drops the sentences that its schema and the
-process note state. The `describe` sentence leaves the description of
-`compose`.
+list of the macros follows it. The `compose` schema of a seat with no macro
+holds `uses` and `code` alone, with no `macro` and no `args`. The rule that
+a failed tool rejects and that `error.details` holds its result stands once,
+in the description of `compose`, and the guidance keeps the example that
+catches it. The description of the `bash` tool drops the sentences that its
+schema and the process note state. The `describe` sentence leaves the
+description of `compose`.
 
 **The prompt tells a seat to seat a colleague first only when it holds
 `seat`.** The hand-off paragraph names the reserve only when the room offers
@@ -139,10 +139,11 @@ and a model looked for a file that no host wrote. A host that calls
 states.** The process note drops the default of `wait`, the default of
 `timeout`, and the stop signals, and keeps the directory of a process. The
 SQL note drops the sentences on `export`, on the table `import.rows`, and
-on `params`. The `fetch` note drops the sentences that its description
-states. The snapshot note drops the sentence on the bytes of a ref. The git
-note drops one sentence on a clone. The descriptions of `wait`, `cancel`,
-`repos`, and `restore` drop the sentences that a schema or a note states.
+the `params` sentence that its schema now states. The `fetch` note drops the
+sentences that its description states. The snapshot note drops the sentence
+on the bytes of a ref. The git note drops one sentence on a clone. The
+descriptions of `wait`, `cancel`, `repos`, and `restore` drop the sentences
+that a schema or a note states.
 
 **`processRuntime` names the memory limit when the child aborts.** V8 can
 abort the child before it prints its out-of-memory line. A child that ends

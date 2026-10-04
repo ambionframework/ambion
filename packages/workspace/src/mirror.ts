@@ -52,7 +52,7 @@ export interface RoomMirror {
 export function roomMirrorGuidance(root: string): string {
 	return [
 		`This workspace holds ${root}/<room name>/messages.jsonl for each room that mirrors`,
-		`its record here. Read it with read or jq. It can hold messages your own context has`,
+		`its record here. Read it with read, or filter it with jq in bash. It can hold messages your own context has`,
 		`trimmed or folded into a summary, and the history of a room you are not seated in.`,
 		`Each line carries the message's own seq. A message ref names the same seq:`,
 		`ambion://room/<name>/message/<seq>. jq 'select(.seq == <seq>)' finds the line that a`,

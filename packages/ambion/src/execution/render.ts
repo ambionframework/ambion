@@ -427,7 +427,7 @@ const AUDIENCE_PARAGRAPH = [
 /**
  * Whether the room offers `seat` to every activation of the seat. The tool
  * list of a seat stays the same for the whole room, so this reads the
- * composition and not the live reserve.
+ * composition. The live reserve can change.
  */
 export function offersSeat(context: ActivationView['context']): boolean {
 	return context.reserved === true && context.seating !== false;
