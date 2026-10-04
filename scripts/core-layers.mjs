@@ -25,6 +25,7 @@ export const CORE_LAYERS = [
 			'compose.ts',
 			'define.ts',
 			'errors.ts',
+			'names.ts',
 			'record.ts',
 			'refs.ts',
 			'scheduling.ts',

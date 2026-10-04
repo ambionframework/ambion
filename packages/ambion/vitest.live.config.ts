@@ -19,7 +19,7 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
-			{ find: '@ambionframework/ambion', replacement: core },
+			{ find: /^@ambionframework\/ambion$/, replacement: core },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

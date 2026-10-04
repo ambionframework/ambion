@@ -34,7 +34,11 @@
 			"types": "./dist/testing.d.mts",
 			"import": "./dist/testing.mjs"
 		},
-		"./package.json": "./package.json"
+		"./package.json": "./package.json",
+		"./names": {
+			"types": "./dist/names.d.mts",
+			"import": "./dist/names.mjs"
+		}
 	},
 	"main": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",

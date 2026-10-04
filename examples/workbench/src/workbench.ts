@@ -15,7 +15,7 @@ import {
 	readFile,
 	readLabTable,
 } from './files.ts';
-import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { isRoomName, MAX_GOAL } from './names.ts';
 import { readCommitFile, readSnapshotFile } from './previews.ts';
 import { byRecency, type ProcessOutput, readOutput } from './processes.ts';
 import {
@@ -200,7 +200,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		approvals: (room) => rooms.approvals(room),
 		// Async, so a refusal is a rejected promise like every other failure of this interface.
 		async create(name, goal) {
-			if (!ROOM_NAME.test(name))
+			if (!isRoomName(name))
 				fail('Use a lowercase room name, up to 48 letters, digits, or dashes.');
 			const trimmed = goal.trim();
 			if (!trimmed || trimmed.length > MAX_GOAL)

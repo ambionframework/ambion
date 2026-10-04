@@ -67,6 +67,24 @@ describe.skipIf(!hasGitTools)('serve', () => {
 		['a path with ..', 'analyst', "git-upload-pack '/analyst/../templates/blank'", 1, 'refused'],
 		['a path into .staging', 'analyst', "git-upload-pack '/.staging/x'", 1, 'refused'],
 		['a second command', 'analyst', "git-upload-pack '/analyst/report'; id", 1, 'refused'],
+		['an uppercase namespace', 'analyst', "git-upload-pack '/Analyst/report'", 1, 'refused'],
+		[
+			'an underscore in the namespace',
+			'analyst',
+			"git-upload-pack '/analyst_extra/report'",
+			1,
+			'refused',
+		],
+		['a command prefix', 'analyst', "xgit-upload-pack '/analyst/report'", 1, 'refused'],
+		...['\n', '\r', '\r\n', '\u2028', '\u2029'].map(
+			(end): [string, string, string, number, string] => [
+				'a command with a final line terminator',
+				'analyst',
+				`git-upload-pack '/analyst/report'${end}`,
+				1,
+				'refused',
+			],
+		),
 		['a shell', 'analyst', 'bash', 1, 'refused'],
 		['no command', 'analyst', undefined, 1, 'refused'],
 	])('answers %s', (_name, agent, request, status, message) => {

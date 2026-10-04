@@ -171,6 +171,7 @@ const CASES = [
 		'packages/workspace/src',
 		[
 			['@ambionframework/ambion', true],
+			['@ambionframework/ambion/names', false],
 			['./tools.ts', true],
 			['just-bash', true],
 			['@earendil-works/pi-durable', true],
@@ -186,6 +187,9 @@ const CASES = [
 	['packages/workstation/src', '@ambionframework/workspace/sqlite', true],
 	['packages/workstation/src', '@ambionframework/just-bash', true],
 	['packages/workstation/src', '@ambionframework/ambion', true],
+	['packages/workstation/src', '@ambionframework/ambion/names', false],
+	['packages/just-bash/src', '@ambionframework/ambion/names', true],
+	['packages/journal/src', '@ambionframework/ambion/names', true],
 	['packages/workstation/src', 'node:sqlite', true],
 	['packages/workstation/src', 'just-bash/browser', true],
 	['packages/workstation/src', '@ambionframework/just-bash/git', true],

@@ -8,6 +8,7 @@
  * a backend writes itself.
  */
 
+import { isName } from '@ambionframework/ambion/names';
 import type { GitCommit, GitRevision } from './git-backend.ts';
 import type { WorkspaceAgent } from './resource.ts';
 
@@ -28,9 +29,6 @@ export const NAME_PATTERN = '^[a-z0-9][a-z0-9._-]{0,63}$';
 
 const NAME = new RegExp(NAME_PATTERN);
 
-/** The rule for a namespace: the name of an agent, or the reserved name. */
-const NAMESPACE = /^[a-z][a-z0-9-]*$/;
-
 /** Whether `name` is a valid repository name. */
 export function validName(name: string): boolean {
 	return NAME.test(name);
@@ -41,7 +39,7 @@ export function namespaceOf(id: string): string | undefined {
 	const slash = id.indexOf('/');
 	if (slash <= 0 || slash !== id.lastIndexOf('/')) return undefined;
 	const namespace = id.slice(0, slash);
-	return NAMESPACE.test(namespace) && validName(id.slice(slash + 1)) ? namespace : undefined;
+	return isName(namespace) && validName(id.slice(slash + 1)) ? namespace : undefined;
 }
 
 /** Refuse an agent that takes the reserved name, or a name that no namespace takes. */
@@ -49,7 +47,7 @@ export function assertAgent(agent: WorkspaceAgent): void {
 	if (agent.name === TEMPLATES || agent.name === SHARED) {
 		throw new Error(`The name '${agent.name}' is reserved by the git backend.`);
 	}
-	if (!NAMESPACE.test(agent.name)) {
+	if (!isName(agent.name)) {
 		throw new Error(`The name '${agent.name}' is not a namespace of the git backend.`);
 	}
 }

@@ -425,6 +425,9 @@ importers:
 
   packages/workstation:
     dependencies:
+      '@ambionframework/ambion':
+        specifier: workspace:*
+        version: link:../ambion
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../workspace
@@ -432,9 +435,6 @@ importers:
         specifier: ^1.17.0
         version: 1.17.0
     devDependencies:
-      '@ambionframework/ambion':
-        specifier: workspace:*
-        version: link:../ambion
       '@types/ssh2':
         specifier: ^1.15.6
         version: 1.15.6

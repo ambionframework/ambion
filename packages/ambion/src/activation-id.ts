@@ -1,5 +1,6 @@
 /** The durable identity of one activation. */
 
+import { isName, NAME_SYNTAX } from './names.ts';
 import type { Seq } from './types.ts';
 
 /** The journal fact that gives an activation its identity. */
@@ -14,16 +15,14 @@ export interface ActivationId {
 }
 
 const SOURCES: ReadonlySet<string> = new Set<ActivationSource>(['message', 'closed']);
-const SEAT = /^[a-z][a-z0-9-]*$/;
-const ID = /^(message|closed):([1-9]\d*):([a-z][a-z0-9-]*):([1-9]\d*)$/;
+const ID = new RegExp(`^(message|closed):([1-9]\\d*):(${NAME_SYNTAX}):([1-9]\\d*)$`);
 
 /** Encode one activation id in the durable format. */
 export function encodeActivationId(value: ActivationId): string {
 	if (!SOURCES.has(value.source)) throw new Error(`Unknown activation source '${value.source}'.`);
 	if (!safePositiveInteger(value.position))
 		throw new Error('Activation position must be positive.');
-	if (typeof value.seat !== 'string' || SEAT.exec(value.seat)?.[0] !== value.seat)
-		throw new Error(`Invalid activation seat '${value.seat}'.`);
+	if (!isName(value.seat)) throw new Error(`Invalid activation seat '${value.seat}'.`);
 	if (!safePositiveInteger(value.attempt)) throw new Error('Activation attempt must be positive.');
 	return `${value.source}:${value.position}:${value.seat}:${value.attempt}`;
 }
@@ -38,7 +37,7 @@ export function decodeActivationId(raw: unknown): ActivationId | undefined {
 	if (position === undefined || attempt === undefined) return undefined;
 	const source = parts[1];
 	const seat = parts[3];
-	if (source === undefined || !SOURCES.has(source) || seat === undefined || !SEAT.test(seat))
+	if (source === undefined || !SOURCES.has(source) || seat === undefined || !isName(seat))
 		return undefined;
 	return { source: source as ActivationSource, position, seat, attempt };
 }

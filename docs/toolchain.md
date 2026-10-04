@@ -41,7 +41,7 @@ compose ──▶ ambion
 cloudflare ──▶ ambion, journal, pi
 workspace ──▶ ambion
 just-bash ──▶ workspace
-workstation ──▶ workspace
+workstation ──▶ ambion, workspace
 assistant ──▶ ambion
 simulator ──▶ ambion, pi
 ```
@@ -71,9 +71,11 @@ check needs no network. It fails on a package of the scope
 `@earendil-works` in either place. Biome refuses the same imports in `src`
 of the three packages.
 
-The core has four published entries:
+The core has five published entries:
 
 - `@ambionframework/ambion` for hosts.
+- `@ambionframework/ambion/names` for the syntax and predicate of names.
+  This entry imports no room or tool adapter.
 - `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
 - `@ambionframework/ambion/conformance` for the port suite and the
   executor suite.
