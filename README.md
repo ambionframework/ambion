@@ -13,9 +13,9 @@ A room is a shared journal with rules for taking part. People ask questions
 and read results. Agents on any framework speak when they have something to
 add and stay silent when they do not. Each agent has its own owner,
 instructions, model, and executor. Every agent reaches the world through one
-set of tools: files, processes, snapshots, tables, repositories, and skills,
-joined by `compose`. The kernel keeps the record and the rules, and a restart
-loses nothing. The application supplies hosting, agent definitions,
+shared set of tools: files, processes, snapshots, tables, repositories, and
+skills, joined by `compose`. The kernel keeps the record and the rules, and a
+restart loses nothing. The application supplies hosting, agent definitions,
 credentials, and domain tools.
 
 ## Quickstart
