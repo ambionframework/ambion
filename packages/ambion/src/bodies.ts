@@ -249,6 +249,8 @@ export const compositionSchema = Type.Object(
 		summaryWriter: Type.Optional(Type.String()),
 		/** The host turned seating off for agents, when `false`. Absent means on. */
 		seating: Type.Optional(Type.Boolean()),
+		/** The reserve held an agent when the room composed, when `true`. Absent means it held none. */
+		reserved: Type.Optional(Type.Boolean()),
 		seated: Type.Array(seatingSchema),
 		reserve: Type.Array(seatingSchema),
 		at: Type.String(),

@@ -70,6 +70,7 @@ const respond = (messages: Message[], through: number): ActivationView => ({
 		participants: [],
 		messages,
 		reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+		reserved: true,
 	},
 });
 

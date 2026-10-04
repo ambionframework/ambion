@@ -77,6 +77,7 @@ export function viewOf(
 			exchange: { person: 'priya', from: 1 },
 			// The reserve holds one agent, so the seat holds `seat`.
 			reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+			reserved: true,
 		},
 	};
 	return view;

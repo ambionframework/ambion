@@ -63,6 +63,16 @@ function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipant[] 
 	}));
 }
 
+/** The seating facts that a seat reads, each set only when it differs from the default. */
+function seatingFlags(
+	composition: RoomState['composition'],
+): Pick<CollaborationContext, 'seating' | 'reserved'> {
+	return {
+		...(composition?.seating === false ? { seating: false as const } : {}),
+		...(composition?.reserved === true ? { reserved: true as const } : {}),
+	};
+}
+
 /** Select collaboration facts without reading an executable agent definition. */
 export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): ActivationView {
 	const state = facts.state;
@@ -91,7 +101,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		participants: [...agentsOf(facts), ...peopleOf(facts)],
 		messages: messages.map(contextMessage),
 		reserve: seating ? state.reserve.map(({ name, identity }) => ({ name, identity })) : [],
-		...(seating ? {} : { seating: false as const }),
+		...seatingFlags(state.composition),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: exchangeContext(state.exchange) }),

@@ -104,10 +104,10 @@ it.each(['reserve', 'named'] as const)(
 		for (const phase of [0, 1]) {
 			expect(find(phase, 'writer')?.input).toContain(request);
 			expect(find(phase, 'assistant')?.input).toContain(request);
-			// The room offers `seat` while the reserve holds the writer: before the first handoff alone.
+			// The room offers `seat` when the reserve held the writer as the room composed, in both phases.
 			const tools = find(phase, 'assistant')?.tools ?? [];
 			expect(tools).toEqual(expect.arrayContaining(['say', 'unseat']));
-			expect(tools.includes('seat')).toBe(attention === 'reserve' && phase === 0);
+			expect(tools.includes('seat')).toBe(attention === 'reserve');
 		}
 		for (const capture of responding) {
 			expect(capture.input).toContain(goal);

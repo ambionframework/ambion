@@ -164,6 +164,124 @@ describe('ordinary participation', () => {
 		},
 	);
 
+	it.each([
+		[
+			'a reserve that the seating empties',
+			[surveyor],
+			['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'],
+			surveyor.name,
+			'seat',
+		],
+		[
+			'no reserve that the unseating fills',
+			[],
+			['say', 'schedule', 'unseat', 'dismiss', 'recall'],
+			surveyor.name,
+			'unseat',
+		],
+	])(
+		'keeps the tool list of a seat the same after %s',
+		async (_case, reserve, offered, name, operation) => {
+			const tools: string[][] = [];
+			const session = await open({
+				agents: reserve.length === 0 ? [product, surveyor] : [product],
+				available: reserve,
+				script: byAgent({
+					product: (context, _name, request) => {
+						tools.push(toolNames(context));
+						return request === 1 ? callTool(operation, { name }) : quiet();
+					},
+					surveyor: () => quiet(),
+				}),
+			});
+			await (await session.visit(priya)).send({ text: 'Change the team.' });
+			await waitForRoom(session);
+			expect(await seatNames(session)).toEqual(
+				operation === 'seat' ? [product.name, name] : [product.name],
+			);
+			expect(tools).toHaveLength(2);
+			expect(tools[1]).toEqual(tools[0]);
+			expect(tools[0]?.filter((tool) => tool !== 'compose' && tool !== 'describe')).toEqual(
+				offered,
+			);
+		},
+	);
+
+	it('keeps the tool list of a seat the same across a stop and a resume', async () => {
+		const tools: string[][] = [];
+		const session = await open({
+			agents: [product],
+			available: [surveyor],
+			script: byAgent({ surveyor: () => quiet() }),
+		});
+		await session.seat(surveyor.name);
+		await waitForRoom(session);
+		await session.stop();
+		// The reserve is empty now, and the recomposed entry holds no agent in its reserve.
+		const resumed = stopAtEnd(
+			await resumeRoom(session.name, {
+				agents: [product, surveyor],
+				runtime,
+				execution: piExecution({
+					sessions: 'memory',
+					stream: scriptedStream(
+						byAgent({
+							product: (context) => {
+								tools.push(toolNames(context));
+								return quiet();
+							},
+							surveyor: () => quiet(),
+						}),
+					),
+				}),
+			}),
+		);
+		await (await resumed.visit(priya)).send({ text: 'Who is here?' });
+		await waitForRoom(resumed);
+		expect(tools[0]).toContain('seat');
+	});
+
+	it('keeps a room composed with an empty reserve without `seat` after an unseat, a stop, and a resume', async () => {
+		const before: string[][] = [];
+		const after: string[][] = [];
+		const session = await open({
+			agents: [product, surveyor],
+			script: byAgent({
+				product: (context, _name, request) => {
+					before.push(toolNames(context));
+					return request === 1 ? callTool('unseat', { name: surveyor.name }) : quiet();
+				},
+				surveyor: () => quiet(),
+			}),
+		});
+		await (await session.visit(priya)).send({ text: 'Change the team.' });
+		await waitForRoom(session);
+		expect(await seatNames(session)).toEqual([product.name]);
+		await session.stop();
+		// The reserve holds the unseated agent now. No agent is new, so the rule stays.
+		const resumed = stopAtEnd(
+			await resumeRoom(session.name, {
+				agents: [product, surveyor],
+				runtime,
+				execution: piExecution({
+					sessions: 'memory',
+					stream: scriptedStream(
+						byAgent({
+							product: (context) => {
+								after.push(toolNames(context));
+								return quiet();
+							},
+						}),
+					),
+				}),
+			}),
+		);
+		await (await resumed.visit(priya)).send({ text: 'Who is here?' });
+		await waitForRoom(resumed);
+		expect(before[0]).not.toContain('seat');
+		expect(after[0]).toEqual(before[0]);
+	});
+
 	it('offers neither `seat` nor `unseat` when the host turned seating off, and the host still seats', async () => {
 		const contexts: string[] = [];
 		const tools: string[][] = [];

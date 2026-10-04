@@ -4,8 +4,9 @@
  *
  * Every respond activation can speak, schedule a say to itself, dismiss a
  * scheduled say, or recall messages of the room by URI. It can also remove an
- * agent, unless the host turned seating off, and seat an agent, when the
- * reserve holds one. A summary activation
+ * agent, unless the host turned seating off, and seat an agent, when seating
+ * is on and the reserve held an agent as the room composed. The tool list of a
+ * seat does not change between its activations. A summary activation
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
@@ -106,8 +107,10 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 	const tools = [
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
-		// The view empties the reserve when the host turned seating off.
-		...(view.context.reserve.length > 0 ? [seatingTool(binding, 'seated')] : []),
+		// The tool list of a seat stays the same for the whole room: both rules read the composition.
+		...(view.context.reserved === true && view.context.seating !== false
+			? [seatingTool(binding, 'seated')]
+			: []),
 		...(view.context.seating === false ? [] : [seatingTool(binding, 'unseated')]),
 		dismissTool(binding),
 		recallTool(view.context.name, binding),
