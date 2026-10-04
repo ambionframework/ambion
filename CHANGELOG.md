@@ -106,9 +106,9 @@ tool calls first, and to use one compose call when a result feeds a later
 call, or when the model needs a part of a large result. A single call, or a
 call whose result the model must judge before the next, goes direct. The
 guidance tells the model to call `describe` for a tool whose result has
-fields that the code reads. Room tools return text. It tells the model to
-explore large results with compose, and to return a count or a sample. The
-description of `compose` names the same two uses.
+fields that the code reads. It tells the model to explore large results
+with compose, and to return a count or a sample. The description of
+`compose` names the same two uses.
 
 **The guidance of `compose` follows the tools of the seat.**
 `describeExecutor` builds the text from the tools of the definition. The
@@ -144,6 +144,22 @@ sentences that its description states. The snapshot note drops the sentence
 on the bytes of a ref. The git note drops one sentence on a clone. The
 descriptions of `wait`, `cancel`, `repos`, and `restore` drop the sentences
 that a schema or a note states.
+
+**The tool guidance of a seat states each fact once.** The citation rule
+stands on the `refs` field of `say` and in the description of `snapshot`.
+The `refs` field of `schedule` points to `say`, and the `say` description,
+the snapshot note, and the `fetch` description drop their copies. The
+snapshot note keeps the form of a ref. The workspace guidance drops the line
+"Your workspace tools are ...", because the tool list names them, and
+`defaultToolGuidance` is gone. The git note says "git fetch" and "git
+rebase", because a seat also holds the `fetch` tool for HTTP. The `edit`
+description and schema state the rules on unique, non-overlapping matches
+once. The grace of a stop stands in `bash`, and the example handle stands
+in `wait`. The description of `schedule` drops its sentence on a long
+process, which the process note states. The description of `compose` lists
+only the tools with a typed result, and says once that the other tools
+return text. `seat` and `unseat` bind only when the tool list holds them, as
+before. `COMPOSE_GUIDANCE` drops the sentence "Room tools return text."
 
 **`processRuntime` names the memory limit when the child aborts.** V8 can
 abort the child before it prints its out-of-memory line. A child that ends

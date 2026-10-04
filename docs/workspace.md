@@ -431,9 +431,9 @@ const bytes = await drive.readSnapshot(report);
 ```
 
 **The `snapshot` tool gives an agent the same refs.** It reads the files as
-the calling agent, and its result lists one ref for each path. The guidance
-tells every agent to cite a file with a snapshot ref in the `refs` of a
-say. The audit log records each call.
+the calling agent, and its result lists one ref for each path. The `refs` field
+of `say` and the description of `snapshot` tell every agent to cite a file
+with a snapshot ref. The audit log records each call.
 
 | Step | Resource | What happens                                                                                 |
 | ---- | -------- | -------------------------------------------------------------------------------------------- |

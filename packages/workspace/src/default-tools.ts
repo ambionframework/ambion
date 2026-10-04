@@ -1,6 +1,5 @@
 /**
- * The neutral layer's file tools, read, write and edit, and the tool line
- * of the guidance.
+ * The neutral layer's file tools, read, write and edit.
  *
  * Every workspace gets these three tools, the four process tools
  * (`./process-tools.ts`: bash, ps, wait and cancel), and `snapshot`
@@ -15,20 +14,6 @@ import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
 import { fileTools } from './file-tools.ts';
 import type { WorkspaceResource } from './resource.ts';
-
-/** `a, b and c`. */
-function listOf(names: readonly string[]): string {
-	return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-}
-
-/**
- * The tool line of the guidance. `names` holds the name of each tool of the
- * bundle, in order. The line gives no count, because a seat holds tools
- * beyond the workspace.
- */
-export function defaultToolGuidance(names: readonly string[]): string {
-	return `Your workspace tools are ${listOf(names)}.`;
-}
 
 /** The note on the file tools and the bash tool. */
 const FILES_NOTE = [

@@ -185,13 +185,16 @@ function outputName(tool: AmbionTool): string {
 }
 
 /**
- * The compact list of the tools that code can bind: `name -> Type` for each
- * tool, in the order given. It holds no signature. `renderCatalog` gives those.
+ * The compact list of the tools that code can bind with a typed result:
+ * `name -> Type` for each, in the order given. A tool that returns text has no
+ * entry. The list holds no signature. `renderCatalog` gives those.
  */
 export function renderBindings(tools: readonly AmbionTool[]): string {
 	return tools
 		.filter(bindable)
-		.map((tool) => `${keyOf(tool.name)} -> ${outputName(tool)}`)
+		.map((tool) => [keyOf(tool.name), outputName(tool)] as const)
+		.filter(([, type]) => type !== 'string')
+		.map(([name, type]) => `${name} -> ${type}`)
 		.join(', ');
 }
 

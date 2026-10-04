@@ -253,8 +253,8 @@ section that states it in full.
   use ([Compose evidence](../planning/next.md#the-compose-evidence),
   [Catalog](#the-catalog)).
 - **The description of `compose` shows no signature.** It lists each tool
-  with the name of its result type. The model calls `describe` for the
-  signatures, and a failed compose call shows the signature of the tools
+  with a typed result by the name of its result type. The model calls
+  `describe` for the signatures, and a failed compose call shows the signature of the tools
   that it names ([Catalog](#the-catalog)).
 - **A compose call fails in workerd until a runtime for workerd
   exists.** A worker seat has both tools
@@ -262,19 +262,23 @@ section that states it in full.
 
 ## The catalog
 
-**The description of `compose` lists the bindings by name and result type.**
-It holds no signature. The core builds one line for each tool that a seat can
-bind, in the order of the tools, with the room tools last:
+**The description of `compose` lists the bindings with a typed result by
+name and result type.** It holds no signature. The core builds one entry for
+each tool that a seat can bind and that declares an output, in the order of
+the tools. One sentence says that the other tools return text:
 
 ```text
-Tools that code can bind, each with the type of its result (string is text): read -> ReadResult, write -> string, sql -> SqlResult, say -> string, schedule -> string, recall -> string, dismiss -> string. seat and unseat return text, and bind only when your tool list holds them.
+Tools that code can bind, each with the type of its result: read -> ReadResult, sql -> SqlResult. The other tools return text. seat and unseat bind only when your tool list holds them.
 ```
 
-| The tool declares       | The line shows                                          |
-| ----------------------- | ------------------------------------------------------- |
-| An output with an `$id` | The `$id`, such as `sql -> SqlResult`.                  |
-| An output with no `$id` | `object`, `array`, or the primitive type of the output. |
-| No output               | `string`. The binding gives the text.                   |
+A seat with no typed tool reads `Every tool that code can bind returns
+text.` in place of the list.
+
+| The tool declares       | The line shows                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| An output with an `$id` | The `$id`, such as `sql -> SqlResult`.                                                  |
+| An output with no `$id` | `object`, `array`, or the primitive type of the output. A `string` output has no entry. |
+| No output               | No entry. The binding gives the text.                                                   |
 
 **`describe` renders the signatures on demand.** It is a counterpart of
 `compose` on every seat that has `compose`. It takes `tools`, a non-empty
@@ -420,9 +424,9 @@ directly when it stands alone, or when you must judge its result before
 the next call.
 
 To write a compose call, call describe for each tool whose result has
-fields that you read. Room tools return text. Put the tools in uses, and
-the body of an async function in code. Each tool is tools.<name>. Read
-the fields of each result, and do not parse text.
+fields that you read. Put the tools in uses, and the body of an async
+function in code. Each tool is tools.<name>. Read the fields of each
+result, and do not parse text.
 
 Use compose also to explore. To learn the size or the shape of data,
 return a count, a few fields, or a short sample from code. Do not read

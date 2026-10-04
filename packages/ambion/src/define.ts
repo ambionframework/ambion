@@ -310,25 +310,25 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 }
 
 /**
- * The refs a say cites. Each item names the ref forms a model makes: a
- * workspace path and a table have no ref form.
+ * The refs a message cites. Each item names the ref forms a model makes: a
+ * workspace path and a table have no ref form. `say` holds the rule in full,
+ * and `schedule` points to it.
  */
-const CITED = Type.Array(
-	Type.String({
-		description:
-			'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, never by its path, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
-	}),
+const cited = (description: string) => Type.Array(Type.String({ description }));
+const SAY_REFS = cited(
+	'An absolute URI the message cites. Cite a file by the ref that `snapshot` gives, never by its path, a commit by its commit ref, and a message by ambion://room/<room>/message/<seq>.',
 );
+const SCHEDULE_REFS = cited('An absolute URI the message cites, in the forms that `say` takes.');
 
 /** The room tool that every activation may use to speak. */
 export const SAY = {
 	name: 'say' as const,
 	description:
-		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`. A file path is no URI.',
+		'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly.',
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String({ description: 'What you say, as the record shows it.' }),
-		refs: Type.Optional(CITED),
+		refs: Type.Optional(SAY_REFS),
 	}),
 };
 
@@ -367,14 +367,14 @@ export const DISMISS = {
 export const SCHEDULE = {
 	name: 'schedule' as const,
 	description:
-		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. The message then opens an exchange for the person of the exchange in which you scheduled it. Use it to check a long process or to continue your work later. The result names the seq of the message; `dismiss` drops it.',
+		'Schedule a message to yourself. After `delaySeconds` seconds, the room wakes you with this text. The message then opens an exchange for the person of the exchange in which you scheduled it. The result names the seq of the message; `dismiss` drops it.',
 	parameters: Type.Object({
 		delaySeconds: Type.Integer({
 			minimum: 1,
 			description: 'Seconds until the room wakes you with this message.',
 		}),
 		text: Type.String({ description: 'What to do when the room wakes you.' }),
-		refs: Type.Optional(CITED),
+		refs: Type.Optional(SCHEDULE_REFS),
 	}),
 };
 

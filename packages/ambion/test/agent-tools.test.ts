@@ -215,7 +215,8 @@ describe('the definition of agent tools', () => {
 			'describe',
 		]);
 		const description = agent.executor.tools.at(-2)?.description ?? '';
-		expect(description).toContain('lookup -> string, inspect -> string, say -> string');
+		expect(description).toContain('Every tool that code can bind returns text.');
+		expect(description).not.toContain('->');
 		expect(description).not.toContain('hidden');
 		expect(description).not.toContain('compose ->');
 		expect(description).not.toContain('describe ->');

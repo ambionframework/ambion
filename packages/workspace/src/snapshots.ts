@@ -360,11 +360,10 @@ export function snapshotCapability(store: SnapshotStore): Capability {
 	};
 }
 
-/** The note that tells every agent how to cite a file, and how to read one that is cited. */
+/** The note that gives the form of a snapshot ref, and tells every agent how to read a cited one. */
 export function snapshotGuidance(workspace: string): string {
 	return [
-		`To cite a file, call snapshot with its path, and put the ref it gives in the refs of a`,
-		`say. The ref has the form ambion://workspace/${workspace}/snapshot/<digest>/<path>.`,
+		`A ref of a snapshot has the form ambion://workspace/${workspace}/snapshot/<digest>/<path>.`,
 		`To read a cited snapshot, call restore with its ref.`,
 	].join('\n');
 }

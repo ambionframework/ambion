@@ -1,7 +1,7 @@
 /**
  * A workspace with a git backend: the `repos` and `fork` tools and their
- * texts, a clone made with `bash`, the host's `commitRef`, the tool line and
- * the order of the notes, the audit entry of a call, and a room in which a
+ * texts, a clone made with `bash`, the host's `commitRef`, the order of the
+ * notes, the audit entry of a call, and a room in which a
  * seat forks a template, clones it, edits, commits, and pushes. The backend is `justGitBackend`, reached by
  * relative path the same way as the just-bash source; its own package runs
  * the conformance cases.
@@ -14,13 +14,12 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { callTool, quiet } from '../../ambion/test/support/scripted.ts';
 import { justGitBackend, sqliteGitStorage } from '../../just-bash/src/git/index.ts';
 import { memoryBackend } from '../../just-bash/src/index.ts';
-import { defaultToolGuidance } from '../src/default-tools.ts';
 import { validRefName } from '../src/git-names.ts';
 import { gitToolGuidance } from '../src/git-tools.ts';
 import { openWorkspace } from '../src/index.ts';
 import { roomMirrorGuidance } from '../src/mirror.ts';
 import { sqliteBackend } from '../src/sqlite-entry.ts';
-import { callAs, invokeText, toolOf } from './support/backends.ts';
+import { callAs, FILES_NOTE, invokeText, toolOf } from './support/backends.ts';
 import { agent, run, toolResults } from './support/room.ts';
 
 const SERVER = 'http://git.ambion.invalid';
@@ -78,12 +77,9 @@ describe('the tools and the guidance', () => {
 			'fork',
 		]);
 		const guidance = workspace.tools().guidance ?? '';
-		expect(
-			guidance.startsWith(defaultToolGuidance(workspace.tools().tools.map((t) => t.name))),
-		).toBe(true);
-		expect(guidance).toContain(
-			'Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.',
-		);
+		// The tool list names the tools, so the guidance holds no list of them.
+		expect(guidance.startsWith(FILES_NOTE)).toBe(true);
+		expect(guidance).not.toContain('Your workspace tools are');
 		const git = guidance.indexOf(gitToolGuidance(SERVER, 'lab'));
 		expect(git).toBeGreaterThan(-1);
 		expect(git).toBeGreaterThan(guidance.indexOf('sql runs statements'));
@@ -95,8 +91,7 @@ describe('the tools and the guidance', () => {
 	it('states the full guidance of a bundle with sql, git and audit', async () => {
 		const { workspace } = await lab({ sql: true, audit: true });
 		expect(workspace.tools().guidance).toMatchInlineSnapshot(`
-			"Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, sql, repos and fork.
-			read, write, edit and bash work on shared files. Other agents connected to this
+			"read, write, edit and bash work on shared files. Other agents connected to this
 			workspace read and write the same files.
 
 			bash starts each command as a background process and returns its handle.
@@ -111,8 +106,7 @@ describe('the tools and the guidance', () => {
 			A process that outlives your activation shows in the reminder at the start of your next activation.
 			To check a long process later, call schedule with delaySeconds. The room wakes you with it then.
 
-			To cite a file, call snapshot with its path, and put the ref it gives in the refs of a
-			say. The ref has the form ambion://workspace/lab/snapshot/<digest>/<path>.
+			A ref of a snapshot has the form ambion://workspace/lab/snapshot/<digest>/<path>.
 			To read a cited snapshot, call restore with its ref.
 
 			sql runs statements on one shared database, :memory:. Every agent queries this
@@ -133,8 +127,8 @@ describe('the tools and the guidance', () => {
 			repos and fork reach the git server of this workspace, http://git.ambion.invalid.
 			templates/<name> is a read-only template. shared/<name> is a repository every agent can write.
 			<agent>/<name> belongs to that agent. You can read every repository.
-			You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
-			If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
+			You push to <your name>/<name> and to shared/<name>. Before a shared push, run git fetch and git rebase onto origin/main.
+			If a push is rejected because another agent pushed first, run git fetch and git rebase, resolve conflicts, and retry.
 			To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
 			A clone of shared/<name> pushes back to it.
 			A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
@@ -165,12 +159,9 @@ describe('the tools and the guidance', () => {
 		`);
 	});
 
-	it('counts eleven tools with no SQL backend, states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
+	it('states the form of a commit ref, and states the shell sentence that holds with a git backend', async () => {
 		const { workspace } = await lab();
 		const guidance = workspace.tools().guidance ?? '';
-		expect(guidance).toContain(
-			'Your workspace tools are read, write, edit, bash, ps, wait, cancel, snapshot, restore, repos and fork.',
-		);
 		expect(guidance).toContain(
 			'ambion://workspace/lab/repo/<repository>/branch/<branch>/commit/<hash>',
 		);

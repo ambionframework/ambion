@@ -83,14 +83,13 @@ const editSchema = Type.Object({
 	edits: Type.Array(
 		Type.Object({
 			oldText: Type.String({
-				description:
-					'Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.',
+				description: 'Exact text for one targeted replacement.',
 			}),
 			newText: Type.String({ description: 'Replacement text for this targeted edit.' }),
 		}),
 		{
 			description:
-				'One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.',
+				'One or more targeted replacements. Each edit is matched against the original file, not incrementally.',
 		},
 	),
 });

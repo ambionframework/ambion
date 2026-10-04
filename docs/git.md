@@ -557,9 +557,7 @@ holds the bundle, so the git note stays short.
 
 **`openWorkspace` joins the notes in this order.**
 
-1. The tool line, which counts the tools. With a git backend it names
-   eleven: read, write, edit, bash, ps, wait, cancel, snapshot, restore,
-   repos and fork. With a SQL backend as well, it names twelve.
+1. The files note.
 2. The process note ([Processes](processes.md#the-guidance)).
 3. The snapshot note ([Snapshot a file](workspace.md#snapshot-a-file)).
 4. The SQL note, when the workspace has a SQL backend.
@@ -567,6 +565,9 @@ holds the bundle, so the git note stays short.
 6. The bash backend's note about its shell.
 7. The audit note, when `audit` is set.
 8. The rooms note, when `rooms` is set.
+
+The guidance holds no list of the tools. The tool list of the seat names
+them.
 
 **The git note states the namespaces and the rule that persists an
 edit.** The workspace writes the backend's `label` into the first line, and
@@ -576,8 +577,8 @@ its own name into the form of a commit ref.
 repos and fork reach the git server of this workspace, <server>.
 templates/<name> is a read-only template. shared/<name> is a repository every agent can write.
 <agent>/<name> belongs to that agent. You can read every repository.
-You push to <your name>/<name> and to shared/<name>. Before a shared push, fetch and rebase onto origin/main.
-If a push is rejected because another agent pushed first, fetch, rebase, resolve conflicts, and retry.
+You push to <your name>/<name> and to shared/<name>. Before a shared push, run git fetch and git rebase onto origin/main.
+If a push is rejected because another agent pushed first, run git fetch and git rebase, resolve conflicts, and retry.
 To check out a repository without forking it, take its clone URL from repos and run git clone <url> <path> with bash.
 A clone of shared/<name> pushes back to it.
 A clone of a template or of another agent's fork is read-only. Raise wait for a large repository.
@@ -954,7 +955,7 @@ CI job runs them with the hooks of the `ssh` access
 ([Workstation git](workstation-git.md#tests)).
 
 **`packages/workspace` holds the texts and a room test.** Each outcome of
-`fork` and the `repos` table has a case, and so do the tool line and the
+`fork` and the `repos` table has a case, and so does the
 order of the notes. The room test drives the five calls of
 [Prompt an agent](#prompt-an-agent) with a scripted execution, then reads
 the pushed branch through `lab.git.use`. No test needs a model.

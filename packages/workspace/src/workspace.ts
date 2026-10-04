@@ -2,7 +2,7 @@ import type { AmbionTool, Room, ToolBundle, ToolContext } from '@ambionframework
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
-import { defaultToolGuidance, fileCapability } from './default-tools.ts';
+import { fileCapability } from './default-tools.ts';
 import { fetchCapability } from './fetch-tool.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
@@ -206,10 +206,9 @@ function capabilitiesOf(
 
 /**
  * Compose the bundle from the capabilities of the workspace. The tools keep
- * the order of the capabilities. The guidance holds the tool line, the notes
- * of each capability in order, the bash backend's note, the audit note when
- * one is set, and the rooms note when the host sets `rooms`. The tool line opens the first note, in the
- * same paragraph. The bundle's reminder merges the reminders of the
+ * the order of the capabilities. The guidance holds the notes of each
+ * capability in order, the bash backend's note, the audit note when one is
+ * set, and the rooms note when the host sets `rooms`. The bundle's reminder merges the reminders of the
  * capabilities, so it names each seat's processes.
  * When the workspace has an audit log, `audited` wraps every tool of the bundle.
  */
@@ -222,11 +221,8 @@ function workspaceTools(
 ): ToolBundle {
 	const capabilities = capabilitiesOf(resource, backends);
 	const tools = capabilities.flatMap((capability) => capability.tools);
-	const toolLine = defaultToolGuidance(tools.map((tool) => tool.name));
-	const [first = '', ...rest] = capabilities.flatMap((capability) => capability.notes);
 	const notes = [
-		`${toolLine}\n${first}`,
-		...rest,
+		...capabilities.flatMap((capability) => capability.notes),
 		bash.guidance,
 		audit && auditGuidance(audit),
 		rooms ? roomMirrorGuidance(bash.layout.rooms) : undefined,
