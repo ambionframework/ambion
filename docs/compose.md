@@ -404,40 +404,29 @@ policy, as it renders the guidance of every bundle
 
 **The text is `COMPOSE_GUIDANCE`.** `compose.ts` holds it, and the main
 entry exports it. `ComposeOptions.guidance` replaces it, as the `speaking`
-option replaces `DEFAULT_SPEAKING`. The text tells the model to call
-`describe` before it writes code that reads the fields of a result. The text
-follows:
+option replaces `DEFAULT_SPEAKING`. The text tells the model to plan
+first, to compose a plan of two or more calls, and to call `describe`
+before it writes the code. The text follows:
 
 ```text
-compose joins your tools in one call. Put the tools that you use in
-uses, and the body of an async function in code. Each tool is
-tools.<name>. You read only the value that the code returns. compose
-runs JavaScript, so code with no tools also calculates and transforms
-data.
-
-Before you write code that reads the fields of a result, call describe
-with the names of the tools. It returns their signatures and types. The
-description of compose lists the tools and the type of each result.
-Read the fields, and do not parse text.
-
 Plan the tool calls of a task before you make the first call. When the
-plan has two or more tool calls, make them in one compose call. Each
-result that you read costs tokens and one more turn.
+plan has two or more tool calls, make them in one compose call. This
+includes say and the other room tools. Each direct call costs one more
+turn, and you read its whole result.
 
-Use compose when:
-- the result of one tool is the input of another tool, also when you
-  filter or map the result first;
-- the task gives the rule for the next step. Code can apply the rule
-  with if, filter, and map;
-- a tool gives a large result, and you need a count, a filter, or a
-  few fields of it;
-- you call one tool for many inputs;
-- you start several processes and wait for each;
-- you speak to many participants, seat several agents, or recall many
-  refs. say, schedule, seat, unseat, dismiss, and recall are tools of
-  compose;
-- you calculate, or you sort, group, or reshape data that you already
-  hold. Give uses: [] and put the data in the code.
+Write a compose call in two steps:
+1. Call describe with the tools of the plan. It returns their
+   signatures and the fields of each result.
+2. Call compose. Put those tools in uses, and the body of an async
+   function in code. Each tool is tools.<name>. Read the fields of each
+   result, and do not parse text. You read only the value that the code
+   returns.
+
+Use compose also to explore. To learn the size or the shape of data,
+return a count, a few fields, or a short sample from code. Do not read
+large results one direct call at a time. Code with uses: [] calculates,
+sorts, groups, and reshapes data that you already hold. When the code
+starts processes, call wait on each handle before the code returns.
 
 Call a tool directly only when:
 - the next step needs your judgment of the result, and the task gives
@@ -457,8 +446,7 @@ Return only the values that you need to read. The code has no clock,
 no random source, and no I/O except through tools. A failed compose
 call lists each call, its outcome, and the result of each completed
 call, such as a process handle. A completed call can have had an
-effect, so read the list before you call a tool again. A tool that the
-code reads as tools.<name> must be in uses.
+effect, so read the list before you call a tool again.
 
 When a skill names a macro, call compose with the macro and its args,
 and write no code. The macro holds the code and names its own tools.
@@ -477,9 +465,9 @@ The macros of your skills. Run one with compose({ macro, args }):
 ```
 
 **The description of `compose` holds its uses, the limits, and the list of
-bindings.** The first lines are `Run JavaScript in one call. It joins your
-tools: code calls them as tools.<name>. Code with no tools also calculates
-and transforms data. You read only the value that the code returns.` A
+bindings.** The first line is `Run JavaScript that calls your tools as
+tools.<name>, in one call. Use it for a plan of two or more tool calls, and
+to explore large results. You read only the value that the code returns.` A
 block of three lines follows it. The first line gives the limits of the seat:
 `compose.limits` after the defaults. The second line states that a
 binding rejects with an `Error` when its tool fails, and that
@@ -610,6 +598,13 @@ catalog does not change between activations. Code binds them as text, as it
 binds a tool with no declared output. Use them to say to many
 participants, seat several agents, or recall many refs in one call.
 
+**Only the room tools of the activation bind.** An activation holds `seat`
+only when the reserve holds an agent, and holds neither `seat` nor `unseat`
+in a room started with `seating: false`. The catalog and the `describe` tool
+still list both, because the executor fixes its description when it is
+defined. A call that uses a room tool that the activation lacks fails before
+the code runs. The error states that the room does not offer the tool.
+
 **The driver hands the room tools to the compose call.** It passes the
 room tools of the activation to `invokeTool` and `invokeChecked`,
 beside the step sink. The room tools stay bound to the activation, so a
@@ -675,6 +670,14 @@ land in the order that the code made them. `schedule`, `seat`, `unseat`,
 `dismiss`, and `recall` run together, up to the cap. A seating or a dismissal that lands counts as read, because it is the own
 act of the activation. A line of another participant that lands before a say
 still makes the room refuse that say as missed.
+
+**A seat that starts beside a say can make the say miss.** `Promise.all` of
+a `seat` before a `say` starts both with the same read position. The seat
+commit lands first, and its entry is past that position. The room refuses
+the say as missed. Run the seat, await it, and then say: the landed seat
+counts as read, and the say carries the new position. A line of another
+participant that lands between the seat and the say makes the say miss
+in the same way, and the compose result shows that line.
 
 **A resource can serialize what `compose` runs together.** `compose`
 starts the calls. The resource behind a tool decides whether their work

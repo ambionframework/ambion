@@ -29,6 +29,7 @@ cannot enter the record.
 | Read the record of another room                | `recall` reads the room of the activation alone. A ref to another room gives a line, and the room reads nothing.                                | `recallTool` in [`execution/room-tools.ts`](../packages/ambion/src/execution/room-tools.ts), [`executor-tools.test.ts`](../packages/pi/test/executor-tools.test.ts)                                                                                   |
 | Revive cancelled work                          | Work before the cancellation boundary loses publication authority.                                                                              | `survivesCancellation` and `beforeCancellation` in [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)                                                  |
 | Unseat a fixed seat through the tool           | The room refuses. The host can still call `room.unseat`.                                                                                        | [Roster](roster.md), [`roster.test.ts`](../packages/ambion/test/roster.test.ts)                                                                                                                                                                       |
+| Seat or unseat with seating turned off         | The room refuses a seating intent from a seat. The host can still call `room.seat` and `room.unseat`.                                           | [Roster](roster.md#turn-off-seating-for-agents), [`contribution-validation.test.ts`](../packages/ambion/test/contribution-validation.test.ts)                                                                                                         |
 | Seat a human name or an unknown name           | The room refuses.                                                                                                                               | [Roster](roster.md), [`fixed-definitions.test.ts`](../packages/ambion/test/fixed-definitions.test.ts), [`room.test.ts`](../packages/ambion/test/room.test.ts)                                                                                         |
 
 ## What one seat can do to another
@@ -47,7 +48,8 @@ does not restrict who may address or steer whom.
 
 **The room owns the roster.** An agent changes it only by name, through
 `seat` and `unseat`. A fixed seat resists the tool. The host always keeps
-`room.unseat`. [Roster](roster.md) owns the rules and the attention scale.
+`room.unseat`, and can start the room with `seating: false` to remove both
+tools. [Roster](roster.md) owns the rules and the attention scale.
 
 ## What the kernel does not defend
 

@@ -11,6 +11,7 @@ import {
 	definePerson,
 	messageUri,
 	readRoom,
+	resumeRoom,
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
@@ -55,8 +56,12 @@ async function openWorld(
 }
 
 /** A room where the person asks a question and the test claims the worker's activation for it. */
-async function claimedWorker(storage: Storage, agents = [worker]) {
-	const world = await openWorld(storage, { agents, seats: { [worker.name]: 'broadcast' } });
+async function claimedWorker(storage: Storage, agents = [worker], seating?: boolean) {
+	const world = await openWorld(storage, {
+		agents,
+		seats: { [worker.name]: 'broadcast' },
+		...(seating === undefined ? {} : { seating }),
+	});
 	const exchange = await (
 		await world.room.visit(person)
 	).send({
@@ -330,6 +335,33 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		expect(await membership('seated', reserveAgent.name)).toEqual(seated);
 		expect(await membership('seated', worker.name)).toMatchObject(differentOperation);
 		expect(await membership('unseated', reserveAgent.name)).toMatchObject(differentOperation);
+	});
+
+	it('refuses a seating intent from a seat when the host turned seating off, and records the choice', async () => {
+		const { peer, activation, opened, room, runtime } = await claimedWorker(
+			storage,
+			[worker, reserveAgent],
+			false,
+		);
+		const refused = { refused: expect.stringMatching(/does not let agents seat or unseat/) };
+		for (const kind of ['seated', 'unseated'] as const)
+			expect(
+				await peer.commit({ activation, key: `off-${kind}`, intent: { kind, name: worker.name } }),
+			).toMatchObject(refused);
+		expect((await messagesOf(room)).filter((message) => message.kind !== 'arrived')).toHaveLength(
+			1,
+		);
+		// The host keeps its own seating.
+		await room.seat(reserveAgent.name);
+		await room.unseat(reserveAgent.name);
+		// A resumed room records its composition again and keeps the choice.
+		await room.stop();
+		stopAtEnd(await resumeRoom(room.name, { agents: [worker, reserveAgent], runtime }));
+		const stored = (await storedOf(opened.journals, room.name)).filter(
+			(entry) => entry.kind === 'composition',
+		);
+		expect(stored).toHaveLength(2);
+		for (const entry of stored) expect(entry.body).toMatchObject({ seating: false });
 	});
 
 	it.each(blankTexts)(

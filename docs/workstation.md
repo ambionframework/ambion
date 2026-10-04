@@ -69,7 +69,7 @@ workspace supplies everything that holds on every backend
 | `connect()` and `dispose()`                 | The workstation                                                 |
 | `SshEnv`, the transport of each call        | The workstation                                                 |
 | `layout`: the audit log, rooms, snapshots   | The workstation, from its options                               |
-| `guidance` about the shell and hostname     | The workstation                                                 |
+| `guidance` about the shell                  | The workstation                                                 |
 | `endpoints.forward()` for loopback services | The workstation                                                 |
 | `read`, `write`, `edit`                     | The workspace: the three file tools                             |
 | `bash`, `ps`, `wait`, `cancel`              | The workspace: the process tools ([Processes](processes.md))    |
@@ -524,9 +524,8 @@ new keys.
 **The workspace describes the tools, and the workstation describes its
 shell.** The workstation's `guidance` states what every workstation has:
 a real shell, open network access, and one account for each agent. The
-application names the commands that its server installs. Guidance also
-names the configured workstation hostname and separates the remote service
-port from the SSH login port and the private host loopback URL.
+application names the commands that its server installs. Guidance names
+no hostname and no port, because the seat is logged in already.
 
 ## Trust
 

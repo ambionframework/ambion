@@ -63,7 +63,14 @@ const respond = (messages: Message[], through: number): ActivationView => ({
 		purpose: { kind: 'respond', message: 1 },
 	},
 	through,
-	context: { name: 'setup', now: 0, participants: [], messages, reserve: [] },
+	// The reserve holds one agent, so the seat holds `seat`.
+	context: {
+		name: 'setup',
+		now: 0,
+		participants: [],
+		messages,
+		reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+	},
 });
 
 const closing = (messages: Message[]): ActivationView => ({
@@ -84,10 +91,13 @@ function recording(script: PiScript) {
 		context: Context;
 		options: SimpleStreamOptions | undefined;
 		model: string;
+		/** The roles of the request as the provider receives it, before `scriptContext`. */
+		roles: string[];
 	}[] = [];
 	const base = scriptedStream(script);
 	const stream: StreamFn = (model, context, options) => {
-		requests.push({ context: scriptContext(context), options, model: model.id });
+		const roles = context.messages.map((message) => message.role);
+		requests.push({ context: scriptContext(context), options, model: model.id, roles });
 		return base(model, context, options);
 	};
 	return { requests, stream };
@@ -192,6 +202,11 @@ describe('the harness of an activation', () => {
 		expect(isClosingContext(closed?.context as Context)).toBe(true);
 		expect(closed?.context.messages.length).toBeGreaterThan(1);
 		expect(last.session).toEqual({ kind: 'pi', id: 'message:1:worker:1' });
+		// A provider lifts only the first message into its system field, so each request leads with it.
+		expect(ordinary?.roles.slice(0, 2)).toEqual(['system', 'user']);
+		expect(closed?.roles[0]).toBe('system');
+		expect(closed?.roles.at(-1)).toBe('system');
+		expect(closed?.roles.at(-2)).toBe('user');
 	});
 
 	it('compacts the session when the context passes the threshold, and never reads back', async () => {

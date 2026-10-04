@@ -128,7 +128,7 @@ Applications that need different attention or a separate summary writer can
 use the existing explicit configuration. Omitting `assistant` preserves the
 current API behavior.
 
-**Omitting `seats` starts all specialists immediately at broadcast attention.**
+**Omitting `seats` starts all specialists immediately with no roster mark.**
 This preserves the existing default and permits direct specialist participation.
 Use an empty map when the assistant should select specialists from the reserve:
 

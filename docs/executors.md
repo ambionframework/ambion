@@ -362,7 +362,8 @@ as `#<seq>` and gives the due time, and it lists the `unread` messages of
 the answer.
 
 **`seat` and `unseat` commit a seating intent**, keyed on the tool call
-id.
+id. The room offers `seat` only when the reserve holds an agent, and offers
+neither tool when the host started the room with `seating: false`.
 
 **`recall` reads and commits nothing.** For each distinct ref of its
 room, it calls `view(id, seq)`. The view of one message applies no window

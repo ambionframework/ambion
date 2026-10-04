@@ -6,6 +6,7 @@
  */
 import { type TSchema, Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { type AmbionTool, contentText, type ToolContext } from '../src/bundle.ts';
 import { ComposeFailure } from '../src/compose.ts';
 import type { RoomCall } from '../src/compose-tool.ts';
@@ -20,7 +21,9 @@ import {
 	defineTool,
 	type Step,
 	startRoom,
+	systemClock,
 } from '../src/index.ts';
+import type { CommitRequest } from '../src/protocol.ts';
 import { callTool, quiet, say, scripted, settled } from '../src/testing.ts';
 import { functionRuntime } from './support/compose-runtime.ts';
 import {
@@ -34,7 +37,18 @@ import {
 	text,
 	total,
 } from './support/compose-tools.ts';
-import { andrei, collect, messagesOf, participantsOf, roomName } from './support/room.ts';
+import { faulty } from './support/ports.ts';
+import {
+	andrei,
+	collect,
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	scriptedAgent,
+	stateOf,
+} from './support/room.ts';
+import { scriptedStream, toolResultTexts } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 
 const hidden = defineTool({
@@ -801,7 +815,7 @@ describe('the compose tool of an executor', () => {
 		});
 		expect(tool.description).toBe(
 			[
-				'Run JavaScript in one call. It joins your tools: code calls them as tools.<name>. Code with no tools also calculates and transforms data. You read only the value that the code returns.',
+				'Run JavaScript that calls your tools as tools.<name>, in one call. Use it for a plan of two or more tool calls, and to explore large results. You read only the value that the code returns.',
 				'',
 				'Limits of this seat: at most 32 nested calls, 8 at a time. The return value holds at most 65536 bytes of JSON. The call lasts at most 90 seconds, and the end of your activation cuts it sooner.',
 				'A binding rejects with an Error when its tool fails. error.details holds the details of the tool when it gives them. A rejection cancels no other call.',
@@ -1126,7 +1140,11 @@ describe('a compose call in a room', () => {
 });
 
 /** A seat that composes over `tools` and the room tools. Its script runs on the scripted executor. */
-function composer(name: string, tools: readonly AmbionTool[] = []) {
+function composer(
+	name: string,
+	tools: readonly AmbionTool[] = [],
+	options: Partial<ComposeOptions> = {},
+) {
 	return defineAgent({
 		name,
 		identity: `${name}.`,
@@ -1134,9 +1152,19 @@ function composer(name: string, tools: readonly AmbionTool[] = []) {
 			kind: 'scripted',
 			instructions: 'Compose.',
 			tools,
-			compose: { runtime: functionRuntime },
+			compose: { runtime: functionRuntime, ...options },
 		}),
 	});
+}
+
+/** A fault that holds the first commit of an intent kind, and runs `hold` before the room sees it. */
+function holdCommit(kind: CommitRequest['intent']['kind'], hold: () => Promise<void>) {
+	return {
+		on: 'commit' as const,
+		kind: 'hold' as const,
+		match: (request: unknown) => (request as CommitRequest).intent.kind === kind,
+		hold,
+	};
 }
 
 const quietAgent = (name: string) =>
@@ -1298,6 +1326,40 @@ describe('a compose call over the room tools', () => {
 		expect(names).toEqual(expect.arrayContaining(['ana', 'ben']));
 	});
 
+	it.each([
+		['an empty reserve', {}, ['worker', 'ana']],
+		['seating turned off', { seating: false }, ['worker']],
+	] as const)(
+		'cannot bind `seat` in a room with %s, and seats nobody',
+		async (_case, options, seated) => {
+			const read: string[] = [];
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('compose-no-seat'),
+					agents: [composer('worker'), quietAgent('ana')],
+					seats: Object.fromEntries(seated.map((name) => [name, 'broadcast'])),
+					...options,
+					execution: scripted((step, seat, request) => {
+						if (seat !== 'worker') return quiet();
+						if (request === 1)
+							return callTool('compose', {
+								uses: ['seat'],
+								code: `return await tools.seat({ name: 'ana' });`,
+							});
+						read.push(...step.results.map((result) => result.text));
+						return quiet();
+					}),
+				}),
+			);
+			await (await room.visit(andrei)).send({ text: 'Bring in ana.' });
+			await settled(room);
+			expect(read[0]).toContain("The room does not offer the room tools 'seat' to this activation");
+			expect((await messagesOf(room)).some((message) => message.kind === 'seated')).toBe(false);
+			const agents = (await participantsOf(room)).filter((one) => one.kind === 'agent');
+			expect(agents.map((one) => one.name)).toEqual(seated);
+		},
+	);
+
 	it('says to an agent that it seated in the same compose call', async () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
@@ -1327,6 +1389,117 @@ describe('a compose call over the room tools', () => {
 		);
 		expect(said).toHaveLength(1);
 	});
+
+	it('lets a say that still runs at the time limit land, reports the cut call, and keeps the read position', async () => {
+		const started = deferred();
+		const release = deferred();
+		const read: string[] = [];
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('compose-time'),
+				agents: [
+					scriptedAgent('worker', 'worker.', {
+						compose: { runtime: functionRuntime, limits: { time: 40 } },
+					}),
+				],
+				seats: { worker: 'broadcast' },
+				execution: faulty(
+					piExecution({
+						sessions: 'memory',
+						stream: scriptedStream((context) => {
+							const results = toolResultTexts(context);
+							if (results.length === 0)
+								return callTool('compose', {
+									uses: ['say'],
+									code: `await tools.say({ text: 'Done.' }); return 'said';`,
+								});
+							read.push(...results);
+							return quiet();
+						}),
+					}),
+					[
+						holdCommit('said', async () => {
+							started.resolve();
+							await release.promise;
+						}),
+					],
+					systemClock(),
+				),
+			}),
+		);
+		await (await room.visit(andrei)).send({ text: 'Start.' });
+		await started.promise;
+		// The time limit passes while the say still waits on the room.
+		await pause(300);
+		expect(read).toEqual([]);
+		release.resolve();
+		await settled(room);
+		const said = (await messagesOf(room)).filter(
+			(message) => message.kind === 'said' && message.from === 'worker',
+		);
+		expect(said).toHaveLength(1);
+		expect(read).toHaveLength(1);
+		expect(read[0]).toContain('The compose call passed compose.limits.time (40 ms).');
+		expect(read[0]).toMatch(/\.1 say: completed/);
+		// The say landed with no line of another participant before it, so the result shows no record.
+		expect(read[0]).not.toContain('Room tools reported:');
+		const lease = [...stateOf(room).leases.values()].find((one) => one.id.includes(':worker:'));
+		expect(lease?.readThrough).toBe(said[0]?.seq);
+	});
+
+	it.each([
+		{ held: 'seated', story: 'before the seat lands' },
+		{ held: 'said', story: 'between the seat and the say' },
+	] as const)(
+		'refuses the says that follow a seat when a line of another participant lands $story, and shows that line',
+		async ({ held }) => {
+			const read: string[] = [];
+			let visit: Awaited<ReturnType<typeof room.visit>> | undefined;
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('compose-seat-missed'),
+					agents: [composer('worker'), quietAgent('ana')],
+					seats: { worker: 'broadcast' },
+					execution: faulty(
+						scripted((step, seat, request) => {
+							if (seat !== 'worker') return quiet();
+							if (request === 1)
+								return callTool('compose', {
+									uses: ['seat', 'say'],
+									code: `await tools.seat({ name: 'ana' });
+										const miss = (error) => 'missed: ' + error.message.slice(0, 13);
+										const first = await tools.say({ text: 'Welcome.' }).catch(miss);
+										// A retry carries the read position of the activation. It lands only past the line.
+										const second = await tools.say({ text: 'Again.' }).catch(miss);
+										return [first, second];`,
+								});
+							read.push(...step.results.map((result) => result.text));
+							return quiet();
+						}),
+						[
+							holdCommit(held, async () => {
+								await visit?.send({ text: 'Wait, check Q3 first.' });
+							}),
+						],
+						systemClock(),
+					),
+				}),
+			);
+			visit = await room.visit(andrei);
+			await visit.send({ text: 'Bring in ana.' });
+			await settled(room);
+			expect(read).toHaveLength(1);
+			expect(JSON.parse(read[0]?.split('\n')[0] ?? '')).toEqual([
+				'missed: Not delivered',
+				'missed: Not delivered',
+			]);
+			expect(read[0]).toContain('Room tools reported:');
+			expect(read[0]).toContain('Wait, check Q3 first.');
+			const messages = await messagesOf(room);
+			expect(messages.some((one) => one.kind === 'said' && one.from === 'worker')).toBe(false);
+			expect(messages.some((one) => one.kind === 'seated' && one.subject === 'ana')).toBe(true);
+		},
+	);
 
 	it('records the steps of a nested room tool under the compose call, and shows the names to the approval', async () => {
 		const logged: Step[] = [];

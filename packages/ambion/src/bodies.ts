@@ -247,6 +247,8 @@ export const compositionSchema = Type.Object(
 		goal: Type.Optional(Type.String()),
 		/** The configured agent that writes summaries for human owners. */
 		summaryWriter: Type.Optional(Type.String()),
+		/** The host turned seating off for agents, when `false`. Absent means on. */
+		seating: Type.Optional(Type.Boolean()),
 		seated: Type.Array(seatingSchema),
 		reserve: Type.Array(seatingSchema),
 		at: Type.String(),

@@ -82,7 +82,7 @@ export async function boundActivation(
 	return { state, tools };
 }
 
-/** The view of one activation purpose over an empty room. */
+/** The view of one activation purpose over an empty room. Its reserve holds one agent, so a seat holds `seat`. */
 export function viewFor(
 	purpose: ActivationView['spec']['purpose'],
 	through = purpose.kind === 'summarize' ? purpose.through : 0,
@@ -90,7 +90,13 @@ export function viewFor(
 	return {
 		spec: { id: 'activation', seat: 'worker', attempt: 1, purpose },
 		through,
-		context: { name: 'room', now: 0, participants: [], messages: [], reserve: [] },
+		context: {
+			name: 'room',
+			now: 0,
+			participants: [],
+			messages: [],
+			reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+		},
 	};
 }
 
