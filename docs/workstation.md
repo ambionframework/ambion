@@ -62,7 +62,7 @@ and no `node:sqlite`. The workstation does not depend on
 
 **A `BashBackend` supplies a transport and the facts of its server.** The
 workspace supplies everything that holds on every backend
-([The resource contract](workspace.md#the-resource-contract)).
+([Build a bash backend](workspace.md#build-a-bash-backend)).
 
 | Part                                        | Owner                                                           |
 | ------------------------------------------- | --------------------------------------------------------------- |

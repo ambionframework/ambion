@@ -692,24 +692,8 @@ process to name gets no process reminder. A summarize activation calls none.
 the record of the first pass of a respond activation. The text goes in the
 context, before the ask line.
 
-```ts
-export interface ToolBundle {
-  readonly tools: readonly AmbionTool[];
-  readonly guidance?: string;
-  readonly remind?: Reminder;
-}
-
-export type Reminder = (
-  seat: ReminderSeat,
-  signal: AbortSignal,
-) => string | undefined | Promise<string | undefined>;
-
-export interface ReminderSeat {
-  readonly agent: string;
-  readonly room: string;
-  readonly activation: string;
-}
-```
+[Tool bundles](resources.md#tool-bundles) states the `ToolBundle`,
+`Reminder`, and `ReminderSeat` contract.
 
 **A reminder has 5 seconds.** A reminder that throws, rejects, gives
 blank text, or takes longer gives no text, and the activation goes on.
