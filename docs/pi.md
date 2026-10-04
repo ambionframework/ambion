@@ -366,7 +366,8 @@ exist for the model.
 
 **What the model sees.** The model sees the system prompt at the head of
 the request, the record, and the tools that
-[Definitions and tools](agent.md#tools) lists for the activation. The model sees no environment variable and no key.
+[Definitions and tools](agent.md#tools) lists for the activation. The model
+sees no environment variable and no key.
 
 **What the host holds.** The registry stream reads the provider key in the
 host process, and it sends the key to the provider only. A tool that reads

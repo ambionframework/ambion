@@ -5,7 +5,8 @@
 **A Pi seat receives the seat prompt as the system prompt.** The harness
 wrote the prompt after the first input, and a provider lifts only the first
 message into its system field. On a model that accepts system messages in the
-middle of a conversation, such as Claude 5 and GPT-5.4 and later, the seat
+middle of a conversation (Claude 5 and `claude-opus-4-8`, GPT-5.4 and later
+on `openai`, GPT-5.5 and later on `openai-codex`), the seat
 prompt reached the model as an update item and the system field held a
 generic text. A hook now moves the first prompt entry to the head of each
 request. The stored session keeps its order. On Anthropic, `pi-ai` now also
@@ -17,7 +18,8 @@ mechanism says "You are an agent seated in a room: a shared room with a
 record." The ask line says that the speech defaults yield to the
 instructions under "Your instructions", the label that the prompt uses. The
 workstation guidance drops the hostname, the SSH port, and the forwarded port
-sentence. No tool of a seat shows them.
+sentence. The sensor tools name the hostname and the remote port when a seat
+connects a sensor. No tool shows the SSH port or the forwarded URL.
 
 **The guidance of a seat follows the review of the workbench prompts.**
 The speaking policy states that a directed say wakes a participant. The
