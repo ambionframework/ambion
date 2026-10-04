@@ -9,6 +9,7 @@ import { AmbionError } from '../errors.ts';
 import { placed, spaced } from '../journal/journal.ts';
 import type { VisitRuntime } from '../room/presence.ts';
 import type { RoomCommand } from '../room/transition.ts';
+import { singleFlight } from '../single-flight.ts';
 import type { Message, PersonDefinition, PresenceMessage, SeatOptions, Seq } from '../types.ts';
 import {
 	decideAndAppend,
@@ -139,7 +140,7 @@ async function retryKnown(
 	captured: PersonDefinition,
 	known: VisitRuntime,
 ): Promise<VisitRuntime> {
-	if (known.departure !== undefined) await known.departure.catch(() => {});
+	if (known.departure?.promise !== undefined) await known.departure.promise.catch(() => {});
 	else await endVisit(run, known);
 	return arrive(run, captured);
 }
@@ -171,7 +172,7 @@ function handle(run: RoomRunState, runtime: VisitRuntime): Visit {
 }
 
 async function endVisit(run: RoomRunState, runtime: VisitRuntime): Promise<void> {
-	if (runtime.departure !== undefined) return runtime.departure;
+	if (runtime.departure?.promise !== undefined) return runtime.departure.promise;
 	// A terminal room invalidates handles it ended itself. A handle that
 	// started a departure has a stable key and must still retry its write,
 	// even when shutdown also failed while the storage was unavailable.
@@ -181,13 +182,8 @@ async function endVisit(run: RoomRunState, runtime: VisitRuntime): Promise<void>
 	// Close this handle's admission immediately. The durable decision below
 	// still checks recorded presence before any speech or departure lands.
 	runtime.gone = true;
-	let operation!: Promise<void>;
-	operation = leaveVisit(run, runtime, key).catch((error) => {
-		if (runtime.departure === operation) runtime.departure = undefined;
-		throw error;
-	});
-	runtime.departure = operation;
-	return operation;
+	runtime.departure ??= {};
+	return singleFlight(runtime.departure, () => leaveVisit(run, runtime, key), true);
 }
 
 async function leaveVisit(run: RoomRunState, runtime: VisitRuntime, key: string): Promise<void> {

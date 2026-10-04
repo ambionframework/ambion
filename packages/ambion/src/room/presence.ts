@@ -7,6 +7,7 @@
  * does not hold is the handle a host delivers through, and that stays in
  * the running room.
  */
+import type { SingleFlight } from '../single-flight.ts';
 import type { Message, PersonDefinition, PresenceMessage, PresenceStatus, Seq } from '../types.ts';
 
 /** One person in the room, for as long as they are in it. */
@@ -14,7 +15,7 @@ export interface VisitRuntime {
 	person: PersonDefinition;
 	gone: boolean;
 	/** A departure in progress, shared by every caller of this handle. */
-	departure?: Promise<void>;
+	departure?: SingleFlight<void>;
 	/** Stable idempotency key for a departure whose acknowledgement was lost. */
 	departureKey?: string;
 }

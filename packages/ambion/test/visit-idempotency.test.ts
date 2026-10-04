@@ -117,6 +117,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		);
 		const first = observed(room.visit(person));
 		await started.promise;
+		await expect(observed(room.visit(returnedPerson))).rejects.toThrow(/different identity/);
 		const second = observed(room.visit(person));
 		const third = observed(room.visit(person));
 		const settled = second.then(
@@ -205,6 +206,9 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 		expect(await count(room, 'left')).toBe(1);
 		expect(await count(room, 'arrived')).toBe(2);
 		await expect(old.send({ text: 'old handle is ended' })).rejects.toThrow(/ended|leaving/);
+		await old.leave();
+		expect(await count(room, 'left')).toBe(1);
+		await fresh.send({ text: 'the fresh visit remains present' });
 		await fresh.leave();
 	});
 
