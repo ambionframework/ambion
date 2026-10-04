@@ -14,8 +14,8 @@ and it can have one SQL backend
 ([Query the shared database](#query-the-shared-database)) and one git
 backend ([Git](git.md)). Agents receive access through
 ordinary tool bundles. Workspace files remain separate from the
-collaboration journal. [Resources](resources.md) states the contract, the
-SQL binding, and the rules for references and provenance.
+collaboration journal. [Resources](resources.md) states the resource contract,
+tool bundles, and the rules for references and provenance.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-capabilities-dark.svg">
@@ -35,9 +35,13 @@ const drive = openWorkspace({ name: 'team-site', backend: { bash: memoryBackend(
 creates one workspace for each shared filesystem it intends agents to share.
 The package does not coordinate separate workspaces or processes.
 
-The workspace serializes complete operations. Each `use` call checks
-revocation, opens a fresh backend environment for its agent, runs the
-operation, and cleans up the environment in `finally`.
+**Each backend has its own resource.** `openWorkspace` opens a bash resource
+with `WorkspaceEnv` and an object resource with `ObjectEnv` for snapshots.
+It opens a SQL resource with `SqlEnv` when `backend.sql` is set, and a git
+resource with `GitEnv` when `backend.bash.git` is set. The resources share
+[the resource contract](resources.md#the-resource-contract). `workspace.use`
+reaches the bash resource; `workspace.sql` and `workspace.git` expose the
+optional resources. The snapshot methods use the object resource.
 
 ```ts
 await drive.use(
@@ -49,9 +53,6 @@ await drive.use(
   signal,
 );
 ```
-
-The workspace checks revocation before it connects. A queued operation that
-starts after disposal is refused.
 
 ## The layout and the host identity
 
@@ -106,8 +107,8 @@ A workspace with a SQL backend adds `sql`
 no SQL backend has no `sql` tool. The bash backend adds its own guidance
 about its own shell, if it has any. Tools use the resources for storage
 operations; process waits and `fetch` requests run outside those
-operations. The bundle keeps one stable identity. Pass it in an agent's
-`bundles` field.
+operations. The bundle keeps one stable identity. Pass it in an executor's
+`bundles` field ([Tool bundles](resources.md#tool-bundles)).
 
 **A failure is an error, and every result tells the agent what to do.**
 The workspace tools share these rules:
@@ -140,13 +141,7 @@ const surveyor = defineAgent({
 });
 ```
 
-The core flattens bundles when it defines the agent. Bundle guidance is
-included for every activation. The `tools` field accepts ordinary typed
-Ambion tools. Every activation also receives the room's `say`, `seat`, and
-`unseat` tools.
-
-Custom tools close over the resource. They select the calling agent and pass
-the call signal to `use`.
+**A custom tool passes the calling agent and signal to the resource.**
 
 ```ts
 import { Type } from 'typebox';
@@ -168,10 +163,8 @@ const readPlan = defineTool({
 });
 ```
 
-`ToolContext` contains `agent`, `signal`, `callId`, `onUpdate`, `room`,
-`activation`, and `exchange`. [Resources](resources.md#references-and-provenance)
-states what the last three hold. The executor builds the context once per
-call and freezes it. `ToolContext` holds no workspace or resource field.
+[Resources](resources.md#references-and-provenance) states the provenance
+that a tool receives through `ToolContext`.
 
 ## Give an agent skills
 
@@ -1173,29 +1166,29 @@ named type in the catalog of `compose`: `Process`, `ProcessResult`,
 and `Truncation`. A `Static` type holds mutable arrays, so a tool
 copies a readonly array into its details.
 
-## The resource contract
+## Build a bash backend
 
-The contract lives in [Resources](resources.md).
+`BashBackend` uses [the resource contract](resources.md#the-resource-contract).
 
 The memory and directory backends export from the package
 `@ambionframework/just-bash`, which depends on the workspace. The root entry
 names `WorkspaceEnv`, the port of a bash backend ([The port](#the-port)).
 `BashBackend` extends `ResourceBackend<WorkspaceEnv>` and adds
 optional guidance about the backend's own shell and a required `layout` (see
-[The layout and the host identity](#the-layout-and-the-host-identity)). A
-backend adds no tool: the workspace binds the same tools over every backend.
+[The layout and the host identity](#the-layout-and-the-host-identity)).
+The workspace binds its tools over every backend.
 `openWorkspace` opens the bash resource, builds the three file tools, and
 binds them to its `use` method. It also opens
 the process table and builds the four process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
 processes of this run ([The host's view](processes.md#the-hosts-view)).
 `Workspace` adds `tools()`, `mirrorAgent`, and `mirror()` to the resource surface.
-Direct operations and tool calls share one queue and one lifecycle.
+Direct file operations and file tool calls use the bash resource.
 
-**A new backend implements `connect()` and a `WorkspaceEnv`, over the
-shared helpers below, and names its own `layout`.** It adds only the tools
-and the guidance beyond the nine tools every workspace has, passes
-`@ambionframework/workspace/conformance`, and loads no just-bash.
+**A new backend implements `connect()` and `WorkspaceEnv`.** Use the
+shared helpers below and name the backend's `layout`. Supply guidance for
+its shell and pass `@ambionframework/workspace/conformance`. The backend
+loads no just-bash.
 
 **The root entry also exports the environment helpers a new `WorkspaceEnv`
 backend needs.** The just-bash backends and the workstation both build on
@@ -1320,20 +1313,15 @@ statement. `sqliteBackend` in memory and on a file runs them
 await drive.dispose();
 ```
 
-Disposal immediately revokes new and queued work. It waits for an active
-operation and its cleanup, cancels every background process of this run and
-waits for it to end ([Processes](processes.md#life-and-disposal)), then asks
-the backend to release its local handles once. Concurrent calls join that
-release. A successful disposal is terminal. A failed disposal leaves the
-resource active and retryable.
+**Workspace disposal closes its resources in dependency order.** It closes
+SQL, bash, objects, then git. It stops pending HTTP forwarding at once.
+The bash resource cancels every background process of this run and waits
+for it to end ([Processes](processes.md#life-and-disposal)). Each resource
+follows [the disposal contract](resources.md#the-resource-contract).
 
-Disposal keeps the persisted workspace. A directory resource keeps its
-files, and an in-memory resource releases its cached filesystem. A host
-deletes the data that it owns.
-
-A `use` callback must not await another `use` or `dispose` call on the same
-resource. The resource serializes those operations, so such nesting would
-wait for the callback that is already running.
+**Disposal keeps the persisted workspace.** A directory backend keeps its
+files. A memory backend releases its cached filesystem. The host owns
+removal of the data.
 
 ## Backends and limits
 
@@ -1375,12 +1363,8 @@ and authorization for external services.
 Backends perform raw filesystem I/O below the resource. They do not keep a
 second operation queue.
 
-**A new backend follows one recipe.** It implements `connect()` and a
-`WorkspaceEnv` over the shared helpers (see [The resource
-contract](#the-resource-contract)), names its own `layout`, and adds only
-the tools and the shell guidance beyond the nine tools every workspace
-already has. It passes `@ambionframework/workspace/conformance` and loads
-no just-bash.
+[Build a bash backend](#build-a-bash-backend) states the implementation
+requirements and the shared helpers.
 
 ### The null device
 

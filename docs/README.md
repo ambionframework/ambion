@@ -31,7 +31,7 @@ each page.
 | [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend                        |
 | [Patterns](patterns.md)               | The human collaboration patterns the room represents                                          |
 | [Summaries](summary.md)               | Optional closing work and context replacement                                                 |
-| [Resources](resources.md)             | The resource contract, references, and provenance                                             |
+| [Resources](resources.md)             | The resource contract, tool bundles, references, and provenance                               |
 | [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                                          |
 | [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders                   |
 | [Breakout rooms](breakout.md)         | A design: a room that an agent opens for background work                                      |
@@ -52,7 +52,7 @@ each page.
 Read `patterns.md` to find which primitive represents a human pattern.
 
 Read `resources.md` for the resource contract and `workspace.md` for the
-filesystem binding and the just-bash backends of
+workspace resources, tools, and the just-bash backends of
 `@ambionframework/just-bash`. `processes.md` is the `bash` tool, the
 background processes it starts, and `ps`. `workstation.md` is the bash
 backend for a workspace on a remote server over SSH. `git.md` is the git
