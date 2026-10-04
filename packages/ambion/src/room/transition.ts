@@ -28,9 +28,10 @@ import {
 } from './reconcile.ts';
 import { routes } from './routing.ts';
 import {
-	admitsClose,
 	admitsLease,
+	type CloseAdmission,
 	type CloseRef,
+	closeAdmission,
 	speechFreshness as freshnessRule,
 	isExpired,
 	isLive,
@@ -111,7 +112,10 @@ export type Refusal =
 	{ category: RefusalCode; reason: string } | { category: 'missed'; missed: Message[] };
 
 export type RoomDecision<K extends Kind> =
-	{ entry: ProposedEntry<K> | undefined } | { refusal: Refusal } | { unchanged: Unchanged };
+	| { entry: ProposedEntry<K> | undefined }
+	| { refusal: Refusal }
+	| { unchanged: Unchanged }
+	| (K extends 'close' ? { close: Exclude<CloseAdmission, 'admitted'> } : never);
 
 /** A write a pass asks for. `decide` builds its entry where the write lands. */
 export type ReconcileStep = EndCommand | CloseCommand | Extract<MessageCommand, { type: 'return' }>;
@@ -675,15 +679,12 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 }
 
 /**
- * The close of the exchange that the pass saw, as `admitsClose` admits it
- * where the write lands. The close names the `person` of the exchange, and
- * the configured summary writer when it has one and an agent said a message
- * inside the range.
+ * Decide the close where it lands. Name its person and any summary writer.
  */
 function closing(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'> {
 	const exchange = state.exchange;
-	if (!admitsClose(exchange, command, state.lastSeq, liveWork(state, now).exchange))
-		return { entry: undefined };
+	const admission = closeAdmission(exchange, command, state.lastSeq, liveWork(state, now).exchange);
+	if (admission !== 'admitted') return { close: admission };
 	const { from, through } = command;
 	const person = exchange?.person;
 	const reported = owesSummary(state.messages, [...state.people.keys()], from, through);

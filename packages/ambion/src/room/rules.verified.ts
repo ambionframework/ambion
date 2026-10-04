@@ -186,19 +186,25 @@ export interface CloseRef {
 	readonly through: number;
 }
 
-//@ contract A close is written only for the open exchange, at the record's last seq, with nothing of the exchange's work live.
-export function admitsClose(
+/** The admission of a close, or why the pass must leave it unwritten. */
+export type CloseAdmission = 'admitted' | 'obsolete' | 'replan';
+
+//@ contract A close admits only the current quiet exchange. A changed or live exchange requires another pass.
+export function closeAdmission(
 	open: OpenExchange | undefined,
 	close: CloseRef,
 	lastSeq: number,
 	exchangeLive: boolean,
-): boolean {
-	//@ ensures \result ==> open != undefined
-	//@ ensures open != undefined ==> (\result <==> (open.from == close.from && close.through == lastSeq && !exchangeLive))
-	//@ ensures exchangeLive ==> !\result
-	//@ ensures \result ==> close.through == lastSeq
-	if (open === undefined) return false;
-	return open.from === close.from && close.through === lastSeq && !exchangeLive;
+): CloseAdmission {
+	//@ ensures open == undefined ==> \result == 'obsolete'
+	//@ ensures open != undefined ==> (\result == 'obsolete' <==> open.from != close.from)
+	//@ ensures open != undefined ==> (\result == 'admitted' <==> (open.from == close.from && close.through == lastSeq && !exchangeLive))
+	//@ ensures open != undefined ==> (\result == 'replan' <==> (open.from == close.from && (close.through != lastSeq || exchangeLive)))
+	//@ ensures \result == 'admitted' ==> close.through == lastSeq && !exchangeLive
+	if (open === undefined) return 'obsolete';
+	if (open.from !== close.from) return 'obsolete';
+	if (close.through !== lastSeq || exchangeLive) return 'replan';
+	return 'admitted';
 }
 
 //@ contract A summary covers a close when its range contains the close's range.

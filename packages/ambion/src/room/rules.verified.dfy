@@ -40,6 +40,8 @@ datatype OpenExchange = OpenExchange(from: int)
 
 datatype CloseRef = CloseRef(from: int, through: int)
 
+datatype CloseAdmission = admitted | obsolete | replan
+
 datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int, cause: Option<string>)
 
 datatype Ending = revoked | expired | stays
@@ -216,21 +218,28 @@ lemma unreadBy_ensures(ordinarySay: bool, readThrough: Option<int>, seq_: int, e
 {
 }
 
-function admitsClose(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): bool
+function closeAdmission(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): CloseAdmission
 {
   match open {
     case Some(i_open_val) =>
-      (((i_open_val.from == close.from) && (close.through == lastSeq)) && !(exchangeLive))
+      if (i_open_val.from != close.from) then
+        CloseAdmission.obsolete
+      else
+        if ((close.through != lastSeq) || exchangeLive) then
+          CloseAdmission.replan
+        else
+          CloseAdmission.admitted
     case None =>
-      false
+      CloseAdmission.obsolete
   }
 }
 
-lemma admitsClose_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
-  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (match open { case Some(i_) => true case None => false }))
-  ensures (match open { case Some(i_open_val) => (admitsClose(open, close, lastSeq, exchangeLive) <==> (((i_open_val.from == close.from) && (close.through == lastSeq)) && !(exchangeLive))) case None => true })
-  ensures (exchangeLive ==> !(admitsClose(open, close, lastSeq, exchangeLive)))
-  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (close.through == lastSeq))
+lemma closeAdmission_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
+  ensures ((match open { case Some(i_) => false case None => true }) ==> closeAdmission(open, close, lastSeq, exchangeLive).obsolete?)
+  ensures (match open { case Some(i_open_val) => (closeAdmission(open, close, lastSeq, exchangeLive).obsolete? <==> (i_open_val.from != close.from)) case None => true })
+  ensures (match open { case Some(i_open_val) => (closeAdmission(open, close, lastSeq, exchangeLive).admitted? <==> (((i_open_val.from == close.from) && (close.through == lastSeq)) && !(exchangeLive))) case None => true })
+  ensures (match open { case Some(i_open_val) => (closeAdmission(open, close, lastSeq, exchangeLive).replan? <==> ((i_open_val.from == close.from) && ((close.through != lastSeq) || exchangeLive))) case None => true })
+  ensures (closeAdmission(open, close, lastSeq, exchangeLive).admitted? ==> ((close.through == lastSeq) && !(exchangeLive)))
 {
 }
 
