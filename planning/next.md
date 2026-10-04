@@ -14,39 +14,51 @@
 >   golden journals, and body validation catch unintended changes.
 >   A deliberate change updates the affected guards in the same commit.
 
-**0.7.0 gives agents breakout rooms: background work that a person can
-visit.** An agent opens a room for delegated work. The workers speak in a
-journal of their own. A person can visit the room at any time. Each
-closed exchange reports back to the opener once, across a restart.
-[Breakout rooms](../docs/breakout.md) owns the design. This file owns the
-work and its evidence. [The backlog](backlog.md) holds everything else.
+**0.7.0 introduces the canvas, the container of the rooms of a
+deployment, and lets an agent open a breakout room on it.** The canvas is
+the counterpart of the workspace: the workspace is the substrate where
+agents work, and the canvas is the front end where agents and people
+meet. A breakout room holds delegated work in a journal of its own. A
+person can visit it, and each closed exchange reports back to the opener
+once, across a restart. [The canvas](../docs/canvas.md) owns the design.
+This file owns the work and its evidence. [The backlog](backlog.md) holds
+everything else.
 
 ## Status
 
-**No item has started.** The owner set the theme on 2026-10-03. The scope
-proposal of 2026-10-04 passed an adversarial review with no blocker. The
-breakout decisions (BD1) come before the package.
+**No item has started.** The owner set breakout rooms as the theme on
+2026-10-03, and the canvas as their container on 2026-10-04. The canvas
+decisions (CD1) come before the package.
 
 ## The scope
 
 **The release follows one breakout room from the open to the report.**
 
 ```text
-opener -> breakout({ name, goal, agents }) -> catalog row -> startRoom -> start post
-                                                                            |
-              workers speak in the breakout journal  <- person visits ------+
-                                                                            |
-       exchange closes -> bridge reads room.read() -> keyed post to the opener
+host -> openCanvas -> canvas.resume() -> each running room resumes
+                                              |
+opener -> breakout({ name, goal, agents }) -> row -> room opens -> start post
+                                                                      |
+            workers speak in the breakout journal  <- person visits --+
+                                                                      |
+     exchange closes -> canvas reads room.read() -> keyed report to the opener
 ```
 
-- **`@ambionframework/breakout`** is the thirteenth package. It holds the
-  `breakout` and `tell` tools, the bridge, the reminder line, and the
-  `BreakoutCatalog` port.
-- **The workbench is the first host.** It stores the catalog in its
-  SQLite file and lists the breakout rooms that a person can visit.
-- **The kernel does not change for breakout rooms.** Each part that the
-  design uses exists today: the keyed `room.post`, `exchange_closed`,
-  `room.read()`, the seating, and the reminder hook.
+- **`@ambionframework/canvas`** is the thirteenth package. It holds
+  `openCanvas`, the store port with a SQLite and a memory store, the
+  `breakout` and `tell` tools, the report, the reminder, and
+  `canvas.subscribe`.
+- **The canvas owns the list of rooms.** The host opens one canvas and
+  calls `canvas.resume()`. The store replaces the room catalog of each
+  host.
+- **The workbench is the first host.** Its `workbench_rooms` table gives
+  way to the canvas store, and its room list draws the tree of the
+  canvas.
+- **The kernel does not change.** Each part that the canvas uses exists
+  today: `startRoom`, `resumeRoom`, `readRoom`, the keyed `room.post`,
+  `room.read()`, `exchange_closed`, and the reminder of a bundle.
+- **Widgets come later on the same canvas.** The design keeps their
+  shape, and no widget ships in 0.7.0.
 - **Two fixes come first.** The live tiers expect the current tool list
   (LT1). The mirror stops writing reading preferences (MR1).
 - **Supporting items** are in phase 5. Each one can drop at the release
@@ -55,27 +67,32 @@ opener -> breakout({ name, goal, agents }) -> catalog row -> startRoom -> start 
 ## Decisions taken
 
 - **Breakout rooms are the theme.** The owner named them on 2026-10-03.
+- **The canvas is the container of rooms.** The owner set it on
+  2026-10-04. One canvas holds the rooms of a deployment. Widgets belong
+  to a room of it, in a later step.
 - **No `task()` or subagent tool.** A native subagent writes no entry, so
   a crash loses its work. The executors keep their native subagents off.
-- **The bridge is the one report.** A worker `report` tool and the bridge
-  would both post to the opener, so the opener would wake twice for each
-  exchange. Step one has no `report` tool. A worker ends its exchange with
-  a `say`, and the bridge cites the range.
-- **The bridge reads closed exchanges with `room.read()`.** The
-  `exchange_closed` event carries the range only, with no outcome and no
-  usage. The bridge also runs over every closed exchange at each start,
-  because a resume seeds the heard closes from the state.
-- **A post to the workers opens the first exchange.** This is the current
-  kernel behavior, and the start post states the task.
+- **The canvas is the one reporter.** A worker has no report tool, so the
+  opener wakes once for each exchange. The report carries the last say of
+  the exchange and cites its range.
+- **The report reads closed exchanges with `room.read()`.** The
+  `exchange_closed` event carries the range only. The canvas also reports
+  over every closed exchange at each start, because a resume seeds the
+  heard closes from the state.
+- **A breakout room lives while its opener sits in a running parent.**
+  When the opener leaves, the canvas stops the room and posts its pending
+  reports with no `to`.
+- **The reminder guards a retry.** It lists the rooms of the opener, so a
+  retried activation sees the room that it opened.
 
 ## Out of scope
 
-- **The canvas (D5).** It plans a widget for a breakout room, so it comes
-  after breakout rooms exist.
+- **Widgets.** The design in [The canvas](../docs/canvas.md) keeps their
+  shape for a later release.
 - **Reads across rooms through `recall`, and an author across rooms.**
-  The opener reads a breakout room through the mirror.
-- **A depth above one, and breakout rooms on Cloudflare.**
-- **Bounds that the kernel enforces (D1).** The host bounds each open.
+  The opener reads the report, and the range through the mirror.
+- **A depth above one, and a canvas on Cloudflare.**
+- **Bounds that the kernel enforces (D1).** The canvas bounds each open.
 - **The adoptions of the harness comparison of 2026-10-04.** The owner
   decided to add none of them.
 - **Every other backlog item.**
@@ -96,32 +113,34 @@ key, except the one live run of phase 4.
 holds today. A mirror test reads a message with preferences and finds
 none in the file.
 
-### Phase 2. The breakout decisions
+### Phase 2. The canvas decisions
 
-- [ ] **1.** The owner settles the seven breakout decisions. (BD1)
+- [ ] **1.** The owner settles the open decisions of the canvas. (CD1)
 
-**Evidence:** `docs/breakout.md` states each decision, and its list of
-open decisions is empty.
+**Evidence:** `docs/canvas.md` states each decision. Its open decisions
+hold only the widget questions.
 
-### Phase 3. The breakout package
+### Phase 3. The canvas package
 
-- [ ] **1.** The package on the scripted executor. Needs phase 2. (BR1)
-- [ ] **2.** The workbench as the first host. Needs 1. (BR2)
+- [ ] **1.** The canvas and its store on the scripted executor. Needs
+      phase 2. (CV1)
+- [ ] **2.** Breakout rooms on the canvas. Needs 1. (CV2)
+- [ ] **3.** The workbench on the canvas. Needs 2. (CV3)
 
-**Evidence:** a scripted room opens a breakout room, and the opener
-receives one report for each closed exchange. A refused open names the
-bound that it broke. A person opens a breakout room from the workbench
-room list.
+**Evidence:** a scripted host opens a canvas, resumes its rooms, and an
+opener receives one report for each closed exchange of a breakout room.
+A refused open names the bound that it broke. A person visits a breakout
+room from the workbench room list.
 
-### Phase 4. The breakout evidence
+### Phase 4. The canvas evidence
 
-- [ ] **1.** The crash test and one live run. Needs phase 3. (BR3)
-- [ ] **2.** The pages and the changelog. (BR4)
+- [ ] **1.** The crash test and one live run. Needs phase 3. (CV4)
+- [ ] **2.** The pages and the changelog. (CV5)
 
 **Evidence:** the crash test stops the host at each write of the
 durability table, and no report goes missing or lands twice. One live run
 on a subscription login delegates, visits, reports, and tells.
-`docs/breakout.md` drops its design banner.
+`docs/canvas.md` drops its design banner for rooms.
 
 ### Phase 5. The supporting items
 
@@ -168,55 +187,68 @@ of the opener, so the workbench logs the failure.
 **Evidence:** a mirror test over a real room finds no `preferences` in
 the file. A workbench test with a failed attach finds the log line.
 
-**BD1. The breakout decisions.** Each decision changes the tool shape,
-the composition, or the package. The table gives the recommended choice.
+**CD1. The canvas decisions.** Each decision changes the tool shape,
+the composition, or the store. [The canvas](../docs/canvas.md#open-decisions)
+gives the recommended choice for each one.
 
-| #   | Decision                                     | Recommended                                                                                                                                  |
-| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Who may open a breakout room                 | An agent that the host gives the opener bundle. The host bounds the count for each opener (3), the depth (1), and the definitions to seat    |
-| 2   | An author across rooms                       | None in step one. A bridge post carries the label `breakout <name>:`                                                                         |
-| 3   | The name of a breakout room                  | `<parent>-<name>`, checked against the workbench bound of 48 until S1 lands                                                                  |
-| 4   | The composition of a breakout room           | No assistant, each worker at `broadcast`, an empty reserve, `seating: false`, and no summary for a visitor in step one                       |
-| 5   | A chain of scheduled says in a breakout room | A returned say opens an exchange, and the bridge reports it. The count bound does not bound the chain. Step one accepts this, and D1 owns it |
-| 6   | The place of the host part                   | The package, with a catalog port. The workbench supplies the store                                                                           |
-| 7   | A worker that ends with text and no `say`    | The text stays lost, as on every executor today. The bridge reports the exchange with no message, and the reminder shows it                  |
+| #   | Decision                                  | Recommended                                                                                                                                 |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Who may open a breakout room              | An agent that the host gives the opener bundle. The canvas bounds the count for each opener (3), the depth (1), and the definitions to seat |
+| 2   | An author across rooms                    | None in the first step. A report carries the label `breakout <name>:`                                                                       |
+| 3   | The name of a breakout room               | `<parent>-<name>`, checked against one room name rule with one length bound (S1)                                                            |
+| 4   | The composition of a breakout room        | Workers alone at `broadcast`, no assistant, an empty reserve, `seating: false`, and only definitions that the parent does not seat          |
+| 5   | A worker that ends with text and no `say` | The text stays lost, as on every executor today. The report names the exchange with no message                                              |
+| 6   | What a person can change                  | A person visits and speaks. Opening a room stays with the host and the opener bundle in the first step                                      |
 
-**BR1. The breakout package.** `@ambionframework/breakout` exports two
-bundles and the bridge.
+**CV1. The canvas and its store.** `@ambionframework/canvas` exports
+`openCanvas({ name, runtime, agents, store })`, the `CanvasStore` port,
+`sqliteCanvas`, and `memoryCanvas`. The store keeps one row for each
+room: the name, the goal, the parent, the opener, the depth, and the
+state. `canvas.open` writes the row and starts the room.
+`canvas.resume()` resumes each running room. `canvas.rooms()` and
+`canvas.subscribe` give the host the tree. A conformance suite runs over
+both stores.
 
-- **The opener bundle** holds `breakout({ name, goal, agents, to? })` and
-  `tell({ room, text, to?, refs? })`. `breakout` is idempotent by name.
-  It checks the bounds, writes the catalog row, starts the room, and
-  posts the start with the key `breakout-start:<name>`.
-- **The bridge** reads the closed exchanges of each breakout room with
+**Evidence:** tests over real rooms, a real journal, and a real SQLite
+file. A host restart finds each running room resumed. The package passes
+the export snapshot and the packaging checks.
+
+**CV2. Breakout rooms on the canvas.** `canvas.tools()` gives the opener
+bundle.
+
+- **`breakout({ name, goal, agents, to? })`** is idempotent by name. It
+  checks the bounds, writes the row, opens the room, and posts the start
+  with the key `breakout-start:<name>`.
+- **`tell({ room, text, to?, refs? })`** posts into a room that the caller
+  opened. A `tell` key lands once for one tool call.
+- **The report** reads the closed exchanges of each breakout room with
   `room.read()`. For each one, it posts one line to the opener with the
-  key `breakout:<name>:<from>`. It runs on each `exchange_closed` event
-  and over every closed exchange at each start.
-- **The reminder line** lists each open breakout room of the seat, with
-  its state, its open exchange, and the seq of its last line.
-- **`BreakoutCatalog`** is a port with one row for each room: the name,
-  the parent room, the opener, and the depth.
+  last say, cut to a byte cap, and the key `breakout:<name>:<from>`. It
+  runs on each `exchange_closed` event and over every closed exchange at
+  each start.
+- **The reminder** lists each open breakout room of the seat from the
+  store, with its state, its open exchange, and the seq of its last
+  message.
+- **The life of a room** follows its opener: when the opener leaves a
+  running parent, the canvas stops the room and posts its pending reports
+  with no `to`.
 
-A `tell` key lands once for one tool call. A retried activation makes a
-new call, so it can post again. The page states this.
+**Evidence:** tests over real rooms on the scripted executor: one report
+for each closed exchange, a refused open for each bound, a retried
+opener that finds its room in the reminder, and an opener that leaves.
 
-**Evidence:** tests over real rooms and a real journal, on the scripted
-executor. The package passes the export snapshot and the packaging
-checks.
-
-**BR2. The workbench as the first host.** The workbench implements
-`BreakoutCatalog` in its SQLite file, gives the opener bundle to the
-definitions that the host names, and resumes each breakout room at a
-start. The workbench reads its rooms from `workbench_rooms`
-(`examples/workbench/src/rooms.ts:323`). The room list of the terminal
-shows breakout rooms under their parent, so a person can visit one.
+**CV3. The workbench on the canvas.** The workbench opens one canvas over
+its SQLite file and drops `workbench_rooms`
+(`examples/workbench/src/rooms.ts:154`). It gives the opener bundle to
+the definitions that the host names. The room list of the terminal draws
+the tree of the canvas, so a person can visit a breakout room.
 
 **Evidence:** a workbench test opens a breakout room, restarts the host,
-and finds the room resumed and listed.
+and finds the room resumed and listed under its parent.
 
-**BR3. The crash test and one live run.** The claim is that a restart
+**CV4. The crash test and one live run.** The claim is that a restart
 loses no report. A scripted test stops the host after each write of the
-durability table in `docs/breakout.md`, starts it again, and counts the
+durability table in `docs/canvas.md`, starts it again, and counts the
 reports. One live run on the ChatGPT login of the owner's Mac (Codex or
 Pi): an opener delegates, a person visits, the report arrives, and the
 opener tells the workers a follow-up.
@@ -224,10 +256,11 @@ opener tells the workers a follow-up.
 **Evidence:** the crash test passes on memory and SQLite storage. This
 file records the live run: the model, the exchanges, and the outcome.
 
-**BR4. The pages and the changelog.** `docs/breakout.md` becomes the
-contract of the package and drops its design banner. `docs/README.md`
-indexes the package. The changelog names the new package, the mirror
-change, and each changed export.
+**CV5. The pages and the changelog.** `docs/canvas.md` becomes the
+contract of the package for rooms, and keeps widgets as a later step.
+`docs/README.md` and `README.md` name the canvas. The changelog names the
+new package, the workbench change, the mirror change, and each changed
+export.
 
 **Evidence:** the docs checks pass, and no page describes a surface that
 the release does not export.
@@ -252,12 +285,12 @@ over a real journal. The export snapshot, the golden journals, and the
 Cloudflare tests change in the same commit.
 
 **CR1. A closed exchange with no person renders as one line.** This is
-the first step of D2. BR3 measures the window growth of a breakout room
+the first step of D2. CV4 measures the window growth of a breakout room
 where no person speaks. If the growth matters, a closed exchange with no
 spoken message renders as one line, and `recall` still reads it. If it
 does not, the item drops.
 
-**Evidence:** the measurement from BR3. With the rule, a render test
+**Evidence:** the measurement from CV4. With the rule, a render test
 shows one line for such an exchange.
 
 **SP1. The speaking text of the room core.** The room core states the

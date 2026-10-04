@@ -138,18 +138,14 @@ The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
 
-**D5. The canvas.** Agents arrange the surface that people see. An
-agent places widgets from a catalog that the host declares, and binds
-each widget to a source: a sensor, a query, a file, a snapshot, a
-process, or a room. The host draws the widgets and keeps the data
-current with no activation. A press or a submit by a person returns to
-the room as a `visit.send` from that person. The canvas is a folder of
-the workspace, outside the journal, with a revision on each widget.
-[The canvas](../docs/canvas.md) states the design. The owner settled
-four decisions on 2026-10-03: one canvas for each room, an act as a
-`visit.send`, the workbench first, and no code from an agent. Three
-stay open. The first step adds a package and no kernel change.
-**Condition:** the owner schedules the canvas for a release.
+**D5. Widgets on the canvas.** Agents place widgets for people on the
+canvas that 0.7.0 introduces. A widget belongs to a room of the canvas
+and binds a view to a source: a sensor, a query, a file, a snapshot, a
+process, a room, or inline text. The host keeps the data current with no
+activation. A press or a submit by a person returns to the room as a
+`visit.send` from that person. [The canvas](../docs/canvas.md#widgets-a-later-step)
+states the design. **Condition:** the canvas ships, and the owner
+schedules widgets for a release.
 
 ## Considered and kept
 
