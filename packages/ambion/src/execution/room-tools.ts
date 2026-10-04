@@ -2,9 +2,10 @@
  * The room tools of one activation, and the agent's own tools, in a shape
  * that names no harness.
  *
- * Every respond activation can speak, schedule a say to itself, seat an
- * agent, remove an agent, dismiss a scheduled say, or recall messages of the
- * room by URI. A summary activation
+ * Every respond activation can speak, schedule a say to itself, dismiss a
+ * scheduled say, or recall messages of the room by URI. It can also remove an
+ * agent, unless the host turned seating off, and seat an agent, when the
+ * reserve holds one. A summary activation
  * receives only `say`; the room turns that said intent into the assigned
  * summary and supplies its recipient and range.
  *
@@ -105,8 +106,9 @@ export function roomTools(view: ActivationView, binding: RoomToolBinding): Bound
 	const tools = [
 		sayTool(binding),
 		scheduleTool(view.spec.seat, binding),
-		seatingTool(binding, 'seated'),
-		seatingTool(binding, 'unseated'),
+		// The view empties the reserve when the host turned seating off.
+		...(view.context.reserve.length > 0 ? [seatingTool(binding, 'seated')] : []),
+		...(view.context.seating === false ? [] : [seatingTool(binding, 'unseated')]),
 		dismissTool(binding),
 		recallTool(view.context.name, binding),
 	];

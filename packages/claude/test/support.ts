@@ -71,7 +71,8 @@ export function viewOf(through = 1): ActivationView {
 				},
 			],
 			exchange: { person: 'priya', from: 1 },
-			reserve: [],
+			// The reserve holds one agent, so the seat holds `seat`.
+			reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
 		},
 	};
 }

@@ -80,6 +80,7 @@ describe('room journal body validation', () => {
 				at,
 			},
 		],
+		['composition', { seating: false, seated: [seating], reserve: [], at }],
 		['run', { at }],
 		['run', { at, unread: 'extra field' }],
 		['cancel', { at }],

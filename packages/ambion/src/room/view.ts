@@ -68,6 +68,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 	const state = facts.state;
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
+	const seating = state.composition?.seating !== false;
 	// A summary reads every message through its closed exchange, background and
 	// current alike; what it covers stays fixed to its own exchange. A respond
 	// activation reads the whole record instead. The room windows that record to
@@ -89,7 +90,8 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		...(goal === undefined ? {} : { goal }),
 		participants: [...agentsOf(facts), ...peopleOf(facts)],
 		messages: messages.map(contextMessage),
-		reserve: state.reserve.map(({ name, identity }) => ({ name, identity })),
+		reserve: seating ? state.reserve.map(({ name, identity }) => ({ name, identity })) : [],
+		...(seating ? {} : { seating: false as const }),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: exchangeContext(state.exchange) }),

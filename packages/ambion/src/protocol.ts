@@ -100,8 +100,13 @@ export interface CollaborationContext {
 	readonly messages: readonly Without<Message, 'preferences'>[];
 	/** The open exchange for an ordinary response. */
 	readonly exchange?: { readonly person?: string; readonly from: Seq };
-	/** Reserve identities are available to every responding agent. */
+	/**
+	 * Reserve identities are available to every responding agent. The list is
+	 * empty when the host turned seating off.
+	 */
 	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
+	/** `false` when the host turned seating off: an agent cannot seat or unseat. Absent means on. */
+	readonly seating?: false;
 	/** Only the summary writer reads the preferences of the person it writes for. */
 	readonly preferences?: string;
 	/**

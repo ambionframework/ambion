@@ -48,6 +48,8 @@ export interface StartOptions {
 	definitions?: readonly string[];
 	seats?: Record<string, Attention>;
 	goal?: string;
+	/** `false` turns off seating for agents, as `StartRoomOptions.seating` states. */
+	seating?: boolean;
 }
 
 export interface Visitor {
@@ -141,6 +143,7 @@ export class RoomObject extends DurableObject<Env> {
 			...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
 			...(options.seats === undefined ? {} : { seats: options.seats }),
 			...(options.goal === undefined ? {} : { goal: options.goal }),
+			...(options.seating === undefined ? {} : { seating: options.seating }),
 		});
 		await this.room.read({ messages: false });
 	}

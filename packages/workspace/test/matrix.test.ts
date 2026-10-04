@@ -78,10 +78,10 @@ const twoWorkspaces: Scenario = {
 								return request === 3 ? say('beta done') : quiet();
 							},
 							gamma: (context) => {
+								// Every agent is seated, so the reserve is empty and the room offers no `seat`.
 								expect(toolNames(context)).toEqual([
 									'say',
 									'schedule',
-									'seat',
 									'unseat',
 									'dismiss',
 									'recall',

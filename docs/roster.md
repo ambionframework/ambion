@@ -62,6 +62,8 @@ checks the activation, lease, recipient, and consumed context for every write.
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
 also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
+- An activation holds `seat` only when the reserve holds an agent at its
+  start. The prompt shows the reserve under the same rule.
 - `seat` accepts a name from the definitions or the reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a person name is refused.
@@ -73,6 +75,25 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 - An unseating drops the scheduled says of that seat
   ([Exchange](exchange.md#6-a-scheduled-say)). A seating again does not bring
   them back.
+
+## Turn off seating for agents
+
+**`seating: false` removes seating from the agents of a room.** Pass it to
+`startRoom`. The default is `true`.
+
+```ts
+const room = await startRoom({ name: 'site', agents: [inspector, surveyor], seating: false });
+```
+
+- No activation holds `seat` or `unseat`, and the prompt shows no reserve.
+- The room refuses a `seated` or an `unseated` intent from a seat with
+  `This room does not let agents seat or unseat agents. Only the host can.`
+- `room.seat` and `room.unseat` work as before.
+- The composition entry records `seating: false`. A default room writes no
+  `seating` field, and a missing field reads as `true`. A resumed room keeps
+  the recorded value.
+- A `compose` call cannot bind `seat` or `unseat`. See
+  [Compose](compose.md#what-a-compose-call-binds).
 
 ## Fixed seats
 

@@ -52,6 +52,7 @@ async function open(options: {
 	available?: readonly AgentDefinition[];
 	seats?: Readonly<Record<string, Attention>>;
 	summary?: boolean;
+	seating?: boolean;
 }): Promise<Room> {
 	const definitions = [
 		...(options.agents ?? []),
@@ -68,6 +69,7 @@ async function open(options: {
 		agents: definitions,
 		seats,
 		...(options.summary ? { summaryWriter: writer.name } : {}),
+		...(options.seating === undefined ? {} : { seating: options.seating }),
 		runtime,
 		execution: piExecution({ sessions: 'memory', stream: scriptedStream(options.script) }),
 	});
@@ -126,6 +128,70 @@ describe('ordinary participation', () => {
 		expect(activated(events)).toContain('surveyor');
 		expect(activated(events)).toContain('greeter');
 		expect(await seatNames(session)).toEqual(['product', 'greeter', 'surveyor']);
+	});
+
+	it.each([
+		['an empty reserve', undefined, ['say', 'schedule', 'unseat', 'dismiss', 'recall']],
+		[
+			'an agent in the reserve',
+			surveyor,
+			['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'],
+		],
+	])(
+		'with %s, offers `seat` only when the reserve holds an agent',
+		async (_case, held, offered) => {
+			const contexts: string[] = [];
+			const tools: string[][] = [];
+			const session = await open({
+				agents: [product],
+				available: held === undefined ? [] : [held],
+				script: byAgent({
+					product: (context) => {
+						contexts.push(contextText(context));
+						tools.push(toolNames(context));
+						return quiet();
+					},
+				}),
+			});
+			await (await session.visit(priya)).send({ text: 'Who is here?' });
+			await waitForRoom(session);
+			expect(tools[0]?.filter((name) => name !== 'compose' && name !== 'describe')).toEqual(
+				offered,
+			);
+			expect(contexts[0]?.includes('The reserve: agents not in the room.')).toBe(
+				held !== undefined,
+			);
+		},
+	);
+
+	it('offers neither `seat` nor `unseat` when the host turned seating off, and the host still seats', async () => {
+		const contexts: string[] = [];
+		const tools: string[][] = [];
+		const session = await open({
+			agents: [product],
+			available: [surveyor],
+			seating: false,
+			script: byAgent({
+				product: (context) => {
+					contexts.push(contextText(context));
+					tools.push(toolNames(context));
+					return quiet();
+				},
+				surveyor: () => quiet(),
+			}),
+		});
+		await (await session.visit(priya)).send({ text: 'Who is here?' });
+		await waitForRoom(session);
+		expect(tools[0]).toEqual(['say', 'schedule', 'dismiss', 'recall', 'compose', 'describe']);
+		expect(contexts[0]).not.toContain('The reserve:');
+		// The host keeps its own seating, and the room still reads the reserve.
+		expect((await readRoom(session.name, { runtime })).reserve.map((one) => one.name)).toEqual([
+			surveyor.name,
+		]);
+		await session.seat(surveyor.name);
+		expect(await seatNames(session)).toEqual([product.name, surveyor.name]);
+		await session.unseat(surveyor.name);
+		expect(await seatNames(session)).toEqual([product.name]);
 	});
 
 	it('recalls a message of the record through the room, and the recall commits nothing', async () => {
@@ -217,6 +283,8 @@ describe('ordinary unseating and host membership', () => {
 		const contexts: string[] = [];
 		const session = await open({
 			agents: [product, surveyor],
+			// The reserve holds an agent, so the activation holds the `seat` tool.
+			available: [architect],
 			summary: true,
 			script: byAgent({
 				product: (context, _name, request) => {

@@ -63,7 +63,14 @@ const respond = (messages: Message[], through: number): ActivationView => ({
 		purpose: { kind: 'respond', message: 1 },
 	},
 	through,
-	context: { name: 'setup', now: 0, participants: [], messages, reserve: [] },
+	// The reserve holds one agent, so the seat holds `seat`.
+	context: {
+		name: 'setup',
+		now: 0,
+		participants: [],
+		messages,
+		reserve: [{ name: 'surveyor', identity: 'Surveys.' }],
+	},
 });
 
 const closing = (messages: Message[]): ActivationView => ({

@@ -95,6 +95,8 @@ describe('assistant room shorthand', () => {
 				(entry) => entry.kind === 'composition',
 			);
 			expect(composition?.body).toMatchObject({ summaryWriter: seats[0]?.name });
+			// A default room leaves seating out of its composition.
+			expect(composition?.body).not.toHaveProperty('seating');
 		},
 	);
 

@@ -318,7 +318,7 @@ function renderContext(
 		...renderSetting(view),
 		...renderLegend(context.participants),
 		renderAgents(context.participants),
-		...(view.spec.purpose.kind === 'summarize' || context.reserve === undefined
+		...(view.spec.purpose.kind === 'summarize' || context.reserve.length === 0
 			? []
 			: [``, ...renderReserve(context.reserve)]),
 		``,
