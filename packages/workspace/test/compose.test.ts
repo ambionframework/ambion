@@ -363,6 +363,8 @@ describe('the compose field of the workspace tools', () => {
 		expect(compose?.description).toContain('sql -> SqlResult');
 		expect(compose?.description).toContain('bash -> ProcessResult');
 		expect(compose?.description).toContain('wait -> WaitResult');
+		for (const tool of bundle.tools.filter((one) => one.compose !== false && one.compose?.output))
+			expect(compose?.description).toContain(`${tool.name} -> `);
 		expect(compose?.description).not.toContain('-> string');
 		expect(compose?.description).not.toContain('write ->');
 		const described = await describer?.invoke({ tools: names }, callAs('ada', { room: 'lobby' }));

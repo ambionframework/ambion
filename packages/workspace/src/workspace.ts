@@ -206,10 +206,9 @@ function capabilitiesOf(
 
 /**
  * Compose the bundle from the capabilities of the workspace. The tools keep
- * the order of the capabilities. The guidance holds the tool line, the notes
- * of each capability in order, the bash backend's note, the audit note when
- * one is set, and the rooms note when the host sets `rooms`. The tool line opens the first note, in the
- * same paragraph. The bundle's reminder merges the reminders of the
+ * the order of the capabilities. The guidance holds the notes of each
+ * capability in order, the bash backend's note, the audit note when one is
+ * set, and the rooms note when the host sets `rooms`. The bundle's reminder merges the reminders of the
  * capabilities, so it names each seat's processes.
  * When the workspace has an audit log, `audited` wraps every tool of the bundle.
  */

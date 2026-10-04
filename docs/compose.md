@@ -253,8 +253,8 @@ section that states it in full.
   use ([Compose evidence](../planning/next.md#the-compose-evidence),
   [Catalog](#the-catalog)).
 - **The description of `compose` shows no signature.** It lists each tool
-  with a typed result by the name of its result type. The model calls `describe` for the
-  signatures, and a failed compose call shows the signature of the tools
+  with a typed result by the name of its result type. The model calls
+  `describe` for the signatures, and a failed compose call shows the signature of the tools
   that it names ([Catalog](#the-catalog)).
 - **A compose call fails in workerd until a runtime for workerd
   exists.** A worker seat has both tools
@@ -274,11 +274,11 @@ Tools that code can bind, each with the type of its result: read -> ReadResult, 
 A seat with no typed tool reads `Every tool that code can bind returns
 text.` in place of the list.
 
-| The tool declares       | The line shows                                          |
-| ----------------------- | ------------------------------------------------------- |
-| An output with an `$id` | The `$id`, such as `sql -> SqlResult`.                  |
-| An output with no `$id` | `object`, `array`, or the primitive type of the output. |
-| No output               | No entry. The binding gives the text.                   |
+| The tool declares       | The line shows                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| An output with an `$id` | The `$id`, such as `sql -> SqlResult`.                                                  |
+| An output with no `$id` | `object`, `array`, or the primitive type of the output. A `string` output has no entry. |
+| No output               | No entry. The binding gives the text.                                                   |
 
 **`describe` renders the signatures on demand.** It is a counterpart of
 `compose` on every seat that has `compose`. It takes `tools`, a non-empty

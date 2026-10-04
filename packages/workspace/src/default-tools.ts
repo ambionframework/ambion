@@ -1,6 +1,5 @@
 /**
- * The neutral layer's file tools, read, write and edit, and the tool line
- * of the guidance.
+ * The neutral layer's file tools, read, write and edit.
  *
  * Every workspace gets these three tools, the four process tools
  * (`./process-tools.ts`: bash, ps, wait and cancel), and `snapshot`

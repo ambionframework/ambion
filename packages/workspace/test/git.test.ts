@@ -1,7 +1,7 @@
 /**
  * A workspace with a git backend: the `repos` and `fork` tools and their
- * texts, a clone made with `bash`, the host's `commitRef`, the tool line and
- * the order of the notes, the audit entry of a call, and a room in which a
+ * texts, a clone made with `bash`, the host's `commitRef`, the order of the
+ * notes, the audit entry of a call, and a room in which a
  * seat forks a template, clones it, edits, commits, and pushes. The backend is `justGitBackend`, reached by
  * relative path the same way as the just-bash source; its own package runs
  * the conformance cases.

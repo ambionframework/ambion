@@ -106,9 +106,9 @@ tool calls first, and to use one compose call when a result feeds a later
 call, or when the model needs a part of a large result. A single call, or a
 call whose result the model must judge before the next, goes direct. The
 guidance tells the model to call `describe` for a tool whose result has
-fields that the code reads. It tells the model to
-explore large results with compose, and to return a count or a sample. The
-description of `compose` names the same two uses.
+fields that the code reads. It tells the model to explore large results
+with compose, and to return a count or a sample. The description of
+`compose` names the same two uses.
 
 **The guidance of `compose` follows the tools of the seat.**
 `describeExecutor` builds the text from the tools of the definition. The
