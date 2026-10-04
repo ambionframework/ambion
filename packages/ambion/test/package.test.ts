@@ -11,6 +11,7 @@ import * as conformance from '../src/conformance.ts';
 import * as hosting from '../src/hosting.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME, type Seq } from '../src/index.ts';
+import * as names from '../src/names.ts';
 
 const read = async (name: string) =>
 	readFile(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
@@ -29,7 +30,13 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual(['src/index.ts', 'src/hosting.ts', 'src/conformance.ts', 'src/testing.ts']);
+	expect(built).toEqual([
+		'src/index.ts',
+		'src/hosting.ts',
+		'src/conformance.ts',
+		'src/testing.ts',
+		'src/names.ts',
+	]);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
@@ -168,4 +175,8 @@ it('names no model library: the manifest lists none, and no source file imports 
 		const models = imported.filter((name) => /^@earendil-works\/|\/pi(\/|$)/.test(name));
 		expect({ file, models }).toEqual({ file, models: [] });
 	}
+});
+
+it('exports only the name syntax and predicate from the neutral entry', () => {
+	expect(Object.keys(names).sort()).toEqual(['NAME_SYNTAX', 'isName']);
 });

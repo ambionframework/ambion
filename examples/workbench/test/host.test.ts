@@ -132,6 +132,8 @@ describe('Workbench host', () => {
 		for (const [name, goal] of [
 			['Bad Name', 'x'],
 			['9lives', 'x'],
+			['a'.repeat(49), 'x'],
+			['motors\n', 'x'],
 			['empty-goal', '   '],
 			['long-goal', 'x'.repeat(2_001)],
 		] as const)

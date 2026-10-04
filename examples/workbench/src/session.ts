@@ -5,7 +5,7 @@ import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
 import { dismissCommand } from './dismiss.ts';
 import { RoomFeed } from './feed.ts';
-import { MAX_GOAL, ROOM_NAME } from './names.ts';
+import { isRoomName, MAX_GOAL } from './names.ts';
 import {
 	holderOf,
 	type Known,
@@ -375,7 +375,7 @@ export class Session {
 	private async newRoom(argument: string): Promise<void> {
 		const [name = '', ...goal] = argument.split(/\s+/).filter(Boolean);
 		if (!name) return this.say('Name the room: /new <name> [goal]');
-		if (!ROOM_NAME.test(name))
+		if (!isRoomName(name))
 			return this.say(
 				'Use a lowercase room name, up to 48 letters, digits, or dashes, starting with a letter.',
 			);

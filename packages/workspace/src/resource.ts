@@ -1,3 +1,5 @@
+import { isName } from '@ambionframework/ambion/names';
+
 /** The stable name a backend uses for one calling agent. */
 export interface WorkspaceAgent {
 	readonly name: string;
@@ -39,7 +41,7 @@ export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 	name: string;
 	backend: ResourceBackend<Env>;
 }): WorkspaceResource<Env> {
-	if (!/^[a-z][a-z0-9-]*$/.test(options.name)) {
+	if (!isName(options.name)) {
 		throw new Error(
 			`Invalid workspace name '${options.name}': names are lowercase, alphanumeric plus dashes.`,
 		);

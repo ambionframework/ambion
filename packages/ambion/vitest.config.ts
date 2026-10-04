@@ -25,11 +25,11 @@ export const journalConformance = fileURLToPath(
 /**
  * The core's tests build rooms with the Pi executor, so they read its source
  * by relative path. The Pi source names the core by its package name, and
- * these two aliases send that name to the core's own source: one room must
- * be one module. The hosting entry comes first because a string alias
- * matches by prefix.
+ * the aliases send that name to the core's own source: one room must
+ * be one module. The root alias matches only the bare package name.
  */
 export const core = fileURLToPath(new URL('./src/index.ts', import.meta.url));
+export const names = fileURLToPath(new URL('./src/names.ts', import.meta.url));
 export const hosting = fileURLToPath(new URL('./src/hosting.ts', import.meta.url));
 /** The Pi test entry reads the verbs of the core test entry by the same name. */
 export const testing = fileURLToPath(new URL('./src/testing.ts', import.meta.url));
@@ -39,7 +39,8 @@ export default defineConfig({
 		alias: [
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
-			{ find: '@ambionframework/ambion', replacement: core },
+			{ find: '@ambionframework/ambion/names', replacement: names },
+			{ find: /^@ambionframework\/ambion$/, replacement: core },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

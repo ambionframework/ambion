@@ -8,7 +8,8 @@
  * forms. A workspace makes a snapshot and keeps its bytes, and its git
  * backend holds the commit.
  */
-import { assertRoomName, isName } from './define.ts';
+import { assertRoomName } from './define.ts';
+import { isName } from './names.ts';
 import type { Seq } from './types.ts';
 
 /** The most refs one message carries, and the most characters one ref has. */

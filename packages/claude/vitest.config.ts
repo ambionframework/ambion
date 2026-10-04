@@ -14,7 +14,7 @@ const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
 	resolve: {
-		// A string alias matches by prefix, so the subpaths come before the bare name.
+		// The root alias matches only the bare package name.
 		alias: [
 			{
 				find: '@ambionframework/ambion/conformance',
@@ -22,7 +22,8 @@ export default defineConfig({
 			},
 			{ find: '@ambionframework/ambion/testing', replacement: source('../ambion/src/testing.ts') },
 			{ find: '@ambionframework/ambion/hosting', replacement: source('../ambion/src/hosting.ts') },
-			{ find: '@ambionframework/ambion', replacement: source('../ambion/src/index.ts') },
+			{ find: '@ambionframework/ambion/names', replacement: source('../ambion/src/names.ts') },
+			{ find: /^@ambionframework\/ambion$/, replacement: source('../ambion/src/index.ts') },
 			{
 				find: '@ambionframework/journal/conformance',
 				replacement: source('../journal/src/conformance.ts'),

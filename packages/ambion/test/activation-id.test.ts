@@ -32,7 +32,7 @@ describe('activation id codec', () => {
 	it.each([
 		{ position: 0 },
 		{ seat: 'Alpha' },
-		{ seat: 'alpha\n' },
+		...['\n', '\r', '\r\n', '\u2028', '\u2029'].map((end) => ({ seat: `alpha${end}` })),
 		{ attempt: 0 },
 		{ position: Number.MAX_SAFE_INTEGER + 1 },
 	])('rejects an invalid value when encoding: %j', (change) => {

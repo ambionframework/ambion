@@ -44,11 +44,11 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
+		"@ambionframework/ambion": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
 		"ssh2": "^1.17.0"
 	},
 	"devDependencies": {
-		"@ambionframework/ambion": "workspace:*",
 		"@types/ssh2": "^1.15.6",
 		"tsdown": "^0.23.0",
 		"typescript": "^7.0.2",

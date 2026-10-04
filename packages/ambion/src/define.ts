@@ -30,6 +30,7 @@ import {
 import { assertMacros, macrosOf } from './compose-macros.ts';
 import { composeGuidance, composeTools } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
+import { isName } from './names.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -569,13 +570,6 @@ function isExecutionMode(value: unknown): value is ToolConcurrency | undefined {
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 	return typeof value === 'object' && value !== null;
-}
-
-const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
-
-/** Whether a value is a name the room can address. */
-export function isName(value: unknown): value is string {
-	return typeof value === 'string' && NAME_PATTERN.test(value);
 }
 
 function assertName(name: unknown): asserts name is string {

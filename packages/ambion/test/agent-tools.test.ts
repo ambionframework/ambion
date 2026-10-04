@@ -64,7 +64,7 @@ function tool(name: string, execute: (ctx: ToolContext) => string = () => 'done'
 const worker = (options: Partial<PiOptions>) => scriptedAgent('worker', 'Worker.', options);
 
 describe('the definition of agent tools', () => {
-	it.each(['reader\n', 'reader\r\n', 12, undefined])(
+	it.each(['reader\n', 'reader\r', 'reader\r\n', 'reader\u2028', 'reader\u2029', 12, undefined])(
 		'rejects participant names that are not exact lowercase identifiers: %j',
 		(name) => {
 			const agent = {

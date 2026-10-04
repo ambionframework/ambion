@@ -12,7 +12,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * type-checker.
  */
 export const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
-/** Aliased ahead of the bare package name: a string alias matches by prefix. */
+export const names = fileURLToPath(new URL('../ambion/src/names.ts', import.meta.url));
+/** The hosting entry. The root alias matches only the bare package name. */
 export const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.meta.url));
 export const conformance = fileURLToPath(new URL('../ambion/src/conformance.ts', import.meta.url));
 export const testing = fileURLToPath(new URL('../ambion/src/testing.ts', import.meta.url));
@@ -27,7 +28,8 @@ export default defineConfig({
 			{ find: '@ambionframework/ambion/conformance', replacement: conformance },
 			{ find: '@ambionframework/ambion/testing', replacement: testing },
 			{ find: '@ambionframework/ambion/hosting', replacement: hosting },
-			{ find: '@ambionframework/ambion', replacement: core },
+			{ find: '@ambionframework/ambion/names', replacement: names },
+			{ find: /^@ambionframework\/ambion$/, replacement: core },
 			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],

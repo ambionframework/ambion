@@ -10,6 +10,7 @@
  * forced command exists.
  */
 
+import { NAME_SYNTAX } from '@ambionframework/ambion/names';
 import { type RepositoryRegistration, registerRepositories } from '@ambionframework/workspace/git';
 import type { GitAccount } from './git-account.ts';
 import { runIn } from './git-account.ts';
@@ -37,7 +38,7 @@ function serveScript(root: string): string {
 		'#!/usr/bin/env bash',
 		'set -euo pipefail',
 		'agent="$1"',
-		`re="^(git-upload-pack|git-receive-pack) '/?([a-z][a-z0-9-]*)/([a-z0-9][a-z0-9._-]{0,63})'$"`,
+		`re="^(git-upload-pack|git-receive-pack) '/?(${NAME_SYNTAX})/([a-z0-9][a-z0-9._-]{0,63})'$"`,
 		`[[ "\${SSH_ORIGINAL_COMMAND:-}" =~ $re ]] || { echo 'ambion: refused' >&2; exit 1; }`,
 		`service="\${BASH_REMATCH[1]}" namespace="\${BASH_REMATCH[2]}" name="\${BASH_REMATCH[3]}"`,
 		`repo="$HOME/${root}/$namespace/$name.git"`,

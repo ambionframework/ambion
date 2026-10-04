@@ -30,6 +30,16 @@ const room = await startRoom({
 });
 ```
 
+**Names use one syntax.** Room, participant, workspace, and repository
+namespace names start with a lowercase ASCII letter. Later characters are
+lowercase ASCII letters, digits, or dashes.
+
+**The neutral entry exports `isName` and `NAME_SYNTAX`.** `isName` checks the
+complete string and rejects whitespace and line terminators. It has no length limit.
+The workbench limits room names to 48 characters. `NAME_SYNTAX` exports the
+unanchored pattern source for composition. Both exports come from
+`@ambionframework/ambion/names`.
+
 `name` identifies the agent inside the room and on the journal. `identity` is
 public roster text. `executor` names the loop the agent runs on and its
 configuration. `pi`, `claude`, and `codex` are the executors that ship; see
