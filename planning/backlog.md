@@ -14,17 +14,17 @@ items that the pruning of 2026-10-03 removed.
 the first item comes first. An item whose condition holds moves to the
 top of its section.
 
-| Section                                       | Items     | First item                               |
-| --------------------------------------------- | --------- | ---------------------------------------- |
-| [The 0.7.0 theme](#the-070-theme)             | B1        | B1, breakout rooms                       |
-| [Pending decisions](#pending-decisions)       | Q1        | Q1, the `assistant` option               |
-| [Known defects](#known-defects)               | F1        | F1, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | R1        | R1, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1        | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | S1, S4–S7 | S1, one name rule                        |
-| [Designs with a shape](#designs-with-a-shape) | D1–D5     | D1, bounds on unattended work            |
-| [Considered and kept](#considered-and-kept)   | None      | None                                     |
-| [Deferred by decision](#deferred-by-decision) | None      | None                                     |
+| Section                                       | Items | First item                               |
+| --------------------------------------------- | ----- | ---------------------------------------- |
+| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                       |
+| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option               |
+| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard      |
+| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one       |
+| [Rules and proofs](#rules-and-proofs)         | P1    | P1, `returnable` into the verified rules |
+| [Simplification](#simplification)             | S6–S7 | S6, resource documentation               |
+| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work            |
+| [Considered and kept](#considered-and-kept)   | None  | None                                     |
+| [Deferred by decision](#deferred-by-decision) | None  | None                                     |
 
 ## The 0.7.0 theme
 
@@ -132,16 +132,12 @@ concept goes when another concept already carries its meaning. The rank is
 the concepts removed times the confidence (high 3, medium 2, low 1).
 The changelog and the git history record completed reductions.
 
-| ID  | Finding                                                         | Evidence                                                                                                                                                                                  | Rank |
-| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| S1  | One name rule is written six times                              | Core: `NAME_PATTERN`, `SEAT`. Workspace: the literal in `resource.ts`, `NAMESPACE`. Workstation: the serve pattern. Workbench: `ROOM_NAME`, with a bound of 48 that the core does not set | 6    |
-| S4  | One in-doubt append is written four times                       | Cancel, arrival, departure, and stop each keep a promise and a key in `room-run/`. One keyed single-flight helper serves all four                                                         | 6    |
-| S5  | A package import sets the default execution of its kind         | `defaults` in `execution/route.ts` is module state, and resolution reads three tiers. The one value in the definitions that is not a value                                                | 6    |
-| S6  | `resources.md` overlaps `workspace.md` and states a false count | `resources.md` says "two bindings"; seven backend factories exist                                                                                                                         | 3    |
-| S7  | "Envelope" has three meanings                                   | `envelope.md`, `durability.md`, `formal.md`                                                                                                                                               | 3    |
+| ID  | Finding                                                         | Evidence                                                          | Rank |
+| --- | --------------------------------------------------------------- | ----------------------------------------------------------------- | ---- |
+| S6  | `resources.md` overlaps `workspace.md` and states a false count | `resources.md` says "two bindings"; seven backend factories exist | 3    |
+| S7  | "Envelope" has three meanings                                   | `envelope.md`, `durability.md`, `formal.md`                       | 3    |
 
-**S4 changes nothing that a host sees.** It stays inside `room-run/`.
-S5 changes the quickstart. S6 and S7 change only pages.
+**S6 and S7 change only pages.**
 
 ## Designs with a shape
 

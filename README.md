@@ -34,7 +34,7 @@ export ANTHROPIC_API_KEY=...
 ```ts
 import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { memoryBackend } from '@ambionframework/just-bash';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 
 const workspace = openWorkspace({ name: 'lab', backend: { bash: memoryBackend() } });
@@ -54,7 +54,12 @@ const design = defineAgent({
 });
 
 const priya = definePerson({ name: 'priya', identity: 'Designs the test bench.' });
-const room = await startRoom({ name: 'lab', goal: 'Choose a part.', agents: [datasheets, design] });
+const room = await startRoom({
+  name: 'lab',
+  goal: 'Choose a part.',
+  agents: [datasheets, design],
+  execution: piExecution(),
+});
 
 try {
   const visit = await room.visit(priya);
@@ -82,8 +87,8 @@ harness. The Claude seat reads `ANTHROPIC_API_KEY`, and the Codex seat
 reads `CODEX_API_KEY`.
 
 ```ts
-import { claude } from '@ambionframework/claude';
-import { codex } from '@ambionframework/codex';
+import { claude, claudeExecution } from '@ambionframework/claude';
+import { codex, codexExecution } from '@ambionframework/codex';
 
 const reviewer = defineAgent({
   name: 'reviewer',
@@ -102,6 +107,9 @@ const experiments = defineAgent({
   }),
 });
 ```
+
+Pass `[piExecution(), claudeExecution(), codexExecution()]` as `execution`
+when the room includes all three executor kinds.
 
 The room seats every agent at `broadcast` by default. Pass `seats` to choose
 another attention; see [Roster](docs/roster.md#configuration).

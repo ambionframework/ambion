@@ -27,6 +27,7 @@ const room = await startRoom({
   name: 'delivery',
   agents: [researcher, editor],
   summaryWriter: 'editor',
+  execution: piExecution(),
 });
 ```
 

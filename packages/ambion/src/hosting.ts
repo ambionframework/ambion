@@ -7,11 +7,9 @@
  * side the room calls back. An `Execution` connects one to the other: its
  * connector returns the port of each seat. `localExecution` builds the
  * execution of one executor kind, whose port is an `AgentRunner` in this
- * process. `defineExecution` defines an executor kind: the executions of
- * one kind by options, and the default of that kind. An executor package
- * calls it once. A host that puts the seats somewhere else writes an
- * execution whose port crosses the boundary, and runs an `AgentRunner`
- * there.
+ * process. A host supplies each execution to its runtime or room. A remote
+ * host builds an execution whose port crosses the boundary, and runs an
+ * `AgentRunner` there.
  * `@ambionframework/cloudflare` is one such host.
  *
  * Every shape a call carries is plain data, because a remote port
@@ -47,7 +45,7 @@ export type {
 } from './execution/contract.ts';
 export { classifyCause, failedPass, PermanentError, providerMessage } from './execution/failure.ts';
 export { ROOM_SERVER, toolContext } from './execution/room-tools.ts';
-export { defineExecution, localExecution } from './execution/route.ts';
+export { localExecution } from './execution/route.ts';
 export { AgentRunner } from './execution/runner.ts';
 export type { ConnectorRequest, Execution, ExecutionHost, SeatContext } from './host/runtime.ts';
 export { hostingOf, runningRoom } from './host/runtime.ts';

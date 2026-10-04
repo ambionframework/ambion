@@ -1,6 +1,6 @@
 /**
  * How a room finds the execution for a seat. An execution of a room or a
- * runtime runs before a default. One router serves each seat on the first
+ * runtime is supplied explicitly. One router serves each seat on the first
  * execution for its executor kind, and an execution with no kind serves
  * every kind. A room with no execution still runs its people and its
  * record. A seat whose kind no execution serves fails at once and for good,
@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { pi, piExecution, type StreamFn } from '../../pi/src/index.ts';
 import {
 	type ActivationOpener,
-	defineExecution,
 	type Execution,
 	hostingOf,
 	localExecution,
@@ -51,21 +50,8 @@ function stub(connected: string[] = [], kind?: string) {
 	return { counts, execution };
 }
 
-/** An executor whose sessions never run a pass: the stub of a default counts only its builds. */
+/** An executor whose sessions never run a pass. */
 const idle: ActivationOpener = () => ({ pass: async () => ({ failed: false }) });
-
-/** A default of `kind`, defined the way an executor package defines one, that counts its builds. */
-function defaultOf(kind: string) {
-	const counts = { built: 0, connected: 0 };
-	defineExecution(kind, () => {
-		counts.built += 1;
-		return () => {
-			counts.connected += 1;
-			return idle;
-		};
-	});
-	return counts;
-}
 
 function seat(kind: string, name = 'worker') {
 	const executor: Executor = { kind, instructions: 'answer', tools: [] };
@@ -80,43 +66,50 @@ async function ask(options: Parameters<typeof startRoom>[0]) {
 }
 
 describe('the execution a room chooses', () => {
-	// The defaults register as the suite loads, so each case sees the same known kinds.
-	const once = defaultOf('stub-once');
-	const overridden = {
-		room: defaultOf('stub-room-override'),
-		runtime: defaultOf('stub-runtime-override'),
-	};
-
-	it('runs the default of the kind when the host passes none, and builds it once per runtime', async () => {
-		const defaults = once;
-		// An execution that localExecution builds does not change the default of its kind.
-		let local = 0;
-		localExecution('stub-once', () => {
-			local += 1;
+	it('keeps execution construction apart from routing and builds each supplied value once per room', async () => {
+		let unusedBuilds = 0;
+		localExecution('stub', () => {
+			unusedBuilds += 1;
 			return () => idle;
 		});
-		const runtime = createRuntime();
-		await ask({ name: roomName('once-a'), agents: [seat('stub-once')], runtime });
-		await ask({ name: roomName('once-b'), agents: [seat('stub-once')], runtime });
-		await vi.waitFor(() => expect(defaults.connected).toBeGreaterThan(1));
-		expect(defaults.built).toBe(1);
-		expect(local).toBe(0);
+		const shared = stub([], 'stub');
+		const runtime = createRuntime({ execution: shared.execution });
+		for (const label of ['a', 'b']) {
+			await ask({
+				name: roomName(`explicit-${label}`),
+				agents: [seat('stub', 'first'), seat('stub', 'second')],
+				runtime,
+			});
+		}
+		expect(shared.counts).toEqual({ built: 2, connected: 4 });
+		expect(unusedBuilds).toBe(0);
+	});
+
+	it.each(['room', 'runtime'] as const)('runs the execution supplied to the %s', async (owner) => {
+		const explicit = stub();
+		await ask({
+			name: roomName(owner),
+			agents: [seat('stub')],
+			runtime: createRuntime(owner === 'runtime' ? { execution: explicit.execution } : {}),
+			...(owner === 'room' ? { execution: explicit.execution } : {}),
+		});
+		expect(explicit.counts).toEqual({ built: 1, connected: 1 });
 	});
 
 	it.each(['room', 'runtime'] as const)(
-		'runs the execution of the %s and not the default',
+		'uses the first matching execution of the %s, including a wildcard',
 		async (owner) => {
-			const kind = `stub-${owner}-override`;
-			const defaults = overridden[owner];
-			const explicit = stub();
+			const first = stub();
+			const later = stub([], 'stub');
+			const execution = [first.execution, later.execution];
 			await ask({
-				name: roomName(kind),
-				agents: [seat(kind)],
-				runtime: createRuntime(owner === 'runtime' ? { execution: explicit.execution } : {}),
-				...(owner === 'room' ? { execution: explicit.execution } : {}),
+				name: roomName(`first-${owner}`),
+				agents: [seat('stub')],
+				runtime: createRuntime(owner === 'runtime' ? { execution } : {}),
+				...(owner === 'room' ? { execution } : {}),
 			});
-			await vi.waitFor(() => expect(explicit.counts.connected).toBeGreaterThan(0));
-			expect(defaults).toEqual({ built: 0, connected: 0 });
+			expect(first.counts).toEqual({ built: 1, connected: 1 });
+			expect(later.counts).toEqual({ built: 0, connected: 0 });
 		},
 	);
 
@@ -128,33 +121,50 @@ describe('the execution a room chooses', () => {
 			name: roomName('routes'),
 			agents: [seat('pi', 'pilot'), seat('claude', 'sonnet')],
 			runtime: createRuntime({ execution: stub(shadowed, 'pi').execution }),
-			execution: [stub(pi, 'pi').execution, stub(claude, 'claude').execution],
+			execution: [stub(pi, 'pi').execution, stub(claude).execution],
 		});
 		await vi.waitFor(() => expect([...pi, ...claude]).toEqual(['pilot', 'sonnet']));
 		expect(shadowed).toEqual([]);
 	});
 
 	const other = () => stub([], 'pi').execution;
-	const missing = (kind: string) =>
-		`No execution serves seat 'worker' of kind '${kind}'. Load the executor package of the kind, or pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: pi, stub-once, stub-room-override, stub-runtime-override.`;
+	const missing = (kind: string, known = 'pi') =>
+		`No execution serves seat 'worker' of kind '${kind}'. Pass an \`execution\` of the kind, such as \`piExecution()\` from @ambionframework/pi, to startRoom or createRuntime. Known kinds: ${known}.`;
 	const reason = missing('claude');
 	it.each([
-		{ router: 'an execution of another kind on the room', kind: 'claude', room: other(), reason },
+		{
+			router: 'an execution of another kind on the room',
+			kind: 'claude',
+			room: other(),
+			reason,
+			before: false,
+		},
 		{
 			router: 'an execution of another kind on the runtime',
 			kind: 'claude',
 			runtime: other(),
 			reason,
+			before: false,
 		},
 		{
-			router: 'the defaults',
-			kind: 'none',
-			reason: missing('none'),
+			router: 'a runtime created after execution construction',
+			kind: 'pi',
+			reason: missing('pi', 'none'),
+			before: false,
+		},
+		{
+			router: 'a runtime created before execution construction',
+			kind: 'pi',
+			reason: missing('pi', 'none'),
+			before: true,
 		},
 	])(
 		'fails the activation at once and for good when $router serves no execution for the kind',
-		async ({ kind, room: own, runtime: shared, reason }) => {
+		async ({ kind, room: own, runtime: shared, reason, before: useBefore }) => {
 			const clock = fakeClock();
+			const before = createRuntime({ clock });
+			// Importing Pi and building another execution cannot configure either runtime.
+			piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 			const runtime = createRuntime({
 				clock,
 				...(shared === undefined ? {} : { execution: shared }),
@@ -163,7 +173,7 @@ describe('the execution a room chooses', () => {
 				await startRoom({
 					name: roomName('no-execution'),
 					agents: [seat(kind)],
-					runtime,
+					runtime: useBefore ? before : runtime,
 					...(own === undefined ? {} : { execution: own }),
 				}),
 			);

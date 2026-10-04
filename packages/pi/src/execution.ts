@@ -1,6 +1,6 @@
 /** The Pi execution: Pi's model services and one Pi executor for each seat. */
 
-import { defineExecution } from '@ambionframework/ambion/hosting';
+import { localExecution } from '@ambionframework/ambion/hosting';
 import { createPiOpener } from './executor.ts';
 import { createExecutionServices, type PiExecutionOptions } from './services.ts';
 
@@ -8,15 +8,16 @@ import { createExecutionServices, type PiExecutionOptions } from './services.ts'
  * The Pi execution for a runtime or a room. Pass it as `execution` to
  * `createRuntime`, `startRoom` or `resumeRoom`. The runtime supplies its
  * clock when it builds the connector. It serves the
- * seats of kind `pi`. It does not change the default of that kind. Loading
- * the package defines that default, with no options.
+ * seats of kind `pi`.
  */
-export const piExecution = defineExecution<PiExecutionOptions>('pi', (host, options = {}) => {
-	const services = createExecutionServices(options);
-	return (request) =>
-		createPiOpener({
-			...services,
-			definition: request.definition,
-			now: () => host.clock.now(),
-		});
-});
+export function piExecution(options: PiExecutionOptions = {}) {
+	return localExecution('pi', (host) => {
+		const services = createExecutionServices(options);
+		return (request) =>
+			createPiOpener({
+				...services,
+				definition: request.definition,
+				now: () => host.clock.now(),
+			});
+	});
+}

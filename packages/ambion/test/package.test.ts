@@ -89,7 +89,6 @@ it('exports exactly the wire and the hosting escape hatch, and nothing an applic
 		'PermanentError',
 		'ROOM_SERVER',
 		'classifyCause',
-		'defineExecution',
 		'describeExecutor',
 		'executorOfKind',
 		'failedPass',

@@ -18,7 +18,7 @@ the executor that you pick.
 ```ts
 import { startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
-import { pi } from '@ambionframework/pi';
+import { pi, piExecution } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
   instructions: 'Prefer small, reversible changes.',
@@ -32,13 +32,15 @@ await startRoom({
   assistant,
   agents: [builder, reviewer],
   seats: { builder: 'named', reviewer: 'named' },
+  execution: piExecution(),
 });
 ```
 
-To run the assistant on Codex, change only the function:
+To run the assistant on Codex, change the function and supply
+`codexExecution()` in the room or runtime:
 
 ```ts
-import { codex } from '@ambionframework/codex';
+import { codex, codexExecution } from '@ambionframework/codex';
 
 const assistant = defineAssistant({
   instructions: 'Prefer small, reversible changes.',

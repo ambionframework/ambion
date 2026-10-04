@@ -317,12 +317,13 @@ started. Set `rooms: true` on `openWorkspace` as well, so the guidance
 of each seat names the mirror.
 
 ```ts
+import { piExecution } from '@ambionframework/pi';
 import { startRoom } from '@ambionframework/ambion';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/just-bash';
 
 const site = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
-const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
+const session = await startRoom({ name: 'lobby', agents: [/* ... */], execution: piExecution() });
 
 const mirror = await site.mirror(session);
 // later, on shutdown:

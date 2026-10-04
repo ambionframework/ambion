@@ -1,6 +1,6 @@
 /**
- * The default provider runtime. A room of Pi agents with no `execution` runs
- * on `piExecution()`, which resolves each model id and streams through the
+ * The provider runtime. A room of Pi agents runs
+ * on the supplied `piExecution()`, which resolves each model id and streams through the
  * built-in catalog. The mock wraps the real catalog: it counts the builds, can
  * fail one, and answers every stream and the `scripted` provider with a
  * scripted stream. A real stream needs a key and a network.
@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'v
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
 import { stopAtEnd } from '../../ambion/test/support/stop.ts';
+import { piExecution } from '../src/execution.ts';
 import type { StreamFn } from '../src/models.ts';
 import { stubModel } from '../src/services.ts';
 import { defaultSessionDir } from '../src/sessions.ts';
@@ -66,12 +67,14 @@ afterAll(async () => {
 });
 
 describe('default provider runtime', () => {
-	it('runs a room of Pi agents with no execution option, and keeps its sessions in the OS temporary directory of the user', async () => {
+	it('runs a room of Pi agents with piExecution(), and keeps its sessions in the OS temporary directory of the user', async () => {
 		catalog.stream = scriptedStream((_context, _agent, request) =>
 			request === 1 ? say('42') : quiet(),
 		);
 		const name = roomName('pi-default');
-		const room = stopAtEnd(await startRoom({ name, agents: [scriptedAgent('worker')] }));
+		const room = stopAtEnd(
+			await startRoom({ name, agents: [scriptedAgent('worker')], execution: piExecution() }),
+		);
 		const visit = await room.visit(andrei);
 		const exchange = await visit.send({ text: 'What is the answer?' });
 		const messages = await exchange.waitForClose();

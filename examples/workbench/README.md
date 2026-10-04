@@ -249,9 +249,9 @@ of the terminal shows the executor kind beside each agent name.
 
 The workspace, lab, and instrument tools reach every seat as tool bundles.
 `src/rooms.ts` passes a list of three executions, one for each executor
-kind. It passes them because it checks keys, sets the environment, and
-lets a test script an executor. A room with no such
-need takes the default execution of each executor kind.
+kind. Each execution checks keys, sets the environment, and
+lets a test script an executor. Every host supplies the execution for each
+kind through the room or runtime.
 
 ### One tool set, one filesystem, no native tool
 

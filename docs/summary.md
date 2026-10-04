@@ -43,6 +43,7 @@ const room = await startRoom({
   agents: [inventory, scheduling, editor],
   summaryWriter: 'editor',
   seats: { inventory: 'broadcast', scheduling: 'broadcast', editor: 'broadcast' },
+  execution: piExecution(),
 });
 ```
 

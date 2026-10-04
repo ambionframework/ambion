@@ -96,11 +96,10 @@ try {
 }
 ```
 
-**A room with no `execution` uses the default Claude execution.** A host that sets `env`, a config root, or an executable path
-passes `claudeExecution(options)`. It passes it to a room or to
-`createRuntime`. A room whose seats run on more than one executor kind passes a
-list, such as `[piExecution(), claudeExecution()]`. It passes none when the package of each
-executor kind is loaded.
+**Pass `claudeExecution()` as `execution` to a room or runtime.** A host
+that sets `env`, a config root, or an executable path passes
+`claudeExecution(options)`. A room with several executor kinds takes a
+list, such as `[piExecution(), claudeExecution()]`.
 
 ## Options
 
@@ -230,7 +229,7 @@ binary with `ANTHROPIC_API_KEY`.
 
 ## Troubleshooting
 
-- **`no_execution`.** No loaded package serves the kind of the seat. Import the executor package.
+- **`no_execution`.** No supplied execution serves the kind of the seat. Pass `claudeExecution()` to the room or runtime.
 - **The model cannot see `Bash`.** A Claude seat has no built-in tool. Give it a workspace bundle.
 - **Abandoned after one attempt with an authentication text.** Check
   `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. The sign-in of
