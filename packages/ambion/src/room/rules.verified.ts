@@ -78,6 +78,13 @@ function expired(expiry: number, now: number): boolean {
 	return expiry <= now;
 }
 
+//@ contract A scheduled say returns only when due and its seat is on the roster. With the seat still on the roster, an eligible say stays eligible as time advances.
+export function returnable(due: number, now: number, onRoster: boolean): boolean {
+	//@ ensures \result <==> due <= now && onRoster
+	//@ ensures \result ==> forall(later, now <= later ==> returnable(due, later, onRoster))
+	return due <= now && onRoster;
+}
+
 //@ contract A lease covers an entry while it attempts work, and every earlier entry with it.
 export function coversAttempt(lease: RuleLease, seq: number): boolean {
 	//@ ensures lease.phase == 'running' ==> \result

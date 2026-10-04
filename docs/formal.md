@@ -7,11 +7,11 @@ contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
 stale. Three files hold every rule:
 
-| File                                                                                                    | Concern                                                                                                                          | Obligations                   |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                  | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close | 78, and 39 in its proofs file |
-| [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                  | 2                             |
+| File                                                                                                    | Concern                                                                                                                                                | Obligations                   |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                   | The fence, the key, the seq counter, the cursor                                                                                                        | 12, and 23 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)           | The lease fold, the admissions, the grant, the retry, the unread lines of a commit, the opening question, the verdict, the close, the scheduled return | 80, and 39 in its proofs file |
+| [`packages/ambion/src/execution/rules.verified.ts`](../packages/ambion/src/execution/rules.verified.ts) | The read position after an own seating, unseating, or dismissal                                                                                        | 2                             |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, seating changes,
@@ -227,8 +227,8 @@ made internal or deleted.
 
 ## 6. What LemmaScript 0.6.1 lowers
 
-**A rule stays inside these rows.** Each row was checked with `lsc gen`
-and `dafny verify` on this repository.
+**The table states which constructs LemmaScript can verify.** Each row
+was checked with `lsc gen` and `dafny verify` on this repository.
 
 | Construct                                                   | Result                                                                                                           |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -250,7 +250,7 @@ and `dafny verify` on this repository.
 | An import of a rule from another verified file              | Verifies when a body calls it; a call only inside a contract does not resolve                                    |
 | `switch` over a named string union                          | Verifies                                                                                                         |
 | The literal `'none'` as a return value                      | Lowers to `Option.None`; a scale returns a number                                                                |
-| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the envelope                                                                                             |
+| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the proof scope                                                                                          |
 
 ## 7. What the proofs say, and what they do not
 
@@ -323,6 +323,7 @@ found no such rule.
 | `coversExchange`       | A second summary entry, and the summaries that the room owes                 |
 | `summaryVerdict`       | The summaries that the room owes                                             |
 | `openingQuestion`      | The open exchange that a close entry closes                                  |
+| `returnable`           | The returned post that the planner selects and the commit writes             |
 | `exchangeLive`         | A close entry                                                                |
 | `closeAdmission`       | A close entry                                                                |
 | `unreadBy`             | The unread lines of a commit answer, and so the read position of a say       |

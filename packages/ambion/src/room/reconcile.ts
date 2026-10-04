@@ -23,8 +23,9 @@ import {
 	exchangeLive,
 	isExpired,
 	isLive,
+	returnable,
 } from './rules.verified.ts';
-import { returnable, returnsAt } from './scheduled.ts';
+import { returnsAt } from './scheduled.ts';
 
 export interface ReconcileOptions {
 	now: number;
@@ -265,7 +266,15 @@ function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
  * the roster waits: the room returns it when the seat takes its seat again.
  */
 function dueSays(state: RoomState, now: number): Seq[] {
-	return state.scheduled.filter((say) => returnable(say, state.roster, now)).map((say) => say.seq);
+	return state.scheduled
+		.filter((say) =>
+			returnable(
+				returnsAt(say),
+				now,
+				state.roster.some((seat) => seat.name === say.seat),
+			),
+		)
+		.map((say) => say.seq);
 }
 
 function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefined {

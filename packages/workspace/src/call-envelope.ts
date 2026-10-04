@@ -12,7 +12,7 @@ export interface CallEnvelope {
 	readonly exchange?: { readonly person?: string; readonly from: number };
 }
 
-/** The envelope of the call that `ctx` describes. */
+/** The provenance of the call that `ctx` describes. */
 export function callEnvelope(ctx: ToolContext): CallEnvelope {
 	return {
 		agent: ctx.agent.name,

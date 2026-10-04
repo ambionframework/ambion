@@ -86,6 +86,63 @@ const quietQuestion: RoomEntry = { ...question, body: { ...question.body, wakes:
 const claimed = () => replayState([composition, person, question, running], options);
 
 describe('the room runs the verified rules', () => {
+	it.each(['plan', 'write'] as const)(
+		'returns a scheduled say in the %s only as returnable answers',
+		(path) => {
+			const state = replayState(
+				[
+					composition,
+					{
+						kind: 'message',
+						seq: 2,
+						body: {
+							kind: 'said',
+							at,
+							from: 'product',
+							to: 'product',
+							text: 'Later.',
+							delaySeconds: 60,
+						},
+					},
+				],
+				options,
+			);
+			const due = now + 60_000;
+			const run = () =>
+				path === 'plan'
+					? decide(
+							state,
+							{
+								type: 'reconcile',
+								options: { resend: 5_000, attempts: 3, sent: new Map(), stopped: false },
+							},
+							due,
+						).steps
+					: decide(state, { type: 'return', message: 2 }, due);
+			bind.onceWith(rules.returnable, (parsedDue, clock, seated) => {
+				expect([parsedDue, clock, seated]).toEqual([due, due, true]);
+				return false;
+			});
+			expect(run()).toEqual(path === 'plan' ? [] : { entry: undefined });
+			expect(run()).toMatchObject(
+				path === 'plan'
+					? [{ type: 'return', message: 2 }]
+					: { entry: { kind: 'message', body: { kind: 'posted', returns: 2 } } },
+			);
+			// An admission from the rule also controls a say before its deadline.
+			bind.once(rules.returnable, true);
+			const early =
+				path === 'plan'
+					? reconcile(state).steps
+					: decide(state, { type: 'return', message: 2 }, now);
+			expect(early).toMatchObject(
+				path === 'plan'
+					? [{ type: 'return', message: 2 }]
+					: { entry: { kind: 'message', body: { kind: 'posted', returns: 2 } } },
+			);
+		},
+	);
+
 	it('ends a lease only when mayEnd says so', () => {
 		const end = { type: 'end', id, reason: 'revoked', readThrough: 0 } as const;
 		bind.once(rules.mayEnd, false);

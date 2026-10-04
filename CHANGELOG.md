@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**Resource contracts have one documentation owner.** `resources.md` states
+resource lifecycle, tool bundles, and provenance. `workspace.md` states
+workspace behavior and backend details.
+
+**Terms name one concept.** The documentation uses limits and fold cost,
+journal entry, and proof scope. The limits page is `docs/limits.md`, and
+its benchmark is `scripts/projection-cost.mjs`.
+
+**Scheduled returns use one verified rule.** Planning and commit validation
+call `returnable` with due time, current time, and roster membership.
+The contracts state eligibility and its preservation as time advances.
+
 **Concurrent control calls share one operation.** Cancellation, departure,
 and stop use one promise lifecycle. Failed operations permit a retry.
 Cancellation and departure keep their own keys across uncertain writes.

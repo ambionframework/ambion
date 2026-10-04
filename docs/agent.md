@@ -125,15 +125,10 @@ such a message, the token limit of the seat can leave it out, or the cap of
 `limits.context.messages` can keep it below the view. `recall` commits
 nothing, and it never moves the read position.
 
-**A bundle adds tools, guidance, and a reminder.** `bundles: [shared.tools()]`
-adds the tools of a resource, such as the workspace. A bundle's `remind`
-gives text for each respond activation of a seat, such as the handles of
-its running processes ([Processes](processes.md#reminders)).
-
-**The kernel rejects two tools with one name.** [Resources](resources.md)
-and [Workspace](workspace.md) state how a resource builds a bundle and how
-the kernel flattens it. [Executors](executors.md#the-prompt-the-driver-renders)
-states how the guidance follows the speaking policy.
+**A bundle gives an executor access to resource tools.** Pass it through
+`bundles: [shared.tools()]`. [Tool bundles](resources.md#tool-bundles) owns
+the bundle contract, guidance, reminders, and duplicate-name rule.
+[Workspace](workspace.md#give-the-resource-to-an-agent) shows its use.
 
 **A tool learns where it ran from `ctx`.**
 [Resources](resources.md#references-and-provenance) states what `ctx.room`,

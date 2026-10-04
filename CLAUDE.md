@@ -52,7 +52,7 @@ newer, the OpenTUI floor.
 | A `rules.verified.ts`                   | `docs/formal.md`                                                 |
 | The assistant or the `assistant` option | `docs/assistant.md`, `docs/summary.md`                           |
 | The simulator                           | `docs/simulator.md`                                              |
-| The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `envelope`        |
+| The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `limits`          |
 | The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
 | The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
 | Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |
@@ -156,8 +156,9 @@ need the key. Read neither login file.
   (`@earendil-works/pi-durable`) owns the model loop, the session, and
   compaction. `packages/workspace` owns the workspace port, resource, tools,
   and backend helpers. `packages/just-bash` owns the just-bash filesystem and
-  shell. The core composes ordinary tools. `packages/journal` owns the queue, the fence, and the entry
-  envelope. A harness keeps its own session, best effort, for one exchange.
+  shell. The core composes ordinary tools. `packages/journal` owns the queue,
+  the fence, and the journal entry. A harness keeps its own session, best
+  effort, for one exchange.
   Ambion owns only participants as values and the room. A third concern is a
   design failure: push it into a dependency or drop it.
 - **Rendering and summary guidance stay pure and stateless.**

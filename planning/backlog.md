@@ -14,17 +14,17 @@ items that the pruning of 2026-10-03 removed.
 the first item comes first. An item whose condition holds moves to the
 top of its section.
 
-| Section                                       | Items | First item                               |
-| --------------------------------------------- | ----- | ---------------------------------------- |
-| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                       |
-| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option               |
-| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard      |
-| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one       |
-| [Rules and proofs](#rules-and-proofs)         | P1    | P1, `returnable` into the verified rules |
-| [Simplification](#simplification)             | S6–S7 | S6, resource documentation               |
-| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work            |
-| [Considered and kept](#considered-and-kept)   | None  | None                                     |
-| [Deferred by decision](#deferred-by-decision) | None  | None                                     |
+| Section                                       | Items | First item                          |
+| --------------------------------------------- | ----- | ----------------------------------- |
+| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                  |
+| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option          |
+| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard |
+| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one  |
+| [Rules and proofs](#rules-and-proofs)         | None  | None                                |
+| [Simplification](#simplification)             | None  | None                                |
+| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work       |
+| [Considered and kept](#considered-and-kept)   | None  | None                                |
+| [Deferred by decision](#deferred-by-decision) | None  | None                                |
 
 ## The 0.7.0 theme
 
@@ -119,11 +119,7 @@ next live run that fails on a provider refusal.
 [docs/formal.md](../docs/formal.md) states the mechanism and the line a
 proof must pay for.
 
-**P1. `returnable` moves into the verified rules.** The rule decides when
-the room returns a scheduled say, and `reconcile.ts` and `returning` call
-it. It lives in `packages/ambion/src/room/scheduled.ts`, outside
-`room/rules.verified.ts`, so it has no contract and no binding case.
-**Condition:** none.
+No open findings.
 
 ## Simplification
 
@@ -132,12 +128,7 @@ concept goes when another concept already carries its meaning. The rank is
 the concepts removed times the confidence (high 3, medium 2, low 1).
 The changelog and the git history record completed reductions.
 
-| ID  | Finding                                                         | Evidence                                                          | Rank |
-| --- | --------------------------------------------------------------- | ----------------------------------------------------------------- | ---- |
-| S6  | `resources.md` overlaps `workspace.md` and states a false count | `resources.md` says "two bindings"; seven backend factories exist | 3    |
-| S7  | "Envelope" has three meanings                                   | `envelope.md`, `durability.md`, `formal.md`                       | 3    |
-
-**S6 and S7 change only pages.**
+No open findings.
 
 ## Designs with a shape
 
