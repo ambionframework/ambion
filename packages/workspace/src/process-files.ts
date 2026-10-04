@@ -143,10 +143,15 @@ export async function writeSpec(
  *
  * `trap : TERM` keeps the wrapper alive through the `SIGTERM` of a cancel, so
  * it writes `exit` when the command ends inside the grace. The handler
- * resets to the default in the subshell, so the command gets the signal as
- * usual. An ignored signal stays ignored in each program that the command
- * runs, so the wrapper does not ignore `TERM`. just-bash has no `trap`, and
- * the redirect hides its error.
+ * resets to the default in each program that the command runs, so each
+ * program gets the signal as usual. An ignored signal stays ignored in each
+ * program, so the wrapper does not ignore `TERM`. just-bash has no `trap`,
+ * and the redirect hides its error.
+ *
+ * The subshell traps `TERM` with `exit $?`. A shell that forks the last
+ * program of a list, as bash 3.2 on macOS does, then waits for that program
+ * and ends with its code. Without the trap, the `SIGTERM` ends the subshell
+ * with code 143 before a program that ends cleanly inside the grace.
  */
 export function wrapped(command: string, dir: string): string {
 	const at = shellQuote(dir);
@@ -154,6 +159,7 @@ export function wrapped(command: string, dir: string): string {
 		'trap : TERM 2>/dev/null',
 		`echo "$$" > ${at}/pid`,
 		`(`,
+		`trap 'exit $?' TERM 2>/dev/null`,
 		command,
 		`) < /dev/null > ${at}/out 2>&1`,
 		`echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > ${at}/exit.tmp && mv ${at}/exit.tmp ${at}/exit`,

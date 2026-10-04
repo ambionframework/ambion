@@ -78,6 +78,11 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(await readFile(join(dirname(timed.process?.output ?? ''), 'stop'), 'utf8')).toMatch(
 			/^timed_out /,
 		);
+		// The shell forks the child and waits, as bash 3.2 on macOS does for a list. The shell outlives the SIGTERM and gives the code of the child.
+		const forked = 'sh -c \'trap "exit 0" TERM; sleep 30 & wait\'; code=$?; exit $code';
+		const child = await invoke(workspace, 'bash', { command: forked, wait: 0 });
+		const stopped = await invoke(workspace, 'cancel', { handle: child.process?.handle ?? '' });
+		expect(stopped.process).toMatchObject({ state: 'exited', exitCode: 0 });
 	});
 
 	it('sends SIGKILL after the grace to an owned and an adopted process that ignore TERM, and shows the cancel while it waits', async () => {
