@@ -26,6 +26,7 @@ export default defineConfig({
 				find: '@ambionframework/ambion/conformance',
 				replacement: source('../ambion/src/conformance.ts'),
 			},
+			{ find: '@ambionframework/ambion/names', replacement: source('../ambion/src/names.ts') },
 			{ find: /^@ambionframework\/ambion$/, replacement: source('../ambion/src/index.ts') },
 			{
 				find: '@ambionframework/journal/conformance',

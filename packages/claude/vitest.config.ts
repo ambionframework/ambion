@@ -22,6 +22,7 @@ export default defineConfig({
 			},
 			{ find: '@ambionframework/ambion/testing', replacement: source('../ambion/src/testing.ts') },
 			{ find: '@ambionframework/ambion/hosting', replacement: source('../ambion/src/hosting.ts') },
+			{ find: '@ambionframework/ambion/names', replacement: source('../ambion/src/names.ts') },
 			{ find: /^@ambionframework\/ambion$/, replacement: source('../ambion/src/index.ts') },
 			{
 				find: '@ambionframework/journal/conformance',

@@ -22,6 +22,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * timeout there reports the runner and not the backend.
  */
 const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
+const names = fileURLToPath(new URL('../ambion/src/names.ts', import.meta.url));
 /** The core's host-facing entry. The root alias matches only the bare package name. */
 const hosting = fileURLToPath(new URL('../ambion/src/hosting.ts', import.meta.url));
 /** The core's conformance entry, which the suites here build on. */
@@ -41,6 +42,7 @@ export const alias = [
 	{ find: '@ambionframework/ambion/hosting', replacement: hosting },
 	{ find: '@ambionframework/ambion/conformance', replacement: conformance },
 	{ find: '@ambionframework/ambion/testing', replacement: testing },
+	{ find: '@ambionframework/ambion/names', replacement: names },
 	{ find: /^@ambionframework\/ambion$/, replacement: core },
 	{ find: '@ambionframework/pi', replacement: pi },
 	{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
