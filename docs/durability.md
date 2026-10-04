@@ -14,9 +14,10 @@ sequence position, so message positions may have gaps. Folding the ordered
 record reconstructs the composition, roster, people, exchanges, leases,
 routing, pending work, and summaries. In-memory state is a cache of that fold.
 
-The journal envelope owns `kind`, `body`, `seq`, `key`, and `run`. The room owns
-message freshness and validates recognized bodies before replay. One append
-operation handles every entry kind: it reads recovery state, evaluates the
+Each journal entry holds `kind`, `body`, `seq`, `key`, and `run`. The journal
+owns this shape. The room owns message freshness and validates recognized
+bodies before replay. One append operation handles every entry kind: it
+reads recovery state, evaluates the
 room's synchronous decision, and either appends or returns a result. A repeated
 key returns its original entry before the decision runs; reusing a key for a
 different kind fails. Keys never expire while the record is retained.

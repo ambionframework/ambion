@@ -171,7 +171,7 @@ async function run(
 	return outcome.import === undefined ? result : withImport(result, outcome.import);
 }
 
-/** The provenance of one tool call: its envelope, and the time. */
+/** The provenance of one tool call: its context fields and the time. */
 function provenanceOf(ctx: ToolContext): SqlProvenance {
 	const { exchange, ...placed } = callEnvelope(ctx);
 	return {

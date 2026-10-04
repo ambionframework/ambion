@@ -1,10 +1,10 @@
-# Envelope
+# Limits and fold cost
 
 **This page owns two subjects: the configurable limits of a room and the
 measured cost of its fold.** Other pages link here and do not repeat the
-figures. The word cost envelope means the growth of the fold cost with
-history. It differs from the journal envelope in
-[Durability](durability.md) and the proof envelope in [Formal](formal.md).
+figures. The fold cost is the time to derive room state from the journal.
+[Durability](durability.md) owns the journal entry contract.
+[Formal](formal.md) owns the proof scope.
 
 ## The limits
 
@@ -90,7 +90,7 @@ the load. They promise nothing.
 too noisy for the gate.
 
 ```sh
-node scripts/projection-envelope.mjs 100 1000 4000
+node scripts/projection-cost.mjs 100 1000 4000
 ```
 
 **The gate checks the result and not the time.** The property test in
