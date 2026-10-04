@@ -103,35 +103,42 @@ exchange. A port defines it, and a SQLite store and a memory store
 implement it, as the workspace backends do.
 
 **The host opens one canvas and resumes it.** `openCanvas` takes the
-runtime, the agent definitions, the store, and an optional workspace.
-`canvas.resume()` reads the store and resumes each room with the state
-`running`. A room that the host does not resume does no work: its pending
-work and its scheduled says wait in its journal.
+runtime, the store, the execution, and an optional workspace. The agent
+definitions arrive at `canvas.resume({ agents })`, because the opener
+bundle comes from the canvas before the definitions exist. The resume
+reads the store and starts each room with the state `running`. A room
+that the host does not resume does no work: its pending work and its
+scheduled says wait in its journal.
 
-**`canvas.open` takes the options of `startRoom`.** It takes every option
-except `name`, `runtime`, and `agents`, which the canvas supplies: the
-seats, the assistant, the summary writer, seating, and the execution. A
-root room of the workbench keeps its assistant and its scenario seats.
+**`canvas.open` takes the composition options of `startRoom`.** It takes
+the seats, the assistant, the summary writer, and seating. The canvas
+supplies the name, the runtime, the agents, and the execution. A root
+room of the workbench keeps its assistant and its scenario seats.
 
 **The canvas attaches the mirror of each room.** With a workspace, the
 canvas calls `workspace.mirror(room)` after each start and each resume.
-A failed attach goes to the `onError` of the canvas, and the room keeps
-running. The mirror is the read path of an opener, so the host sees the
-failure.
+It keeps the mirror and stops it when the room stops. A failed attach
+goes to the `onError` of the canvas, and the room keeps running. The
+mirror is the read path of an opener, so the host sees the failure.
 
-**`canvas.stop()` stops every room and keeps each row `running`.** A host
-shutdown is no decision about a room. The next `canvas.resume()` starts
-each room again, the breakout rooms included.
+**`canvas.close()` stops every room and keeps each row `running`.** A
+host shutdown is no decision about a room. The next `canvas.resume()`
+starts each room again, the breakout rooms included. `canvas.stop(name)`
+is the decision: it sets the row to `stopped` and stops the room.
 
 ```ts
 const canvas = openCanvas({
   name: 'lab',
   runtime,
-  agents,
   workspace,
   store: sqliteCanvas('./data/canvas.db'),
 });
-await canvas.resume();
+const lead = defineAgent({
+  name: 'lead',
+  identity: 'Splits the work and reads the reports.',
+  executor: pi({ instructions, model, bundles: [workspace.tools(), canvas.tools()] }),
+});
+await canvas.resume({ agents: [lead, ...scenario, ...team] });
 const design = await canvas.open({ name: 'design', goal: 'Design the drift test', seats });
 ```
 
@@ -267,18 +274,19 @@ parent and the breakout room together, and both resume at the next
 start (see [The model](#the-model)).
 
 **The canvas learns of a departure from the roster of the parent.**
-Before each report, the canvas reads the roster of the parent with
-`readRoom`. When the opener is no longer seated, the canvas sets the row
-to `stopped`, stops the breakout room, and posts each pending report to
-the parent with no `to`, under the same keys. The run at each start
-makes the same check, so a departure during a shutdown is found at the
-next start.
+Each report pass reads the roster of the parent with `readRoom`. When the
+opener is no longer seated, the canvas sets the row to `stopped`, stops
+the breakout room, and posts each pending report to the parent with no
+`to`, under the same keys. A pass runs at each closed exchange and at
+each resume. So an idle breakout room finds a departure only at the next
+resume.
 
 **A report goes with no `to` when the opener cannot receive it.** A post
 to a seat with the attention `none` is a refusal
 ([Exchange](exchange.md#7-the-edges-a-host-sees)). The canvas reads the
 attention of the opener with the roster and posts with no `to` in that
-case.
+case. The pass looks up the key in the parent record before it posts, so
+a report that landed with another `to` is never posted again.
 
 **A stopped room keeps its journal.** `readRoom` and the mirror still
 read it.
@@ -292,22 +300,22 @@ the record is kept. A later design can retire a stopped room.
 The posts carry the refs between the two rooms, and their keys record
 which reports landed. The canvas keeps no cursor.
 
-| Write          | Key                          | A repeat after a crash      |
-| -------------- | ---------------------------- | --------------------------- |
-| The row        | The room name                | Finds the row and continues |
-| The start post | `breakout-start:<name>`      | Returns the same handle     |
-| A `tell` post  | `tell:<activation>:<callId>` | Lands once for one call     |
-| A report       | `breakout:<name>:<from>`     | Returns the same handle     |
+| Write          | Key                          | A repeat after a crash                   |
+| -------------- | ---------------------------- | ---------------------------------------- |
+| The row        | The room name                | Finds the row and continues              |
+| The start post | `breakout-start:<name>`      | Returns the same handle                  |
+| A `tell` post  | `tell:<activation>:<callId>` | Lands once for one call                  |
+| A report       | `breakout:<name>:<from>`     | The pass finds the key and posts nothing |
 
 **A crash at any step leaves a state that the next start completes.**
 
-| Crash point                                  | What the next start does                                |
-| -------------------------------------------- | ------------------------------------------------------- |
-| After the row, before the room starts        | `readRoom` finds no room, so the canvas starts it       |
-| After the room starts, before the start post | The canvas posts the start again under its key          |
-| After an exchange closes, before its report  | The run at the start posts the report under its key     |
-| After the opener leaves, before the reports  | The roster check posts the pending reports with no `to` |
-| During a host shutdown                       | `canvas.resume()` starts each `running` room again      |
+| Crash point                                  | What the next start does                                     |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| After the row, before the room starts        | `readRoom` finds no room, so the canvas starts it            |
+| After the room starts, before the start post | The canvas posts the start again under its key               |
+| After an exchange closes, before its report  | The run at the start posts the report under its key          |
+| After the opener leaves, before the reports  | The roster check posts the pending reports with no `to`      |
+| During a host shutdown                       | `canvas.resume({ agents })` starts each `running` room again |
 
 **A retried opener reads the reminder first.** A `tell` key lands once
 for one tool call. An activation that expires and runs again makes new
@@ -391,11 +399,11 @@ are final for 0.7.0. The defaults are the values of the first release.
 ### The canvas
 
 ```ts
+function openCanvas(options: OpenCanvasOptions): Canvas;
+
 interface OpenCanvasOptions {
   readonly name: string;
   readonly runtime: Runtime;
-  /** Every definition that a room of the canvas may seat. */
-  readonly agents: readonly AgentDefinition[];
   readonly store: CanvasStore;
   /** The execution of every room, as StartRoomOptions.execution states. */
   readonly execution?: Execution | readonly Execution[];
@@ -407,53 +415,105 @@ interface OpenCanvasOptions {
 
 interface Canvas {
   readonly name: string;
-  /** Writes the row, then starts the room. A name that exists is a refusal. */
+  /** The opener bundle: breakout, tell, and the reminder. Call it before defineAgent. */
+  tools(): ToolBundle;
+  /** Takes the definitions once, then starts or resumes each running room. */
+  resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void>;
+  /** Opens a root room. Needs resume first. */
   open(options: CanvasRoomOptions): Promise<Room>;
-  /** Resumes each room whose row is running. */
-  resume(): Promise<void>;
-  /** Stops each room. Each row keeps its state. */
-  stop(): Promise<void>;
+  /** Sets a root room and its breakout rooms to running, and starts them. */
+  start(name: string): Promise<void>;
+  /** Sets a root room and its breakout rooms to stopped, and stops them. */
+  stop(name: string): Promise<void>;
+  /** Stops every room of this run. Each row keeps its state. */
+  close(): Promise<void>;
   /** The live handle of a room of this run, or undefined. */
   room(name: string): Room | undefined;
   rooms(): readonly CanvasRoom[];
   subscribe(listener: (event: CanvasEvent) => void): () => void;
-  /** The opener bundle: breakout, tell, and the reminder. */
-  tools(): ToolBundle;
 }
 
-type CanvasRoomOptions = Omit<StartRoomOptions, 'name' | 'runtime' | 'agents' | 'execution'> & {
-  readonly name: string;
-  readonly goal: string;
-};
+type CanvasRoomOptions = Pick<
+  StartRoomOptions,
+  'goal' | 'seats' | 'assistant' | 'summaryWriter' | 'seating'
+> & { readonly name: string; readonly goal: string };
 
 interface CanvasRoom {
   readonly name: string;
   readonly goal: string;
-  readonly parent?: string;
-  readonly opener?: string;
   readonly depth: 0 | 1;
   readonly state: 'running' | 'stopped';
+  /** What a start needs when the row has no journal yet. */
+  readonly start: RootStart | BreakoutStart;
+}
+
+interface RootStart {
+  readonly kind: 'root';
+  readonly seats?: StartRoomOptions['seats'];
+  readonly assistant?: string;
+  readonly summaryWriter?: string;
+  readonly seating?: boolean;
+}
+
+interface BreakoutStart {
+  readonly kind: 'breakout';
+  readonly parent: string;
+  readonly opener: string;
+  readonly agents: readonly string[];
+  readonly to?: string;
 }
 
 type CanvasEvent =
   | { readonly type: 'opened'; readonly room: CanvasRoom }
-  | { readonly type: 'stopped'; readonly room: string }
+  | { readonly type: 'started' | 'stopped'; readonly room: string }
   | { readonly type: 'reported'; readonly room: string; readonly from: Seq; readonly to?: string };
 
 interface CanvasError {
   readonly room: string;
-  readonly operation: 'mirror' | 'resume' | 'report' | 'stop';
+  readonly operation: 'start' | 'resume' | 'mirror' | 'report' | 'stop';
   readonly error: unknown;
 }
 ```
 
-**The store row holds no start options.** The journal records the
-composition of each room, so a resume needs the definitions and the
-execution alone. `resumeRoom` takes the same two.
+**The definitions arrive at `resume`.** An opener holds the bundle of
+`canvas.tools()`, and `defineAgent` reads its bundles when it defines the
+agent. So the host calls `tools()`, defines its agents, and then calls
+`resume({ agents })`. `open`, `start`, and every tool call before
+`resume` are refusals.
+
+**Each room gets only its own definitions.** A resume adds to the
+reserve each definition that the composition does not hold. The canvas
+therefore passes each room the definitions that belong to it:
+
+| Room            | Definitions that the canvas passes                               |
+| --------------- | ---------------------------------------------------------------- |
+| A root room     | Every definition outside the worker team, the assistant included |
+| A breakout room | The definitions that its row names in `start.agents`             |
+
+**`canvas.open` refuses a team name.** A team name in `seats`,
+`assistant`, or `summaryWriter` is a refusal. At a start, the canvas
+removes the assistant from the definitions that it passes, because
+`startRoom` refuses an assistant that `agents` also holds. With no
+`seats`, a root room seats every definition that it receives.
+
+**A row with no journal starts from its row.** `open` and `breakout`
+write the row first. A crash before the start leaves a row with no
+journal. The next `resume` reads the row, finds no journal with
+`readRoom`, and starts the room from `start`. A repeat `open` of that
+name does the same. A row with a journal resumes.
+
+**A failed start or resume keeps its row.** The row stays `running`.
+The error goes to `onError`, and the next `resume` tries again.
+
+**The order of a resume is fixed.** The canvas starts or resumes each
+running root room, then each running breakout room. Then it runs one
+report pass over every breakout row, `stopped` rows included.
 
 **The canvas hears each room that it starts or resumes.** It calls
-`room.subscribe` once for each handle, and it reacts to
-`exchange_closed`. The handle of a run goes with the run.
+`room.subscribe` once for each handle and reacts to `exchange_closed`.
+With a workspace, it calls `workspace.mirror(room)` after each start and
+resume, keeps the `RoomMirror`, and stops it when the room stops. The
+mirror path of a room is the path that its `RoomMirror` reports.
 
 ### The store
 
@@ -469,7 +529,7 @@ function sqliteCanvas(path: string): CanvasStore;
 function memoryCanvas(): CanvasStore;
 ```
 
-**`insert` is the idempotence of an open.** A repeat after a crash gets
+**`insert` is the idempotence of a write.** A repeat after a crash gets
 `exists` and continues with the row that it finds.
 `canvasStoreConformance` runs the same cases over both stores.
 
@@ -479,17 +539,18 @@ function memoryCanvas(): CanvasStore;
 interface BreakoutOptions {
   /** The worker team. No root room seats these definitions. */
   readonly team: readonly string[];
-  /** The most running breakout rooms for one opener. Default 3. */
+  /** The most running breakout rooms for one opener in one parent. Default 3. */
   readonly perOpener?: number;
   /** The closed exchanges after which the canvas stops a breakout room. Default 20. */
   readonly exchanges?: number;
   /** The most bytes of the last say in a report. Default 2,000. */
   readonly reportBytes?: number;
+  /** The most characters of a breakout room name. Default 48. */
+  readonly nameLength?: number;
 }
 ```
 
-**`openCanvas` refuses a team name that it cannot resolve.** `canvas.open`
-refuses a root room that seats a team name.
+**`resume` refuses a team name that no definition resolves.**
 
 ### The tools
 
@@ -499,14 +560,14 @@ breakout({
   goal: string,
   agents: string[],    // one or more names of the team
   to?: string,         // a worker; omit to start every worker
-}) -> { room: string, uri: string, mirror?: string, created: boolean }
+}) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped', created: boolean }
 
 tell({
   room: string,        // a breakout room that the caller opened
   text: string,
   to?: string,
   refs?: string[],
-}) -> { room: string, seq: Seq }
+}) -> { room: string, from: Seq }
 ```
 
 **The tools read the caller from `ToolContext`.** The opener is
@@ -514,13 +575,52 @@ tell({
 from a room that is not on the canvas, is a refusal. A call from a
 breakout room is a refusal, so the depth stays one.
 
-**A refusal is a tool error that names the cause.** The causes are a bad
-name, a name that another opener holds, the count for the opener, a name
-outside the team, and a room that the caller did not open.
+**`breakout` checks in a fixed order.**
+
+1. A row of the room name with the same parent and opener: the tool
+   returns it with `created: false`, and it checks no bound. The `state`
+   tells the opener whether the room still runs.
+2. A row of the room name with another opener: a refusal.
+3. The name rule and `nameLength`, the team, and `perOpener`: a
+   refusal names the bound that it broke.
+4. Otherwise the canvas inserts the row and starts the room. The result
+   has `created: true`.
+
+**`perOpener` counts running rows.** It counts the breakout rows with
+that parent and that opener whose state is `running`.
+
+**`tell` refuses a room that is not running.** The refusal says that the
+room stopped. `from` is the seq of the message that the post wrote.
+
+**A refusal is a tool error that names the cause.**
+
+### The report
+
+**A report pass looks for each key first.** For each closed exchange of
+a breakout room, the canvas looks in the record of the parent for a
+message with the key `breakout:<name>:<from>`. A key that it finds is
+done. For a key that it does not find, it picks the recipient: the
+opener when the opener sits in the parent at an attention other than
+`none`, else no `to`. A post with the key of a landed report and another
+recipient would be a key conflict, so the canvas never posts a found key
+again.
+
+**A report waits for a live parent.** A parent with no live handle in
+this run gets no post. The pass of the next `resume` or `start` of the
+parent posts it.
+
+**The cap stops the room.** When the count of closed exchanges reaches
+`exchanges`, the canvas posts the last report, sets the row to
+`stopped`, and stops the room.
+
+**The departure check runs with each report pass.** A breakout room that
+closes no exchange runs no pass, so it notices a departure only at the
+next start of the canvas.
 
 ### The text
 
-**A report is one line, then the last say.**
+**A report is one line, then the last say.** The line names the outcome
+kind: `complete`, `awaiting`, `cancelled`, or `exhausted`.
 
 ```text
 breakout design-survey: exchange #41 is complete.
@@ -528,10 +628,12 @@ The drift stays under 0.3% on all four runs; the table is runs-0412.
 ```
 
 An exchange with no say reads `breakout design-survey: exchange #41 is
-complete, with no message.` The report that reaches the exchange cap adds
+exhausted, with no message.` An `awaiting` line names the person:
+`exchange #41 is awaiting ana.` The report that reaches the cap adds
 `The canvas stopped the room after 20 exchanges.`
 
-**The reminder lists the breakout rooms of the seat.**
+**The reminder lists the breakout rooms of the seat.** It lists the rows
+whose opener is `seat.agent` and whose parent is `seat.room`.
 
 ```text
 Your breakout rooms:

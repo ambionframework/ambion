@@ -37,7 +37,7 @@ interface. No code item has started.
 **The release follows one breakout room from the open to the report.**
 
 ```text
-host -> openCanvas -> canvas.resume() -> each running room resumes
+host -> openCanvas -> canvas.resume({ agents }) -> each running room resumes
                                               |
 opener -> breakout({ name, goal, agents }) -> row -> room opens -> start post
                                                                       |
@@ -51,7 +51,7 @@ opener -> breakout({ name, goal, agents }) -> row -> room opens -> start post
   `breakout` and `tell` tools, the report, the reminder, and
   `canvas.subscribe`.
 - **The canvas owns the list of rooms.** The host opens one canvas and
-  calls `canvas.resume()`. The store replaces the room catalog of each
+  calls `canvas.resume({ agents })`. The store replaces the room catalog of each
   host.
 - **The workbench is the first host.** Its `workbench_rooms` table gives
   way to the canvas store, and its room list draws the tree of the
@@ -206,15 +206,19 @@ them.
 | 6   | What a person can change                  | A person visits and speaks. Opening a room stays with the host and the opener bundle in the first step                                      |
 
 **CV1. The canvas and its store.** `@ambionframework/canvas` exports
-`openCanvas({ name, runtime, agents, store, workspace? })`, the
-`CanvasStore` port, `sqliteCanvas`, and `memoryCanvas`. The store keeps
-one row for each room: the name, the goal, the parent, the opener, the
-depth, and the state. `canvas.open` takes the options of `startRoom`
-except the name, the runtime, and the agents. It writes the row and
-starts the room. `canvas.resume()` resumes each running room, and
-`canvas.stop()` stops each room and keeps its row `running`. With a
-workspace, the canvas attaches the mirror after each start and resume,
-and a failed attach goes to `onError`. `canvas.rooms()` and
+`openCanvas({ name, runtime, store, execution?, workspace?, breakout?,
+onError? })`, the `CanvasStore` port, `sqliteCanvas`, and `memoryCanvas`.
+The store keeps one row for each room: the name, the goal, the depth,
+the state, and the start data (`RootStart` or `BreakoutStart`), so a row
+with no journal can start. `canvas.resume({ agents })` takes the
+definitions and resumes each running room; every call before it is a
+refusal. Each room gets only its own definitions, so a resume never adds
+the worker team to a root room. `canvas.open` takes the seats, the
+assistant, the summary writer, and seating. It writes the row and starts
+the room. `canvas.start(name)` and `canvas.stop(name)` set the state of
+one row. `canvas.close()` stops each room and keeps its row `running`.
+With a workspace, the canvas attaches the mirror after each start and
+resume, stops it with the room, and a failed attach goes to `onError`. `canvas.rooms()` and
 `canvas.subscribe` give the host the tree. A conformance suite runs over
 both stores.
 
@@ -231,15 +235,16 @@ bundle.
 - **`tell({ room, text, to?, refs? })`** posts into a room that the caller
   opened. A `tell` key lands once for one tool call.
 - **The report** reads the closed exchanges of each breakout room with
-  `room.read()`. For each one, it posts one line to the opener with the
-  last say, cut to a byte cap, and the key `breakout:<name>:<from>`. It
-  runs on each `exchange_closed` event and over every closed exchange at
-  each start.
-- **The reminder** lists each open breakout room of the seat from the
-  store, with its state, its open exchange, and the seq of its last
+  `room.read()`. For each one, it looks up the key
+  `breakout:<name>:<from>` in the parent record and posts only when the
+  key is absent. The line names the outcome kind and carries the last
+  say, cut to a byte cap. It runs on each `exchange_closed` event and
+  over every breakout row at each resume, after the rooms start.
+- **The reminder** lists each breakout room with the seat as opener and
+  the seat's room as parent, at most ten lines, from the store, with its state, its open exchange, and the seq of its last
   message.
-- **The life of a room** follows its opener. Before each report, and at
-  each start, the canvas reads the roster of the parent. When the opener
+- **The life of a room** follows its opener. With each report pass, the
+  canvas reads the roster of the parent. When the opener
   is gone, the canvas sets the row to `stopped`, stops the room, and posts
   its pending reports with no `to`. A report to an opener at `none` also
   goes with no `to`.
@@ -254,7 +259,8 @@ host shutdown that resumes the breakout room, and the exchange cap.
 **CV3. The workbench on the canvas.** The workbench opens one canvas over
 its SQLite file and drops `workbench_rooms`
 (`examples/workbench/src/rooms.ts:154`). Its root rooms keep their
-assistant and scenario seats through `canvas.open`. The workbench seats
+assistant and scenario seats through `canvas.open`, and its start and
+stop commands call `canvas.start(name)` and `canvas.stop(name)`. The workbench seats
 every definition in every root room today (`rooms.ts:184`), so it names a
 worker team that no root room seats. It gives the opener bundle to the
 definitions that the host names. The room list of the terminal draws
