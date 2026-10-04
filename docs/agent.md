@@ -88,9 +88,12 @@ const lookup = defineTool({
 property path and the rule it breaks, such as `handles must not have fewer
 than 1 items`. The model reads this text as a tool error.
 
-Every respond activation receives `say`, `schedule`, `seat`, `unseat`,
-`dismiss`, and `recall`, plus the tools from its definition. A summary
-activation receives only `say`. `say` accepts `{ text, to?, refs? }`.
+Every respond activation receives `say`, `schedule`, `unseat`, `dismiss`, and
+`recall`, plus the tools from its definition. It receives `seat` only when
+the reserve holds an agent. When the host starts the room with
+`seating: false`, it receives neither `seat` nor `unseat`
+([Roster](roster.md#seating-operations)). A summary activation receives
+only `say`. `say` accepts `{ text, to?, refs? }`.
 `schedule` accepts `{ delaySeconds, text, refs? }` and writes a scheduled say
 ([Exchange](exchange.md#6-a-scheduled-say)). The room stamps the author,
 activation, time, and routing facts. `seat` and `unseat` accept an agent name.

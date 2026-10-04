@@ -46,6 +46,12 @@ export interface StartRoomOptions {
 	/** Public context that states what the room is for. */
 	goal?: string;
 	/**
+	 * Whether an agent may seat and unseat agents. Defaults to `true`. With
+	 * `false`, an agent holds neither tool, and the room refuses a seating
+	 * intent from a seat. The host keeps `room.seat` and `room.unseat`.
+	 */
+	seating?: boolean;
+	/**
 	 * The execution for this room, such as `piExecution()`, or one for each
 	 * executor kind. A seat runs on the first that serves its kind, then on
 	 * the runtime's, then on the default of its kind.
@@ -212,6 +218,7 @@ function composeFrom(options: StartRoomOptions): CompositionDraft {
 	return {
 		goal: normalized.goal?.trim() || undefined,
 		summaryWriter: normalized.summaryWriter,
+		seating: normalized.seating,
 		definitions,
 		seats: initialSeats(normalized, definitions),
 	};

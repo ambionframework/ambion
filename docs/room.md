@@ -104,6 +104,9 @@ const room = await startRoom({
 });
 ```
 
+`startRoom` takes `seating: false` to remove `seat` and `unseat` from the
+agents of the room. See [Roster](roster.md#turn-off-seating-for-agents).
+
 `room.seat(name)` adds a defined agent to the roster. `room.unseat(name)`
 removes a seated agent and returns the definition to the reserve. A live activation
 may call the same operations for another agent or itself, unless the target

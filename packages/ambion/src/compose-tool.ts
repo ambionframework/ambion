@@ -327,7 +327,11 @@ function liveEntry(entry: AmbionTool, call: RoomCall, notes: RoomNotes): AmbionT
 	return live;
 }
 
-/** The room tools that `names` use, bound to the calls of the activation. A tool with no call refuses the compose call. */
+/**
+ * The room tools that `names` use, bound to the calls of the activation. The
+ * catalog lists every room tool, but only the room tools of the activation
+ * bind. A tool with no call refuses the compose call before any code runs.
+ */
 function liveRoom(
 	program: Program,
 	room: readonly RoomCall[] | undefined,
@@ -338,10 +342,14 @@ function liveRoom(
 	const missing = used.filter(
 		(tool) => room?.find((call) => call.name === tool.name) === undefined,
 	);
-	if (missing.length > 0)
+	if (missing.length > 0) {
+		const names = missing.map((tool) => `'${tool.name}'`).join(', ');
 		throw refusal(
-			`The room tools ${missing.map((tool) => `'${tool.name}'`).join(', ')} need an activation. This call has none.`,
+			room === undefined
+				? `The room tools ${names} need an activation. This call has none.`
+				: `The room does not offer the room tools ${names} to this activation. Call a tool that the room offers.`,
 		);
+	}
 	const tools = new Map(
 		[...program.tools].map(([name, tool]) => {
 			const call = ROOM_ENTRIES.has(tool) ? room?.find((one) => one.name === name) : undefined;

@@ -304,6 +304,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					const [first, second] = on.responses.requests as [ResponsesRequest, ResponsesRequest];
 
 					// The model sees the room tools, the tool of the seat, and compose as functions, and nothing else.
+					// The reserve is empty, so the room offers no `seat`.
 					// Codex adds no `exec`, `wait`, or MCP helper tool.
 					const tools = toolsOf(first);
 					expect(tools).toEqual({
@@ -315,7 +316,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'recall',
 							'say',
 							'schedule',
-							'seat',
 							'unseat',
 						],
 					});
@@ -405,7 +405,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							tools: [
 								'say',
 								'schedule',
-								'seat',
 								'unseat',
 								'dismiss',
 								'recall',
@@ -467,7 +466,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'recall',
 							'say',
 							'schedule',
-							'seat',
 							'unseat',
 						],
 					});
@@ -546,7 +544,6 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 							'restore',
 							'say',
 							'schedule',
-							'seat',
 							'snapshot',
 							'unseat',
 							'wait',

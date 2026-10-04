@@ -368,6 +368,11 @@ function commit(state: RoomState, command: CommitCommand, now: number): RoomDeci
 	const live = authority.spec;
 	const { intent } = request;
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
+	if (
+		state.composition?.seating === false &&
+		(intent.kind === 'seated' || intent.kind === 'unseated')
+	)
+		return refused(SEATING_OFF);
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
 		return summaryCommit(state, request, live, purpose, now, bytes);
@@ -429,6 +434,9 @@ function ordinaryCommit(
 	const body = { ...rest, ...refsField(refs), ...stamp };
 	return message(state, body, now, true, bytes);
 }
+
+/** The refusal of a seating intent from a seat in a room where the host turned seating off. */
+const SEATING_OFF = 'This room does not let agents seat or unseat agents. Only the host can.';
 
 /** Both purposes permit speech. Only a response permits a seating or an unseating. */
 function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {

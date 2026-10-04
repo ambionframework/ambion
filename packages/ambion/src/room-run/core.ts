@@ -205,6 +205,7 @@ export function compositionOf(cast: CompositionDraft, at: string): Without<Compo
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		...(cast.summaryWriter === undefined ? {} : { summaryWriter: cast.summaryWriter }),
+		...(cast.seating === false ? { seating: false } : {}),
 		seated: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))
 			.map((agent) => {
@@ -231,6 +232,8 @@ export function compositionOf(cast: CompositionDraft, at: string): Without<Compo
 export interface CompositionDraft {
 	goal: string | undefined;
 	summaryWriter: string | undefined;
+	/** `false` when the host turned seating off for agents. */
+	seating: boolean | undefined;
 	definitions: AgentDefinition[];
 	seats: ReadonlyMap<string, SeatOptions>;
 }

@@ -1298,6 +1298,40 @@ describe('a compose call over the room tools', () => {
 		expect(names).toEqual(expect.arrayContaining(['ana', 'ben']));
 	});
 
+	it.each([
+		['an empty reserve', {}, ['worker', 'ana']],
+		['seating turned off', { seating: false }, ['worker']],
+	] as const)(
+		'cannot bind `seat` in a room with %s, and seats nobody',
+		async (_case, options, seated) => {
+			const read: string[] = [];
+			const room = stopAtEnd(
+				await startRoom({
+					name: roomName('compose-no-seat'),
+					agents: [composer('worker'), quietAgent('ana')],
+					seats: Object.fromEntries(seated.map((name) => [name, 'broadcast'])),
+					...options,
+					execution: scripted((step, seat, request) => {
+						if (seat !== 'worker') return quiet();
+						if (request === 1)
+							return callTool('compose', {
+								uses: ['seat'],
+								code: `return await tools.seat({ name: 'ana' });`,
+							});
+						read.push(...step.results.map((result) => result.text));
+						return quiet();
+					}),
+				}),
+			);
+			await (await room.visit(andrei)).send({ text: 'Bring in ana.' });
+			await settled(room);
+			expect(read[0]).toContain("The room does not offer the room tools 'seat' to this activation");
+			expect((await messagesOf(room)).some((message) => message.kind === 'seated')).toBe(false);
+			const agents = (await participantsOf(room)).filter((one) => one.kind === 'agent');
+			expect(agents.map((one) => one.name)).toEqual(seated);
+		},
+	);
+
 	it('says to an agent that it seated in the same compose call', async () => {
 		const read: string[] = [];
 		const room = stopAtEnd(

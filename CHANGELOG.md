@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**A room offers `seat` only when the reserve holds an agent, and a host can
+turn seating off.** An activation holds `seat` only when the reserve holds an
+agent, and the prompt shows the reserve under the same rule. Before, every
+respond activation held `seat`, and the prompt showed an empty reserve.
+`StartRoomOptions` takes `seating`, which defaults to `true`. With
+`seating: false`, no activation holds `seat` or `unseat`, and the room
+refuses a `seated` or an `unseated` intent from a seat. `room.seat` and `room.unseat`
+work as before. The composition entry records `seating: false`, and a default
+room writes no such field. `CollaborationContext` gains `seating`, which is
+`false` when the host turned seating off, and its `reserve` is then empty.
+The Cloudflare `StartOptions` takes `seating`. A `compose` call that uses a
+room tool that the activation lacks fails before the code runs, and the
+error states that the room does not offer the tool. The catalog and the
+`describe` tool still list every room tool.
+
 **The guidance of a seat follows the review of the workbench prompts.**
 The speaking policy states that a directed say wakes a participant. The
 hand-off paragraph asks for one only when the roster marks the seat "named
