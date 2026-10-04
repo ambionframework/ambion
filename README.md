@@ -11,11 +11,12 @@
 
 A room is a shared journal with rules for taking part. People ask questions
 and read results. Agents on any framework speak when they have something to
-add and stay silent when they do not. One question can need several domains,
-and each agent has its own owner, instructions, model, tools, and framework.
-The kernel keeps the record and the rules, and a restart loses nothing. The
-application supplies hosting, agent definitions, credentials, and domain
-tools.
+add and stay silent when they do not. Each agent has its own owner,
+instructions, model, and executor. Every agent reaches the world through one
+set of tools: files, processes, snapshots, tables, repositories, and skills,
+joined by `compose`. The kernel keeps the record and the rules, and a restart
+loses nothing. The application supplies hosting, agent definitions,
+credentials, and domain tools.
 
 ## Quickstart
 
@@ -76,8 +77,8 @@ nothing.
 
 **One room runs Pi, the Claude Agent SDK, and Codex.** Install
 `@ambionframework/claude` or `@ambionframework/codex`, and pass its
-executor. Every seat holds the same workspace tools and no native tool of
-its harness. The Claude seat reads `ANTHROPIC_API_KEY`, and the Codex seat
+executor. Every seat holds the same tools and no native tool of its
+harness. The Claude seat reads `ANTHROPIC_API_KEY`, and the Codex seat
 reads `CODEX_API_KEY`.
 
 ```ts
@@ -141,13 +142,11 @@ try {
 }
 ```
 
-**`simulate` sends each message of the actor as one exchange.** It ends
-when the actor stops, after `messages` messages, at a timeout, or on a
-failure. A healthy run has `simulation.ended` equal to `stopped` or `limit`,
-and no exchange ends `exhausted`. [The simulator page](docs/simulator.md)
-shows an eval as a vitest test.
+**`simulate` sends each message of the actor as one exchange.**
+[The simulator page](docs/simulator.md) states when a run ends and shows an
+eval as a vitest test.
 
-## How a room works
+## What the kernel keeps
 
 - **Speech is checked.** A `say` that read a stale record comes back with
   the messages it missed. Agents reason in parallel, and the room serializes
@@ -156,69 +155,92 @@ shows an eval as a vitest test.
   room started with `summaryWriter` adds a closing summary, which replaces the
   discussion in later prompts. See [Exchange](docs/exchange.md).
 - **The record is durable.** The journal holds every message, close,
-  summary, and lease entry, with usage and cost. A restart replays it. See
+  summary, and lease entry, with usage and cost. A restart replays it, and a
+  lost harness session starts fresh from the record. See
   [Durability](docs/durability.md).
-- **A harness session is a cache for one exchange.** A lost session starts
-  fresh from the record. See
-  [Exchange continuity](docs/executors.md#exchange-continuity).
-- **An agent comes back to its work later.** `schedule` with `delaySeconds` returns
-  a say when it is due, and the say opens an exchange. A host posts an event
-  with `room.post`. See [A scheduled say](docs/exchange.md#6-a-scheduled-say).
-- **The steps of each activation go to the host's logger.** See
-  [The trace log](docs/executors.md#the-trace-log).
+- **An agent comes back to its work later.** `schedule` with `delaySeconds`
+  returns a say when it is due, and the say opens an exchange. A host posts
+  an event with `room.post`. See
+  [A scheduled say](docs/exchange.md#6-a-scheduled-say).
+- **Agents change the roster.** An agent seats an agent from the reserve
+  and unseats a seated one. The tool list of a seat stays the same for the
+  whole room. `seating: false` removes seating from the agents. See
+  [Roster](docs/roster.md).
 - **The boundaries are narrow.** The journal owns no domain transactions and
   no credentials. Tools can act before a contribution commits, so
-  applications own effect idempotency. A scheduled say is the one clock an
-  agent sets, and every other event comes from the host through `room.post`.
+  applications own effect idempotency.
   [Technical facts](docs/technical-facts.md) lists every limit.
 
-## The workspace
+## What an agent can do
 
 **The journal records what is said. The workspace holds what is made, and a
 message cites it.** Each agent has a home, and each capability is a set of
 tools.
 
-| Capability   | Tools                          | When                              | Read                                                     |
-| ------------ | ------------------------------ | --------------------------------- | -------------------------------------------------------- |
-| Files        | `read`, `write`, `edit`        | Every workspace                   | [Workspace](docs/workspace.md)                           |
-| Processes    | `bash`, `ps`, `cancel`, `wait` | Every workspace                   | [Processes](docs/processes.md)                           |
-| Snapshots    | `snapshot`, `restore`          | Every workspace                   | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
-| Tables       | `sql`                          | With a SQL backend                | [Workspace](docs/workspace.md#query-the-shared-database) |
-| Repositories | `repos`, `fork`                | With a git backend                | [Git](docs/git.md)                                       |
-| Sensors      | `fetch`                        | With a backend that has endpoints | [Sensors](docs/sensors.md)                               |
-| Skills       | `read`, `bash`                 | When the host passes skills       | [Skills](docs/skills.md)                                 |
+| Capability   | Tools                          | When                                   | Read                                                     |
+| ------------ | ------------------------------ | -------------------------------------- | -------------------------------------------------------- |
+| Files        | `read`, `write`, `edit`        | Every workspace                        | [Workspace](docs/workspace.md)                           |
+| Snapshots    | `snapshot`, `restore`          | Every workspace                        | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
+| Processes    | `bash`, `ps`, `cancel`, `wait` | Every workspace                        | [Processes](docs/processes.md)                           |
+| HTTP reads   | `fetch`                        | With a bash backend that has endpoints | [Processes](docs/processes.md#processes-that-serve-http) |
+| Tables       | `sql`                          | With a SQL backend                     | [Workspace](docs/workspace.md#query-the-shared-database) |
+| Repositories | `repos`, `fork`                | With a git backend                     | [Git](docs/git.md)                                       |
+| Skills       | `read`, `bash`                 | When the host passes skills            | [Skills](docs/skills.md)                                 |
 
-**Actuators are a pattern over processes.** A controller command started
-with `bash` drives a device and stops safe on `SIGTERM`. A sensor confirms
-the result. See [Actuators](docs/actuators.md).
+**A process outlives the activation that starts it.** Each process gets a
+`$PORT`. `fetch` reads a path of a running process with GET, and the
+workspace keeps the body as a snapshot.
 
-**A skill can store a procedure as a macro.** The model runs the macro by
-name with arguments, and it reads only the value that the macro returns.
-Every Pi, Claude, and Codex seat has the `compose` tool, which runs a macro
-or short code over the tools of the seat. `quickjsRuntime()` runs the code
-by default. Its `describe` tool returns the signatures of the tools. See
-[Macros](docs/macros.md) and [Compose](docs/compose.md).
+**Every Pi, Claude, and Codex seat has `compose` and `describe`.** `compose`
+joins the tools of the seat in one call through short code, and the model
+reads only the returned value. A skill can store a procedure as a macro,
+and the model runs the macro by name. See [Compose](docs/compose.md) and
+[Macros](docs/macros.md).
 
-**Two packages provide the bash backend.** `@ambionframework/just-bash`
-runs a simulated shell on one node, in memory or in a directory.
-`@ambionframework/workstation` runs a real bash on a server over SSH, with
-one Unix account for each agent. See
-[Backends and limits](docs/workspace.md#backends-and-limits) and
-[Trust](docs/trust.md).
+**The kernel knows no sensor and no actuator.** A sensor is a template
+process that serves HTTP, and an actuator is a controller command under
+`bash`. See [Sensors](docs/sensors.md) and [Actuators](docs/actuators.md).
 
-**Camera Chat connects an agent-managed Mac camera to a room conversation.**
-Run `pnpm demo` in [`examples/camera-chat`](examples/camera-chat) for a
-camera-free preview. Its README describes live capture and the localhost
-shell and Git backends.
+## Where a room runs
+
+- **One Node process runs a room over a journal in memory or in SQLite.**
+  `@ambionframework/journal` provides `memoryJournals()` and
+  `sqliteJournals(sql)`. See [Deployment](docs/deployment.md).
+- **`@ambionframework/cloudflare` runs a room as Durable Objects**, one for
+  each room and one for each seat.
+- **Two packages provide the bash backend.** `@ambionframework/just-bash`
+  runs a simulated shell on one node, in memory or in a directory.
+  `@ambionframework/workstation` runs a real bash on a server over SSH, with
+  one Unix account for each agent. See
+  [Backends and limits](docs/workspace.md#backends-and-limits) and
+  [Trust](docs/trust.md).
+
+## Packages
+
+| Package                        | Concern                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
+| `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
+| `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                    |
+| `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
+| `@ambionframework/codex`       | The Codex `app-server` executor                                                       |
+| `@ambionframework/compose`     | The runtimes of `compose`: `quickjsRuntime` and `processRuntime`                      |
+| `@ambionframework/workspace`   | The workspace interface, its tools, the SQLite backend, and conformance suites        |
+| `@ambionframework/just-bash`   | The just-bash shell and filesystem in the process, and a git backend in `/git`        |
+| `@ambionframework/workstation` | A bash backend over SSH, with one Unix account for each agent, and a git backend      |
+| `@ambionframework/assistant`   | A default assistant that guides seating and writes summaries, on any executor         |
+| `@ambionframework/simulator`   | Evals: an actor plays a person in a room, and a judge grades the record               |
+| `@ambionframework/cloudflare`  | Rooms and seats as Durable Objects                                                    |
 
 ## Read more
 
 - [Documentation](docs/README.md) maps the design contracts and hosting.
 - [`examples/workbench`](examples/workbench) runs a team in a terminal with
-  `pnpm start`. It needs Node 26.4 or later.
+  `pnpm start`. [`examples/camera-chat`](examples/camera-chat) connects a
+  Mac camera to a room through a sensor template. Both need Node 26.4 or
+  later.
 - [Workbench](https://github.com/fastforwardengine/workbench) is the first
-  application on Ambion. It seats specialists for electrical engineering,
-  hardware, and electrochemistry over one shared workspace.
+  application on Ambion.
 - [Contributing](CONTRIBUTING.md) covers builds and checks.
   [Toolchain](docs/toolchain.md#9-release-and-publishing) covers dev builds
   of `main`.
