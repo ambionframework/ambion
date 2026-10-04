@@ -8,7 +8,6 @@ export default defineConfig({
 		'src/git-entry.ts',
 		'src/s3-entry.ts',
 		'src/conformance.ts',
-		'src/sensors.ts',
 	],
 	format: ['esm'],
 	dts: true,

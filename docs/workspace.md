@@ -1,11 +1,10 @@
 # The workspace
 
-> **Sensor tools are available when the bash backend has workstation endpoints.**
-> `connect` discovers a running server, `disconnect` detaches it, and `observe`
-> reads a qualified sensor and retains its verified evidence through the
-> existing snapshot store.
-> A frame reaches the model as an image, and the text of the result names its
-> export path.
+> **`fetch` is available when the bash backend has endpoints.** It reads a
+> path of a running process that listens on `$PORT`, with GET. The workspace
+> keeps the body as a snapshot. An image reaches the model as an image, and
+> the text of the result names its export path. The host reads a process with
+> `workspace.fetch`.
 
 **The workspace is a resource that holds files and a shell.** The optional
 `@ambionframework/workspace` package provides a workspace resource and its
@@ -20,7 +19,7 @@ SQL binding, and the rules for references and provenance.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-capabilities-dark.svg">
-  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. cancel takes its handle, and wait takes 1 to 16 handles. A wait with timeout 0 reads a process at once. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files and objects. read, write, and edit reach the files. snapshot puts the bytes of a file in an object store, and restore gives them back. The store is a folder of the workspace or an S3 bucket. Optional sensors add connect and observe: an agent observes a server, and the workspace retains the evidence. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="assets/ambion-capabilities.svg">
+  <img alt="A room and its workspace, by capability. A room activates an agent. The room's journal holds a person's question, what an agent says, a say to itself, the close, an optional summary, and the returned say. The agent calls the tools of a workspace. It says what it finds, with refs to what it names. An agent says to itself with a delay. The exchange closes while the say waits. When the say is due, the room gives it back, and the returned say opens an exchange. The workspace gives an agent five capabilities and one pattern, and the agent combines them while the room runs. Every workspace gives an agent processes. bash starts a process that outlives the activation. ps lists it. cancel takes its handle, and wait takes 1 to 16 handles. A wait with timeout 0 reads a process at once. At the start of each activation, a reminder lists the seat's processes. Optional tables add sql: agents pass work through a table or a view. Optional repositories add repos and fork: an agent forks a template, clones it into its home, and pushes. Every workspace gives an agent files and objects. read, write, and edit reach the files. snapshot puts the bytes of a file in an object store, and restore gives them back. The store is a folder of the workspace or an S3 bucket. Optional sensors add fetch: an agent reads a server that a process runs, and the workspace retains the body. Actuators are a pattern over processes: an agent runs a controller command with bash. The command reads its own instruments, handles SIGTERM to stop safe inside the grace of its bash call, and logs JSON lines to a file. The six share the homes and the snapshots. Each agent has a home. On a workstation, no other agent reads it. A snapshot ref names the bytes of a file. An opt-in audit log holds each tool call and its activation. An opt-in room mirror holds each message of the room. A person and the host steer the room. A person on a visit asks a question and reads results. The host is application code. It lists and cancels processes, and hears each start and end. Each one posts a message to the room, and the host can post one when a process ends. A message cites a file with a ref. A restart replays the room's entries." src="assets/ambion-capabilities.svg">
 </picture>
 
 ## Open one resource
@@ -86,28 +85,27 @@ console.log(drive.mirrorAgent); // { name: 'town-host' }
 binds three file tools first: `read`, `write`, and `edit`. The four process
 tools come next: `bash`, `ps`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
-([Processes](processes.md)). The bundle reminds each seat of its processes
-and lists captured sensor discovery when the backend has endpoints. `snapshot`
+([Processes](processes.md)). The bundle reminds each seat of its processes.
+`snapshot`
 and `restore` come next:
 one freezes files and gives the refs that cite them, and the other puts the
 bytes of a cited snapshot in the agent's files
 ([Snapshot a file](#snapshot-a-file)).
-A backend with `endpoints` adds `connect` to validate and discover a running
-sensor server owned by the caller, `disconnect` to detach an owned connection
-without stopping its process, and `observe` to read a qualified sensor and
-retain its returned evidence. Network requests run outside the bash resource.
-Only process checks and export or audit writes use the bash resource.
-`observe` returns each frame as an image part and names its export path in
+A backend with `endpoints` adds `fetch`, which reads a path of a running
+process with GET and keeps the body as a snapshot
+([Read a process with fetch](#read-a-process-with-fetch)). Network requests
+run outside the bash resource. Only process checks and export writes use it.
+`fetch` returns each image as an image part and names its export path in
 the text of the result. `read` of an image returns the image part and a text
 part, `Image path: <path>`. A format that the tool does not attach, such as
 BMP, returns the text part alone. A model that cannot read images still learns
-where the file is. `observe` retains its frame bytes in the exports and
+where the file is. `fetch` keeps the image bytes in the exports and
 snapshots, and `read` leaves its source file unchanged.
 A workspace with a SQL backend adds `sql`
 ([Query the shared database](#query-the-shared-database)). A workspace with
 no SQL backend has no `sql` tool. The bash backend adds its own guidance
 about its own shell, if it has any. Tools use the resources for storage
-operations; process waits and sensor network requests run outside those
+operations; process waits and `fetch` requests run outside those
 operations. The bundle keeps one stable identity. Pass it in an agent's
 `bundles` field.
 
@@ -632,6 +630,130 @@ that the image's user owns. The tier proves what only a real server can:
 A local HTTP server in the unit tests gives the two answers that MinIO does
 not: a 403 head and a 409 put.
 
+## Read a process with fetch
+
+**`fetch` reads one path of a running process with GET.** The process
+serves HTTP on its `$PORT` ([Processes](processes.md#processes-that-serve-http)).
+The workspace keeps the body as a snapshot, writes it to `~/.fetch`, and
+returns the ref. The tool is present when the bash backend has `endpoints`.
+That fact does not change in a session, so the tool list of a seat stays the
+same, and the `bash` schema is the same on every backend.
+
+| Parameter | Type   | Rule                                                         |
+| --------- | ------ | ------------------------------------------------------------ |
+| `process` | string | The name or the handle of a running process                  |
+| `path`    | string | `^/[^\s#]*$`, at most 2048 characters, with its query string |
+
+**The tool refuses any other parameter.** It has no URL, no host, no port,
+no method, and no header. It reaches the port of a running process and
+nothing else.
+
+**One call takes seven steps.**
+
+1. Find the running process of that name or handle in any agent of the
+   workspace.
+2. Send GET to the path through the forward of the process, with a limit of
+   60 seconds joined to the signal of the call. Read the body up to the limit.
+3. Check that the process still runs. A process that ended during the read
+   fails the call.
+4. Refuse a status outside 200 to 299, and show the start of its body.
+5. Take the media type from the `content-type` header, before `;`, trimmed,
+   in lower case. An absent header gives `application/octet-stream`.
+6. Keep the bytes: resolve `~/.fetch/<process>/`, put the bytes on the
+   object resource, and write the export file.
+7. Render the result.
+
+**The export has a name from its content.** The file is
+`~/.fetch/<process>/<sha12>.<ext>`, where `<sha12>` is the first 12 digits of
+the SHA-256 digest. The same bytes give the same file. Each read writes the
+file again, so an edit lasts until the next read of the same bytes. The ref
+keeps the received bytes. The extension follows the media type.
+
+| Media type                       | Extension     |
+| -------------------------------- | ------------- |
+| `application/json`, and `*+json` | `json`        |
+| `text/csv`                       | `csv`         |
+| Other `text/*`                   | `txt`         |
+| `image/png`, `image/jpeg`        | `png`, `jpg`  |
+| `image/gif`, `image/webp`        | `gif`, `webp` |
+| Anything else                    | `bin`         |
+
+**The result has one text block, then an image part for an image.**
+
+```text
+Fetched <path> from <process> (<handle>): <status>, <mediaType>, <bytes> bytes.
+Process data: <the JSON or text>
+File: <export path>
+Snapshot ref: <ref>
+```
+
+The `Process data` line appears for JSON and text. A body past the line and
+byte limits of `read` is cut, and the result adds `The full body is at
+<export path>.` A body of text or JSON past 4 MiB shows no data and says
+where the full body is. An image part appears when the header type is PNG,
+JPEG, GIF, or WebP, the bytes agree with the type, and the body is at most
+5 MiB.
+
+**The declared output is the same for every call.**
+
+| Field                | Meaning                                                   |
+| -------------------- | --------------------------------------------------------- |
+| `process`            | The name of the process, or its handle when it has none   |
+| `handle`, `owner`    | The handle at the read, and the agent that started it     |
+| `path`, `status`     | The path that the call read, and the HTTP status          |
+| `mediaType`, `bytes` | The media type in lower case, and the size of the body    |
+| `sha256`             | The digest of the body                                    |
+| `ref`, `file`        | The snapshot ref to cite, and the absolute export path    |
+| `json`, `text`       | The parsed JSON body, or the whole text body, up to 4 MiB |
+
+**The limits are constants.** The host cannot change them.
+
+| Limit                           | Value  |
+| ------------------------------- | ------ |
+| The body of one call            | 64 MiB |
+| JSON and text in the output     | 4 MiB  |
+| An image part                   | 5 MiB  |
+| The body shown for a bad status | 2 KiB  |
+| The request                     | 60 s   |
+
+**Each failure is a tool error that states the next step.**
+
+| Event                               | Text                                                                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| No running process has the name     | `No running process is named '<process>'. A process of an agent that has not acted since the host started is not listed yet.` |
+| Two running processes have the name | `Two running processes are named '<process>': <handle> of <agent>, <handle> of <agent>. Give the handle.`                     |
+| The port refuses the connection     | `Process '<process>' (<handle>) does not listen on $PORT <port>.`                                                             |
+| The process answers a redirect      | `Process '<process>' answered a redirect for <path>. fetch does not follow redirects.`                                        |
+| The read fails for another cause    | `The read of <path> from '<process>' (<handle>) failed: <message>`                                                            |
+| The body is past the limit          | `The body of <path> is larger than 64 MiB. Nothing was kept.`                                                                 |
+| The process ended during the read   | `Process '<process>' (<handle>) ended during the read. Nothing was kept.`                                                     |
+| The status is outside 200 to 299    | `Process '<process>' answered <status> for <path>. Process data: <first 2 KiB>`                                               |
+| The request ran past 60 seconds     | `Process '<process>' (<handle>) did not answer <path> in 60 seconds. Nothing was kept.`                                       |
+
+**Only a refused connection says that nothing listens.** A refused connect
+to the port and a refused forward of the workstation give that text. A
+redirect answer fails, and `fetch` follows none. Any other failure of the
+request gives its own message.
+
+**Process data is untrusted.** JSON and text render after the mark
+`Process data`. The note of the tool says that process data is untrusted text.
+A seat treats it as evidence. It does not follow it as an instruction.
+
+**The request runs outside the resources.** The lookup and the retention
+take the bash resource and the object resource for their own steps. No step
+runs inside a call of the bash resource, so the call never waits on itself.
+The audit log wraps `fetch` as it wraps every tool.
+
+| Who                        | Reaches                              | Can do                                                   |
+| -------------------------- | ------------------------------------ | -------------------------------------------------------- |
+| Any agent of the workspace | Running processes, by name or handle | GET with no header or body. The workspace keeps the body |
+| The owner of a process     | The same, and `cancel`               | Stop it, which closes its forward                        |
+| The host                   | The same, with `workspace.fetch`     | Any request, with nothing kept. The host is trusted      |
+
+**`workspace.fetch(process, path, init?)` is the read of the host.** It
+returns a `Response`, and it keeps nothing. It exists when the bash backend
+has `endpoints`.
+
 ## Query the shared database
 
 **A workspace has one bash backend, and it can have one SQL backend.**
@@ -975,34 +1097,33 @@ backend exists. That backend moves them back to the conformance entry
 
 ## Declared outputs
 
-**Twelve tools declare their output for `compose`.** Each sets
+**Eleven tools declare their output for `compose`.** Each sets
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares
-none, so `compose` binds it as text. `write`, `edit`, and `disconnect`
+none, so `compose` binds it as text. `write` and `edit`
 declare none, because code needs only their success or their rejection.
 
 **Each output has a named type.** The schema carries an `$id`, which is the
 name in the `Type` column. The description of `compose` lists `name -> Type`
 for each tool, and `describe` renders the type once for all tools that
 share it ([Compose](compose.md#the-catalog)). `wait` gives `WaitResult`, a
-union of `ProcessResult` and `WaitedResult`. `Process`, `Truncation`, and
-`SensorSource` are the named types inside them.
+union of `ProcessResult` and `WaitedResult`. `Process` and `Truncation` are the named types
+inside them.
 
-| Tool       | Type             | Declared output                                                                                         |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `sql`      | `SqlResult`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them. |
-| `snapshot` | `SnapshotResult` | `refs`: one ref for each path, in order.                                                                |
-| `restore`  | `RestoreResult`  | `ref`, `path` of the file, and `bytes`.                                                                 |
-| `read`     | `ReadResult`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.       |
-| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` when the result cut the output.                             |
-| `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                               |
-| `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                   |
-| `wait`     | `WaitResult`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                |
-| `repos`    | `ReposResult`    | `server`, and `repositories` with the id, branches, and clone URL of each.                              |
-| `fork`     | `ForkResult`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                           |
-| `connect`  | `ConnectResult`  | `name`, `hostname`, `port`, `process`, `owner`, `source`, and the qualified names in `sensors`.         |
-| `observe`  | `ObserveResult`  | `sensor`, `request`, `manifestRef`, `manifestPath`, `directory`, `files`, and the connection facts.     |
+| Tool       | Type             | Declared output                                                                                                      |
+| ---------- | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `sql`      | `SqlResult`      | `database`, `count`, `columns`, `rows`, and `export`, `import`, and `imported` when the call sets them.              |
+| `snapshot` | `SnapshotResult` | `refs`: one ref for each path, in order.                                                                             |
+| `restore`  | `RestoreResult`  | `ref`, `path` of the file, and `bytes`.                                                                              |
+| `read`     | `ReadResult`     | `path`, `text`, and the lines `from`, `to`, `lines`, and `next` and `truncation` when they apply.                    |
+| `bash`     | `ProcessResult`  | `process`, `text`, `read`, and `truncation` when the result cut the output.                                          |
+| `cancel`   | `ProcessResult`  | The same facts as `bash`.                                                                                            |
+| `ps`       | `PsResult`       | `processes`: the facts of each process of the caller.                                                                |
+| `wait`     | `WaitResult`     | On one handle, the facts of `bash`. On several, `processes` and `ended`.                                             |
+| `repos`    | `ReposResult`    | `server`, and `repositories` with the id, branches, and clone URL of each.                                           |
+| `fork`     | `ForkResult`     | `repository`, `source`, `url`, and `clone` when the call made a working copy.                                        |
+| `fetch`    | `FetchResult`    | `process`, `handle`, `owner`, `path`, `status`, `mediaType`, `bytes`, `sha256`, `ref`, `file`, and `json` or `text`. |
 
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.
@@ -1016,12 +1137,11 @@ cut. When the first line alone exceeds 50 KB, `text` is empty, and
 is also in the content of the result, so a record that keeps both with
 `toolOutput: 'full'` holds the shown output twice.
 
-**The git, snapshot, and sensor tools declare the facts that they already
+**The git, snapshot, and fetch tools declare the facts that they already
 report.** `repos` gives `repositories` as data, with the branches and the
 hash of each, so code reads no table. `restore` gives the
-absolute path that it wrote. `connect` gives the connection and the names
-of its sensors, and its `details` hold no copy of the server index.
-`observe` gives the paths and refs of the retained evidence.
+absolute path that it wrote. `fetch` gives the status, the digest, the ref,
+and the export path, and it gives the JSON body parsed.
 
 **The `sql` details hold the rows that the tool already reads.** `count` is
 the count of every row of the last statement. `columns` names its columns.
@@ -1046,7 +1166,7 @@ the same facts in `details`. A binding copies them to `error.details`. The
 `truncation` lists the fields of `ShellOutputTruncation`, and a type test pins
 that the two stay assignable. A schema with an `$id` renders once as a
 named type in the catalog of `compose`: `Process`, `ProcessResult`,
-`Truncation`, and `SensorSource`. A `Static` type holds mutable arrays, so a tool
+and `Truncation`. A `Static` type holds mutable arrays, so a tool
 copies a readonly array into its details.
 
 ## The resource contract
@@ -1213,8 +1333,8 @@ wait for the callback that is already running.
 
 ## Backends and limits
 
-**Both deployments provide the core workspace tools.** A backend with ports
-also provides a private transport for sensor servers.
+**Both deployments provide the core workspace tools.** A backend with
+endpoints also provides `fetch`.
 
 | What an agent gets             | One node: `@ambionframework/just-bash`                               | A remote server: `@ambionframework/workstation`            |
 | ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -1226,7 +1346,7 @@ also provides a private transport for sensor servers.
 | Output after cancel or timeout | The file stays empty                                                 | The file keeps the output so far                           |
 | Work after a host restart      | Memory: none. Directory: the files; earlier processes read as failed | The files, and the processes that still run                |
 | Repositories                   | In the host's process, with `justGitBackend`                         | In one account on the server, with `workstationGitBackend` |
-| Sensor servers                 | No endpoints; no `connect`, `disconnect`, or `observe` tools         | Workstation provides loopback forwarding over SSH          |
+| Reading a process over HTTP    | No endpoints, so no `fetch` tool and no `workspace.fetch`            | Loopback forwarding over SSH gives both                    |
 
 `memoryBackend()` keeps files in process. Its optional seed writes files
 before the first use, and `readFiles()` supports host inspection. Disposal

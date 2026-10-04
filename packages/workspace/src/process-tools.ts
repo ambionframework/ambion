@@ -87,6 +87,8 @@ export function processToolGuidance(): string {
 		`The whole output of a process goes to ${PROCESSES_DIR}/<handle>/out. Read it with read.`,
 		`Each process has a directory, ${PROCESSES_DIR}/<handle>/, with its spec, its out, and its exit code when it ends.`,
 		`ls ${PROCESSES_DIR} lists every process you started that the workspace still keeps.`,
+		`The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.`,
+		`Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.`,
 		`A process keeps running after your activation ends. It stops after timeout seconds, ${DEFAULT_TIMEOUT_SECONDS} by default.`,
 		`A stop sends SIGTERM, then SIGKILL after grace seconds, ${DEFAULT_GRACE_SECONDS} by default. Raise grace for a process that must clean up.`,
 		`No message tells you when a process ends. When your answer needs the result, call wait before you answer.`,

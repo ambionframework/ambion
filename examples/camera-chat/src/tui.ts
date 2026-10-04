@@ -194,7 +194,7 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		status.content = `${host.preview.failure ?? host.activity}\nEnter: send · Shift+Enter: newline · PgUp/PgDn: scroll · Ctrl+P: preview · Ctrl+C: quit`;
 	}
 	function fitChat() {
-		camera.visible = Boolean(host.preview.sensor && host.preview.latest) && !dismissed;
+		camera.visible = Boolean(host.preview.handle && host.preview.latest) && !dismissed;
 		chat.width = camera.visible ? Math.max(1, renderer.width - camera.width - 4) : '100%';
 	}
 	function updatePicture(frame: PreviewFrame) {
@@ -301,7 +301,7 @@ function chatBlocks(messages: readonly Message[], activity: string): Block[] {
 	if (!blocks.length)
 		blocks.push({
 			type: 'note',
-			text: 'Ask the agent to connect the camera. The preview appears after its sensor link is connected.',
+			text: 'Ask the agent to connect the camera. The preview appears while the camera process runs.',
 		});
 	if (activity !== 'Ready') blocks.push({ type: 'live', text: activity });
 	return blocks;

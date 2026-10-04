@@ -135,14 +135,32 @@ function skillOf(folder: string, paths: readonly string[], files: SourceFiles): 
 	});
 }
 
+/** The files of every source, merged. Two sources may not hold one skill folder. */
+async function readSources(sources: readonly SourceInput[]): Promise<SourceFiles> {
+	const owners = new Map<string, number>();
+	const merged: Record<string, Uint8Array> = {};
+	for (const [index, source] of sources.entries()) {
+		const files = await readSource(source);
+		const folders = new Set(Object.keys(files).map((path) => path.split('/')[0] ?? path));
+		for (const folder of folders) {
+			const owner = owners.get(folder);
+			if (owner !== undefined)
+				refuse(`the skill '${folder}' is in source ${owner + 1} and source ${index + 1}.`);
+			owners.set(folder, index);
+		}
+		Object.assign(merged, files);
+	}
+	return merged;
+}
+
 /**
- * Read `source` once, check each skill, and freeze the files. Each folder
- * at the root of the source is one skill, with a `SKILL.md` and any
- * scripts, references, and assets. The error names the first file that
- * breaks a rule.
+ * Read each source once, check each skill, and freeze the files. Each
+ * folder at the root of a source is one skill, with a `SKILL.md` and any
+ * scripts, references, and assets. A skill folder may be in one source
+ * only. The error names the first file that breaks a rule.
  */
-export async function loadSkills(source: SourceInput): Promise<SkillSet> {
-	const files = await readSource(source);
+export async function loadSkills(...sources: readonly SourceInput[]): Promise<SkillSet> {
+	const files = await readSources(sources);
 	const folders = byFolder(files);
 	if (folders.size === 0) refuse('the source holds no skill.');
 	const skills = [...folders].map(([folder, paths]) => skillOf(folder, paths, files));

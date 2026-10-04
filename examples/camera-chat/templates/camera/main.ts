@@ -2,10 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import type { SensorSource } from '@ambionframework/workspace/sensors';
 import { builtInCamera, DEFAULT_FRAMERATE, startCamera } from './camera.ts';
 import { demoFrame, type Frame } from './frame.ts';
-import { openSensor } from './server.ts';
+import { openSensor, type SensorSource } from './server.ts';
 
 const cwd = dirname(fileURLToPath(import.meta.url));
 const git = (...args: string[]) =>
@@ -25,6 +24,14 @@ function launchSource(): SensorSource {
 	};
 }
 
+/** The port of the process. The workspace sets `PORT` for every process that `bash` starts. */
+function portOf(value: string | undefined): number {
+	const port = Number(value);
+	if (value === undefined || !Number.isInteger(port) || port < 1 || port > 65535)
+		throw new Error('PORT must be an integer from 1 to 65535. The workspace sets it.');
+	return port;
+}
+
 async function main() {
 	const { values } = parseArgs({
 		options: {
@@ -39,14 +46,8 @@ async function main() {
 	if (!Number.isFinite(framerate) || framerate <= 0)
 		throw new Error('--framerate must be a positive number.');
 	const source = launchSource();
-	const sensor = await openSensor(source);
-	let ready = false;
-	const receive = (frame: Frame) => {
-		sensor.receive(frame);
-		if (ready) return;
-		ready = true;
-		console.log(`READY ${JSON.stringify({ port: sensor.port, source })}`);
-	};
+	const sensor = await openSensor(source, portOf(process.env.PORT));
+	const receive = (frame: Frame) => sensor.receive(frame);
 	let stopCamera = async () => {};
 	try {
 		if (values.demo) receive(demoFrame());

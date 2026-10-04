@@ -1,16 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createSensorClient } from '@ambionframework/workspace/sensors';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { labRepositories } from '../src/repositories.ts';
-import {
-	runTemplateSensorConformance,
-	templateSensorFixture,
-} from './support/sensor-conformance.ts';
 
 const template = fileURLToPath(new URL('../templates/sensor-server/', import.meta.url));
 
@@ -31,7 +26,14 @@ describe('the sensor server template', () => {
 		expect(head).toBeDefined();
 		const commit = await git.show(fork.repository.id, head ?? '');
 		expect(commit?.changes.map((change) => change.path)).toEqual(
-			expect.arrayContaining(['server.mjs', 'package.json', 'test/server.test.mjs']),
+			expect.arrayContaining([
+				'server.mjs',
+				'api.mjs',
+				'package.json',
+				'test/server.test.mjs',
+				'skills/sensor-server/SKILL.md',
+				'skills/sensor-server/macros/observe.js',
+			]),
 		);
 
 		const root = await mkdtemp(join(tmpdir(), 'ambion-sensor-lifecycle-'));
@@ -61,7 +63,7 @@ describe('the sensor server template', () => {
 		await writeFile(serverFile, broken);
 		const rejected = npmTest(checkout);
 		expect(rejected.status).not.toBe(0);
-		expect(rejected.output).toContain('fixture fails the SN1 observation schema');
+		expect(rejected.output).toContain('fixture fails the sensor API 2 observation schema');
 
 		const customized = broken
 			.replace("kind: 'invalid-series',", "kind: 'series',")
@@ -83,34 +85,30 @@ describe('the sensor server template', () => {
 
 		const server = await start(fresh, join(root, 'sensor-data'));
 		onTestFinished(() => server.stop());
-		const index = await server.client.index();
-		expect(index.source).toMatchObject({
-			repository: 'agent/sensors',
-			commit: savedCommit,
-			branch: 'calibrated',
-			dirty: false,
+		const index = await server.get('/');
+		expect(index).toMatchObject({
+			api: 2,
+			source: {
+				repository: 'agent/sensors',
+				commit: savedCommit,
+				branch: 'calibrated',
+				dirty: false,
+			},
 		});
-		const result = await server.client.observe('room-temperature');
+		const result = await server.get('/room-temperature/observe');
 		const series = result.observations[0]?.parts[0];
 		expect(series?.kind).toBe('series');
-		if (series?.kind !== 'series')
-			throw new Error('The calibrated fixture is not a numeric series.');
-		expect(series.values).toEqual([21.5, 22.25, 21.4]);
-		const frameBytes = await readFile(join(fresh, 'fixtures', 'frame.png'));
-		const frameDigest = createHash('sha256').update(frameBytes).digest('hex');
-		await runTemplateSensorConformance(
-			`http://127.0.0.1:${server.port}`,
-			templateSensorFixture(frameDigest, frameBytes, [21.5, 22.25, 21.4]),
-		);
-		const camera = await server.client.observe('bench-camera');
+		expect(series?.values).toEqual([21.5, 22.25, 21.4]);
+		const camera = await server.get('/bench-camera/observe');
 		expect(camera.observations[0]?.at).toBe('2025-01-02T03:04:06.000Z');
 		const frame = camera.observations[0]?.parts[0];
 		expect(frame?.kind).toBe('frame');
-		if (frame?.kind !== 'frame') throw new Error('The camera fixture is not a frame.');
-		const image = await server.client.file(frame.file);
-		expect(image.mediaType).toBe('image/png');
-		expect([...image.bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-		const notes = await server.client.observe('operator-notes');
+		const image = await fetch(`http://127.0.0.1:${server.port}/files/${frame?.file}`);
+		expect(image.headers.get('content-type')).toBe('image/png');
+		expect([...new Uint8Array(await image.arrayBuffer()).slice(0, 8)]).toEqual([
+			137, 80, 78, 71, 13, 10, 26, 10,
+		]);
+		const notes = await server.get('/operator-notes/observe');
 		expect(notes.observations[0]).toEqual({
 			at: '2025-01-02T03:04:07.000Z',
 			parts: [{ kind: 'text', text: 'Fixture run: the indicator is green.' }],
@@ -154,25 +152,41 @@ async function packageRoot(file: string, expectedName: string): Promise<string> 
 }
 
 async function linkDependencies(project: string): Promise<void> {
-	const workspaceFile = fileURLToPath(import.meta.resolve('@ambionframework/workspace/sensors'));
 	const typeboxFile = fileURLToPath(import.meta.resolve('typebox/value'));
-	const workspaceRoot = await packageRoot(workspaceFile, '@ambionframework/workspace');
 	const typeboxRoot = await packageRoot(typeboxFile, 'typebox');
 	const modules = join(project, 'node_modules');
-	const scope = join(modules, '@ambionframework');
-	await mkdir(scope, { recursive: true });
-	await symlink(workspaceRoot, join(scope, 'workspace'), 'dir');
+	await mkdir(modules, { recursive: true });
 	await symlink(typeboxRoot, join(modules, 'typebox'), 'dir');
 }
 
+async function unusedPort(): Promise<number> {
+	const listener = createServer();
+	await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
+	const address = listener.address();
+	if (address === null || typeof address === 'string') throw new Error('No test port.');
+	await new Promise<void>((resolve) => listener.close(() => resolve()));
+	return address.port;
+}
+
+/** The parts of a wire body that the test reads. */
+interface Wire {
+	readonly api: number;
+	readonly source: unknown;
+	readonly observations: readonly {
+		readonly at: string;
+		readonly parts: readonly { kind: string; values?: number[]; file?: string }[];
+	}[];
+}
+
 async function start(cwd: string, dataPath: string) {
+	const port = await unusedPort();
 	const child = spawn(process.execPath, ['server.mjs'], {
 		cwd,
 		env: {
 			...process.env,
 			AMBION_SENSOR_DATA_DIR: dataPath,
 			AMBION_SENSOR_REPOSITORY: 'agent/sensors',
-			PORT: '0',
+			PORT: String(port),
 		},
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
@@ -181,36 +195,25 @@ async function start(cwd: string, dataPath: string) {
 	child.stderr.setEncoding('utf8');
 	child.stdout.on('data', (part: string) => (output += part));
 	child.stderr.on('data', (part: string) => (output += part));
-	const port = await new Promise<number>((resolvePort, reject) => {
-		const timeout = setTimeout(
-			() => reject(new Error(`Sensor server did not start: ${output}`)),
-			5000,
+	const exited = new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()));
+	const base = `http://127.0.0.1:${port}`;
+	// The server prints nothing when it listens, so poll the index until it answers.
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (child.exitCode !== null) throw new Error(`Sensor server exited: ${output}`);
+		const answered = await fetch(base).then(
+			(response) => response.ok,
+			() => false,
 		);
-		child.stdout.on('data', (part: string) => {
-			const match = part.match(/READY http:\/\/127\.0\.0\.1:(\d+)/);
-			if (match?.[1] !== undefined) {
-				clearTimeout(timeout);
-				resolvePort(Number(match[1]));
-			}
-		});
-		child.once('exit', (code) => {
-			clearTimeout(timeout);
-			reject(new Error(`Sensor server exited with ${code}: ${output}`));
-		});
-	}).catch(async (error: unknown) => {
-		if (child.exitCode === null) {
-			child.kill('SIGTERM');
-			await new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()));
-		}
-		throw error;
-	});
+		if (answered) break;
+		await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+	}
 	return {
 		port,
-		client: createSensorClient(`http://127.0.0.1:${port}`),
+		get: async (path: string) => (await (await fetch(`${base}${path}`)).json()) as Wire,
 		async stop() {
 			if (child.exitCode !== null) return;
 			child.kill('SIGTERM');
-			await new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()));
+			await exited;
 		},
 	};
 }

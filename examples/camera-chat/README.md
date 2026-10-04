@@ -2,20 +2,22 @@
 
 A macOS room chat with an agent-managed camera sensor. The conversation uses
 Workbench's transcript widgets and colors. A small image-only preview appears
-at the top right after the agent connects a camera server and a frame arrives.
-While it is visible, the chat column narrows to keep text clear of the image.
-Hiding or disconnecting the preview restores the full chat width. Referenced
+at the top right while a camera process runs and a frame arrives. While it is
+visible, the chat column narrows to keep text clear of the image. Hiding the
+preview or stopping the camera restores the full chat width. Referenced
 observation images appear beneath their messages, at the same size as the
-preview, and remain available after disconnecting.
+preview, and remain available after the camera stops.
 
 The host does not open the camera at startup. Ask:
 
 > Connect the built-in camera and tell me what you see.
 
 The agent forks `templates/camera`, clones it, validates and pushes the saved
-code, starts its foreground server through `bash`, reads its READY port, and
-calls standard `connect`. It reads scenes through standard `observe` and cites
-the retained manifest snapshot. There is no camera-specific observation tool.
+code, and starts its foreground server through `bash` with the name `camera`.
+The workspace gives the process a port in `$PORT`. The agent reads scenes with
+`fetch`: the observation at `/camera/observe`, then the frame at
+`/files/<digest>`. It cites both snapshot refs. There is no camera-specific
+observation tool.
 
 ## Run on macOS
 
@@ -76,44 +78,46 @@ pnpm demo
 
 Send a message to start the scripted agent. A script in `src/demo.ts` runs the
 seat in place of Codex and needs no Codex login. It executes the actual Git,
-process, connect, and observe tools against a clone of the camera template.
+process, and fetch tools against a clone of the camera template.
 The cloned server runs with `--demo` and produces a synthetic image. It opens
 no physical device and makes no model request. Its reply does not perform
 visual inference. The demo also requires macOS. Demo state uses `.data/demo`;
 live state uses `.data/live`. `--directory <path>` selects another directory.
 
-## Preview and connection lifetime
+## Preview and process lifetime
 
-The host subscribes to `workspace.sensors` lifecycle events. A successful
-camera `connect` opens the image-only preview when its first frame arrives. It
-polls the registered connection through the standard sensor client and
-verifies PNG digests. It rechecks the server process every two seconds; a link
-event hides the preview at once. Preview frames are temporary display data;
-standard `observe` retains evidence independently in workspace snapshots.
-Inline images resolve those immutable snapshots, so later preview frames do
-not change the evidence shown with an answer. The agent's answer should cite
-the time of its own observation.
+The host subscribes to `workspace.processes`. A `started` event of a process
+named `camera` starts a timer of five reads each second. At open, one list of
+the running processes of the agent `observer` finds a camera that still runs
+from an earlier host run. The list reads the files of `observer`, and the
+read adopts the process. Each read
+calls `workspace.fetch` for `/camera/observe` and then for the frame, with no
+retention. A failed read shows "Camera starting". The `ended` event of the
+process stops the timer and hides the preview. Preview frames are temporary
+display data; the agent's `fetch` retains evidence independently in workspace
+snapshots. Inline images resolve those immutable snapshots, so later preview
+frames do not change the evidence shown with an answer. The agent's answer
+should cite the time of its own observation.
 
 | Key               | Action                                      |
 | ----------------- | ------------------------------------------- |
 | Enter             | Send a room message                         |
 | Shift+Enter       | Insert a newline                            |
 | PageUp / PageDown | Scroll the conversation                     |
-| Escape            | Hide the preview without disconnecting      |
-| Ctrl+P            | Toggle the connected preview                |
+| Escape            | Hide the preview while the camera runs      |
+| Ctrl+P            | Toggle the preview                          |
 | Ctrl+C            | Close the room and stop workspace processes |
 
-Ask the agent to disconnect the camera to call `disconnect({ name: 'camera' })`.
-This detaches the link and hides the preview while leaving the server running.
-Ask it to turn off or stop the camera to call `cancel` on the process. Process
-exit also hides the preview. Reconnecting a running server opens it again.
-A host restart restores the room journal, but starts without a sensor link;
-ask the agent to start and connect the server again.
+Ask the agent to stop or turn off the camera to call `cancel` on the process.
+Process exit hides the preview. Ask the agent to start the camera again to
+start a new process. A host restart restores the room journal. The preview
+lists the processes of `observer` at open, so it shows a camera that still
+runs from the earlier host run before the agent acts.
 
 The standalone [camera template](templates/camera/README.md) documents runtime,
-validation, device selection, readiness, Git source metadata, replacement, and
-rollback. It uses no runtime npm dependencies and implements the version 1
-[sensor API](../../docs/sensors.md). It buffers recent frames in memory and
+validation, device selection, `$PORT`, Git source metadata, replacement, and
+rollback. It uses no runtime npm dependencies and implements version 2 of the
+[sensor protocol](../../docs/sensors.md). It buffers recent frames in memory and
 advertises no span support. The clone records its own launch source metadata.
 
 ## Local backends and storage
@@ -133,28 +137,28 @@ image data.
 
 ## Code and validation
 
-| File                      | Responsibility                                          |
-| ------------------------- | ------------------------------------------------------- |
-| `src/main.ts`             | CLI, Codex login check, room startup, cleanup           |
-| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle         |
-| `src/login.ts`            | Find the Codex login of the host                        |
-| `src/demo.ts`             | Scripted seat for `--demo`                              |
-| `src/preview.ts`          | Connection callbacks and standard sensor-client polling |
-| `src/reference-images.ts` | Resolve retained images cited by messages               |
-| `src/tui.ts`              | Workbench transcript and floating preview               |
-| `src/terminal.ts`         | Native graphics requirement                             |
-| `src/local-bash.ts`       | Local shell backend and loopback ports                  |
-| `src/local-env.ts`        | Local files and `bash` on the workspace port            |
-| `src/local-git.ts`        | Template seeding and local repositories                 |
-| `templates/camera/`       | Independently runnable, forkable camera server          |
+| File                      | Responsibility                                  |
+| ------------------------- | ----------------------------------------------- |
+| `src/main.ts`             | CLI, Codex login check, room startup, cleanup   |
+| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle |
+| `src/login.ts`            | Find the Codex login of the host                |
+| `src/demo.ts`             | Scripted seat for `--demo`                      |
+| `src/preview.ts`          | Process events and `workspace.fetch` polling    |
+| `src/reference-images.ts` | Resolve retained images cited by messages       |
+| `src/tui.ts`              | Workbench transcript and floating preview       |
+| `src/terminal.ts`         | Native graphics requirement                     |
+| `src/local-bash.ts`       | Local shell backend and loopback ports          |
+| `src/local-env.ts`        | Local files and `bash` on the workspace port    |
+| `src/local-git.ts`        | Template seeding and local repositories         |
+| `templates/camera/`       | Independently runnable, forkable camera server  |
 
 ```sh
 pnpm check:types
 pnpm test
 ```
 
-Tests run the real clone → validate → launch → connect → observe path with a
-scripted agent and synthetic frame. They check retained evidence, connection
-and process lifetime, preview visibility, resizing, native image dimensions,
-and the standard sensor conformance suite. These tests open no physical camera
-and make no live model request.
+Tests run the real clone → validate → launch → fetch path with a scripted
+agent and synthetic frame. They check retained evidence, process lifetime,
+preview visibility, resizing, and native image dimensions. The template's own
+`node --test test.ts` runs the protocol cases. These tests open no physical
+camera and make no live model request.

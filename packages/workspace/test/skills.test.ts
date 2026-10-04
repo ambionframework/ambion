@@ -90,6 +90,17 @@ describe('loadSkills', () => {
 		).toBe(true);
 	});
 
+	it('merges the files of several sources into one sorted set, and refuses a skill in two sources', async () => {
+		const set = await loadSkills(POUR_PLAN, { 'zinc/SKILL.md': skillMd(valid('zinc')) });
+		expect(set.skills.map((skill) => skill.name)).toEqual(['pour-plan', 'zinc']);
+		expect(Object.keys(set.files)).toEqual([...Object.keys(set.files)].sort());
+		expect(set.scripts).toEqual(['pour-plan/scripts/tonnage.sh']);
+		const copy = { 'a/SKILL.md': skillMd(valid('a')) };
+		await expect(loadSkills(copy, POUR_PLAN, copy)).rejects.toThrow(
+			"Skill set: the skill 'a' is in source 1 and source 3.",
+		);
+	});
+
 	it.each<[string, Record<string, string>, string]>([
 		[
 			'a file outside a skill folder',
@@ -151,6 +162,10 @@ describe('loadSkills', () => {
 		['no skill', {}, 'the source holds no skill'],
 	])('refuses %s', async (_case, source, message) => {
 		await expect(loadSkills(source)).rejects.toThrow(`Skill set: ${message}`);
+	});
+
+	it('refuses zero sources', async () => {
+		await expect(loadSkills()).rejects.toThrow('Skill set: the source holds no skill.');
 	});
 
 	it('ends the frontmatter at a line that is --- alone, and refuses a SKILL.md that is not UTF-8 and a set that loadSkills did not make', async () => {

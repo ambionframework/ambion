@@ -89,7 +89,12 @@ export interface WorkspaceEndpoint {
 export interface WorkspaceEndpoints {
 	/** The configured machine where workspace commands run. */
 	readonly machine: string;
-	/** Forward a remote loopback service to a private host loopback listener. */
+	/**
+	 * Forward a remote loopback service to a private host loopback listener.
+	 * When the machine refuses the connection to `port`, the call rejects
+	 * with an error whose `code` is `'ECONNREFUSED'`, and `fetch` says that
+	 * the process does not listen.
+	 */
 	forward(
 		agent: { readonly name: string },
 		port: number,

@@ -8,24 +8,16 @@ import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
-import {
-	ObserveResponseSchema,
-	SensorErrorSchema,
-	SensorIndexSchema,
-} from '@ambionframework/workspace/sensors';
 import { Check } from 'typebox/value';
+import { API, ErrorSchema, IndexSchema, ObserveSchema } from '../api.mjs';
 
 const template = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const workspaceRoot = await findPackageRoot(
-	fileURLToPath(import.meta.resolve('@ambionframework/workspace/sensors')),
-	'@ambionframework/workspace',
-);
 const typeboxRoot = await findPackageRoot(
 	fileURLToPath(import.meta.resolve('typebox/value')),
 	'typebox',
 );
 
-test('server fixtures, launch metadata, and data safety follow SN1', async (context) => {
+test('server fixtures, launch metadata, and data safety follow sensor API 2', async (context) => {
 	const root = await mkdtemp(join(tmpdir(), 'ambion-sensor-template-'));
 	context.after(() => rm(root, { recursive: true, force: true }));
 	const bare = join(root, 'fork.git');
@@ -49,7 +41,7 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	const clean = await start(checkout, data);
 	context.after(() => clean.stop());
 	const index = await clean.get('/');
-	assert.equal(Check(SensorIndexSchema, index), true);
+	assert.equal(Check(IndexSchema, index), true);
 	assert.deepEqual(index.source, {
 		repository: 'agent/sensors',
 		commit: baseCommit,
@@ -59,7 +51,7 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	const allFixtures = new Map();
 	for (const sensor of index.sensors) {
 		const result = await clean.observe(sensor.name);
-		assert.equal(Check(ObserveResponseSchema, result), true);
+		assert.equal(Check(ObserveSchema, result), true);
 		allFixtures.set(sensor.name, result);
 	}
 	const numeric = [...allFixtures.values()].find((result) =>
@@ -72,7 +64,7 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 		result.observations[0].parts.some((part) => part.kind === 'text'),
 	);
 	assert.ok(numeric && frame && text, 'all numeric, frame, and text fixtures are present');
-	assert.equal(Check(ObserveResponseSchema, numeric), true);
+	assert.equal(Check(ObserveSchema, numeric), true);
 	const series = numeric.observations[0].parts[0];
 	assert.equal(series.kind, 'series');
 	assert.ok(series.values.length > 0 && series.values.every(Number.isFinite));
@@ -94,30 +86,8 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	assert.ok(text.observations[0].parts[0].text.length > 0);
 	const seriesName = [...allFixtures].find(([, result]) => result === numeric)[0];
 	assert.equal((await readFile(join(data, 'acquisition.json'), 'utf8')).includes(seriesName), true);
-	const badRequest = await clean.post(`/${seriesName}/observe`, '{');
-	assert.equal(badRequest.status, 400);
-	assert.equal(Check(SensorErrorSchema, badRequest.body), true);
-	for (const body of [
-		{ api: 2 },
-		{ api: 1, span: { from: '2025-01-02T03:04:06.000Z', to: '2025-01-02T03:04:05.000Z' } },
-		{ api: 1, span: { from: '2025-01-02T03:04:05.000Z', to: '2025-01-02T03:04:05.000Z' } },
-	]) {
-		const invalid = await clean.post(`/${seriesName}/observe`, JSON.stringify(body));
-		assert.equal(invalid.status, 400);
-		assert.equal(Check(SensorErrorSchema, invalid.body), true);
-	}
-	const span = await clean.post(
-		`/${seriesName}/observe`,
-		JSON.stringify({
-			api: 1,
-			span: { from: '2025-01-02T03:04:05.000Z', to: '2025-01-02T03:04:06.000Z' },
-		}),
-	);
-	assert.equal(span.status, 422);
-	for (const path of ['/constructor/observe', '/unknown/observe', '/missing/path']) {
-		assert.equal((await clean.post(path, '{"api":1}')).status, 404);
-	}
-	assert.equal(await clean.status(`/files/${'a'.repeat(64)}`), 404);
+	const acquired = JSON.parse(await readFile(join(data, 'acquisition.json'), 'utf8'));
+	await conformance(clean, index, { acquired, frameDigest: digest, frameBytes: fixtureBytes });
 
 	await writeFile(join(checkout, 'README.md'), 'edited after launch\n');
 	git(checkout, ['add', 'README.md']);
@@ -129,6 +99,11 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	context.after(() => assigned.stop());
 	assert.equal(assigned.port, requestedPort);
 	await assigned.stop();
+	const unassigned = await start(checkout, join(root, 'unassigned-data'), {
+		expectExit: true,
+		port: '',
+	});
+	assert.match(unassigned.output, /PORT must be an integer from 1 to 65535/);
 
 	const dirtyFile = join(checkout, 'dirty.txt');
 	await writeFile(dirtyFile, 'dirty at launch\n');
@@ -156,6 +131,57 @@ test('server fixtures, launch metadata, and data safety follow SN1', async (cont
 	assert.match(refused.output, /outside the Git checkout/);
 	assert.deepEqual(await readdir(join(checkout, 'inside-data')), []);
 });
+
+const SPAN = { from: '2025-01-02T03:04:00.000Z', to: '2025-01-02T03:05:00.000Z' };
+
+/** The wire cases of sensor API 2, against the acquisition file that the server wrote at launch. */
+async function conformance(server, index, fixture) {
+	const expected = fixture.acquired;
+	assert.equal(index.api, API);
+	assert.deepEqual(index.sensors.map(({ name }) => name).sort(), Object.keys(expected).sort());
+	for (const sensor of index.sensors) {
+		assert.equal(sensor.spans, false, `${sensor.name} declares no span support`);
+		const latest = await server.request(`/${sensor.name}/observe`);
+		assert.equal(latest.status, 200);
+		assert.match(latest.contentType, /^application\/json/);
+		assert.deepEqual(latest.body, { api: API, observations: [expected[sensor.name]] });
+		const span = await server.request(`/${sensor.name}/observe?from=${SPAN.from}&to=${SPAN.to}`);
+		assert.equal(span.status, 422, `${sensor.name} refuses a span it does not support`);
+		assert.equal(span.body.code, 'unavailable');
+	}
+	const name = 'room-temperature';
+	const invalid = [
+		['a reversed span', `?from=${SPAN.to}&to=${SPAN.from}`],
+		['an empty span', `?from=${SPAN.from}&to=${SPAN.from}`],
+		['from alone', `?from=${SPAN.from}`],
+		['to alone', `?to=${SPAN.to}`],
+		['a timestamp with no milliseconds', '?from=2025-01-02T03:04:00Z&to=2025-01-02T03:05:00Z'],
+		['an unknown parameter', `?from=${SPAN.from}&to=${SPAN.to}&limit=1`],
+		['a repeated parameter', `?from=${SPAN.from}&from=${SPAN.from}&to=${SPAN.to}`],
+	];
+	for (const [what, query] of invalid) {
+		const reply = await server.request(`/${name}/observe${query}`);
+		assert.equal(reply.status, 400, `${what} returns 400`);
+		assert.equal(Check(ErrorSchema, reply.body), true);
+		assert.equal(reply.body.code, 'invalid');
+	}
+	for (const [path, method] of [
+		['/unknown-sensor/observe', 'GET'],
+		['/constructor/observe', 'GET'],
+		[`/files/${'a'.repeat(64)}`, 'GET'],
+		['/unknown-path', 'GET'],
+		[`/${name}/observe`, 'POST'],
+	]) {
+		const reply = await server.request(path, method);
+		assert.equal(reply.status, 404, `${method} ${path} returns 404`);
+		assert.equal(Check(ErrorSchema, reply.body), true);
+		assert.equal(reply.body.code, 'unknown');
+	}
+	const file = await server.file(`/files/${fixture.frameDigest}`);
+	assert.equal(file.status, 200);
+	assert.equal(file.contentType, 'image/png');
+	assert.deepEqual(file.bytes, fixture.frameBytes);
+}
 
 function git(cwd, args) {
 	const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -225,80 +251,95 @@ async function findPackageRoot(file, name) {
 
 async function linkDependencies(project) {
 	const modules = join(project, 'node_modules');
-	const scope = join(modules, '@ambionframework');
-	await mkdir(scope, { recursive: true });
-	await symlink(workspaceRoot, join(scope, 'workspace'), 'dir');
+	await mkdir(modules, { recursive: true });
 	await symlink(typeboxRoot, join(modules, 'typebox'), 'dir');
 }
 
-async function start(cwd, dataPath, { expectExit = false, port = 0 } = {}) {
+async function start(cwd, dataPath, { expectExit = false, port } = {}) {
+	const boundPort = port ?? (await unusedPort());
 	const child = spawn(process.execPath, ['server.mjs'], {
 		cwd,
 		env: {
 			...process.env,
 			AMBION_SENSOR_DATA_DIR: dataPath,
 			AMBION_SENSOR_REPOSITORY: 'agent/sensors',
-			PORT: String(port),
+			PORT: String(boundPort),
 		},
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let output = '';
+	let exited = false;
 	child.stdout.setEncoding('utf8');
 	child.stderr.setEncoding('utf8');
 	child.stdout.on('data', (part) => (output += part));
 	child.stderr.on('data', (part) => (output += part));
-	const ready = new Promise((resolveReady, reject) => {
-		const timeout = setTimeout(
-			() => reject(new Error(`Server did not become ready: ${output}`)),
-			5000,
-		);
-		child.stdout.on('data', (part) => {
-			const match = part.match(/READY http:\/\/127\.0\.0\.1:(\d+)/);
-			if (match) {
-				clearTimeout(timeout);
-				resolveReady(Number(match[1]));
-			}
-		});
+	const exit = new Promise((resolveExit) =>
 		child.once('exit', (code) => {
-			clearTimeout(timeout);
-			if (expectExit) resolveReady(0);
-			else reject(new Error(`Server exited with ${code}: ${output}`));
-		});
-	});
-	const boundPort = await ready;
-	if (expectExit) return { output };
+			exited = true;
+			resolveExit(code);
+		}),
+	);
+	const base = `http://127.0.0.1:${boundPort}`;
+	// The server prints nothing when it listens, so poll the index until it answers.
+	const listening = async () => {
+		for (let attempt = 0; attempt < 100 && !exited; attempt++) {
+			const answered = await fetch(base).then(
+				(response) => response.status === 200,
+				() => false,
+			);
+			if (answered) return true;
+			await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+		}
+		return false;
+	};
+	if (expectExit) {
+		await exit;
+		return { output };
+	}
+	if (!(await listening())) {
+		child.kill('SIGTERM');
+		throw new Error(`Server did not listen: ${output}`);
+	}
 	return {
 		async get(path) {
-			const response = await fetch(`http://127.0.0.1:${boundPort}${path}`);
+			const response = await fetch(`${base}${path}`);
 			return response.json();
 		},
 		async observe(name) {
-			const response = await this.post(`/${name}/observe`, '{"api":1}');
+			const response = await this.request(`/${name}/observe`);
 			assert.equal(response.status, 200);
 			return response.body;
 		},
-		async post(path, body) {
-			const response = await fetch(`http://127.0.0.1:${boundPort}${path}`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body,
-			});
-			return { status: response.status, body: await response.json() };
+		async request(path, method = 'GET') {
+			const response = await fetch(`${base}${path}`, { method });
+			return {
+				status: response.status,
+				contentType: response.headers.get('content-type'),
+				body: await response.json(),
+			};
 		},
 		async bytes(path) {
-			const response = await fetch(`http://127.0.0.1:${boundPort}${path}`);
+			const response = await fetch(`${base}${path}`);
 			assert.equal(response.status, 200);
 			return Buffer.from(await response.arrayBuffer());
 		},
+		async file(path) {
+			const response = await fetch(`${base}${path}`);
+			return {
+				status: response.status,
+				contentType: response.headers.get('content-type'),
+				bytes: Buffer.from(await response.arrayBuffer()),
+			};
+		},
 		async status(path) {
-			const response = await fetch(`http://127.0.0.1:${boundPort}${path}`);
+			const response = await fetch(`${base}${path}`);
 			return response.status;
 		},
 		port: boundPort,
 		async stop() {
-			if (child.exitCode !== null) return;
+			if (exited) return;
 			child.kill('SIGTERM');
-			await new Promise((resolveExit) => child.once('exit', resolveExit));
+			await exit;
 		},
 	};
 }

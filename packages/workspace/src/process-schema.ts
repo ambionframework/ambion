@@ -23,6 +23,9 @@ export const ProcessFacts = Type.Object(
 		kind: Type.Literal('bash'),
 		agent: Type.String({ description: 'The agent that started the process.' }),
 		command: Type.String({ description: 'The command, as it was given.' }),
+		port: Type.Integer({
+			description: 'The port that the workspace set in $PORT for the command. Zero means none.',
+		}),
 		state: ProcessState,
 		output: Type.String({
 			description: 'The absolute path of the file that holds the whole output.',

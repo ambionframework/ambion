@@ -1,8 +1,9 @@
 # Processes
 
-> [Sensor servers](sensors.md#run-a-server-from-git) use these existing
-> process tools. A workspace with endpoints adds `connect`, which attaches a
-> server port and changes no process timeout or disposal rule.
+> Every process has a port in `$PORT`. A process that listens on it serves
+> HTTP, and any agent reads it with `fetch`
+> ([Processes that serve HTTP](#processes-that-serve-http)).
+> [Sensor servers](sensors.md#run-a-server-from-git) are such processes.
 >
 > [Actuators](actuators.md) describes a device controller that runs as a
 > `bash` process, with a grace that fits the device.
@@ -38,6 +39,7 @@ the processes of the agents of this run through `workspace.processes`
 | `processes.ts`      | The table: starts, reads, adoptions, and the host's view             |
 | `process-cancel.ts` | The cancels: the chain of steps for each agent, and the waits        |
 | `process-run.ts`    | One run of a process, and the waits                                  |
+| `process-fetch.ts`  | The forward cache: the lookup of a process and the request to it     |
 | `process-tools.ts`  | The four tools, and the read of the end of an output                 |
 | `process-text.ts`   | The state line, the `ps` table, and the reminder text                |
 
@@ -51,6 +53,8 @@ states the resources and the backends that a process runs on.
 | process     | One background command that the workspace runs for one agent                  |
 | handle      | The key of one process: `<kind>-<12 hex digits>`, such as `bash-3f9a2c1d0b7e` |
 | name        | A label that the agent gives a process, such as `tests`                       |
+| port        | The number in `$PORT` for one process, from 20000 to 29999                    |
+| forward     | One tunnel from the host to the port of one process, over the backend         |
 | owner agent | The agent whose call started the process                                      |
 | run         | One run of the host process, from `openWorkspace` to `dispose` or a crash     |
 | adopt       | Take a live process of an earlier run into this run's timers and cancels      |
@@ -94,16 +98,16 @@ agent is the agent's own home. A handle of another agent fails with
 
 **Each process is a directory: `~/.processes/<handle>/`.**
 
-| File     | Written by  | When                                                                            |
-| -------- | ----------- | ------------------------------------------------------------------------------- |
-| `spec`   | The table   | At the start: the command, the name, the timeout, the grace, the room, the time |
-| `out`    | The command | While it runs. The just-bash backends write it when the command ends            |
-| `pid`    | The wrapper | First: the pid of the shell that runs the command                               |
-| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent                  |
-| `stop`   | The table   | Before it cancels the process: `cancelled`, `timed_out`, or `failed`            |
-| `stop`   | The table   | When a read first finds the process lost with a `pid`: `failed`                 |
-| `seen`   | The table   | When a result or a reminder showed the end                                      |
-| `cursor` | The table   | After each result: the byte offset of the output that results showed            |
+| File     | Written by  | When                                                                                      |
+| -------- | ----------- | ----------------------------------------------------------------------------------------- |
+| `spec`   | The table   | At the start: the command, the name, the port, the timeout, the grace, the room, the time |
+| `out`    | The command | While it runs. The just-bash backends write it when the command ends                      |
+| `pid`    | The wrapper | First: the pid of the shell that runs the command                                         |
+| `exit`   | The wrapper | After the command: the exit code and the time, whole or absent                            |
+| `stop`   | The table   | Before it cancels the process: `cancelled`, `timed_out`, or `failed`                      |
+| `stop`   | The table   | When a read first finds the process lost with a `pid`: `failed`                           |
+| `seen`   | The table   | When a result or a reminder showed the end                                                |
+| `cursor` | The table   | After each result: the byte offset of the output that results showed                      |
 
 **The wrapper writes the pid, runs the command, and writes the end.**
 
@@ -216,17 +220,17 @@ slab pour Thu
 ```text
 compiling 14 of 120
 
-[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes.]
+[Process bash-3f9a2c1d0b7e (tests) is running. Output: /home/writer/.processes/bash-3f9a2c1d0b7e/out. Call wait with its handle, and timeout 0 to read it at once. Call cancel with its handle, or ps to list your processes. $PORT=24817.]
 ```
 
-| State       | The bracketed line, where `<h>` is the handle and the name  |
-| ----------- | ----------------------------------------------------------- |
-| `running`   | `Process <h> is running. ... Call wait with its handle ...` |
-| `running`   | `Process <h> is running, and the table stopped it. ...`     |
-| `exited`    | `Process <h> exited with code <n>.`                         |
-| `timed_out` | `Process <h> timed out after <timeout> seconds.`            |
-| `cancelled` | `Process <h> is cancelled.`                                 |
-| `failed`    | `Process <h> failed: <message>.`                            |
+| State       | The bracketed line, where `<h>` is the handle and the name                |
+| ----------- | ------------------------------------------------------------------------- |
+| `running`   | `Process <h> is running. ... Call wait with its handle ... $PORT=<port>.` |
+| `running`   | `Process <h> is running, and the table stopped it. ... $PORT=<port>.`     |
+| `exited`    | `Process <h> exited with code <n>.`                                       |
+| `timed_out` | `Process <h> timed out after <timeout> seconds.`                          |
+| `cancelled` | `Process <h> is cancelled.`                                               |
+| `failed`    | `Process <h> failed: <message>.`                                          |
 
 **The result of a running process can point to a scheduled say.** `bash`
 and `wait` add one note when three facts hold:
@@ -445,6 +449,10 @@ process group of the pid ([The cancel](#the-cancel)). The script signals the
 group only when the group is not its own, so a backend that runs
 commands in the host's group loses one shell and no more.
 
+**An adopted process keeps the port of its `spec`.** A `spec` written before
+ports has port 0. The process does not listen on a port of the workspace, and
+`fetch` refuses it.
+
 **A process of an earlier run that no shell runs is lost.** Its state is
 `failed`, with the error `The host run ended before the process did.` The
 first read that finds it with a `pid` writes `stop` for it. The reminder
@@ -473,13 +481,16 @@ table. Each line states one process, in the order the processes started.
 The command shows its first line, cut to 80 characters.
 
 ```text
-| Handle | Name | Runs for | Command |
-| --- | --- | --- | --- |
-| bash-3f9a2c1d0b7e | tests | 2m 14s | npm test |
-| bash-9c01d4e2aa31 | server-log | 12s | tail -f server.log |
+| Handle | Name | Port | Runs for | Command |
+| --- | --- | --- | --- | --- |
+| bash-3f9a2c1d0b7e | tests | 24817 | 2m 14s | npm test |
+| bash-9c01d4e2aa31 | server-log | 21093 | 12s | tail -f server.log |
 
 2 running processes.
 ```
+
+**The `Port` column shows `$PORT` of each process.** A process that listens
+on that port serves HTTP to `fetch`.
 
 **A caller with no running process gets one line:** `No running
 processes.` A finished process stays in the files, and `wait` with its
@@ -505,10 +516,15 @@ export type ProcessEvent =
 
 **`list` reads the tables of the agents that used the workspace in this
 run.** An agent joins that set on its first process tool call or
-reminder. A `read`, `write`, or `edit` call adds no agent. A new run of the
-host shows an agent's processes once that agent acts again.
-`running: true` gives the running processes alone, and `agent` gives one
-agent.
+reminder. A `read`, `write`, or `edit` call adds no agent.
+`running: true` gives the running processes alone.
+
+**`list({ agent })` reads the table of the named agent.** It reads the files
+of that agent even when the agent has not acted in this run, so the read
+adopts the live processes of an earlier run. A new run of the host calls it
+once for each agent that it follows, and it finds those processes before the
+agent acts again. The agent joins the set of the run. A name that the backend
+does not know rejects the call.
 
 **`subscribe` gives one event when a process starts and one when it
 ends.** It covers the processes of this run, and the adopted ones whose
@@ -520,6 +536,117 @@ end as the `cancel` tool does: the grace, up to 10 seconds, and 5 seconds.
 A process that has not ended by then still reads `running`, and its cancel
 goes on. The host reads the output of a process through
 `workspace.use`, as the owner agent, at `Process.output`.
+
+## Processes that serve HTTP
+
+**Every process has a port.** The table picks it when `bash` starts the
+command, and it writes the port into `spec`. The wrapper sets `PORT` to that
+number in the environment of the command. A server that listens on `$PORT`
+serves HTTP to the workspace. The kernel knows nothing else about the
+server.
+
+**The pick is random and belongs to the table.**
+
+- **The range is 20000 to 29999.** The table picks a number at random.
+- **The pick excludes the ports of the running processes that the table
+  holds.** An agent runs at most 4 processes, so the range does not run out.
+- **The pick does not test the machine.** Another program can hold the port.
+  The server then fails with `EADDRINUSE`. The agent starts the process
+  again, and the new start picks a new port.
+- **A process keeps its port until it ends.** A cancel and a timeout free it.
+
+**The agent sees the port in four places.** The command reads `$PORT`. The
+`Port` column of `ps` shows it ([ps](#ps)). The state line of a running
+process ends with `$PORT=<port>.`. The `details` of `bash`, `wait`, `ps`, and
+`cancel` hold `port` as an integer.
+
+**Many servers do not read `$PORT`.** The note of the process tools says so,
+and it gives two forms: `vite --port $PORT` and `python3 -m http.server $PORT`.
+The agent passes the number on the command line of such a server.
+
+### Read a process with `fetch`
+
+**`fetch({ process, path })` reads one path of a running process with GET.**
+Any agent of the workspace can read the running process of any other agent,
+by name or by handle. The workspace keeps the body as a snapshot, writes it
+to `~/.fetch`, and returns the ref. [Workspace](workspace.md#read-a-process-with-fetch) states
+the schema, the result, and the limits.
+
+```ts
+bash({ command: 'python3 -m http.server $PORT', name: 'docs', wait: 1 });
+fetch({ process: 'docs', path: '/index.html' });
+// Result: the status, the media type, the body, the export path, and a ref.
+```
+
+**`fetch` finds the process in the tables of this run.** A handle that the
+table holds live resolves from memory, with no read of files. A name uses
+the same list as `workspace.processes.list` with `running: true`. An agent
+joins that list when it first acts in this run. After a restart of the host,
+`fetch` finds a process of an agent once that agent has called a process
+tool or received a reminder, or once the host has called
+`workspace.processes.list({ agent })` for that agent.
+
+**The host reads a process with `workspace.fetch(process, path, init?)`.**
+It returns a `Response`. The host can use any method and any header, and the
+workspace keeps nothing. The property exists when the bash backend has
+`endpoints`. The host is trusted, so no rule limits its request.
+
+### The forward
+
+**One forward carries the requests of one process.** The cache of the
+workspace (`process-fetch.ts`) opens the forward at the first request. It
+opens it on the session of the owner agent, and it keeps it until the process
+ends or the workspace disposes. A forward that fails to open is not kept,
+so the next request opens it again. The `ended` event of the table closes the
+forward of that process.
+
+**The bash backend carries the forward through `endpoints`.** This contract
+is separate from the `connect` method of the environment:
+
+```ts
+interface WorkspaceEndpoint {
+  readonly url: string; // private HTTP root reachable by the host
+  close(): Promise<void>;
+}
+
+interface WorkspaceEndpoints {
+  readonly machine: string; // the machine where workspace commands run
+  forward(
+    agent: { readonly name: string },
+    port: number,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceEndpoint>;
+}
+
+// Optional property of BashBackend:
+// readonly endpoints?: WorkspaceEndpoints;
+```
+
+**The workstation implements `endpoints` through SSH forwarding.**
+`machine` is `WorkstationOptions.server`. The `port` argument is the port of
+the process on the `127.0.0.1` of the workstation. It is an integer from 1 to 65535. `WorkstationOptions.port` is the SSH login port. The returned URL uses
+a private loopback address of the host and a local port that the system
+assigns. It holds no SSH credentials. The transport reuses the credentials
+and the host-key check of the owner agent.
+
+**The caller owns the open forward.** `forward` holds a reference to the
+SSH session until `close` completes. Its signal cancels the opening and
+releases partial resources. After success, the caller calls `close`, which is
+safe more than once. An SSH disconnect, a forwarding failure, and a disposal of
+the backend release the channels, the reference, and the local listener.
+
+**OpenSSH must permit the forwarding.** The backend reports a refusal of
+forwarding as an error. The example setup enables the loopback destination.
+The tests cover both permitted and denied forwarding.
+
+**A backend with no `endpoints` has no `fetch`.** The just-bash backends gain
+no real network. The workstation backend carries the path from a process to
+a reader.
+
+**A port is not an identity.** A handle and a port do not prove that a
+listener belongs to the process. The workstation shares one loopback network
+between its accounts, so any account reaches any port with `curl`. `fetch`
+adds no reach that `curl` lacks ([Trust](trust.md)).
 
 ## Reminders
 
@@ -588,9 +715,7 @@ when the pass has something to send.
 - **Claude** and **Codex** read the whole view on the first pass.
 
 **The process reminder reads the agent's table once.** It runs on the
-bash resource. A sensor-enabled workspace also checks each connected process
-through the table and adds captured sensor discovery to the reminder.
-A bundle with skills first queues the copy of the
+bash resource. A bundle with skills first queues the copy of the
 skills, which costs one more read when the copy matches
 ([Skills](skills.md#the-copy-in-the-home)). On the workstation, the read connects the agent's SSH
 session at the start of the agent's first activation, and it creates the
@@ -669,8 +794,11 @@ workspace.processes.subscribe((event) => {
   restart of the host.
 - A process of an earlier run ends in a read. A host that bridges its
   ends calls `workspace.processes.list()` on an interval, so a read sees
-  them. `list` reads the agents that acted in this run. A process that
-  ended while no host ran gives no event, and the reminder names it.
+  them. `list` reads the agents that acted in this run. `list({ agent })`
+  reads that agent even when it has not acted in this run, and the read
+  adopts its live processes. A host that restarted calls it once for each
+  agent, so it finds a process of an earlier run. A process that ended
+  while no host ran gives no event, and the reminder names it.
 - `Process.room` names the room of the `bash` call, so a host with
   several rooms posts each end to the room that started the process.
 
@@ -769,6 +897,9 @@ git backend.
 | `directoryBackend`   | `out` stays empty until the process ends     | The process ends at once, no trap runs, and `out` stays empty |
 | `workstationBackend` | The output reaches `out` as the command runs | `SIGTERM`, the grace, then `SIGKILL`; `out` keeps the output  |
 
+**A just-bash backend has no endpoints.** Its workspace has no `fetch`
+tool and no `workspace.fetch`. A process of that backend still gets `$PORT`.
+
 **just-bash has no `ps` and no `kill`.** A just-bash process runs in the
 host's process, so no process outlives its run, and the listing finds no
 live shell.
@@ -800,7 +931,8 @@ files of a process are its record.
 ## The guidance
 
 **`openWorkspace` adds one note about the process tools after the tool
-line.**
+line.** The two `$PORT` lines belong to the note on every backend. A backend
+with no endpoints has no `fetch`, and the lines still state `$PORT`.
 
 ```text
 bash starts each command as a background process and returns its handle, such as bash-1a2b3c4d5e6f.
@@ -812,6 +944,8 @@ ls ~/.processes lists every process you started that the workspace still keeps.
 wait takes a list of handles and waits for the first of them to end.
 wait with one handle and timeout 0 gives the state and the new output of that process at once.
 cancel takes a handle and stops its process. ps lists your running processes.
+The workspace sets $PORT for each process. A server that listens on $PORT can be read with fetch.
+Many servers do not read $PORT; pass it, as in vite --port $PORT or python3 -m http.server $PORT.
 A process keeps running after your activation ends. It stops after timeout seconds, 600 by default.
 No message tells you when a process ends. When your answer needs the result, call wait before you answer.
 A wait stops before your activation ends.
@@ -840,12 +974,14 @@ the two handle tools stay as they are.
 | A lost process reads `failed`                                   | It left no end, and nothing runs it                                                                  |
 | The first read of a lost process with a pid writes its `stop`   | A later listing runs no `ps` for a process that nothing runs                                         |
 | The lost `stop` skips `ps` only for a pid gone from `/proc`     | A `ps` that fails once does not hide a live shell, and the skip starts no program                    |
-| The host's list covers this run's agents                        | The workspace keeps no roster                                                                        |
+| The host's list covers this run's agents, and a named agent     | The workspace keeps no roster, and a name reads the files of an agent that has not acted yet         |
 | The reminder resolves once per activation, and can read I/O     | Every render of one activation reads the same text                                                   |
 | The table holds the timeout, and adopts a live process          | A cancel goes through the cancels of its agent, in every run                                         |
 | A cancel writes no `stop` after `exit`                          | A command that ended reads its own end, whatever cancel came late                                    |
 | The default timeout is 600 seconds, and the agent can raise it  | An adopted process needs a bound from its spec                                                       |
 | A name is a label, and the handle is the key                    | Two processes can have one name with no rule for which one a call takes                              |
+| Every process gets a port in `$PORT`                            | A server needs no flag, no registration, and no output line to be read; the workspace knows its port |
+| `fetch` sends GET alone                                         | A request that asks a process to act is the actuator pattern                                         |
 | `ps` writes an audit entry                                      | The audit log records every tool call                                                                |
 | A process wakes no seat, and the agent waits for its result     | The kernel adds no wake source for the end of a process, and a host that wants one calls `room.post` |
 | The agent comes back to a long process with a scheduled say     | The room keeps one clock, and the agent chooses when to look again                                   |

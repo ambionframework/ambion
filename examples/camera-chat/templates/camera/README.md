@@ -1,8 +1,8 @@
 # Mac camera sensor
 
-This is a runnable sensor API version 1 server. Node 26.4 or newer runs the
-TypeScript directly. There are no runtime npm dependencies. Imports of the
-Ambion sensor types are erased by Node. Live capture needs macOS and FFmpeg
+This is a runnable sensor server at protocol version 2. Node 26.4 or newer runs
+the TypeScript directly. There are no runtime npm dependencies. `server.ts`
+holds the wire contract, and the template owns it. Live capture needs macOS and FFmpeg
 installed on the host (`brew install ffmpeg`). macOS camera consent belongs
 to the person running the terminal.
 
@@ -21,11 +21,14 @@ bash({
 
 Use your own fork ID in `AMBION_SENSOR_REPOSITORY`. The process stays in the
 foreground; do not use `&`, `nohup`, or daemonize it. Capture starts at launch.
-Read `wait({ handles: [handle], timeout: 0 })` until output contains `READY {"port":...}`. READY is
-printed only after the first usable frame. A permission request can delay it.
-Then call `connect({ name: 'camera', process: handle, port })`, followed by
-`observe({ sensor: 'camera/camera' })`. Cite the returned manifest snapshot ref.
-A successful camera connection also opens the host's preview.
+The workspace sets `PORT` for every process, and the server listens on it. The
+server prints nothing. Until the first frame arrives, a read answers `503`. A
+permission request can delay the first frame.
+
+Read the camera with `fetch({ process: 'camera', path: '/camera/observe' })`,
+then fetch the frame at `/files/<digest>` from its result. Cite both refs. The
+`observe` macro of the `camera` skill in `skills/` does both reads and checks
+the digest of the frame. The host's preview opens while the process runs.
 
 `node main.ts --demo` serves a synthetic frame without opening any device. Use
 this flag only for a demonstration. `--device <index>` selects a specific
@@ -41,20 +44,19 @@ frame replaces a frame that waits for compression.
 uses about 30% of one core for PNG encoding and FFmpeg uses about 8%. One
 frame is a PNG of about 700 KB. The `bash` timeout of the launch command
 (86400 seconds above) ends the process after 24 hours. Capture stops then,
-and the agent must start the server and connect again.
+and the agent must start the server again.
 
-The server binds only to 127.0.0.1 on a random port. It supports `GET /`,
-`POST /camera/observe`, and `GET /files/<sha256>`. The last 10 distinct PNG
+The server binds only to 127.0.0.1 on `PORT`. It supports `GET /`,
+`GET /camera/observe`, and `GET /files/<sha256>`. The last 10 distinct PNG
 frames remain in memory. It does not support span reads, persistent
-acquisition data, or reconstruction of missed frames. The workspace retains
-observed evidence. Launch source metadata is frozen at startup, including
-repository, commit, branch, and dirty status. Keep acquired data and
+acquisition data, or reconstruction of missed frames. A span query returns
+`422`. The workspace keeps what `fetch` reads. Launch source metadata is
+frozen at startup, including repository, commit, branch, and dirty status. Keep acquired data and
 credentials out of this repo.
 
 Edit `camera.ts` for device selection and sampling, `frame.ts` for resolution,
 and `server.ts` for acquisition delivery. Validate with `node --test test.ts`.
 Commit and push edits before launching saved code. Stop with `cancel({ handle
 })`. For replacement or rollback, cancel the previous process, change the
-checkout, start again, read its new port, and reconnect. Never open two
-capture processes for the same device. A host restart requires starting and
-connecting again.
+checkout, and start again with the name `camera`. Never open two capture
+processes for the same device. After a host restart, list the running processes before you start one.

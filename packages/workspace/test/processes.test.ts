@@ -339,7 +339,7 @@ describe('the process table', () => {
 				const grace = 10;
 				await writeExit(
 					env,
-					await writeSpec(env, root, { ...spec, timeout: 600, grace, startedAt }),
+					await writeSpec(env, root, { ...spec, port: 20000 + i, timeout: 600, grace, startedAt }),
 					0,
 				);
 			}
@@ -375,6 +375,7 @@ describe('the process table', () => {
 			const startedAt = new Date().toISOString();
 			const dir = await writeSpec(env, await processesDir(env), {
 				...spec,
+				port: 20001,
 				timeout: 600,
 				grace: 10,
 				startedAt,
@@ -435,11 +436,48 @@ describe('ps', () => {
 		};
 		const own = await listed('alpha');
 		expect(own.count).toBe(1);
-		expect(own.text).toMatch(/\| bash-[0-9a-f]{12} \| tests \| \d+s \| sleep 30 \|/);
+		expect(own.text).toMatch(/\| bash-[0-9a-f]{12} \| tests \| 2\d{4} \| \d+s \| sleep 30 \|/);
 		expect(own.text).not.toContain('token=secret');
 		expect(own.text.endsWith('\n\n1 running process.')).toBe(true);
 		expect((await listed('beta')).text).toContain('token=secret');
 		expect((await listed('gamma')).text).toBe('No running processes.');
+	});
+});
+
+describe('the port of a process', () => {
+	it('sets $PORT for the command, shows it in the state line, and gives a different port to each running process', async () => {
+		const workspace = site();
+		const done = await call(workspace, 'bash', { command: 'echo "port=$PORT"' });
+		const { port } = done.details.process;
+		expect(port).toBeGreaterThanOrEqual(20000);
+		expect(port).toBeLessThanOrEqual(29999);
+		expect(done.text.startsWith(`port=${port}\n\n[`)).toBe(true);
+		// An ended process shows no $PORT in its state line.
+		expect(done.text).not.toContain('$PORT=');
+		const started = await Promise.all(
+			Array.from({ length: MAX_RUNNING_PROCESSES }, () =>
+				call(workspace, 'bash', { command: 'sleep 30', wait: 0 }),
+			),
+		);
+		const ports = started.map((one) => one.details.process.port);
+		expect(new Set(ports).size).toBe(MAX_RUNNING_PROCESSES);
+		for (const one of started) {
+			expect(one.text.endsWith(` $PORT=${one.details.process.port}.]`)).toBe(true);
+		}
+		const listed = await call(workspace, 'ps', {});
+		for (const port of ports) expect(listed.text).toContain(`| ${port} |`);
+		expect(listed.text).toContain('| Handle | Name | Port | Runs for | Command |');
+		const waited = await call(workspace, 'wait', {
+			handles: [started[0]?.details.process.handle ?? ''],
+			timeout: 0,
+		});
+		expect(waited.text.endsWith(` $PORT=${ports[0]}.]`)).toBe(true);
+	});
+
+	it('tells the agent about $PORT and fetch in the guidance of the bundle', () => {
+		const { guidance } = site().tools();
+		expect(guidance).toContain('The workspace sets $PORT for each process.');
+		expect(guidance).toContain('python3 -m http.server $PORT');
 	});
 });
 
@@ -851,6 +889,7 @@ describe('the files as the source of truth', () => {
 				kind: 'bash' as const,
 				agent: 'alpha',
 				command: 'true',
+				port: 20002,
 				timeout: 600,
 				grace: 10,
 				startedAt: '2026-01-01T00:00:00.000Z',

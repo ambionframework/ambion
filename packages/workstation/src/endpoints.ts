@@ -252,9 +252,12 @@ function listen(server: Server, signal: AbortSignal | undefined): Promise<void> 
 
 function forwardingRefused(port: number, error: unknown): Error {
 	const detail = error instanceof Error ? error.message : String(error);
-	return new Error(`SSH port forwarding to workstation 127.0.0.1:${port} was refused: ${detail}`, {
-		cause: error,
-	});
+	return Object.assign(
+		new Error(`SSH port forwarding to workstation 127.0.0.1:${port} was refused: ${detail}`, {
+			cause: error,
+		}),
+		{ code: 'ECONNREFUSED' },
+	);
 }
 
 function closeChannel(channel: ClientChannel): Promise<void> {

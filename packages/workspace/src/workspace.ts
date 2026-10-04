@@ -3,6 +3,7 @@ import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from
 import type { BashBackend, WorkspaceBackends, WorkspaceEnv } from './backend.ts';
 import { type Capability, joinNotes, mergeReminders } from './capability.ts';
 import { defaultToolGuidance, fileCapability } from './default-tools.ts';
+import { fetchCapability } from './fetch-tool.ts';
 import { workspaceFiles } from './files.ts';
 import type { GitBackend, GitCommit, GitEnv, GitRevision } from './git-backend.ts';
 import { commitRefOf, readCommitOf } from './git-refs.ts';
@@ -15,7 +16,7 @@ import {
 } from './mirror.ts';
 import type { ObjectBackend, ObjectEnv } from './object-backend.ts';
 import { fileObjectBackend } from './object-files.ts';
-import { sensorCapability } from './observe-tool.ts';
+import { createProcessFetch, type ProcessFetch } from './process-fetch.ts';
 import type { Process } from './process-files.ts';
 import type { ProcessEvent, ProcessQuery, ProcessTable } from './process-table.ts';
 import { processCapability } from './process-tools.ts';
@@ -26,7 +27,6 @@ import {
 	type WorkspaceAgent,
 	type WorkspaceResource,
 } from './resource.ts';
-import { createSensorConnections, type SensorConnections } from './sensor-connections.ts';
 import { type SkillSet, skillGuidance, skillSetOf, syncSkills } from './skills.ts';
 import {
 	readSnapshot,
@@ -56,7 +56,11 @@ export interface WorkspaceToolsOptions {
 export interface WorkspaceProcesses {
 	/**
 	 * The processes of the agents that used the workspace in this run of the
-	 * host, read from each agent's files, in the order they started.
+	 * host, read from each agent's files, in the order they started. With
+	 * `query.agent`, the list reads that agent's files even when the agent has
+	 * not acted in this run: the read adopts the live processes of an earlier
+	 * run, and a host that restarted finds them. The call rejects when the
+	 * backend has no such agent.
 	 */
 	list(query?: ProcessQuery): Promise<readonly Process[]>;
 	/** Call `listener` when a process starts and when it ends. Returns the unsubscribe. */
@@ -105,8 +109,12 @@ export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	 * `use`, as its owner agent, at `Process.output`.
 	 */
 	readonly processes: WorkspaceProcesses;
-	/** Host sensor reads and lifecycle callbacks. Available when the bash backend has `endpoints`. */
-	readonly sensors?: Pick<SensorConnections, 'get' | 'list' | 'subscribe'>;
+	/**
+	 * Send a request to the port of a running process, by name or handle, as
+	 * the host. The host may use any method and any headers, and nothing is
+	 * kept. Available when the bash backend has `endpoints`.
+	 */
+	readonly fetch?: (process: string, path: string, init?: RequestInit) => Promise<Response>;
 	/**
 	 * Start mirroring `room`'s messages under the backend's layout, at
 	 * `<layout.rooms>/<room.name>/messages.jsonl`. Call once the room has
@@ -168,17 +176,17 @@ interface WorkspaceBackings {
 	readonly git?: GitBinding;
 	readonly processes: ProcessTable;
 	readonly store: SnapshotStore;
-	readonly connections?: SensorConnections;
+	readonly processFetch?: ProcessFetch;
 }
 
 /**
  * The capabilities of a workspace, in the order of its bundle: files,
- * processes, snapshots, SQL, git and sensors. The composer leaves out a
+ * processes, snapshots, SQL, git and fetch. The composer leaves out a
  * capability whose backend is absent.
  */
 function capabilitiesOf(
 	resource: WorkspaceResource<WorkspaceEnv>,
-	{ sql, git, connections, store, processes }: WorkspaceBackings,
+	{ sql, git, processFetch, store, processes }: WorkspaceBackings,
 ): readonly Capability[] {
 	return [
 		fileCapability(resource.use),
@@ -192,7 +200,7 @@ function capabilitiesOf(
 				server: git.backend.label,
 				workspace: resource.name,
 			}),
-		connections && sensorCapability({ connections, store }),
+		processFetch && fetchCapability({ processFetch, store }),
 	].filter((capability) => capability !== undefined);
 }
 
@@ -202,7 +210,7 @@ function capabilitiesOf(
  * of each capability in order, the bash backend's note, the audit note when
  * one is set, and the rooms note. The tool line opens the first note, in the
  * same paragraph. The bundle's reminder merges the reminders of the
- * capabilities, so it names each seat's processes and connected sensors.
+ * capabilities, so it names each seat's processes.
  * When the workspace has an audit log, `audited` wraps every tool of the bundle.
  */
 function workspaceTools(
@@ -286,17 +294,32 @@ function withSkills(
 function withProcesses(
 	backend: ResourceBackend<WorkspaceEnv>,
 	processes: ProcessTable,
-	connections?: SensorConnections,
+	processFetch?: ProcessFetch,
 ): ResourceBackend<WorkspaceEnv> {
 	return {
 		connect: (agent, signal) => backend.connect(agent, signal),
 		dispose: async () => {
-			// The processes wait until the connections have closed. `close()` is
-			// memoised, so a second call awaits the first.
-			await connections?.close();
+			// `close()` is memoised, so a second call awaits the first.
+			await processFetch?.close();
 			await processes.close();
 			await backend.dispose?.();
 		},
+	};
+}
+
+/** The forward cache of the workspace, when the bash backend has `endpoints`. */
+function openProcessFetch(bash: BashBackend, processes: ProcessTable): ProcessFetch | undefined {
+	return bash.endpoints === undefined
+		? undefined
+		: createProcessFetch({ processes, endpoints: bash.endpoints });
+}
+
+/** The `fetch` of the host over the forward cache, or no member when there is none. */
+function hostFetch(processFetch: ProcessFetch | undefined): Pick<Workspace, 'fetch'> {
+	if (processFetch === undefined) return {};
+	return {
+		fetch: async (process, path, init) =>
+			processFetch.send(await processFetch.resolve(process), path, init),
 	};
 }
 
@@ -372,11 +395,10 @@ export function openWorkspace(options: {
 		// The bash resource opens below. The table calls it only after the workspace opens.
 		bash: (agent, operation, signal) => resource.use(agent, operation, signal),
 	});
-	const connections =
-		bash.endpoints === undefined ? undefined : createSensorConnections(bash.endpoints, table);
+	const processFetch = openProcessFetch(bash, table);
 	const resource = openResource<WorkspaceEnv>({
 		name: options.name,
-		backend: withProcesses(bash, table, connections),
+		backend: withProcesses(bash, table, processFetch),
 	});
 	const sql =
 		sqlBackend === undefined
@@ -410,7 +432,7 @@ export function openWorkspace(options: {
 	const toolBundle = workspaceTools(
 		bash,
 		resource,
-		{ sql, git, processes: table, store, connections },
+		{ sql, git, processes: table, store, processFetch },
 		audit,
 	);
 	const processes: WorkspaceProcesses = Object.freeze({
@@ -435,11 +457,11 @@ export function openWorkspace(options: {
 		entry === undefined ? [] : [entry],
 	);
 	const dispose = (): Promise<void> => {
-		// This call stops a pending sensor connect at once, even while the bash
+		// This call stops a pending forward at once, even while the bash
 		// resource is busy. The call in `withProcesses` then awaits the same close.
-		const connectionClose = connections?.close() ?? Promise.resolve();
+		const fetchClose = processFetch?.close() ?? Promise.resolve();
 		const resourcesClose = disposeInOrder(resources);
-		return Promise.all([connectionClose, resourcesClose]).then(() => undefined);
+		return Promise.all([fetchClose, resourcesClose]).then(() => undefined);
 	};
 	return Object.freeze({
 		...resource,
@@ -447,15 +469,7 @@ export function openWorkspace(options: {
 		tools,
 		mirrorAgent,
 		processes,
-		...(connections === undefined
-			? {}
-			: {
-					sensors: Object.freeze({
-						get: connections.get,
-						list: connections.list,
-						subscribe: connections.subscribe,
-					}),
-				}),
+		...hostFetch(processFetch),
 		mirror,
 		snapshot: (paths: readonly string[], snapshotOptions?: SnapshotOptions) =>
 			takeSnapshot(store, paths, snapshotOptions),

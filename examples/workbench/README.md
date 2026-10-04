@@ -65,15 +65,16 @@ itself with `node`. Its `npm test` sends real signals to the controller.
 ## Sensor server template
 
 The lab Git backend offers a [`sensor-server` template](templates/sensor-server).
-It serves deterministic numeric, frame, and text fixtures. An agent can
-fork and customize it like the firmware template. The template README covers
-the workspace package setup, validation, process startup, readiness, data
-storage, and rollback. Its `npm test` checks HTTP behavior, schemas, digests,
-launch metadata, and data-directory safety.
+It serves deterministic numeric, frame, and text fixtures over HTTP on
+`$PORT`, in protocol version 2. An agent can fork and customize it like the
+firmware template. The template README covers the setup, validation, process
+startup, data storage, and rollback. Its `npm test` checks HTTP behavior,
+schemas, digests, the conformance cases, launch metadata, and data-directory
+safety. The template ships a `skills/` folder with the `observe` macro.
 
 The running Workbench uses `directoryBackend`, which has no endpoints.
-It does not add `connect` or `observe` to the terminal workspace. The
-workstation flow uses these tools with the same template. The Workbench's
+It does not add `fetch` to the terminal workspace, and it loads no template
+skill. The workstation flow reads the template with `fetch`. The Workbench's
 `test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and
 rejection of an invalid fixture change. The OpenSSH acceptance is in the
 workstation package. See [Sensors](../../docs/sensors.md).

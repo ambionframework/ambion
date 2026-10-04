@@ -35,6 +35,8 @@ export interface Process {
 	readonly agent: string;
 	/** The command as the agent gave it. */
 	readonly command: string;
+	/** The port that the workspace set in `$PORT` for the command. Zero for a spec written before ports. */
+	readonly port: number;
 	readonly state: ProcessState;
 	/** The absolute path of the file that holds the whole output. */
 	readonly output: string;
@@ -62,6 +64,8 @@ export interface ProcessSpec {
 	readonly kind: ProcessKind;
 	readonly agent: string;
 	readonly command: string;
+	/** The port that the workspace sets in `$PORT` for the command. */
+	readonly port: number;
 	readonly timeout: number;
 	/** Seconds from `SIGTERM` to `SIGKILL` when the table cancels the process. */
 	readonly grace: number;
@@ -418,6 +422,8 @@ export function statusOf(files: ProcessFiles, owned: boolean): Process {
 		kind: spec.kind,
 		agent: spec.agent,
 		command: spec.command,
+		// A spec written before ports has none: port 0 means the process does not listen.
+		port: spec.port ?? 0,
 		output: `${files.dir}/out`,
 		timeout: spec.timeout,
 		grace: spec.grace,

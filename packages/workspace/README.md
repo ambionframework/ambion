@@ -27,14 +27,14 @@ environment the backend built for that agent, rooted at
 `/home/<agent name>`. `bash` starts each command as a background process and
 returns its handle, and `drive.processes` lists them for the host; see [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md).
 
-A bash backend with workstation `endpoints` also adds `connect`, `disconnect`, and `observe`.
-Connect a running server process, then call `observe({ sensor: 'bench/temperature' })`;
-the result includes a manifest snapshot ref and export paths. A frame returns
-as an image, and the text of the result names its export path. A `read` of an
-image does the same with `Image path: <path>`. `observe` retains frame bytes
-in its snapshot and export. The `read` tool leaves its source file unchanged.
-See [Sensors](https://github.com/ambionframework/ambion/blob/main/docs/sensors.md)
-for the server lifecycle and observation contract.
+Every process gets a port in `$PORT`. A bash backend with `endpoints` also
+adds `fetch`. Start a server on `$PORT`, then call
+`fetch({ process: 'bench', path: '/temperature' })`. The result includes the
+status, the body, an export path, and a snapshot ref. An image returns as an
+image, and the text of the result names its export path. A `read` of an image
+does the same with `Image path: <path>`. `drive.fetch` reads a process for the
+host. See [Sensors](https://github.com/ambionframework/ambion/blob/main/docs/sensors.md)
+for the sensor pattern.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';

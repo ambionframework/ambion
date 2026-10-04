@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ToolContext } from '@ambionframework/ambion';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -17,6 +17,7 @@ import { hasSetsid } from '../../workstation/test/support/setsid.ts';
 import type { Process } from '../src/process-files.ts';
 import { openWorkspace, type Workspace } from '../src/workspace.ts';
 import { toolOf } from './support/backends.ts';
+import { earlierProcess, until } from './support/earlier-process.ts';
 
 async function server(accounts: readonly string[]): Promise<TestServer> {
 	const started = await startSshServer(accounts);
@@ -46,11 +47,6 @@ function ended(pid: number): boolean {
 	return /^(Z.*)?$/.test(ps.stdout.trim());
 }
 
-const until = async (check: () => boolean, ms = 2_000) => {
-	const end = Date.now() + ms;
-	while (!check() && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 10));
-};
-
 /** Invoke `tool` as `agent`, and give the text and the process details of the result, or the text of its error. */
 const invoke = async (workspace: Workspace, tool: string, params: unknown, agent = 'ada') => {
 	const result = await Promise.resolve(
@@ -61,48 +57,6 @@ const invoke = async (workspace: Workspace, tool: string, params: unknown, agent
 	const details = 'details' in result ? (result.details as { process?: Process }) : {};
 	return { text, process: details.process };
 };
-
-/**
- * A process that an earlier run of the host started for `agent`: its command
- * runs `onTerm` for each TERM, by default a log line, and goes on. Give its directory and the pid of its wrapper.
- */
-async function earlierProcess(
-	started: TestServer,
-	agent: string,
-	handle: string,
-	grace = 10,
-	onTerm = 'echo term',
-) {
-	const dir = join(started.homes.get(agent) ?? '', '.processes', handle);
-	await mkdir(dir, { recursive: true });
-	const spec = { handle, kind: 'bash', agent, command: 'loop' };
-	await writeFile(
-		join(dir, 'spec'),
-		JSON.stringify({
-			...spec,
-			timeout: 600,
-			grace,
-			startedAt: new Date().toISOString(),
-		}),
-	);
-	const earlier = workstationBackend(started.options);
-	const env = await earlier.connect({ name: agent });
-	const script = [
-		'trap : TERM',
-		`echo "$$" > '${dir}/pid'`,
-		'(',
-		`trap '${onTerm}' TERM`,
-		'while :; do sleep 0.2; done',
-		`) < /dev/null > '${dir}/out' 2>&1`,
-		`echo "$? x" > '${dir}/exit'`,
-	].join('\n');
-	void env.exec(script, { timeout: 60 }).catch(() => undefined);
-	await until(() => spawnSync('test', ['-s', join(dir, 'pid')]).status === 0);
-	const pid = Number((await readFile(join(dir, 'pid'), 'utf8')).trim());
-	await env.cleanup();
-	await earlier.dispose?.();
-	return { dir, pid };
-}
 
 describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 	it('lets a command that traps TERM end inside the grace: a cancel and a timeout read its own exit code', async () => {
@@ -226,6 +180,26 @@ describe.skipIf(!hasSetsid)('a cancel on a real signal path', () => {
 		expect(Date.now() - began).toBeLessThan(9_000);
 		expect(cancelled.process?.state).toBe('cancelled');
 		expect(ended(pid)).toBe(true);
+	}, 20_000);
+
+	it('lists a named agent that has not acted in this run, and adopts its process', async () => {
+		const started = await server(['ada', 'bob']);
+		const { pid } = await earlierProcess(started, 'ada', 'bash-0000000000a3', 30, 'exit 0');
+		const workspace = workspaceOn(started);
+		const states: string[] = [];
+		workspace.processes.subscribe((event) => states.push(event.type));
+		// The list with no agent covers the agents that acted in this run: none yet.
+		expect(await workspace.processes.list({ running: true })).toEqual([]);
+		expect(await workspace.processes.list({ agent: 'bob', running: true })).toEqual([]);
+		const named = await workspace.processes.list({ agent: 'ada', running: true });
+		expect(named).toMatchObject([{ handle: 'bash-0000000000a3', agent: 'ada', state: 'running' }]);
+		// The read adopted the process, so the list of every agent holds it now, with no start event.
+		expect(await workspace.processes.list({ running: true })).toHaveLength(1);
+		expect(states).toEqual([]);
+		const cancelled = await workspace.processes.cancel('bash-0000000000a3');
+		expect(cancelled).toMatchObject({ state: 'exited', exitCode: 0 });
+		expect(ended(pid)).toBe(true);
+		expect(states).toEqual(['ended']);
 	}, 20_000);
 
 	it('returns at once for an adopted process that ends inside its grace', async () => {

@@ -5,14 +5,8 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-	isValidObserveRequest,
-	ObserveRequestSchema,
-	ObserveResponseSchema,
-	SensorErrorSchema,
-	SensorIndexSchema,
-} from '@ambionframework/workspace/sensors';
 import { Check } from 'typebox/value';
+import { API, ErrorSchema, IndexSchema, ObserveSchema, spanOf } from './api.mjs';
 
 const checkout = await realpath(dirname(fileURLToPath(import.meta.url)));
 const repositoryRoot = await realpath(git(['rev-parse', '--show-toplevel'], checkout));
@@ -53,8 +47,8 @@ const observations = {
 	},
 };
 for (const observation of Object.values(observations)) {
-	if (!Check(ObserveResponseSchema, { api: 1, observations: [observation] })) {
-		throw new Error('A fixture fails the SN1 observation schema.');
+	if (!Check(ObserveSchema, { api: API, observations: [observation] })) {
+		throw new Error(`A fixture fails the sensor API ${API} observation schema.`);
 	}
 }
 const sensors = Object.keys(observations).map((name) => ({
@@ -62,8 +56,9 @@ const sensors = Object.keys(observations).map((name) => ({
 	description: `Deterministic ${name} fixture.`,
 	spans: false,
 }));
-const index = { api: 1, source, sensors };
-if (!Check(SensorIndexSchema, index)) throw new Error('The sensor index fails the SN1 schema.');
+const index = { api: API, source, sensors };
+if (!Check(IndexSchema, index))
+	throw new Error(`The sensor index fails the sensor API ${API} schema.`);
 
 await storeBlob(frameDigest, frameBytes);
 await writeFile(join(dataPath, 'acquisition.json'), `${JSON.stringify(observations)}\n`, {
@@ -74,14 +69,15 @@ await writeFile(join(dataPath, 'acquisition.json'), `${JSON.stringify(observatio
 
 const server = createServer(async (request, response) => {
 	try {
-		if (request.method === 'GET' && request.url === '/') {
+		const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+		if (request.method === 'GET' && url.pathname === '/') {
 			return sendJson(response, 200, index);
 		}
-		if (request.method === 'GET' && request.url?.startsWith('/files/')) {
-			return await sendFile(response, request.url.slice('/files/'.length));
+		if (request.method === 'GET' && url.pathname.startsWith('/files/')) {
+			return await sendFile(response, url.pathname.slice('/files/'.length));
 		}
-		const match = request.method === 'POST' && request.url?.match(/^\/([a-z][a-z0-9-]*)\/observe$/);
-		if (match) return await observe(response, match[1], request);
+		const match = request.method === 'GET' && url.pathname.match(/^\/([a-z][a-z0-9-]*)\/observe$/);
+		if (match) return await observe(response, match[1], url.searchParams);
 		return sendError(response, 404, 'unknown', 'The sensor path does not exist.');
 	} catch (error) {
 		return sendError(
@@ -93,40 +89,27 @@ const server = createServer(async (request, response) => {
 	}
 });
 
-const port = parsePort(process.env.PORT);
-server.listen(port, '127.0.0.1', () => {
-	const address = server.address();
-	if (!address || typeof address === 'string')
-		throw new Error('The server did not bind a TCP port.');
-	process.stdout.write(`READY http://127.0.0.1:${address.port}\n`);
-});
+// The workspace sets PORT for every process. The server serves on it and
+// prints nothing: a reader reaches the server with fetch.
+server.listen(parsePort(process.env.PORT), '127.0.0.1');
 for (const signal of ['SIGINT', 'SIGTERM']) {
 	process.on(signal, () => server.close(() => process.exit(0)));
 }
 
-async function observe(response, name, request) {
+async function observe(response, name, params) {
 	if (!Object.hasOwn(observations, name)) {
 		return sendError(response, 404, 'unknown', `Sensor ${name} does not exist.`);
 	}
-	const sensor = observations[name];
-	let body;
-	try {
-		body = await readJson(request);
-	} catch (error) {
-		return sendError(response, 400, 'invalid', error.message);
-	}
-	if (!Check(ObserveRequestSchema, body) || !isValidObserveRequest(body)) {
-		return sendError(response, 400, 'invalid', 'The request does not match the SN1 schema.');
-	}
-	if (body.span)
+	const { span, error } = spanOf(params);
+	if (error) return sendError(response, 400, 'invalid', error);
+	if (span)
 		return sendError(response, 422, 'unavailable', 'This fixture does not support span reads.');
-	const found = [sensor];
-	const result = { api: 1, observations: found };
-	if (!Check(ObserveResponseSchema, result))
-		throw new Error('The observation fails the SN1 schema.');
+	const result = { api: API, observations: [observations[name]] };
+	if (!Check(ObserveSchema, result))
+		throw new Error(`The observation fails the sensor API ${API} schema.`);
 	await appendFile(
 		join(dataPath, 'observations.jsonl'),
-		`${JSON.stringify({ sensor: name, request: body, result })}\n`,
+		`${JSON.stringify({ sensor: name, request: {}, result })}\n`,
 	);
 	return sendJson(response, 200, result);
 }
@@ -225,34 +208,14 @@ function git(args, cwd, allowMissing = false) {
 }
 
 function parsePort(value) {
-	if (value === undefined || value === '') return 0;
 	const port = Number(value);
-	if (!Number.isInteger(port) || port < 0 || port > 65535)
-		throw new Error('PORT must be an integer from 0 to 65535.');
+	if (value === undefined || !Number.isInteger(port) || port < 1 || port > 65535)
+		throw new Error('PORT must be an integer from 1 to 65535. The workspace sets it.');
 	return port;
 }
 
 function digest(bytes) {
 	return createHash('sha256').update(bytes).digest('hex');
-}
-
-function readJson(request) {
-	return new Promise((resolveBody, reject) => {
-		let raw = '';
-		request.setEncoding('utf8');
-		request.on('data', (part) => {
-			raw += part;
-			if (raw.length > 64 * 1024) reject(new Error('The request body exceeds 64 KiB.'));
-		});
-		request.on('end', () => {
-			try {
-				resolveBody(JSON.parse(raw));
-			} catch {
-				reject(new Error('The request body is not valid JSON.'));
-			}
-		});
-		request.on('error', reject);
-	});
 }
 
 function sendJson(response, status, value) {
@@ -261,7 +224,7 @@ function sendJson(response, status, value) {
 }
 
 function sendError(response, status, code, message) {
-	const error = { api: 1, code, message };
-	if (!Check(SensorErrorSchema, error)) throw new Error('The error fails the SN1 schema.');
+	const error = { api: API, code, message };
+	if (!Check(ErrorSchema, error)) throw new Error(`The error fails the sensor API ${API} schema.`);
 	return sendJson(response, status, error);
 }

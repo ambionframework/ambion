@@ -2,9 +2,19 @@
 
 This template serves deterministic numeric, frame, and text fixtures. It
 needs Node 22.19 or newer, Git, and npm. It needs no hardware, model
-provider, framework daemon, or ffmpeg. The sensor wire schemas come from
-`@ambionframework/workspace/sensors`; the template does not copy their
-definitions.
+provider, framework daemon, or ffmpeg. The wire contract is protocol
+version 2. `api.mjs` holds its schemas, and the template owns them.
+
+**The server is a process that serves HTTP on `$PORT`.** The workspace sets
+`PORT` for every process that `bash` starts. Any agent reads the server with
+`fetch({ process, path })`. The `observe` macro of the `sensor-server` skill
+in `skills/` wraps the reads of one sensor.
+
+| Path                                | Result                                                          |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `GET /`                             | `api: 2`, the source metadata, and the sensors with `spans`     |
+| `GET /<sensor>/observe[?from=&to=]` | The latest observation, or the observations of a half-open span |
+| `GET /files/<sha256>`               | Immutable bytes                                                 |
 
 ## Fork and install
 
@@ -16,31 +26,12 @@ fork({ source: 'templates/sensor-server', name: 'bench-sensors', clone: '~/senso
 bash({ command: 'cd ~/sensor-server && git switch -c sensing' });
 ```
 
-Install the sensor API package by building and packing it from the SN1
-commit, `ccaf45bf42eaef98c36841e133810232b24fced2`. The published 0.4.0
-package does not include SN1, and the GitHub Packages registry is not a
-substitute for this local build. Keep the tarball outside the sensor
-checkout and reuse that exact artifact after cloning elsewhere; rebuilding
-from a moving checkout can silently change the package contents.
+Install the one dependency, `typebox`, in the clone:
 
 ```sh
-cd /path/to/ambion
-git rev-parse HEAD  # use ccaf45bf42eaef98c36841e133810232b24fced2
-pnpm install
-mkdir -p /tmp/ambion-packages
-pnpm --dir packages/workspace build
-pnpm --dir packages/workspace pack --pack-destination /tmp/ambion-packages
 cd ~/sensor-server
-npm install --no-save --package-lock=false typebox@1.3.34 /tmp/ambion-packages/ambionframework-workspace-0.4.0.tgz
+npm install
 ```
-
-The template declares `typebox` as a direct, pinned dependency because
-`server.mjs` imports `typebox/value` directly. The install resolves that
-dependency along with the workspace tarball. `--no-save` and
-`--package-lock=false` keep the machine-local tarball path out of the fork's
-manifest and lockfile. After cloning elsewhere, install from that same
-preserved tarball; only rebuild it when deliberately changing the workspace
-API artifact.
 
 Set `AMBION_SENSOR_REPOSITORY` to the fork's lowercase `namespace/name`
 if the `origin` remote cannot provide it. Otherwise the server reads the
@@ -50,10 +41,10 @@ repository identifier from `origin`.
 
 Edit `server.mjs` to change the fixture observations. Numeric values use a
 series part, frame bytes live in `fixtures/frame.png`, and text uses a text
-part. Keep timestamps in UTC with three millisecond digits and validate
-every response against `@ambionframework/workspace/sensors`. The fixtures
-are deterministic; span requests return `422` because all three index
-entries declare `spans: false`.
+part. Keep timestamps in UTC with three millisecond digits. The server
+checks every response against the schemas of `api.mjs`. The fixtures are
+deterministic. A span request returns `422`, because all three index
+entries declare `spans: false`. A malformed query returns `400`.
 
 Run the template tests after making a change:
 
@@ -61,10 +52,9 @@ Run the template tests after making a change:
 npm test
 ```
 
-The tests exercise the real HTTP server, schema validation, retained file
-digests, bad requests, launch metadata, and the external data directory.
-The SN4 `sensorConformance` runner is not implemented yet, so `npm test`
-does not claim conformance-runner coverage or Git push/reclone acceptance.
+The tests run the real HTTP server. They check the schemas, the retained
+file digests, the conformance cases of protocol version 2, bad requests,
+launch metadata, and the external data directory.
 
 After the tests pass, commit and push the branch before starting the saved
 version:
@@ -77,29 +67,40 @@ git push -u origin HEAD
 
 ## Start in a workspace
 
-Start the server as a foreground workspace process. The workspace `bash`
-tool runs it in the background and returns a process handle:
+Start the server as a foreground workspace process. Give it a `name`. The
+workspace `bash` tool runs it in the background and returns a process
+handle:
 
 ```ts
 bash({
   command:
     'cd ~/sensor-server && AMBION_SENSOR_REPOSITORY=instruments/bench-sensors ' +
-    'AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bench" PORT=0 node server.mjs',
+    'AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bench" node server.mjs',
   name: 'bench-sensors',
-  wait: 0,
+  wait: 1,
   timeout: 86400,
 });
-// Result: process bash-1a2b3c4d5e6f.
-wait({ handles: ['bash-1a2b3c4d5e6f'], timeout: 0 });
-// Read READY http://127.0.0.1:<port> from the process output.
 ```
 
-The server uses `PORT` when set and otherwise requests port zero, so the
-operating system selects a free port. It binds to workstation
-`127.0.0.1`. It writes the fixture acquisition files before printing
-`READY http://127.0.0.1:<port>`. Use that port and the process handle in
-the workspace `connect` call, available on a backend with port support.
-Then use `observe` to retain the measurements and referenced files.
+The server listens on `PORT`, which the workspace sets, and binds to
+`127.0.0.1`. It exits when `PORT` is not set. It prints nothing when it
+listens. Read it with `fetch`, or run the macro:
+
+```ts
+compose({
+  macro: 'sensor-server/observe',
+  args: { process: 'bench-sensors', sensor: 'operator-notes' },
+});
+```
+
+The macro reads `GET /`, refuses a server that does not serve API 2, reads
+the observation, and reads each file that the observation names. It checks
+the SHA-256 of each file against its digest. It returns the refs to cite,
+the measurement times, and the paths of the exported files. Add `from` and
+`to`, two UTC timestamps, to read a span. A host loads the macro with
+`loadSkills(fromDirectory('templates/sensor-server/skills'))`. The macro
+that runs comes from the host's copy of the template. An edit of
+`skills/` in a fork changes nothing that runs.
 
 The `GET /` index captures the repository, full commit, branch when
 attached, and dirty flag once at startup. A detached checkout omits the
@@ -117,7 +118,7 @@ the directory. Otherwise it uses
 path inside the checkout, including one that reaches it through a symlink.
 
 It writes `acquisition.json` once, appends each successful latest-read
-request and result to `observations.jsonl`, and stores frame bytes at
+result to `observations.jsonl`, and stores frame bytes at
 `blobs/<sha256>`. The first acquisition fixture is write-once; later
 observations append to the log. The current server code does not read the
 observation log as history. Git commits contain code and fixtures, not this
@@ -131,8 +132,8 @@ editing or replacing the checkout, for example
 SIGTERM and closes its listener. Then validate, commit, push, and start the
 saved version as a new process. Keep the same
 `AMBION_SENSOR_DATA_DIR="$HOME/sensor-data/bench"` value when replacing or
-rolling back so each version uses the same persistent data directory. Save
-the new handle and readiness port before connecting again.
+rolling back so each version uses the same persistent data directory. Name the
+new process the same, so the macro reads it.
 
 Rollback means stopping the process, checking out an earlier commit, and
 starting that code with the same data directory. The template's current

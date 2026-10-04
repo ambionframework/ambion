@@ -35,6 +35,8 @@
 			}
 		}
 	},
+	// A macro body has a top-level `return`, which no parser here accepts.
+	"files": { "includes": ["**", "!**/skills/*/macros/*.js"] },
 	"vcs": {
 		"clientKind": "git",
 		"enabled": true,

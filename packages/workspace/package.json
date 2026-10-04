@@ -42,11 +42,6 @@
 			"types": "./dist/conformance.d.mts",
 			"import": "./dist/conformance.mjs"
 		},
-		"./sensors": {
-			"types": "./dist/sensors.d.mts",
-			"import": "./dist/sensors.mjs"
-		},
-		"./sensor-api.schema.json": "./dist/sensor-api.schema.json",
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",
@@ -62,7 +57,7 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsdown && node scripts/write-sensor-schema.mjs",
+		"build": "tsdown",
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",

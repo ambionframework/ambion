@@ -109,7 +109,11 @@ describe('workstation endpoints over the in-process SSH tier', () => {
 	it('surfaces an unavailable remote loopback service without leaking its transport', async () => {
 		const { backend, ssh } = await fixture();
 		const unavailable = await unusedPort();
-		await expect(open(backend, unavailable)).rejects.toThrow(/forward.*127\.0\.0\.1/i);
+		// The code lets `fetch` say that the process does not listen.
+		await expect(open(backend, unavailable)).rejects.toMatchObject({
+			message: expect.stringMatching(/forward.*127\.0\.0\.1/i),
+			code: 'ECONNREFUSED',
+		});
 		await until(() => ssh.forwards.size === 0, 'A refused SSH channel remained open.');
 		const env = await backend.connect({ name: 'ada' });
 		expect(await env.writeFile('probe.txt', 'ready')).toMatchObject({

@@ -15,14 +15,14 @@ place where agents do the work. The canvas is the place where the work
 shows to people. The canvas is a folder of the workspace, so it is
 shared, durable, and outside the journal ([Resources](resources.md)).
 
-| Property        | Workspace                                                       | Canvas                                       |
-| --------------- | --------------------------------------------------------------- | -------------------------------------------- |
-| Serves          | Agents, which act on files, tables, and processes               | People, who read the room and act on it      |
-| Reached through | Workspace tools behind the port                                 | Canvas tools, which write through the port   |
-| State           | Files, rows, processes, snapshots                               | One file for each widget                     |
-| Provenance      | The audit log and the provenance columns                        | The audit log of the workspace               |
-| Host view       | `sensors.subscribe`, `processes.subscribe`, and the mirror file | `canvas.subscribe`                           |
-| Agent read      | Files, `jq`, and a reminder for processes                       | A reminder for widgets, and the widget files |
+| Property        | Workspace                                         | Canvas                                       |
+| --------------- | ------------------------------------------------- | -------------------------------------------- |
+| Serves          | Agents, which act on files, tables, and processes | People, who read the room and act on it      |
+| Reached through | Workspace tools behind the port                   | Canvas tools, which write through the port   |
+| State           | Files, rows, processes, snapshots                 | One file for each widget                     |
+| Provenance      | The audit log and the provenance columns          | The audit log of the workspace               |
+| Host view       | `processes.subscribe`, and the mirror file        | `canvas.subscribe`                           |
+| Agent read      | Files, `jq`, and a reminder for processes         | A reminder for widgets, and the widget files |
 
 ## Why a folder of the workspace
 
@@ -65,7 +65,7 @@ accepts this.
 | Tools for a seat            | A bundle, as `workspace.tools()` gives one                         |
 | The agent reads the canvas  | The `remind` text of a bundle, as the process reminder gives       |
 | Provenance of each change   | `ToolContext` in the audit log of the workspace                    |
-| Live data for the host      | `workspace.sensors.get`, `workspace.sql`, the port, `readRoom`     |
+| Live data for the host      | `workspace.fetch`, `workspace.sql`, the port, `readRoom`           |
 | A person acts               | `room.visit` and `visit.send`, with a ref to the widget            |
 | Join several placements     | `compose` and [macros](macros.md), through declared outputs        |
 
@@ -85,16 +85,16 @@ changes.
 
 **A source names data that exists today.**
 
-| Source     | Names                   | The host reads it with                                 |
-| ---------- | ----------------------- | ------------------------------------------------------ |
-| `sensor`   | `<connection>/<sensor>` | `workspace.sensors.get` and the standard sensor client |
-| `sql`      | A query that reads      | `workspace.sql`, under `PRAGMA query_only`             |
-| `file`     | A workspace path        | The port                                               |
-| `snapshot` | A snapshot ref          | The object store; the bytes never change               |
-| `process`  | A process handle        | `processes.subscribe` and the output file              |
-| `room`     | `ambion://room/<name>`  | `readRoom` and the mirror                              |
-| `message`  | A message ref           | The journal                                            |
-| `inline`   | Text or a small table   | The configuration itself                               |
+| Source     | Names                  | The host reads it with                                      |
+| ---------- | ---------------------- | ----------------------------------------------------------- |
+| `sensor`   | `<process>/<sensor>`   | `workspace.fetch` of the process, with the template's paths |
+| `sql`      | A query that reads     | `workspace.sql`, under `PRAGMA query_only`                  |
+| `file`     | A workspace path       | The port                                                    |
+| `snapshot` | A snapshot ref         | The object store; the bytes never change                    |
+| `process`  | A process handle       | `processes.subscribe` and the output file                   |
+| `room`     | `ambion://room/<name>` | `readRoom` and the mirror                                   |
+| `message`  | A message ref          | The journal                                                 |
+| `inline`   | Text or a small table  | The configuration itself                                    |
 
 **The host reads each source as the host agent.** That agent is
 `workspace.mirrorAgent`, `<name>-host`. A widget shows what the host
@@ -110,8 +110,8 @@ mark, as the camera-chat preview keeps its `failure`.
 **A live widget is not evidence.** A `sensor` widget shows temporary
 frames, as the camera-chat preview does today. A `snapshot` widget shows
 retained bytes, and a message can cite them. To cite a measurement, the
-agent calls `observe` and places the snapshot ref
-([Sensors](sensors.md#observe-and-retain-evidence)).
+agent calls `fetch` and places the snapshot ref
+([Sensors](sensors.md#read-and-retain-evidence)).
 
 ### The catalog
 
@@ -270,7 +270,7 @@ executors turn off native subagents for the same reason
 | Host        | Effect                                                                                                                        |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Workbench   | The files panel, the process panel, and the previews give a first catalog of four kinds. The feed and the composer stay fixed |
-| Camera chat | The preview that opens on `connected` becomes a `sensor` widget that the agent places                                         |
+| Camera chat | The preview that opens when the `camera` process starts becomes a `sensor` widget that the agent places                       |
 | Cloudflare  | A later step. A Cloudflare room has no workspace today, and the adapter has no WebSocket or fetch handler for a browser       |
 
 **Macros can build a canvas in one call.** A skill can store a macro,
@@ -285,9 +285,9 @@ lines, and its outcome. The opener places it in the activation that
 calls `breakout`. The bridge does not change ([Breakout
 rooms](breakout.md#the-bridge)).
 
-**Sensors keep their wire API.** The `sensor` widget reads through the
-standard client, as the camera-chat preview does today. The `api`
-version and the evidence path through `observe` do not change.
+**Sensors keep their wire API.** The `sensor` widget reads through
+`workspace.fetch`, as the camera-chat preview does today. The `api`
+version of the template and the evidence path through `fetch` do not change.
 
 **An ambient room keeps its canvas current.** Between exchanges, each
 widget with a source refreshes with no activation. A scheduled say

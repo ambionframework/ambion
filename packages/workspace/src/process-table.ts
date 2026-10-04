@@ -23,7 +23,11 @@ interface BashProcessSpec {
 
 /** Which processes the host's list holds. */
 export interface ProcessQuery {
-	/** The owner agent. Absent lists the processes of every agent of this run. */
+	/**
+	 * The owner agent. The list reads that agent's files even when the agent
+	 * has not acted in this run, so the read adopts its live processes of an
+	 * earlier run. Absent lists the processes of every agent of this run.
+	 */
 	readonly agent?: string;
 	/** `true` lists the running processes alone. */
 	readonly running?: boolean;
@@ -82,8 +86,17 @@ export interface ProcessTable {
 		seat: { agent: string; room: string; activation: string },
 		signal: AbortSignal,
 	): Promise<string | undefined>;
-	/** The host's list: the processes of the agents that used the workspace in this run. */
+	/**
+	 * The host's list: the processes of the agents that used the workspace in
+	 * this run, or of the one agent that `query.agent` names.
+	 */
 	hostList(query?: ProcessQuery): Promise<readonly Process[]>;
+	/**
+	 * The process `handle` when this table holds it live: it started in this
+	 * run, or a read adopted it. It answers from memory and reads no file, so
+	 * it sees an end only after the table settled the process.
+	 */
+	running(handle: string): Process | undefined;
 	/**
 	 * Whether this table saw the process `handle` of `agent` end. It answers
 	 * at once and stays true for the run. A process that ended before this

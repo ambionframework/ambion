@@ -86,7 +86,7 @@ echo "tonnage for $1 m3: $(( $1 * 24 / 10 )) t"
 
 ## Give an agent its skills
 
-**`loadSkills(source)` reads the source once and checks each skill.** A
+**`loadSkills(...sources)` reads each source once and checks each skill.** A
 source is `fromDirectory(path)`, which reads a folder on the host, or an
 object that maps each path to its text. `fromDirectory` reads bytes, so an
 asset can be binary. Call `loadSkills` before you define the agent: a skill
@@ -140,6 +140,25 @@ bundle of each agent. Each agent still gets its own copy in its own home.
 **`tools()` with no skills keeps one stable bundle.** Each call with
 `skills` returns a new bundle, whose tools run the tools of `tools()`. `tools` throws when
 `skills` is a value that `loadSkills` did not make.
+
+### Several sources
+
+**`loadSkills` takes any number of sources and merges their files into
+one set.** A host uses it to put the skills of a template beside the skills
+of an agent. The merge runs before the checks, so the set stays sorted and
+its manifest has one list.
+
+```ts
+const skills = await loadSkills(
+  fromDirectory('./agents/surveyor/skills'),
+  fromDirectory('./templates/sensor-server/skills'),
+);
+```
+
+**One skill folder can come from one source only.** Two sources that hold
+the same folder fail with `Skill set: the skill '<name>' is in source <i>
+and source <j>.` The ordinals start at 1, in the order of the arguments.
+A call with no source fails with `Skill set: the source holds no skill.`
 
 ## The rules that `loadSkills` checks
 
@@ -311,6 +330,12 @@ material to start from.** Use each for its own job.
 **A skill can tell an agent to fork a template.** The body of `SKILL.md`
 names the template and the steps: `fork` it, change the clone, and push.
 See [Git](git.md).
+
+**A template can ship a skill.** A sensor template holds a `skills/`
+folder with the skill and the `observe` macro of the sensor. The host loads
+that folder from its own copy of the template, with `loadSkills`. An edit
+in the fork of an agent changes nothing that runs
+([Sensors](sensors.md#load-the-skills-of-a-template)).
 
 ## Limits
 
