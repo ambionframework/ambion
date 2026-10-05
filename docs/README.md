@@ -34,7 +34,7 @@ each page.
 | [Resources](resources.md)             | The resource contract, tool bundles, references, and provenance                               |
 | [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                                          |
 | [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders                   |
-| [Canvas](canvas.md)                   | A design: the collection of rooms, and breakout rooms for background work                     |
+| [Canvas](canvas.md)                   | The collection of rooms, and breakout rooms for background work                               |
 | [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent                           |
 | [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes                                 |
 | [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys                     |
