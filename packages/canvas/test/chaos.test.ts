@@ -355,6 +355,10 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 					: undefined;
 			await w.open(w.first, names[hit] as string);
 			await settled(live(w.first.canvas, target));
+			// The bridge tries the notice after the exchange closes, so wait for its failure.
+			await vi.waitFor(() =>
+				expect(w.first.errors.some((error) => error.operation === 'notice')).toBe(true),
+			);
 			w.fault.journal = undefined;
 			expect(await keyed(w.base, 'site', `breakout:${target}:`)).toEqual([]);
 			w.fault.store = (write, room) => write === 'archive' && room === target;
