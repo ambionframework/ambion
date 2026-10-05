@@ -21,6 +21,8 @@ export interface BreakoutPort {
 	assertReady(): void;
 	/** Runs the operation after the calls in flight on that room name. */
 	serial<T>(name: string, operation: () => Promise<T>): Promise<T>;
+	/** Runs the operation in the chain of the bridge posts for one parent. */
+	ordered<T>(parent: string, operation: () => Promise<T>): Promise<T>;
 	row(name: string): CanvasRoom | undefined;
 	rows(): readonly CanvasRoom[];
 	room(name: string): Room | undefined;
@@ -192,7 +194,7 @@ export async function openBreakout(
 }
 
 /** A room that stopped is a refusal, as the canvas states every refusal. */
-function refusedStop(error: unknown, room: string): unknown {
+export function refusedStop(error: unknown, room: string): unknown {
 	return error instanceof AmbionError && error.code === 'room_stopped'
 		? refuse(`The room "${room}" is stopped.`)
 		: error;
@@ -209,7 +211,7 @@ export async function seqUnder(
 }
 
 /** Posts into a room, and gives the seq of the post. */
-export async function postInto(
+async function postInto(
 	room: Room,
 	post: { to?: string; text: string; refs?: string[]; key: string },
 ): Promise<number> {

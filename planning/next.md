@@ -100,7 +100,7 @@ changelog names the dropped `workbench_rooms` table.
 
 - [x] **1.** `breakout`, `tell`, `archive`, `report`, the reminder, and
       the bounds. Needs phase 2.
-- [ ] **2.** The bridge. Needs 1.
+- [x] **2.** The bridge. Needs 1.
 - [ ] **3.** Delegation in the workbench: a worker team and the two
       bundles. Needs 2.
 
