@@ -440,9 +440,19 @@ describe('exchange continuity on the local disk', () => {
 		const dir = await tempDir('ambion-refused-');
 		await writeFile(join(dir, 'file'), '');
 		// A directory under a file: the disk refuses every session.
-		const { run } = seatOn(new TwoQuestions(), diskSessions(join(dir, 'file', 'sessions')));
+		const { run, notices } = seatOn(
+			new TwoQuestions(),
+			diskSessions(join(dir, 'file', 'sessions')),
+		);
 		const first = await run('message:1:product:1');
 		expect(first.result).toEqual({ failed: false });
+		expect(notices).toEqual([
+			expect.objectContaining({
+				level: 'warning',
+				text: 'Pi session kept in memory',
+				data: expect.objectContaining({ reason: expect.stringContaining('ENOTDIR') }),
+			}),
+		]);
 		const second = await run('message:2:product:1', { resume: first.session });
 		expect(second.session).toEqual(began(1));
 		expect(second.readThrough).toBe(2);

@@ -391,7 +391,7 @@ files itself.
 `ambion-pi-sessions-<uid>` in the OS temporary directory, which every local
 user shares. The executor creates it with access for its owner only. It
 refuses a link, and a directory that another user owns. The sessions then
-stay in memory.
+stay in memory, and the trace carries a warning notice with the error.
 
 ## Exchange continuity
 
@@ -414,8 +414,10 @@ context still holds. The executor writes no other entry for it.
 hold, cannot read, or that the harness cannot restore, closes and gives way
 to a fresh session under the id of the activation. The activation does not
 fail, and it reads the whole view. A JSONL file with a corrupt line is such
-a session. A session the disk refuses to create stays in memory. A new
-session whose id the store already holds takes a new id.
+a session. A session the disk refuses to create stays in memory, and the
+trace carries a warning notice with the error. A session that the disk
+holds and cannot read gives way to a fresh session with a warning notice. A
+new session whose id the store already holds takes a new id.
 
 **A session that fails gives way too.** When the store fails a write during
 a pass, the pass fails as transient. The release then records no session, so
@@ -442,7 +444,8 @@ the summary of the exchange before it, and each continues its own session.
 - **Node.** The harness writes each session to a JSONL storage under
   `sessionDir`, in a folder for each room, seat, and session id:
   `<sessionDir>/<room>/<seat>/<id>`. A restart on the same disk reopens it.
-  A session the disk refuses stays in memory.
+  A session the disk refuses stays in memory, and the trace carries a
+  warning notice with the error.
 - **`sessions: 'memory'`.** A `MemoryStorage` of pi-durable keeps the two
   newest sessions of each room and seat in memory. A restart loses them.
 - **Cloudflare.** The seat object keeps its sessions in memory on the
@@ -599,6 +602,6 @@ Pi seats.
 | The agent never speaks                                              | Silence is legal. Pass a `logger` to `createRuntime` and read the thinking and the tool calls there.                                                                    |
 | A say returns `Not delivered: the room moved`                       | The freshness rule refused a say against newer record. The model reads the new messages, then says its message again unless they already say it or make it unnecessary. |
 | A steer shows `consumed: false`                                     | No provider request held the line before the pass ended. The next delta carries the line.                                                                               |
-| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts.                                                                            |
+| The first activation after a restart re-reads the record            | The sessions were in memory, or the restart used another `sessionDir`. A new session starts. Read the warning notices of the trace for a disk that refused a session.   |
 | The session directory grows                                         | The executor deletes no session file. Remove old files under `sessionDir`.                                                                                              |
 | The activation ends with `stop: 'length'`                           | The last model message hit a length limit. Shorten the record with `activationTokenLimit`.                                                                              |

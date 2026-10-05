@@ -274,13 +274,17 @@ class Activation implements RunningActivation {
 	private async openSession(pass: Pass, model: Model<Api>): Promise<Opened> {
 		const scope = scopeOf(pass.view, this.definition);
 		const storage = await this.resumed(scope, pass.resumeId);
-		if (storage !== undefined && pass.resumeId !== undefined) {
-			const opened = await this.attach(storage, pass.resumeId, pass, model, true).catch(
-				() => undefined,
+		const { resumeId } = pass;
+		if (storage !== undefined && resumeId !== undefined) {
+			const opened = await this.attach(storage, resumeId, pass, model, true).catch(
+				(error: unknown) => this.fellBack('Pi session not resumed', resumeId, error),
 			);
 			if (opened !== undefined) return opened;
 		}
 		const created = await this.seat.sessions.create(scope, this.activation.id);
+		if (created.fallback !== undefined) {
+			this.fellBack('Pi session kept in memory', created.id, created.fallback);
+		}
 		return this.attach(created.storage, created.id, pass, model, false);
 	}
 
@@ -293,7 +297,16 @@ class Activation implements RunningActivation {
 		// An ended activation may still close the session, and a session opens once.
 		// A cut ends the wait.
 		await Promise.race([this.seat.closing.get(resume), this.cut]);
-		return this.seat.sessions.open(scope, resume).catch(() => undefined);
+		return this.seat.sessions
+			.open(scope, resume)
+			.catch((error: unknown) => this.fellBack('Pi session not opened', resume, error));
+	}
+
+	/** Say in the trace that a session gave way, and keep the cause. The activation runs on. */
+	private fellBack(text: string, session: string, cause: unknown): undefined {
+		const reason = cause instanceof Error ? cause.message : String(cause);
+		this.trace.record({ type: 'notice', level: 'warning', text, data: { session, reason } });
+		return undefined;
 	}
 
 	/** A harness over the storage, with the tools of this activation. A failed attach closes the storage. */
