@@ -1,16 +1,9 @@
 # The simulator
 
-**This page designs `@ambionframework/simulator`.** 0.3.0 ships it, built
-in the four pull requests of [the order of work](#the-order-of-work). The
-package holds `simulate`, `scriptedActor`, `agentActor`, and `agentJudge`,
-and the assistant's live suite runs on it. The evidence that validates the
-design waits on the first live run of that suite on `main`.
-
-**The rewrite of the assistant's live suite validates the design.** The
-package lands when `packages/assistant/test/live/behavior.test.ts` runs on
-it and keeps every claim the suite makes today.
-[Validation](#validation-the-assistants-live-suite) states the port and
-the evidence.
+**`@ambionframework/simulator` runs evals.** The package holds
+`simulate`, `scriptedActor`, `agentActor`, and `agentJudge`. The
+assistant's live suite runs on it, as
+[The assistant's live suite](#the-assistants-live-suite) states.
 
 **The simulator runs an eval: an agent plays a person in a room, and the test
 grades what the room did.** An eval has three parts. The actor sends each
@@ -97,7 +90,7 @@ sequenceDiagram
     J-->>T: verdict
 ```
 
-## Decisions taken
+## Design rules
 
 - **The simulator drives a room that the test started.** `simulate` takes
   a running `Room`. The test chooses the runtime, the storage, the
@@ -323,7 +316,7 @@ the discussion, and its next move answers it or stops.
 ## The model call
 
 **Both agents run on the Pi harness through `@ambionframework/pi`.**
-The Pi package gains one export:
+The Pi package exports `runAgent`:
 
 ```ts
 export function runAgent(
@@ -439,8 +432,8 @@ source in the simulation.
 | What the person did with tools    | `simulation.moves[].calls`                                         |
 
 **The package ships no helper for these reads.** A filter over the simulation is
-one line. The helpers of `packages/ambion/test/live/support.ts` stay in the
-test support where they are.
+one line. The helpers of `packages/ambion/test/live/support.ts` live in the
+test support.
 
 ## The judge
 
@@ -540,20 +533,15 @@ holds the rules.
   Pi sessions stay in memory. No state passes from one case or sample to
   the next.
 
-## Validation: the assistant's live suite
+## The assistant's live suite
 
-**The rewrite of `packages/assistant/test/live/behavior.test.ts` is the
-acceptance test of the design.** The suite runs a live assistant beside a
+**`packages/assistant/test/live/behavior.test.ts` is the acceptance test
+of the design.** The suite runs a live assistant beside a
 specialist whose evidence the test fixes. Its claims are about judgment:
 routing, silence, and what the summary keeps, a superseded constraint
 included.
 
-**Before the port, the suite held one helper and eleven tests.** `evaluate()` started
-a room, sent one question, waited for the summary under its own timer,
-and stopped the room. A Pi stream routed on the model id. The assistant
-reached the provider, and the specialist returned one fixed `say`.
-
-**The rewrite removes both mechanisms.**
+**The suite rests on three mechanisms.**
 
 - **The specialist runs on the testing entry.** Its definition carries
   `executor: { kind: 'scripted', instructions, tools: [] }`.
@@ -561,9 +549,9 @@ reached the provider, and the specialist returned one fixed `say`.
   `piExecution()`, and the specialist runs on `scripted()`, which has no
   kind and serves every kind. The `executor` function of `defineAssistant`
   calls `pi()`, so the assistant has the kind `pi`.
-- **`simulate` replaces `evaluate()`.** A case passes
+- **`simulate` runs each case.** A case passes
   `scriptedActor([question])` and `messages: 1`. `exchangeMs: 90_000`
-  replaces the timer.
+  bounds each exchange.
 - **Each case starts its own runtime.** `scripted()` keeps one step counter
   for each seat name over the life of its runtime. A shared runtime shares
   the counter between cases.
@@ -597,7 +585,7 @@ scripted Pi assistant, so its plumbing needs no key.
 criterion.** A check such as `/8|eight/` decides a fact. A regex that lists
 eight ways to say "not verified" grades a meaning.
 
-| Case today                                                       | Checks                                                                                                                                                                        | Criteria for the judge                                                                                                                                         |
+| Case                                                             | Checks                                                                                                                                                                        | Criteria for the judge                                                                                                                                         |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Routes participation, five samples                               | The specialist spoke. At `named`, the assistant says once, to `inventory`, and says nothing otherwise. The summary names 8.                                                   | None                                                                                                                                                           |
 | The reserve sample of the five                                   | The record holds a `seated` entry for `inventory` from `assistant`.                                                                                                           | None                                                                                                                                                           |
@@ -607,12 +595,11 @@ eight ways to say "not verified" grades a meaning.
 | Keeps the verification limits                                    | The assistant says nothing.                                                                                                                                                   | The summary says that the check was a source inspection of a static prototype, that runtime behavior is unverified, and that nothing was released or deployed. |
 | Works a request after the person who asked leaves, three samples | The first two entries are the question and the departure. At `named`, the assistant says once, to `inventory`. The specialist spoke. The summary goes to `priya` and names 8. | The summary does not say that the request went unanswered because the person left.                                                                             |
 
-**The rewrite adds the cases that `evaluate()` cannot express.** Each one
-needs more than one exchange.
+**Three cases need more than one exchange.**
 [Assistant evaluation](assistant.md#integration-and-evaluation) lists
 them.
 
-| New case                                    | Actor                                                   | Checks                                                                                                                  | Criteria for the judge                                                                                     |
+| Case                                        | Actor                                                   | Checks                                                                                                                  | Criteria for the judge                                                                                     |
 | ------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | A person revises the request                | Scripted: the question, then the revision               | At `named`, the assistant says once to `inventory` in the second exchange, and names SKU B. The second summary names 5. | The second summary answers for SKU B.                                                                      |
 | A constraint survives into a later exchange | Scripted: a no-dispatch constraint, then a plan request | At `named`, the assistant says once to `inventory` in the second exchange.                                              | That request carries the no-dispatch constraint. The second summary keeps it.                              |
@@ -639,39 +626,16 @@ words of an agent never change the evidence.
 | No seat without need                        | Scripted: a note that needs no specialist         | No `seated` entry. The specialist and the assistant say nothing.                                             | None                                                                                |
 | A specialist asks the assistant             | Scripted: a question about the north warehouse    | The specialist asks the assistant which warehouse. The assistant says once, to `inventory`, and names north. | None                                                                                |
 
-**Samples stay in the test.** `it.each` keeps the sample numbers of today.
+**Samples stay in the test.** `it.each` sets the number of samples.
 The simulator repeats nothing. `it.each` over k samples measures pass^k:
 the case passes when every sample passes.
-
-**The evidence for the port:**
-
-- The file no longer holds `evaluate()` or the routing stream.
-- Every claim of the eleven tests holds as a check or a criterion.
-- The three new cases run, and each one has more than one exchange.
-- The five purpose cases run.
-- `pnpm check` passes, and one live run of the file prints the cost of each
-  case: the room, the actor, and the judge.
-- A gap that the port finds changes this page first, and the package
-  second.
-
-## The order of work
-
-**Four pull requests build the package, in this order.** Each one states
-its evidence below.
-
-| Pull request              | What it adds                                                 | Evidence                                            |
-| ------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| 1. Pi: `runAgent`         | `packages/pi/src/run-agent.ts`, the export, a changelog line | [The `runAgent` cases](#tests)                      |
-| 2. Simulator: the loop    | `simulate`, `scriptedActor`, the package and its graph line  | The scripted-tier table                             |
-| 3. Simulator: the agents  | `agentActor`, `agentJudge`, `send`, `stop`, `grade`          | The scripted-stream cases, and one live case        |
-| 4. Assistant: the rewrite | The port of `behavior.test.ts`                               | [Validation](#validation-the-assistants-live-suite) |
 
 ## Where the code lives
 
 **The package depends on `ambion` and `pi`.** The package graph in
-[Toolchain](toolchain.md#1-repository-layout) gains one line:
+[Toolchain](toolchain.md#1-repository-layout) holds the line
 `simulator ──▶ ambion, pi`. `packages/pi/src/run-agent.ts` holds
-`runAgent`, the one change to the Pi package.
+`runAgent`.
 
 | File                      | What it holds                                          |
 | ------------------------- | ------------------------------------------------------ |

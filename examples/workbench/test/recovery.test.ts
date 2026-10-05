@@ -200,14 +200,14 @@ describe('Workbench room reads and recovery', () => {
 		const database = catalog(directory);
 		const counter = { calls: 0 };
 		const rooms = await hostRooms(database, directory, counter);
-		await rooms.create('legacy', 'Recorded goal.');
-		await rooms.withRoom('legacy', (entry) => liveRoom(entry).unseat('design'));
-		await rooms.lifecycle('legacy', 'stop');
+		await rooms.create('restored', 'Recorded goal.');
+		await rooms.withRoom('restored', (entry) => liveRoom(entry).unseat('design'));
+		await rooms.lifecycle('restored', 'stop');
 		await rooms.close();
 		// The catalog holds a provisional goal. The journal holds the recorded one.
 		database
 			.prepare('UPDATE workbench_rooms SET goal = ?, enabled = 1 WHERE name = ?')
-			.run('Provisional goal.', 'legacy');
+			.run('Provisional goal.', 'restored');
 		const status = (await (await hostRooms(database, directory, counter)).list())[0];
 		expect(status).toMatchObject({ initialized: true, goal: 'Recorded goal.', status: 'running' });
 		expect(status?.participants).not.toEqual(

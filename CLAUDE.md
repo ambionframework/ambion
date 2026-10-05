@@ -136,6 +136,11 @@ need the key. Read neither login file.
   alias, reader for an older format, or compatibility test. Update the export
   snapshot and the golden journals in the same commit, and name the change in
   the changelog. [`planning/next.md`](planning/next.md) holds the rule.
+- **History lives in git.** Code, comments, docs, error messages, and tests
+  describe the current state. Do not write how a name, an API, or a design
+  changed. A test asserts what the code does, and asserts nothing about a
+  removed name. `CHANGELOG.md` is the one record of change in the tree.
+  `scripts/vocabulary.test.mjs` refuses the common phrases.
 - **A sensor template carries a protocol version.** A breaking change raises
   `api`, and the template's macros refuse a server at another `api`. A forked
   server does not upgrade with the host. Reducer state belongs to the server.

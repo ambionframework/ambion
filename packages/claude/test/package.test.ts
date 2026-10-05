@@ -9,5 +9,4 @@ it('exports the executor, its execution and the test fixture, and names the pack
 	const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 	expect(entry.PACKAGE_NAME).toBe(manifest.name);
 	expect(manifest.dependencies).not.toHaveProperty('@ambionframework/pi');
-	expect(manifest.dependencies).not.toHaveProperty('@ambionframework/pi-journal');
 });

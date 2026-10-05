@@ -6,16 +6,12 @@ import test from 'node:test';
 
 /**
  * The vocabulary check. The glossary in `docs/room.md` gives each word one
- * meaning. Each entry here refuses one old name in the paths where a rename
- * removed it. The check reads the tracked files, so ignored files stay out.
- * `CHANGELOG.md` and `planning/` keep the old names as history.
+ * meaning. Each entry refuses one word in the paths where the glossary uses
+ * another word for that concept. The check reads the tracked files, so
+ * ignored files stay out. `CHANGELOG.md` and `planning/` are exempt.
  *
- * A new entry lands with the rename that removes the word.
- *
- * The `turn` entry refuses the phrases that used `turn` for an activation.
- * A vendor turn, such as a Codex `turn.started` event, stays legal. The
- * `after` delay is now `delaySeconds`, and a regex cannot tell the old delay
- * from the `after` position, so it has no entry.
+ * The `turn` entry refuses the phrases that use `turn` for an activation.
+ * A vendor turn, such as a Codex `turn.started` event, is correct.
  */
 
 const root = join(import.meta.dirname, '..');
@@ -24,13 +20,13 @@ const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: '
 	.split('\0')
 	.filter((path) => path !== '' && existsSync(join(root, path)));
 
+const EXEMPT = /^(CHANGELOG\.md|planning\/|scripts\/vocabulary\.test\.mjs$|pnpm-lock\.yaml$)/;
 const TEXT = /\.(ts|tsx|mjs|cjs|js|json|jsonc|md|yml|yaml|sh|svg|dfy|snap|css|html)$/;
-const HISTORY = /^(CHANGELOG\.md|planning\/|scripts\/vocabulary\.test\.mjs$|pnpm-lock\.yaml$)/;
 const CODE = /\.(ts|tsx|mjs|cjs|js|yml|yaml|sh)$/;
 const SOURCE = /^(packages|examples)\/[^/]+\/src\/.*\.(ts|tsx)$/;
 const PROSE = /^(docs\/.*\.md|README\.md|packages\/[^/]+\/README\.md)$/;
 
-/** A pattern that matches one old name in the file of the paths that `paths` accepts. */
+/** A pattern that matches one refused word in the files that `paths` accepts. */
 const entry = (id, pattern, paths, options = {}) => ({
 	id,
 	pattern,
@@ -39,54 +35,13 @@ const entry = (id, pattern, paths, options = {}) => ({
 	allow: options.allow ?? [],
 });
 
-// Old names that a rename removed. A name has a word boundary and no false
-// positive in the current tree. One entry holds one concept.
-const OLD_NAMES = [
-	['person', /\b(?:defineHuman|HumanDefinition|HumanParticipant)\b/],
-	[
-		'executor',
-		/\b(?:AgentExecutor(?:BaseOptions)?|ExecutorSession|scriptedExecutor|create(?:Pi|Claude|Codex)Executor|(?:Pi|Claude|Codex)ExecutorOptions)\b/,
-	],
-	// pi-durable names its own events `tool_execution_start` and `tool_execution_end`.
-	[
-		'activation event',
-		/\b(?:ExecutionEvent|tool_execution_(?:start|end))\b/,
-		{ exclude: /^(?:packages\/pi\/|docs\/pi\.md$)/ },
-	],
-	['summarize purpose', /\bisClosing\b|\bpurpose\b[^'\n]{0,8}'summary'/],
-	['cancel', /\broom\.abort\(/],
-	['summarize commit', /\b(?:closingCommit|membershipTool|interface Closing)\b/],
-	['said message', /\b(?:SpokenMessage|isSpoken)\b/],
-	['speaking default', /\bDEFAULT_GUIDANCE\b/],
-	['exchange', /\b(?:ExchangeView|ClosedExchange(?:View)?|readView)\b/],
-	['read position', /\bwatermark\b/],
-	['scheduled say', /\b(?:PendingSay|pendingFor|renderPending)\b/],
-	['port error', /\bdelivery_error\b/],
-	['send state', /\bDeliveryState\b/],
-	[
-		'journal entries',
-		/\b(?:applyEvent|ProposedEvent|acceptedEvent|journal\/events(?:\.ts|\.js)?)\b/,
-	],
-	['journal entry type', /\bJournalEntry\b/],
-	['execution options', /\b(?:ClaudeRuntime|CodexRuntime)\b/],
-	['executor kind', /\b(?:seatFamilies|scriptedFamilies)\b/],
-	['workspace endpoint', /\bWorkspacePorts?\b|workstation\/src\/ports\.ts/],
-	['shell error', /\bExecutionError(?:Code)?\b/],
-	['credential lifetime', /\b(?:tokenTtl|keyTtl)\b/],
-	['process cancel', /\b(?:StopCause|process-stop)\b/],
-	['process record', /\b(?:ProcessStatus|ProcessRecord|ProcessView)\b/],
-	['due activation', /\b(?:PendingActivation|PendingWake|draftsClose|draftsOf)\b/],
-	['due respond', /\b(?:Due|Open|Held)Wake\b/],
-	['trace policy', /\bthinking:\s*'summary'/],
-	['simulation', /\bRunExchange\b/],
-	['traced step', /\bTraceRecord\b/],
-	['trace policy default', /\bDEFAULT_TRACE\b/],
-	['bound tool', /\bRoomTool(?:Result)?\b/],
-	['tool concurrency', /\bToolExecutionMode\b/],
-	['seat context', /\bAgentExecutionContext\b/],
-];
-
 const entries = [
+	// History belongs to git. Text and tests describe the current state.
+	entry(
+		'history',
+		/\b(?:formerly|renamed (?:from|to)|was renamed|used to be|previously (?:called|named)|old names?|deprecated alias|backwards? compat(?:ibility)?)\b/i,
+		TEXT,
+	),
 	entry('member', /\bmember(?:ship)?s?\b/i, PROSE),
 	entry(
 		'seating',
@@ -115,7 +70,6 @@ const entries = [
 	),
 	entry('Spoken', /\w+Spoken\b|\bspoken\w*/i, SOURCE),
 	entry('Info', /\bexport\s+(?:type|interface)\s+\w+Info\b/, /^packages\/ambion\/src\/.*\.ts$/),
-	entry('entry body type', /\binterface Fence\b/, /^packages\/ambion\/.*\.ts$/),
 	entry('Harness', /\b\w*(?:Harness|HARNESS|harness[A-Z_])\w*/, CODE, {
 		exclude: /^packages\/pi\//,
 		allow: [
@@ -123,9 +77,6 @@ const entries = [
 		],
 	}),
 	entry('harness matrix', /\bmatrix\.harness\b|^\s*harness: \[/, CODE),
-	...OLD_NAMES.map(([concept, pattern, options]) =>
-		entry(`old names of the ${concept}`, pattern, TEXT, options),
-	),
 ];
 
 const lines = new Map();
@@ -139,7 +90,7 @@ function hitsOf({ pattern, paths, exclude, allow }) {
 	const global = new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`);
 	const hits = [];
 	for (const path of tracked) {
-		if (!paths.test(path) || HISTORY.test(path) || exclude?.test(path)) continue;
+		if (!paths.test(path) || EXEMPT.test(path) || exclude?.test(path)) continue;
 		linesOf(path).forEach((line, index) => {
 			const found = [...line.matchAll(global)].filter(
 				(match) => !allow.some((pattern) => pattern.test(match[0])),
@@ -155,7 +106,7 @@ for (const item of entries) {
 		const hits = hitsOf(item);
 		assert.ok(
 			hits.length === 0,
-			`${item.id}: an old name is back. docs/room.md holds the glossary.\n${hits.join('\n')}`,
+			`${item.id}: a refused word. docs/room.md holds the glossary.\n${hits.join('\n')}`,
 		);
 	});
 }
