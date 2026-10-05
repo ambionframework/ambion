@@ -63,6 +63,9 @@ class Cluster {
 	/** Leases live when time jumped past the whole expiry: every one expires, and that is one error. */
 	private jumped = 0;
 	private jumpedBefore = 0;
+	/** Lease writes the disk fault met: a renewal that no attempt confirms fails its activation, and that is one error. A claim and a release send again and fail nothing. */
+	private lost = 0;
+	private lostBefore = 0;
 	private readonly journals;
 
 	constructor(
@@ -70,9 +73,10 @@ class Cluster {
 		readonly opened: Awaited<ReturnType<typeof memory.open>>,
 		readonly random: () => number,
 	) {
-		this.journals = tappedJournals(opened.storage, (id, _n, phase) => {
+		this.journals = tappedJournals(opened.storage, (id, _n, phase, kind) => {
 			if (id !== name || this.disk !== phase) return;
 			this.disk = false;
+			if (kind === 'lease') this.lost += 1;
 			throw new Error('the disk is full');
 		});
 	}
@@ -168,6 +172,7 @@ class Cluster {
 		this.failedBefore = this.cast.failures();
 		this.droppedBefore = this.dropped;
 		this.jumpedBefore = this.jumped;
+		this.lostBefore = this.lost;
 		const session = this.session;
 		session.subscribe((event) => {
 			this.events.push(event);
@@ -182,13 +187,14 @@ class Cluster {
 	/** The takeovers asked for so far, one after the other; the drain waits for the last. */
 	private resuming: Promise<void> = Promise.resolve();
 
-	/** The errors a run may carry: what it inherited, the cast's failures, the drops and the jumps it saw. */
+	/** The errors a run may carry: what it inherited, the cast's failures, and the drops, the jumps and the lease writes the disk failed that it saw. */
 	private allowance(): number {
 		return (
 			this.inherited.activations +
 			(this.cast.failures() - this.failedBefore) +
 			(this.dropped - this.droppedBefore) +
-			(this.jumped - this.jumpedBefore)
+			(this.jumped - this.jumpedBefore) +
+			(this.lost - this.lostBefore)
 		);
 	}
 
