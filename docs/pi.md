@@ -411,13 +411,15 @@ position is the largest `through` of the `ambion.record` entries that the
 context still holds. The executor writes no other entry for it.
 
 **A session that cannot open starts fresh.** A session the store does not
-hold, cannot read, or that the harness cannot restore, closes and gives way
-to a fresh session under the id of the activation. The activation does not
-fail, and it reads the whole view. A JSONL file with a corrupt line is such
-a session. A session the disk refuses to create stays in memory, and the
-trace carries a warning notice with the error. A session that the disk
-holds and cannot read gives way to a fresh session with a warning notice. A
-new session whose id the store already holds takes a new id.
+hold, cannot read, or that the harness cannot restore, closes. A fresh
+session under the id of the activation replaces it, and the activation reads
+the whole view. A JSONL file with a corrupt line is such a session. A new
+session whose id the store already holds takes a new id.
+
+**The trace reports each fallback.** It carries a warning notice with the
+error when the disk refuses to create a session, when the disk cannot read
+a session, and when the harness cannot restore a session. A session the
+disk refuses to create stays in memory.
 
 **A session that fails gives way too.** When the store fails a write during
 a pass, the pass fails as transient. The release then records no session, so
