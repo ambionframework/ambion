@@ -480,8 +480,8 @@ of the same bytes uses it.
 the object store's. The just-bash directory backend reads at most 10 MiB of
 one file. The memory backend holds 128 MiB in all. On those backends, a
 larger file fails with the backend's own error. The workstation reads at
-most 10 MiB of one regular file. A larger file, a device file, and a FIFO fail with
-`invalid`.
+most 10 MiB of one regular file. A larger file, a device file, and a FIFO
+fail with `invalid`.
 
 ## The object backend
 

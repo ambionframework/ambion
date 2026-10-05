@@ -56,8 +56,8 @@ export const readdir = (sftp: SFTPWrapper, path: string): Promise<FileEntryWithS
 /** The most bytes that one file read returns. The directory backend of just-bash uses the same 10 MiB. */
 const MAX_READ_BYTES = 10 * 1024 * 1024;
 
-/** The size of one SFTP read request. */
-const CHUNK_BYTES = 32 * 1024;
+/** The size of one SFTP read request. `ssh2` splits a request that is longer than the server takes. */
+const CHUNK_BYTES = 256 * 1024;
 
 const refuseSize = (path: string, size: string): FileError =>
 	new FileError(
@@ -82,7 +82,7 @@ async function readChunks(
 		);
 		if (count === 0) return Buffer.concat(chunks, total);
 		total += count;
-		if (total > MAX_READ_BYTES) throw refuseSize(path, `more than ${MAX_READ_BYTES} bytes`);
+		if (total > MAX_READ_BYTES) throw refuseSize(path, 'larger than its size on `stat`');
 		chunks.push(chunk.subarray(0, count));
 	}
 	throw new Error('The session ended during the read.');

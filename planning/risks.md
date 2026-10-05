@@ -6,9 +6,7 @@ the effect, the code, and what a host does about it today. An entry that
 a [backlog](backlog.md) item covers links to that item.
 
 **An entry leaves this page in one of two ways.** A fix lands and deletes
-the entry. Or the risk moves to [next.md](next.md) as planned work. The
-full evaluation, with the method and the claims that hold, is in the
-project files under `robustness/evaluation.md`.
+the entry. Or the risk moves to [next.md](next.md) as planned work.
 
 **The record holds.** The conditional append is atomic. A fence refuses
 every stale write. A retry under the same key lands once. No risk on this

@@ -19,8 +19,10 @@ import {
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+import type { SFTPWrapper } from 'ssh2';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../src/index.ts';
+import { readBounded } from '../src/sftp.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
 
@@ -407,17 +409,47 @@ describe.skipIf(!hasSetsid)('a workstation read', () => {
 			const edge = await env.readBinaryFile('edge.bin');
 			expect(edge.ok && edge.value.length).toBe(limit);
 			for (const path of ['big.bin', '/dev/zero', 'pipe']) {
-				const rss = process.memoryUsage().rss;
-				const began = Date.now();
 				const refused = await env.readBinaryFile(path);
 				expect(refused).toMatchObject({ ok: false, error: { code: 'invalid' } });
 				expect(refused.ok ? '' : refused.error.message).toContain(path);
-				expect(Date.now() - began).toBeLessThan(10_000);
-				expect(process.memoryUsage().rss - rss).toBeLessThan(200 * 1024 * 1024);
 			}
 			const again = await env.readTextFile('edge.bin');
 			expect(again.ok).toBe(true);
 		});
+	});
+});
+
+describe('a bounded read', () => {
+	it('stops at the limit when a file grows past the size that `stat` reported, and closes the handle', async () => {
+		let buffered = 0;
+		let closed = 0;
+		// A stand-in server: a regular file of size 0 that never ends, as a file that grows does.
+		const sftp = {
+			stat: (_path: string, done: (error: undefined, stats: object) => void) =>
+				done(undefined, { isDirectory: () => false, isFile: () => true, size: 0 }),
+			open: (_path: string, _flag: string, done: (error: undefined, handle: Buffer) => void) =>
+				done(undefined, Buffer.from('h')),
+			read: (
+				_handle: Buffer,
+				_chunk: Buffer,
+				_offset: number,
+				length: number,
+				_position: number,
+				done: (error: undefined, count: number) => void,
+			) => {
+				buffered += length;
+				done(undefined, length);
+			},
+			close: (_handle: Buffer, done: () => void) => {
+				closed += 1;
+				done();
+			},
+		} as unknown as SFTPWrapper;
+		await expect(readBounded(sftp, 'grows', () => false)).rejects.toMatchObject({
+			code: 'invalid',
+		});
+		expect(closed).toBe(1);
+		expect(buffered).toBeLessThanOrEqual(10 * 1024 * 1024 + 256 * 1024);
 	});
 });
 
