@@ -4,7 +4,7 @@
  * harness setup. The record stands at `last`, and an activation reads
  * through its own message.
  */
-import type { AgentDefinition, Message } from '@ambionframework/ambion';
+import type { AgentDefinition, Message, Step } from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -24,6 +24,7 @@ import { stubModel } from '../../src/index.ts';
 import type { PiSessions } from '../../src/sessions.ts';
 import { contextText, type PiScript, scriptedStream } from '../../src/testing.ts';
 import { stateOf } from './activation.ts';
+import { noTrace } from './trace.ts';
 
 export const said = (seq: number, text: string): Message => ({
 	kind: 'said',
@@ -118,6 +119,7 @@ export function seatOn(
 ) {
 	const seen: Context[] = [];
 	const errors: string[] = [];
+	const notices: Step[] = [];
 	const opener = createPiOpener({
 		definition,
 		model: stubModel,
@@ -137,6 +139,12 @@ export function seatOn(
 		const session = stateOf(opener, definition, {
 			id,
 			room,
+			trace: {
+				...noTrace,
+				record: (step) => {
+					if (step.type === 'notice') notices.push(step);
+				},
+			},
 			emit: (event) => {
 				if (event.type === 'error') errors.push(event.error.message);
 			},
@@ -153,5 +161,5 @@ export function seatOn(
 		session.close?.();
 		return recorded;
 	};
-	return { seen, errors, run, opener, definition };
+	return { seen, errors, notices, run, opener, definition };
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**The trace reports a Pi session fallback.** The trace carries a warning
+notice with the error when the disk refuses to create a session, cannot
+read it, or the harness cannot resume it. `CreatedSession` gains `fallback`,
+and `PiSessions.open` rejects for a session it cannot read.
+
 **Resource contracts have one documentation owner.** `resources.md` states
 resource lifecycle, tool bundles, and provenance. `workspace.md` states
 workspace behavior and backend details.

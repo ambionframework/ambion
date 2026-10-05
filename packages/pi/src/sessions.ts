@@ -5,17 +5,18 @@
  * pi-durable `Storage` with one root conversation. The executor creates it
  * under the id of the activation that began it, and reopens it by that id
  * when the room names it in `spec.resume`. A session that the store does not
- * hold, or cannot read, opens as nothing, and the activation begins a fresh
- * one.
+ * hold opens as nothing, and the activation begins a fresh one. A session
+ * that the store cannot read fails to open, and the executor records the
+ * cause in the trace before it begins a fresh one.
  *
  * - **Memory.** `memorySessions()` keeps each session in a `MemoryStorage`.
  *   It keeps the two newest sessions of each room and seat, as long as the
  *   store lives.
  * - **Disk.** `diskSessions(dir)` keeps each session as a JSONL storage in
  *   the folder `dir/<room>/<seat>/<id>`. A restart on the same disk reopens
- *   it. A session the disk refuses stays in memory. The store loads the Node
- *   file system on first use, so the entry of this package loads on a host
- *   with no disk.
+ *   it. A session the disk refuses to create stays in memory, and `create`
+ *   reports the cause. The store loads the Node file system on first use,
+ *   so the entry of this package loads on a host with no disk.
  */
 import { MemoryStorage, type Storage } from '@earendil-works/pi-durable';
 
@@ -29,6 +30,8 @@ export interface SessionScope {
 export interface CreatedSession {
 	readonly id: string;
 	readonly storage: Storage;
+	/** The message of the error that made the store keep the session in memory. Absent on the store's own storage. */
+	readonly fallback?: string;
 }
 
 /** A seat's store of Pi sessions. */
@@ -38,7 +41,10 @@ export interface PiSessions {
 	 * session gets a fresh id, and `created.id` names it.
 	 */
 	create(scope: SessionScope, id: string): Promise<CreatedSession>;
-	/** Open the session `id`. Nothing, when the store does not hold it or cannot read it. */
+	/**
+	 * Open the session `id`. Nothing, when the store does not hold it. It
+	 * rejects when the store holds no copy and cannot read its own.
+	 */
 	open(scope: SessionScope, id: string): Promise<Storage | undefined>;
 }
 
@@ -167,7 +173,7 @@ async function isDirectory(folder: string): Promise<boolean> {
  * Sessions as JSONL storages under `dir`, a folder for each room, seat, and
  * session. A function names the directory on first use. The store is a
  * cache: when the disk refuses a session, the store keeps it in memory, and
- * the activation runs on.
+ * the activation runs on. The store reports the cause to its caller.
  */
 export function diskSessions(dir: string | (() => Promise<string>)): PiSessions {
 	const fallback = memorySessions();
@@ -180,8 +186,8 @@ export function diskSessions(dir: string | (() => Promise<string>)): PiSessions 
 					? `${id}-${crypto.randomUUID()}`
 					: id;
 				return { id: held, storage: await jsonlStorage(await folderOf(base, scope, held)) };
-			} catch {
-				return fallback.create(scope, id);
+			} catch (error) {
+				return { ...(await fallback.create(scope, id)), fallback: messageOf(error) };
 			}
 		},
 		open: async (scope, id) => {
@@ -189,10 +195,17 @@ export function diskSessions(dir: string | (() => Promise<string>)): PiSessions 
 				const folder = await folderOf(await root(), scope, id);
 				// The storage creates a missing folder: a session the disk does not hold opens as nothing.
 				if (await isDirectory(folder)) return await jsonlStorage(folder);
-			} catch {
-				// A session the disk cannot read opens as nothing.
+			} catch (error) {
+				// A session that a refused create kept in memory is still there to open.
+				const kept = await fallback.open(scope, id);
+				if (kept !== undefined) return kept;
+				throw error;
 			}
 			return fallback.open(scope, id);
 		},
 	};
+}
+
+function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
