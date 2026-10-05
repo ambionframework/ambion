@@ -478,7 +478,10 @@ class CanvasRun implements Canvas {
 
 	/** Starts a running breakout room that has no live handle. A live handle needs nothing. */
 	private async completeBreakout(name: string): Promise<void> {
-		if (!this.handles.has(name)) await this.guard(name, 'breakout', () => this.launch(name));
+		if (this.handles.has(name)) return;
+		await this.guard(name, 'breakout', () => this.launch(name));
+		// A resumed journal can close an exchange before the bridge listens.
+		this.bridge.pass(name).catch((error: unknown) => this.report(name, 'notice', error));
 	}
 
 	private async archiveRow(name: string, close: CanvasClose): Promise<CanvasClose> {

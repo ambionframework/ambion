@@ -470,7 +470,7 @@ describe('report', () => {
 		await site.post({ to: 'ada', text: 'Start a survey.' });
 		await settled(site);
 		await settled(live(canvas, 'site-survey'));
-		// A pass of the bridge runs after the close of the exchange. The report holds its place.
+		// The start of the room replays its parent in the chain of the bridge, so every post has landed.
 		await canvas.start('site-survey');
 		const messages = (await site.read()).messages.flatMap((m) => (m.kind === 'posted' ? [m] : []));
 		expect(messages.slice(1)).toMatchObject([

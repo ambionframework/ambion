@@ -153,7 +153,7 @@ exchange with no such key, the bridge posts the close notice:
 ```ts
 await parent.post({
   to: recipient, // the opener, or undefined; see below
-  text: `breakout ${name}: exchange #${exchange.from} is ${exchange.outcome}, messages #${exchange.from} to #${exchange.through}.`,
+  text: `breakout ${name}: exchange #${exchange.from} is ${exchange.outcome.kind}, messages #${exchange.from} to #${exchange.through}.`,
   refs: [messageUri(name, exchange.through)],
   key: `breakout:${name}:${exchange.from}`,
 });
@@ -161,8 +161,9 @@ await parent.post({
 
 **The bridge posts for one parent in order, one at a time.** It keeps a
 chain of its own for each parent, apart from the queue of a room name. It
-picks the recipient inside that order. `report` posts in the same chain. The recipient is the opener when the opener
-is on the roster of the parent at an attention other than `none`.
+picks the recipient inside that order. `report` posts in the same chain.
+The recipient is the opener when the opener is on the roster of the parent
+at an attention other than `none`.
 Otherwise the post has no `to`, and the room stays open. A key conflict
 counts as landed. `report` follows the same rule for its recipient.
 
@@ -244,7 +245,7 @@ the two leaves an archived row, and the next `resume` starts no archived
 room. `archive` of a stopped row records the close and stops nothing. A
 repeat `archive` returns the recorded result, and stops the handle again
 when one lives. `close` stops every handle, whatever its row says. An
-exchange that the stop interrupts gets no close notice: the opener already
+exchange that an `archive` interrupts gets no close notice: the opener already
 decided.
 
 **An opener that leaves keeps its rooms.** The bridge posts with no `to`.

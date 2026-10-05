@@ -107,8 +107,9 @@ opener.** An exchange with a `report` needs nothing more. An exchange with no
 roster at an attention other than `none`. Otherwise it has no `to`.
 
 **The bridge posts for one parent in order.** A parent with no live handle
-gets no post. Each `resume` and `start` runs one pass over every breakout row
-of the live parents, stopped rows included. A pass skips archived rows,
+gets no post. Each `resume` runs one pass over every breakout row of the live
+parents, and each `start` over the breakout rows of that parent, stopped rows
+included. A pass skips archived rows,
 reads a stopped journal with `readRoom`, and starts no worker. A failed post
 goes to `onError` with the operation `notice`, and the next pass posts it.
 
