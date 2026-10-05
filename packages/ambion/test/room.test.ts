@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
@@ -42,6 +43,9 @@ const spoken = (messages: readonly Message[]) => messages.filter(isSaid);
 
 type Options = Partial<Parameters<typeof startRoom>[0]>;
 
+/** The runtime of every room that `open` starts. */
+const shared = createRuntime({ storage: memoryJournals() });
+
 /** A room of scripted agents on these seats, and the assistant seated for nothing. */
 async function open(
 	label: string,
@@ -51,6 +55,7 @@ async function open(
 ): Promise<Room> {
 	return stopAtEnd(
 		await startRoom({
+			runtime: shared,
 			name: roomName(label),
 			seats: { ...seats, [assistant.name]: 'none' },
 			agents: [...Object.keys(seats).map((name) => scriptedAgent(name)), assistant],
@@ -228,7 +233,7 @@ describe('startRoom', () => {
 		await again.stop();
 
 		// a room that is not running reads: the record, and the roster it folds
-		const view = await readRoom(name);
+		const view = await readRoom(name, { runtime: shared });
 		expect(spoken(view.messages).map((m) => m.text)).toContain('for the record');
 		expect(view.participants.map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
 		expect(
@@ -448,7 +453,7 @@ describe('startRoom', () => {
 			}),
 		});
 		const session = await open('cut', { solo: 'broadcast' }, script, {
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution,
 		});
 		const visit = await enter(session);
@@ -464,7 +469,7 @@ describe('startRoom', () => {
 	});
 
 	it('refuses stale leases, missing or invalid freshness, and a commit from a lease that ended', async () => {
-		const runtime = createRuntime();
+		const runtime = createRuntime({ storage: memoryJournals() });
 		const session = await open('stale', { solo: 'broadcast' }, undefined, {
 			runtime,
 			execution: deaf(),

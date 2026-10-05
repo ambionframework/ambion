@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The `/testing` entry: the scripted executor, the wait, and the clock,
  * proved through a room and through the executor contract. Nothing here
@@ -71,7 +72,7 @@ describe('scripted', () => {
 		const room = await open({
 			name: roomName('testing-route'),
 			agents: [agent('a', [echo]), agent('b')],
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted(
 				byAgent({
 					a: record('a', (_step, _seat, request) =>
@@ -118,6 +119,7 @@ describe('scripted', () => {
 			},
 		});
 		const room = await open({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: roomName('testing-context'),
 			agents: [agent('a', [probe])],
 			execution: scripted((_step, _seat, request) => (request === 1 ? callTool('probe') : quiet())),
@@ -149,6 +151,7 @@ describe('scripted', () => {
 			name: roomName('testing-schema'),
 			agents: [agent('a', [lax])],
 			runtime: createRuntime({
+				storage: memoryJournals(),
 				clock: fakeClock(),
 				limits: { activation: { attempts: 1, backoff: () => 0 } },
 				logger: (traced) => void logged.push(traced.step),
@@ -175,7 +178,11 @@ describe('scripted', () => {
 		const room = await open({
 			name: roomName('testing-throws'),
 			agents: [agent('a')],
-			runtime: createRuntime({ clock, limits: { activation: { attempts: 1, backoff: () => 0 } } }),
+			runtime: createRuntime({
+				storage: memoryJournals(),
+				clock,
+				limits: { activation: { attempts: 1, backoff: () => 0 } },
+			}),
 			execution: scripted(() => {
 				throw new Error('script failed');
 			}),
@@ -200,7 +207,7 @@ describe('isSummarizing', () => {
 			agents: [agent('product'), agent('writer')],
 			summaryWriter: 'writer',
 			seats: { product: 'broadcast', writer: 'none' },
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted((step, seat, request) => {
 				flags.push(isSummarizing(step.view));
 				return request === 1 ? say(seat === 'writer' ? 'the summary' : 'an answer') : quiet();
@@ -220,7 +227,7 @@ describe('settled', () => {
 		const room = await open({
 			name: roomName('testing-settled'),
 			agents: [agent('a')],
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted((_step, _seat, request) => (request === 1 ? say('an answer') : quiet())),
 		});
 		let reads = 0;
@@ -256,6 +263,7 @@ describe('settled', () => {
 			name: roomName('testing-backoff'),
 			agents: [agent('a')],
 			runtime: createRuntime({
+				storage: memoryJournals(),
 				clock,
 				limits: { activation: { attempts: 2, backoff: () => 30_000 } },
 			}),

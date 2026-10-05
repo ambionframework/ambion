@@ -34,7 +34,7 @@ of Claude Code.
 ## Install and sign in
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/pi
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi
 ```
 
 Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
@@ -61,7 +61,14 @@ never loads it and needs no key.
 ## A complete example
 
 ```ts
-import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
+import {
+  createRuntime,
+  defineAgent,
+  definePerson,
+  defineTool,
+  startRoom,
+} from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 import { Type } from 'typebox';
 
@@ -85,7 +92,9 @@ const inventory = defineAgent({
 
 const priya = definePerson({ name: 'priya', identity: 'Coordinates deliveries.' });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [inventory],
   execution: piExecution(),
@@ -517,8 +526,15 @@ as a status and a JSON body reads `400 invalid_request_error: <message>
 and id.
 
 ```ts
-import { defineAgent, definePerson, isSaid, startRoom } from '@ambionframework/ambion';
+import {
+  createRuntime,
+  defineAgent,
+  definePerson,
+  isSaid,
+  startRoom,
+} from '@ambionframework/ambion';
 import { byAgent, quiet, say } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream } from '@ambionframework/pi/testing';
 
@@ -534,7 +550,9 @@ const stream = scriptedStream(
   }),
 );
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery-test',
   agents: [inventory],
   execution: piExecution({ stream, sessions: 'memory' }),

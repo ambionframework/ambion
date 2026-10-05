@@ -25,6 +25,7 @@ import {
 } from '@ambionframework/ambion';
 import { type Execution, visitOf } from '@ambionframework/ambion/hosting';
 import { byAgent, quiet, type Script, say, scripted } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { type PiOptions, pi, piExecution } from '@ambionframework/pi';
 import type { Simulation, SimulationExchange, Verdict } from '@ambionframework/simulator';
 import { describe, onTestFailed, onTestFinished } from 'vitest';
@@ -132,7 +133,7 @@ export async function openRoom(options: RoomOptions): Promise<Room> {
 		}),
 		agents: [inventory],
 		seats: options.attention === undefined ? {} : { inventory: options.attention },
-		runtime: createRuntime({ execution }),
+		runtime: createRuntime({ storage: memoryJournals(), execution }),
 	});
 	room = started;
 	onTestFinished(() => started.stop());

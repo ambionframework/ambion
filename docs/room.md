@@ -95,7 +95,9 @@ agent starts seated with `broadcast` attention. An empty map starts all
 defined agents in the reserve.
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'weekly',
   goal: 'Prepare the weekly report.',
   agents: [researcher, editor],

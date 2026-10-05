@@ -18,8 +18,8 @@ table below states the status of each deployment model.
 
 **The embedded model needs no remote coordination service.** Use Node 22.19
 or later and ESM. Supply agent definitions, provider credentials, and domain
-tools. Keep the process alive while agents work. The default in-memory
-journals lose their contents when their storage instance is lost.
+tools. Keep the process alive while agents work. `memoryJournals()` keeps
+the record in memory and loses it when the storage instance is lost.
 
 The [three-harness team](../README.md#one-team-on-three-harnesses) uses this model.
 Pi remains the supported model loop; its integration supplies provider access.
@@ -27,8 +27,8 @@ Pi remains the supported model loop; its integration supplies provider access.
 ## Persistent Node
 
 **The application owns service startup and recovery.** `sqliteJournals(sql)`
-provides the journal adapter. `createRuntime` accepts the journal opener, and
-`resumeRoom` reconstructs a named room from its confirmed entries.
+provides the journal adapter. `createRuntime` requires the journal opener
+as `storage`, and `resumeRoom` reconstructs a named room from its confirmed entries.
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 

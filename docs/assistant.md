@@ -76,8 +76,9 @@ The `assistant` property accepts an agent definition. The core accepts
 that definition without depending on `@ambionframework/assistant`.
 
 ```ts
-import { startRoom } from '@ambionframework/ambion';
+import { createRuntime, startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
@@ -86,7 +87,9 @@ const assistant = defineAssistant({
   executor: (parts) => pi({ ...parts, model, thinking: 'low' }),
 });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   goal: 'Implement and verify the agreed milestone.',
   assistant,
@@ -99,7 +102,9 @@ const room = await startRoom({
 With the default assistant name, the shorthand expands before composition:
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   goal: 'Implement and verify the agreed milestone.',
   agents: [assistant, builder, reviewer],
@@ -135,7 +140,9 @@ This preserves the existing default and permits direct specialist participation.
 Use an empty map when the assistant should select specialists from the reserve:
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'triage',
   assistant,
   agents: [builder, reviewer],

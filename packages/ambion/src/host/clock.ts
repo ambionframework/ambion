@@ -4,7 +4,7 @@
  */
 const LONGEST_DELAY = 2 ** 31 - 1;
 
-/** The system clock and its unref'd alarm used by the default runtime. */
+/** The system clock and its unref'd alarm used when `createRuntime` gets no clock. */
 export function systemClock(): {
 	now(): number;
 	alarm(at: number, fire: () => void): () => void;

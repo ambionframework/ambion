@@ -4,12 +4,14 @@
  */
 import {
 	type AgentDefinition,
+	createRuntime,
 	defineAgent,
 	definePerson,
 	type Room,
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Script, scripted } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { onTestFinished } from 'vitest';
 
 export const priya = definePerson({ name: 'priya', identity: 'Site manager. Pours concrete.' });
@@ -33,6 +35,7 @@ export async function open(
 ): Promise<Room> {
 	unique += 1;
 	const room = await startRoom({
+		runtime: createRuntime({ storage: memoryJournals() }),
 		name: `simulate-${unique}-${crypto.randomUUID()}`,
 		agents: names.map(agent),
 		execution: scripted(script),

@@ -5,6 +5,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRuntime, isSaid, type Room, resumeRoom, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { andrei, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
 import { quiet, say, scriptedStream } from '../../ambion/test/support/scripted.ts';
@@ -29,6 +30,7 @@ describe('piExecution', () => {
 	it('answers a question end to end and closes the exchange', async () => {
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('pi-execution'),
 				agents: [worker],
 				execution: piExecution({ sessions: 'memory', stream: answering() }),
@@ -64,6 +66,7 @@ describe('piExecution', () => {
 
 	it('lets a room name its own execution over the runtime default', async () => {
 		const runtime = createRuntime({
+			storage: memoryJournals(),
 			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
 		const room = stopAtEnd(
@@ -82,6 +85,7 @@ describe('piExecution', () => {
 		const name = roomName('pi-disk');
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name,
 				agents: [worker],
 				execution: piExecution({ stream: answering(), sessionDir }),

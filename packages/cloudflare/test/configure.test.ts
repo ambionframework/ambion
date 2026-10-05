@@ -1,4 +1,5 @@
 import { defineAgent, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi } from '@ambionframework/pi';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, runtimeFor, seatExecution, seatHost } from '../src/configure.ts';
@@ -66,11 +67,19 @@ describe('configure', () => {
 			}),
 		});
 		configure({ agents: [reader], estimators: { chars: (text: string) => text.length } });
-		const room = await startRoom({ name: 'estimators', runtime: runtimeFor({}), agents: [reader] });
+		const room = await startRoom({
+			name: 'estimators',
+			runtime: runtimeFor({ storage: memoryJournals() }),
+			agents: [reader],
+		});
 		await room.stop();
 		configure({ agents: [reader] });
 		await expect(
-			startRoom({ name: 'estimators', runtime: runtimeFor({}), agents: [reader] }),
+			startRoom({
+				name: 'estimators',
+				runtime: runtimeFor({ storage: memoryJournals() }),
+				agents: [reader],
+			}),
 		).rejects.toThrow(
 			"Agent 'reader' names estimator 'chars', and the runtime holds none by that name.",
 		);

@@ -9,6 +9,7 @@ import {
 	scripted,
 	settled,
 } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
@@ -103,7 +104,7 @@ describe('the Workbench filesystem', () => {
 			goal: 'Share a file.',
 			agents: built.specialists,
 			assistant: built.assistant,
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted(script),
 			seats: { design: 'named', experiments: 'named' },
 		});
@@ -160,7 +161,7 @@ describe('the Workbench repositories', () => {
 			goal: 'Start the firmware.',
 			agents: built.specialists,
 			assistant: built.assistant,
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted(script),
 			seats: { design: 'named', experiments: 'named' },
 		});
@@ -225,7 +226,7 @@ describe('the Workbench repositories', () => {
 			goal: 'Sweep the LED resistor.',
 			agents: built.specialists,
 			assistant: built.assistant,
-			runtime: createRuntime(),
+			runtime: createRuntime({ storage: memoryJournals() }),
 			execution: scripted(script),
 			seats: { design: 'named' },
 		});

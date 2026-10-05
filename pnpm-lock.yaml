@@ -144,6 +144,9 @@ importers:
       '@ambionframework/codex':
         specifier: workspace:*
         version: link:../codex
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       '@ambionframework/pi':
         specifier: workspace:*
         version: link:../pi
@@ -348,6 +351,9 @@ importers:
         specifier: ^1.3.34
         version: 1.3.34
     devDependencies:
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       tsdown:
         specifier: ^0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
@@ -370,6 +376,9 @@ importers:
         specifier: ^1.3.34
         version: 1.3.34
     devDependencies:
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       '@ambionframework/just-bash':
         specifier: workspace:*
         version: link:../just-bash
@@ -407,6 +416,9 @@ importers:
         specifier: ^2.9.1
         version: 2.9.1
     devDependencies:
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       '@ambionframework/pi':
         specifier: workspace:*
         version: link:../pi
@@ -435,6 +447,9 @@ importers:
         specifier: ^1.17.0
         version: 1.17.0
     devDependencies:
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../journal
       '@types/ssh2':
         specifier: ^1.15.6
         version: 1.15.6

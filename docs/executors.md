@@ -652,8 +652,9 @@ executor kind. `@ambionframework/claude` is the worked example, and
    through the `execution` option of the room or runtime.
 
 ```ts
-import { defineAgent, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, startRoom } from '@ambionframework/ambion';
 import { claude, claudeExecution } from '@ambionframework/claude';
+import { memoryJournals } from '@ambionframework/journal';
 
 const reviewer = defineAgent({
   name: 'reviewer',
@@ -664,7 +665,9 @@ const reviewer = defineAgent({
   }),
 });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [reviewer],
   execution: claudeExecution(),

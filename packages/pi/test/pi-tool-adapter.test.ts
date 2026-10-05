@@ -1,5 +1,12 @@
 /** A native Pi tool adapted by `fromPiTool`, and the argument checks of `defineTool`. */
-import { defineTool, startRoom, type ToolContext, type ToolResult } from '@ambionframework/ambion';
+import {
+	createRuntime,
+	defineTool,
+	startRoom,
+	type ToolContext,
+	type ToolResult,
+} from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { enter, roomName, scriptedAgent, waitForRoom } from '../../ambion/test/support/room.ts';
@@ -85,6 +92,7 @@ it('prepares native arguments once per call and validates before execution', asy
 	const results: string[] = [];
 	const room = stopAtEnd(
 		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: roomName('native-adapter'),
 			agents: [worker],
 			execution: piExecution({

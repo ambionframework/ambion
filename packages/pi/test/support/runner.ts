@@ -15,6 +15,7 @@ import {
 	type ViewResponse,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { scriptedAgent, tick } from '../../../ambion/test/support/room.ts';
 import { quiet, scriptedStream } from '../../../ambion/test/support/scripted.ts';
@@ -120,7 +121,11 @@ export function seatHost(options: SeatOptions = {}) {
 	const definition = options.definition ?? worker;
 	const name = options.name ?? 'played';
 	const clock = fakeClock(0);
-	const runtime = createRuntime({ clock, limits: { call: options.call } });
+	const runtime = createRuntime({
+		storage: memoryJournals(),
+		clock,
+		limits: { call: options.call },
+	});
 	const services = createExecutionServices({
 		stream: options.stream ?? scriptedStream(() => quiet()),
 		sessions: 'memory',

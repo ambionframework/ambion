@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import {
@@ -46,6 +47,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		);
 		let defaultCalls = 0;
 		const runtime = createRuntime({
+			storage: memoryJournals(),
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scriptedStream(() => {

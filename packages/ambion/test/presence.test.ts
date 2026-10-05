@@ -1,4 +1,5 @@
 import type { JournalOpener } from '@ambionframework/journal';
+import { memoryJournals } from '@ambionframework/journal';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
@@ -46,7 +47,11 @@ const roomName = () => name('presence');
 type Options = Partial<Parameters<typeof startRoom>[0]>;
 
 /** The room options every test here starts from: one watcher, and the assistant. */
+/** The runtime of every room that a test opens without naming one. */
+const shared = createRuntime({ storage: memoryJournals() });
+
 const base = (overrides: Options = {}) => ({
+	runtime: shared,
 	name: roomName(),
 	seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' } as const,
 	agents: [watcher, assistant],
@@ -237,7 +242,7 @@ describe('presence', () => {
 
 		await session.stop();
 
-		const view = await readRoom(session.name);
+		const view = await readRoom(session.name, { runtime: shared });
 		expect(view.messages.map((m) => m.kind)).toEqual(['arrived', 'left']);
 		// an activation started to hear that the room is closing is an activation nobody reads
 		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
@@ -342,7 +347,10 @@ describe('a storage that fails', () => {
 		fail(true);
 		await expect(session.stop()).rejects.toThrow(/disk is full/);
 		// a room that cannot be started again is worse than one that lost a write
-		const again = await open({ name: session.name, runtime: createRuntime() });
+		const again = await open({
+			name: session.name,
+			runtime: createRuntime({ storage: memoryJournals() }),
+		});
 		expect(again.name).toBe(session.name);
 	});
 

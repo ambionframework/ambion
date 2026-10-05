@@ -5,11 +5,12 @@ person, one exchange at a time, and `simulate` returns a simulation that
 checks in code read. [Simulator](../../docs/simulator.md) holds the design.
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/pi @ambionframework/simulator
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/pi @ambionframework/simulator
 ```
 
 ```ts
-import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedActor, simulate } from '@ambionframework/simulator';
 
@@ -19,7 +20,13 @@ const weather = defineAgent({
   executor: pi({ model: 'anthropic/claude-sonnet-5', instructions: 'Answer with the forecast.' }),
 });
 const priya = definePerson({ name: 'priya', identity: 'Site manager.' });
-const room = await startRoom({ name: 'pour', agents: [weather], execution: piExecution() });
+const runtime = createRuntime({ storage: memoryJournals() });
+const room = await startRoom({
+  name: 'pour',
+  agents: [weather],
+  execution: piExecution(),
+  runtime,
+});
 
 const simulation = await simulate(room, {
   person: priya,

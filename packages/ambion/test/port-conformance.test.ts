@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The port suite on the two in-process executions: the direct one, and the
  * one that sends every request and answer through JSON.
@@ -9,7 +10,9 @@ import { type Execution, hostingOf, localExecution } from '../src/hosting.ts';
 import { createRuntime, defineAgent } from '../src/index.ts';
 import { serializing } from './support/ports.ts';
 
-const host = hostingOf(createRuntime({ limits: { call: { attempts: 2, timeout: 1_000 } } }));
+const host = hostingOf(
+	createRuntime({ storage: memoryJournals(), limits: { call: { attempts: 2, timeout: 1_000 } } }),
+);
 
 const fixtureOver = (execution: Execution): PortFixture => ({
 	connect: async (room, names) =>

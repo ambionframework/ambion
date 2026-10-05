@@ -8,7 +8,8 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isSaid, startRoom } from '@ambionframework/ambion';
+import { createRuntime, isSaid, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import {
 	type AssistantMessageEventStream,
 	createAssistantMessageEventStream,
@@ -73,7 +74,12 @@ describe('default provider runtime', () => {
 		);
 		const name = roomName('pi-default');
 		const room = stopAtEnd(
-			await startRoom({ name, agents: [scriptedAgent('worker')], execution: piExecution() }),
+			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
+				name,
+				agents: [scriptedAgent('worker')],
+				execution: piExecution(),
+			}),
 		);
 		const visit = await room.visit(andrei);
 		const exchange = await visit.send({ text: 'What is the answer?' });

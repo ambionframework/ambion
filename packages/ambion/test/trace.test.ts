@@ -1,4 +1,4 @@
-import { assertJson } from '@ambionframework/journal';
+import { assertJson, memoryJournals } from '@ambionframework/journal';
 import type { JsonObject } from '@earendil-works/pi-ai';
 import {
 	createAssistantMessageEventStream,
@@ -53,9 +53,13 @@ const product = defineAgent({
 const sorted = (steps: readonly TraceStep[]) => steps.map((step) => step.type);
 
 /** Ask one question in a room that runs `stream`, and read the logged steps of its one activation. */
-async function traced(stream: StreamFn, options: CreateRuntimeOptions = {}, agent = product) {
+async function traced(
+	stream: StreamFn,
+	options: Omit<CreateRuntimeOptions, 'storage'> = {},
+	agent = product,
+) {
 	const log = collectSteps();
-	const runtime = createRuntime({ ...options, logger: log.logger });
+	const runtime = createRuntime({ storage: memoryJournals(), ...options, logger: log.logger });
 	const name = roomName('trace');
 	const room = stopAtEnd(
 		await startRoom({
@@ -196,7 +200,11 @@ describe('the trace limits and policy', () => {
 
 	/** The steps of one activation that thinks, then calls `tool`. */
 	/** The steps of one activation that thinks, then calls `tool`. */
-	async function run(agent: AgentDefinition, options?: CreateRuntimeOptions, tool = 'lookup') {
+	async function run(
+		agent: AgentDefinition,
+		options?: Omit<CreateRuntimeOptions, 'storage'>,
+		tool = 'lookup',
+	) {
 		const { steps } = await traced(thinksThenCalls('a'.repeat(400), tool), options, agent);
 		const result = steps.find((step) => step.type === 'tool_result');
 		const thinking = steps.find((step) => step.type === 'thinking');
@@ -405,7 +413,11 @@ function play(
 	stub?: ActivationOpener,
 ) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, execution: piExecution({ sessions: 'memory', stream }) });
+	const runtime = createRuntime({
+		storage: memoryJournals(),
+		clock,
+		execution: piExecution({ sessions: 'memory', stream }),
+	});
 	const services = createExecutionServices({ stream, sessions: 'memory' });
 	const hosting = hostingOf(runtime);
 	const room = new PlayedRoom(() => clock.now());

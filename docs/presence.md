@@ -40,7 +40,9 @@ decide whether an arrival matters; the agent's `identity` and instructions
 remain its own domain context.
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'initiative',
   goal: 'Ship payments v2 this quarter; keep the plan of record current.',
   agents: [lead, designer, planner],

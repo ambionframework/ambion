@@ -5,6 +5,7 @@
  * execution or its runtime supplies one for each kind.
  */
 import { createRuntime, defineAgent, isSaid, type Room, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { piExecution } from '@ambionframework/pi';
 import { expect, it } from 'vitest';
 import { andrei, roomName, scriptedAgent } from '../../ambion/test/support/room.ts';
@@ -54,11 +55,18 @@ async function expectBothSay(room: Room): Promise<void> {
 
 it('runs a Pi seat and a Claude seat in one room, and the record holds both says', async () => {
 	const execution = [pilot(), sonnet()];
-	await expectBothSay(await startRoom({ name: roomName('mixed'), agents, execution }));
+	await expectBothSay(
+		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
+			name: roomName('mixed'),
+			agents,
+			execution,
+		}),
+	);
 });
 
 it('uses the supplied executions of the runtime even when other executions are built', async () => {
-	const runtime = createRuntime({ execution: [pilot(), sonnet()] });
+	const runtime = createRuntime({ storage: memoryJournals(), execution: [pilot(), sonnet()] });
 	piExecution({
 		sessions: 'memory',
 		stream: scriptedStream(() => say('Leaked from another room.')),

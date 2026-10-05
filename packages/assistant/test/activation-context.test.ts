@@ -3,8 +3,15 @@
  * models make the decisions, so these tests check the context the room builds
  * and do not evaluate model judgment.
  */
-import { defineAgent, definePerson, type Room, startRoom } from '@ambionframework/ambion';
+import {
+	createRuntime,
+	defineAgent,
+	definePerson,
+	type Room,
+	startRoom,
+} from '@ambionframework/ambion';
 import { quiet, say, seat } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 import { scriptedStream, toolNames } from '@ambionframework/pi/testing';
 import type { Context } from '@earendil-works/pi-ai';
@@ -75,6 +82,7 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 	});
 	const room = stopAtEnd(
 		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: `prompt-review-${attention}`,
 			goal,
 			execution: piExecution({ sessions: 'memory', stream }),
@@ -178,6 +186,7 @@ async function requestAfterSteer(): Promise<{ system: string; steered: string }>
 	);
 	room = stopAtEnd(
 		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: 'steer-marker',
 			assistant: defineAssistant({ executor: onPi }),
 			agents: [agent('inventory', 'Checks stock.', 'Report the stock once.')],

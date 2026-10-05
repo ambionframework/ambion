@@ -6,8 +6,9 @@ agent. Pass `codexExecution()` as `execution` to a room or runtime.
 library. This package holds `@openai/codex`.
 
 ```ts
-import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
 import { codex, codexExecution } from '@ambionframework/codex';
+import { memoryJournals } from '@ambionframework/journal';
 
 const planner = defineAgent({
   name: 'planner',
@@ -21,7 +22,9 @@ const planner = defineAgent({
 
 const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [planner],
   execution: codexExecution(),
@@ -31,7 +34,7 @@ await visit.send({ text: 'Is the plan ready?' });
 ```
 
 **Install it next to the kernel.** Run `npm install @ambionframework/ambion
-@ambionframework/codex`. The package needs Node 22.19 or newer. The package
+@ambionframework/journal @ambionframework/codex`. The package needs Node 22.19 or newer. The package
 brings the `codex` binary. Sign in with `CODEX_API_KEY` in the environment,
 or run `codex login`. A ChatGPT sign-in runs the seat on a ChatGPT Plus or
 Pro subscription: leave `CODEX_API_KEY` out. Every seat runs in the Codex

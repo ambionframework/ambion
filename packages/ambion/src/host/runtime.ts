@@ -21,7 +21,7 @@
  * `Execution`, built by an executor package such as `@ambionframework/pi`.
  */
 
-import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
+import { type JournalOpener, namespaced } from '@ambionframework/journal';
 import { AmbionError } from '../errors.ts';
 import type { ActivationOpener, TraceOpener } from '../execution/contract.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
@@ -212,7 +212,7 @@ export interface ExecutionConnector<Port extends AgentPort = AgentPort> {
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	/** Where the runtime opens room journals. */
-	storage?: JournalOpener;
+	storage: JournalOpener;
 	/**
 	 * The execution every room in this runtime uses, such as `piExecution()`
 	 * from `@ambionframework/pi`, or one execution for each executor kind. A
@@ -263,9 +263,9 @@ function validateSchedule({ minDelaySeconds, maxDelaySeconds }: ScheduleLimits):
 		);
 }
 
-export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
+export function createRuntime(options: CreateRuntimeOptions): Runtime {
 	const running = new Map<string, RunningRoom>();
-	const storage = options.storage ?? memoryJournals();
+	const storage = options.storage;
 	const journals = namespaced(storage, 'ambion/room');
 	const clock = options.clock ?? systemClock();
 	const given = options.limits ?? {};
@@ -387,12 +387,4 @@ function callLimits(given: Partial<Limits['call']> | undefined): Limits['call'] 
 	if (!Number.isFinite(timeout) || timeout <= 0)
 		throw new Error('Room call timeout must be a finite positive number.');
 	return { attempts, timeout };
-}
-
-let singleton: Runtime | undefined;
-
-/** What a host gets when it passes no runtime: one process-wide value, created on first use. */
-export function defaultRuntime(): Runtime {
-	if (singleton === undefined) singleton = createRuntime();
-	return singleton;
 }

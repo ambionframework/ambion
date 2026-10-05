@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The binding between the room's verified rules and the code that runs
  * them. A proof is about a rule's body; it reaches the room only when a
@@ -458,6 +459,7 @@ describe('the room runs the verified rules', () => {
 		'follows the queued %s close outcome',
 		async (outcome) => {
 			const runtime = createRuntime({
+				storage: memoryJournals(),
 				clock: fakeClock(),
 				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 			});
@@ -499,6 +501,7 @@ describe('the room runs the verified rules', () => {
 
 	it('reports a scheduled say the unread entries that unreadBy names', async () => {
 		const runtime = createRuntime({
+			storage: memoryJournals(),
 			clock: fakeClock(),
 			execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
 		});
@@ -538,6 +541,7 @@ describe('the room runs the verified rules', () => {
 			await startRoom({
 				name: roomName('binding-own-entry'),
 				runtime: createRuntime({
+					storage: memoryJournals(),
 					clock: fakeClock(),
 					execution: piExecution({
 						sessions: 'memory',

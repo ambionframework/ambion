@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * What the room accepts from a person and from a seat: the byte limit, the
  * idempotency key of each contribution, blank text, and the lease answers
@@ -41,7 +42,7 @@ const differentOperation = { refused: expect.stringMatching(/different room oper
 async function openWorld(
 	storage: Storage,
 	options: Omit<StartRoomOptions, 'name' | 'runtime'>,
-	runtimeOptions: CreateRuntimeOptions = {},
+	runtimeOptions: Omit<CreateRuntimeOptions, 'storage'> = {},
 ) {
 	const opened = await openFor(storage);
 	const runtime = createRuntime({
@@ -103,7 +104,10 @@ async function claimedWorker(storage: Storage, agents = [worker], seating?: bool
  * The worker answers the question first, because an exchange that no agent
  * answered owes no summary.
  */
-async function claimedSummary(storage: Storage, runtimeOptions: CreateRuntimeOptions = {}) {
+async function claimedSummary(
+	storage: Storage,
+	runtimeOptions: Omit<CreateRuntimeOptions, 'storage'> = {},
+) {
 	const world = await openWorld(
 		storage,
 		{
@@ -150,7 +154,11 @@ describe('the message byte limit', () => {
 	const long = 'a message that is far over sixteen bytes';
 
 	it('refuses a long delivery, reserves no key, and lets a short retry land', async () => {
-		const runtime = createRuntime({ ...limits, execution: recordingExecution() });
+		const runtime = createRuntime({
+			storage: memoryJournals(),
+			...limits,
+			execution: recordingExecution(),
+		});
 		const room = stopAtEnd(await startRoom({ name: roomName('byte-delivery'), runtime }));
 		const visit = await room.visit(person);
 		await expect(visit.send({ text: long, key: 'k' })).rejects.toEqual(
@@ -165,6 +173,7 @@ describe('the message byte limit', () => {
 	it('gives an agent a tool error for a long say and leaves no mark', async () => {
 		const results: string[][] = [];
 		const runtime = createRuntime({
+			storage: memoryJournals(),
 			...limits,
 			execution: piExecution({
 				sessions: 'memory',
