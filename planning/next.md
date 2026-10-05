@@ -53,7 +53,7 @@ flowchart LR
 - [x] **2.** The package `@ambionframework/canvas`, the store port,
       `memoryCanvas`, `sqliteCanvas`, and `canvasStoreConformance`.
       Needs 1.
-- [ ] **3.** `openCanvas`, `resume`, `open`, `start`, `stop`, `close`,
+- [x] **3.** `openCanvas`, `resume`, `open`, `start`, `stop`, `close`,
       `rooms`, `subscribe`, and the mirror attach. Needs 2.
 
 **Evidence:**

@@ -2,17 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
+import { sqliteJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { type CanvasStoreFixture, canvasStoreConformance } from '../src/conformance.ts';
 import { memoryCanvas, sqliteCanvas } from '../src/index.ts';
-
-const sqlOver = (database: DatabaseSync): Sql => ({
-	run: (query, ...params) => {
-		database.prepare(query).run(...params);
-	},
-	all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
-});
+import { sqlOver } from './support/sql.ts';
 
 const fixtures: readonly CanvasStoreFixture[] = [
 	{ name: 'memory', open: () => ({ store: memoryCanvas() }) },

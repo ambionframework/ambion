@@ -6,7 +6,10 @@
 It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
 `sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of
 `sqliteJournals`. The `/conformance` entry exports `canvasStoreConformance`.
-The lifecycle, the tools, and the bridge do not exist yet.
+`openCanvas` runs the lifecycle: `resume`, `open`, `start`, `stop`,
+`archive`, and `close`. It serializes the calls on one room name, attaches
+the workspace mirror of each room, and reports failures to `onError`. The
+tools and the bridge do not exist yet.
 
 **A room operation requires a runtime, and a runtime its storage.**
 `startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
