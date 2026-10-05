@@ -41,7 +41,8 @@ newer, the OpenTUI floor.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   sensor and a preview.
 - `planning/`: `next.md` is the 0.6.0 scope and plan, and `backlog.md` is
-  everything else, the open simplification findings included.
+  everything else, the open simplification findings included. `risks.md`
+  lists the robustness gaps the owner accepted.
 
 ## Read before you change
 
