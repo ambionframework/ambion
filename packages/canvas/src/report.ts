@@ -21,12 +21,6 @@ async function recipientOf(parent: Room, opener: string): Promise<string | undef
 	return seat?.kind === 'agent' && seat.attention !== 'none' ? opener : undefined;
 }
 
-/** The room refuses a key that names another operation. For a report, that means it landed. */
-const isKeyConflict = (error: unknown): boolean =>
-	error instanceof AmbionError &&
-	error.code === 'refused' &&
-	error.message.includes('already names a different room operation');
-
 type Post = { to?: string; text: string; refs?: string[]; key: string };
 
 /** Posts the report. A key that the parent holds already counts as landed. */
@@ -34,7 +28,11 @@ async function land(parent: Room, post: Post): Promise<number> {
 	try {
 		return await postInto(parent, post);
 	} catch (error) {
-		const seq = isKeyConflict(error) ? await seqUnder(parent, post.key, 0) : undefined;
+		// A refusal may mean that the key landed with other content. The record has no cheaper anchor than its start.
+		const seq =
+			error instanceof AmbionError && error.code === 'refused'
+				? await seqUnder(parent, post.key, 0)
+				: undefined;
 		if (seq === undefined) throw error;
 		return seq;
 	}
@@ -42,6 +40,17 @@ async function land(parent: Room, post: Post): Promise<number> {
 
 /** Posts the text into the parent room, as a report of the exchange that activated the caller. */
 export async function reportToParent(
+	port: BreakoutPort,
+	caller: Caller,
+	params: ReportParams,
+): Promise<ReportResult> {
+	// A call from a root room is refused at once: it never waits in the queue of a root.
+	if (startOf(port.row(caller.room)) === undefined)
+		throw refuse(`"${caller.room}" is not a breakout room. Only a worker in one reports.`);
+	return port.serial(caller.room, () => reportQueued(port, caller, params));
+}
+
+async function reportQueued(
 	port: BreakoutPort,
 	caller: Caller,
 	params: ReportParams,

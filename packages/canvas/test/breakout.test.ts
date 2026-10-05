@@ -184,6 +184,21 @@ describe('breakout', () => {
 		expect(errors).toEqual([]);
 	});
 
+	it('holds perOpener under concurrent calls', async () => {
+		const { call, store } = await lab({ perOpener: 1 });
+		const args = (name: string) => ({ name, goal: 'G', message: 'M', agents: ['cy'] });
+		const [first, second] = await Promise.allSettled([
+			call('ada', 'breakout', args('one')),
+			call('ada', 'breakout', args('two')),
+		]);
+		expect(first.status).toBe('fulfilled');
+		expect(second).toMatchObject({
+			status: 'rejected',
+			reason: { code: 'refused', message: expect.stringMatching(/perOpener is 1/) },
+		});
+		expect((await store.list()).filter((row) => row.depth === 1)).toHaveLength(1);
+	});
+
 	it('refuses a call from a breakout room, from an unknown room, and with no room', async () => {
 		const { open, call } = await lab();
 		await open();
@@ -401,6 +416,16 @@ describe('archive', () => {
 		const late = call('ada', 'archive', { room: 'site-survey', result: 'done' });
 		await late;
 		expect(canvas.room('site-survey')).toBeUndefined();
+	});
+
+	it('runs a report and an archive of one room in order, and refuses a report after', async () => {
+		const { open, call } = await lab();
+		await open();
+		const report = call('cy', 'report', { text: 'Late.' }, 'site-survey');
+		const archive = call('ada', 'archive', { room: 'site-survey', result: 'done' });
+		await expect(report).resolves.toMatchObject({ room: 'site' });
+		await archive;
+		await refusal(call('cy', 'report', { text: 'Later.' }, 'site-survey'), /archived/);
 	});
 
 	it('refuses every tool call after close', async () => {

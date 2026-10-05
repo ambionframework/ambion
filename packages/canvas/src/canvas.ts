@@ -434,10 +434,16 @@ class CanvasRun implements Canvas {
 
 	/** Writes the row of a breakout room, and starts the room with its first message. */
 	private async createBreakout(row: CanvasRoom): Promise<void> {
+		// The row holds its place at once, so a concurrent call counts it against `perOpener`.
+		this.rows.set(row.name, row);
 		await this.guard(row.name, 'breakout', async () => {
-			if ((await this.options.store.insert(row)) === 'exists')
-				throw refuse(`The canvas has a room "${row.name}" already.`);
-			this.rows.set(row.name, row);
+			try {
+				if ((await this.options.store.insert(row)) === 'exists')
+					throw refuse(`The canvas has a room "${row.name}" already.`);
+			} catch (error) {
+				this.rows.delete(row.name);
+				throw error;
+			}
 		});
 		this.emit({ type: 'opened', room: structuredClone(row) });
 		await this.guard(row.name, 'breakout', () => this.launch(row.name));

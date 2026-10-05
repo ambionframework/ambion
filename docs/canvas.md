@@ -560,10 +560,6 @@ other failure stops the room and keeps the row `running`.
 return it. A `report` that finds its key counts as landed and returns the
 seq of the message that holds the key.
 
-**`report` does not wait in the queue of a room name.** A report runs in
-the activation of a worker, and a stop waits for that activation. A report
-that waited behind a stop would never end.
-
 **`perOpener` counts running rows.** It counts the breakout rows with
 that parent and that opener whose state is `running`. `archive` frees a
 place.
