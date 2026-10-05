@@ -63,7 +63,7 @@ class Cluster {
 	/** Leases live when time jumped past the whole expiry: every one expires, and that is one error. */
 	private jumped = 0;
 	private jumpedBefore = 0;
-	/** Lease writes the disk fault met: a renewal that no attempt confirms fails its activation, and that is one error. A claim and a release send again and fail nothing. */
+	/** Lease writes the disk fault met: a renewal that no attempt confirms fails its activation, and that is one error. The count is an upper bound: a claim, a release, and a sweep ending count and fail nothing. */
 	private lost = 0;
 	private lostBefore = 0;
 	private readonly journals;
