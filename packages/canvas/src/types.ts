@@ -1,5 +1,11 @@
 /** The host interface of the canvas. The contract is `docs/canvas.md`. */
-import type { AgentDefinition, Room, Runtime, StartRoomOptions } from '@ambionframework/ambion';
+import type {
+	AgentDefinition,
+	Room,
+	Runtime,
+	StartRoomOptions,
+	ToolBundle,
+} from '@ambionframework/ambion';
 import type { Workspace } from '@ambionframework/workspace';
 import type { CanvasClose, CanvasRoom, CanvasStore } from './store.ts';
 
@@ -65,6 +71,10 @@ export type CanvasEvent =
 
 export interface Canvas {
 	readonly name: string;
+	/** The opener bundle: `breakout`, `tell`, `archive`, and the reminder. Call it before `defineAgent`. */
+	tools(): ToolBundle;
+	/** The worker bundle: `report`. Call it before `defineAgent`. */
+	workerTools(): ToolBundle;
 	/**
 	 * Takes the definitions once, then starts or resumes each running root room,
 	 * then each running breakout room whose parent runs. A second call is a refusal.

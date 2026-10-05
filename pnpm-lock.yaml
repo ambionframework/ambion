@@ -180,6 +180,9 @@ importers:
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../workspace
+      typebox:
+        specifier: ^1.3.34
+        version: 1.3.34
     devDependencies:
       '@ambionframework/just-bash':
         specifier: workspace:*

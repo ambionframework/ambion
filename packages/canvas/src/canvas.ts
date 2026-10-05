@@ -1,13 +1,16 @@
 /** The canvas lifecycle: which rooms exist, whether each one runs, and their handles. */
 import {
 	type AgentDefinition,
+	AmbionError,
 	type Room,
 	readRoom,
 	resumeRoom,
 	startRoom,
+	type ToolBundle,
 } from '@ambionframework/ambion';
 import { isName } from '@ambionframework/ambion/names';
 import type { RoomMirror } from '@ambionframework/workspace';
+import { type BreakoutPort, DEFAULT_PER_OPENER } from './breakout.ts';
 import {
 	assertNoTeam,
 	breakoutCast,
@@ -18,6 +21,7 @@ import {
 	rootCast,
 } from './cast.ts';
 import type { CanvasClose, CanvasRoom, RootStart } from './store.ts';
+import { openerBundle, workerBundle } from './tools.ts';
 import type {
 	Canvas,
 	CanvasEvent,
@@ -70,10 +74,43 @@ class CanvasRun implements Canvas {
 	private closing: Promise<void> | undefined;
 	/** The launch pass of `resume`. `close` waits for it. */
 	private resuming: Promise<void> | undefined;
+	private readonly port: BreakoutPort;
+	private bundles: { opener: ToolBundle; worker: ToolBundle } | undefined;
 
 	constructor(options: OpenCanvasOptions) {
 		this.name = options.name;
 		this.options = options;
+		this.port = this.portOf();
+	}
+
+	tools(): ToolBundle {
+		return this.toolBundles().opener;
+	}
+
+	workerTools(): ToolBundle {
+		return this.toolBundles().worker;
+	}
+
+	private toolBundles(): { opener: ToolBundle; worker: ToolBundle } {
+		this.bundles ??= { opener: openerBundle(this.port), worker: workerBundle(this.port) };
+		return this.bundles;
+	}
+
+	/** What the breakout tools read and write: the rows and handles of this run. */
+	private portOf(): BreakoutPort {
+		return {
+			perOpener: this.options.breakout.perOpener ?? DEFAULT_PER_OPENER,
+			team: this.team(),
+			assertReady: () => this.assertReady(),
+			serial: (name, operation) => this.serial(name, operation),
+			row: (name) => this.rows.get(name),
+			rows: () => [...this.rows.values()],
+			room: (name) => this.handles.get(name)?.room,
+			mirror: (name) => this.handles.get(name)?.mirror?.path,
+			create: (row) => this.createBreakout(row),
+			complete: (name) => this.completeBreakout(name),
+			archive: (name, close) => this.archive(name, close),
+		};
 	}
 
 	async resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void> {
@@ -233,9 +270,10 @@ class CanvasRun implements Canvas {
 		const rows = [...this.rows.values()].filter((row) => row.state === 'running' && accept(row));
 		for (const row of rows) {
 			if (this.closed) return;
-			await this.serial(row.name, () =>
-				this.guard(row.name, 'resume', () => this.launch(row.name)),
-			).catch(() => {});
+			await this.serial(row.name, async () => {
+				if (this.closed) return;
+				await this.guard(row.name, 'resume', () => this.launch(row.name));
+			}).catch(() => {});
 		}
 	}
 
@@ -304,10 +342,13 @@ class CanvasRun implements Canvas {
 		this.assertNotClosed();
 		const live = this.handles.get(name);
 		if (live !== undefined) return live.room;
-		const handle: Handle = { room: await this.begin(this.liveRow(name)) };
+		const row = this.liveRow(name);
+		const handle: Handle = { room: await this.begin(row) };
 		this.handles.set(name, handle);
-		await this.attach(handle);
+		// A host subscribes to the room on `started`, so the event comes before the mirror and the start post.
 		this.emit({ type: 'started', room: name });
+		await this.attach(handle);
+		await this.postStart(row, handle);
 		return handle.room;
 	}
 
@@ -318,6 +359,32 @@ class CanvasRun implements Canvas {
 		return recorded.initialized
 			? resumeRoom(row.name, { agents: cast.members, runtime })
 			: startRoom({ ...cast.start, name: row.name, goal: row.goal, runtime });
+	}
+
+	/**
+	 * A breakout room starts with its first message under the key `breakout-start:<name>`.
+	 * A journal that holds the key lands nothing, so each start and each resume posts it. A start
+	 * that the room refuses cannot pass on a retry, so the row closes as failed. Any other failure
+	 * stops the room, keeps the row running, and the next start posts again.
+	 */
+	private async postStart(row: CanvasRoom, handle: Handle): Promise<void> {
+		const start = row.start;
+		if (start.kind !== 'breakout') return;
+		try {
+			await handle.room.post({
+				...(start.to === undefined ? {} : { to: start.to }),
+				text: start.message,
+				key: `breakout-start:${row.name}`,
+			});
+		} catch (error) {
+			const refused =
+				error instanceof AmbionError && error.code !== 'room_stopped' && error.code !== 'stale';
+			const closing = refused
+				? this.archiveRow(row.name, { result: 'failed', note: error.message })
+				: this.release(row.name);
+			await closing.catch(() => {});
+			throw error;
+		}
 	}
 
 	/** The mirror is a copy. A failed attach goes to `onError`, and the room runs. */
@@ -342,7 +409,8 @@ class CanvasRun implements Canvas {
 			await handle.room.stop();
 		} finally {
 			this.handles.delete(name);
-			await handle.mirror?.stop();
+			// The mirror is a copy: its error goes to `onError`, and the stop error reaches the caller.
+			await handle.mirror?.stop().catch((error: unknown) => this.report(name, 'mirror', error));
 		}
 		this.emit({ type: 'stopped', room: name });
 	}
@@ -362,6 +430,22 @@ class CanvasRun implements Canvas {
 			await this.serial(child.name, () =>
 				this.guard(child.name, 'stop', () => this.release(child.name)),
 			).catch(() => {});
+	}
+
+	/** Writes the row of a breakout room, and starts the room with its first message. */
+	private async createBreakout(row: CanvasRoom): Promise<void> {
+		await this.guard(row.name, 'breakout', async () => {
+			if ((await this.options.store.insert(row)) === 'exists')
+				throw refuse(`The canvas has a room "${row.name}" already.`);
+			this.rows.set(row.name, row);
+		});
+		this.emit({ type: 'opened', room: structuredClone(row) });
+		await this.guard(row.name, 'breakout', () => this.launch(row.name));
+	}
+
+	/** Starts a running breakout room that has no live handle. A live handle needs nothing. */
+	private async completeBreakout(name: string): Promise<void> {
+		if (!this.handles.has(name)) await this.guard(name, 'breakout', () => this.launch(name));
 	}
 
 	private async archiveRow(name: string, close: CanvasClose): Promise<CanvasClose> {

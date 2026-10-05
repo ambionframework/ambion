@@ -1,7 +1,7 @@
 # The canvas
 
-> **Status: design for 0.7.0. The package, the store, and the lifecycle
-> exist. The tools and the bridge do not exist yet.** The kernel
+> **Status: design for 0.7.0. The package, the store, the lifecycle, and
+> the tools exist. The bridge does not exist yet.** The kernel
 > parts that the page names exist today. RT1 makes the runtime a required
 > parameter of each one.
 > [The plan](../planning/next.md) owns delivery and evidence.
@@ -489,7 +489,7 @@ breakout({
   message: string,     // the initial message
   agents: string[],    // one or more names of the team
   to?: string,         // a worker; omit to post to every worker
-}) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped' | 'archived', created: boolean }
+}) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped' | 'archived', created: boolean, close?: CanvasClose }
 
 tell({
   room: string,        // a breakout room that the caller opened
@@ -548,6 +548,21 @@ notice of a refused `report` reaches the opener after the parent resumes.
    most 48 characters.
 4. Otherwise the canvas inserts the row and starts the room. The result
    has `created: true`.
+
+**A start posts its first message under its key.** Each start and each
+resume of a breakout room posts `message` under `breakout-start:<name>`.
+A journal that holds the key lands nothing. A start post that the room
+refuses cannot pass on a retry, so the canvas archives the row as `failed`
+with the refusal as the note, and the call fails with that refusal. Any
+other failure stops the room and keeps the row `running`.
+
+**`from` is the seq of the message that landed.** `tell` and `report`
+return it. A `report` that finds its key counts as landed and returns the
+seq of the message that holds the key.
+
+**`report` does not wait in the queue of a room name.** A report runs in
+the activation of a worker, and a stop waits for that activation. A report
+that waited behind a stop would never end.
 
 **`perOpener` counts running rows.** It counts the breakout rows with
 that parent and that opener whose state is `running`. `archive` frees a

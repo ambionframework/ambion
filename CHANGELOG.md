@@ -8,8 +8,13 @@ It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
 `sqliteJournals`. The `/conformance` entry exports `canvasStoreConformance`.
 `openCanvas` runs the lifecycle: `resume`, `open`, `start`, `stop`,
 `archive`, and `close`. It serializes the calls on one room name, attaches
-the workspace mirror of each room, and reports failures to `onError`. The
-tools and the bridge do not exist yet.
+the workspace mirror of each room, and reports failures to `onError`.
+`canvas.tools()` is the opener bundle: `breakout`, `tell`, `archive`, and a
+reminder that lists the breakout rooms of the seat. `canvas.workerTools()`
+is the worker bundle: `report`. `breakout` is idempotent by name, checks
+the worker team and `perOpener`, and posts its first message under
+`breakout-start:<name>`. The canvas emits `started` before it attaches the
+mirror. The bridge does not exist yet.
 
 **The workbench keeps its root rooms on the canvas.** The table
 `workbench_rooms` is dropped, and the workbench reads no older database of
