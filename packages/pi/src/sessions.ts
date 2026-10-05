@@ -15,9 +15,8 @@
  * - **Disk.** `diskSessions(dir)` keeps each session as a JSONL storage in
  *   the folder `dir/<room>/<seat>/<id>`. A restart on the same disk reopens
  *   it. A session the disk refuses to create stays in memory, and `create`
- *   reports the cause. The store loads the Node
- *   file system on first use, so the entry of this package loads on a host
- *   with no disk.
+ *   reports the cause. The store loads the Node file system on first use,
+ *   so the entry of this package loads on a host with no disk.
  */
 import { MemoryStorage, type Storage } from '@earendil-works/pi-durable';
 

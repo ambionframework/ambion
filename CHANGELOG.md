@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-**A Pi session that gives way leaves a notice.** The trace carries a warning
+**The trace reports a Pi session fallback.** The trace carries a warning
 notice with the error when the disk refuses to create a session, cannot
 read it, or the harness cannot resume it. `CreatedSession` gains `fallback`,
 and `PiSessions.open` rejects for a session it cannot read.

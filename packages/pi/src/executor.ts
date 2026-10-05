@@ -302,7 +302,7 @@ class Activation implements RunningActivation {
 			.catch((error: unknown) => this.fellBack('Pi session not opened', resume, error));
 	}
 
-	/** Say in the trace that a session gave way, and keep the cause. The activation runs on. */
+	/** Say in the trace that a session fell back, and keep the cause. The activation runs on. */
 	private fellBack(text: string, session: string, cause: unknown): undefined {
 		const reason = cause instanceof Error ? cause.message : String(cause);
 		this.trace.record({ type: 'notice', level: 'warning', text, data: { session, reason } });
