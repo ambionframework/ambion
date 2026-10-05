@@ -1,9 +1,8 @@
 # The simulator
 
 **`@ambionframework/simulator` runs evals.** The package holds
-`simulate`, `scriptedActor`, `agentActor`, and `agentJudge`. The
-assistant's live suite runs on it, as
-[The assistant's live suite](#the-assistants-live-suite) states.
+`simulate`, `scriptedActor`, `agentActor`, and `agentJudge`.
+[The assistant's live suite](#the-assistants-live-suite) runs on it.
 
 **The simulator runs an eval: an agent plays a person in a room, and the test
 grades what the room did.** An eval has three parts. The actor sends each
@@ -521,8 +520,8 @@ holds the rules.
   its summary. A simulation that fails there spends no grade, and its evidence
   file shows the cause.
 - **The scripted tier proves the eval first.** Run the eval with a
-  scripted execution, a scripted actor, and a scripted judge before the
-  first live run.
+  scripted execution, a scripted actor, and a scripted judge before any
+  live run.
 - **A failed case keeps its evidence.** The live support writes `simulation` and
   `verdict` to `test/live/runs/<model>/<case>.json`, and prints the path. Each
   `Error` becomes its `message`. Git ignores the directory. A person reads

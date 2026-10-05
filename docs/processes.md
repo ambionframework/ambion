@@ -8,9 +8,6 @@
 > [Actuators](actuators.md) describes a device controller that runs as a
 > `bash` process, with a grace that fits the device.
 
-**Background processes are part of 0.3.0.** In 0.2.0, `bash` holds the
-call until its command ends, and a workspace has four tools.
-
 **`bash` starts every command as a background process.** The call gives a
 handle for the process. `cancel` takes that handle, `wait` takes a list of
 handles, and `ps` lists the processes. `wait` with one handle and `timeout:

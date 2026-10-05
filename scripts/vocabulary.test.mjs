@@ -41,7 +41,18 @@ const entries = [
 		'history',
 		/\b(?:formerly|renamed (?:from|to)|was renamed|used to be|previously (?:called|named)|old names?|deprecated alias|backwards? compat(?:ibility)?)\b/i,
 		TEXT,
+		// The rule itself names the phrases.
+		{ exclude: /^CLAUDE\.md$/ },
 	),
+	entry(
+		'release history',
+		/\b[Ii]n 0\.\d+\.\d+\b|\b0\.\d+\.\d+ (?:ships|lands|landed|gives|adds|removes)\b|\bpart of 0\.\d/,
+		PROSE,
+	),
+	// pi-durable names its own events `tool_execution_start` and `tool_execution_end`.
+	entry('Pi event', /\btool_execution_(?:start|end)\b/, TEXT, {
+		exclude: /^(?:packages\/pi\/|docs\/pi\.md$)/,
+	}),
 	entry('member', /\bmember(?:ship)?s?\b/i, PROSE),
 	entry(
 		'seating',

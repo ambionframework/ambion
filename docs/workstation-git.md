@@ -4,8 +4,7 @@
 `workstationGitBackend` is a second `GitBackend` for the
 [git contract](git.md). It keeps the repositories on the
 [workstation](workstation.md), in the home of one dedicated account, and
-each agent reaches them with `git` over SSH. The
-[changelog of 0.3.0](../CHANGELOG.md#030-2026-09-25) states the change.
+each agent reaches them with `git` over SSH.
 
 **The backend reuses the SSH code of the package.** The client of the git
 account is the same kind of SSH session, with the same environment over
@@ -14,25 +13,23 @@ adds no dependency.
 
 ## Why the workstation needs its own backend
 
-**The git backend of 0.2.0 ran in the host's process.** `gitBackend`
-served the just-bash `git` through a `fetch` in the same process. A real
-`git` on a workstation reached it only over HTTP, through a listener on
-the host. The default `url`, `http://git.ambion.invalid`, never resolved.
-With the defaults, `connect` succeeded, and the first `git clone` of an
-agent failed on DNS.
+**A git backend in the host's process reaches a workstation only over
+HTTP.** `justGitBackend` serves the just-bash `git` through a `fetch` in
+the same process. A real `git` on a workstation reaches it only through a
+listener on the host.
 
-**The HTTP path had three costs on a workstation.**
+**The HTTP path has three costs on a workstation.**
 
-- **The host opened an inbound port.** The server had to reach the Ambion
-  host, and a firewall or a NAT between the two blocked it.
-- **Each token crossed the network in HTTP basic authentication.** A
-  plain `http` URL sent it in clear text. `https` needed a certificate and
-  a proxy in front of `handler`.
-- **The code lived on the host, and the working copies lived on the
-  server.** A command on the server that wanted the code cloned it across
+- **The host opens an inbound port.** The server must reach the Ambion
+  host, and a firewall or a NAT between the two blocks it.
+- **Each token crosses the network in HTTP basic authentication.** A
+  plain `http` URL sends it in clear text. `https` needs a certificate and
+  a proxy in front of the handler.
+- **The code lives on the host, and the working copies live on the
+  server.** A command on the server that wants the code clones it across
   the network.
 
-**0.3.0 gives each deployment shape one package.** The local shape, one
+**Each deployment shape has one package.** The local shape, one
 node that runs the host and every agent, is `@ambionframework/just-bash`,
 with `justGitBackend` in its `./git` entry. The lab shape, a host on one
 machine and a workstation on another, is `@ambionframework/workstation`,
@@ -346,8 +343,7 @@ hour early or late on that day. The `command` path comes from the home
 that the client reads once with `realpath('.')`.
 
 **A key inside its margin counts as missing.** The margin is the smaller
-of 10 minutes and half of the key's life, the rule of the 0.2.0
-credential file. The key rotates about once each `credentialTtl`, and a command
+of 10 minutes and half of the key's life. The key rotates about once each `credentialTtl`, and a command
 that starts with a key keeps it for the length of the margin.
 
 **An old line stays until its expiry.** The backend adds the new line and
@@ -716,13 +712,12 @@ is about fifteen lines of `bash`.
    no write of the backend reaches the host's own key.
 3. **The template helpers live in `@ambionframework/workspace/git`.**
    The workstation installs no `just-git`.
-4. **0.3.0 landed the work,** in #312, #314, #316, and #317.
-5. **The git account is on the workstation, on the loopback address.** A
+4. **The git account is on the workstation, on the loopback address.** A
    git server on a second machine is not supported.
-6. **The core knows no access type.** Each access type lives with its
+5. **The core knows no access type.** Each access type lives with its
    pair, a bash backend takes the git backend of its own package, and
    `gitConformance` calls fixture hooks.
-7. **One package for each deployment shape.** `@ambionframework/just-bash`
+6. **One package for each deployment shape.** `@ambionframework/just-bash`
    holds the local pair, with the git backend in its `./git` entry.
    `@ambionframework/workstation` holds the lab pair.
 

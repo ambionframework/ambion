@@ -294,8 +294,7 @@ before the rules existed.
 record: it decides an entry, an admission, the `due` list that
 `admitsLease` reads, or the read position that the say lock reads. A rule
 that only shapes a read leaves the file, and it lives beside its caller
-with an ordinary test. The sweep for 0.2.0
-found no such rule.
+with an ordinary test.
 
 | Rule                   | The write it gates                                                           |
 | ---------------------- | ---------------------------------------------------------------------------- |
