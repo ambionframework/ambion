@@ -150,7 +150,7 @@ changelog names the dropped `workbench_rooms` table.
 
 - [x] **1.** Run the workbench delegation end to end on scripted
       executors, and the repository gate. Needs phase 3.
-- [ ] **2.** Add one `pnpm chaos` case for each row of the crash table in
+- [x] **2.** Add one `pnpm chaos` case for each row of the crash table in
       [Durability](../docs/canvas.md#durability), and a case for a crash
       between the archive row and the stop, then a resume. Needs 1.
 - [ ] **3.** Finish the package docs, exports, and the changelog. Needs 2.
