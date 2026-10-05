@@ -43,10 +43,10 @@ const spoken = (messages: readonly Message[]) => messages.filter(isSaid);
 
 type Options = Partial<Parameters<typeof startRoom>[0]>;
 
-/** A room of scripted agents on these seats, and the assistant seated for nothing. */
 /** The runtime of every room that `open` starts. */
 const shared = createRuntime({ storage: memoryJournals() });
 
+/** A room of scripted agents on these seats, and the assistant seated for nothing. */
 async function open(
 	label: string,
 	seats: Record<string, Attention>,

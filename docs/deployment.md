@@ -27,8 +27,8 @@ Pi remains the supported model loop; its integration supplies provider access.
 ## Persistent Node
 
 **The application owns service startup and recovery.** `sqliteJournals(sql)`
-provides the journal adapter. `createRuntime` requires the journal opener as `storage`, and
-`resumeRoom` reconstructs a named room from its confirmed entries.
+provides the journal adapter. `createRuntime` requires the journal opener
+as `storage`, and `resumeRoom` reconstructs a named room from its confirmed entries.
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
