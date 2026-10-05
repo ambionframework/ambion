@@ -239,12 +239,18 @@ export async function openRooms(
 		// usable running room that shutdown can still clean up.
 		entry.lifecycle = { status: 'running', room };
 		room.subscribe((event) => notify(entry, event));
+		await attachMirror(entry, room);
+	}
+	/** The mirror is a secondary, best-effort copy. A failure to attach one must not stop the room. */
+	async function attachMirror(entry: HostedRoom, room: Room) {
 		try {
-			// The mirror is a secondary, best-effort copy. A failure to attach
-			// one must not stop the room itself from running.
 			entry.lifecycle = { status: 'running', room, mirror: await workspace.mirror(room) };
-		} catch {
-			// Left unmirrored; the room keeps running on its own journal.
+		} catch (error) {
+			// Left unmirrored; the room keeps running on its own journal. The
+			// activity list tells the person.
+			const reason = error instanceof Error ? error.message : String(error);
+			pushActivity(entry, { type: 'error', text: `The room mirror did not attach: ${reason}` });
+			for (const watcher of [...entry.watchers]) watcher();
 		}
 	}
 	async function status(entry: HostedRoom) {
@@ -418,7 +424,10 @@ function recordFailure(entry: HostedRoom, step: TraceStep): void {
 
 function recordActivity(entry: HostedRoom, event: RoomNotification): void {
 	const activity = describeEvent(event);
-	if (!activity) return;
+	if (activity) pushActivity(entry, activity);
+}
+
+function pushActivity(entry: HostedRoom, activity: Omit<Activity, 'at'>): void {
 	entry.activity.push({ at: new Date().toISOString(), ...activity });
 	entry.activity.splice(0, Math.max(0, entry.activity.length - 30));
 }

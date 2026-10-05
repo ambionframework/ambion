@@ -12,6 +12,11 @@ notice with the error when the disk refuses to create a session, cannot
 read it, or the harness cannot resume it. `CreatedSession` gains `fallback`,
 and `PiSessions.open` rejects for a session it cannot read.
 
+**The room mirror writes no reading preferences.** An `arrived` message
+holds the reading preferences of a person. The mirror leaves them out, as
+the room view does. `@ambionframework/ambion` exports `withoutPreferences`.
+The workbench shows a failed mirror attach in the activity of the room.
+
 **Resource contracts have one documentation owner.** `resources.md` states
 resource lifecycle, tool bundles, and provenance. `workspace.md` states
 workspace behavior and backend details.

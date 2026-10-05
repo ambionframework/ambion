@@ -326,7 +326,9 @@ await mirror.stop();
 
 `mirror()` writes as `workspace.mirrorAgent`, the `<name>-host` agent `openWorkspace`
 built (see [The layout and the host identity](#the-layout-and-the-host-identity)),
-so a caller names only the room. Stop the room before the mirror. The room's
+so a caller names only the room. The mirror leaves out the reading
+preferences of a person, because every agent that reads the file would read
+them. Stop the room before the mirror. The room's
 own shutdown commits a `left` message for every present visitor; a mirror
 already stopped never sees it.
 

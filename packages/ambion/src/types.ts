@@ -247,6 +247,18 @@ export function copyMessage(message: unknown): unknown {
 	return structuredClone(message);
 }
 
+/**
+ * A message without the reading preferences of a person. Only the summary
+ * writer of that person reads them, so a room view and a record copy leave
+ * them out.
+ */
+export function withoutPreferences<T extends Message | MessageSnapshot>(message: T): T {
+	if (!('preferences' in message)) return message;
+	const publicMessage = { ...message };
+	delete publicMessage.preferences;
+	return publicMessage;
+}
+
 export function isSaid<T extends Message | MessageSnapshot>(
 	message: T,
 ): message is Extract<T, { kind: 'said' }> {

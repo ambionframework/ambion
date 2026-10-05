@@ -10,6 +10,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	definePerson,
 	defineTool,
 	isSaid,
 	snapshotUri,
@@ -280,7 +281,12 @@ describe('a workspace beside a running room', () => {
 		});
 		const mirror = await site.mirror(session);
 		expect(mirror.path).toBe(roomMirrorPath(own.rooms, roomId));
-		const visit = await enter(session);
+		const reader = definePerson({
+			name: 'andrei',
+			identity: 'Founder. Owns the room.',
+			preferences: 'Lead with the decision.',
+		});
+		const visit = await enter(session, reader);
 		await (await visit.send({ text: 'go' })).waitForClose();
 		// Stop the room, and the "left" its shutdown writes, before the mirror:
 		// a mirror that stopped first must not see what came after.
@@ -301,6 +307,10 @@ describe('a workspace beside a running room', () => {
 			await site.use(site.mirrorAgent, (env) => env.exists(`${own.snapshots}/${digest}`)),
 		).toEqual({ ok: true, value: true });
 		expect(lines.every((line) => line.room === roomId)).toBe(true);
+		// The arrival of a person holds reading preferences. The mirror leaves them out.
+		expect(lines.some((line) => line.kind === 'arrived')).toBe(true);
+		expect(lines.some((line) => 'preferences' in line)).toBe(false);
+		expect(JSON.stringify(lines)).not.toContain('Lead with the decision.');
 		expect(lines).toHaveLength((await session.read()).messages.length);
 		await site.dispose();
 	});
