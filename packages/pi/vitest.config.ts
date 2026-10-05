@@ -8,7 +8,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * The core and the journals resolve to their source, not to their built
  * `dist`. The tests reach the core's own test support, which imports the
  * source, and one room must be one module: two copies would hold two
- * `defaultRuntime`s. `tsconfig.check.json` maps the same specifiers for the
+ * runtime registries. `tsconfig.check.json` maps the same specifiers for the
  * type-checker.
  */
 export const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));

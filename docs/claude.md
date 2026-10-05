@@ -47,7 +47,7 @@ builds its seats on Pi and does not run this executor. Use
 ## Install and sign in
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/claude
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/claude
 ```
 
 Every package needs Node 22.19 or newer. The packages install from npmjs with no token. A dev build of `main` installs
@@ -83,8 +83,15 @@ finds the executable that it ships with.
 ## A complete example
 
 ```ts
-import { defineAgent, definePerson, defineTool, startRoom } from '@ambionframework/ambion';
+import {
+  createRuntime,
+  defineAgent,
+  definePerson,
+  defineTool,
+  startRoom,
+} from '@ambionframework/ambion';
 import { claude, claudeExecution } from '@ambionframework/claude';
+import { memoryJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
 import { Type } from 'typebox';
@@ -112,7 +119,9 @@ const reviewer = defineAgent({
 
 const priya = definePerson({ name: 'priya', identity: 'Owns the delivery.' });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [reviewer],
   execution: claudeExecution({ configRoot: './claude-state' }),

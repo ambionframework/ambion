@@ -4,7 +4,6 @@ import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
 import { route } from './execution/route.ts';
 import {
-	defaultRuntime,
 	type Execution,
 	type ExecutionConnector,
 	executionsOf,
@@ -57,13 +56,13 @@ export interface StartRoomOptions {
 	 * the runtime's. With no match, the activation fails with `no_execution`.
 	 */
 	execution?: Execution | readonly Execution[];
-	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
-	runtime?: Runtime;
+	/** The runtime that owns storage and lifecycle. */
+	runtime: Runtime;
 }
 
 export interface ReadRoomOptions {
 	/** The runtime that owns the room journal. */
-	runtime?: Runtime;
+	runtime: Runtime;
 	/** Include all messages, omit them, or select those after an exclusive cursor. */
 	messages?: MessageSelection;
 }
@@ -72,7 +71,7 @@ export interface ResumeRoomOptions {
 	/** Definitions that resolve every recorded roster and reserve name. */
 	agents: readonly AgentDefinition[];
 	/** The runtime that owns the room journal. */
-	runtime?: Runtime;
+	runtime: Runtime;
 	/** The execution for this room, as `StartRoomOptions.execution` states. */
 	execution?: Execution | readonly Execution[];
 }
@@ -120,7 +119,7 @@ async function acquire(
 	open: (state: RuntimeState, connector: ExecutionConnector) => RoomRun,
 ): Promise<Room> {
 	assertRoomName(name);
-	const state = runtimeStateOf(options.runtime ?? defaultRuntime());
+	const state = runtimeStateOf(options.runtime);
 	assertFree(state, name);
 	const room = open(state, connectorFor(state, options.execution));
 	state.running.set(room.name, room);
@@ -145,9 +144,9 @@ export function visitOf(room: Room, name: string): Visit | undefined {
 }
 
 /** Observe a room's recorded state without requiring a running handle. */
-export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomRead> {
+export async function readRoom(name: string, options: ReadRoomOptions): Promise<RoomRead> {
 	assertRoomName(name);
-	const runtime = options.runtime ?? defaultRuntime();
+	const runtime = options.runtime;
 	const messages = captureMessageSelection(options.messages);
 	const state = runtimeStateOf(runtime);
 	const live = state.running.get(name);
@@ -175,7 +174,7 @@ export interface ExchangeRead {
 export async function readExchange(
 	name: string,
 	from: Seq,
-	options: { runtime?: Runtime } = {},
+	options: { runtime: Runtime },
 ): Promise<ExchangeRead | undefined> {
 	if (!Number.isSafeInteger(from) || from <= 0)
 		throw new RangeError('Exchange reference must be a positive safe integer.');

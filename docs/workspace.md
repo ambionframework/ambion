@@ -311,12 +311,19 @@ of each seat names the mirror.
 
 ```ts
 import { piExecution } from '@ambionframework/pi';
-import { startRoom } from '@ambionframework/ambion';
+import { createRuntime, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { openWorkspace } from '@ambionframework/workspace';
 import { memoryBackend } from '@ambionframework/just-bash';
 
 const site = openWorkspace({ name: 'town', backend: { bash: memoryBackend() } });
-const session = await startRoom({ name: 'lobby', agents: [/* ... */], execution: piExecution() });
+const runtime = createRuntime({ storage: memoryJournals() });
+const session = await startRoom({
+  name: 'lobby',
+  agents: [/* ... */],
+  execution: piExecution(),
+  runtime,
+});
 
 const mirror = await site.mirror(session);
 // later, on shutdown:

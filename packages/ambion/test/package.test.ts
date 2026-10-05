@@ -60,7 +60,6 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'composeMacro',
 		'contentText',
 		'createRuntime',
-		'defaultRuntime',
 		'defineAgent',
 		'definePerson',
 		'defineTool',

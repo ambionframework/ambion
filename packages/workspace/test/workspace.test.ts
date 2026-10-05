@@ -10,6 +10,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	createRuntime,
 	definePerson,
 	defineTool,
 	isSaid,
@@ -17,6 +18,7 @@ import {
 	startRoom,
 	type ToolContext,
 } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { piExecution } from '@ambionframework/pi';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
@@ -263,6 +265,7 @@ describe('a workspace beside a running room', () => {
 
 		const roomId = name('through-room');
 		const session = await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: roomId,
 			agents: [agent('worker', { bundles: [site.tools()] })],
 			execution: piExecution({

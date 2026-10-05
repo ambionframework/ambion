@@ -13,6 +13,7 @@ import type {
 import { createRuntime } from '@ambionframework/ambion';
 import type { AgentRunner, Execution, ExecutionHost } from '@ambionframework/ambion/hosting';
 import { hostingOf } from '@ambionframework/ambion/hosting';
+import { memoryJournals } from '@ambionframework/journal';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 
 /**
@@ -109,10 +110,15 @@ export function seatExecution(): Execution<AgentRunner> {
 	return piExecution({ sessions: 'memory', ...(stream === undefined ? {} : { stream }) });
 }
 
-/** The host of a seat object: the system clock, and the worker's limits and logger. */
+/**
+ * The host of a seat object: the system clock, the worker's limits and
+ * logger, and a memory storage, because a seat object keeps no record.
+ */
 export function seatHost(): ExecutionHost {
 	const { limits, logger } = configured();
-	const hosting = hostingOf(createRuntime({ ...(limits === undefined ? {} : { limits }) }));
+	const hosting = hostingOf(
+		createRuntime({ storage: memoryJournals(), ...(limits === undefined ? {} : { limits }) }),
+	);
 	return {
 		clock: hosting.clock,
 		storage: hosting.storage,

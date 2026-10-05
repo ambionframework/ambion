@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * A seat with a token limit reads a windowed record. The record keeps every
  * message; the room serves the tail that fits, plus the open exchange whole,
@@ -80,7 +81,7 @@ async function watched(
 			return { ...protocol, view };
 		},
 	});
-	const runtime = createRuntime({ limits, estimators, execution });
+	const runtime = createRuntime({ storage: memoryJournals(), limits, estimators, execution });
 	const started = stopAtEnd(await startRoom({ name: roomName('limit'), runtime, agents, ...room }));
 	return { room: started, pages, contexts };
 }
@@ -200,7 +201,7 @@ describe('a limit windows the record', () => {
 			activationTokenLimit: 10,
 			estimateTokens: 'words',
 		});
-		const runtime = createRuntime({ estimators });
+		const runtime = createRuntime({ storage: memoryJournals(), estimators });
 		const name = roomName('estimator');
 		const refused = { code: 'missing_definition', message: /names estimator 'words'/ };
 		await expect(startRoom({ name, runtime, agents: [reader] })).rejects.toMatchObject(refused);

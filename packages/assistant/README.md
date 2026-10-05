@@ -8,7 +8,7 @@ Install it alongside the core package using the repository's GitHub Packages
 registry configuration:
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/assistant @ambionframework/pi
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/assistant @ambionframework/pi
 ```
 
 The `executor` option is required. It is a function that receives the parts of
@@ -16,8 +16,9 @@ the assistant and returns an executor of any package. Install the package of
 the executor that you pick.
 
 ```ts
-import { startRoom } from '@ambionframework/ambion';
+import { createRuntime, startRoom } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 
 const assistant = defineAssistant({
@@ -26,7 +27,9 @@ const assistant = defineAssistant({
   executor: (parts) => pi({ ...parts, model: 'anthropic/claude-sonnet-5', thinking: 'low' }),
 });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 await startRoom({
+  runtime,
   name: 'delivery',
   goal: 'Implement the agreed milestone.',
   assistant,

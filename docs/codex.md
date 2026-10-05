@@ -32,7 +32,7 @@ version 0.159.2.
 ## Install and sign in
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/codex
+npm install @ambionframework/ambion @ambionframework/journal @ambionframework/codex
 ```
 
 **Node 22.19 or newer.** The package needs the same Node floor as every
@@ -105,8 +105,15 @@ home: `CODEX_HOME=~/.ambion/codex codex login`.
 ## A complete example
 
 ```ts
-import { defineAgent, definePerson, isSaid, startRoom } from '@ambionframework/ambion';
+import {
+  createRuntime,
+  defineAgent,
+  definePerson,
+  isSaid,
+  startRoom,
+} from '@ambionframework/ambion';
 import { codex, codexExecution } from '@ambionframework/codex';
+import { memoryJournals } from '@ambionframework/journal';
 
 const planner = defineAgent({
   name: 'planner',
@@ -120,7 +127,9 @@ const planner = defineAgent({
 
 const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [planner],
   execution: codexExecution(),

@@ -1,7 +1,14 @@
+import { memoryJournals } from '@ambionframework/journal';
 /** Helpers for the process HTTP acceptance run on the provisioned OpenSSH tier. */
 
 import { randomUUID } from 'node:crypto';
-import { defineAgent, definePerson, type Message, startRoom } from '@ambionframework/ambion';
+import {
+	createRuntime,
+	defineAgent,
+	definePerson,
+	type Message,
+	startRoom,
+} from '@ambionframework/ambion';
 import { callTool, isSummarizing, quiet, scripted, settled } from '@ambionframework/ambion/testing';
 import type { Workspace } from '@ambionframework/workspace';
 
@@ -66,6 +73,7 @@ export async function runToolRoom(
 		},
 	});
 	const room = await startRoom({
+		runtime: createRuntime({ storage: memoryJournals() }),
 		name: `http-${randomUUID().slice(0, 8)}`,
 		agents: [agent],
 		execution: scripted((step) => {

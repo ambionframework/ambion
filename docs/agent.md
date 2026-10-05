@@ -23,7 +23,9 @@ const researcher = defineAgent({
   }),
 });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   agents: [researcher, editor],
   summaryWriter: 'editor',

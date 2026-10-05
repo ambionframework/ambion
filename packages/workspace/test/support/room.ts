@@ -3,7 +3,8 @@
  * through a real room: `run` starts one, asks one question, and resolves at
  * the exchange close. `toolResults` reads what the model has been shown.
  */
-import { type AgentDefinition, type Room, startRoom } from '@ambionframework/ambion';
+import { type AgentDefinition, createRuntime, type Room, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { type PiOptions, piExecution } from '@ambionframework/pi';
 import type { Context } from '@earendil-works/pi-ai';
 import { enter, roomName as name, scriptedAgent } from '../../../ambion/test/support/room.ts';
@@ -30,6 +31,7 @@ export async function run(
 ): Promise<Room> {
 	const session = stopAtEnd(
 		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: name('workspace'),
 			agents,
 			execution: piExecution({ sessions: 'memory', stream: scriptedStream(byAgent(seats)) }),

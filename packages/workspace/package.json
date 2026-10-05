@@ -65,6 +65,7 @@
 		"test:s3": "vitest run --config vitest.s3.config.ts"
 	},
 	"devDependencies": {
+		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/pi": "workspace:*",
 		"@earendil-works/pi-ai": "^1.0.0",
 		"tsdown": "^0.23.0",

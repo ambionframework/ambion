@@ -20,19 +20,20 @@ credentials, and domain tools.
 
 ## Quickstart
 
-**Install the kernel, the Pi executor, and an in-memory workspace.** Use
+**Install the kernel, its journal, the Pi executor, and an in-memory workspace.** Use
 Node 22.19 or later. The packages are ESM.
 
 ```sh
-npm install @ambionframework/ambion @ambionframework/pi \
-  @ambionframework/workspace @ambionframework/just-bash
+npm install @ambionframework/ambion @ambionframework/journal \
+  @ambionframework/pi @ambionframework/workspace @ambionframework/just-bash
 export ANTHROPIC_API_KEY=...
 ```
 
 **Save a room with two agents as `room.mts`.**
 
 ```ts
-import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { pi, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -54,7 +55,9 @@ const design = defineAgent({
 });
 
 const priya = definePerson({ name: 'priya', identity: 'Designs the test bench.' });
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'lab',
   goal: 'Choose a part.',
   agents: [datasheets, design],

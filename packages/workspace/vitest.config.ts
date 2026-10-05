@@ -8,7 +8,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
  *
  * The core resolves to its source, not to its built `dist`. The tests reach
  * the core's own test support, which imports the source, and one room must be
- * one module: two copies would hold two `defaultRuntime`s and two catalogs.
+ * one module: two copies would hold two runtime registries and two catalogs.
  * `tsconfig.check.json` maps the same specifier for the type-checker.
  *
  * The workspace's own specifiers resolve to this package's source too. The

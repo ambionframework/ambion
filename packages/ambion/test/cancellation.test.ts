@@ -1,4 +1,5 @@
 import type { JournalOpener } from '@ambionframework/journal';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { pi, piExecution } from '../../pi/src/index.ts';
 import { type AgentPort, hostingOf, type Wake } from '../src/hosting.ts';
@@ -44,14 +45,17 @@ const assistant = defineAgent({
 const deaf = scriptedStream(() => new Promise<never>(() => {}));
 
 /** A room with one broadcast worker that never answers, stopped when the test ends. */
-async function workerRoom(runtime?: Runtime, options: Partial<StartRoomOptions> = {}) {
+async function workerRoom(
+	runtime: Runtime = createRuntime({ storage: memoryJournals() }),
+	options: Partial<StartRoomOptions> = {},
+) {
 	return stopAtEnd(
 		await startRoom({
 			name: roomName('cancel'),
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
 			execution: piExecution({ sessions: 'memory', stream: deaf }),
-			...(runtime === undefined ? {} : { runtime }),
+			runtime,
 			...options,
 		}),
 	);
@@ -66,7 +70,7 @@ const cancels = async (journals: JournalOpener, room: Room) =>
 describe('durable cancellation', () => {
 	it('fences every old room call while admitting a new activation', async () => {
 		const wakes: Wake[] = [];
-		const runtime = createRuntime();
+		const runtime = createRuntime({ storage: memoryJournals() });
 		const room = await workerRoom(runtime, { execution: recordingExecution(wakes) });
 		const visit = await room.visit(person);
 		const first = await visit.send({ text: 'old question' });
@@ -143,7 +147,7 @@ describe('durable cancellation', () => {
 					}),
 				},
 			);
-			const room = await workerRoom(createRuntime(), { execution });
+			const room = await workerRoom(createRuntime({ storage: memoryJournals() }), { execution });
 			await (await room.visit(person)).send({ text: 'cut the worker' });
 			await started.promise;
 			await room.cancel();

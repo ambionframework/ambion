@@ -47,11 +47,13 @@ describe('provider loading', () => {
 		'loads neither the provider catalog nor the Node harness file system while importing the Pi entry, reading a room, or running a scripted room',
 		async () => {
 			const result = await runFreshProcess(
-				`const { readRoom, startRoom, defineAgent, definePerson } = await import('@ambionframework/ambion');
+				`const { createRuntime, readRoom, startRoom, defineAgent, definePerson } = await import('@ambionframework/ambion');
+			const { memoryJournals } = await import('@ambionframework/journal');
 			const { pi, piExecution } = await import(${JSON.stringify(entry)});
 			const { quiet } = await import('@ambionframework/ambion/testing');
 			const { scriptedStream } = await import(${JSON.stringify(testing)});
-			await readRoom('lazy-provider-test');
+			const runtime = createRuntime({ storage: memoryJournals() });
+			await readRoom('lazy-provider-test', { runtime });
 			const agent = (name) =>
 				defineAgent({
 					name,
@@ -60,6 +62,7 @@ describe('provider loading', () => {
 				});
 			const room = await startRoom({
 				name: 'lazy-scripted-check',
+				runtime,
 				agents: [agent('worker'), agent('assistant')],
 				summaryWriter: 'assistant',
 				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),

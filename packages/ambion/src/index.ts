@@ -41,7 +41,7 @@ export { AmbionError } from './errors.ts';
 export { DEFAULT_SPEAKING } from './execution/render.ts';
 export { loggedToolResult } from './execution/trace.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
-export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
+export { createRuntime, systemClock } from './host/runtime.ts';
 export type { CommitUri, CommitVia, RoomUri, SnapshotUri } from './refs.ts';
 export {
 	commitUri,

@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -110,7 +111,7 @@ const dan = definePerson({ name: 'dan', identity: 'Quantity surveyor.' });
 
 /** One clock the tests move by hand, and one runtime over it. */
 const clock = fakeClock();
-const runtime = createRuntime({ clock });
+const runtime = createRuntime({ storage: memoryJournals(), clock });
 
 async function open(options: {
 	script: PiScript;

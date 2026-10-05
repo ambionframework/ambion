@@ -10,7 +10,9 @@ Pass every definition in `agents`. Use `seats` for initial seating and
 attention.
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'site',
   agents: [inspector, surveyor, editor],
   summaryWriter: 'editor',
@@ -89,7 +91,9 @@ also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 `startRoom`. The default is `true`.
 
 ```ts
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'site',
   agents: [inspector, surveyor],
   seating: false,

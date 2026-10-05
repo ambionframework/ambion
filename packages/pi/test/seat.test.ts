@@ -15,6 +15,7 @@ import {
 	type Wake,
 } from '@ambionframework/ambion/hosting';
 import { fakeClock } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import {
 	type Api,
 	type Context,
@@ -203,7 +204,10 @@ describe('a seat actor', () => {
 
 describe('runner liveness', () => {
 	it('uses a ten second default timeout for room calls', () => {
-		expect(hostingOf(createRuntime({ clock: fakeClock(0) })).limits.call.timeout).toBe(10_000);
+		expect(
+			hostingOf(createRuntime({ storage: memoryJournals(), clock: fakeClock(0) })).limits.call
+				.timeout,
+		).toBe(10_000);
 	});
 
 	it('does not start an activation from an already-expired claim', async () => {

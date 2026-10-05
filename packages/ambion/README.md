@@ -17,15 +17,15 @@ token. A dev build of `main` installs from GitHub Packages; see
 [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
 ```sh
-npm install @ambionframework/ambion
+npm install @ambionframework/ambion @ambionframework/journal
 ```
 
-The main library includes its journal dependency. Add
+The journal storage comes from `@ambionframework/journal`. Add
 `@ambionframework/workspace` when agents need optional filesystem tools.
 Add `@ambionframework/assistant` for the default assistant implementation.
 Model execution comes from an executor package. `@ambionframework/pi` is the
 Pi executor. Pass `piExecution()` as `execution` to `startRoom` or
-`createRuntime`. The runtime supplies storage and limits.
+`createRuntime`. The runtime takes the `storage` option and supplies limits.
 It needs credentials for the chosen provider.
 
 ## Use
@@ -35,7 +35,8 @@ The optional `summaryWriter` field names an ordinary agent that may write a clos
 summary.
 
 ```ts
-import { defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, definePerson, startRoom } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { pi, piExecution } from '@ambionframework/pi';
 
 const you = definePerson({
@@ -60,7 +61,9 @@ const editor = defineAgent({
   }),
 });
 
+const runtime = createRuntime({ storage: memoryJournals() });
 const room = await startRoom({
+  runtime,
   name: 'delivery',
   goal: 'Check delivery promises against stock.',
   summaryWriter: 'editor',
@@ -117,9 +120,9 @@ gives the executor one typed tool shape.
 ## Persistence and limits
 
 The journal records active collaboration and its history. Hosts can recover
-pending work from confirmed entries. The default storage is in memory;
-persistent services must supply storage, executable definitions, and recovery
-procedures. Workspace data has its own persistence contract.
+pending work from confirmed entries. `createRuntime` requires a `storage` option. `memoryJournals()` keeps the
+record in memory, and a persistent service passes `sqliteJournals(sql)`. A
+service supplies executable definitions and recovery procedures. Workspace data has its own persistence contract.
 
 Tools can act before speech commits. Applications own effect idempotency.
 Room history and model input can grow, and continuing contributions can keep

@@ -4,6 +4,7 @@
  * second runtime over the same storage.
  */
 import { readdir } from 'node:fs/promises';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
@@ -13,6 +14,7 @@ import {
 	isSaid,
 	type Runtime,
 	readRoom,
+	resumeRoom,
 	startRoom,
 	systemClock,
 } from '../src/index.ts';
@@ -31,6 +33,20 @@ const quietRoom = (name: string, runtime: Runtime) =>
 	});
 
 type Limits = NonNullable<CreateRuntimeOptions['limits']>;
+
+describe('the required options', () => {
+	it('refuses a runtime with no storage at the type level, and a room operation with no runtime', async () => {
+		// @ts-expect-error `storage` is required.
+		const withoutStorage = (): Runtime => createRuntime({});
+		expect(withoutStorage).toBeTypeOf('function');
+		// @ts-expect-error `runtime` is required.
+		await expect(startRoom({ name: 'no-runtime', agents: [assistant] })).rejects.toThrow();
+		// @ts-expect-error `runtime` is required.
+		await expect(resumeRoom('no-runtime', { agents: [assistant] })).rejects.toThrow();
+		// @ts-expect-error `runtime` is required.
+		await expect(readRoom('no-runtime', {})).rejects.toThrow();
+	});
+});
 
 describe('the system clock', () => {
 	it('waits the longest delay a timer takes, and no less, for an alarm past it', () => {
@@ -86,11 +102,11 @@ describe('createRuntime', () => {
 		],
 		['no scheduled says', { schedule: { waiting: 0 } }, /limits.schedule.waiting/],
 	])('refuses %s', (_, limits, error) => {
-		expect(() => createRuntime({ limits })).toThrow(error);
+		expect(() => createRuntime({ storage: memoryJournals(), limits })).toThrow(error);
 	});
 
 	it('exposes every limit at its default, keeps the rest of a group on override, and accepts the floors', () => {
-		const limits = hostingOf(createRuntime()).limits;
+		const limits = hostingOf(createRuntime({ storage: memoryJournals() })).limits;
 		expect(limits.port).toEqual({ resend: 5_000 });
 		expect(limits.lease).toEqual({ ttl: 60_000, deadline: 600_000 });
 		expect(limits.activation.attempts).toBe(3);
@@ -103,6 +119,7 @@ describe('createRuntime', () => {
 
 		const overridden = hostingOf(
 			createRuntime({
+				storage: memoryJournals(),
 				limits: {
 					lease: { ttl: 1 },
 					activation: { attempts: 1 },
@@ -118,6 +135,7 @@ describe('createRuntime', () => {
 		expect(overridden.message.bytes).toBe(Number.POSITIVE_INFINITY);
 		expect(() =>
 			createRuntime({
+				storage: memoryJournals(),
 				limits: {
 					context: { messages: Number.POSITIVE_INFINITY },
 					message: { bytes: Number.POSITIVE_INFINITY },

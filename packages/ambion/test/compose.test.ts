@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The `compose` tool, run through the `invoke` that `describeExecutor` appends:
  * the catalog, the approval, the ledger, the limits, the nested context, the
@@ -1093,7 +1094,10 @@ describe('a compose call in a room', () => {
 			await startRoom({
 				name: roomName('compose-room'),
 				agents: [seat],
-				runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+				runtime: createRuntime({
+					storage: memoryJournals(),
+					logger: (traced) => void logged.push(traced.step),
+				}),
 				execution: scripted((step, _seat, request) => {
 					if (request === 1)
 						return callTool('compose', {
@@ -1183,6 +1187,7 @@ describe('a compose call over the room tools', () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-say'),
 				agents: [composer('worker'), quietAgent('ana'), quietAgent('ben')],
 				seats: { worker: 'broadcast', ana: 'named', ben: 'named' },
@@ -1224,6 +1229,7 @@ describe('a compose call over the room tools', () => {
 		let passes = 0;
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-missed'),
 				agents: [composer('worker', [gate.tool])],
 				seats: { worker: 'broadcast' },
@@ -1268,6 +1274,7 @@ describe('a compose call over the room tools', () => {
 		let requests = 0;
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-error'),
 				agents: [composer('worker')],
 				seats: { worker: 'broadcast' },
@@ -1299,6 +1306,7 @@ describe('a compose call over the room tools', () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-seat'),
 				agents: [composer('worker'), quietAgent('ana'), quietAgent('ben')],
 				seats: { worker: 'broadcast' },
@@ -1339,6 +1347,7 @@ describe('a compose call over the room tools', () => {
 			const read: string[] = [];
 			const room = stopAtEnd(
 				await startRoom({
+					runtime: createRuntime({ storage: memoryJournals() }),
 					name: roomName('compose-no-seat'),
 					agents: [composer('worker'), quietAgent('ana')],
 					seats: Object.fromEntries(seated.map((name) => [name, 'broadcast'])),
@@ -1368,6 +1377,7 @@ describe('a compose call over the room tools', () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-seat-say'),
 				agents: [composer('worker'), quietAgent('ana')],
 				seats: { worker: 'broadcast' },
@@ -1400,6 +1410,7 @@ describe('a compose call over the room tools', () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('compose-time'),
 				agents: [
 					scriptedAgent('worker', 'worker.', {
@@ -1461,6 +1472,7 @@ describe('a compose call over the room tools', () => {
 			let visit: Awaited<ReturnType<typeof room.visit>> | undefined;
 			const room = stopAtEnd(
 				await startRoom({
+					runtime: createRuntime({ storage: memoryJournals() }),
 					name: roomName('compose-seat-missed'),
 					agents: [composer('worker'), quietAgent('ana')],
 					seats: { worker: 'broadcast' },
@@ -1527,7 +1539,10 @@ describe('a compose call over the room tools', () => {
 			await startRoom({
 				name: roomName('compose-trace'),
 				agents: [seat],
-				runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+				runtime: createRuntime({
+					storage: memoryJournals(),
+					logger: (traced) => void logged.push(traced.step),
+				}),
 				execution: scripted((_step, _seat, request) =>
 					request === 1
 						? callTool('compose', {

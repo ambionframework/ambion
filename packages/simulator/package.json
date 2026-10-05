@@ -46,6 +46,7 @@
 		"typebox": "^1.3.34"
 	},
 	"devDependencies": {
+		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/just-bash": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
 		"@earendil-works/pi-ai": "^1.0.0",

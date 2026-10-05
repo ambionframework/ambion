@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The tools of an agent. The core knows ordinary tool composition: a
  * definition flattens its bundles, captures every value, and refuses a bad
@@ -545,6 +546,7 @@ async function probeRoom(attention: 'broadcast' | 'presence', script: PiScript, 
 	};
 	const room = stopAtEnd(
 		await startRoom({
+			runtime: createRuntime({ storage: memoryJournals() }),
 			name: roomName('ordinary-tools'),
 			summaryWriter: assistant.name,
 			seats: { worker: attention, [assistant.name]: 'none' },

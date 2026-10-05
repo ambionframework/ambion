@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
@@ -44,7 +45,7 @@ const greeter = scriptedAgent('greeter', 'Meets people at the door.');
 const writer = scriptedAgent('writer', 'Writes the one message a person reads at the close.');
 const priya = definePerson({ name: 'priya', identity: 'Project manager.' });
 
-const runtime = createRuntime({ clock: fakeClock() });
+const runtime = createRuntime({ storage: memoryJournals(), clock: fakeClock() });
 
 async function open(options: {
 	script: PiScript;

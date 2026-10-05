@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The `compose` tool on the Pi executor, in a room on the scripted stream.
  * The seat calls `compose` once, and the script reads the tool result that the
@@ -53,7 +54,10 @@ async function composed(tools: AmbionTool[], call: Call, compose: Partial<Compos
 		await startRoom({
 			name: roomName('pi-compose'),
 			agents: [seat],
-			runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+			runtime: createRuntime({
+				storage: memoryJournals(),
+				logger: (traced) => void logged.push(traced.step),
+			}),
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scriptedStream((context, _seat, request) => {

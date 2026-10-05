@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * A wake is safe to send twice, a lost one is sent again, a lost release
  * expires, and a lost wake into a running activation is read off the
@@ -79,7 +80,12 @@ async function open(
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
 	const runtime =
-		own?.(clock) ?? createRuntime({ clock, ...(limits === undefined ? {} : { limits }) });
+		own?.(clock) ??
+		createRuntime({
+			storage: memoryJournals(),
+			clock,
+			...(limits === undefined ? {} : { limits }),
+		});
 	const execution = piExecution({ sessions: 'memory', stream: scriptedStream(script) });
 	const session = stopAtEnd(
 		await startRoom({
@@ -385,7 +391,7 @@ describe('a lease', () => {
 
 	it('releases as failed a run that the host lost, and reports a release that no attempt confirms', async () => {
 		const clock = fakeClock();
-		const runtime = createRuntime({ clock });
+		const runtime = createRuntime({ storage: memoryJournals(), clock });
 		const session = stopAtEnd(
 			await startRoom({
 				name: roomName('recover'),

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A room operation requires a runtime, and a runtime its storage.**
+`startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
+`createRuntime` requires `storage`. A test or a quickstart that wants memory
+passes `memoryJournals()` from `@ambionframework/journal`. The
+`defaultRuntime` export is removed.
+
 **A workstation read has a size limit.** The workstation reads at most
 10 MiB of one regular file. A larger file, a device file such as
 `/dev/zero`, and a FIFO fail with `invalid`. A read on a session that ends

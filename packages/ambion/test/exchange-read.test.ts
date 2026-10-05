@@ -1,4 +1,5 @@
 import type { JournalOpener } from '@ambionframework/journal';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import {
@@ -259,7 +260,9 @@ it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEG
 	'rejects invalid exchange reference %s',
 	async (from) => {
 		await expect(
-			readExchange(roomName('exchange-read-invalid'), from, { runtime: createRuntime() }),
+			readExchange(roomName('exchange-read-invalid'), from, {
+				runtime: createRuntime({ storage: memoryJournals() }),
+			}),
 		).rejects.toThrow(/positive safe integer/i);
 	},
 );

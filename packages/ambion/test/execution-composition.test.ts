@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * How a room finds the execution for a seat. An execution of a room or a
  * runtime is supplied explicitly. One router serves each seat on the first
@@ -73,7 +74,7 @@ describe('the execution a room chooses', () => {
 			return () => idle;
 		});
 		const shared = stub([], 'stub');
-		const runtime = createRuntime({ execution: shared.execution });
+		const runtime = createRuntime({ storage: memoryJournals(), execution: shared.execution });
 		for (const label of ['a', 'b']) {
 			await ask({
 				name: roomName(`explicit-${label}`),
@@ -94,7 +95,10 @@ describe('the execution a room chooses', () => {
 			await ask({
 				name: roomName(`first-${owner}`),
 				agents: [seat('stub')],
-				runtime: createRuntime(owner === 'runtime' ? { execution } : {}),
+				runtime: createRuntime({
+					storage: memoryJournals(),
+					...(owner === 'runtime' ? { execution } : {}),
+				}),
 				...(owner === 'room' ? { execution } : {}),
 			});
 			expect(first.counts).toEqual({ built: 1, connected: 1 });
@@ -109,7 +113,10 @@ describe('the execution a room chooses', () => {
 		await ask({
 			name: roomName('routes'),
 			agents: [seat('pi', 'pilot'), seat('claude', 'sonnet')],
-			runtime: createRuntime({ execution: stub(shadowed, 'pi').execution }),
+			runtime: createRuntime({
+				storage: memoryJournals(),
+				execution: stub(shadowed, 'pi').execution,
+			}),
 			execution: [stub(pi, 'pi').execution, stub(claude).execution],
 		});
 		await vi.waitFor(() => expect([...pi, ...claude]).toEqual(['pilot', 'sonnet']));
@@ -151,10 +158,11 @@ describe('the execution a room chooses', () => {
 		'fails the activation at once and for good when $router serves no execution for the kind',
 		async ({ kind, room: own, runtime: shared, reason, before: useBefore }) => {
 			const clock = fakeClock();
-			const before = createRuntime({ clock });
+			const before = createRuntime({ storage: memoryJournals(), clock });
 			// Importing Pi and building another execution cannot configure either runtime.
 			piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) });
 			const runtime = createRuntime({
+				storage: memoryJournals(),
 				clock,
 				...(shared === undefined ? {} : { execution: shared }),
 			});
@@ -215,6 +223,7 @@ describe('execution composition', () => {
 	it('keeps same named definitions and room stream overrides isolated in one runtime', async () => {
 		let defaultCalls = 0;
 		const runtime = createRuntime({
+			storage: memoryJournals(),
 			execution: piExecution({
 				sessions: 'memory',
 				stream: scriptedStream(() => {

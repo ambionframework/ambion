@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 /**
  * The record window: the one rule by which the room bounds the record of a
  * view. The room keeps the newest messages under its cap, then under the
@@ -102,7 +103,10 @@ const wide = wideState();
 
 /** A runtime whose registry holds `chars`: one token per character, so a limit reads as a length. */
 const runtime = runtimeStateOf(
-	createRuntime({ estimators: { chars: (text: string) => text.length } }),
+	createRuntime({
+		storage: memoryJournals(),
+		estimators: { chars: (text: string) => text.length },
+	}),
 );
 const chars = 'chars';
 
@@ -319,9 +323,14 @@ describe('the estimator a seat names', () => {
 
 	it('registers a function under a new name only', () => {
 		const estimate = (text: string) => text.length;
-		expect(() => createRuntime({ estimators: { length: estimate } })).toThrow(/is built in/);
 		expect(() =>
-			createRuntime({ estimators: { chars: 'text' as unknown as typeof estimate } }),
+			createRuntime({ storage: memoryJournals(), estimators: { length: estimate } }),
+		).toThrow(/is built in/);
+		expect(() =>
+			createRuntime({
+				storage: memoryJournals(),
+				estimators: { chars: 'text' as unknown as typeof estimate },
+			}),
 		).toThrow('Runtime estimators.chars must be a function.');
 	});
 });

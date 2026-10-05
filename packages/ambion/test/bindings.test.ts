@@ -1,3 +1,4 @@
+import { memoryJournals } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
@@ -17,7 +18,7 @@ describe('room bindings', () => {
 	it('keeps same-named agents in separate rooms bound to their own tools', async () => {
 		const calls: string[] = [];
 		const prompts: string[] = [];
-		const runtime = createRuntime();
+		const runtime = createRuntime({ storage: memoryJournals() });
 		const person = definePerson({ name: 'priya', identity: 'Project manager.' });
 		const rooms = await Promise.all(
 			['first', 'second'].map(async (label) => {

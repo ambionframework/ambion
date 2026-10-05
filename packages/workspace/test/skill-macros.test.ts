@@ -18,6 +18,7 @@ import {
 } from '@ambionframework/ambion';
 import { describeExecutor, invokeTool } from '@ambionframework/ambion/hosting';
 import { callTool, quiet, say, scripted, settled } from '@ambionframework/ambion/testing';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { functionRuntime } from '../../ambion/test/support/compose-runtime.ts';
 import { andrei, roomName } from '../../ambion/test/support/room.ts';
@@ -275,7 +276,10 @@ describe('a seat that runs a macro by name', () => {
 			await startRoom({
 				name: roomName('macro-room'),
 				agents: [seat],
-				runtime: createRuntime({ logger: (traced) => void logged.push(traced.step) }),
+				runtime: createRuntime({
+					storage: memoryJournals(),
+					logger: (traced) => void logged.push(traced.step),
+				}),
 				execution: scripted(async (step, _seat, request) => {
 					if (request === 1) return callTool('compose', COMPOSE_MACRO);
 					if (request === 2) {
@@ -360,6 +364,7 @@ describe('a seat that runs a macro by name', () => {
 		const read: string[] = [];
 		const room = stopAtEnd(
 			await startRoom({
+				runtime: createRuntime({ storage: memoryJournals() }),
 				name: roomName('macro-quote'),
 				agents: [seat],
 				execution: scripted((step, _seat, request) => {

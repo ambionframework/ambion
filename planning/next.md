@@ -48,7 +48,7 @@ flowchart LR
 
 ### Phase 1. The canvas store and lifecycle
 
-- [ ] **1.** Require the runtime and its storage, and remove
+- [x] **1.** Require the runtime and its storage, and remove
       `defaultRuntime`. (RT1)
 - [ ] **2.** The package `@ambionframework/canvas`, the store port,
       `memoryCanvas`, `sqliteCanvas`, and `canvasStoreConformance`.
