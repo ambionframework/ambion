@@ -106,7 +106,7 @@ export type {
 	Usage,
 	VendorSession,
 } from './types.ts';
-export { addUsage, isPosted, isPresence, isSaid, isSummary } from './types.ts';
+export { addUsage, isPosted, isPresence, isSaid, isSummary, withoutPreferences } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

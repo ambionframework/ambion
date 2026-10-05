@@ -9,7 +9,7 @@ import type {
 } from '../protocol.ts';
 import { type Block, blocks, renderLine } from '../record.ts';
 import type { AgentParticipant, ExchangeRef, Participant, Seq } from '../types.ts';
-import { isSummary, type MessageSnapshot as Message } from '../types.ts';
+import { isSummary, type MessageSnapshot as Message, withoutPreferences } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
 /** The token limit of one seat, and the estimator that counts against it. */
@@ -99,7 +99,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, message?: Seq): A
 		now: facts.now,
 		...(goal === undefined ? {} : { goal }),
 		participants: [...agentsOf(facts), ...peopleOf(facts)],
-		messages: messages.map(contextMessage),
+		messages: messages.map(withoutPreferences),
 		reserve: seating ? state.reserve.map(({ name, identity }) => ({ name, identity })) : [],
 		...seatingFlags(state.composition),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
@@ -220,14 +220,6 @@ function foldAlignedFloor(messages: readonly Message[], floor: Seq): Seq {
 			aligned = message.covers.through + 1;
 	}
 	return aligned;
-}
-
-/** Reading preferences enter context only through the recipient's summary purpose. */
-function contextMessage(message: Message): Message {
-	if (!('preferences' in message)) return message;
-	const publicMessage = { ...message };
-	delete publicMessage.preferences;
-	return publicMessage;
 }
 
 /** Only the summary purpose receives reading preferences. */

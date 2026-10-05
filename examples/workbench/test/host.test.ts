@@ -178,6 +178,21 @@ describe('Workbench host', () => {
 		expect(sensing.some((message) => 'from' in message && message.from === 'mira')).toBe(false);
 	});
 
+	it('tells the person when a room mirror does not attach, and keeps the room running', async () => {
+		const directory = await freshDirectory();
+		// A file where the mirror needs the rooms directory makes the attach fail.
+		await mkdir(joinPath(directory, 'workspace'), { recursive: true });
+		await writeFile(joinPath(directory, 'workspace/rooms'), 'not a directory');
+		const workbench = await open(directory);
+
+		const view = await workbench.read('bringup', 0);
+		expect(view.status).toBe('running');
+		expect(view.activity.map((item) => [item.type, item.text])).toContainEqual([
+			'error',
+			expect.stringContaining('The room mirror did not attach'),
+		]);
+	});
+
 	it('lists the seeded library, previews a SQLite file, hides shell devices, and refuses unsafe paths', async () => {
 		const directory = await freshDirectory();
 		const workbench = await openHost({ directory });

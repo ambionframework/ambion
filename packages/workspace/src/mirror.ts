@@ -8,6 +8,9 @@
  * mirror is an ordinary file: an agent reads it with `read` or `bash cat`,
  * the same as any file a peer wrote.
  *
+ * The mirror leaves out the reading preferences of a person, because every
+ * agent that reads the file would read them.
+ *
  * This is a secondary, best-effort copy. `packages/journal` remains the
  * source of truth for the room; a write failure here calls `onError` and
  * the room keeps running. Recovery follows the same recipe
@@ -22,6 +25,7 @@
 
 import { posix } from 'node:path';
 import type { Message, Room, RoomRead, Seq } from '@ambionframework/ambion';
+import { withoutPreferences } from '@ambionframework/ambion';
 import type { WorkspaceEnv } from './backend.ts';
 import { bestEffort, isLogFile, openLog } from './log.ts';
 import type { WorkspaceAgent, WorkspaceResource } from './resource.ts';
@@ -166,7 +170,7 @@ export async function mirrorRoom(
 		if (stopped) return;
 		if (appendedSeq !== undefined && message.seq <= appendedSeq) return;
 		appendedSeq = message.seq;
-		const entry: RoomMessageEntry = { ...message, room: room.name };
+		const entry: RoomMessageEntry = { ...withoutPreferences(message), room: room.name };
 		pending = bestEffort(() => drive.use(agent, (env) => log.append(env, entry)), options.onError);
 	};
 
