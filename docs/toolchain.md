@@ -11,7 +11,7 @@ platform plans live in [the plan](../planning/next.md) and
 packages/
   ambion/       runtime library
   assistant/    default assistant agent and behavioral guidance
-  canvas/       the canvas store: memoryCanvas() and sqliteCanvas()
+  canvas/       the canvas: openCanvas(), memoryCanvas(), and sqliteCanvas()
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
@@ -44,7 +44,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ ambion, workspace
 assistant ──▶ ambion
-canvas ──▶ ambion, journal
+canvas ──▶ ambion, journal, workspace
 simulator ──▶ ambion, pi
 ```
 

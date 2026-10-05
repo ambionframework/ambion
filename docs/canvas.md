@@ -1,7 +1,7 @@
 # The canvas
 
-> **Status: design for 0.7.0. The package and the store exist. The
-> lifecycle, the tools, and the bridge do not exist yet.** The kernel
+> **Status: design for 0.7.0. The package, the store, and the lifecycle
+> exist. The tools and the bridge do not exist yet.** The kernel
 > parts that the page names exist today. RT1 makes the runtime a required
 > parameter of each one.
 > [The plan](../planning/next.md) owns delivery and evidence.

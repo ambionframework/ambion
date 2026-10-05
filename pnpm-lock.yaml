@@ -174,7 +174,13 @@ importers:
       '@ambionframework/journal':
         specifier: workspace:*
         version: link:../journal
+      '@ambionframework/workspace':
+        specifier: workspace:*
+        version: link:../workspace
     devDependencies:
+      '@ambionframework/just-bash':
+        specifier: workspace:*
+        version: link:../just-bash
       tsdown:
         specifier: ^0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)

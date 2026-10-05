@@ -5,14 +5,14 @@ The store keeps one row for each room: the name, the goal, the depth, the
 state, and what a start needs. It holds no message, no lease, and no
 exchange. The journal of each room stays the source of that room.
 
-The package holds the store alone. The lifecycle, the tools, and the bridge
-do not exist yet. [The canvas design](../../docs/canvas.md) holds the
-contract.
+The package holds the store and the lifecycle of the rooms. The tools and
+the bridge do not exist yet. [The canvas design](../../docs/canvas.md) holds
+the contract.
 
 ## Install
 
 ```sh
-pnpm add @ambionframework/canvas @ambionframework/journal
+pnpm add @ambionframework/canvas @ambionframework/journal @ambionframework/workspace
 ```
 
 The package needs Node 22.19 or newer.
@@ -37,6 +37,46 @@ console.log(await store.list());
 `sqliteCanvas` takes the `Sql` that `sqliteJournals` takes. It creates the
 table `canvas_rooms` when the table is absent. A host can share one `Sql`
 between the two.
+
+## The lifecycle
+
+```ts
+import { openCanvas, sqliteCanvas } from '@ambionframework/canvas';
+
+const canvas = openCanvas({
+  name: 'lab',
+  runtime,
+  store: sqliteCanvas(sql),
+  workspace,
+  breakout: { team: ['scout'] },
+  onError: (failure) => console.error(failure.room, failure.operation),
+});
+await canvas.resume({ agents: [planner, writer, scout] });
+const room = await canvas.open({ name: 'site', goal: 'Plan the site.', agents: ['planner'] });
+```
+
+| Call                   | Effect                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `resume({ agents })`   | Takes the definitions once. Starts or resumes each running root room, then each running breakout room under a live parent |
+| `open(options)`        | Writes a root row and starts the room. A root row that exists returns its handle                                          |
+| `start(name)`          | Sets the row to `running` and starts the room. A root starts its running breakout rooms                                   |
+| `stop(name)`           | Sets the row to `stopped`, stops the room, then its mirror                                                                |
+| `archive(name, close)` | Records the close of a breakout room, then stops it                                                                       |
+| `close()`              | Stops every handle. Each row keeps its state                                                                              |
+| `room(name)`           | The live handle of a room, or `undefined`                                                                                 |
+| `rooms()`              | The rows                                                                                                                  |
+| `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, and `archived`                                                                      |
+
+**Each room receives its own definitions.** A root room receives the
+definitions in its `agents`, or every definition outside the worker team. A
+breakout room receives the definitions of its row, at `broadcast`, with no
+assistant, no summary writer, an empty reserve, and `seating: false`.
+
+**The canvas runs the calls on one room name in order.** A refusal is an
+`AmbionError` with the code `refused`. A start that fails goes to `onError`,
+and its row stays `running`. With a `workspace`, the canvas attaches
+`workspace.mirror(room)` after each start. A failed attach goes to
+`onError`, and the room runs.
 
 ## The store
 
