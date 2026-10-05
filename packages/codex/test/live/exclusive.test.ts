@@ -24,11 +24,14 @@ import {
 	untilQuiet,
 } from './support.ts';
 
-/** The tools of the room. */
-const ROOM = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
+/** The tools of a room with an empty reserve. The room offers `seat` only when the reserve holds an agent. */
+const ROOM = ['say', 'schedule', 'unseat', 'dismiss', 'recall'];
 
-/** The tools of the room, the one tool of the application, and the compose tools of every seat. */
-const ALLOWED = [...ROOM, 'lookup', 'compose', 'describe'];
+/** The tools of the room and the compose tools that every seat holds. */
+const SEAT = [...ROOM, 'compose', 'describe'];
+
+/** The tools of the seat and the one tool of the application. */
+const ALLOWED = [...SEAT, 'lookup'];
 
 /** The MCP helpers that Codex adds when an MCP server is on. A seat runs no server, so none may appear. */
 const HELPERS = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'];
@@ -118,7 +121,7 @@ live('no native tools', () => {
 			const called = calledIn(steps, activation).map((tool) =>
 				tool.replace(/^(?:codex__|functions\.)/, ''),
 			);
-			expect(called.filter((tool) => !ROOM.includes(tool))).toEqual([]);
+			expect(called.filter((tool) => !SEAT.includes(tool))).toEqual([]);
 			const said = saidBy((await room.read()).messages, 'clerk')
 				.map((message) => message.text)
 				.join('\n');

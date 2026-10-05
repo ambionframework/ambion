@@ -34,7 +34,8 @@ import { segment } from '../../src/home.ts';
 import { claudeExecution } from '../../src/index.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
-const ROOM_TOOLS = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
+/** The tools of a seat in a room with an empty reserve: the room offers `seat` only when the reserve holds an agent. */
+const SEAT_TOOLS = ['say', 'schedule', 'unseat', 'dismiss', 'recall', 'compose', 'describe'];
 const WIRE = fileURLToPath(new URL('./support/wire.mjs', import.meta.url));
 
 /** The settings that a poisoned user or project holds. `kind` and `markers` name the files that they touch. */
@@ -192,7 +193,7 @@ live('hermetic seat', () => {
 
 			// The session step shows what the seat ran with: the room tools, and the room server alone.
 			const [opened] = stepsOfType(steps, 'session');
-			expect(new Set(opened?.tools)).toEqual(new Set(ROOM_TOOLS));
+			expect(new Set(opened?.tools)).toEqual(new Set(SEAT_TOOLS));
 			expect(opened?.servers).toEqual([{ name: 'ambion', status: 'connected' }]);
 			expect(opened?.cwd).toBe(work);
 
