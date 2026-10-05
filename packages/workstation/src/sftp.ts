@@ -89,24 +89,23 @@ async function readChunks(
 }
 
 /**
- * Read one regular file of at most `MAX_READ_BYTES`. The size that `fstat`
- * reports and the bytes that arrive both count, so a file that grows or
- * reports size 0, such as `/dev/zero`, stops at the limit. The handle closes
- * on every path. `stopped` ends the loop when the session ends.
+ * Read one regular file of at most `MAX_READ_BYTES`. The check runs before
+ * the open, because an open of a FIFO blocks the SFTP server. The size that
+ * `stat` reports and the bytes that arrive both count, so a file that grows
+ * or reports size 0 stops at the limit. The handle closes on every path.
+ * `stopped` ends the loop when the session ends.
  */
 export async function readBounded(
 	sftp: SFTPWrapper,
 	path: string,
 	stopped: () => boolean,
 ): Promise<Buffer> {
+	const stats = await stat(sftp, path);
+	if (stats.isDirectory()) throw new FileError('is_directory', `${path} is a directory.`, path);
+	if (!stats.isFile()) throw new FileError('invalid', `${path} is not a regular file.`, path);
+	if (stats.size > MAX_READ_BYTES) throw refuseSize(path, `${stats.size} bytes`);
 	const handle = await call<Buffer>((done) => sftp.open(path, 'r', done));
 	try {
-		const stats = await call<Stats>((done) => sftp.fstat(handle, done));
-		if (stats.isDirectory()) throw new FileError('is_directory', `${path} is a directory.`, path);
-		if (!stats.isFile()) {
-			throw new FileError('invalid', `${path} is not a regular file.`, path);
-		}
-		if (stats.size > MAX_READ_BYTES) throw refuseSize(path, `${stats.size} bytes`);
 		return await readChunks(sftp, handle, path, stopped);
 	} finally {
 		sftp.close(handle, () => undefined);

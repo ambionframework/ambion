@@ -3,8 +3,8 @@
 ## Unreleased
 
 **A workstation read has a size limit.** The workstation reads at most
-10 MiB of one regular file. A larger file and a device file, such as
-`/dev/zero`, fail with `invalid`. The read ends when the session ends.
+10 MiB of one regular file. A larger file, a device file such as
+`/dev/zero`, and a FIFO fail with `invalid`. The read ends when the session ends.
 
 **Resource contracts have one documentation owner.** `resources.md` states
 resource lifecycle, tool bundles, and provenance. `workspace.md` states

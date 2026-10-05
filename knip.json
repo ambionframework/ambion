@@ -1,6 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"ignoreBinaries": ["setsid", "flock"],
+	"ignoreBinaries": ["setsid", "flock", "mkfifo"],
 	"workspaces": {
 		".": {
 			"entry": [

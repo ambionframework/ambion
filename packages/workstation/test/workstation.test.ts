@@ -395,22 +395,23 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 }
 
 describe.skipIf(!hasSetsid)('a workstation read', () => {
-	it('returns a file at the limit, and refuses a larger file and a device file with `invalid`', async () => {
+	it('returns a file at the limit, and refuses a larger file, a device file, and a FIFO with `invalid`', async () => {
 		const started = await server();
 		const home = started.homes.get('ada') ?? '';
 		const limit = 10 * 1024 * 1024;
 		await writeFile(join(home, 'edge.bin'), Buffer.alloc(limit, 97));
 		await writeFile(join(home, 'big.bin'), Buffer.alloc(limit + 1, 97));
+		spawnSync('mkfifo', [join(home, 'pipe')]);
 		const backend = backendFor(started.options);
 		await withEnv(backend, 'ada', async (env) => {
 			const edge = await env.readBinaryFile('edge.bin');
 			expect(edge.ok && edge.value.length).toBe(limit);
-			for (const path of ['big.bin', '/dev/zero']) {
+			for (const path of ['big.bin', '/dev/zero', 'pipe']) {
 				const rss = process.memoryUsage().rss;
 				const began = Date.now();
 				const refused = await env.readBinaryFile(path);
 				expect(refused).toMatchObject({ ok: false, error: { code: 'invalid' } });
-				expect(refused.ok ? '' : refused.error.message).toContain(path.slice(-8));
+				expect(refused.ok ? '' : refused.error.message).toContain(path);
 				expect(Date.now() - began).toBeLessThan(10_000);
 				expect(process.memoryUsage().rss - rss).toBeLessThan(200 * 1024 * 1024);
 			}
