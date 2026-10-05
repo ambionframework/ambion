@@ -20,7 +20,6 @@ import {
 	sqliteJournals,
 } from '@ambionframework/journal';
 import { describe, expect, it, vi } from 'vitest';
-import { mulberry32 } from '../../ambion/test/support/core-failure.ts';
 import { type CanvasRoom, type CanvasStore, memoryCanvas, sqliteCanvas } from '../src/index.ts';
 import { callOf, contextOf, type Host, host, statesOf, tooled } from './support/host.ts';
 import { sqlOver } from './support/sql.ts';
@@ -347,3 +346,15 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 		});
 	});
 });
+
+/** A small seeded generator, so a seed replays the same choices. */
+function mulberry32(seed: number): () => number {
+	let a = seed >>> 0;
+	return () => {
+		a = (a + 0x6d2b79f5) >>> 0;
+		let t = a;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
