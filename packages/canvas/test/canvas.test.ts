@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { AmbionError, createRuntime, readRoom } from '@ambionframework/ambion';
+import { AmbionError, createRuntime, readRoom, startRoom } from '@ambionframework/ambion';
 import { scripted, settled } from '@ambionframework/ambion/testing';
 import { sqliteJournals } from '@ambionframework/journal';
 import { memoryBackend } from '@ambionframework/just-bash';
@@ -88,6 +88,19 @@ describe('resume', () => {
 		expect(canvas.rooms().map((row) => row.name)).toEqual(['site', 'site-a']);
 		expect(canvas.room('site')).toBeUndefined();
 		expect(canvas.room('site-a')).toBeUndefined();
+	});
+
+	it('leaves no room running when close comes during resume', async () => {
+		const { canvas, store, runtime } = host();
+		await store.insert(rootRow('one'));
+		await store.insert(rootRow('two'));
+		const resuming = canvas.resume({ agents: everyone });
+		await canvas.close();
+		await resuming;
+		expect([canvas.room('one'), canvas.room('two')]).toEqual([undefined, undefined]);
+		for (const name of ['one', 'two'])
+			await startRoom({ name, agents: [ada], runtime }).then((room) => room.stop());
+		expect(await statesOf(store)).toEqual({ one: 'running', two: 'running' });
 	});
 
 	it('reports a failed start, and keeps the row running', async () => {

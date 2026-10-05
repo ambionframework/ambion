@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	type Room,
+	type Runtime,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
 import { byAgent, type Script, scripted } from '@ambionframework/ambion/testing';
@@ -49,6 +50,7 @@ export interface Host {
 	readonly store: CanvasStore;
 	readonly storage: JournalOpener;
 	readonly errors: CanvasError[];
+	readonly runtime: Runtime;
 }
 
 type HostOptions = Partial<Pick<OpenCanvasOptions, 'workspace' | 'breakout'>> & {
@@ -65,16 +67,17 @@ export function host(options: HostOptions = {}): Host {
 	const store = options.store ?? memoryCanvas();
 	const storage = options.storage ?? memoryJournals();
 	const errors: CanvasError[] = [];
+	const runtime = createRuntime({ storage, execution: scripted(options.script ?? byAgent({})) });
 	const canvas = openCanvas({
 		name: 'lab',
-		runtime: createRuntime({ storage, execution: scripted(options.script ?? byAgent({})) }),
+		runtime,
 		store,
 		breakout: options.breakout ?? { team: ['cy'] },
 		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
 		onError: (error) => void errors.push(error),
 	});
 	onTestFinished(() => canvas.close());
-	return { canvas, store, storage, errors };
+	return { canvas, store, storage, errors, runtime };
 }
 
 /** The names of the agents that a room seats, and of the agents in its reserve. */

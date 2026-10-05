@@ -95,6 +95,7 @@ export interface Canvas {
 	close(): Promise<void>;
 	/** The live handle of a room of this run, or undefined. */
 	room(name: string): Room | undefined;
+	/** The rows of the store, read at `resume`. Empty before `resume`. */
 	rooms(): readonly CanvasRoom[];
 	subscribe(listener: (event: CanvasEvent) => void): () => void;
 }

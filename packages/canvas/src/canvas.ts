@@ -31,6 +31,13 @@ interface Handle {
 	mirror?: RoomMirror;
 }
 
+const EVENT_OPERATION: Record<CanvasEvent['type'], CanvasOperation> = {
+	opened: 'open',
+	started: 'start',
+	stopped: 'stop',
+	archived: 'archive',
+};
+
 function castOf(row: CanvasRoom, definitions: Definitions): Cast {
 	return row.start.kind === 'root'
 		? rootCast(row.start, definitions)
@@ -61,6 +68,8 @@ class CanvasRun implements Canvas {
 	private ready = false;
 	private closed = false;
 	private closing: Promise<void> | undefined;
+	/** The launch pass of `resume`. `close` waits for it. */
+	private resuming: Promise<void> | undefined;
 
 	constructor(options: OpenCanvasOptions) {
 		this.name = options.name;
@@ -80,6 +89,11 @@ class CanvasRun implements Canvas {
 		}
 		this.definitions = definitions;
 		this.ready = true;
+		this.resuming = this.launchRunning();
+		await this.resuming;
+	}
+
+	private async launchRunning(): Promise<void> {
 		await this.launchAll((row) => row.depth === 0);
 		await this.launchAll(
 			(row) => row.start.kind === 'breakout' && this.handles.has(row.start.parent),
@@ -144,7 +158,11 @@ class CanvasRun implements Canvas {
 			try {
 				listener(event);
 			} catch (error) {
-				this.report(event.type === 'opened' ? event.room.name : event.room, 'start', error);
+				this.report(
+					event.type === 'opened' ? event.room.name : event.room,
+					EVENT_OPERATION[event.type],
+					error,
+				);
 			}
 		}
 	}
@@ -160,10 +178,14 @@ class CanvasRun implements Canvas {
 	/** Runs the operations on one room name one at a time, in call order. */
 	private serial<T>(name: string, operation: () => Promise<T>): Promise<T> {
 		const result = (this.tails.get(name) ?? Promise.resolve()).then(operation);
-		this.tails.set(
-			name,
-			result.catch(() => {}),
+		const settled = result.then(
+			() => {},
+			() => {},
 		);
+		this.tails.set(name, settled);
+		void settled.then(() => {
+			if (this.tails.get(name) === settled) this.tails.delete(name);
+		});
 		return result;
 	}
 
@@ -209,10 +231,12 @@ class CanvasRun implements Canvas {
 	/** Starts or resumes each running row that the filter accepts, and reports each failure. */
 	private async launchAll(accept: (row: CanvasRoom) => boolean): Promise<void> {
 		const rows = [...this.rows.values()].filter((row) => row.state === 'running' && accept(row));
-		for (const row of rows)
+		for (const row of rows) {
+			if (this.closed) return;
 			await this.serial(row.name, () =>
 				this.guard(row.name, 'resume', () => this.launch(row.name)),
 			).catch(() => {});
+		}
 	}
 
 	private async openRow(options: CanvasRoomOptions): Promise<Room> {
@@ -277,6 +301,7 @@ class CanvasRun implements Canvas {
 
 	/** Starts the room from its row, or resumes it from its journal, and attaches its mirror. */
 	private async launch(name: string): Promise<Room> {
+		this.assertNotClosed();
 		const live = this.handles.get(name);
 		if (live !== undefined) return live.room;
 		const handle: Handle = { room: await this.begin(this.liveRow(name)) };
@@ -313,16 +338,21 @@ class CanvasRun implements Canvas {
 	private async release(name: string): Promise<void> {
 		const handle = this.handles.get(name);
 		if (handle === undefined) return;
-		await handle.room.stop();
-		this.handles.delete(name);
-		await handle.mirror?.stop();
+		try {
+			await handle.room.stop();
+		} finally {
+			this.handles.delete(name);
+			await handle.mirror?.stop();
+		}
 		this.emit({ type: 'stopped', room: name });
 	}
 
 	private async stopRow(name: string): Promise<void> {
 		const row = this.liveRow(name);
-		await this.record(name, 'stopped');
-		await this.guard(name, 'stop', () => this.release(name));
+		await this.guard(name, 'stop', async () => {
+			await this.record(name, 'stopped');
+			await this.release(name);
+		});
 		if (row.depth === 0) await this.releaseChildren(name);
 	}
 
@@ -349,6 +379,7 @@ class CanvasRun implements Canvas {
 	/** Waits for the calls in flight, then stops every handle. Each row keeps its state. */
 	private async shutdown(): Promise<void> {
 		this.closed = true;
+		await this.resuming?.catch(() => {});
 		await Promise.all([...this.tails.values()]);
 		for (const name of [...this.handles.keys()])
 			await this.guard(name, 'close', () => this.release(name)).catch(() => {});
