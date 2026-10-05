@@ -8,7 +8,7 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
-import { byAgent, type Script, scripted } from '@ambionframework/ambion/testing';
+import { byAgent, type FakeClock, type Script, scripted } from '@ambionframework/ambion/testing';
 import { type JournalOpener, memoryJournals } from '@ambionframework/journal';
 import { onTestFinished } from 'vitest';
 import {
@@ -59,6 +59,7 @@ type HostOptions = Partial<Pick<OpenCanvasOptions, 'workspace' | 'breakout'>> & 
 	store?: CanvasStore;
 	storage?: JournalOpener;
 	script?: Script;
+	clock?: FakeClock;
 };
 
 /**
@@ -69,7 +70,11 @@ export function host(options: HostOptions = {}): Host {
 	const store = options.store ?? memoryCanvas();
 	const storage = options.storage ?? memoryJournals();
 	const errors: CanvasError[] = [];
-	const runtime = createRuntime({ storage, execution: scripted(options.script ?? byAgent({})) });
+	const runtime = createRuntime({
+		storage,
+		execution: scripted(options.script ?? byAgent({})),
+		...(options.clock === undefined ? {} : { clock: options.clock }),
+	});
 	const canvas = openCanvas({
 		name: 'lab',
 		runtime,
