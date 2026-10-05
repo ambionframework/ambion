@@ -257,28 +257,6 @@ It does not guarantee that every omission or failure will be detected before
 closure. A summary activation can report an incomplete result but cannot
 repair it through further investigation.
 
-**The live suite measured the change.** The earlier guidance let the
-assistant give one minimal correction. On it, both models tested corrected a
-specialist at `broadcast` in each of three samples. Both also asked the
-person for a missing fact during the exchange.
-
-**The results of 0.3.0.** Each cell counts the passing cases, with one
-sample for each case. Each model is graded by the model of the other provider.
-
-| Guidance                                          | Sonnet 5, `medium` | Luna 5.6, `medium` |
-| ------------------------------------------------- | ------------------ | ------------------ |
-| Before the change, 18 cases                       | 13                 | 12                 |
-| Seating first                                     | 16                 | 16                 |
-| Each reaction at `broadcast` named                | 17                 | 18                 |
-| A constraint stays until withdrawn                | 17                 | 18                 |
-| The rule for each specialist, and its questions   | 17                 | 17                 |
-| A specialist that addresses the assistant, 19     | 19                 | 18                 |
-| No redirect of a specialist that cannot do work   | 17 (a)             | 18 (a)             |
-| The specialists read only the words of the person | 19                 | 19                 |
-
-(a) Two scripted specialists read the words of the assistant. The last row
-fixes the scripts, and it runs the same guidance.
-
 ## Seating and completion
 
 **Changes to the roster serve the work.** Select specialists from the identities in

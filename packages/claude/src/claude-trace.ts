@@ -125,9 +125,8 @@ function sessionStep(init: Extract<SDKMessage, { type: 'system'; subtype: 'init'
 		...(init.session_id === '' ? {} : { session: init.session_id }),
 		auth: init.apiKeySource,
 		permissionMode: init.permissionMode,
-		// An older executable can leave a list out, and the step then holds an empty one.
-		tools: (init.tools ?? []).map(plainName),
-		servers: (init.mcp_servers ?? []).map(({ name, status }) => ({ name, status })),
+		tools: init.tools.map(plainName),
+		servers: init.mcp_servers.map(({ name, status }) => ({ name, status })),
 	};
 }
 

@@ -207,8 +207,8 @@ content. The field `compose: false` leaves the tool out of `compose`.
 `captureTool` copies the schema. [Compose](compose.md#bindings) states how a
 binding uses the field.
 
-**`ToolResult` takes the type of its details.** `ToolResult<TDetails =
-unknown>` has the shape that it always had when no type is given.
+**`ToolResult` takes the type of its details.** `TDetails` of
+`ToolResult<TDetails = unknown>` defaults to `unknown`.
 `AmbionTool` keeps `details` as `unknown`, because a list of tools holds
 tools of many outputs.
 
@@ -216,8 +216,7 @@ tools of many outputs.
 return a `ToolResult` whose `details` is assignable to `Static` of the
 schema. `tsc` reports the field that breaks it, such as `Property 'status'
 is missing`. A tool with no declared output returns a string or a
-`ToolResult`. The export `DefineToolOptions` no longer exists: the three
-types below replace it.
+`ToolResult`. Three types hold the options:
 
 ```ts
 interface BaseToolOptions<P extends TSchema> {

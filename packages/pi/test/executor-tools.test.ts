@@ -11,11 +11,9 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import type {
-	ActivationSpec,
 	ActivationView,
 	CommitRequest,
 	CommitResult,
-	Intent,
 	RoomProtocol,
 } from '@ambionframework/ambion/hosting';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
@@ -61,20 +59,6 @@ const worker = defineAgent({
 		],
 	}),
 });
-
-// @ts-expect-error The room has no summary intent; closing work uses said.
-const removedSummaryIntent: Intent = { kind: 'summary', text: 'x' };
-void removedSummaryIntent;
-
-const oldAuthority: ActivationSpec = {
-	id: 'message:4:worker:1',
-	seat: 'worker',
-	attempt: 1,
-	purpose: { kind: 'respond', message: 4 },
-	// @ts-expect-error Activation authority no longer carries a grant field.
-	grant: { kind: 'say', tool: 'say' },
-};
-void oldAuthority;
 
 type Purpose = ActivationView['spec']['purpose'];
 const respond: Purpose = { kind: 'respond', message: 4 };

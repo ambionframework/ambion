@@ -1,9 +1,8 @@
 # The example: Workbench
 
 **One runnable example ships with Ambion. It is an agentic lab workbench.**
-It replaces the site example and Relay. It is the room a new reader opens
-first, the host the deployment guide describes, and the evidence that the
-release claims hold. The directory is `examples/workbench`.
+It is the room a new reader opens first, the host the deployment guide
+describes, and the evidence that the release claims hold. The directory is `examples/workbench`.
 
 Workbench is a narrow build of a larger idea. The
 [Workbench repository](https://github.com/fastforwardengine/workbench) runs
