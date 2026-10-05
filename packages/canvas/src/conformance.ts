@@ -9,7 +9,7 @@
  * });
  * ```
  */
-import type { CanvasClose, CanvasRoom, CanvasStore } from './store.ts';
+import type { BreakoutStart, CanvasClose, CanvasRoom, CanvasStore } from './store.ts';
 
 /** One case a test runner names and awaits. It throws on failure. */
 export interface ConformanceCase {
@@ -34,7 +34,14 @@ const root = (name: string, state: CanvasRoom['state'] = 'running'): CanvasRoom 
 	goal: `Goal of ${name}.`,
 	depth: 0,
 	state,
-	start: { kind: 'root', agents: ['ada'], seating: false },
+	start: {
+		kind: 'root',
+		agents: ['ada', 'max'],
+		seats: { ada: 'broadcast' },
+		assistant: 'max',
+		summaryWriter: 'max',
+		seating: false,
+	},
 });
 
 const breakout = (name: string, parent: string): CanvasRoom => ({
@@ -52,12 +59,27 @@ const breakout = (name: string, parent: string): CanvasRoom => ({
 	},
 });
 
+/** A breakout row with no `to`: the start message goes to every worker. */
+const toAll = (name: string, parent: string): CanvasRoom => {
+	const { to: _to, ...start } = breakout(name, parent).start as BreakoutStart;
+	return { ...breakout(name, parent), start };
+};
+
 const done: CanvasClose = { result: 'done', note: 'Shipped.' };
 const failed: CanvasClose = { result: 'failed' };
 
+/** JSON with the keys of each object in order, so key order is not a difference. */
+function canonical(value: unknown): string {
+	return JSON.stringify(value, (_key, item: unknown) =>
+		item !== null && typeof item === 'object' && !Array.isArray(item)
+			? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+			: item,
+	);
+}
+
 function same(actual: unknown, expected: unknown, what: string): void {
-	const left = JSON.stringify(actual);
-	const right = JSON.stringify(expected);
+	const left = canonical(actual);
+	const right = canonical(expected);
 	if (left !== right) throw new Error(`${what}: expected ${right}, got ${left}`);
 }
 
@@ -91,7 +113,7 @@ const cases: readonly (readonly [name: string, body: Body])[] = [
 		},
 	],
 	[
-		'keeps a breakout start and an archived row with its close',
+		'keeps breakout starts and an archived row with its close',
 		async (store) => {
 			const archived: CanvasRoom = {
 				...breakout('site-survey', 'site'),
@@ -99,8 +121,13 @@ const cases: readonly (readonly [name: string, body: Body])[] = [
 				close: done,
 			};
 			await store.insert(breakout('site-tests', 'site'));
+			await store.insert(toAll('site-docs', 'site'));
 			await store.insert(archived);
-			same(await store.list(), [breakout('site-tests', 'site'), archived], 'list of both starts');
+			same(
+				await store.list(),
+				[breakout('site-tests', 'site'), toAll('site-docs', 'site'), archived],
+				'list of the starts',
+			);
 		},
 	],
 	[
