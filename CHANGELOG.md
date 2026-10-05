@@ -26,6 +26,12 @@ its rooms. The canvas owns the room rows, the resume at the start, the
 mirror, and the stop. A failed stop leaves the room stopped, and a failed
 start of one room no longer stops the host.
 
+**The workbench delegates work to breakout rooms.** The worker team is
+`scout` and `maker`, and no root room seats them. The assistant holds the
+opener bundle, and each worker holds the worker bundle with the workspace
+tools. The host opens the canvas before it defines the agents. The room
+view carries the `parent` of a breakout room, and `/room` shows it.
+
 **A room operation requires a runtime, and a runtime its storage.**
 `startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
 `createRuntime` requires `storage`. A test or a quickstart that wants memory

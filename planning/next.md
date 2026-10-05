@@ -101,7 +101,7 @@ changelog names the dropped `workbench_rooms` table.
 - [x] **1.** `breakout`, `tell`, `archive`, `report`, the reminder, and
       the bounds. Needs phase 2.
 - [x] **2.** The bridge. Needs 1.
-- [ ] **3.** Delegation in the workbench: a worker team and the two
+- [x] **3.** Delegation in the workbench: a worker team and the two
       bundles. Needs 2.
 
 **Evidence:**
@@ -148,7 +148,7 @@ changelog names the dropped `workbench_rooms` table.
 
 ### Phase 4. Evidence and release
 
-- [ ] **1.** Run the workbench delegation end to end on scripted
+- [x] **1.** Run the workbench delegation end to end on scripted
       executors, and the repository gate. Needs phase 3.
 - [ ] **2.** Add one `pnpm chaos` case for each row of the crash table in
       [Durability](../docs/canvas.md#durability), and a case for a crash

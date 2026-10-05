@@ -23,7 +23,7 @@ import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
-import { team } from './definitions.ts';
+import { team, workerNames } from './definitions.ts';
 import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
@@ -183,7 +183,6 @@ export async function openRooms(
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
-	const roomTeam = team(workspace, openInstrument({ lab, instruments }));
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
 		if (closing) fail('The host is stopping.');
@@ -200,9 +199,11 @@ export async function openRooms(
 		runtime,
 		store: sqliteCanvas(sql),
 		workspace,
-		breakout: { team: [] },
+		breakout: { team: workerNames },
 		onError: (failure) => reportFailure(stateOf(failure.room), failure),
 	});
+	// The canvas exists first: an agent reads its bundle when it is defined.
+	const roomTeam = team(workspace, openInstrument({ lab, instruments }), canvas);
 	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
 	try {
 		await canvas.resume({ agents: roomTeam.agents });
@@ -329,6 +330,8 @@ function roomView(
 		/** The seats that cannot run because their executor kind has no key. */
 		unavailable,
 		goal: snapshot.initialized ? snapshot.goal : row.goal,
+		/** The parent of a breakout room. A root room has none. */
+		parent: row.start.kind === 'breakout' ? row.start.parent : undefined,
 		status: running ? ('running' as const) : ('stopped' as const),
 		activity: [...state.activity],
 		failures: new Map(state.failures) as ReadonlyMap<string, string>,

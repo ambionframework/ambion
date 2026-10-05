@@ -10,6 +10,8 @@ export const seatKinds: Readonly<Record<string, ExecutorKind>> = {
 	datasheets: 'pi',
 	design: 'claude',
 	experiments: 'codex',
+	scout: 'pi',
+	maker: 'pi',
 };
 
 /** The model of the Pi seats. `AMBION_MODEL` overrides it. */
