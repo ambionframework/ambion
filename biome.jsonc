@@ -678,6 +678,7 @@
 			// a host, a workspace backend, and an example alike.
 			"includes": [
 				"packages/assistant/src/**",
+				"packages/canvas/src/**",
 				"packages/cloudflare/src/**",
 				"packages/pi/src/**",
 				"packages/claude/src/**",

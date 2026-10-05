@@ -228,6 +228,7 @@ and the model runs the macro by name. See [Compose](docs/compose.md) and
 | ------------------------------ | ------------------------------------------------------------------------------------- |
 | `@ambionframework/ambion`      | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
 | `@ambionframework/journal`     | The append-only journal and its storage contract                                      |
+| `@ambionframework/canvas`      | The canvas store: one row for each room, in memory or in SQLite                       |
 | `@ambionframework/pi`          | The Pi executor, on the Pi harness                                                    |
 | `@ambionframework/claude`      | The Claude Agent SDK executor                                                         |
 | `@ambionframework/codex`       | The Codex `app-server` executor                                                       |

@@ -1,0 +1,6 @@
+{
+	"extends": "../../tsconfig.base.json",
+	// `tsdown` reads this one, and it emits declarations, so it sees `src`
+	// alone. `tsconfig.check.json` adds `test` for the type-checker.
+	"include": ["src"]
+}

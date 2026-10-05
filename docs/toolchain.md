@@ -11,6 +11,7 @@ platform plans live in [the plan](../planning/next.md) and
 packages/
   ambion/       runtime library
   assistant/    default assistant agent and behavioral guidance
+  canvas/       the canvas store: memoryCanvas() and sqliteCanvas()
   claude/       Claude Agent SDK executor: claude() and claudeExecution()
   cloudflare/   Durable Object adapter
   codex/        Codex executor: codex() and codexExecution()
@@ -29,7 +30,7 @@ planning/       the plan for the next release and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 
-The twelve `packages/*` entries are publishable and share a lockstep version.
+The thirteen `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -43,6 +44,7 @@ workspace ──▶ ambion
 just-bash ──▶ workspace
 workstation ──▶ ambion, workspace
 assistant ──▶ ambion
+canvas ──▶ ambion, journal
 simulator ──▶ ambion, pi
 ```
 
@@ -371,7 +373,7 @@ and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-Two channels publish the twelve packages under the `@ambionframework` scope.
+Two channels publish the thirteen packages under the `@ambionframework` scope.
 
 | Channel | Registry                     | Dist-tag         | Who publishes                 |
 | ------- | ---------------------------- | ---------------- | ----------------------------- |
