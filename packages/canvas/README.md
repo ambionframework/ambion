@@ -5,8 +5,8 @@ The store keeps one row for each room: the name, the goal, the depth, the
 state, and what a start needs. It holds no message, no lease, and no
 exchange. The journal of each room stays the source of that room.
 
-The package holds the store and the lifecycle of the rooms. The tools and
-the bridge do not exist yet. [The canvas design](../../docs/canvas.md) holds
+The package holds the store, the lifecycle of the rooms, and the tools of
+the breakout rooms. The bridge does not exist yet. [The canvas design](../../docs/canvas.md) holds
 the contract.
 
 ## Install
@@ -77,6 +77,26 @@ assistant, no summary writer, an empty reserve, and `seating: false`.
 and its row stays `running`. With a `workspace`, the canvas attaches
 `workspace.mirror(room)` after each start. A failed attach goes to
 `onError`, and the room runs.
+
+## The tools
+
+```ts
+const opener = canvas.tools(); // breakout, tell, archive, and the reminder
+const worker = canvas.workerTools(); // report
+```
+
+| Tool       | Bundle | Effect                                                                          |
+| ---------- | ------ | ------------------------------------------------------------------------------- |
+| `breakout` | Opener | Opens `<parent>-<name>`, seats workers of the team, and posts the first message |
+| `tell`     | Opener | Posts into a running breakout room that the caller opened                       |
+| `archive`  | Opener | Records `done` or `failed`, then stops the room                                 |
+| `report`   | Worker | Posts into the parent room, to the opener, with the label `breakout <name>:`    |
+
+**Call both bundles before `defineAgent`.** A tool call before `resume`
+or after `close` is a refusal. `breakout` checks a repeat, a name held by
+another opener, the name rule, the team, and `perOpener`, in that order. The
+reminder of the opener bundle lists the breakout rooms of the seat. Each
+refusal is an `AmbionError` with the code `refused`.
 
 ## The store
 

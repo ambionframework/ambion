@@ -90,14 +90,17 @@ describe('resume', () => {
 		expect(canvas.room('site-a')).toBeUndefined();
 	});
 
-	it('leaves no room running when close comes during resume', async () => {
-		const { canvas, store, runtime } = host();
+	it('leaves no later room running when close comes during resume, and reports no failure', async () => {
+		const { canvas, store, runtime, errors } = host();
 		await store.insert(rootRow('one'));
 		await store.insert(rootRow('two'));
-		const resuming = canvas.resume({ agents: everyone });
+		canvas.subscribe((event) => {
+			if (event.type === 'started' && event.room === 'one') void canvas.close();
+		});
+		await canvas.resume({ agents: everyone });
 		await canvas.close();
-		await resuming;
 		expect([canvas.room('one'), canvas.room('two')]).toEqual([undefined, undefined]);
+		expect(errors).toEqual([]);
 		for (const name of ['one', 'two'])
 			await startRoom({ name, agents: [ada], runtime }).then((room) => room.stop());
 		expect(await statesOf(store)).toEqual({ one: 'running', two: 'running' });
@@ -362,6 +365,23 @@ describe('the mirror', () => {
 		await canvas.start('site');
 		expect(order.at(-1)).toBe('attach site');
 		expect(errors).toEqual([]);
+	});
+
+	it('reports a failed mirror stop, and the stop reaches the caller', async () => {
+		const drive = workspace();
+		const broken: Workspace = {
+			...drive,
+			mirror: async (room, options) => ({
+				...(await drive.mirror(room, options)),
+				stop: () => Promise.reject(new Error('no stop')),
+			}),
+		};
+		const { canvas, errors } = host({ workspace: broken });
+		await canvas.resume({ agents: everyone });
+		await canvas.open({ name: 'site', goal: 'Plan.' });
+		await canvas.stop('site');
+		expect(errors).toMatchObject([{ room: 'site', operation: 'mirror' }]);
+		expect(canvas.room('site')).toBeUndefined();
 	});
 
 	it('reports a failed attach, and the room runs', async () => {

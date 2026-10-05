@@ -4,6 +4,8 @@ import {
 	defineAgent,
 	type Room,
 	type Runtime,
+	type ToolBundle,
+	type ToolContext,
 } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
 import { byAgent, type Script, scripted } from '@ambionframework/ambion/testing';
@@ -99,4 +101,46 @@ export function live(canvas: Canvas, name: string): Room {
 	const room = canvas.room(name);
 	if (room === undefined) throw new Error(`The canvas holds no live room "${name}".`);
 	return room;
+}
+
+/** An agent on the scripted executor with tool bundles. */
+export const tooled = (name: string, bundle: ToolBundle): AgentDefinition =>
+	defineAgent({
+		name,
+		identity: `${name}.`,
+		executor: describeExecutor({
+			kind: 'scripted',
+			instructions: 'Answer.',
+			bundles: [bundle],
+		}),
+	});
+
+/** The context of a tool call, as an activation of `agent` in `room` gives it. */
+export function contextOf(
+	agent: string,
+	room: string,
+	callId: string,
+	extra: Partial<ToolContext> = {},
+): ToolContext {
+	return {
+		agent: { name: agent, identity: `${agent}.` },
+		callId,
+		room,
+		activation: 'act-1',
+		exchange: { from: 1 },
+		...extra,
+	};
+}
+
+/** The tool of a bundle, called with a context. It gives the details of the result. */
+export async function callOf(
+	bundle: ToolBundle,
+	tool: string,
+	args: Record<string, unknown>,
+	ctx: ToolContext,
+): Promise<unknown> {
+	const found = bundle.tools.find((one) => one.name === tool);
+	if (found === undefined) throw new Error(`The bundle has no tool "${tool}".`);
+	const result = await found.invoke(args, ctx);
+	return typeof result === 'string' ? result : result.details;
 }
