@@ -1,527 +1,198 @@
-# Next: the scope for 0.6.0
+# Next: the scope for 0.7.0
 
-> **No compatibility promise before 1.0.0.** 0.5.0 shipped on 2026-10-02
-> from commit bd813ce, with eleven packages on npmjs. Until 1.0.0, any
-> release may change any export, entry point, journal body, stored format,
-> or package API.
->
-> - **A change carries no compatibility path.** Add no re-export, no
->   deprecated alias, no reader for an older format, no upgrade step, and
->   no compatibility test.
-> - **The changelog names each change** to an export, a journal body, or a
->   stored format.
-> - **The guards pin the current surface.** The export snapshot,
->   golden journals, and body validation catch unintended changes.
->   A deliberate change updates the affected guards in the same commit.
-
-**0.6.0 gives a seat the `compose` tool, fixes three defects that 0.5.0
-left open, and removes one concept that the repository holds twice.**
-[Compose](../docs/compose.md) owns the compose contract. This file owns
-the work and its evidence. [The backlog](backlog.md) holds everything
-else.
+**0.7.0 brings the canvas and breakout rooms: background work that a
+person can visit.** A canvas holds the rooms of a deployment. An agent
+opens a breakout room for background work, and the room reports back to
+it. The workbench is the first host.
 
 ## Status
 
-**Every item is complete. The 0.6.0 release is prepared.** CS1, CC1, CX1, and W5
-merged, and so did CP1 to CP7. The live run of CP6 found that
-the guidance steers `gpt-5.6-luna` and `claude-opus-5-5` to `compose` for
-a chain, and does not steer `claude-sonnet-5`. The compose design passed two design
-reviews and two readiness reviews on ambionframework/ambion#395. A `tsc`
-run checked the typed `defineTool`. A prototype on `quickjs-emscripten`
-0.32 ran two binding calls at once. Node 22.22.2 and Node 26.4.0 checked
-the `--allow-net` test of `processRuntime`.
+**The contract is settled. Implementation has not started.**
+[The canvas](../docs/canvas.md) owns the contract: the store, the
+interface, the tools, and the bridge. This file owns
+delivery and evidence. [The backlog](backlog.md) holds work outside this
+release.
 
 ## The scope
 
-**The release follows one compose call from the definition to the
-model.**
+| Item | Delivery                                                       | Contract                                           |
+| ---- | -------------------------------------------------------------- | -------------------------------------------------- |
+| RT1  | A room operation requires a runtime, and a runtime its storage | [RT1](#the-items)                                  |
+| CV1  | The package, the store port, and the memory and SQLite stores  | [The store](../docs/canvas.md#the-store)           |
+| CV2  | The canvas lifecycle: resume, open, start, stop, close         | [The canvas](../docs/canvas.md#the-host-interface) |
+| WB1  | Workbench root rooms on the canvas                             | [Phase 2](#phase-2-workbench-root-rooms)           |
+| BR1  | `breakout`, `tell`, `archive`, `report`, the reminder, bounds  | [The tools](../docs/canvas.md#the-tools)           |
+| BR2  | The bridge: close notices, replay, and recipients              | [The bridge](../docs/canvas.md#the-bridge)         |
+| BR3  | Delegation in the workbench                                    | [Phase 3](#phase-3-breakout-rooms)                 |
 
-```text
-executor options -> describeExecutor appends compose -> catalog and guidance
-                                                            |
-            model -> compose({ uses, code }) -> approve -> runtime
-                                                            |
-                         nested calls -> declared outputs -> ledger -> value
-```
+**The host composes existing kernel operations.** The canvas adds no
+journal entry kind and no kernel operation. Each breakout room has its
+own journal. RT1 changes the signatures of the room operations and adds
+no operation.
 
-- **`compose({ uses, code })`** joins the tools of the definition. The
-  model reads only the returned value, or the error and the ledger.
-- **Declared outputs** give the code typed `details`. `defineTool` checks
-  them at compile time, and `compose` checks them at every call.
-- **`@ambionframework/compose/runtime`** holds `quickjsRuntime` and
-  `processRuntime`. Both pass `composeRuntimeConformance`.
-- **Pi, Claude, and Codex** host `compose` as one more definition tool.
-- **Three fixes** close defects that 0.5.0 left open: a late steer on
-  Claude (CS1), the Camera Chat findings (CC1), and Codex on a ChatGPT
-  sign-in (CX1).
-- **One simplification** replaces the sensor tools with `fetch` (W5).
-
-## Decisions taken
-
-- The tool is `compose`. One run is a compose call. The page never uses
-  `composition`, which names the roster entry of the journal.
-- `uses` is required. `compose` checks it, then asks `approve`, then
-  evaluates the code.
-- A declared tool gives its `details`. An undeclared tool gives its text.
-- The room tools bind in a respond activation: `say`, `schedule`,
-  `recall`, `seat`, `unseat`, and `dismiss`. They bind as text. A direct
-  `invoke` has no activation and refuses them. The say calls of one compose
-  call run one after another.
-- The code has no clock, no random source, no timer, and no I/O except
-  through its bindings.
-- A failed or cancelled compose call throws, and its message holds the
-  ledger. A call that outlives the code keeps the result.
-- The limits and the guidance live on the `compose` option.
-- The description of `compose` lists each bindable tool with the name of
-  its result type. The `describe` tool returns the signatures, and a failed
-  compose call shows the signatures of the tools that it names. The CP6
-  token numbers below measured the earlier full catalog.
-- The live token comparison is evidence of the release (CP6). It gates no
-  phase before phase 5.
-- `ToolContext` has no public `record` and no public `ctx.call`. One
-  function runs a tool call (`tool-call.ts`), and only the core hands the
-  step sink to `compose`.
-
-## Out of scope
-
-- **A runtime for workerd.** A worker seat has `compose` and `describe`.
-  A compose call fails with an error that says QuickJS could not load its
-  WebAssembly, until a runtime for workerd exists.
-- **Replay of a compose call from its trace.** The trace caps can cut a
-  nested output.
-- **Room tools in a compose call.** `say`, `schedule`, `seat`, `unseat`,
-  `dismiss`, and `recall` stay direct calls.
-- **Concurrent operations in one workspace.** Parallel calls of file tools
-  still run one operation at a time. Concurrent operations are not supported.
-- **A compose call inside a compose call.**
-- **Every backlog item.**
+**Widgets and the camera-chat viewfinder are out of 0.7.0.**
+[D5](backlog.md#designs-with-a-shape) holds the smallest design for the
+viewfinder.
 
 ## The order of work
 
-**The compose phases run in order.** Each compose phase has one
-observable result. Complete each phase and its evidence before starting
-the next phase. Within a phase, items can proceed together when their
-dependencies allow. Phases 2 to 4 need no provider and no key. Phase 1
-runs beside the compose phases and blocks only the release.
+**Each phase proves the boundary that the next phase uses.** Docs and
+checks change with their phase.
 
-### Phase 1. The fixes and the simplification
+```mermaid
+flowchart LR
+  P1[1. Canvas store and lifecycle] --> P2[2. Workbench root rooms]
+  P2 --> P3[3. Breakout rooms]
+  P3 --> P4[4. Evidence and release]
+```
 
-- [x] **1.** A late steer on Claude keeps its answer. (CS1)
-- [x] **2.** The Camera Chat fixes. (CC1)
-- [x] **3.** Codex on a ChatGPT sign-in. (CX1)
-- [x] **4.** The sensor tools give way to `fetch`. (W5)
+### Phase 1. The canvas store and lifecycle
 
-**Evidence:** the `claude` tests steer during the final answer, and the
-answer to the line commits. Each Camera Chat fix has its test or its
-README text. The full Codex live tier passes on the ChatGPT login of the
-owner's Mac. The sensor tools and the wire client are gone, and `fetch` reads a process.
+- [ ] **1.** Require the runtime and its storage, and remove
+      `defaultRuntime`. (RT1)
+- [ ] **2.** The package `@ambionframework/canvas`, the store port,
+      `memoryCanvas`, `sqliteCanvas`, and `canvasStoreConformance`.
+      Needs 1.
+- [ ] **3.** `openCanvas`, `resume`, `open`, `start`, `stop`, `close`,
+      `rooms`, `subscribe`, and the mirror attach. Needs 2.
 
-### Phase 2. The vocabulary and the trace
+**Evidence:**
 
-- [x] **1.** The tool vocabulary and the typed `defineTool`. (CP1)
-- [x] **2.** The step sink, parented steps, and the scripted executor.
-      Needs 1. (CP2)
+- `startRoom`, `resumeRoom`, and `readRoom` refuse a call with no runtime
+  at the type level.
+- `createRuntime` refuses a call with no storage. Every example names its
+  storage.
+- Both stores pass the conformance cases.
+- A real room over a real journal resumes with the definitions that the
+  host interface gives it, and the reserve holds no other definition.
+- A root room with `agents` receives those definitions alone.
+- `close` keeps each row `running`, and `stop` records `stopped`.
+- A stop of a root with two running breakout rooms changes the root row
+  alone. A start of the root runs both breakout rooms.
+- A start of a breakout room under a stopped parent is a refusal.
+- A row with no journal starts from its row.
+- `open` before `resume` is a refusal. `open` with a team name is a
+  refusal. `open` of a root row returns its handle and ignores the other
+  options. `open` of a breakout name is a refusal.
+- The assistant name and the summary writer name resolve at a start. A
+  name that no definition resolves is a refusal.
+- `resume` twice is a refusal.
+- A stop stops the room first, then its mirror.
+- A failed attach reaches `onError`, and the room runs. A failed start
+  reaches `onError`, and the row stays `running`.
+- `rooms()` lists the rows, and `subscribe` hears `opened`, `started`,
+  `stopped`, and `archived`.
+- The export snapshot lists the package.
 
-**Evidence:** a definition refuses a user tool named `compose`. A type
-test refuses a declared tool that returns a string, a wrong literal, or a
-missing field. A parented step raises tool events and gives its id to no
-direct call. The scripted executor gives a tool call a signal, the
-deadline, and a step sink.
+### Phase 2. Workbench root rooms
 
-### Phase 3. Compose on the scripted executor
+- [ ] **1.** Replace `workbench_rooms` with the canvas. Needs phase 1.
+- [ ] **2.** Verify scenario composition, visits, stop, resume, and
+      shutdown. Needs 1.
 
-- [x] **1.** The `compose` tool with a runtime for tests alone. Needs
-      phase 2. (CP3)
-- [x] **2.** The declared outputs of the workspace tools. Needs phase 2.
-      (CP4)
-- [x] **3.** Skill macros. Needs CP3. (CP-M)
+**Evidence:** root rooms keep their assistants, seats, and scenarios. The
+canvas owns room identity, the tree, and hosting intent. The host keeps its
+feed, composer, room selection, scenario definitions, and workspace
+browsers. A person's answer to an approval stays a room message. The
+changelog names the dropped `workbench_rooms` table.
 
-**Evidence:** acceptance items 1, 2, 4, and 5 of
-[Compose](../docs/compose.md#acceptance) pass on the scripted executor.
-A compose call binds `sql` and `snapshot` over a real workspace and a real
-SQLite file. A skill macro runs by name over the same workspace and file.
+### Phase 3. Breakout rooms
 
-### Phase 4. The runtimes
+- [ ] **1.** `breakout`, `tell`, `archive`, `report`, the reminder, and
+      the bounds. Needs phase 2.
+- [ ] **2.** The bridge. Needs 1.
+- [ ] **3.** Delegation in the workbench: a worker team and the two
+      bundles. Needs 2.
 
-- [x] **1.** `composeRuntimeConformance`, `quickjsRuntime`, and
-      `processRuntime`. Needs phase 3. (CP5)
+**Evidence:**
 
-**Evidence:** both runtimes pass `composeRuntimeConformance` on Node 26.
-`quickjsRuntime` passes on Node 22.19. `processRuntime` refuses Node
-22 at construction.
+- A goal and a message start a real breakout room on the scripted
+  executor. The result carries the mirror path.
+- The composition has no assistant, no summary writer, an empty reserve,
+  and `seating: false`.
+- A repeat `breakout` returns the same room, posts nothing, and ignores
+  the other parameters. A repeat on a `stopped` row starts nothing. A
+  repeat on an archived row returns its `close`.
+- Each bound refuses with its cause. `breakout.to` outside `agents`, or at
+  `none`, passes the kernel refusal through.
+- `tell` steers a worker. A `tell` after an exchange closes opens a new
+  exchange that the bridge reports.
+- `tell` and `report` each refuse after `archive` and after `stop`.
+- `tell` on a stopped room, and `report` with the parent stopped, are
+  refusals.
+- A `tell` and an `archive` on one room run in order. After `close`, every
+  tool call is a refusal.
+- `archive` records `done` or `failed`, stops the room, frees a
+  `perOpener` place, and survives a crash between the row and the stop.
+- `archive` of a stopped row stops nothing. A repeat `archive` returns
+  the result. `archive` of another opener's room is a refusal.
+- An archived room refuses `tell` and `start`, gets no close notice, and
+  stays readable.
+- A `report` reaches the opener, and that exchange gets no close notice.
+  A `report` from a root room, and a `report` with no `ctx.exchange`,
+  are refusals.
+- An exchange with no report gets one notice.
+- A worker gets no opener bundle, and `breakout` from a breakout room is a
+  refusal.
+- The reminder text lists one running and one stopped row, caps at ten
+  lines, and ends with `and N more`.
+- An opener at `none`, and an opener absent from the roster, get reports
+  with no `to`. A found key gets no second post.
+- A resume with an open exchange left in a breakout journal posts one
+  notice.
+- A crash after the row and before the start completes at the next
+  `resume`.
+- A replay after a restart posts each missing notice once, from stopped
+  journals too.
+- A person can visit a breakout room.
 
-### Phase 5. Live evidence and release
+### Phase 4. Evidence and release
 
-- [x] **1.** The live cases and the token comparison. Needs phase 4.
-      (CP6)
-- [x] **2.** The pages, the changelog, and the status of the design.
-      Done before 1, because 1 waits for a person to approve the spend.
-      (CP7)
+- [ ] **1.** Run the workbench delegation end to end on scripted
+      executors, and the repository gate. Needs phase 3.
+- [ ] **2.** Add one `pnpm chaos` case for each row of the crash table in
+      [Durability](../docs/canvas.md#durability), and a case for a crash
+      between the archive row and the stop, then a resume. Needs 1.
+- [ ] **3.** Finish the package docs, exports, and the changelog. Needs 2.
 
-**Evidence:** the live evidence file records acceptance items 1, 6, and
-7, and the token comparison, on Pi, Claude, and Codex.
+**Evidence:** the delegation scenario passes on scripted executors. Each
+chaos case passes. Packaging and `pnpm check` pass. A paid live run needs an
+explicit request for release evidence.
 
 ## The items
 
-**CS1. A late steer on Claude keeps its answer.** A line that lands while
-a Claude seat streams its final answer runs as a separate turn after the
-first `result`, which reports `queued_turn_count: 0`. The executor parks
-that result behind `ECHO_GRACE` (5 seconds). The echo arrives with the
-request of the next turn and calls `read`, but it does not restart the
-timer. The pass settles on the first result, and `close` stops the turn
-that answers the line. The fix: an echo that arrives while a result waits
-on the grace timer cancels the timer, and the pass settles on the result
-of the next turn. The code is in `answered`, `settleWith`, and `echoed` of
-`packages/claude/src/executor.ts`.
+**RT1. A room operation requires a runtime, and a runtime its storage.**
+`startRoom`, `resumeRoom`, and `readRoom` fall back to `defaultRuntime()`,
+and `createRuntime` to memory storage, so a second process reads an empty
+room with no error.
 
-**Evidence:** the fake executable
-(`packages/claude/test/fake/claude-executable.mjs`) gains a mode that
-echoes a held message with the next request after the `result`. A test in
-`packages/claude/test/steer-echo.test.ts` steers during the final text,
-with a second turn longer than `ECHO_GRACE`, and the say of that turn
-commits after the line. The live steer test gains one final-answer case
-that runs only when a person asks for release evidence.
+1. Make `runtime` required on each room operation. Remove
+   `defaultRuntime` and its export.
+2. Make `storage` required on `createRuntime`. A test or an example that
+   wants memory passes `memoryJournals()` by name.
+3. Change each call site, about 78, in the packages, the examples, the
+   docs, and the README.
 
-**CC1. The Camera Chat fixes.** An adversarial review of
-`examples/camera-chat` (merged in #393) left six small findings open.
+**RT1 ships with CV1.** `openCanvas` already takes a runtime, so a host
+changes how it opens a room once. The export snapshot and the changelog
+change in the same commit.
 
-1. `README.md` says that the seat never bills an API account. That is
-   false when `codex login --api-key` wrote `auth.json`. State that the
-   login in `auth.json` decides billing.
-2. `disconnect` in `packages/workspace/src/sensor-connections.ts` marks a
-   link whose process ended as `disconnected`. Make it a no-op on an
-   unavailable link.
-3. The instruction in `src/host.ts` to ensure `fps=5` and commit any edits
-   invites an edit and a push on every connect, and the template already
-   sets `fps=5`. Delete the instruction.
-4. A `refreshed` event clears the preview in `src/preview.ts` for one
-   poll, so the preview flickers on a reconnect. Keep the frame on
-   `refreshed` for the same sensor.
-5. `src/preview.ts` downloads a frame again when the digest is unchanged.
-   Skip the download.
-6. `templates/camera/camera.ts` fixes the input at 30 frames per second.
-   Add `--framerate`. State the CPU cost, the frame size, and the 24 hour
-   timeout of `bash` in the READMEs.
+## Out of scope
 
-**Evidence:** findings 2, 4, and 5 have a test where the code has tests.
-The README states the billing rule, the costs, and the timeout.
+- Widgets, the camera-chat viewfinder, layout tools, and code from an
+  agent ([D5](backlog.md#designs-with-a-shape)).
+- Native executor subagents and vendor UI surfaces.
+- Nested breakout rooms, and a general protocol to reconcile interrupted
+  work.
+- A bound on a chain of exchanges, and kernel spend quotas
+  ([D1](backlog.md#designs-with-a-shape)).
+- Cloudflare canvas support.
+- An author across rooms, and isolated workspaces with mirror reads.
+- Range recall (RC1) and the speaking text (SP1). They wait in the
+  backlog for a measured need.
 
-**CX1. Codex on a ChatGPT sign-in.** The 0.5.0 release run on the owner's
-Mac passed the Codex visibility and mixed-room live files on the ChatGPT
-login. The rest of the Codex live tier ran only on a key. The binary tier
-runs no ChatGPT sign-in, and no test covers the token refresh
-(`account/chatgptAuthTokens/refresh`). Run the full Codex live tier once
-on the ChatGPT login of the owner's Mac. The run uses the subscription and
-bills no API account. Fix what fails, and state in `docs/codex.md` what
-the run covers.
+## Compatibility and release guards
 
-**Evidence:** the full Codex live tier passes on the ChatGPT login, and
-`docs/codex.md` names the run and what stays untested.
-
-**W5. The sensor tools give way to `fetch`.** The kernel stops knowing
-sensors. Every process of `bash` has a port in `$PORT`, and any agent reads
-a running process with `fetch({ process, path })`. The host reads it with
-`workspace.fetch`. The sensor protocol, its version, and its digest rule
-move into the templates, which ship an `observe` macro over `fetch`.
-`loadSkills` takes several sources, so a host loads the skill of a template.
-The old sensor path validated each schema and digest in two places. The new
-path has one check, in the macro of the template. This item settles
-backlog Q2.
-
-**Evidence:** `connect`, `disconnect`, `observe`, `workspace.sensors`, the
-`./sensors` and `./sensor-api.schema.json` exports, and `sensorConformance`
-no longer exist. The `fetch` tests read a real HTTP server behind a real
-process. The macro test reads the sensor-server template through `compose`.
-The workstation acceptance test reads a template process as a second agent
-across a host crash and a cancel. It needs the OpenSSH tier, and the run on the owner's Mac is still open.
-
-**CP1. The vocabulary.** Add `compose` to `AmbionTool`, `defineTool`,
-`captureTool`, and `assertTool`, and capture its `output` schema. Give
-`defineTool` its two overloads, and `ToolResult` its type parameter. Add
-`ToolContext.composeCall`, and `parent` to the `tool_call` and
-`tool_result` steps. `ToolContext` has no `record`. Add the `compose` option to the
-executor options, and reserve the name in `appendTools`. Add
-`packages/ambion/src/compose.ts` to the vocabulary layer of
-`biome.jsonc`.
-
-**Evidence:** `define` tests refuse a bad `compose` value and a user tool
-named `compose`, and a capture keeps the `output` schema. A type test
-holds the `@ts-expect-error` cases of
-[Typing a declared output](../docs/compose.md#typing-a-declared-output).
-`fromPiTool` and every existing `defineTool` caller compile unchanged.
-
-**CP2. The trace.** The core records the steps of a nested call, and no
-tool holds the step sink. `callId` and the record of unclaimed calls skip
-a step with a `parent`. The scripted executor gives each tool call a
-signal and the deadline of the view.
-
-**Evidence:** a test records a nested `bash` step during a direct `bash`
-call of the same batch, and the direct call keeps its own id. A nested
-step closes an open text block. `settled(room)` waits for a scripted
-tool call that reads its deadline.
-
-**CP3. The `compose` tool.** `compose.ts` builds the catalog, the
-guidance, the approval, the ledger, the limits, the nested context, the
-output check, and the rendering of the result and the error. `tool-call.ts`
-holds the one function that runs a tool call: it prepares and checks the
-arguments, calls `invoke`, and records the two steps of a nested call.
-`agentTools`, the scripted executor, and the nested calls of `compose` use
-it, so a direct call on Claude, Codex, and the scripted executor gets the
-full schema check. The hosting export `invokeTool` hands the step sink of
-the activation to the `compose` tool. A test runtime in `test/support`
-runs the code as an `AsyncFunction`, and only tests import it.
-
-**Evidence:** acceptance items 1, 2, 4, and 5 pass on the scripted Pi
-stream and on the fake Claude executable. A room test reads the status
-and the ledger from the rendered content. A unit test of `invoke` reads
-the `ComposeResult`. `COMPOSE_GUIDANCE` joins the export snapshot. A
-hand-built tool whose `invoke` checks nothing refuses bad arguments on a
-direct call, and no tool sees a function on its context beside
-`onUpdate`.
-
-**CP4. The declared outputs.** `sql` gives `count`, the columns, the
-preview rows, and the export or import facts. A blob is lowercase hex, and
-a `bigint` is decimal text. `snapshot`, `bash`, `ps`, `wait`, and `fork`
-declare their outputs. Each details type becomes `Static` of its schema.
-
-**Evidence:** workspace tests read the declared output of each tool
-through `compose`, and the runtime check passes. A type test pins that
-`ShellOutputTruncation` stays assignable to its schema. The `sql` tests
-assert `count` in place of `details.rows`.
-
-**CP-M. Skill macros.** A skill stores a compose program that the model
-runs by name. `loadSkills` parses
-`macros/*.js`, and the bundle carries each macro. `describeExecutor`
-checks them. `compose` lists the macros, approves them, and runs them as
-`{ macro, args }`. `sql` gains bind `params`. The same commit updates
-[Compose](../docs/compose.md), [Skills](../docs/skills.md),
-`COMPOSE_GUIDANCE`, and the export snapshot.
-
-**Evidence:** a skill macro runs on the scripted executor over a real
-workspace and a real SQLite file. A load or a definition refuses a bad
-header, a bad `uses`, a bad `args` schema, and a duplicate name. An edit
-of `~/.skills` does not change the body that runs. A seat without
-`compose` takes the same skill set and lists no macro.
-
-**CP5. The runtimes.** `@ambionframework/ambion/conformance` exports
-`composeRuntimeConformance`. `@ambionframework/compose/runtime` holds
-`quickjsRuntime`, on the synchronous QuickJS build, and
-`processRuntime`, with a bundled child entry that speaks JSON lines over
-stdio. `scripts/import-rules.test.mjs` gains the cases of the new package.
-
-**Evidence:** the suite covers the globals table, a memory limit, a cut,
-concurrent binding calls, errors with `details`, and JSON at each
-crossing. `quickjsRuntime` disposes every handle, so a runtime frees
-clean. `processRuntime` kills its child at the signal, and a relative
-import in the child fails.
-
-**CP6. Live evidence.** Run acceptance items 1, 6, and 7 once on each
-family, and the token comparison of one task with and without `compose`,
-the catalog included. One more case: a seat with a skill that names a
-macro runs it by name, and the comparison counts the output tokens of free
-code against the macro. A run costs money, so it runs when a person asks
-for release evidence.
-
-**Evidence:** [the compose evidence](#the-compose-evidence) records each
-run: the model, the tools that the seat chose, the input tokens, and the
-outcome. A family with no key is marked skipped.
-
-**Result:** [the first run](#the-first-run) holds one run on each of Pi,
-Claude, and Codex. Item 1 and item 6 passed on each kind. Item
-7 passed its read case and failed its chain case on each kind: no seat
-called `compose` for a chain. The token comparison therefore measures the
-catalog only, and the run with `compose` cost more input tokens. The macro
-case passed on Claude and Codex. On Pi the seat ran the macro and also
-wrote code.
-
-**Second run of the chain case:** after that run, `COMPOSE_GUIDANCE`
-makes compose the default for a plan of two or more tool calls, and gives
-an example. The chain case then ran once on each kind:
-
-| Kind   | Model           | Effort | Tools                                | Input tokens | Outcome |
-| ------ | --------------- | ------ | ------------------------------------ | ------------ | ------- |
-| Codex  | gpt-5.6-luna    | medium | sql, compose, say                    | 28180        | passed  |
-| Codex  | gpt-5.6-luna    | high   | compose, bash, sql (3), compose, say | 58954        | passed  |
-| Pi     | claude-sonnet-5 | -      | sql, snapshot, say                   | 44613        | failed  |
-| Claude | claude-sonnet-5 | -      | sql (2), snapshot, say               | 50553        | failed  |
-| Pi     | claude-opus-5-5 | -      | sql, compose, say                    | 45322        | passed  |
-
-The guidance steers `gpt-5.6-luna` and `claude-opus-5-5`. It does not
-steer `claude-sonnet-5`. One more run gave the main rule in the
-description of `compose` too, and `claude-sonnet-5` still called the
-tools directly, so the description keeps its text.
-
-**Third run: the chain case and the fan-out case.** A run with
-`AMBION_THINKING` unset ran the chain case, the token comparison, and the
-fan-out case once on each kind.
-[The third run](#the-third-run) holds each run. In the
-fan-out case, the seat reads the log of each drift run, finds the peak, and
-snapshots four logs.
-
-| Kind   | Chain                | Fan-out with compose                            | Fan-out without compose     |
-| ------ | -------------------- | ----------------------------------------------- | --------------------------- |
-| Pi     | passed, compose      | passed, compose of 32 bash calls, 180508 / 2495 | passed, bash, 105117 / 1965 |
-| Claude | failed, direct calls | passed, compose of one bash call, 99276 / 1928  | passed, bash, 61823 / 1324  |
-| Codex  | passed, compose      | failed, compose then bash, 238616 / 1037        | failed, bash, 305275 / 2209 |
-
-Each fan-out cell gives the outcome, the approach, and the input and
-output tokens. On Pi and Claude, the seat with `compose` cost more input
-tokens than the seat without it. The seat with `compose` also made many
-direct calls of `bash` and `sql` before it composed. Both Codex seats
-counted 10 runs: they omitted the drift label and counted each log with a
-peak over 900. The lab holds 4 drift runs with a peak over 900. The chain
-case on Claude chose direct calls again. On Pi it passed, so the choice of
-`claude-sonnet-5` changes from run to run.
-
-**Fourth run: the subscription login.** On 2026-10-03, on `e6d34c6f`, the
-live test ran once on each kind with no API key. Codex used the ChatGPT
-login of the host, `gpt-5.6-luna` at medium effort. Pi used
-`AMBION_MODEL=openai-codex/gpt-5.6-luna` with thinking off, on the stored
-`openai-codex` sign-in. The flags were `--retry=0` and
-`--testTimeout=300000`. Claude has no login path, so the run skipped it.
-[The fourth run](#the-fourth-run) holds each run.
-
-Codex passed 6 of 6 cases. Pi passed 5 of 6. The Pi chain case failed:
-the seat called `compose` for one `sql` query and took the snapshots with
-direct calls. The model made that choice. The case checks the nested
-calls before the answer, so the run did not check the answer.
-
-- **Seats with `compose` said from inside `compose` in 3 of 6 cases on
-  each kind.** On Codex, those cases are read before deciding, parallel
-  processes, and fan-out. On Pi, they are parallel processes, the token
-  comparison, and fan-out. The other cases used a direct `say`.
-- **The fan-out prompt names the table `runs`.** All four seats found the
-  4 hot runs. In the third run, the prompts did not name the table, and
-  both Codex seats counted 10 runs.
-- **Fan-out input tokens:** Codex used 105477 with `compose` and 40794
-  without. Pi used 89510 with `compose` and 206748 without. One run does
-  not support a general conclusion.
-- **The token counts do not compare with the earlier tables.** The prompts
-  name the table now.
-
-Two earlier runs used the same login, with the login support of #525
-before it merged. On `a439aef4` (before #522), Codex passed 4 of 6 cases
-and Pi passed 5 of 6. On `1f5e6df1` (after #522), Codex passed 5 of 6 and
-Pi passed 4 of 6.
-
-**CP7. Release documentation.** Update the pages that the compose change
-touches, the changelog, and the package count. Each page states its own
-facts, so [Compose](../docs/compose.md) holds no list of changes. Change
-the status of Compose from a proposed design to the current contract, with
-the live token comparison of CP6 as its one pending item.
-
-**Evidence:** the docs checks pass, and no page describes a surface that
-the release does not export.
-
-## The compose evidence
-
-**Each table holds the runs of
-`packages/workspace/test/live/compose.test.ts`.**
-`scripts/compose-evidence.mjs` writes the tables from the JSON lines of a
-run. The tools column lists the direct calls of the seat, and the nested
-calls follow. `×3` counts three calls in a row of one tool. Input tokens
-count the prompt, the cache read, and the cache write. The table of the
-second run is in CP6.
-
-### The first run
-
-#### pi
-
-| Model                     | Case                             | Tools                                                                                | Input tokens | Output tokens | Wall time | Outcome                                                                                |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------ | ------------ | ------------- | --------- | -------------------------------------------------------------------------------------- |
-| anthropic/claude-sonnet-5 | chain                            | sql, snapshot, say                                                                   | 43729        | 851           | -         | failed: expected [ 'sql', 'snapshot', 'say' ] to include 'compose'                     |
-| anthropic/claude-sonnet-5 | read before deciding             | sql, say                                                                             | 31723        | 193           | -         | passed (chose direct calls)                                                            |
-| anthropic/claude-sonnet-5 | parallel processes               | compose ×2, say (nested: bash ×3, wait ×3, read ×3)                                  | 40148        | 830           | 3.1 s     | passed                                                                                 |
-| anthropic/claude-sonnet-5 | token comparison with compose    | sql ×2, snapshot, say                                                                | 55016        | 934           | -         | passed                                                                                 |
-| anthropic/claude-sonnet-5 | token comparison without compose | sql ×3, snapshot, say                                                                | 45861        | 1028          | -         | passed                                                                                 |
-| anthropic/claude-sonnet-5 | macro                            | compose ×2, read, compose ×2, bash ×3, read, compose ×2, say (nested: sql, snapshot) | 154377       | 1642          | 0.0 s     | failed: expected false to be true // Object.is equality (free code: 934 output tokens) |
-
-#### claude
-
-| Model                     | Case                             | Tools                                                         | Input tokens | Output tokens | Wall time | Outcome                                                             |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------- | ------------ | ------------- | --------- | ------------------------------------------------------------------- |
-| anthropic/claude-sonnet-5 | chain                            | sql ×3, snapshot, say                                         | 59317        | 749           | -         | failed: expected [ 'sql', 'sql', 'sql', …(2) ] to include 'compose' |
-| anthropic/claude-sonnet-5 | read before deciding             | sql, say                                                      | 28409        | 195           | -         | passed (chose direct calls)                                         |
-| anthropic/claude-sonnet-5 | parallel processes               | compose ×2, wait ×2, say (nested: bash ×3, wait ×61, bash ×3) | 70070        | 1480          | 3.3 s     | passed                                                              |
-| anthropic/claude-sonnet-5 | token comparison with compose    | sql ×4, snapshot, say                                         | 60065        | 828           | -         | passed                                                              |
-| anthropic/claude-sonnet-5 | token comparison without compose | sql, snapshot, say                                            | 33964        | 627           | -         | passed                                                              |
-| anthropic/claude-sonnet-5 | macro                            | compose ×2, say (nested: sql, snapshot)                       | 40245        | 592           | 0.0 s     | passed (free code: 828 output tokens)                               |
-
-#### codex
-
-| Model        | Case                             | Tools                                               | Input tokens | Output tokens | Wall time | Outcome                                                              |
-| ------------ | -------------------------------- | --------------------------------------------------- | ------------ | ------------- | --------- | -------------------------------------------------------------------- |
-| gpt-5.6-luna | chain                            | bash, sql ×2, snapshot, say                         | 41872        | 488           | -         | failed: expected [ 'bash', 'sql', 'sql', …(2) ] to include 'compose' |
-| gpt-5.6-luna | read before deciding             | sql, say                                            | 20000        | 102           | -         | passed (chose direct calls)                                          |
-| gpt-5.6-luna | parallel processes               | compose ×2, say (nested: bash ×3, wait ×3, read ×3) | 25601        | 554           | 3.1 s     | passed                                                               |
-| gpt-5.6-luna | token comparison with compose    | sql ×2, snapshot, say                               | 34575        | 439           | -         | passed                                                               |
-| gpt-5.6-luna | token comparison without compose | sql ×2, snapshot, say                               | 23767        | 442           | -         | passed                                                               |
-| gpt-5.6-luna | macro                            | compose ×2, say (nested: sql, snapshot)             | 28202        | 367           | 0.0 s     | passed (free code: 439 output tokens)                                |
-
-### The third run
-
-The model column holds the reasoning level in parentheses.
-
-#### pi
-
-| Model                           | Case                             | Tools                                                                                               | Input tokens | Output tokens | Wall time | Outcome          |
-| ------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------- | ------------ | ------------- | --------- | ---------------- |
-| anthropic/claude-sonnet-5 (off) | chain                            | compose ×2, say (nested: sql ×2, snapshot)                                                          | 45119        | 762           | 0.0 s     | passed           |
-| anthropic/claude-sonnet-5 (off) | token comparison with compose    | sql, snapshot, say                                                                                  | 44290        | 568           | -         | passed           |
-| anthropic/claude-sonnet-5 (off) | token comparison without compose | sql ×2, snapshot, say                                                                               | 38354        | 937           | -         | passed           |
-| anthropic/claude-sonnet-5 (off) | fan-out with compose             | bash ×3, sql ×2, compose, bash, compose, bash, snapshot, say (nested: sql, bash ×16, sql, bash ×16) | 180508       | 2495          | 0.3 s     | passed (compose) |
-| anthropic/claude-sonnet-5 (off) | fan-out without compose          | bash ×4, sql ×3, bash, snapshot, say                                                                | 105117       | 1965          | -         | passed (bash)    |
-
-#### claude
-
-| Model                               | Case                             | Tools                                                     | Input tokens | Output tokens | Wall time | Outcome                                                            |
-| ----------------------------------- | -------------------------------- | --------------------------------------------------------- | ------------ | ------------- | --------- | ------------------------------------------------------------------ |
-| anthropic/claude-sonnet-5 (default) | chain                            | sql, snapshot, say                                        | 40103        | 624           | -         | failed: expected [ 'sql', 'snapshot', 'say' ] to include 'compose' |
-| anthropic/claude-sonnet-5 (default) | token comparison with compose    | sql ×3, snapshot, say                                     | 60573        | 746           | -         | passed                                                             |
-| anthropic/claude-sonnet-5 (default) | token comparison without compose | sql ×4, snapshot, say                                     | 52116        | 825           | -         | passed                                                             |
-| anthropic/claude-sonnet-5 (default) | fan-out with compose             | bash, sql ×3, compose, read, snapshot, say (nested: bash) | 99276        | 1928          | 0.1 s     | passed (compose)                                                   |
-| anthropic/claude-sonnet-5 (default) | fan-out without compose          | bash, sql ×2, bash, sql, bash, snapshot, say              | 61823        | 1324          | -         | passed (bash)                                                      |
-
-#### codex
-
-| Model                 | Case                             | Tools                                                        | Input tokens | Output tokens | Wall time | Outcome                                                                                     |
-| --------------------- | -------------------------------- | ------------------------------------------------------------ | ------------ | ------------- | --------- | ------------------------------------------------------------------------------------------- |
-| gpt-5.6-luna (medium) | chain                            | sql, compose, say (nested: sql, snapshot)                    | 28159        | 411           | 0.0 s     | passed                                                                                      |
-| gpt-5.6-luna (medium) | token comparison with compose    | compose ×2, say (nested: sql ×2, snapshot)                   | 28497        | 481           | 0.0 s     | passed                                                                                      |
-| gpt-5.6-luna (medium) | token comparison without compose | sql ×2, snapshot, say                                        | 23771        | 450           | -         | passed                                                                                      |
-| gpt-5.6-luna (medium) | fan-out with compose             | compose, bash ×5, sql ×2, bash, snapshot, say (nested: bash) | 238616       | 1037          | 0.1 s     | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (compose) |
-| gpt-5.6-luna (medium) | fan-out without compose          | bash ×10, snapshot, say ×2                                   | 305275       | 2209          | -         | failed: expected 'Found 10 drift runs with peak_temp ov…' to match /\b4\b\|four/i (bash)    |
-
-### The fourth run
-
-The model column holds the reasoning level in parentheses.
-
-#### pi
-
-| Model                           | Case                             | Tools                                                        | Input tokens | Output tokens | Wall time | Outcome                                          |
-| ------------------------------- | -------------------------------- | ------------------------------------------------------------ | ------------ | ------------- | --------- | ------------------------------------------------ |
-| openai-codex/gpt-5.6-luna (off) | chain                            | sql, bash, compose, read ×2, snapshot ×2, say (nested: sql)  | 50506        | 491           | 0.0 s     | failed: expected [ 'sql' ] to include 'snapshot' |
-| openai-codex/gpt-5.6-luna (off) | read before deciding             | sql, say                                                     | 24159        | 89            | -         | passed (chose direct calls)                      |
-| openai-codex/gpt-5.6-luna (off) | parallel processes               | compose (nested: bash ×3, wait ×3, say)                      | 14474        | 167           | 3.1 s     | passed                                           |
-| openai-codex/gpt-5.6-luna (off) | token comparison with compose    | compose ×3 (nested: sql ×3, snapshot, say)                   | 32819        | 208           | 0.0 s     | passed                                           |
-| openai-codex/gpt-5.6-luna (off) | token comparison without compose | sql ×4, read ×4, snapshot ×4, say                            | 33145        | 792           | -         | passed                                           |
-| openai-codex/gpt-5.6-luna (off) | macro                            | compose, say (nested: sql, snapshot)                         | 25341        | 283           | 0.0 s     | passed                                           |
-| openai-codex/gpt-5.6-luna (off) | fan-out with compose             | sql, bash, compose ×2 (nested: sql, read ×16, snapshot, say) | 89510        | 369           | 0.1 s     | passed (compose)                                 |
-| openai-codex/gpt-5.6-luna (off) | fan-out without compose          | sql ×3, bash ×5, snapshot, say                               | 206748       | 785           | -         | passed (bash)                                    |
-
-#### claude
-
-Skipped. The run had no key for this executor kind.
-
-#### codex
-
-| Model                 | Case                             | Tools                                                   | Input tokens | Output tokens | Wall time | Outcome                |
-| --------------------- | -------------------------------- | ------------------------------------------------------- | ------------ | ------------- | --------- | ---------------------- |
-| gpt-5.6-luna (medium) | chain                            | compose, say (nested: sql, snapshot)                    | 25491        | 370           | 0.1 s     | passed                 |
-| gpt-5.6-luna (medium) | read before deciding             | compose (nested: sql, say)                              | 16565        | 194           | 0.0 s     | passed (chose compose) |
-| gpt-5.6-luna (medium) | parallel processes               | compose (nested: bash ×3, wait ×3, say)                 | 15006        | 339           | 3.2 s     | passed                 |
-| gpt-5.6-luna (medium) | token comparison with compose    | compose, say (nested: sql, snapshot)                    | 25560        | 383           | 0.1 s     | passed                 |
-| gpt-5.6-luna (medium) | token comparison without compose | sql, snapshot, say                                      | 19264        | 398           | -         | passed                 |
-| gpt-5.6-luna (medium) | macro                            | compose, say (nested: sql, snapshot)                    | 26079        | 371           | 0.0 s     | passed                 |
-| gpt-5.6-luna (medium) | fan-out with compose             | compose ×4 (nested: sql, read ×16, bash, snapshot, say) | 105477       | 575           | 0.0 s     | passed (compose)       |
-| gpt-5.6-luna (medium) | fan-out without compose          | sql ×2, bash ×2, snapshot, say                          | 40794        | 602           | -         | passed (bash)          |
+The product rule in `CLAUDE.md` applies: no compatibility promise before
+1.0.0. Name each change in the changelog, and update the export snapshot
+and the golden journals with it.

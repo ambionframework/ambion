@@ -1,12 +1,12 @@
 /**
- * Live evidence for `compose` (CP6 of `planning/next.md`, items 1, 6 and 7 of
+ * Live evidence for `compose` (items 1, 6 and 7 of
  * the acceptance in `docs/compose.md`). Each case runs on the executor kind
  * of the run. A run costs money, so each room holds one seat and each prompt
  * is short.
  *
  * When `AMBION_LIVE_REPORT` names a file, each case appends one JSON line
- * for each run. `scripts/compose-evidence.mjs` turns the lines into the
- * tables of the compose evidence in `planning/next.md`.
+ * for each run. `scripts/compose-evidence.mjs` turns the lines into
+ * evidence tables.
  */
 
 import { createHash } from 'node:crypto';

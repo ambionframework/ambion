@@ -7,8 +7,7 @@
  * The live test appends one line for each run to the file that
  * `AMBION_LIVE_REPORT` names. A line holds `composeChars`, the length of the
  * description of the `compose` tool, and the table shows it in characters.
- * The output holds one table for each executor kind, under a heading of the
- * level that `planning/next.md` uses for a run.
+ * The output holds one table for each executor kind, under a heading.
  * A kind with no line is marked skipped. A later line for the same kind and
  * case replaces an earlier one. With no output file, the script writes to
  * stdout.

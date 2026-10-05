@@ -10,72 +10,11 @@ gap in a room that runs unattended or in a restart that loses nothing. Or
 it removes a duplicate that already breaks a rule. Git history keeps the
 items that the pruning of 2026-10-03 removed.
 
-**The sections come in the order of their priority.** Inside a section,
-the first item comes first. An item whose condition holds moves to the
-top of its section.
-
-| Section                                       | Items | First item                          |
-| --------------------------------------------- | ----- | ----------------------------------- |
-| [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                  |
-| [Pending decisions](#pending-decisions)       | Q1–Q4 | Q1, the `assistant` option          |
-| [Known defects](#known-defects)               | F1–F2 | F1, the allow-list of the SQL guard |
-| [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one  |
-| [Rules and proofs](#rules-and-proofs)         | None  | None                                |
-| [Simplification](#simplification)             | None  | None                                |
-| [Designs with a shape](#designs-with-a-shape) | D1–D5 | D1, bounds on unattended work       |
-| [Considered and kept](#considered-and-kept)   | None  | None                                |
-| [Deferred by decision](#deferred-by-decision) | None  | None                                |
-
-## The 0.7.0 theme
-
-**B1 is the likely theme of 0.7.0.** The owner named it on 2026-10-03. It
-moves to [next.md](next.md) when 0.7.0 planning starts.
-
-**B1. Breakout rooms.** An agent opens a room for background work. A
-person can visit the room and read its exchanges. The room is the room
-equivalent of a background `bash` process, with messages in both
-directions.
-
-**The executors' native subagents stay off.** Claude runs with `tools:
-[]`, so it has no `Task` tool (`packages/claude/src/options.ts`). Codex
-runs with `multi_agent` off and no `spawn_agent` tool
-(`packages/codex/src/catalog.ts`). A native subagent lives in the vendor
-session and writes no entry. A crash loses it, and the host cannot see
-or bound its spend.
-
-**A worker seat in the same room costs every other seat.** Its directed
-says are entries of the parent room. They fill the window of each seat,
-and the undirected ones wake each `broadcast` seat. A breakout room keeps
-the work in a journal of its own. That journal is durable, replays, and
-takes visits.
-
-**The kernel holds every part except the open.**
-
-| Need                    | Part that exists                                                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Make the room           | The host makes rooms. The workbench does.                                                                                 |
-| Seat the workers        | `room.seat` from the reserve                                                                                              |
-| Send the goal and notes | `room.post` with `to` and `key` wakes or steers the target and lands once across a restart                                |
-| Read the exchanges      | [The room mirror](../docs/workspace.md#mirror-a-rooms-messages) on a shared workspace. `recall` reads its own room alone. |
-| Return the result       | The host posts a line for each closed exchange of the breakout room into the parent room, with a ref to its range         |
-
-**[Breakout rooms](../docs/breakout.md) states the design.** The first
-step is a host tool bundle with no change to the kernel.
-`breakout({ goal, agents })` opens a room, seats the agents, and posts the
-goal. `tell({ room, text })` posts to a room that the caller opened. The
-mirror serves reads. Each journal holds its own entries, and the posts
-carry the refs between them.
-
-**Two decisions come first:**
-
-1. **Who may open a breakout room.** An open is spend, so the host bounds
-   it: the count, the depth, and the agents that a breakout room may
-   seat. D1 holds the accounting.
-2. **A post has no author.** A seat in the breakout room tells the parent
-   agent from another source by a label in the text. An author across
-   rooms is a new trust surface, and the first step adds none.
-
-**Condition:** the owner starts 0.7.0 planning.
+**Each section holds only open work, except the guard lists.** Contract
+pages own design details. Git history keeps completed plans, removed
+findings, and prior reviews. [Considered and kept](#considered-and-kept)
+and [Deferred by decision](#deferred-by-decision) stop a later review from
+proposing the same change again.
 
 ## Pending decisions
 
@@ -155,22 +94,6 @@ billing or authentication refusal fails the job with an annotation that
 names the provider error, and the tests do not run. **Condition:** the
 next live run that fails on a provider refusal.
 
-## Rules and proofs
-
-[docs/formal.md](../docs/formal.md) states the mechanism and the line a
-proof must pay for.
-
-No open findings.
-
-## Simplification
-
-**This section lists the concepts that the repository holds twice.** A
-concept goes when another concept already carries its meaning. The rank is
-the concepts removed times the confidence (high 3, medium 2, low 1).
-The changelog and the git history record completed reductions.
-
-No open findings.
-
 ## Designs with a shape
 
 **Rooms that run unattended come first.** A room that stays available
@@ -228,18 +151,55 @@ The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
 
-**D5. The canvas.** Agents arrange the surface that people see. An
-agent places widgets from a catalog that the host declares, and binds
-each widget to a source: a sensor, a query, a file, a snapshot, a
-process, or a room. The host draws the widgets and keeps the data
-current with no activation. A press or a submit by a person returns to
-the room as a `visit.send` from that person. The canvas is a folder of
-the workspace, outside the journal, with a revision on each widget.
-[The canvas](../docs/canvas.md) states the design. The owner settled
-four decisions on 2026-10-03: one canvas for each room, an act as a
-`visit.send`, the workbench first, and no code from an agent. Three
-stay open. The first step adds a package and no kernel change.
-**Condition:** the owner schedules the canvas for a release.
+**D5. Widgets and the camera-chat viewfinder.** 0.7.0 ships the canvas
+as a room collection with breakout tools, and no widgets
+([Canvas](../docs/canvas.md)). The first consumer of a widget is the
+viewfinder of camera-chat. Today its host follows any process with the
+name `camera` (`examples/camera-chat/src/preview.ts`). The smallest change
+gives the observer one durable fact that the host reads: a declaration
+file in the home of the observer that names a process handle and a path.
+It needs no canvas store and no widget operations. A widget contract on
+the canvas waits for a second consumer.
+
+One canvas holds the rooms of a deployment. **Condition:** the owner schedules the
+viewfinder, or a second widget consumer appears.
+
+## Supporting work
+
+**These items stay outside the 0.7.0 scope.** Each enters a
+release only when its condition holds.
+
+**RC1. Range recall in the own room.** `recall` grows two selections:
+
+```text
+recall({ refs })              // as today, 1 to 16 refs
+recall({ from, through? })    // a seq range; { from: 1 } reads the whole room
+recall({ last })              // the N most recent messages
+  + optional { kind?, by? }   // filters
+```
+
+A result has a byte cap and names the next `from` on its last line. The
+authority does not change: a live lease, and a summary reads only through
+its exchange. `room.view` takes the selection, so the Durable Object wire
+changes. A long worker reads its own room past its window on every host,
+Cloudflare included, with no mirror.
+
+**Condition:** a measured need for own-room reads beyond the window.
+
+**Evidence:** a test reads a range, the last N messages, and a filter
+over a real journal. The export snapshot, the golden journals, and the
+Cloudflare tests change in the same commit.
+
+**SP1. The speaking text of the room core.** The room core states the
+rule of silence about five ways, in about 720 tokens. It is the largest
+block on a bare seat. Cut it to one statement of each fact. The guidance
+review of #535 tuned this text against live runs, so one live run on the
+ChatGPT login runs before the cut and one after.
+
+**Condition:** a measured context cost that justifies provider spend.
+
+**Evidence:** the token count of a bare seat before and after, and the
+two live runs.
 
 ## Considered and kept
 
@@ -280,6 +240,7 @@ own.** A later review does not propose them again.
 
 ## Deferred by decision
 
+- A `task()` or subagent tool; breakout rooms carry delegated work.
 - Hot-loaded definitions; the definition set is fixed per run.
 - Multiple simultaneous discussions within one room; separate rooms.
 - Per-tab presence tokens and automatic departures; hosts reconcile.
