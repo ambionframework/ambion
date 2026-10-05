@@ -86,8 +86,8 @@ flowchart LR
 
 ### Phase 2. Workbench root rooms
 
-- [ ] **1.** Replace `workbench_rooms` with the canvas. Needs phase 1.
-- [ ] **2.** Verify scenario composition, visits, stop, resume, and
+- [x] **1.** Replace `workbench_rooms` with the canvas. Needs phase 1.
+- [x] **2.** Verify scenario composition, visits, stop, resume, and
       shutdown. Needs 1.
 
 **Evidence:** root rooms keep their assistants, seats, and scenarios. The

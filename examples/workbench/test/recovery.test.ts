@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { people } from '../src/definitions.ts';
-import { liveRoom, openRooms, type RoomView } from '../src/rooms.ts';
+import { openRooms, type RoomView } from '../src/rooms.ts';
 import type { Workbench } from '../src/workbench.ts';
 import { freshDirectory, openHost, quietStream, scriptedKinds } from './hosting.ts';
 
@@ -17,7 +17,7 @@ if (!mira) throw new Error('The test team has no human.');
 interface Faults {
 	departure?: 'before' | 'after';
 	composition?: boolean;
-	catalog?: boolean;
+	state?: boolean;
 }
 
 function journalWrite(faults: Faults, write: (...params: unknown[]) => unknown) {
@@ -37,11 +37,11 @@ function journalWrite(faults: Faults, write: (...params: unknown[]) => unknown) 
 	};
 }
 
-function catalogSave(faults: Faults, save: (...params: unknown[]) => unknown) {
+function stateSave(faults: Faults, save: (...params: unknown[]) => unknown) {
 	return (...params: unknown[]) => {
-		if (!faults.catalog) return save(...params);
-		faults.catalog = false;
-		throw new Error('injected catalog save failure');
+		if (!faults.state) return save(...params);
+		faults.state = false;
+		throw new Error('injected state save failure');
 	};
 }
 
@@ -58,8 +58,8 @@ function faults(): Faults {
 				const bound = value.bind(target);
 				if (method === 'all' && query.includes('INSERT INTO journal_entries'))
 					return journalWrite(armed, bound);
-				if (method === 'run' && query.includes('UPDATE workbench_rooms'))
-					return catalogSave(armed, bound);
+				if (method === 'all' && query.includes('UPDATE canvas_rooms SET state'))
+					return stateSave(armed, bound);
 				return bound;
 			},
 		});
@@ -70,8 +70,8 @@ function faults(): Faults {
 	return armed;
 }
 
-/** The catalog database of a rooms host. The test closes it after the hosts. */
-function catalog(directory: string): DatabaseSync {
+/** The database of a rooms host. The test closes it after the hosts. */
+function hostDatabase(directory: string): DatabaseSync {
 	const database = new DatabaseSync(join(directory, 'rooms.db'));
 	onTestFinished(() => database.close());
 	return database;
@@ -92,14 +92,14 @@ const statusOf = async (workbench: Workbench, room: string) =>
 	(await workbench.rooms()).find((candidate) => candidate.name === room)?.status;
 
 describe('Workbench host stop recovery', () => {
-	it('recovers a lost stop acknowledgement, a failed stop, and a failed shutdown', async () => {
+	it('keeps a stopped room that failed to leave, and starts it again from its journal', async () => {
 		const armed = faults();
 		const counter = { calls: 0 };
 		const workbench = await openHost({ stream: quietStream(counter) });
 		await workbench.visit('bringup', 'mira');
 		armed.departure = 'after';
 		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/acknowledgement loss/);
-		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
+		expect(await statusOf(workbench, 'bringup')).toBe('stopped');
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
 		expect(departures(await workbench.read('bringup', 0))).toBe(1);
 
@@ -107,56 +107,66 @@ describe('Workbench host stop recovery', () => {
 		armed.departure = 'before';
 		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/write failure/);
 		await expect(workbench.visit('bringup', 'mira')).rejects.toThrow(/Resume this room first/);
-		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
-		const retries = await Promise.all([
+		const repeats = await Promise.all([
 			workbench.control('bringup', 'stop'),
 			workbench.control('bringup', 'stop'),
 		]);
-		expect(retries.map((view) => view.status)).toEqual(['stopped', 'stopped']);
-		expect(departures(await workbench.read('bringup', 0))).toBe(2);
-
+		expect(repeats.map((view) => view.status)).toEqual(['stopped', 'stopped']);
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
 		await workbench.visit('bringup', 'mira');
-		armed.departure = 'before';
-		await expect(workbench.close()).rejects.toThrow(/write failure/);
-		expect(await statusOf(workbench, 'bringup')).toBe('stopping');
-		await expect(workbench.close()).resolves.toBeUndefined();
 		expect(counter.calls).toBe(0);
 	});
 
-	it('retries the catalog stop intent after cleanup succeeds but its save fails', async () => {
+	it('reports a failed shutdown, closes the other rooms, and resumes every room at the next start', async () => {
+		const armed = faults();
+		const directory = await freshDirectory();
+		const workbench = await openHost({ directory });
+		await workbench.visit('bringup', 'mira');
+		armed.departure = 'before';
+		await expect(workbench.close()).resolves.toBeUndefined();
+		expect(armed.departure).toBeUndefined();
+		const restarted = await openHost({ directory });
+		expect((await restarted.rooms()).map((room) => room.status)).toEqual([
+			'running',
+			'running',
+			'running',
+			'running',
+		]);
+	});
+
+	it('keeps the room running when the save of its stopped state fails, and stops it on the retry', async () => {
 		const armed = faults();
 		const directory = await freshDirectory();
 		const counter = { calls: 0 };
 		const workbench = await openHost({ directory, stream: quietStream(counter) });
 		await workbench.visit('bringup', 'mira');
-		armed.catalog = true;
-		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/catalog save failure/);
-		expect(await statusOf(workbench, 'bringup')).toBe('stopped');
-		expect(departures(await workbench.read('bringup', 0))).toBe(1);
+		armed.state = true;
+		await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/state save failure/);
+		expect(await statusOf(workbench, 'bringup')).toBe('running');
+		expect(departures(await workbench.read('bringup', 0))).toBe(0);
 		expect((await workbench.control('bringup', 'stop')).status).toBe('stopped');
-		const rows = catalog(directory)
-			.prepare('SELECT enabled FROM workbench_rooms WHERE name = ?')
-			.all('bringup') as { enabled: number }[];
-		expect(rows[0]?.enabled).toBe(0);
+		expect(departures(await workbench.read('bringup', 0))).toBe(1);
+		const rows = hostDatabase(directory)
+			.prepare('SELECT state FROM canvas_rooms WHERE name = ?')
+			.all('bringup') as { state: string }[];
+		expect(rows[0]?.state).toBe('stopped');
 		expect(counter.calls).toBe(0);
 	});
 
-	it('reopens a failed stop as running intent and retries it on the next host', async () => {
+	it('keeps the stopped state of a room that failed to leave across a restart', async () => {
 		const armed = faults();
 		const directory = await freshDirectory();
-		const database = catalog(directory);
+		const database = hostDatabase(directory);
 		const counter = { calls: 0 };
 		const first = await hostRooms(database, directory, counter);
 		await first.create('review', 'Check durable stop.');
-		await first.withRoom('review', (entry) => liveRoom(entry).visit(mira));
+		await first.inRoom('review', (room) => room.visit(mira));
 		armed.departure = 'before';
 		await expect(first.lifecycle('review', 'stop')).rejects.toThrow(/write failure/);
 
 		const restarted = await hostRooms(database, directory, counter);
-		expect((await restarted.list())[0]?.status).toBe('running');
-		expect((await restarted.lifecycle('review', 'stop')).status).toBe('stopped');
-		expect(departures(await restarted.read('review', 0))).toBe(1);
+		expect((await restarted.list())[0]?.status).toBe('stopped');
+		expect((await restarted.lifecycle('review', 'resume')).status).toBe('running');
 		expect(counter.calls).toBe(0);
 	});
 });
@@ -195,18 +205,18 @@ describe('Workbench room reads and recovery', () => {
 		expect(counter.calls).toBe(beforeRead);
 	});
 
-	it('resumes from the recorded membership and goal, not the catalog row', async () => {
+	it('resumes from the recorded membership and goal, not the canvas row', async () => {
 		const directory = await freshDirectory();
-		const database = catalog(directory);
+		const database = hostDatabase(directory);
 		const counter = { calls: 0 };
 		const rooms = await hostRooms(database, directory, counter);
 		await rooms.create('restored', 'Recorded goal.');
-		await rooms.withRoom('restored', (entry) => liveRoom(entry).unseat('design'));
+		await rooms.inRoom('restored', (room) => room.unseat('design'));
 		await rooms.lifecycle('restored', 'stop');
 		await rooms.close();
-		// The catalog holds a provisional goal. The journal holds the recorded one.
+		// The canvas row holds a provisional goal. The journal holds the recorded one.
 		database
-			.prepare('UPDATE workbench_rooms SET goal = ?, enabled = 1 WHERE name = ?')
+			.prepare("UPDATE canvas_rooms SET goal = ?, state = 'running' WHERE name = ?")
 			.run('Provisional goal.', 'restored');
 		const status = (await (await hostRooms(database, directory, counter)).list())[0];
 		expect(status).toMatchObject({ initialized: true, goal: 'Recorded goal.', status: 'running' });
@@ -216,23 +226,27 @@ describe('Workbench room reads and recovery', () => {
 		expect(counter.calls).toBe(0);
 	});
 
-	it('retries startup after a failure before the initialization composition', async () => {
+	it('keeps a room that fails to start as running intent, and starts it on a resume', async () => {
 		const armed = faults();
 		const directory = await freshDirectory();
-		const database = catalog(directory);
-		database.exec(
-			'CREATE TABLE workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
-		);
-		database
-			.prepare('INSERT INTO workbench_rooms VALUES (?, ?, 1)')
-			.run('partial', 'Retry startup.');
-		armed.composition = true;
+		const database = hostDatabase(directory);
 		const counter = { calls: 0 };
-		await expect(hostRooms(database, directory, counter)).rejects.toThrow(
+		const first = await hostRooms(database, directory, counter);
+		armed.composition = true;
+		await expect(first.create('partial', 'Retry startup.')).rejects.toThrow(
 			/injected initialization write failure/,
 		);
-		const recovered = await hostRooms(database, directory, counter);
-		expect((await recovered.list())[0]).toMatchObject({ initialized: true, status: 'running' });
+		await first.close();
+
+		armed.composition = true;
+		const restarted = await hostRooms(database, directory, counter);
+		const failed = (await restarted.list())[0];
+		expect(failed).toMatchObject({ initialized: false, status: 'stopped' });
+		expect(failed?.activity).toContainEqual(
+			expect.objectContaining({ type: 'error', text: expect.stringContaining('resume') }),
+		);
+		const recovered = await restarted.lifecycle('partial', 'resume');
+		expect(recovered).toMatchObject({ initialized: true, status: 'running' });
 		expect(counter.calls).toBe(0);
 	});
 });

@@ -176,8 +176,14 @@ calls the host through a typed in-process API. The example defines no HTTP
 interface.
 
 - **Lifecycle.** The rooms run while the terminal runs. When the person
-  quits, the host ends each visit, then closes the rooms. The journals stay
-  on disk. The next start resumes them.
+  quits, the host ends each visit, then closes the rooms. The journals and the
+  canvas rows stay on disk. The next start resumes the rooms that ran.
+- **Canvas.** The host keeps its root rooms on one canvas over `rooms.db`.
+  The canvas owns the name, the goal, the seats, and whether each room runs.
+  It resumes each running room at the start, attaches the room mirror, and
+  stops the rooms at the close. The host keeps the feed, the composer, and
+  the scenarios. The answer of a person to an approval stays a room
+  message. The canvas has no breakout team in the workbench.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
   or room, create a room, search workspace files in a side panel, watch and cancel the agents'
@@ -228,7 +234,7 @@ automated test yet.
 | A specialist writes a file to the workspace                                 | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                                                                                                                                                                         |
 | The Experiments specialist plans a distance test                            | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file                                                                                                                                                                      |
 | A person adds a constraint while an agent works                             | Steering an open exchange                  | By hand: the thread shows the message in order                                                                                                                                                                                        |
-| The host stops, fails to stop, and resumes                                  | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal                                                                                                                                                             |
+| The host stops, fails to stop, and resumes                                  | Resume keeps the question and the files    | Scripted: clean stop, failed stop, failed save of the stopped state with retry, and resume from the journal                                                                                                                           |
 | Two people work the kit through separate rooms                              | Visits, presence, and catch-up by position | Scripted                                                                                                                                                                                                                              |
 | One specialist records a run and another reads it back                      | Records apart from the journal             | Scripted: an INSERT through `sql` gets its provenance, and a SELECT reads the row from `lab.db`                                                                                                                                       |
 | The Design specialist drives an instrument above its limit                  | An action that waits for a person          | Scripted: `operate` records a request, `approve_operation` records the answer                                                                                                                                                         |
@@ -259,7 +265,7 @@ examples/workbench/
     scenarios.ts       the rooms, the workspace seed, the lab schema, and the instruments
     repositories.ts    the git backend and its firmware-sketch template
     instrument.ts      the simulated instruments and their approval step
-    rooms.ts           the host lifecycle and the room catalog
+    rooms.ts           the canvas of the root rooms and the host room view
     workbench.ts       the host: open, read, watch, send, control, create, files, processes
     names.ts           the room name and goal rules
     files.ts           the workspace list, one file preview, one lab table preview, and /attach

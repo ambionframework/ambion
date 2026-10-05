@@ -13,7 +13,7 @@ that runs on the current kernel API.
 
 **One command starts the rooms and the terminal in one process.** The rooms
 run while the terminal runs. When you quit, the host ends your visit and
-closes the rooms. The journals stay on disk.
+closes the rooms. The journals and the room rows stay on disk.
 
 From the repository root, install and build with Node 26.4 or later:
 
@@ -27,10 +27,15 @@ pnpm start                  # uses ./.data
 pnpm start ./bench --as mira   # a directory, and a person
 ```
 
+**The host keeps the root rooms on one canvas.** The canvas stores one row
+for each room in `rooms.db`, beside the journals. A stopped room has a
+stopped row, and a restart leaves it stopped. A failed stop leaves the room
+stopped. The `/resume` command starts it again from its journal.
+
 `pnpm start` runs Node with `--experimental-ffi`, which OpenTUI needs. A
 directory with no `rooms.db` gets the three sample rooms and the datasheets.
-A directory that has one resumes its rooms, including a room you created
-and a room you stopped. Set `WORKBENCH_USER` instead of `--as` to pick a
+A directory that has one resumes the rooms that ran, including a room you
+created. A room you stopped stays stopped until you resume it. Set `WORKBENCH_USER` instead of `--as` to pick a
 person. Without either, the first screen asks who you are. Set
 `AMBION_MODEL` and its provider credential to change the model of the Pi
 seats. The default is `anthropic/claude-sonnet-5`.
@@ -305,7 +310,7 @@ the team's artifacts.
 
 ```text
 .data/
-  rooms.db          Room journals, Pi audits, and the host room catalog
+  rooms.db          Room journals, Pi audits, and the canvas rows
   lab.db            The shared database of the sql tool: the lab records
   git.db            The repositories: the firmware-sketch template and every fork
   workspace/
@@ -351,7 +356,7 @@ workspace resources.
 | `src/definitions.ts`     | The assistant, the three specialists, and the people  |
 | `src/scenarios.ts`       | The rooms, and the workspace seed                     |
 | `src/repositories.ts`    | The git backend and its templates                     |
-| `src/rooms.ts`           | The host lifecycle and the room catalog               |
+| `src/rooms.ts`           | The canvas of the root rooms and the host room view   |
 | `src/workbench.ts`       | The host API the terminal calls in process            |
 | `src/files.ts`           | The workspace list, one file preview, and `/attach`   |
 | `src/names.ts`           | The room name and goal rules                          |
