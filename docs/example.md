@@ -79,6 +79,9 @@ executor kind, because it checks keys and lets a test script an executor.
 | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` | Design                |
 | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     | Experiments           |
 
+`AMBION_EXECUTOR=codex` moves the assistant and the two workers to Codex.
+Any other value leaves them on Pi. The live delegation test uses this.
+
 A seat with no key reports the missing variable and does not run. The other
 seats run. The scripted tests give the Claude and Codex seats a scripted
 execution, so they need no key. The live tests skip a scenario when an

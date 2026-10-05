@@ -4,14 +4,20 @@ export type ExecutorKind = 'pi' | 'claude' | 'codex';
 /** The environment variables a run reads. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
+/**
+ * The kind of the assistant and of the workers. `AMBION_EXECUTOR=codex` moves
+ * them to Codex, and any other value leaves them on Pi.
+ */
+const openerKind: ExecutorKind = process.env.AMBION_EXECUTOR === 'codex' ? 'codex' : 'pi';
+
 /** The seats that run on an executor kind, the assistant included. */
 export const seatKinds: Readonly<Record<string, ExecutorKind>> = {
-	assistant: 'pi',
+	assistant: openerKind,
 	datasheets: 'pi',
 	design: 'claude',
 	experiments: 'codex',
-	scout: 'pi',
-	maker: 'pi',
+	scout: openerKind,
+	maker: openerKind,
 };
 
 /** The model of the Pi seats. `AMBION_MODEL` overrides it. */

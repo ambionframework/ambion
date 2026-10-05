@@ -69,10 +69,10 @@ export interface RoomsOptions {
 	/** A model stream for the Pi seats. */
 	stream?: PiExecutionOptions['stream'];
 	/**
-	 * Executions that replace the Claude and Codex executors. A test passes a
+	 * Executions that replace the executors of each kind. A test passes a
 	 * scripted execution for each. Without them, the real executor runs.
 	 */
-	executions?: { claude?: Execution; codex?: Execution };
+	executions?: { pi?: Execution; claude?: Execution; codex?: Execution };
 	/** The environment that holds the keys. The default is the environment of the process. */
 	env?: Environment;
 }
@@ -101,7 +101,7 @@ function kindExecutions(options: RoomsOptions = {}): readonly Execution[] {
 			'pi',
 			() => piExecution({ stream }),
 			// A test gives the stream, and its sessions stay in memory.
-			stream && piExecution({ stream, sessions: 'memory' }),
+			executions?.pi ?? (stream && piExecution({ stream, sessions: 'memory' })),
 		),
 		// The Claude seat takes the allowlist of the host environment, unless the caller gave an env.
 		pick(
