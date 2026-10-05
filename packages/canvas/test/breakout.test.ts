@@ -2,7 +2,7 @@ import { definePerson, readRoom, startRoom } from '@ambionframework/ambion';
 import { byAgent, callTool, type Script, settled } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CanvasRoom } from '../src/index.ts';
 import {
 	breakoutRow,
@@ -22,6 +22,14 @@ const rootRow = (): CanvasRoom => ({
 	state: 'running',
 	start: { kind: 'root' },
 });
+
+/** The posts of the bridge about one breakout room, in the record of its parent. */
+const noticesOf = async (
+	posted: (
+		name: string,
+	) => Promise<readonly { key?: string | undefined; to?: string | undefined }[]>,
+	room = 'site-survey',
+) => (await posted('site')).filter((m) => m.key?.startsWith(`breakout:${room}:`));
 
 const refusal = (promise: Promise<unknown>, cause?: RegExp) =>
 	expect(promise).rejects.toMatchObject({
@@ -293,8 +301,8 @@ describe('the start of a row', () => {
 });
 
 describe('tell', () => {
-	it('steers a worker, lands once for one call, and opens a new exchange after one closes', async () => {
-		const { open, call, canvas } = await lab();
+	it('steers a worker, lands once for one call, and opens a new exchange that the bridge reports', async () => {
+		const { open, call, canvas, posted } = await lab();
 		await open();
 		const room = live(canvas, 'site-survey');
 		await settled(room);
@@ -309,6 +317,7 @@ describe('tell', () => {
 			read.messages.filter((m) => m.kind === 'posted' && m.text === 'Narrow it.'),
 		).toHaveLength(1);
 		expect(read.exchanges.filter((e) => e.status === 'closed')).toHaveLength(2);
+		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(2));
 		expect(
 			await call('ada', 'tell', { room: 'site-survey', text: 'More.', to: 'cy' }),
 		).toMatchObject({
@@ -461,6 +470,8 @@ describe('report', () => {
 		await site.post({ to: 'ada', text: 'Start a survey.' });
 		await settled(site);
 		await settled(live(canvas, 'site-survey'));
+		// A pass of the bridge runs after the close of the exchange. The report holds its place.
+		await canvas.start('site-survey');
 		const messages = (await site.read()).messages.flatMap((m) => (m.kind === 'posted' ? [m] : []));
 		expect(messages.slice(1)).toMatchObject([
 			{
@@ -511,8 +522,8 @@ describe('report', () => {
 			contextOf('cy', 'site-survey', 'next'),
 		);
 		expect(fresh).not.toHaveProperty('to');
-		const posts = (await site.read()).messages.filter((m) => m.kind === 'posted');
-		expect(posts).toHaveLength(2);
+		const reports = (await site.read()).messages.filter((m) => m.key?.includes(':report:'));
+		expect(reports).toHaveLength(2);
 	});
 
 	it('refuses a root room, a call with no exchange, an archived room, and a stopped room', async () => {
@@ -592,6 +603,55 @@ describe('the reminder', () => {
 		expect(lines).toHaveLength(12);
 		expect(lines[0]).toBe('Your breakout rooms:');
 		expect(lines.at(-1)).toBe('and 2 more');
+	});
+});
+
+describe('the bridge', () => {
+	it('posts one close notice for an exchange with no report, and finds its key at the next pass', async () => {
+		const { open, canvas, posted, errors } = await lab();
+		await open();
+		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(1));
+		const closed = (await live(canvas, 'site-survey').read()).exchanges.flatMap((e) =>
+			e.status === 'closed' ? [e] : [],
+		);
+		expect(closed).toHaveLength(1);
+		const { from, through } = closed[0] ?? { from: 0, through: 0 };
+		expect(await noticesOf(posted)).toMatchObject([
+			{
+				kind: 'posted',
+				to: 'ada',
+				text: `breakout site-survey: exchange #${from} is complete, messages #${from} to #${through}.`,
+				refs: [`ambion://room/site-survey/message/${through}`],
+				key: `breakout:site-survey:${from}`,
+			},
+		]);
+		await canvas.start('site-survey');
+		expect(await noticesOf(posted)).toHaveLength(1);
+		expect(errors).toEqual([]);
+	});
+
+	it.each([
+		['at none', { seats: { ada: 'none', bob: 'broadcast' } as const }, false],
+		['absent from the roster', {}, true],
+	])('posts the notice with no `to` for an opener %s', async (_label, options, unseat) => {
+		const { open, site, posted } = await lab(options);
+		if (unseat) await site.unseat('ada');
+		await open();
+		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(1));
+		expect((await noticesOf(posted))[0]).not.toHaveProperty('to');
+	});
+
+	it('reports a failed post to onError, leaves its exchange without a key, and posts it at the next pass', async () => {
+		const { open, site, posted, errors, canvas } = await lab();
+		vi.spyOn(site, 'post').mockRejectedValueOnce(new Error('The disk is full.'));
+		await open();
+		await vi.waitFor(() =>
+			expect(errors).toMatchObject([{ room: 'site-survey', operation: 'notice' }]),
+		);
+		expect(await noticesOf(posted)).toEqual([]);
+		await canvas.start('site-survey');
+		expect(await noticesOf(posted)).toHaveLength(1);
+		expect(errors).toHaveLength(1);
 	});
 });
 

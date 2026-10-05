@@ -1,7 +1,7 @@
 # The canvas
 
-> **Status: design for 0.7.0. The package, the store, the lifecycle, and
-> the tools exist. The bridge does not exist yet.** The kernel
+> **Status: design for 0.7.0. The package, the store, the lifecycle, the
+> tools, and the bridge exist.** The kernel
 > parts that the page names exist today. RT1 makes the runtime a required
 > parameter of each one.
 > [The plan](../planning/next.md) owns delivery and evidence.
@@ -141,8 +141,8 @@ and quotas.
 
 **The bridge carries each finished exchange to the opener.** It runs on
 each `exchange_closed` event of a breakout room. The event carries the
-range alone, so the bridge reads the outcome with `room.read()`, or with
-`readRoom` for a stopped room.
+range alone, so the bridge reads the outcome with `readRoom`. `readRoom`
+reads a live room and a stopped room alike.
 
 **A report pass looks for each key first.** For each closed exchange of a
 breakout room, the bridge reads the `key` of each `posted` message in the
@@ -159,11 +159,17 @@ await parent.post({
 });
 ```
 
-**The bridge posts for one parent in order, one at a time.** It picks the
-recipient inside that order. The recipient is the opener when the opener
+**The bridge posts for one parent in order, one at a time.** It keeps a
+chain of its own for each parent, apart from the queue of a room name. It
+picks the recipient inside that order. `report` posts in the same chain. The recipient is the opener when the opener
 is on the roster of the parent at an attention other than `none`.
 Otherwise the post has no `to`, and the room stays open. A key conflict
 counts as landed. `report` follows the same rule for its recipient.
+
+**The chain never waits on a queue of a room name.** A stop of a root
+waits for the queues of its breakout rooms from inside the queue of the
+root. A bridge post that waited on a queue of a room name could close a
+cycle. A bridge post waits on the kernel alone.
 
 **A notice contains no excerpt.** It names the outcome and the range and
 cites the last message. The text of a result travels in `report`.
@@ -179,6 +185,13 @@ included. A pass skips archived rows. A pass reads a stopped journal with
 `readRoom`, and starts no worker. A post that fails with anything other
 than a key conflict goes to `onError`. Its exchange stays without a key,
 so the next pass posts it.
+
+**A stop interrupts an exchange and closes none.** A stop leaves an open
+exchange open in the journal, so no `exchange_closed` event and no closed
+exchange exist for the pass to read. A resume closes it, and the pass posts
+its notice then. A pass skips an archived room, so an archived room gets
+no notice. A post to a parent that stops is no failure: the next pass
+posts it.
 
 **A post owes no summary.** A post opens an exchange with no person, so
 the exchange owes no summary
@@ -406,8 +419,9 @@ removes the assistant from the definitions that it passes, because
 `startRoom` refuses an assistant that `agents` also holds. With no
 `seats`, a root room seats every definition that it receives.
 
-**The canvas hears each room that it starts or resumes.** It calls
-`room.subscribe` once for each handle and reacts to `exchange_closed`.
+**The canvas hears each breakout room that it starts or resumes.** It
+calls `room.subscribe` once for each breakout handle and reacts to
+`exchange_closed`.
 With a workspace, it calls `workspace.mirror(room)` after each start and
 resume, and keeps the `RoomMirror`. A failed attach goes to `onError`,
 and the room keeps running. A stop stops the room first, then its mirror,

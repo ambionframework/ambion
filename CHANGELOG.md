@@ -14,7 +14,11 @@ reminder that lists the breakout rooms of the seat. `canvas.workerTools()`
 is the worker bundle: `report`. `breakout` is idempotent by name, checks
 the worker team and `perOpener`, and posts its first message under
 `breakout-start:<name>`. The canvas emits `started` before it attaches the
-mirror. The bridge does not exist yet.
+mirror. The bridge carries each finished exchange of a breakout room to
+the opener: a `report`, or else one close notice under the key
+`breakout:<name>:<from>`. Each `resume` and `start` replays the retained
+journals, stopped rooms included, and posts each missing notice once.
+`report` and the notices share one ordered chain for each parent.
 
 **The workbench keeps its root rooms on the canvas.** The table
 `workbench_rooms` is dropped, and the workbench reads no older database of

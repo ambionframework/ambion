@@ -6,8 +6,8 @@ state, and what a start needs. It holds no message, no lease, and no
 exchange. The journal of each room stays the source of that room.
 
 The package holds the store, the lifecycle of the rooms, and the tools of
-the breakout rooms. The bridge does not exist yet. [The canvas design](../../docs/canvas.md) holds
-the contract.
+the breakout rooms, and the bridge. [The canvas design](../../docs/canvas.md)
+holds the contract.
 
 ## Install
 
@@ -97,6 +97,20 @@ or after `close` is a refusal. `breakout` checks a repeat, a name held by
 another opener, the name rule, the team, and `perOpener`, in that order. The
 reminder of the opener bundle lists the breakout rooms of the seat. Each
 refusal is an `AmbionError` with the code `refused`.
+
+## The bridge
+
+**The bridge carries each finished exchange of a breakout room to the
+opener.** An exchange with a `report` needs nothing more. An exchange with no
+`report` gets a close notice in the parent room, with the key
+`breakout:<name>:<from>`. The notice goes to the opener when the opener sits on the
+roster at an attention other than `none`. Otherwise it has no `to`.
+
+**The bridge posts for one parent in order.** A parent with no live handle
+gets no post. Each `resume` and `start` runs one pass over every breakout row
+of the live parents, stopped rows included. A pass skips archived rows,
+reads a stopped journal with `readRoom`, and starts no worker. A failed post
+goes to `onError` with the operation `notice`, and the next pass posts it.
 
 ## The store
 

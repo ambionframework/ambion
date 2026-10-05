@@ -10,7 +10,8 @@ import {
 } from '@ambionframework/ambion';
 import { isName } from '@ambionframework/ambion/names';
 import type { RoomMirror } from '@ambionframework/workspace';
-import { type BreakoutPort, DEFAULT_PER_OPENER } from './breakout.ts';
+import { type BreakoutPort, DEFAULT_PER_OPENER, startOf } from './breakout.ts';
+import { Bridge } from './bridge.ts';
 import {
 	assertNoTeam,
 	breakoutCast,
@@ -20,6 +21,7 @@ import {
 	refuse,
 	rootCast,
 } from './cast.ts';
+import { Queues } from './queue.ts';
 import type { CanvasClose, CanvasRoom, RootStart } from './store.ts';
 import { openerBundle, workerBundle } from './tools.ts';
 import type {
@@ -33,6 +35,8 @@ import type {
 interface Handle {
 	readonly room: Room;
 	mirror?: RoomMirror;
+	/** Ends the subscription of the bridge to a breakout room. */
+	unsubscribe?: () => void;
 }
 
 const EVENT_OPERATION: Record<CanvasEvent['type'], CanvasOperation> = {
@@ -65,7 +69,8 @@ class CanvasRun implements Canvas {
 	private readonly options: OpenCanvasOptions;
 	private readonly rows = new Map<string, CanvasRoom>();
 	private readonly handles = new Map<string, Handle>();
-	private readonly tails = new Map<string, Promise<unknown>>();
+	private readonly queues = new Queues();
+	private readonly bridge: Bridge;
 	private readonly listeners = new Set<(event: CanvasEvent) => void>();
 	private definitions: Definitions | undefined;
 	private resumed = false;
@@ -80,6 +85,7 @@ class CanvasRun implements Canvas {
 	constructor(options: OpenCanvasOptions) {
 		this.name = options.name;
 		this.options = options;
+		this.bridge = this.bridgeOf();
 		this.port = this.portOf();
 	}
 
@@ -103,6 +109,7 @@ class CanvasRun implements Canvas {
 			team: this.team(),
 			assertReady: () => this.assertReady(),
 			serial: (name, operation) => this.serial(name, operation),
+			ordered: (parent, operation) => this.bridge.order(parent, operation),
 			row: (name) => this.rows.get(name),
 			rows: () => [...this.rows.values()],
 			room: (name) => this.handles.get(name)?.room,
@@ -111,6 +118,18 @@ class CanvasRun implements Canvas {
 			complete: (name) => this.completeBreakout(name),
 			archive: (name, close) => this.archive(name, close),
 		};
+	}
+
+	/** The bridge reads the rows and the live handles of this run. */
+	private bridgeOf(): Bridge {
+		return new Bridge({
+			runtime: this.options.runtime,
+			row: (name) => this.rows.get(name),
+			rows: () => [...this.rows.values()],
+			room: (name) => this.handles.get(name)?.room,
+			closed: () => this.closed,
+			fail: (room, error) => this.report(room, 'notice', error),
+		});
 	}
 
 	async resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void> {
@@ -135,6 +154,9 @@ class CanvasRun implements Canvas {
 		await this.launchAll(
 			(row) => row.start.kind === 'breakout' && this.handles.has(row.start.parent),
 		);
+		for (const row of [...this.rows.values()])
+			if (row.depth === 0 && this.handles.has(row.name) && !this.closed)
+				await this.bridge.replay(row.name);
 	}
 
 	async open(options: CanvasRoomOptions): Promise<Room> {
@@ -214,16 +236,7 @@ class CanvasRun implements Canvas {
 
 	/** Runs the operations on one room name one at a time, in call order. */
 	private serial<T>(name: string, operation: () => Promise<T>): Promise<T> {
-		const result = (this.tails.get(name) ?? Promise.resolve()).then(operation);
-		const settled = result.then(
-			() => {},
-			() => {},
-		);
-		this.tails.set(name, settled);
-		void settled.then(() => {
-			if (this.tails.get(name) === settled) this.tails.delete(name);
-		});
-		return result;
+		return this.queues.run(name, operation);
 	}
 
 	/** Reports a failure to `onError`, and throws it again. */
@@ -327,6 +340,8 @@ class CanvasRun implements Canvas {
 			await this.launch(name);
 		});
 		if (row.depth === 0) await this.startChildren(name);
+		const parent = startOf(row)?.parent ?? name;
+		if (!this.closed && this.handles.has(parent)) await this.bridge.replay(parent);
 	}
 
 	private async startChildren(parent: string): Promise<void> {
@@ -345,11 +360,22 @@ class CanvasRun implements Canvas {
 		const row = this.liveRow(name);
 		const handle: Handle = { room: await this.begin(row) };
 		this.handles.set(name, handle);
+		this.listen(row, handle);
 		// A host subscribes to the room on `started`, so the event comes before the mirror and the start post.
 		this.emit({ type: 'started', room: name });
 		await this.attach(handle);
 		await this.postStart(row, handle);
 		return handle.room;
+	}
+
+	/** A breakout room reports each closed exchange to the bridge, which reads the record. */
+	private listen(row: CanvasRoom, handle: Handle): void {
+		if (row.start.kind !== 'breakout') return;
+		const name = row.name;
+		handle.unsubscribe = handle.room.subscribe((event) => {
+			if (event.type !== 'exchange_closed' || this.closed) return;
+			this.bridge.pass(name).catch((error: unknown) => this.report(name, 'notice', error));
+		});
 	}
 
 	private async begin(row: CanvasRoom): Promise<Room> {
@@ -405,6 +431,7 @@ class CanvasRun implements Canvas {
 	private async release(name: string): Promise<void> {
 		const handle = this.handles.get(name);
 		if (handle === undefined) return;
+		handle.unsubscribe?.();
 		try {
 			await handle.room.stop();
 		} finally {
@@ -470,7 +497,8 @@ class CanvasRun implements Canvas {
 	private async shutdown(): Promise<void> {
 		this.closed = true;
 		await this.resuming?.catch(() => {});
-		await Promise.all([...this.tails.values()]);
+		await this.queues.settled();
+		await this.bridge.settled();
 		for (const name of [...this.handles.keys()])
 			await this.guard(name, 'close', () => this.release(name)).catch(() => {});
 	}
