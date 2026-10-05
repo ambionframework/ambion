@@ -18,14 +18,7 @@ import {
 import { isRoomName, MAX_GOAL } from './names.ts';
 import { readCommitFile, readSnapshotFile } from './previews.ts';
 import { byRecency, type ProcessOutput, readOutput } from './processes.ts';
-import {
-	fail,
-	liveRoom,
-	openRooms,
-	type RoomAction,
-	type RoomsOptions,
-	type RoomView,
-} from './rooms.ts';
+import { fail, openRooms, type RoomAction, type RoomsOptions, type RoomView } from './rooms.ts';
 import { scenarios } from './scenarios.ts';
 import type { ActivationSteps } from './steps.ts';
 
@@ -167,8 +160,7 @@ function present(
 
 function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbench {
 	let closing: Promise<void> | undefined;
-	const inRoom = <T>(name: string, operation: (room: ReturnType<typeof liveRoom>) => Promise<T>) =>
-		rooms.withRoom(name, (entry) => operation(liveRoom(entry)));
+	const inRoom = rooms.inRoom;
 	return {
 		people,
 		rooms: () => rooms.list(),
@@ -240,8 +232,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 }
 
 async function shutdown(rooms: Rooms, database: DatabaseSync): Promise<void> {
-	// Rooms first: a failed stop keeps its handle, so a later close retries it before
-	// the storage goes away.
+	// Rooms first, so every stop writes before the storage goes away.
 	await rooms.close();
 	database.close();
 }

@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
 		"@ambionframework/assistant": "workspace:*",
+		"@ambionframework/canvas": "workspace:*",
 		"@ambionframework/claude": "workspace:*",
 		"@ambionframework/codex": "workspace:*",
 		"@ambionframework/journal": "workspace:*",

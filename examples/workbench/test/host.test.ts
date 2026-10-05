@@ -3,7 +3,8 @@ import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { byAgent, callTool, quiet, say } from '@ambionframework/ambion/testing';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { scenarios } from '../src/scenarios.ts';
 import type { Workbench } from '../src/workbench.ts';
 import {
 	freshDirectory,
@@ -120,6 +121,37 @@ describe('Workbench host', () => {
 		expect((await workbench.control('bringup', 'resume')).status).toBe('running');
 	}, 20_000);
 
+	it('opens each scenario with its seats and its assistant, and records its row on the canvas', async () => {
+		const directory = await freshDirectory();
+		const workbench = await open(directory);
+		for (const scenario of scenarios) {
+			const view = await workbench.read(scenario.name, 0);
+			const seated = view.participants.filter((seat) => seat.kind === 'agent');
+			expect(seated.map((seat) => seat.name)).toEqual(
+				expect.arrayContaining(Object.keys(scenario.seats)),
+			);
+			expect(view).toMatchObject({ goal: scenario.goal, pattern: scenario.pattern });
+		}
+		const created = await workbench.create('motors', 'Drive a small motor.');
+		expect(created.participants.map((seat) => seat.name)).toEqual(
+			expect.arrayContaining(['assistant', 'design']),
+		);
+		const database = new DatabaseSync(joinPath(directory, 'rooms.db'));
+		onTestFinished(() => database.close());
+		const rows = database
+			.prepare('SELECT name, depth, state, start FROM canvas_rooms ORDER BY position')
+			.all() as { name: string; depth: number; state: string; start: string }[];
+		expect(rows.map((row) => [row.name, row.depth, row.state])).toEqual([
+			...scenarios.map((scenario) => [scenario.name, 0, 'running']),
+			['motors', 0, 'running'],
+		]);
+		expect(JSON.parse(rows[0]?.start ?? '{}')).toMatchObject({
+			kind: 'root',
+			assistant: 'assistant',
+			seats: scenarios[0]?.seats,
+		});
+	});
+
 	it('creates a room, and refuses a duplicate and a bad name or goal', async () => {
 		const workbench = await openHost();
 		const created = await workbench.create('motors', '  Drive a small motor.  ');
@@ -189,7 +221,7 @@ describe('Workbench host', () => {
 		expect(view.status).toBe('running');
 		expect(view.activity.map((item) => [item.type, item.text])).toContainEqual([
 			'error',
-			expect.stringContaining('The room mirror did not attach'),
+			expect.stringContaining('The room mirror failed'),
 		]);
 	});
 

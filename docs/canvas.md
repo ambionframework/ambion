@@ -27,11 +27,11 @@ speaks through the visit of the room that the person enters.
 
 ## Why a collection of rooms
 
-**A host already keeps a list of rooms.** The workbench keeps one in
-`workbench_rooms`: the name, the goal, and whether the room runs. The
-host reads it at a start and resumes each room. Every host that runs more
-than one room writes the same table and the same resume loop. The canvas
-gives that list one owner.
+**A host that runs more than one room keeps a list of rooms.** The list
+holds the name, the goal, and whether each room runs. The host reads it at
+a start and resumes each room. Every such host writes the same table and
+the same resume loop. The canvas gives that list one owner. The workbench
+keeps its root rooms on a canvas.
 
 **Delegated work needs a room of its own.** An agent that delegates work
 has three options in Ambion today. Each option fails on one property.

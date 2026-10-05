@@ -11,6 +11,12 @@ It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
 the workspace mirror of each room, and reports failures to `onError`. The
 tools and the bridge do not exist yet.
 
+**The workbench keeps its root rooms on the canvas.** The table
+`workbench_rooms` is dropped, and the workbench reads no older database of
+its rooms. The canvas owns the room rows, the resume at the start, the
+mirror, and the stop. A failed stop leaves the room stopped, and a failed
+start of one room no longer stops the host.
+
 **A room operation requires a runtime, and a runtime its storage.**
 `startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
 `createRuntime` requires `storage`. A test or a quickstart that wants memory

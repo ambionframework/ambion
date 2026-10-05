@@ -5,17 +5,22 @@ import {
 	type Room,
 	type RoomNotification,
 	readRoom,
-	resumeRoom,
-	startRoom,
 	type TraceStep,
 } from '@ambionframework/ambion';
 import type { Execution } from '@ambionframework/ambion/hosting';
+import {
+	type CanvasError,
+	type CanvasEvent,
+	type CanvasRoom,
+	openCanvas,
+	sqliteCanvas,
+} from '@ambionframework/canvas';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
-import { openWorkspace, type RoomMirror } from '@ambionframework/workspace';
+import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import { readApprovals } from './approvals.ts';
 import { team } from './definitions.ts';
@@ -40,24 +45,14 @@ export function fail(message: string): never {
 	throw new Error(message);
 }
 
-interface CatalogEntry {
-	name: string;
-	goal: string;
-	enabled: number;
-}
 interface Activity {
 	at: string;
 	type: string;
 	seat?: string;
 	text: string;
 }
-type HostLifecycle =
-	| { status: 'stopped' }
-	| { status: 'running'; room: Room; mirror?: RoomMirror }
-	| { status: 'stopping'; room: Room; mirror?: RoomMirror };
-interface HostedRoom extends CatalogEntry {
-	lifecycle: HostLifecycle;
-	team: ReturnType<typeof team>;
+/** What the host shows of a room besides its row and its journal. The canvas owns the row. */
+interface RoomState {
 	activity: Activity[];
 	/**
 	 * Why each failed activation failed, by activation id, from the `end` step
@@ -65,7 +60,6 @@ interface HostedRoom extends CatalogEntry {
 	 * reason. The oldest go first past a fixed count.
 	 */
 	failures: Map<string, string>;
-	tail: Promise<unknown>;
 	/** The change listeners a caller registered with `watch`. They survive a stop. */
 	watchers: Set<() => void>;
 }
@@ -119,7 +113,7 @@ function kindExecutions(options: RoomsOptions = {}): readonly Execution[] {
 	];
 }
 
-/** The catalog records hosting intent. Collaboration state stays in each room journal. */
+/** The canvas records hosting intent. Collaboration state stays in each room journal. */
 export async function openRooms(
 	database: DatabaseSync,
 	directory: string,
@@ -136,7 +130,18 @@ export async function openRooms(
 		options.stream || options.executions
 			? []
 			: unavailableSeats(options.env ?? process.env).map(({ seat }) => seat);
-	const entries = new Map<string, HostedRoom>();
+	const states = new Map<string, RoomState>();
+	const stateOf = (name: string): RoomState => {
+		const found = states.get(name);
+		if (found) return found;
+		const created = {
+			activity: [],
+			failures: new Map<string, string>(),
+			watchers: new Set<() => void>(),
+		};
+		states.set(name, created);
+		return created;
+	};
 	// The steps of each activation go to a log in this process. Each step
 	// tells the watchers of its room to read again.
 	const log = stepLog();
@@ -145,14 +150,11 @@ export async function openRooms(
 		execution: kindExecutions(options),
 		logger: (record) => {
 			log.logger(record);
-			const entry = entries.get(record.room);
-			if (entry) recordFailure(entry, record.step);
-			if (entry) for (const watcher of [...entry.watchers]) watcher();
+			const state = stateOf(record.room);
+			recordFailure(state, record.step);
+			changed(state);
 		},
 	});
-	database.exec(
-		'CREATE TABLE IF NOT EXISTS workbench_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
-	);
 	let closing = false;
 	const workspacePath = resolve(directory, 'workspace');
 	const workspace = openWorkspace({
@@ -192,244 +194,204 @@ export async function openRooms(
 		);
 		return result;
 	}
-	function attach(row: CatalogEntry): HostedRoom {
-		const entry = {
-			...row,
-			lifecycle: { status: 'stopped' as const },
-			team: roomTeam,
-			activity: [],
-			failures: new Map<string, string>(),
-			tail: Promise.resolve(),
-			watchers: new Set<() => void>(),
-		};
-		entries.set(row.name, entry);
-		return entry;
-	}
-	function save(entry: HostedRoom): void {
-		database
-			.prepare('UPDATE workbench_rooms SET enabled = ? WHERE name = ?')
-			.run(entry.enabled, entry.name);
-	}
-	function serial<T>(entry: HostedRoom, operation: () => Promise<T>): Promise<T> {
-		const result = entry.tail.then(operation);
-		entry.tail = result.catch(() => {});
-		return result;
-	}
-	async function run(entry: HostedRoom): Promise<void> {
-		if (entry.lifecycle.status === 'running') return;
-		// A failed stop still owns its room handle. Complete that cleanup before
-		// creating a new run, so a stopped run cannot admit new work.
-		if (entry.lifecycle.status === 'stopping') await stopEntry(entry);
-		entry.enabled = 1;
-		save(entry);
-		const options = { agents: entry.team.agents, runtime };
-		const scenario = scenarios.find((candidate) => candidate.name === entry.name);
-		const recorded = await readRoom(entry.name, { runtime, messages: false });
-		const room = recorded.initialized
-			? await resumeRoom(entry.name, options)
-			: await startRoom({
-					agents: entry.team.specialists,
-					assistant: entry.team.assistant,
-					runtime,
-					name: entry.name,
-					goal: entry.goal,
-					seats: scenario?.seats ?? { design: 'named' },
-				});
-		// The handle is owned before subscription. A later host failure leaves a
-		// usable running room that shutdown can still clean up.
-		entry.lifecycle = { status: 'running', room };
-		room.subscribe((event) => notify(entry, event));
-		await attachMirror(entry, room);
-	}
-	/** The mirror is a secondary, best-effort copy. A failure to attach one must not stop the room. */
-	async function attachMirror(entry: HostedRoom, room: Room) {
-		try {
-			entry.lifecycle = { status: 'running', room, mirror: await workspace.mirror(room) };
-		} catch (error) {
-			// Left unmirrored; the room keeps running on its own journal. The
-			// activity list tells the person.
-			const reason = error instanceof Error ? error.message : String(error);
-			pushActivity(entry, { type: 'error', text: `The room mirror did not attach: ${reason}` });
-			for (const watcher of [...entry.watchers]) watcher();
-		}
-	}
-	async function status(entry: HostedRoom) {
-		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }), missing);
-	}
-	async function create(name: string, goal: string) {
-		if (closing) fail('The host is stopping.');
-		if (entries.has(name)) fail('This room already exists.');
-		database
-			.prepare('INSERT INTO workbench_rooms (name, goal, enabled) VALUES (?, ?, 1)')
-			.run(name, goal);
-		const entry = attach({ name, goal, enabled: 1 });
-		return serial(entry, async () => {
-			await run(entry);
-			return status(entry);
-		});
-	}
-	async function withRoom<T>(name: string, operation: (entry: HostedRoom) => Promise<T>) {
-		if (closing) fail('The host is stopping.');
-		const entry = entries.get(name);
-		if (!entry) fail('Unknown room.');
-		return serial(entry, () => operation(entry));
-	}
-	function watch(name: string, changed: () => void): () => void {
-		const entry = entries.get(name);
-		if (!entry) fail('Unknown room.');
-		entry.watchers.add(changed);
-		return () => {
-			entry.watchers.delete(changed);
-		};
-	}
-	async function lifecycle(name: string, action: RoomAction) {
-		return withRoom(name, async (entry) => {
-			switch (action) {
-				case 'resume':
-					await run(entry);
-					break;
-				case 'stop':
-					await stopEntry(entry);
-					// Persist the stopped intent only after durable cleanup succeeds.
-					// A restart then reopens an unresolved stop for another retry.
-					entry.enabled = 0;
-					save(entry);
-					break;
-				case 'cancel':
-					await liveRoom(entry).cancel();
-					break;
-			}
-			return status(entry);
-		});
-	}
-	async function closeEntry(entry: HostedRoom): Promise<void> {
-		await stopEntry(entry);
-	}
-	async function closeEntries(): Promise<void> {
-		const results = await Promise.allSettled(
-			[...entries.values()].map((entry) => serial(entry, () => closeEntry(entry))),
-		);
-		const failure = results.find(
-			(result): result is PromiseRejectedResult => result.status === 'rejected',
-		);
-		if (failure) throw failure.reason;
-	}
-	async function stopEntry(entry: HostedRoom): Promise<void> {
-		if (entry.lifecycle.status === 'stopped') return;
-		const { room, mirror } = entry.lifecycle;
-		// Keep the handle while cleanup is in flight and after a failed write.
-		entry.lifecycle = { status: 'stopping', room, mirror };
-		await room.stop();
-		// Stop the room, and its shutdown-triggered "left", before the mirror:
-		// a mirror stopped first must not miss what the shutdown itself writes.
-		await mirror?.stop();
-		entry.lifecycle = { status: 'stopped' };
-	}
+	// The canvas attaches the mirror of each room, so the host attaches none.
+	const canvas = openCanvas({
+		name: 'workbench',
+		runtime,
+		store: sqliteCanvas(sql),
+		workspace,
+		breakout: { team: [] },
+		onError: (failure) => reportFailure(stateOf(failure.room), failure),
+	});
+	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
 	try {
-		for (const row of database.prepare('SELECT * FROM workbench_rooms ORDER BY rowid').all()) {
-			const entry = attach({
-				name: String(row.name),
-				goal: String(row.goal),
-				enabled: Number(row.enabled),
-			});
-			if (entry.enabled) await run(entry);
-		}
+		await canvas.resume({ agents: roomTeam.agents });
 	} catch (error) {
 		closing = true;
-		await closeEntries().catch(() => {});
+		await canvas.close().catch(() => {});
 		await workspaceTail.catch(() => {});
 		await workspace.dispose().catch(() => {});
 		throw error;
 	}
+	/** The row of a room, or a refusal. */
+	function known(name: string): CanvasRoom {
+		return canvas.rooms().find((row) => row.name === name) ?? fail('Unknown room.');
+	}
+	/** The live room, or a refusal that tells the person to resume it. */
+	function liveRoom(name: string): Room {
+		if (closing) fail('The host is stopping.');
+		known(name);
+		return canvas.room(name) ?? fail('Resume this room first.');
+	}
+	async function inRoom<T>(name: string, operation: (room: Room) => Promise<T>) {
+		return operation(liveRoom(name));
+	}
+	async function view(row: CanvasRoom, messages: ReadMessages = false) {
+		return roomView(
+			row,
+			stateOf(row.name),
+			await readRoom(row.name, { runtime, messages }),
+			canvas.room(row.name) !== undefined,
+			missing,
+		);
+	}
+	async function create(name: string, goal: string) {
+		if (closing) fail('The host is stopping.');
+		if (canvas.rooms().some((row) => row.name === name)) fail('This room already exists.');
+		const scenario = scenarios.find((candidate) => candidate.name === name);
+		await canvas.open({
+			name,
+			goal,
+			agents: roomTeam.specialists.map((agent) => agent.name),
+			assistant: roomTeam.assistant.name,
+			seats: scenario?.seats ?? { design: 'named' },
+		});
+		return view(known(name));
+	}
+	function watch(name: string, listener: () => void): () => void {
+		known(name);
+		const { watchers } = stateOf(name);
+		watchers.add(listener);
+		return () => {
+			watchers.delete(listener);
+		};
+	}
+	async function lifecycle(name: string, action: RoomAction) {
+		if (closing) fail('The host is stopping.');
+		known(name);
+		switch (action) {
+			case 'resume':
+				await canvas.start(name);
+				break;
+			case 'stop':
+				await canvas.stop(name);
+				break;
+			case 'cancel':
+				await liveRoom(name).cancel();
+				break;
+		}
+		return view(known(name));
+	}
+	let shutdown: Promise<void> | undefined;
+	async function close(): Promise<void> {
+		closing = true;
+		// Each room keeps its row, so a restart resumes the rooms that ran. The
+		// canvas reports a stop that failed and stops the other rooms.
+		await canvas.close();
+		await workspaceTail;
+		await workspace.dispose();
+	}
 	return {
 		create,
-		withRoom,
+		inRoom,
 		watch,
 		withWorkspace,
 		workspace,
 		lifecycle,
 		/** The steps of one activation that this process logged. */
-		activation: (name: string, id: string) => withRoom(name, async () => log.read(name, id)),
+		activation: async (name: string, id: string) => {
+			known(name);
+			return log.read(name, id);
+		},
 		/** The operations of a room that wait for the person of their exchange. */
-		approvals: (name: string) => withRoom(name, () => readApprovals(lab, name)),
-		list: () =>
-			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
-		read: (name: string, after?: number) =>
-			withRoom(name, async (entry) =>
-				roomView(
-					entry,
-					await readRoom(entry.name, {
-						runtime,
-						messages: after === undefined ? undefined : { after },
-					}),
-					missing,
-				),
-			),
-		async close() {
-			closing = true;
-			// Preserve hosting intent so process restart resumes previously running rooms.
-			// Each step keeps its resources when it fails, so a later close retries
-			// the retained room handles before disposing shared resources.
-			await closeEntries();
-			await workspaceTail;
-			await workspace.dispose();
+		approvals: async (name: string) => {
+			known(name);
+			return readApprovals(lab, name);
+		},
+		list: () => Promise.all(canvas.rooms().map((row) => view(row))),
+		read: async (name: string, after?: number) =>
+			view(known(name), after === undefined ? undefined : { after }),
+		close() {
+			shutdown ??= close().catch((error: unknown) => {
+				shutdown = undefined;
+				throw error;
+			});
+			return shutdown;
 		},
 	};
 }
 
+type ReadMessages = NonNullable<Parameters<typeof readRoom>[1]>['messages'];
+
 /** A room as the host presents it: the recorded read, plus the hosting state and the recent work. */
-export type RoomView = ReturnType<typeof roomView>;
+export type RoomView = Awaited<ReturnType<typeof roomView>>;
 
 function roomView(
-	entry: HostedRoom,
+	row: CanvasRoom,
+	state: RoomState,
 	snapshot: Awaited<ReturnType<typeof readRoom>>,
+	running: boolean,
 	unavailable: readonly string[],
 ) {
+	const scenario = scenarios.find((candidate) => candidate.name === row.name);
 	return {
 		...snapshot,
 		/** The seats that cannot run because their executor kind has no key. */
 		unavailable,
-		goal: snapshot.initialized ? snapshot.goal : entry.goal,
-		status: entry.lifecycle.status,
-		activity: [...entry.activity],
-		failures: new Map(entry.failures) as ReadonlyMap<string, string>,
-		pattern: scenarios.find((scenario) => scenario.name === entry.name)?.pattern,
-		prompt: scenarios.find((scenario) => scenario.name === entry.name)?.prompt,
+		goal: snapshot.initialized ? snapshot.goal : row.goal,
+		status: running ? ('running' as const) : ('stopped' as const),
+		activity: [...state.activity],
+		failures: new Map(state.failures) as ReadonlyMap<string, string>,
+		pattern: scenario?.pattern,
+		prompt: scenario?.prompt,
 	};
 }
 
-export function liveRoom(entry: HostedRoom): Room {
-	if (entry.lifecycle.status !== 'running') fail('Resume this room first.');
-	return entry.lifecycle.room;
+/** Tell every watcher of a room to read again. */
+function changed(state: RoomState): void {
+	for (const watcher of [...state.watchers]) watcher();
+}
+
+/** A room that the canvas starts: hear its events, and tell the watchers of each change. */
+function heardEvent(
+	event: CanvasEvent,
+	stateOf: (name: string) => RoomState,
+	room: (name: string) => Room | undefined,
+): void {
+	const name = event.type === 'opened' ? event.room.name : event.room;
+	const state = stateOf(name);
+	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
+	changed(state);
+}
+
+/** A failure that the canvas survived goes to the activity list, where the person reads it. */
+function reportFailure(state: RoomState, failure: CanvasError): void {
+	const reason = failure.error instanceof Error ? failure.error.message : String(failure.error);
+	const text =
+		failure.operation === 'mirror'
+			? `The room mirror failed: ${reason}`
+			: `The ${failure.operation} of the room failed: ${reason}`;
+	pushActivity(state, { type: 'error', text });
+	changed(state);
 }
 
 /** One room event: record the activity it shows, then tell every watcher to read again. */
-function notify(entry: HostedRoom, event: RoomNotification): void {
-	recordActivity(entry, event);
-	for (const watcher of [...entry.watchers]) watcher();
+function notify(state: RoomState, event: RoomNotification): void {
+	recordActivity(state, event);
+	changed(state);
 }
 
 /** How many failure reasons a room keeps. */
 const FAILURES_KEPT = 100;
 
 /** Keep the reason of an activation that ended on a failure. */
-function recordFailure(entry: HostedRoom, step: TraceStep): void {
+function recordFailure(state: RoomState, step: TraceStep): void {
 	if (step.type !== 'end' || step.failure === undefined) return;
-	entry.failures.set(step.activation, step.failure.message);
-	for (const oldest of entry.failures.keys()) {
-		if (entry.failures.size <= FAILURES_KEPT) break;
-		entry.failures.delete(oldest);
+	state.failures.set(step.activation, step.failure.message);
+	for (const oldest of state.failures.keys()) {
+		if (state.failures.size <= FAILURES_KEPT) break;
+		state.failures.delete(oldest);
 	}
 }
 
-function recordActivity(entry: HostedRoom, event: RoomNotification): void {
+function recordActivity(state: RoomState, event: RoomNotification): void {
 	const activity = describeEvent(event);
-	if (activity) pushActivity(entry, activity);
+	if (activity) pushActivity(state, activity);
 }
 
-function pushActivity(entry: HostedRoom, activity: Omit<Activity, 'at'>): void {
-	entry.activity.push({ at: new Date().toISOString(), ...activity });
-	entry.activity.splice(0, Math.max(0, entry.activity.length - 30));
+function pushActivity(state: RoomState, activity: Omit<Activity, 'at'>): void {
+	state.activity.push({ at: new Date().toISOString(), ...activity });
+	state.activity.splice(0, Math.max(0, state.activity.length - 30));
 }
 function describeEvent(event: RoomNotification): Omit<Activity, 'at'> | undefined {
 	switch (event.type) {
