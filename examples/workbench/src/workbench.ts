@@ -232,8 +232,7 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 }
 
 async function shutdown(rooms: Rooms, database: DatabaseSync): Promise<void> {
-	// Rooms first: a failed stop keeps its handle, so a later close retries it before
-	// the storage goes away.
+	// Rooms first, so every stop writes before the storage goes away.
 	await rooms.close();
 	database.close();
 }
