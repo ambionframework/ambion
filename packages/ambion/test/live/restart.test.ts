@@ -66,7 +66,7 @@ live('restart', () => {
 			const startOutput = [killed.lines.join('\n'), killed.stderr].filter(Boolean).join('\n');
 			expect(killed.signal, startOutput).toBe('SIGKILL');
 			const ready = killed.lines.find((line) => line.startsWith('ready '));
-			expect(ready).toBeDefined();
+			expect(ready, startOutput).toBeDefined();
 			const checkpoint = JSON.parse(ready?.slice('ready '.length) ?? '{}') as {
 				from: number;
 				fastSeq: number;

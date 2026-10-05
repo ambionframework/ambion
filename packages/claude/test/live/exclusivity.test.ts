@@ -9,7 +9,11 @@ import { isSaid } from '../../../ambion/src/index.ts';
 import { enter, messagesOf } from '../../../ambion/test/support/room.ts';
 import { live, open, person, seat, stepsOfType, untilQuiet, within } from './support.ts';
 
-const ROOM_TOOLS = ['say', 'schedule', 'seat', 'unseat', 'dismiss', 'recall'];
+/** The tools of a room with an empty reserve. The room offers `seat` only when the reserve holds an agent. */
+const ROOM_TOOLS = ['say', 'schedule', 'unseat', 'dismiss', 'recall'];
+
+/** Every executor seat holds `compose` and `describe` with the room tools. */
+const SEAT_TOOLS = [...ROOM_TOOLS, 'compose', 'describe'];
 
 live('exclusivity', () => {
 	it('a seat calls no built-in tool, and its session holds the room tools only', async () => {
@@ -33,9 +37,9 @@ live('exclusivity', () => {
 			await untilQuiet(session);
 			const steps = stepsOf(activation);
 			const called = stepsOfType(steps, 'tool_call').map((s) => s.name);
-			expect(called.filter((n) => !ROOM_TOOLS.includes(n))).toEqual([]);
+			expect(called.filter((n) => !SEAT_TOOLS.includes(n))).toEqual([]);
 			const [opened] = stepsOfType(steps, 'session');
-			expect(new Set(opened?.tools)).toEqual(new Set(ROOM_TOOLS));
+			expect(new Set(opened?.tools)).toEqual(new Set(SEAT_TOOLS));
 			const said = (await messagesOf(session))
 				.filter(isSaid)
 				.filter((m) => m.from === 'bare')
