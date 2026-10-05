@@ -394,6 +394,32 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 	return tool;
 }
 
+describe.skipIf(!hasSetsid)('a workstation read', () => {
+	it('returns a file at the limit, and refuses a larger file and a device file with `invalid`', async () => {
+		const started = await server();
+		const home = started.homes.get('ada') ?? '';
+		const limit = 10 * 1024 * 1024;
+		await writeFile(join(home, 'edge.bin'), Buffer.alloc(limit, 97));
+		await writeFile(join(home, 'big.bin'), Buffer.alloc(limit + 1, 97));
+		const backend = backendFor(started.options);
+		await withEnv(backend, 'ada', async (env) => {
+			const edge = await env.readBinaryFile('edge.bin');
+			expect(edge.ok && edge.value.length).toBe(limit);
+			for (const path of ['big.bin', '/dev/zero']) {
+				const rss = process.memoryUsage().rss;
+				const began = Date.now();
+				const refused = await env.readBinaryFile(path);
+				expect(refused).toMatchObject({ ok: false, error: { code: 'invalid' } });
+				expect(refused.ok ? '' : refused.error.message).toContain(path.slice(-8));
+				expect(Date.now() - began).toBeLessThan(10_000);
+				expect(process.memoryUsage().rss - rss).toBeLessThan(200 * 1024 * 1024);
+			}
+			const again = await env.readTextFile('edge.bin');
+			expect(again.ok).toBe(true);
+		});
+	});
+});
+
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other over a lost stop, and records a lost one', async () => {
 		const started = await server(['ada']);

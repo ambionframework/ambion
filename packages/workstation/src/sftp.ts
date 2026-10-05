@@ -53,6 +53,66 @@ export const stat = (sftp: SFTPWrapper, path: string): Promise<Stats> =>
 export const readdir = (sftp: SFTPWrapper, path: string): Promise<FileEntryWithStats[]> =>
 	call<FileEntryWithStats[]>((done) => sftp.readdir(path, done));
 
+/** The most bytes that one file read returns. The directory backend of just-bash uses the same 10 MiB. */
+const MAX_READ_BYTES = 10 * 1024 * 1024;
+
+/** The size of one SFTP read request. */
+const CHUNK_BYTES = 32 * 1024;
+
+const refuseSize = (path: string, size: string): FileError =>
+	new FileError(
+		'invalid',
+		`${path} is ${size}, more than the ${MAX_READ_BYTES} bytes that a read returns.`,
+		path,
+	);
+
+/** Read the chunks of an open handle, and count them against the limit. */
+async function readChunks(
+	sftp: SFTPWrapper,
+	handle: Buffer,
+	path: string,
+	stopped: () => boolean,
+): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	let total = 0;
+	while (!stopped()) {
+		const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
+		const count = await call<number>((done) =>
+			sftp.read(handle, chunk, 0, CHUNK_BYTES, total, done),
+		);
+		if (count === 0) return Buffer.concat(chunks, total);
+		total += count;
+		if (total > MAX_READ_BYTES) throw refuseSize(path, `more than ${MAX_READ_BYTES} bytes`);
+		chunks.push(chunk.subarray(0, count));
+	}
+	throw new Error('The session ended during the read.');
+}
+
+/**
+ * Read one regular file of at most `MAX_READ_BYTES`. The size that `fstat`
+ * reports and the bytes that arrive both count, so a file that grows or
+ * reports size 0, such as `/dev/zero`, stops at the limit. The handle closes
+ * on every path. `stopped` ends the loop when the session ends.
+ */
+export async function readBounded(
+	sftp: SFTPWrapper,
+	path: string,
+	stopped: () => boolean,
+): Promise<Buffer> {
+	const handle = await call<Buffer>((done) => sftp.open(path, 'r', done));
+	try {
+		const stats = await call<Stats>((done) => sftp.fstat(handle, done));
+		if (stats.isDirectory()) throw new FileError('is_directory', `${path} is a directory.`, path);
+		if (!stats.isFile()) {
+			throw new FileError('invalid', `${path} is not a regular file.`, path);
+		}
+		if (stats.size > MAX_READ_BYTES) throw refuseSize(path, `${stats.size} bytes`);
+		return await readChunks(sftp, handle, path, stopped);
+	} finally {
+		sftp.close(handle, () => undefined);
+	}
+}
+
 /** The kind of the object at `path`, or undefined when nothing is there. */
 async function kindAt(sftp: SFTPWrapper, path: string): Promise<'directory' | 'other' | undefined> {
 	try {
