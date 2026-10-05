@@ -18,7 +18,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
 import { type FakeClock, fakeClock } from '../src/testing.ts';
@@ -57,7 +57,14 @@ const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
 function killAt(dir: string, name: string, at: number, storage: string): Promise<number> {
 	return new Promise((resolve, reject) => {
 		const args = ['--no-warnings', child, dir, name, '40', storage];
-		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
+		const process_ = spawn(node, args, {
+			stdio: ['ignore', 'pipe', 'inherit'],
+			timeout: 10_000,
+			killSignal: 'SIGKILL',
+		});
+		onTestFinished(() => {
+			process_.kill('SIGKILL');
+		});
 		let last = 0;
 		childWrites(process_.stdout, (reported) => {
 			if (reported !== 'done') last = reported;

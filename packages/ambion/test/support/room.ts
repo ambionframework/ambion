@@ -90,7 +90,7 @@ export function runningLeases(room: Room): number {
 export async function waitForRoom(
 	room: Room,
 	scope: 'settled' | 'quiet' = 'quiet',
-	timeoutMs = 150_000,
+	timeoutMs = 10_000,
 ): Promise<void> {
 	const internal = room as Room & {
 		state(): RoomState;
@@ -104,7 +104,7 @@ export async function waitForRoom(
 		const work = liveWork(internal.state(), internal.runtime.clock.now());
 		if (scope === 'settled' ? !work.exchange : work.rest) return;
 	}
-	throw new Error(`The room did not reach ${scope}.`);
+	throw new Error(`The room did not reach ${scope} within ${timeoutMs}ms.`);
 }
 
 export async function messagesOf(
