@@ -291,12 +291,12 @@ if (recorded) {
 the record. It adds no entry kind and starts no timer, so a resumed room reads
 the same outcome. The first case that holds wins:
 
-| Outcome     | When it holds                                                                |
-| ----------- | ---------------------------------------------------------------------------- |
-| `cancelled` | A cancellation wrote the close.                                              |
-| `exhausted` | The room gave up on a respond activation in the range.                       |
-| `awaiting`  | The last said message asks a person, and that person has said nothing since. |
-| `complete`  | None of the above.                                                           |
+| Outcome     | When it holds                                                      |
+| ----------- | ------------------------------------------------------------------ |
+| `cancelled` | A cancellation wrote the close.                                    |
+| `exhausted` | The room gave up on a respond activation in the range.             |
+| `awaiting`  | The last said message goes to a person who has said nothing since. |
+| `complete`  | None of the above.                                                 |
 
 A message to the author of the opening message is the answer to that
 person's question, so it never makes an exchange `awaiting`. A returned say

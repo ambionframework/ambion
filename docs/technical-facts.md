@@ -22,8 +22,10 @@ and the packages.
   can be sent twice and the fold refuses a stale caller. Leases claim, renew,
   expire, and end with a recorded reason and the activation's usage.
 - **Freshness checked at commit.** A `say` carries the position its
-  activation read. If the record moved, the room refuses it and returns the
-  missed messages. An active agent receives new context between provider
+  activation read. If the record moved, the room refuses an immediate say
+  and returns the missed messages. The room checks no position for a
+  scheduled say, a closing summary, a seating, an unseating, or a
+  dismissal. An active agent receives new context between provider
   requests when its framework takes a message during a run, and on its next
   pass otherwise. See [Agents](agent.md).
 - **The exchange is a fold.** The first human question after the last close
@@ -104,9 +106,10 @@ and the packages.
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See
   [Exchange](exchange.md#6-a-scheduled-say).
-- **Waiting on a person as a derived outcome.** An exchange whose last word
-  is a question to a person reads as awaiting them, which gives approval a
-  representation with no new entry kind.
+- **Waiting on a person as a derived outcome.** An exchange reads as
+  awaiting a person when its last said message goes to that person. The
+  person has said nothing since and did not open the exchange. Approval
+  gets a representation with no new entry kind.
 
 ## Boundaries and limits
 
@@ -118,6 +121,9 @@ and the packages.
 - Tools can act before a contribution commits. Applications own effect
   idempotency; conversation freshness does not make external effects
   transactional.
+- An executor that ignores cancellation runs on. The room refuses its room
+  calls once the lease ends, and its tool effects still land. See
+  [Executors](executors.md).
 - Await `cancel()` or `stop()` to confirm their durable room-wide work. A
   graceful stop ends running leases and keeps pending work for the next run.
   See the [cancellation contract](durability.md#cancellation).
