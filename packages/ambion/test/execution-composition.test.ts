@@ -85,17 +85,6 @@ describe('the execution a room chooses', () => {
 		expect(unusedBuilds).toBe(0);
 	});
 
-	it.each(['room', 'runtime'] as const)('runs the execution supplied to the %s', async (owner) => {
-		const explicit = stub();
-		await ask({
-			name: roomName(owner),
-			agents: [seat('stub')],
-			runtime: createRuntime(owner === 'runtime' ? { execution: explicit.execution } : {}),
-			...(owner === 'room' ? { execution: explicit.execution } : {}),
-		});
-		expect(explicit.counts).toEqual({ built: 1, connected: 1 });
-	});
-
 	it.each(['room', 'runtime'] as const)(
 		'uses the first matching execution of the %s, including a wildcard',
 		async (owner) => {

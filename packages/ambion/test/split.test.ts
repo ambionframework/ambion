@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Entry } from '@ambionframework/journal';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
@@ -189,19 +189,37 @@ describe('a split: two live hosts over one SQLite database', () => {
 	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
 		const args = ['--no-warnings', child, dir, name, '40'];
-		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
-		const exited = new Promise<void>((resolve) => process_.on('exit', () => resolve()));
+		const process_ = spawn(node, args, {
+			stdio: ['ignore', 'pipe', 'inherit'],
+			timeout: 45_000,
+			killSignal: 'SIGKILL',
+		});
+		onTestFinished(() => {
+			process_.kill('SIGKILL');
+		});
+		const exited = new Promise<void>((resolve) => process_.on('close', () => resolve()));
 		const stopped = new Promise<number>((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				process_.kill('SIGKILL');
+				reject(new Error(`The child did not reach write ${at} within 10000ms.`));
+			}, 10_000);
 			let sent = false;
 			// stopped once, where it stands; what it writes after the continue is its own
 			childWrites(process_.stdout, (last) => {
 				if (last === 'done' || last < at || sent) return;
 				sent = true;
+				clearTimeout(timeout);
 				process_.kill('SIGSTOP');
 				resolve(last);
 			});
-			process_.on('error', reject);
-			process_.on('exit', () => reject(new Error('the child ended before the stop')));
+			process_.on('error', (error) => {
+				clearTimeout(timeout);
+				reject(error);
+			});
+			process_.on('exit', () => {
+				clearTimeout(timeout);
+				reject(new Error('the child ended before the stop'));
+			});
 		});
 		return {
 			stopped,
@@ -245,6 +263,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 			await session.stop();
 		} finally {
 			paused.kill();
+			await paused.exited;
 			await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 		}
 	}, 60_000);

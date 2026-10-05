@@ -15,7 +15,6 @@ import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { Freshness } from '../../ambion/src/execution/freshness.ts';
 import { deferred, scriptedAgent } from '../../ambion/test/support/room.ts';
 import { createExecutionServices, pi } from '../src/index.ts';
 import {
@@ -47,9 +46,13 @@ const summary = {
 } as const;
 
 describe.each(stores)('exchange continuity on sessions in %s', (_name, store) => {
-	it('continues the session the room names, sends the reminders, the scheduled says, and the delta, and records it', async () => {
+	it('continues the session the room names, sends reminders, scheduled says, and the delta only when the record moves', async () => {
 		// A bundle reminder and the scheduled says reach the model on a continued session too, before the delta.
-		const remind = (seat: ReminderSeat) => `Reminder for ${seat.activation}.`;
+		const reminded: string[] = [];
+		const remind = (seat: ReminderSeat) => {
+			reminded.push(seat.activation);
+			return `Reminder for ${seat.activation}.`;
+		};
 		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
 		const { seen, run } = seatOn(new TwoQuestions(), await store(), undefined, definition);
 		const first = await run('message:1:product:1');
@@ -78,34 +81,13 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 		);
 		// The position the session read never reaches the model.
 		expect(prompts.join('\n')).not.toContain('through');
-	});
 
-	it('calls no reminder for a continued session that has nothing new, and starts no run', async () => {
-		const reminded: string[] = [];
-		const remind = (seat: ReminderSeat) => {
-			reminded.push(seat.activation);
-			return 'Reminder.';
-		};
-		const definition = scriptedAgent('product', 'Product.', { bundles: [{ tools: [], remind }] });
-		const { seen, run } = seatOn(new TwoQuestions(1), await store(), undefined, definition);
-		const first = await run('message:1:product:1');
-		const again = await run('message:1:product:2', { resume: first.session });
-		expect(seen).toHaveLength(1);
-		expect(reminded).toEqual(['message:1:product:1']);
-		// The core takes the view as read, and the session stays the one the room named.
+		const again = await run('message:2:product:2', { resume: second.session });
+		expect(seen).toHaveLength(2);
+		expect(reminded).toEqual(['message:1:product:1', 'message:2:product:1']);
 		expect(again.result).toEqual({ failed: false });
-		expect(again.readThrough).toBe(1);
+		expect(again.readThrough).toBe(2);
 		expect(again.session).toEqual(began(1));
-	});
-
-	it('begins a fresh session when the view names none, as in a new exchange', async () => {
-		const { seen, run } = seatOn(new TwoQuestions(), await store());
-		await run('message:1:product:1');
-		const second = await run('message:2:product:1');
-		expect(second.session).toEqual(began(2));
-		const prompts = texts(seen.at(-1) as Context);
-		expect(prompts).toHaveLength(1);
-		expect(prompts[0]).toContain("The record of 'memory' so far:");
 	});
 
 	it('begins a fresh session when the store does not hold the one the room names', async () => {
@@ -193,7 +175,11 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 	it('keeps the session of a closed exchange for its summary while the next exchange runs', async () => {
 		const { seen, run } = seatOn(new TwoQuestions(), await store());
 		await run('message:1:product:1');
-		await run('message:2:product:1');
+		const second = await run('message:2:product:1');
+		expect(second.session).toEqual(began(2));
+		const fresh = texts(seen.at(-1) as Context);
+		expect(fresh).toHaveLength(1);
+		expect(fresh[0]).toContain("The record of 'memory' so far:");
 		const closing = await run('closed:1:product:1', { purpose: summary, resume: began(1) });
 		expect(closing.session).toEqual(began(1));
 		// The summary activation continued the first session, and it reads the whole view.
@@ -332,13 +318,7 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 			executor: pi({ instructions: 'Work.', model: 'scripted/product', tools: [book] }),
 		});
 		// The hook before the second request throws once. The harness reports it and sends the request.
-		const delivered = Freshness.prototype.delivered;
 		let thrown = false;
-		vi.spyOn(Freshness.prototype, 'delivered').mockImplementation(function (this: Freshness, call) {
-			if (thrown) return delivered.call(this, call);
-			thrown = true;
-			throw new Error('The hook failed.');
-		});
 		const room = new TwoQuestions();
 		const { seen, opener } = seatOn(
 			room,
@@ -347,7 +327,22 @@ describe.each(stores)('exchange continuity on sessions in %s', (_name, store) =>
 			definition,
 		);
 		const id = 'message:2:product:1';
-		const activation = stateOf(opener, definition, { id, room });
+		const activation = stateOf(
+			(input) =>
+				opener({
+					...input,
+					get readThrough() {
+						return input.readThrough;
+					},
+					delivered(call) {
+						if (thrown) return input.delivered(call);
+						thrown = true;
+						throw new Error('The hook failed.');
+					},
+				}),
+			definition,
+			{ id, room },
+		);
 		// The activation stays open, as it does while the room retries the pass.
 		onTestFinished(() => activation.close?.());
 		const failed = await activation.pass({ kind: 'view', view: await viewOf(id, room) });

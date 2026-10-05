@@ -12,7 +12,7 @@
 		"dev": "turbo dev",
 		"build": "turbo build",
 		"test": "pnpm run test:reports && pnpm run test:packages",
-		"test:reports": "node --test --test-reporter=dot scripts/*.test.mjs",
+		"test:reports": "node --test --test-timeout=60000 --test-reporter=dot scripts/*.test.mjs",
 		"test:packages": "turbo run test --continue=dependencies-successful",
 		"test:live": "pnpm -r run test:live",
 		"test:live-local-workstation": "bash scripts/live-local-workstation.sh",

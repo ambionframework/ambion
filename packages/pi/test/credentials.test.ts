@@ -4,7 +4,7 @@
  * provider: a real provider needs an account.
  */
 
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -84,9 +84,10 @@ describe('fileCredentials', () => {
 		expect(await store.read('anthropic')).toMatchObject({ access: 'after-wait' });
 	});
 
-	it('stops waiting for a lock when the sign-in is cancelled', async () => {
+	it('stops waiting for a lock with a missing target when the sign-in is cancelled', async () => {
 		const path = join(await tempDir('ambion-credentials-'), 'auth.json');
-		await writeFile(`${path}.lock`, 'another-process');
+		// A lock whose target is gone still blocks exclusive creation. Cancellation must end the wait.
+		await symlink(join(path, 'missing'), `${path}.lock`);
 		const controller = new AbortController();
 		const written = fileCredentials(path).modify('anthropic', async () => oauth('x'), {
 			signal: controller.signal,

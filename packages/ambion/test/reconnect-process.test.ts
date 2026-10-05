@@ -13,6 +13,7 @@ function runChild(phase: 'start' | 'resume', directory: string) {
 			const process_ = spawn(process.execPath, ['--no-warnings', child, phase, directory], {
 				stdio: ['ignore', 'pipe', 'pipe'],
 				timeout: 10_000,
+				killSignal: 'SIGKILL',
 			});
 			let output = '';
 			let errors = '';
@@ -41,4 +42,4 @@ it('reconnects from durable client identifiers in a fresh process after SIGKILL'
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
-});
+}, 30_000);

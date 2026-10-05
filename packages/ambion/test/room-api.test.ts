@@ -95,7 +95,7 @@ async function world(
 }
 
 describe.each(storages)('the room API over $name storage', (storage) => {
-	it('reads one detached projection', async () => {
+	it('reads detached projections and restores exchange handles after restart', async () => {
 		const runtime = await runtimeOn(storage);
 		const missingName = roomName('room-read-missing');
 		const missing = await readRoom(missingName, { runtime, messages: false });
@@ -127,7 +127,9 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		const sent = await (await room.visit(priya)).send({ text: 'A question?', key: 'read-1' });
 		expect(sent).not.toHaveProperty('messages');
 		expect(sent).not.toHaveProperty('response');
-		await messagesOf(room);
+		const conversation = await sent.waitForClose();
+		expect(closedExchange(room, sent.from)?.from).toBe(sent.from);
+		expect(conversation.at(0)?.seq).toBe(sent.from);
 		const complete = await readRoom(name, { runtime });
 		const closed = complete.exchanges.find((exchange) => exchange.from === sent.from);
 		expect(closed).toMatchObject({ status: 'closed', summary: { kind: 'silent' } });
@@ -156,6 +158,11 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 			detachedMessage !== undefined && isSaid(detachedMessage) ? detachedMessage.text : undefined,
 		).toBe('A question?');
 		expect(detached.participants.some((item) => item.name === priya.name)).toBe(true);
+		await room.stop();
+		const resumed = stopAtEnd(await resumeRoom(name, { runtime, agents: [] }));
+		const recovered = resumed.exchange(sent.from);
+		expect(recovered).toBeDefined();
+		expect(await recovered?.waitForClose()).toEqual(conversation);
 	});
 
 	it('keeps an open exchange open after host eviction', async () => {
@@ -165,25 +172,6 @@ describe.each(storages)('the room API over $name storage', (storage) => {
 		const snapshot = await readRoom(room.name, { runtime, messages: false });
 		expect(snapshot.initialized).toBe(true);
 		expect(snapshot.exchange?.status).toBe('open');
-	});
-
-	it('restores exchange handles', async () => {
-		const { runtime, room: first } = await world(() => quiet(), {}, storage);
-		const sent = await (await first.visit(priya)).send({ text: 'Persist?', key: 'resume-1' });
-		const conversation = await sent.waitForClose();
-		expect(closedExchange(first, sent.from)?.from).toBe(sent.from);
-		expect(conversation.at(0)?.seq).toBe(sent.from);
-		await first.stop();
-		const resumed = stopAtEnd(
-			await resumeRoom(first.name, {
-				runtime,
-				agents: [alpha],
-				execution: piExecution({ sessions: 'memory', stream: scriptedStream(() => quiet()) }),
-			}),
-		);
-		const recovered = resumed.exchange(sent.from);
-		expect(recovered).toBeDefined();
-		expect(await recovered?.waitForClose()).toEqual(conversation);
 	});
 });
 

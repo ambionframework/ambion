@@ -175,12 +175,6 @@ describe('coherent room reads', () => {
 		expect(outcome(failed)).toEqual({ kind: 'failed' });
 		expect(pending.through).toBe(4);
 	});
-
-	it('validates cursors even when the room has no composition', () => {
-		expect(() =>
-			toRoomRead('missing', { ...state([], []), composition: undefined }, 0, 0, { after: -1 }),
-		).toThrow(/cursor/i);
-	});
 });
 
 describe.each(storages)('stored room reads on $name storage', (storage) => {

@@ -12,29 +12,23 @@ const sentences = (text: string): string[] =>
 		.map((sentence) => sentence.replace(/[*_`]/g, '').trim())
 		.filter((sentence) => sentence.split(' ').length > 5);
 
-it('docs/room.md does not restate the positioning of the README', async () => {
-	const readme = new Set(sentences(await read('../../../README.md')));
-	const room = sentences(await read('../../../docs/room.md'));
-	const copied = room.filter((sentence) => readme.has(sentence));
-	expect(copied).toEqual([]);
-});
-
 const headings = (text: string): string[] =>
 	text
 		.split('\n')
 		.filter((line) => line.startsWith('## '))
 		.map((line) => line.trim());
 
-it('each second-level heading of docs/room.md has one owner page', async () => {
-	const room = headings(await read('../../../docs/room.md'));
-	const agent = headings(await read('../../../docs/agent.md'));
-	expect(room.filter((heading) => agent.includes(heading))).toEqual([]);
-});
-
-it('the glossary names executors.md as the owner of Step', async () => {
-	const room = await read('../../../docs/room.md');
-	const agent = await read('../../../docs/agent.md');
-	const executors = await read('../../../docs/executors.md');
+it('keeps documentation ownership and the Step glossary consistent', async () => {
+	const [readme, room, agent, executors] = await Promise.all([
+		read('../../../README.md'),
+		read('../../../docs/room.md'),
+		read('../../../docs/agent.md'),
+		read('../../../docs/executors.md'),
+	]);
+	const positioning = new Set(sentences(readme));
+	expect(sentences(room).filter((sentence) => positioning.has(sentence))).toEqual([]);
+	const agentHeadings = headings(agent);
+	expect(headings(room).filter((heading) => agentHeadings.includes(heading))).toEqual([]);
 	const row = room.split('\n').find((line) => line.startsWith('| Step '));
 	expect(executors).toContain('## The step vocabulary');
 	expect(agent).not.toContain('## Steps and the trace');
