@@ -584,4 +584,4 @@ place.
 ## Out of scope
 
 [The plan](../planning/next.md#out-of-scope) lists the work that this
-design leaves out.
+package leaves out.
