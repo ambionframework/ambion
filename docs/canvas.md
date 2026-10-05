@@ -1,334 +1,558 @@
 # The canvas
 
-> **Status: design. Nothing on this page exists yet.** The page states the
-> design of backlog item D5 for review. The package, the tools, the
-> catalog, `canvas.subscribe`, the `canvas` layout path, and the host view
-> do not exist yet. Every other part that the page names exists today.
+> **Status: design for 0.7.0. The package, the store, the tools, and the
+> bridge do not exist yet.** The kernel parts that the page names exist
+> today. RT1 makes the runtime a required parameter of each one.
+> [The plan](../planning/next.md) owns delivery and evidence.
 
-**The canvas is the surface that people see, and agents arrange it.** An
-agent places widgets and binds each one to a source of data. The host
-draws the widgets and keeps the data current. The interface of a room
-grows from the work of its agents.
+**A canvas is a named collection of rooms.** It holds the rooms of a
+deployment and the relations between them. A room that a host opens is a
+root room. A room that an agent opens for background work is a breakout
+room, with a parent room and an opener. Each room belongs to one canvas.
 
-**The canvas is the counterpart of the workspace.** The workspace is the
-place where agents do the work. The canvas is the place where the work
-shows to people. The canvas is a folder of the workspace, so it is
-shared, durable, and outside the journal ([Resources](resources.md)).
+**The canvas is the counterpart of the workspace.** The workspace holds
+the substrate, and the canvas holds the rooms. Each one has a store, a
+bundle of tools, a reminder, and a view for the host.
 
-| Property        | Workspace                                         | Canvas                                       |
-| --------------- | ------------------------------------------------- | -------------------------------------------- |
-| Serves          | Agents, which act on files, tables, and processes | People, who read the room and act on it      |
-| Reached through | Workspace tools behind the port                   | Canvas tools, which write through the port   |
-| State           | Files, rows, processes, snapshots                 | One file for each widget                     |
-| Provenance      | The audit log and the provenance columns          | The audit log of the workspace               |
-| Host view       | `processes.subscribe`, and the mirror file        | `canvas.subscribe`                           |
-| Agent read      | Files, `jq`, and a reminder for processes         | A reminder for widgets, and the widget files |
-
-## Why a folder of the workspace
-
-**The state of a canvas lives outside the journal.** An entry for each
-canvas operation would give replay and the fence. It would also add
-entry kinds and body schemas to the kernel. Each change of a widget
-would enter the record that every seat reads. [Breakout
-rooms](breakout.md) keep work out of the parent journal for the same
-reason.
-
-**One test sorts the state.** If a loss changes what the room decided,
-the state is an entry. If a loss changes only what people see, the state
-belongs to the canvas. A decision that a person makes on the canvas
-becomes a message (see [Acts](#acts)), so the journal keeps every
-decision.
-
-**The workspace already gives what the canvas needs.** It gives one
-queue, the audit log with provenance, a host read through the port, and
-a layout path ([Workspace](workspace.md#the-layout-and-the-host-identity)).
-Most sources of a widget are workspace data. A second resource would
-repeat each of these parts.
-
-**The canvas package owns four things.** It owns the catalog, the three
-tools, the reminder, and `canvas.subscribe`. The tools emit each change
-to `canvas.subscribe` in process, as the process tools emit to
-`processes.subscribe`. A room with no workspace has no canvas.
-
-**The canvas decides nothing.** It is a view that agents arrange. The
-journal stays the authority of the room
-([Durability](durability.md)). A crash between a canvas write and the
-journal write of the activation leaves a widget for an activation that
-the journal never committed. The widget changes no decision, so the room
-accepts this.
-
-**The design adds no entry kind and no kernel operation.**
-
-| Need                        | Part                                                               |
-| --------------------------- | ------------------------------------------------------------------ |
-| Store and queue the widgets | A new `canvas` path in `WorkspaceLayout`, written through the port |
-| Tools for a seat            | A bundle, as `workspace.tools()` gives one                         |
-| The agent reads the canvas  | The `remind` text of a bundle, as the process reminder gives       |
-| Provenance of each change   | `ToolContext` in the audit log of the workspace                    |
-| Live data for the host      | `workspace.fetch`, `workspace.sql`, the port, `readRoom`           |
-| A person acts               | `room.visit` and `visit.send`, with a ref to the widget            |
-| Join several placements     | `compose` and [macros](macros.md), through declared outputs        |
-
-## Widgets
-
-**A widget is a view and a source.** The view is a kind from the catalog
-of the host and a configuration. The source names data that the host
-reads without the agent. The agent sets the source once. The host
-refreshes the data at the rate that the kind allows.
-
-**The host closes the fast loop, and the agent closes the slow loop.**
-The [actuator](actuators.md#the-loop) page states the same split for a
-controller. A widget that the agent fills on each change costs one
-activation for each change. A widget with a source costs one tool call
-for its life. The agent changes the layout and the sources when the work
-changes.
-
-**A source names data that exists today.**
-
-| Source     | Names                  | The host reads it with                                      |
-| ---------- | ---------------------- | ----------------------------------------------------------- |
-| `sensor`   | `<process>/<sensor>`   | `workspace.fetch` of the process, with the template's paths |
-| `sql`      | A query that reads     | `workspace.sql`, under `PRAGMA query_only`                  |
-| `file`     | A workspace path       | The port                                                    |
-| `snapshot` | A snapshot ref         | The object store; the bytes never change                    |
-| `process`  | A process handle       | `processes.subscribe` and the output file                   |
-| `room`     | `ambion://room/<name>` | `readRoom` and the mirror                                   |
-| `message`  | A message ref          | The journal                                                 |
-| `inline`   | Text or a small table  | The configuration itself                                    |
-
-**The host reads each source as the host agent.** That agent is
-`workspace.mirrorAgent`, `<name>-host`. A widget shows what the host
-agent can read, to every person who sees the canvas. The host refuses a
-source outside the paths and the tables that it allows. It refuses a
-process handle of an agent other than the author of the widget.
-
-**Each refresh is host spend, so the host bounds it.** Each kind has a
-lowest refresh period that the host sets. A widget shows the time of
-its last read. After a failed read, it shows the last value with a stale
-mark, as the camera-chat preview keeps its `failure`.
-
-**A live widget is not evidence.** A `sensor` widget shows temporary
-frames, as the camera-chat preview does today. A `snapshot` widget shows
-retained bytes, and a message can cite them. To cite a measurement, the
-agent calls `fetch` and places the snapshot ref
-([Sensors](sensors.md#read-and-retain-evidence)).
-
-### The catalog
-
-**The host declares the kinds that it can draw.** Each kind has a name
-and a TypeBox schema for its configuration. The bundle guidance lists the
-catalog of the host. A terminal host and a web host give different
-catalogs, and an agent places only a kind that the host can draw. A
-widget of a kind that the host no longer draws shows as one line that
-names its id and kind.
-
-**The full catalog has nine kinds.** The workbench starts with four of
-them (see [Decisions](#decisions)).
-
-| Kind       | Shows                                            |
-| ---------- | ------------------------------------------------ |
-| `markdown` | Formatted text                                   |
-| `table`    | Rows, from `sql`, `file`, or `inline`            |
-| `chart`    | A series over time or over a category            |
-| `image`    | One image, from `sensor`, `snapshot`, or `file`  |
-| `log`      | The tail of a file or of a process               |
-| `metric`   | One value with a label and a unit                |
-| `room`     | The state and the last messages of another room  |
-| `form`     | Fields that a person fills; the submit is an act |
-| `actions`  | Buttons; a press is an act                       |
-
-**An agent writes no code for a widget.** Code from an agent that runs
-in the view of a person is a new trust surface. A later design can make a
-custom kind a Git template, as a sensor server is: fork, customize,
-validate, commit, and run ([Sensors](sensors.md#run-a-server-from-git)).
-
-### Layout
-
-**The agent states intent, and the host places the widget.** A model
-that places widgets by coordinates makes them overlap. A widget carries
-an `area` (`main`, `side`, or `pinned`), an `order`, and a `size`
-(`small`, `medium`, or `wide`). The host fits these to its screen.
-
-**A person can arrange the view for themselves.** A change of order or
-size by a person stays in the host. The host can keep it for that
-person. It does not change the shared canvas.
-
-## The tools
-
-**The bundle has three tools.** `canvas.tools()` returns them with
-guidance and a reminder. The bundle is the authority to place: a seat
-without it cannot change the canvas.
-
-| Tool     | Parameters                                                    | Effect                                                                      |
-| -------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `place`  | `id`, `kind`, `config`, `source?`, `area?`, `order?`, `size?` | Creates one widget. The tool checks `kind` and `config` against the catalog |
-| `update` | `id`, `rev`, `change`                                         | Changes the configuration, the source, or the layout                        |
-| `remove` | `id`, `rev`                                                   | Removes one widget                                                          |
-
-**An id is the name that the agent gives.** It follows the name rule of
-an agent (`^[a-z][a-z0-9-]*$`).
-
-**Each tool declares its output.** The `details` hold the widget and its
-new `rev`, so `compose` binds the result
-([Agents](agent.md#declared-outputs)).
-
-**The reminder lists the widgets.** It gives one line for each widget:
-the id, the kind, the source, the author, and the `rev`. The process
-reminder works the same way ([Processes](processes.md#reminders)). The
-reminder gives at most a fixed count of lines. A longer canvas ends with
-a line that names the canvas folder.
-
-## Contention
-
-**Each widget has a revision.** `update` and `remove` carry the `rev`
-that the agent read. A stale `rev` is a tool error that holds the
-current widget. The agent reads it and decides again. The journal
-applies a like rule to an append: a stale position gets `missed`
+**Each concern keeps one owner.** The room owns its journal and every
+rule of collaboration. The workspace owns the substrate. The canvas owns
+which rooms exist, how they relate, and whether the host intends each one
+to run. Each journal stays the source of its room
 ([Durability](durability.md)).
 
-**`place` creates and never replaces.** A `place` with an id that exists
-is a tool error that holds the current widget. A retried activation that
-places `build-status` again reads the widget that it placed, and it
-cannot overwrite an `update` of another seat. A retried `remove` after a
-crash finds no widget, and the error says so. A tool effect can repeat
-([Durability](durability.md)).
+**The host owns presentation.** The canvas defines no view, layout, or
+rendering contract. A host chooses how to show the rooms. A person
+speaks through the visit of the room that the person enters.
 
-**A widget has no owner lock.** One seat can steer or unseat another by
-design ([Trust](trust.md#what-one-seat-can-do-to-another)). The canvas
-follows that rule. The audit log names the agent of each change, so the
-host can show which seat changed a widget.
+## Why a collection of rooms
 
-**Two seats on two widgets never contend.** The revision belongs to one
-widget, and each widget is one file.
+**A host already keeps a list of rooms.** The workbench keeps one in
+`workbench_rooms`: the name, the goal, and whether the room runs. The
+host reads it at a start and resumes each room. Every host that runs more
+than one room writes the same table and the same resume loop. The canvas
+gives that list one owner.
 
-**The canvas has a freshness rule of its own.** The resource contract
-gives no freshness guarantee, and the room's freshness rule governs only
-what an agent says ([Resources](resources.md#the-resource-contract)). The
-revision governs only the widget that it names.
+**Delegated work needs a room of its own.** An agent that delegates work
+has three options in Ambion today. Each option fails on one property.
 
-## Acts
+| Option                            | Where the work lives                     | What fails                                                                                                      |
+| --------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A native subagent of the executor | The vendor session of one activation     | A crash loses the work. No entry records it. The host cannot see or bound its spend. Each executor turns it off |
+| A worker seat in the parent room  | The journal of the parent room           | Each note of the work is an entry of the parent room. It fills the window of every seat in that room            |
+| A `bash` process                  | A child process of the workspace backend | It runs a command. It cannot hold a conversation between agents                                                 |
+| **A breakout room**               | **A journal of its own**                 | **None of the above.** The work is durable, it replays, a person can visit it, and its spend is per exchange    |
 
-**A person does two kinds of things on a canvas.**
+## The model
 
-| Kind   | Examples                                | Where it goes               |
-| ------ | --------------------------------------- | --------------------------- |
-| A view | Scroll, sort, expand, hide, rearrange   | It stays in the host        |
-| An act | A button press, a form submit, approval | `visit.send` as that person |
+**The store holds one row for each room.** The row is the one durable
+record outside the journals. It holds hosting intent, the tree, and what
+a start needs. It holds no message, no lease, and no exchange
+([The store](#the-store)).
 
-**An act is a message of the person.** `send` belongs to a live visit
-([Presence](presence.md#3-visiting)). A person can look at a canvas
-while absent, so the host calls `room.visit(person)` before it sends the
-act. The text starts with the label `canvas:` and states the act. A ref
-names the widget at its revision. The `to` of the message is the author
-of the widget, so a seat below `broadcast` activates for its own form. A
-`room.post` carries no human direction and has no author, so it does not
-fit an act.
+**The depth is one.** A breakout room has no breakout rooms. Its workers
+get the worker bundle and no opener bundle, so they cannot open a room.
 
-**The exchange of an act has a `person`.** It is eligible for a summary,
-and a configured summary writer then writes one
-([Summaries](summary.md)). An act that answers an agent's question to a
-person clears an `awaiting` outcome
-([Exchange](exchange.md#7-the-edges-a-host-sees)).
+## Breakout rooms
 
-**A form is a question with a shape.** An agent asks a person with a
-form and ends its activation. When a post or a returned say opened the
-exchange, the exchange closes `awaiting`. When the person opened the
-exchange, the form is the answer to that person, and the exchange closes
-`complete`. The submit is the person who speaks. It activates the agent
-with the answer.
+### The tools
 
-**An act lands once.** The key of the send is
-`canvas:<widget>:<rev>:<nonce>`. The client makes the nonce once for each
-press. A replay of one press lands once, and two presses land twice
-([Exchange](exchange.md#7-the-edges-a-host-sees)).
+**An agent opens a breakout room with a goal and a first message.** The
+message opens the first exchange and activates the workers. The workers
+speak in the journal of the breakout room, and a person can visit it at
+any time. The canvas gives two bundles. `canvas.tools()` is the opener
+bundle: the authority to open a room. `canvas.workerTools()` is the
+worker bundle. A host gives the opener bundle to agents of root rooms, and
+the worker bundle to the worker team.
 
-**The record shows the widget that the person acted on.** The ref names
-the revision, and the audit log keeps the call that wrote that
-revision. A widget can change after the act, and the record still
-names what the person saw.
+| Tool       | Bundle | Parameters                                 | Effect                                                                         |
+| ---------- | ------ | ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `breakout` | Opener | `name`, `goal`, `message`, `agents`, `to?` | Opens `<parent>-<name>`, seats `agents`, and posts `message` to `to` or to all |
+| `tell`     | Opener | `room`, `text`, `to?`, `refs?`             | Posts into a running breakout room that the caller opened                      |
+| `archive`  | Opener | `room`, `result`, `note?`                  | Stops a breakout room that the caller opened, and records `done` or `failed`   |
+| `report`   | Worker | `text`, `refs?`                            | Posts into the parent room, to the opener, with the label `breakout <name>:`   |
 
-**The ref is a URI that the application chooses.** The kernel owns the
-`ambion` scheme and refuses a form that it does not define
-([Agents](agent.md#tools)). The canvas uses `canvas://<room>/<id>/<rev>`,
-so the first step needs no kernel change.
+**`breakout` is idempotent by name.** A repeat call by the same opener in
+the same parent returns the same room. The start post keys on
+`breakout-start:<name>`, so a repeat lands it once. A call with a name
+that another opener or a root room holds is a refusal. In every key and
+label, `<name>` is the full room name `<parent>-<name>`.
 
-## Ripple effects
+**A `tell` after the exchange closes opens a new exchange.** An exchange
+with no `report` gets a close notice, so each finished exchange activates
+the opener once. The opener ends the work with `archive`: the canvas
+records the result in the row and stops the room. An archived room does
+not start again, and a new attempt is a new breakout room.
 
-**The kernel does not change.**
+**The canvas runs the calls on one room name in order.** The tool calls
+and the host operations on one room name run one at a time, as the
+`serial` queue of the workbench runs them
+(`examples/workbench/src/rooms.ts`). The kernel refuses a post to a
+stopped room with `room_stopped`, and the canvas maps it to a refusal.
+After `close`, every tool call is a refusal.
 
-**The executors do not change.** Pi, Claude, and Codex receive the canvas
-as a bundle, the same as the workspace. A vendor surface that draws for
-a person stays off. It writes no entry, and the host cannot see it. The
-executors turn off native subagents for the same reason
-([Breakout rooms](breakout.md#why-a-room)).
+**Reads use the mirror.** The `RoomMirror` gives the path of the mirror
+file, and `breakout` returns it. The opener reads it with `jq`, as it reads
+its own room ([Workspace](workspace.md#mirror-a-rooms-messages)).
+`recall` reads the own room alone ([Trust](trust.md)).
 
-**The prompt sees the canvas only through the reminder.**
-`execution/render.ts` stays pure and stateless.
+**The reminder lists the breakout rooms of the seat.** It lists the rows
+whose opener is the seat agent and whose parent is the seat room, and
+omits archived rows. It reads the store, and `room.read()` of each live
+handle, within the reminder bound.
 
-**Each host draws its own catalog.**
+```text
+Your breakout rooms:
+- design-survey: running, exchange #58 open, last message #61
+- design-tests: stopped
+```
 
-| Host        | Effect                                                                                                                        |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Workbench   | The files panel, the process panel, and the previews give a first catalog of four kinds. The feed and the composer stay fixed |
-| Camera chat | The preview that opens when the `camera` process starts becomes a `sensor` widget that the agent places                       |
-| Cloudflare  | A later step. A Cloudflare room has no workspace today, and the adapter has no WebSocket or fetch handler for a browser       |
+It gives at most ten lines, then `and 3 more`. A seat with no breakout
+room gets no reminder text.
 
-**Macros can build a canvas in one call.** A skill can store a macro,
-such as `lab-dashboard`, that places five widgets with sources. The
-first canvas of a room then costs one tool call and no code from the
-model ([Macros](macros.md)). No measurement of macro tokens exists yet.
+### The composition
 
-**A breakout room has a canvas of its own.** A person who visits the
-breakout room sees it. The canvas of the parent room holds a `room`
-widget with the breakout room as its source: its open exchange, its last
-lines, and its outcome. The opener places it in the activation that
-calls `breakout`. The bridge does not change ([Breakout
-rooms](breakout.md#the-bridge)).
+**A breakout room holds its workers alone.** It has no assistant and no
+summary writer. Each worker attends at `broadcast`. The reserve is empty,
+and seating is off (`seating: false`), so no worker can seat another
+agent. A visitor gets no summary.
 
-**Sensors keep their wire API.** The `sensor` widget reads through
-`workspace.fetch`, as the camera-chat preview does today. The `api`
-version of the template and the evidence path through `fetch` do not change.
+**A breakout room seats only definitions that no root room seats.** The
+workspace keys homes, processes, and the process reminder by the agent
+name ([Workspace](workspace.md)). Two seats of one name in two rooms
+share one home and one process list. A host therefore names a worker
+team: definitions that it seats in no root room. The `agents` of a
+`breakout` call come from that team.
 
-**An ambient room keeps its canvas current.** Between exchanges, each
-widget with a source refreshes with no activation. A scheduled say
-brings an agent back to change the canvas on the room's clock.
+### Bounds
 
-**The simulator needs a text view of the canvas.** The actor and the
-judge read text. The reminder lines give that view. An actor needs a
-tool that acts as the person, such as a press of a button.
+**An open is spend, so the host bounds it.** The canvas checks the bounds
+before it writes the row, in the order of
+[the check order](#the-tool-schemas). An agent can only lower its own
+attention, and the host owns every operation that adds activations.
 
-**The canvas adds a trust surface: agent text that a person sees.** The
-host draws only kinds from its catalog. It removes terminal escapes and
-raw HTML. It opens refs as the workbench opens them today
-([Trust](trust.md#what-the-kernel-does-not-defend)). A seat can place a
-button that misleads. The act names the revision, so the record shows
-the exact widget.
+**The first release bounds no chain of exchanges.** A scheduled say can
+keep a breakout room active after its first exchange. Each closed exchange
+carries `usage`, so the host can read the spend of each opener.
+[D1](../planning/backlog.md#designs-with-a-shape) holds kernel bounds
+and quotas.
 
-**A widget shows what the host agent can read.** A `file` or `process`
-source can show a file in the home of another agent. A `sql` source runs
-agent text as the host on each refresh. The host allows a list of paths
-and tables, and it runs each query under `PRAGMA query_only`.
+### The bridge
 
-## Decisions
+**The bridge carries each finished exchange to the opener.** It runs on
+each `exchange_closed` event of a breakout room. The event carries the
+range alone, so the bridge reads the outcome with `room.read()`, or with
+`readRoom` for a stopped room.
 
-**The owner accepted the recommendations of the review on 2026-10-03.**
-Each one holds for now, and a later review can reopen it.
+**A report pass looks for each key first.** For each closed exchange of a
+breakout room, the bridge reads the `key` of each `posted` message in the
+record of the parent. A key `breakout:<name>:<from>`, or a key that starts
+with `breakout:<name>:<from>:`, means that the exchange is done. For an
+exchange with no such key, the bridge posts the close notice:
 
-| Decision              | Choice                                                                                    |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| The scope of a canvas | One canvas for each room. The per-person arrangement in [Layout](#layout) covers the rest |
-| The record of an act  | A `visit.send` with the `canvas:` label. No kind of entry for acts                        |
-| The first host        | The workbench, with four kinds: file text, a table, an image, and a process log           |
-| Code from an agent    | Out of scope. If it comes later, it starts as a Git template                              |
+```ts
+await parent.post({
+  to: recipient, // the opener, or undefined; see below
+  text: `breakout ${name}: exchange #${exchange.from} is ${exchange.outcome}, messages #${exchange.from} to #${exchange.through}.`,
+  refs: [messageUri(name, exchange.through)],
+  key: `breakout:${name}:${exchange.from}`,
+});
+```
 
-## Open decisions
+**The bridge posts for one parent in order, one at a time.** It picks the
+recipient inside that order. The recipient is the opener when the opener
+is on the roster of the parent at an attention other than `none`.
+Otherwise the post has no `to`, and the room stays open. A key conflict
+counts as landed. `report` follows the same rule for its recipient.
 
-1. **What a person can change.** A person can arrange and act. The
-   question is whether a person can also place a widget, such as a note.
-   It stays open for now. One option allows `markdown` alone, with the
-   host as the author.
-2. **Bounds.** A cap on the widgets of a canvas and on the bytes of an
-   `inline` source. [D1](../planning/backlog.md#designs-with-a-shape)
-   holds the accounting.
-3. **The widgets of an unseated author.** They can stay, go with the
-   author, or pass to the host.
+**A notice contains no excerpt.** It names the outcome and the range and
+cites the last message. The text of a result travels in `report`.
+
+**A report waits for a live parent.** A parent with no live handle in
+this run gets no post. The pass of the next `resume` or `start` of the
+parent posts it. A stopped parent does not start in order to receive a
+report.
+
+**The bridge replays retained journals.** Each `resume` and `start` runs
+one pass over every breakout row of the live parents, `stopped` rows
+included. A pass skips archived rows. A pass reads a stopped journal with
+`readRoom`, and starts no worker. A post that fails with anything other
+than a key conflict goes to `onError`. Its exchange stays without a key,
+so the next pass posts it.
+
+**A post owes no summary.** A post opens an exchange with no person, so
+the exchange owes no summary
+([Exchange](exchange.md#4-who-directs-one-and-who-receives-its-result)).
+
+```mermaid
+sequenceDiagram
+  participant O as Opener seat
+  participant P as Parent room
+  participant C as Canvas
+  participant B as Breakout room
+  participant W as Worker seat
+  O->>C: breakout({ name, goal, message, agents })
+  C->>C: write the row
+  C->>B: start, then post (key breakout-start:<name>)
+  B->>W: activation
+  O-->>P: activation ends
+  W->>C: report({ text })
+  C->>P: post to opener (key breakout:<name>:<from>:report:<callId>)
+  P->>O: activation
+  O->>C: tell({ room, text })
+  C->>B: post to worker, a new exchange (key tell:<activation>:<callId>)
+  B-->>C: exchange_closed
+  C->>P: close notice (key breakout:<name>:<from>), no report came
+  P->>O: activation
+  O->>C: archive({ room, result: 'done' })
+  C->>C: record the result in the row
+  C->>B: stop
+```
+
+### The life of a breakout room
+
+**A breakout room stays until its opener archives it or the host stops
+it.** A room is ambient: it stays available between exchanges. A host
+shutdown stops the parent and its breakout rooms together, and both
+resume at the next start.
+
+| State      | Set by                                       | Starts again                                | `tell`    |
+| ---------- | -------------------------------------------- | ------------------------------------------- | --------- |
+| `running`  | `breakout`, or `canvas.start`                | At each `resume`, and with a started parent | Posts     |
+| `stopped`  | `canvas.stop` of that room, by the host      | At `canvas.start` of that room              | A refusal |
+| `archived` | `archive` by the opener, or `canvas.archive` | Never                                       | A refusal |
+
+**A host stop of a root changes the root row alone.** The breakout rooms
+stop with the parent, and their rows stay `running`. `canvas.start` of the
+root and `resume` start them again.
+
+**`archive` writes the row first, then stops the room.** A crash between
+the two leaves an archived row, and the next `resume` starts no archived
+room. `archive` of a stopped row records the close and stops nothing. A
+repeat `archive` returns the recorded result, and stops the handle again
+when one lives. `close` stops every handle, whatever its row says. An
+exchange that the stop interrupts gets no close notice: the opener already
+decided.
+
+**An opener that leaves keeps its rooms.** The bridge posts with no `to`.
+A stopped or archived room keeps its journal, and a person can still visit
+it.
+
+## Durability
+
+**Each journal holds its own entries.** No entry refers to a host object.
+The posts carry the refs between rooms, and their keys record what
+landed. The canvas keeps no cursor.
+
+| Write          | Key                                      | A repeat after a crash                   |
+| -------------- | ---------------------------------------- | ---------------------------------------- |
+| The row        | The room name                            | Finds the row and continues              |
+| An archive     | The archived state of the row            | Finds the state and changes nothing      |
+| The start post | `breakout-start:<name>`                  | Returns the same handle                  |
+| A `tell` post  | `tell:<activation>:<callId>`             | Lands once for one call                  |
+| A `report`     | `breakout:<name>:<from>:report:<callId>` | Lands once for one call                  |
+| A close notice | `breakout:<name>:<from>`                 | The pass finds the key and posts nothing |
+
+| Crash point                                  | What the next start does                           |
+| -------------------------------------------- | -------------------------------------------------- |
+| After the row, before the room starts        | Starts the room from the row                       |
+| After the room starts, before the start post | Posts the start again under its key                |
+| After an exchange closes, before its notice  | The pass posts the notice under its key            |
+| During a host shutdown                       | `canvas.resume()` starts each `running` room again |
+
+**A retried activation can pick a new name.** The reminder shows the
+rooms that the opener holds, and `perOpener` caps the worst case. A tool
+effect can repeat
+([Durability](durability.md#5-what-the-room-does-not-promise)).
+
+**The store has no fence.** One host owns a canvas, as one host owns a
+workspace. The journal fences a second host of a room. Stop one host
+before the next one opens the same store.
+
+## Visits and trust
+
+**A person visits a room of the canvas as any other room.** The person
+reads its exchanges and can speak. A worker can ask a visiting person a
+question with `say({ to })`, and the `awaiting` outcome holds the wait.
+
+**A post has no author.** A worker reads a `tell` post as a message of
+the system, and the label in its text names the source. The canvas adds
+no author across rooms, so it adds no new trust surface.
+
+**The rooms of a canvas share one workspace.** The mirror needs it, and a
+shared workspace is one filesystem boundary
+([Workspace](workspace.md#mirror-a-rooms-messages)). A worker can read
+every room that the workspace mirrors. A room that needs isolation uses
+another workspace and gives up mirror reads.
+
+## The interface
+
+**This section fixes the shape that 0.7.0 builds.** The defaults are the
+values of the first release.
+
+### The host interface
+
+```ts
+function openCanvas(options: OpenCanvasOptions): Canvas;
+
+interface OpenCanvasOptions {
+  readonly name: string;
+  /** The runtime gives every room its execution. The canvas adds no execution option. */
+  readonly runtime: Runtime;
+  readonly store: CanvasStore;
+  /** With a workspace, the canvas attaches the mirror of each room. */
+  readonly workspace?: Workspace;
+  readonly breakout: BreakoutOptions;
+  /** A failed start keeps its row `running`. The next `resume` tries again. */
+  readonly onError?: (error: CanvasError) => void;
+}
+
+interface Canvas {
+  readonly name: string;
+  /** The opener bundle: breakout, tell, archive, and the reminder. Call it before defineAgent. */
+  tools(): ToolBundle;
+  /** The worker bundle: report. Call it before defineAgent. */
+  workerTools(): ToolBundle;
+  /**
+   * Takes the definitions once, then starts or resumes each running root room,
+   * then each running breakout room, then runs one report pass for each live parent.
+   * A second call is a refusal.
+   */
+  resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void>;
+  /**
+   * Opens a root room. Needs resume first. A root row returns its live handle, or starts
+   * from its row; the other options of the repeat are ignored. A breakout name is a refusal.
+   */
+  open(options: CanvasRoomOptions): Promise<Room>;
+  /**
+   * With a root name, sets the room to running, starts it, then starts its breakout
+   * rooms whose rows are running. With a breakout name, sets that room to running and
+   * starts it, under a live parent only. An archived room is a refusal.
+   */
+  start(name: string): Promise<void>;
+  /**
+   * Sets the row to stopped, and stops the room. A root stops with its breakout rooms;
+   * their rows do not change.
+   */
+  stop(name: string): Promise<void>;
+  /**
+   * Archives a breakout room: records the close, then stops it. The `archive` tool calls it.
+   * A stopped row records the close and stops nothing. A repeat returns the recorded close.
+   */
+  archive(name: string, close: CanvasClose): Promise<CanvasClose>;
+  /** Stops every handle of this run. Each row keeps its state. Every tool call after it is a refusal. */
+  close(): Promise<void>;
+  /** The live handle of a room of this run, or undefined. */
+  room(name: string): Room | undefined;
+  rooms(): readonly CanvasRoom[];
+  subscribe(listener: (event: CanvasEvent) => void): () => void;
+}
+
+type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
+  readonly name: string;
+  readonly goal: string;
+  /** The definitions of this room. Default: every definition outside the worker team. */
+  readonly agents?: readonly string[];
+  /**
+   * The name of a definition given at resume. A name that no definition resolves is a
+   * refusal. The row keeps the name, so a later start resolves it again.
+   */
+  readonly assistant?: string;
+  /** The name of a definition given at resume. It resolves as `assistant` does. */
+  readonly summaryWriter?: string;
+};
+
+type CanvasEvent =
+  | { readonly type: 'opened'; readonly room: CanvasRoom }
+  | { readonly type: 'started' | 'stopped'; readonly room: string }
+  | { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose };
+
+interface CanvasError {
+  readonly room: string;
+  readonly operation:
+    | 'resume'
+    | 'open'
+    | 'start'
+    | 'stop'
+    | 'close'
+    | 'breakout'
+    | 'tell'
+    | 'archive'
+    | 'report'
+    | 'notice'
+    | 'mirror';
+  readonly error: unknown;
+}
+```
+
+**The definitions arrive at `resume`.** `defineAgent` reads the bundles
+of an agent when it defines the agent. So the host calls `tools()` and
+`workerTools()`, defines its agents, and then calls `resume({ agents })`.
+`open`, `start`, and every tool call before `resume` are refusals.
+
+**Each room receives the definitions that it names.** A resume adds to the
+reserve each definition that the composition does not hold
+(`resumeRoom`). The canvas therefore passes each room its own
+definitions:
+
+| Room            | Definitions that the canvas passes                                |
+| --------------- | ----------------------------------------------------------------- |
+| A root room     | Its `agents`; by default every definition outside the worker team |
+| A breakout room | The definitions that its row names in `start.agents`              |
+
+**`canvas.open` refuses a team name.** A team name in `agents`, `seats`,
+`assistant`, or `summaryWriter` is a refusal. At a start, the canvas
+removes the assistant from the definitions that it passes, because
+`startRoom` refuses an assistant that `agents` also holds. With no
+`seats`, a root room seats every definition that it receives.
+
+**The canvas hears each room that it starts or resumes.** It calls
+`room.subscribe` once for each handle and reacts to `exchange_closed`.
+With a workspace, it calls `workspace.mirror(room)` after each start and
+resume, and keeps the `RoomMirror`. A failed attach goes to `onError`,
+and the room keeps running. A stop stops the room first, then its mirror,
+so the mirror holds the last message.
+
+### The store
+
+```ts
+interface CanvasStore {
+  list(): Promise<readonly CanvasRoom[]>;
+  /** Writes the row when the name is free. A row of that name stays as it is. */
+  insert(room: CanvasRoom): Promise<'inserted' | 'exists'>;
+  setState(name: string, state: 'running' | 'stopped'): Promise<void>;
+  /** Sets the row to archived with its close. An archived row stays as it is. */
+  archive(name: string, close: CanvasClose): Promise<CanvasClose>;
+}
+
+interface CanvasRoom {
+  readonly name: string;
+  readonly goal: string;
+  readonly depth: 0 | 1;
+  readonly state: 'running' | 'stopped' | 'archived';
+  readonly start: RootStart | BreakoutStart;
+  readonly close?: CanvasClose;
+}
+
+interface CanvasClose {
+  readonly result: 'done' | 'failed';
+  readonly note?: string;
+}
+
+interface RootStart {
+  readonly kind: 'root';
+  readonly agents?: readonly string[];
+  readonly seats?: StartRoomOptions['seats'];
+  readonly assistant?: string;
+  readonly summaryWriter?: string;
+  readonly seating?: boolean;
+}
+
+interface BreakoutStart {
+  readonly kind: 'breakout';
+  readonly parent: string;
+  readonly opener: string;
+  readonly agents: readonly string[];
+  readonly message: string;
+  readonly to?: string;
+}
+
+/** `Sql` is the type that `sqliteJournals` takes, from `@ambionframework/journal`. */
+function sqliteCanvas(sql: Sql): CanvasStore;
+function memoryCanvas(): CanvasStore;
+```
+
+**`insert` returns `exists` on a repeat, so a write is idempotent.**
+`canvasStoreConformance` runs the same cases over both stores.
+`sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of the
+host, and the host can share it with `sqliteJournals`.
+
+### The breakout options
+
+```ts
+interface BreakoutOptions {
+  /** The worker team. No root room seats these definitions. */
+  readonly team: readonly string[];
+  /** The most running breakout rooms for one opener in one parent. Default 3. */
+  readonly perOpener?: number;
+}
+```
+
+**`resume` refuses a team name that no definition resolves.**
+
+### The tool schemas
+
+```ts
+breakout({
+  name: string,        // the room is <parent>-<name>: the shared name syntax, 48 characters at most
+  goal: string,
+  message: string,     // the initial message
+  agents: string[],    // one or more names of the team
+  to?: string,         // a worker; omit to post to every worker
+}) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped' | 'archived', created: boolean }
+
+tell({
+  room: string,        // a breakout room that the caller opened
+  text: string,
+  to?: string,
+  refs?: string[],
+}) -> { room: string, from: Seq }
+
+archive({
+  room: string,        // a breakout room that the caller opened
+  result: 'done' | 'failed',
+  note?: string,
+}) -> { room: string, result: 'done' | 'failed', note?: string }
+
+report({
+  text: string,
+  refs?: string[],
+}) -> { room: string, from: Seq, to?: string }
+```
+
+**The tools read the caller from `ToolContext`.** The opener is
+`ctx.agent.name`, and the parent is `ctx.room`. `report` reads the parent
+and the opener from the row of `ctx.room`, and the exchange from
+`ctx.exchange.from`. A refusal is a tool error that names the cause.
+
+| Call                          | Refusal when                                                            |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Any tool                      | `ctx.room` is absent, or the room is not on the canvas                  |
+| Any tool                      | `resume` has not run, or `close` has run                                |
+| `breakout`, `tell`, `archive` | The caller is in a breakout room                                        |
+| `archive`                     | The room is a root room, or another opener holds it                     |
+| `tell`                        | The row is archived or stopped, or the room has no live handle          |
+| `tell`, `breakout`            | `to` is outside `agents`, or a worker at `none` (kernel refusal)        |
+| `report`                      | The caller is in a root room                                            |
+| `report`                      | The parent has no live handle in this run                               |
+| `report`                      | `ctx.exchange` is absent: report inside the exchange that activated you |
+| `report`                      | The row is archived or stopped                                          |
+
+The canvas passes the refusal of the kernel for `to` through. The close
+notice of a refused `report` reaches the opener after the parent resumes.
+
+**`breakout` checks in a fixed order.**
+
+1. A row of the room name with the same parent and opener: the tool
+   returns it with `created: false`, and checks no bound. The repeat
+   ignores `goal`, `message`, `agents`, and `to`. With no journal, the
+   canvas completes the start first. The `state` tells the opener whether
+   the room still runs. A `stopped` row needs `canvas.start` by the host.
+   An archived row carries its `close`, keeps its name, and the opener
+   picks a new name.
+2. A row of the room name with another opener, or a root row of that
+   name: a refusal.
+3. The name rule and its length, the team, and `perOpener`: a refusal
+   names the bound that it broke. The full name `<parent>-<name>` follows
+   the shared name syntax (`@ambionframework/ambion/names`) and holds at
+   most 48 characters.
+4. Otherwise the canvas inserts the row and starts the room. The result
+   has `created: true`.
+
+**`perOpener` counts running rows.** It counts the breakout rows with
+that parent and that opener whose state is `running`. `archive` frees a
+place.
+
+## Out of scope
+
+[The plan](../planning/next.md#out-of-scope) lists the work that this
+design leaves out.
