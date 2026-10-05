@@ -1,7 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createRuntime } from '@ambionframework/ambion';
 import { byAgent, type Script, scripted } from '@ambionframework/ambion/testing';
+import { memoryCanvas, openCanvas } from '@ambionframework/canvas';
+import { memoryJournals } from '@ambionframework/journal';
 import type { PiExecutionOptions } from '@ambionframework/pi';
 import {
 	type AssistantMessage,
@@ -10,6 +13,7 @@ import {
 	getCurrentSystemPrompt,
 } from '@earendil-works/pi-ai';
 import { onTestFinished } from 'vitest';
+import { workerNames } from '../src/definitions.ts';
 import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbench.ts';
 
 /**
@@ -93,4 +97,14 @@ export async function openHost(options: Partial<OpenOptions> = {}): Promise<Work
 	});
 	onTestFinished(() => workbench.close().catch(() => undefined));
 	return workbench;
+}
+
+/** A canvas over memory, for a test that defines the team and starts no canvas room. */
+export function bundleCanvas() {
+	return openCanvas({
+		name: 'workbench',
+		runtime: createRuntime({ storage: memoryJournals(), execution: [] }),
+		store: memoryCanvas(),
+		breakout: { team: workerNames },
+	});
 }

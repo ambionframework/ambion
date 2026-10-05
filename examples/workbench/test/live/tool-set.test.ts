@@ -35,6 +35,7 @@ import { people, team } from '../../src/definitions.ts';
 import { openInstrument } from '../../src/instrument.ts';
 import { type ExecutorKind, hasKey, seatKinds } from '../../src/kinds.ts';
 import { instruments, labAppendOnly, labSchema } from '../../src/scenarios.ts';
+import { bundleCanvas } from '../hosting.ts';
 
 const QUIET_MS = 150_000;
 
@@ -99,7 +100,7 @@ async function openRoom(seats: readonly string[]) {
 	});
 	const lab = workspace.sql;
 	if (lab === undefined) throw new Error('The workspace has no lab database.');
-	const built = team(workspace, openInstrument({ lab, instruments }));
+	const built = team(workspace, openInstrument({ lab, instruments }), bundleCanvas());
 	const records: TracedStep[] = [];
 	const runtime = createRuntime({
 		storage: memoryJournals(),

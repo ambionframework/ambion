@@ -52,7 +52,10 @@ export function parse(input: string): Parsed {
 export interface RoomChoice {
 	name: string;
 	status: string;
-	working: boolean;
+	/** The open exchange of the room. A room with one is working. */
+	exchange?: unknown;
+	/** The parent room of a breakout room. */
+	parent?: string;
 }
 
 /** A person the terminal can act as. */
@@ -108,6 +111,12 @@ function commandSuggestions(prefix: string): Suggestion[] {
 	);
 }
 
+/** The state of a room, with the parent of a breakout room. */
+function roomDetail(room: RoomChoice): string {
+	const state = room.exchange ? 'working' : room.status;
+	return room.parent === undefined ? state : `${state}, breakout of ${room.parent}`;
+}
+
 function argumentSuggestions(name: string, wanted: string, choices: Choices): Suggestion[] {
 	const text = wanted.trim().toLowerCase();
 	const kind: Kind = KINDS[name] ?? 'room';
@@ -121,7 +130,7 @@ function argumentSuggestions(name: string, wanted: string, choices: Choices): Su
 	if (name === 'room')
 		return choices.rooms
 			.filter((room) => room.name.toLowerCase().startsWith(text))
-			.map((room) => row(room.name, room.working ? 'working' : room.status));
+			.map((room) => row(room.name, roomDetail(room)));
 	if (name === 'user')
 		return choices.people
 			.filter((person) => person.name.toLowerCase().startsWith(text))

@@ -224,11 +224,7 @@ export class Session {
 
 	choices(): Choices {
 		return {
-			rooms: this.rooms.map((room) => ({
-				name: room.name,
-				status: room.status,
-				working: Boolean(room.exchange),
-			})),
+			rooms: this.rooms,
 			people: this.host.people.map((person) => ({ name: person.name, role: person.role })),
 			files: this.files,
 			says: this.view?.scheduled ?? [],

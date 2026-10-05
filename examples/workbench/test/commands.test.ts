@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { type Choices, type Parsed, parse, type RoomChoice, suggest } from '../src/commands.ts';
 
 const rooms: RoomChoice[] = [
-	{ name: 'bringup', status: 'running', working: false },
-	{ name: 'sensing', status: 'running', working: true },
-	{ name: 'power', status: 'stopped', working: false },
+	{ name: 'bringup', status: 'running' },
+	{ name: 'sensing', status: 'running', exchange: { from: 3 } },
+	{ name: 'power', status: 'stopped' },
+	{ name: 'bringup-survey', status: 'running', parent: 'bringup' },
 ];
 
 const choices: Choices = {
@@ -88,6 +89,7 @@ describe('suggest', () => {
 			['bringup', 'running'],
 			['sensing', 'working'],
 			['power', 'stopped'],
+			['bringup-survey', 'running, breakout of bringup'],
 		]);
 		expect(rows[0]).toMatchObject({ insert: '/room bringup', run: true });
 		expect(suggest('/room PO', choices).map((row) => row.label)).toEqual(['power']);
