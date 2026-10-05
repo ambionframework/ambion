@@ -5,14 +5,20 @@
  *
  * A crash is a fault that fires at one write. The write lands or does not land, as the case says,
  * and every later call of the first host fails, the way a dead process fails. The seed picks
- * the number of breakout rooms, the room that the crash hits, and the write of a shutdown.
+ * the number of breakout rooms, the room that the crash hits, and the mode of a shutdown crash.
  *
  * `AMBION_SEEDS` widens the walk, and the seed prints on failure. `AMBION_CHAOS=all` is the
  * switch of the other chaos files, and this file needs none.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { createRuntime, readRoom } from '@ambionframework/ambion';
-import { byAgent, type Script, settled } from '@ambionframework/ambion/testing';
+import {
+	byAgent,
+	type FakeClock,
+	fakeClock,
+	type Script,
+	settled,
+} from '@ambionframework/ambion/testing';
 import {
 	type JournalOpener,
 	type JournalStorage,
@@ -21,7 +27,7 @@ import {
 } from '@ambionframework/journal';
 import { describe, expect, it, vi } from 'vitest';
 import { type CanvasRoom, type CanvasStore, memoryCanvas, sqliteCanvas } from '../src/index.ts';
-import { callOf, contextOf, type Host, host, statesOf, tooled } from './support/host.ts';
+import { callOf, contextOf, type Host, host, live, statesOf, tooled } from './support/host.ts';
 import { sqlOver } from './support/sql.ts';
 
 const seeds = Number(process.env.AMBION_SEEDS ?? 6);
@@ -43,7 +49,7 @@ const storages: { name: string; open: () => Base }[] = [
 ];
 
 /** Whether a write lands before the crash, or the crash comes after the write landed. */
-type Mode = 'before' | 'after';
+type Mode = 'before' | 'after' | 'skip';
 
 /** The first host over a base: every write passes through the fault until the fault kills the host. */
 class Fault {
@@ -81,6 +87,7 @@ class Fault {
 			append: async (entry, expected) => {
 				this.alive();
 				const mode = this.journal?.(name, JSON.stringify(entry));
+				if (mode === 'skip') throw new Error('The disk is full.');
 				if (mode === 'before') this.die();
 				const stored = await inner.append(entry, expected);
 				if (mode === 'after') this.die();
@@ -126,9 +133,14 @@ const rootRow: CanvasRoom = {
 };
 
 /** The first host of a run, and the means to open a second host over the same storage. */
-function world(base: Base, script: Script = byAgent({})) {
+function world(base: Base, script: Script = byAgent({}), clock?: FakeClock) {
 	const fault = new Fault(base);
-	const first = host({ store: fault.store_, storage: fault.storage, script });
+	const first = host({
+		store: fault.store_,
+		storage: fault.storage,
+		script,
+		...(clock === undefined ? {} : { clock }),
+	});
 	let count = 0;
 	const agents = (of: Host) => [
 		tooled('ada', of.canvas.tools()),
@@ -141,7 +153,7 @@ function world(base: Base, script: Script = byAgent({})) {
 	/** A fresh runtime and canvas over the same base, as a restart gives. */
 	const restart = async (): Promise<Host> => {
 		await first.canvas.close();
-		const second = host({ ...base });
+		const second = host({ ...base, ...(clock === undefined ? {} : { clock }) });
 		await second.canvas.resume({ agents: agents(second) });
 		return second;
 	};
@@ -271,43 +283,18 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 					mode === 'after' ? 1 : 0,
 				);
 				const second = await w.restart();
-				await expectWhole(second, w.base, names.map((name) => `site-${name}`).slice(0, hit + 1));
+				await expectWhole(second, w.base, rooms);
 			},
 		);
 
 		it('starts each running room again after a crash during a host shutdown', async () => {
-			const w = await begin();
-			const all = names.map((name) => `site-${name}`);
-			const [stopped, ...running] = all as [string, ...string[]];
-			for (const name of names) await w.open(w.first, name);
-			for (const room of all)
-				await vi.waitFor(async () =>
-					expect(await keyed(w.base, 'site', `breakout:${room}:`)).toHaveLength(1),
-				);
-			await w.first.canvas.stop(stopped);
-			let writes = 0;
-			const crashAt = 1 + (seed % (names.length + 1));
-			w.fault.journal = () =>
-				++writes === crashAt ? (seed % 2 === 0 ? 'before' : 'after') : undefined;
-			await w.first.canvas.close();
-			const second = await w.restart();
-			for (const room of ['site', ...running]) expect(second.canvas.room(room)).toBeDefined();
-			expect(second.canvas.room(stopped)).toBeUndefined();
-			expect(await statesOf(w.base.store)).toEqual({
-				site: 'running',
-				[stopped]: 'stopped',
-				...Object.fromEntries(running.map((room) => [room, 'running'])),
-			});
-			await expectWhole(second, w.base, all);
-		});
-
-		it('keeps an archived room stopped, and posts it no notice, after a crash between the archive and the stop', async () => {
 			const base = kind.open();
 			let hold = false;
 			let release: () => void = () => {};
 			const gate = new Promise<void>((resolve) => {
 				release = resolve;
 			});
+			const clock = fakeClock();
 			const w = world(
 				base,
 				byAgent({
@@ -316,21 +303,67 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 						return [];
 					},
 				}),
+				clock,
 			);
 			await base.store.insert(rootRow);
 			await w.first.canvas.resume({ agents: w.agents(w.first) });
-			const target = `site-${names[hit]}`;
-			w.fault.store = (write, room) => write === 'archive' && room === target;
-			await openBefore(w, names, hit);
+			const all = names.map((name) => `site-${name}`);
+			const [stopped, busy, ...rest] = all as [string, string, ...string[]];
+			for (const name of names) await w.open(w.first, name);
+			for (const room of all)
+				await vi.waitFor(async () =>
+					expect(await keyed(base, 'site', `breakout:${room}:`)).toHaveLength(1),
+				);
+			await w.first.canvas.stop(stopped);
+			// One room is mid-activation at the shutdown, so the stop must write a lease revocation.
 			hold = true;
+			const room = live(w.first.canvas, busy);
+			await room.post({ text: 'More.', key: 'more' });
+			await vi.waitFor(async () =>
+				expect((await room.read()).exchange?.activations.length).toBeGreaterThan(0),
+			);
+			const mode: Mode = seed % 2 === 0 ? 'before' : 'after';
+			w.fault.journal = (name) => (journalOf(name, busy) ? mode : undefined);
+			await w.first.canvas.close();
+			expect(w.fault.dead).toBe(true);
+			hold = false;
+			release();
+			const second = await w.restart();
+			for (const name of ['site', busy, ...rest]) expect(second.canvas.room(name)).toBeDefined();
+			expect(second.canvas.room(stopped)).toBeUndefined();
+			expect(await statesOf(base.store)).toEqual({
+				site: 'running',
+				[stopped]: 'stopped',
+				...Object.fromEntries([busy, ...rest].map((name) => [name, 'running'])),
+			});
+			// The lease of the dead host expires, and the second exchange of the room closes.
+			await vi.waitFor(async () => {
+				await clock.advance(31_000);
+				expect(await keyed(base, 'site', `breakout:${busy}:`)).toHaveLength(2);
+			});
+			expect(second.errors).toEqual([]);
+		});
+
+		it('keeps an archived room stopped, and posts it no notice, after a crash between the archive and the stop', async () => {
+			const w = await begin();
+			const target = `site-${names[hit]}`;
+			await openBefore(w, names, hit);
+			// The notice of the target fails once without a crash, so its exchange closes with no notice.
+			w.fault.journal = (room, text) =>
+				journalOf(room, 'site') && text.includes(`"key":"post:breakout:${target}:`)
+					? 'skip'
+					: undefined;
 			await w.open(w.first, names[hit] as string);
+			await settled(live(w.first.canvas, target));
+			w.fault.journal = undefined;
+			expect(await keyed(w.base, 'site', `breakout:${target}:`)).toEqual([]);
+			w.fault.store = (write, room) => write === 'archive' && room === target;
 			const close = { result: 'failed', note: 'No use.' } as const;
 			await expect(w.call(w.first, 'archive', { room: target, ...close })).rejects.toThrow(
 				'The host died.',
 			);
-			expect(await statesOf(base.store)).toMatchObject({ [target]: 'archived' });
+			expect(await statesOf(w.base.store)).toMatchObject({ [target]: 'archived' });
 			const second = await w.restart();
-			release();
 			expect(second.canvas.room(target)).toBeUndefined();
 			expect(second.canvas.rooms().find((row) => row.name === target)).toMatchObject({
 				state: 'archived',
@@ -338,11 +371,10 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 			});
 			await expect(second.canvas.start(target)).rejects.toMatchObject({ code: 'refused' });
 			await expect(second.canvas.archive(target, { result: 'done' })).resolves.toEqual(close);
-			expect(await keyed(base, 'site', `breakout:${target}:`)).toEqual([]);
-			expect(await keyed(base, target, 'breakout-start:')).toHaveLength(1);
+			expect(await keyed(w.base, 'site', `breakout:${target}:`)).toEqual([]);
+			expect(await keyed(w.base, target, 'breakout-start:')).toHaveLength(1);
 			expect(second.errors).toEqual([]);
-			const others = names.slice(0, hit).map((name) => `site-${name}`);
-			for (const room of others) expect(second.canvas.room(room)).toBeDefined();
+			await expectWhole(second, w.base, rooms.slice(0, hit));
 		});
 	});
 });

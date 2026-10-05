@@ -16,7 +16,7 @@
 		"test:packages": "turbo run test --continue=dependencies-successful",
 		"test:live": "pnpm -r run test:live",
 		"test:live-local-workstation": "bash scripts/live-local-workstation.sh",
-		"chaos": "AMBION_CHAOS=all AMBION_SEEDS=200 pnpm --filter @ambionframework/ambion exec vitest run test/chaos.test.ts test/hosts.test.ts test/property.test.ts test/consistency.test.ts test/split.test.ts test/projection-equivalence.test.ts && AMBION_SEEDS=200 pnpm --filter @ambionframework/canvas exec vitest run test/chaos.test.ts",
+		"chaos": "AMBION_CHAOS=all AMBION_SEEDS=200 pnpm --filter @ambionframework/ambion exec vitest run test/chaos.test.ts test/hosts.test.ts test/property.test.ts test/consistency.test.ts test/split.test.ts test/projection-equivalence.test.ts; a=$?; AMBION_SEEDS=200 pnpm --filter @ambionframework/canvas exec vitest run test/chaos.test.ts; c=$?; exit $((a || c))",
 		"check": "node scripts/check.mjs",
 		"check:format": "prettier . --cache --check --log-level warn",
 		"check:lint": "biome lint . --error-on-warnings --reporter=concise",
