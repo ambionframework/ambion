@@ -7,7 +7,7 @@ it. The workbench is the first host.
 
 ## Status
 
-**Implementation is done. The chaos cases and the release evidence remain.**
+**Implementation is done. The release evidence remains.**
 [The canvas](../docs/canvas.md) owns the contract: the store, the
 interface, the tools, and the bridge. This file owns
 delivery and evidence. [The backlog](backlog.md) holds work outside this

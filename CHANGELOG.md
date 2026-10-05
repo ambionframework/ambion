@@ -32,6 +32,11 @@ opener bundle, and each worker holds the worker bundle with the workspace
 tools. The host opens the canvas before it defines the agents. The room
 view carries the `parent` of a breakout room, and `/room` shows it.
 
+**`pnpm chaos` crashes a canvas at each point of its crash table.** One
+case covers each row of the table in `docs/canvas.md`, and one covers a
+crash between the archive row and the stop. Each case resumes a second
+canvas on the same storage and checks the rows and the notices.
+
 **A room operation requires a runtime, and a runtime its storage.**
 `startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
 `createRuntime` requires `storage`. A test or a quickstart that wants memory
