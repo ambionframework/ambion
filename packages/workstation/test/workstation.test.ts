@@ -19,8 +19,10 @@ import {
 	type WorkspaceEnv,
 } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+import type { SFTPWrapper } from 'ssh2';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../src/index.ts';
+import { readBounded } from '../src/sftp.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
 
@@ -393,6 +395,63 @@ function toolOf(workspace: Workspace, name: string): AmbionTool {
 	if (tool === undefined) throw new Error(`No tool named ${name}.`);
 	return tool;
 }
+
+describe.skipIf(!hasSetsid)('a workstation read', () => {
+	it('returns a file at the limit, and refuses a larger file, a device file, and a FIFO with `invalid`', async () => {
+		const started = await server();
+		const home = started.homes.get('ada') ?? '';
+		const limit = 10 * 1024 * 1024;
+		await writeFile(join(home, 'edge.bin'), Buffer.alloc(limit, 97));
+		await writeFile(join(home, 'big.bin'), Buffer.alloc(limit + 1, 97));
+		spawnSync('mkfifo', [join(home, 'pipe')]);
+		const backend = backendFor(started.options);
+		await withEnv(backend, 'ada', async (env) => {
+			const edge = await env.readBinaryFile('edge.bin');
+			expect(edge.ok && edge.value.length).toBe(limit);
+			for (const path of ['big.bin', '/dev/zero', 'pipe']) {
+				const refused = await env.readBinaryFile(path);
+				expect(refused).toMatchObject({ ok: false, error: { code: 'invalid' } });
+				expect(refused.ok ? '' : refused.error.message).toContain(path);
+			}
+			const again = await env.readTextFile('edge.bin');
+			expect(again.ok).toBe(true);
+		});
+	});
+});
+
+describe('a bounded read', () => {
+	it('stops at the limit when a file grows past the size that `stat` reported, and closes the handle', async () => {
+		let buffered = 0;
+		let closed = 0;
+		// A stand-in server: a regular file of size 0 that never ends, as a file that grows does.
+		const sftp = {
+			stat: (_path: string, done: (error: undefined, stats: object) => void) =>
+				done(undefined, { isDirectory: () => false, isFile: () => true, size: 0 }),
+			open: (_path: string, _flag: string, done: (error: undefined, handle: Buffer) => void) =>
+				done(undefined, Buffer.from('h')),
+			read: (
+				_handle: Buffer,
+				_chunk: Buffer,
+				_offset: number,
+				length: number,
+				_position: number,
+				done: (error: undefined, count: number) => void,
+			) => {
+				buffered += length;
+				done(undefined, length);
+			},
+			close: (_handle: Buffer, done: () => void) => {
+				closed += 1;
+				done();
+			},
+		} as unknown as SFTPWrapper;
+		await expect(readBounded(sftp, 'grows', () => false)).rejects.toMatchObject({
+			code: 'invalid',
+		});
+		expect(closed).toBe(1);
+		expect(buffered).toBeLessThanOrEqual(10 * 1024 * 1024 + 256 * 1024);
+	});
+});
 
 describe.skipIf(!hasSetsid)('a workspace on a workstation', () => {
 	it('adopts the live processes of an earlier run from their files, cancels one through its pid, times out the other over a lost stop, and records a lost one', async () => {

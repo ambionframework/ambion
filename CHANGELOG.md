@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**A workstation read has a size limit.** The workstation reads at most
+10 MiB of one regular file. A larger file, a device file such as
+`/dev/zero`, and a FIFO fail with `invalid`. A read on a session that ends
+answers `unknown`.
+
 **The trace reports a Pi session fallback.** The trace carries a warning
 notice with the error when the disk refuses to create a session, cannot
 read it, or the harness cannot resume it. `CreatedSession` gains `fallback`,

@@ -67,8 +67,10 @@ it.
 the whole journal. Its cost grows with the length of the history. The
 incremental projection in
 [`room/projection.ts`](../packages/ambion/src/room/projection.ts) updates
-the addressed fields that one entry changes. A new question costs the same
-at any history length.
+the addressed fields that one entry changes. It still copies whole
+containers for each entry, so a new question costs more as the history
+grows. The table below shows it, and replay grows faster than the
+history ([Accepted risks](../planning/risks.md)).
 
 **The projection is a cache.** It is the one derivation of the room state
 that the room runs, and `foldRoom` is the oracle that the tests compare it

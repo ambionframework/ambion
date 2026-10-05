@@ -5,8 +5,10 @@
  * the SFTP operations, and `classify`, the error classifier. The workspace's
  * helpers supply the path rule.
  *
- * SFTP needs six adjustments:
+ * SFTP needs seven adjustments:
  *
+ * - a read opens the file, refuses a file that is not regular, and counts
+ *   bytes against `MAX_READ_BYTES` (`sftp.ts`)
  * - a coarse SFTP status becomes a code of the port through one `lstat` (`sftp.ts`)
  * - `writeFile` and `appendFile` make each missing parent first
  * - `renameFile` calls `posix-rename@openssh.com`, which replaces the
@@ -44,7 +46,16 @@ import { err, FileError, HomeEnv, shellQuote } from '@ambionframework/workspace'
 import type { ClientChannel, Stats } from 'ssh2';
 import { type CommandHost, runCommand } from './exec.ts';
 import { ConnectionClosed, type Session } from './session.ts';
-import { call, isMissing, lstat, readdir, stat, statusOf, toFileError } from './sftp.ts';
+import {
+	call,
+	isMissing,
+	lstat,
+	readBounded,
+	readdir,
+	stat,
+	statusOf,
+	toFileError,
+} from './sftp.ts';
 
 /** The mode of an ordinary file. A default ACL can then give the group write. */
 const FILE_MODE = 0o664;
@@ -116,7 +127,11 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	};
 
 	private readBuffer(path: string): Promise<Buffer> {
-		return call<Buffer>((done) => this.sftp.readFile(path, done));
+		let ended = false;
+		const stop = this.session.whenEnded(() => {
+			ended = true;
+		});
+		return readBounded(this.sftp, path, () => ended).finally(stop);
 	}
 
 	private put(path: string, content: string | Uint8Array, flag: 'w' | 'a'): Promise<void> {
