@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A new package, `@ambionframework/canvas`, holds the canvas store.**
+It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
+`sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of
+`sqliteJournals`. The `/conformance` entry exports `canvasStoreConformance`.
+The lifecycle, the tools, and the bridge do not exist yet.
+
 **A room operation requires a runtime, and a runtime its storage.**
 `startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
 `createRuntime` requires `storage`. A test or a quickstart that wants memory

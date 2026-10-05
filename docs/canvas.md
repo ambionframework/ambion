@@ -1,8 +1,9 @@
 # The canvas
 
-> **Status: design for 0.7.0. The package, the store, the tools, and the
-> bridge do not exist yet.** The kernel parts that the page names exist
-> today. RT1 makes the runtime a required parameter of each one.
+> **Status: design for 0.7.0. The package and the store exist. The
+> lifecycle, the tools, and the bridge do not exist yet.** The kernel
+> parts that the page names exist today. RT1 makes the runtime a required
+> parameter of each one.
 > [The plan](../planning/next.md) owns delivery and evidence.
 
 **A canvas is a named collection of rooms.** It holds the rooms of a

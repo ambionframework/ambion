@@ -20,6 +20,8 @@ newer, the OpenTUI floor.
   and closing summaries over the core.
 - `packages/simulator`: evals. `simulate()` drives a room as a person and
   returns the simulation that checks read.
+- `packages/canvas`: the canvas store port, `memoryCanvas`, `sqliteCanvas`, and
+  `canvasStoreConformance` in the `/conformance` entry.
 - `packages/pi`, `packages/claude`, `packages/codex`: the executors. Each
   exports `<name>()` and `<name>Execution()`. The kernel imports no model
   library. The `claude` tests run on a fake executable. The `codex` tests run

@@ -50,7 +50,7 @@ flowchart LR
 
 - [x] **1.** Require the runtime and its storage, and remove
       `defaultRuntime`. (RT1)
-- [ ] **2.** The package `@ambionframework/canvas`, the store port,
+- [x] **2.** The package `@ambionframework/canvas`, the store port,
       `memoryCanvas`, `sqliteCanvas`, and `canvasStoreConformance`.
       Needs 1.
 - [ ] **3.** `openCanvas`, `resume`, `open`, `start`, `stop`, `close`,
