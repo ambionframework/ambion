@@ -58,6 +58,9 @@ breakout room has no person to approve an operation.
 | **Scout** | Reads `/library`, `/shared`, and the lab records, and reports   |
 | **Maker** | Writes the files and lab records that a task names, and reports |
 
+Both workers hold every workspace tool. The instructions of a worker set its
+scope, and no tool enforces it.
+
 The assistant holds the opener bundle of the canvas: `breakout`, `tell`, and
 `archive`. It delegates a long task, and the specialists keep their narrow
 scope in the room of the person. The report of a worker reaches the

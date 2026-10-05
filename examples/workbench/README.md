@@ -262,7 +262,7 @@ visits it as any other room. The report of the worker lands in the parent
 room, and the assistant archives the breakout room when the work is done.
 See [the canvas](../../docs/canvas.md).
 
-The workspace, lab, and instrument tools reach every seat as tool bundles.
+The specialists hold the workspace and instrument bundles. The assistant adds the opener bundle, and a worker holds the workspace bundle and the worker bundle.
 `src/rooms.ts` passes a list of three executions, one for each executor
 kind. Each execution checks keys, sets the environment, and
 lets a test script an executor. Every host supplies the execution for each

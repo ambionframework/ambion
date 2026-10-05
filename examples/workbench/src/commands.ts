@@ -53,7 +53,7 @@ export interface RoomChoice {
 	name: string;
 	status: string;
 	/** The open exchange of the room. A room with one is working. */
-	exchange?: unknown;
+	exchange?: object;
 	/** The parent room of a breakout room. */
 	parent?: string;
 }

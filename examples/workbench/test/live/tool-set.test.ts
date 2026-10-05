@@ -168,14 +168,22 @@ const namesIn = (text: string): string[] =>
 const available = specialists.filter((seat) => hasKey(kindOf(seat)));
 
 describe.skipIf(available.length === 0)('Workbench tool set on every executor kind', () => {
-	it('lists the same tools for every seat, and no native tool', async () => {
+	it('lists the same tools for every specialist, the opener tools for the assistant, and no native tool', async () => {
 		const opened = await openRoom(available);
 		try {
 			const lists = new Map<string, string[]>();
 			for (const seat of available) lists.set(seat, namesIn(await ask(opened.room, seat, LIST)));
-			const [first, ...rest] = available.map((seat) => lists.get(seat) ?? []);
-			expect(first?.length).toBeGreaterThan(0);
-			for (const [index, list] of rest.entries()) expect(list, available[index + 1]).toEqual(first);
+			const [first, ...rest] = available
+				.filter((seat) => seat !== 'assistant')
+				.map((seat) => [seat, lists.get(seat) ?? []] as const);
+			for (const [seat, list] of rest) expect(list, seat).toEqual(first?.[1]);
+			// The assistant holds the opener bundle in addition.
+			const assistant = lists.get('assistant');
+			if (assistant)
+				expect(assistant).toEqual(
+					expect.arrayContaining([...(first?.[1] ?? []), 'breakout', 'tell', 'archive']),
+				);
+			for (const [, list] of lists) expect(list.length).toBeGreaterThan(0);
 			for (const [seat, list] of lists)
 				for (const name of NATIVE) expect(list, seat).not.toContain(name);
 		} finally {

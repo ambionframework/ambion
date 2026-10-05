@@ -44,7 +44,7 @@ const shapeOf = (tools: readonly { name: string; parameters: unknown }[]) =>
 	tools.map(({ name, parameters }) => ({ name, parameters: JSON.stringify(parameters) }));
 
 describe('the Workbench tool set', () => {
-	it('puts the specialists on Pi, Claude, and Codex with their models, gives every agent the same tools, and enables no native tool', async () => {
+	it('puts the specialists on Pi, Claude, and Codex with their models, gives every specialist the same tools, and enables no native tool', async () => {
 		const built = build();
 		expect(built.specialists.map((seat) => seat.executor.kind)).toEqual(['pi', 'claude', 'codex']);
 		const [first, ...rest] = built.specialists;
