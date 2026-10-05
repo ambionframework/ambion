@@ -1,9 +1,8 @@
 # The canvas
 
-> **Status: design for 0.7.0. The package, the store, the lifecycle, the
-> tools, and the bridge exist.** The kernel
-> parts that the page names exist today. RT1 makes the runtime a required
-> parameter of each one.
+> **Status: the package `@ambionframework/canvas` implements this page.** It
+> holds the store, the lifecycle, the tools, and the bridge. The runtime
+> is a required parameter of each room operation.
 > [The plan](../planning/next.md) owns delivery and evidence.
 
 **A canvas is a named collection of rooms.** It holds the rooms of a
@@ -98,8 +97,9 @@ its own room ([Workspace](workspace.md#mirror-a-rooms-messages)).
 
 **The reminder lists the breakout rooms of the seat.** It lists the rows
 whose opener is the seat agent and whose parent is the seat room, and
-omits archived rows. It reads the store, and `room.read()` of each live
-handle, within the reminder bound.
+omits archived rows. It reads the rows of the canvas, and `room.read()` of
+each live handle, within the reminder bound. A running row with no live
+handle shows `running, not started`.
 
 ```text
 Your breakout rooms:
@@ -301,7 +301,7 @@ another workspace and gives up mirror reads.
 
 ## The interface
 
-**This section fixes the shape that 0.7.0 builds.** The defaults are the
+**This section states the shape of the package.** The defaults are the
 values of the first release.
 
 ### The host interface
@@ -493,7 +493,9 @@ interface BreakoutOptions {
 }
 ```
 
-**`resume` refuses a team name that no definition resolves.**
+**`resume` refuses a team name that no definition resolves.** It also
+refuses two definitions of one name. `openCanvas` refuses a canvas name
+that is not a room name.
 
 ### The tool schemas
 
@@ -582,4 +584,4 @@ place.
 ## Out of scope
 
 [The plan](../planning/next.md#out-of-scope) lists the work that this
-design leaves out.
+package leaves out.

@@ -7,7 +7,7 @@ it. The workbench is the first host.
 
 ## Status
 
-**The contract is settled. Implementation has not started.**
+**Implementation is done. A paid live run remains, on request.**
 [The canvas](../docs/canvas.md) owns the contract: the store, the
 interface, the tools, and the bridge. This file owns
 delivery and evidence. [The backlog](backlog.md) holds work outside this
@@ -153,7 +153,7 @@ changelog names the dropped `workbench_rooms` table.
 - [x] **2.** Add one `pnpm chaos` case for each row of the crash table in
       [Durability](../docs/canvas.md#durability), and a case for a crash
       between the archive row and the stop, then a resume. Needs 1.
-- [ ] **3.** Finish the package docs, exports, and the changelog. Needs 2.
+- [x] **3.** Finish the package docs, exports, and the changelog. Needs 2.
 
 **Evidence:** the delegation scenario passes on scripted executors. Each
 chaos case passes. Packaging and `pnpm check` pass. A paid live run needs an
@@ -162,9 +162,9 @@ explicit request for release evidence.
 ## The items
 
 **RT1. A room operation requires a runtime, and a runtime its storage.**
-`startRoom`, `resumeRoom`, and `readRoom` fall back to `defaultRuntime()`,
-and `createRuntime` to memory storage, so a second process reads an empty
-room with no error.
+A room operation that falls back to a default runtime, or a runtime that
+falls back to memory storage, lets a second process read an empty room
+with no error.
 
 1. Make `runtime` required on each room operation. Remove
    `defaultRuntime` and its export.
