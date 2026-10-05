@@ -138,6 +138,11 @@ points.
 
 - **A pass that the cut ends reports no failure.** The cut aborts `signal`,
   and the pass returns `failed: false`.
+- **A pass that ignores the cut keeps running.** The driver stops waiting for
+  it, and the seat can run its next activation. The seat answers the room
+  calls of the old pass as stale, and the room refuses them once the lease
+  ends. The tool effects of the old pass still land, such as bash, git, a
+  process, or a network call. An executor must honor `signal`.
 - **The driver reads `session` after the last pass.** Keep the id of the
   vendor session there until the driver calls `close`. The room hands it
   to the next activation as `spec.resume`, and never reads it.

@@ -17,8 +17,8 @@ top of its section.
 | Section                                       | Items | First item                          |
 | --------------------------------------------- | ----- | ----------------------------------- |
 | [The 0.7.0 theme](#the-070-theme)             | B1    | B1, breakout rooms                  |
-| [Pending decisions](#pending-decisions)       | Q1    | Q1, the `assistant` option          |
-| [Known defects](#known-defects)               | F1    | F1, the allow-list of the SQL guard |
+| [Pending decisions](#pending-decisions)       | Q1–Q4 | Q1, the `assistant` option          |
+| [Known defects](#known-defects)               | F1–F2 | F1, the allow-list of the SQL guard |
 | [Release and CI](#release-and-ci)             | R1    | R1, a billing failure reads as one  |
 | [Rules and proofs](#rules-and-proofs)         | None  | None                                |
 | [Simplification](#simplification)             | None  | None                                |
@@ -91,6 +91,37 @@ options? The executor of the assistant is settled: `defineAssistant`
 takes an `executor` function. A close as a message (D2) removes the
 option with it.
 
+**Q2. The `awaiting` rule for the opener.** A message to the author of the
+opening message closes the exchange `complete`
+(`packages/ambion/src/room/exchange.ts`). An agent that asks the opener
+a clarifying question or an approval therefore reads as done, and
+`awaitingFor` does not list it. A canvas form to the opener closes
+`complete` for the same reason ([The canvas](../docs/canvas.md)). The
+question: does a directed message that ends the exchange await its
+recipient, the opener included?
+**Condition:** a host that must show an open question to the opener, or
+the canvas ships forms (D5).
+
+**Q3. Seat selection and seat options in one map.** With no `seats`, the
+room seats every agent at `broadcast`. With `seats: {}`, it seats nobody.
+A `seats` entry for one agent puts every other agent in the reserve
+(`initialSeats` in `packages/ambion/src/room.ts`). `roster.md` documents
+it. The question: do the initial roster and the per-seat options split,
+for example `seats: string[]` and `attention: Record<string, ...>`?
+Decide with Q1, since `assistant` expands into the same map, and with
+the 0.7.0 plan, since a breakout room opens with `seats`. **Condition:**
+Q1 is decided, or a host reports an agent that it configured and found
+unseated.
+
+**Q4. The order of an execution list.** `route` in
+`packages/ambion/src/execution/route.ts` takes the first execution that
+serves a kind, and an execution with no `kind` serves every kind. A
+kinded execution after a catch-all in the same list never runs. The
+catch-all is deliberate (`scripted`, the Cloudflare seat object), and the
+room list overrides the runtime list on purpose. The question: does the
+room refuse a list where a kind repeats or follows a catch-all?
+**Condition:** a host reports a seat that ran on the wrong execution.
+
 ## Known defects
 
 **F1. An agent that runs SQL can lift the append-only guard.** The guard
@@ -104,6 +135,16 @@ agent call runs only a fixed set of statement kinds, and only the PRAGMAs
 that read. Node 22 has no `setAuthorizer`, so the allow-list reads the
 text there. **Condition:** a room that gives the `sql` tool to an agent
 that the owner does not trust, or a second bypass in use.
+
+**F2. A Pi wrapper stream receives a stub model.** `createExecutionServices`
+in `packages/pi/src/services.ts` resolves every model to `stubModel` when
+`stream` is set. A stream that wraps a real provider then gets a 1,000,000
+token context window. Pi computes its compaction threshold from that
+window, so it does not compact in time. Cost under-counts only when the
+wrapper forwards the stub to a provider stream. Fix: an optional `model`
+resolver beside `stream`; the stub applies only when `stream` is set and
+`model` is not. **Condition:** a host passes a stream that reaches a real
+provider.
 
 ## Release and CI
 
