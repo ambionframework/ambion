@@ -167,7 +167,7 @@ export class FakeHost implements Workbench {
 		};
 	}
 	async pins() {
-		return [];
+		return { pins: [], more: 0 };
 	}
 	async labTables() {
 		return ['runs', 'results'];

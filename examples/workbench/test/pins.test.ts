@@ -10,7 +10,7 @@ const call = (name: string, args: Record<string, string | Record<string, string>
 	fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: 'toolUse' });
 const quiet = () => fauxAssistantMessage('quiet', { stopReason: 'stop' });
 
-/** The assistant pins the kit file at its first activation, and hides it at its second. */
+/** The assistant pins the kit file and edits it in its first activation, and hides it in its second. */
 function pinning() {
 	const steps = [
 		call('show', {
@@ -19,6 +19,7 @@ function pinning() {
 			source: { type: 'file', path: '/shared/kit.md' },
 			title: 'The kit',
 		}),
+		call('write', { path: '/shared/kit.md', content: '# Edited kit' }),
 		quiet(),
 		call('hide', { name: 'kit' }),
 		quiet(),
@@ -32,15 +33,17 @@ function pinning() {
 describe('Workbench pins', () => {
 	it('lists a file that an agent shows, reads it as the author, and drops it on hide', async () => {
 		const workbench = await openHost({ stream: pinning() });
-		expect(await workbench.pins('bringup')).toEqual([]);
+		expect(await workbench.pins('bringup')).toEqual({ pins: [], more: 0 });
 		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'k1', 'Pin the kit file.');
 
-		await vi.waitFor(async () => expect(await workbench.pins('bringup')).toHaveLength(1), {
-			timeout: 10_000,
-			interval: 20,
-		});
-		const [pin] = await workbench.pins('bringup');
+		// The pin shows the file as the end of the activation left it, so an edit reaches it.
+		await vi.waitFor(
+			async () =>
+				expect((await workbench.pins('bringup')).pins[0]?.file?.text).toBe('# Edited kit'),
+			{ timeout: 10_000, interval: 20 },
+		);
+		const [pin] = (await workbench.pins('bringup')).pins;
 		expect(pin).toMatchObject({
 			name: 'kit',
 			title: 'The kit',
@@ -48,8 +51,7 @@ describe('Workbench pins', () => {
 			author: 'assistant',
 			path: '/shared/kit.md',
 		});
-		expect(pin?.file?.text).toContain('# The kit');
-		expect(await workbench.pins('power')).toEqual([]);
+		expect(await workbench.pins('power')).toEqual({ pins: [], more: 0 });
 
 		await vi.waitFor(
 			async () => expect((await workbench.read('bringup', 0)).exchange).toBeUndefined(),
@@ -59,10 +61,13 @@ describe('Workbench pins', () => {
 			},
 		);
 		await workbench.send('bringup', 'mira', 'k2', 'Hide the kit file.');
-		await vi.waitFor(async () => expect(await workbench.pins('bringup')).toEqual([]), {
-			timeout: 10_000,
-			interval: 20,
-		});
+		await vi.waitFor(
+			async () => expect(await workbench.pins('bringup')).toEqual({ pins: [], more: 0 }),
+			{
+				timeout: 10_000,
+				interval: 20,
+			},
+		);
 	}, 30_000);
 });
 
@@ -92,20 +97,25 @@ describe('readPins', () => {
 			widget('notes', 'markdown', '/notes.md'),
 			widget('big', 'markdown', '/big.md'),
 			widget('missing', 'markdown', '/missing.md'),
-			widget('wrong', 'image', '/notes.md'),
-			{ ...widget('hidden', 'markdown', '/notes.md'), state: 'hidden' as never },
+			widget('picture', 'image', '/notes.md'),
+			widget('database', 'table', '/notes.md'),
+			{ ...widget('hidden', 'markdown', '/notes.md'), state: 'hidden' as const },
 			widget('other', 'frame', '/notes.md'),
+			widget('fifth', 'markdown', '/notes.md'),
 		]);
 
-		expect(pins.map((pin) => pin.name)).toEqual(['notes', 'big', 'missing', 'wrong']);
-		expect(pins[0]?.file?.text).toBe('# Notes\nred text\n');
-		expect(pins[1]?.problem).toMatch(/128 KiB/);
-		expect(pins[2]?.problem).toBe('File not found.');
-		expect(pins[3]?.problem).toBe('This file is not a picture.');
+		expect(pins.more).toBe(2);
+		expect(pins.pins.map((pin) => pin.name)).toEqual(['notes', 'big', 'missing', 'picture']);
+		expect(pins.pins[0]?.file?.text).toBe('# Notes\nred text\n');
+		expect(pins.pins[1]?.problem).toMatch(/128 KiB/);
+		expect(pins.pins[2]?.problem).toBe('File not found.');
+		expect(pins.pins[3]?.problem).toBe('This file is not a picture.');
+		const [database] = (await readPins(site, [widget('database', 'table', '/notes.md')])).pins;
+		expect(database?.problem).toBe('This file is not a SQLite database.');
 		await site.dispose();
 	});
 
-	it('refuses a symbolic path, and reads as the agent that the caller names', async () => {
+	it('refuses a path with a parent part, and reads the file of the path', async () => {
 		const site = openWorkspace({ name: 'pins-agent', backend: { bash: memoryBackend() } });
 		await site.use({ name: 'scribe' }, (env) => env.writeFile('/a.md', 'a'));
 		await expect(readFile(site, '/a/../a.md', { name: 'scribe' })).rejects.toThrow(
@@ -121,5 +131,11 @@ describe('plain', () => {
 		expect(plain('a\u001b[1;31mb\u001b[0m\tc\nd\u0000e\u0007f\u001b]8;;x\u001b\\g\u009bh')).toBe(
 			'ab\tc\ndefgh',
 		);
+	});
+
+	it('drops the body of a string sequence, and an unterminated sequence drops only itself', () => {
+		expect(plain('a\u001b_Gdata\u001b\\b\u001bPdcs\u0007c')).toBe('abc');
+		expect(plain('a\u001b[1;3')).toBe('a1;3');
+		expect(plain('b\u001b]0;t')).toBe('b0;t');
 	});
 });

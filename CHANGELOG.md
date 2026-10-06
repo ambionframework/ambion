@@ -7,8 +7,8 @@
 a root room and every worker holds `canvas.widgetTools()`. An agent calls
 `show` with a file path, and the terminal draws the shown files of the open
 room in a side area, each with its title and kind. The host reads each file
-as its author, after each widget event and each room start, and polls
-nothing. A hidden widget and a widget of an archived room draw nothing. The
+as its author, after each widget event, each room start, and the end of
+each activation, and polls nothing. A hidden widget and a widget of an archived room draw nothing. The
 files panel and the side area share the file views in `file-view.ts`.
 `readFile` takes the agent that reads, and `Workbench` gains `pins(room)`.
 

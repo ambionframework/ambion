@@ -12,7 +12,7 @@ import {
 	tableNames,
 	tablesText,
 } from './database.ts';
-import { type Pin, plain, shownFiles } from './pins.ts';
+import { MAX_PINS, type Pin, type Pins, plain, shownFiles } from './pins.ts';
 import { labUri, tableOfUri } from './refs.ts';
 import { fail } from './rooms.ts';
 
@@ -135,11 +135,21 @@ export async function attachFile(workspace: Workspace, localPath: string): Promi
 	return { path, size: bytes.length, ref };
 }
 
-/** Read one file of the workspace as `agent`. The size checks run before the read. */
+type FileKind = 'text' | 'database' | 'image';
+
+/** What the panel reads a path as, from its extension. */
+const kindOf = (path: string): FileKind =>
+	isDatabasePath(path) ? 'database' : isImagePath(path) ? 'image' : 'text';
+
+/**
+ * Read one file of the workspace as `agent`, as the kind that `as` names. The size
+ * checks run before the read and again on the bytes that the read returns.
+ */
 export async function readFile(
 	workspace: Workspace,
 	path: string,
 	agent: { name: string },
+	as: FileKind = kindOf(path),
 ): Promise<FileContent> {
 	const parts = path.split('/').slice(1);
 	if (
@@ -148,13 +158,14 @@ export async function readFile(
 	) {
 		fail('Use an absolute workspace file path.');
 	}
-	const kind = isDatabasePath(path) ? 'database' : isImagePath(path) ? 'image' : 'text';
 	return workspace.use(agent, async (env) => {
-		await checkAncestors(env, parts, kind);
-		if (kind === 'database') return readDatabase(env, path);
-		if (kind === 'image') return readImage(env, path);
+		await checkAncestors(env, parts, as);
+		if (as === 'database') return readDatabase(env, path);
+		if (as === 'image') return readImage(env, path);
 		const result = await env.readTextFile(path);
 		if (!result.ok) fail(result.error.message);
+		// The file can grow after the size check, so the read checks the bytes again.
+		if (Buffer.byteLength(result.value) > MAX_BYTES.text) fail(SIZE_ADVICE.text);
 		return { path, text: result.value, truncated: false };
 	});
 }
@@ -209,6 +220,7 @@ async function checkAncestors(
 async function readDatabase(env: Reader, path: string): Promise<FileContent> {
 	const result = await env.readBinaryFile(path);
 	if (!result.ok) return fail(result.error.message);
+	if (result.value.length > MAX_BYTES.database) return fail(SIZE_ADVICE.database);
 	if (!isDatabase(result.value)) return fail('This file is not a SQLite database.');
 	try {
 		const tables = await readTables(result.value);
@@ -223,6 +235,8 @@ async function readDatabase(env: Reader, path: string): Promise<FileContent> {
 async function readImage(env: Reader, path: string): Promise<FileContent> {
 	const result = await env.readBinaryFile(path);
 	if (!result.ok) return fail(result.error.message);
+	if (!isImagePath(path)) return fail('This file is not a picture.');
+	if (result.value.length > MAX_BYTES.image) return fail(SIZE_ADVICE.image);
 	return {
 		path,
 		text: '',
@@ -256,44 +270,48 @@ export function readLabTable(location: string, uri: string): FileContent {
 	return { path: labUri(name), text: tablesText([table]), truncated: false, tables: [table] };
 }
 
-/** The problem of a file that does not fit the kind of its pin, or undefined. */
-function mismatch(kind: Pin['kind'], file: FileContent): string | undefined {
-	if (kind === 'image') return file.image ? undefined : 'This file is not a picture.';
-	if (kind === 'table') return file.tables ? undefined : 'This file is not a SQLite database.';
-	return file.image || file.tables ? 'This file is not text.' : undefined;
-}
+/** The kind that each pin kind reads its file as. */
+const PIN_READS: Record<Pin['kind'], FileKind> = {
+	markdown: 'text',
+	table: 'database',
+	image: 'image',
+};
+
+/** One cell of a table in a pin: one line, with no escape. */
+const cellText = (text: string): string => plain(text).replace(/[\n\t]/g, ' ');
 
 /** The file with terminal escapes dropped from its text and its tables. */
 function cleaned(file: FileContent): FileContent {
 	const tables = file.tables?.map((table) => ({
 		...table,
-		name: plain(table.name),
-		columns: table.columns.map(plain),
-		rows: table.rows.map((row) => row.map(plain)),
+		name: cellText(table.name),
+		columns: table.columns.map(cellText),
+		rows: table.rows.map((row) => row.map(cellText)),
 	}));
 	return { ...file, text: plain(file.text), ...(tables ? { tables } : {}) };
 }
 
 /** One pin of a shown file widget, with the file read as its author. A failed read is a problem on the pin. */
 async function readPin(workspace: Workspace, widget: CanvasWidget): Promise<Pin> {
+	const kind = widget.kind as Pin['kind'];
 	const path = widget.source?.type === 'file' ? widget.source.path : '';
-	const pin = {
-		name: widget.name,
-		title: widget.title === undefined ? undefined : plain(widget.title),
-		kind: widget.kind as Pin['kind'],
-		author: widget.author,
-		path,
-	};
+	const pin = { name: widget.name, title: widget.title, kind, author: widget.author, path };
 	try {
-		const file = await readFile(workspace, path, { name: widget.author });
-		const problem = mismatch(pin.kind, file);
-		return problem ? { ...pin, problem } : { ...pin, file: cleaned(file) };
+		const file = await readFile(workspace, path, { name: widget.author }, PIN_READS[kind]);
+		return { ...pin, file: cleaned(file) };
 	} catch (error) {
 		return { ...pin, problem: error instanceof Error ? error.message : String(error) };
 	}
 }
 
-/** The pins of the shown file widgets of a room, in the order of the canvas. */
-export function readPins(workspace: Workspace, widgets: readonly CanvasWidget[]): Promise<Pin[]> {
-	return Promise.all(shownFiles(widgets).map((widget) => readPin(workspace, widget)));
+/** The pins of the shown file widgets of a room, `MAX_PINS` at most, in the order of the canvas. */
+export async function readPins(
+	workspace: Workspace,
+	widgets: readonly CanvasWidget[],
+): Promise<Pins> {
+	const shown = shownFiles(widgets);
+	const pins = await Promise.all(
+		shown.slice(0, MAX_PINS).map((widget) => readPin(workspace, widget)),
+	);
+	return { pins, more: shown.length - pins.length };
 }

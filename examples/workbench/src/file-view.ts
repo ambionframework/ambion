@@ -18,6 +18,13 @@ const IMAGE_ROWS = 24;
 export const bytes = (size: number): string =>
 	size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
 
+let style: SyntaxStyle | undefined;
+/** The one style of every markdown view. A style holds native memory, so the views share it. */
+const markdownSyntax = (): SyntaxStyle => {
+	style ??= markdownStyle();
+	return style;
+};
+
 /** How markdown looks on the panel: headings in the accent, code in the summary color. */
 function markdownStyle(): SyntaxStyle {
 	return SyntaxStyle.fromStyles({
@@ -82,7 +89,7 @@ export class FileView {
 		this.body = new TextRenderable(renderer, { content: '', wrapMode: 'word', width: '100%' });
 		this.markdown = new MarkdownRenderable(renderer, {
 			content: '',
-			syntaxStyle: markdownStyle(),
+			syntaxStyle: markdownSyntax(),
 			fg: palette.text,
 			conceal: true,
 			width: '100%',

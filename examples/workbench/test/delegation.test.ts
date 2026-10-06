@@ -84,6 +84,7 @@ describe('Workbench delegation', () => {
 		expect(parent.some((text) => text.includes('is closed'))).toBe(false);
 		const bringup = await workbench.read('bringup', 0);
 		expect(bringup.participants.map((seat) => seat.name)).not.toContain('scout');
+		expect(await workbench.pins('bringup-survey')).toEqual({ pins: [], more: 0 });
 		expect(canvasRow(directory, 'bringup-survey')).toMatchObject({
 			state: 'archived',
 			close: JSON.stringify({ result: 'done' }),

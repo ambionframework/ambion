@@ -24,7 +24,7 @@ export const PIN_KINDS = [
 type PinKind = (typeof PIN_KINDS)[number]['name'];
 
 /** The most pins that the side area draws for one room. */
-const MAX_PINS = 4;
+export const MAX_PINS = 4;
 
 /** One shown widget of a room, with the file it names read as its author. */
 export interface Pin {
@@ -41,18 +41,19 @@ export interface Pin {
 
 const isPinKind = (kind: string): kind is PinKind => PIN_KINDS.some((one) => one.name === kind);
 
-/** The shown widgets of the catalog that name a file, in the order of the canvas, `MAX_PINS` at most. */
-export function shownFiles(widgets: readonly CanvasWidget[]): CanvasWidget[] {
-	return widgets
-		.filter(
-			(widget) =>
-				widget.state === 'shown' && widget.source?.type === 'file' && isPinKind(widget.kind),
-		)
-		.slice(0, MAX_PINS);
+/** The pins that the side area draws, and how many more shown files it leaves out. */
+export interface Pins {
+	pins: Pin[];
+	more: number;
 }
 
-/** The words the side area shows over a pin: the title, or the name. */
-export const pinLabel = (pin: Pick<Pin, 'name' | 'title'>): string => pin.title ?? pin.name;
+/** The shown widgets of the catalog that name a file, in the order of the canvas. */
+export function shownFiles(widgets: readonly CanvasWidget[]): CanvasWidget[] {
+	return widgets.filter(
+		(widget) =>
+			widget.state === 'shown' && widget.source?.type === 'file' && isPinKind(widget.kind),
+	);
+}
 
 const ESC = 0x1b;
 const BEL = 0x07;
@@ -64,15 +65,26 @@ function find(text: string, from: number, stops: (code: number) => boolean): num
 	return at;
 }
 
+/** The index after a string sequence whose body starts at `from`. An unterminated one ends after its introducer. */
+function afterString(text: string, from: number): number {
+	// A string sequence ends at BEL, or at ESC and a backslash.
+	const end = find(text, from, (code) => code === BEL || code === ESC);
+	if (end === text.length) return from;
+	if (text.charCodeAt(end) === BEL) return end + 1;
+	return text[end + 1] === '\\' ? end + 2 : end;
+}
+
+/** The introducers of a string sequence: OSC, DCS, SOS, PM, and APC. */
+const STRING_INTRODUCERS = ']PX^_';
+
 /** The index after the escape sequence that starts at `at`, where `text[at]` is ESC. */
 function afterEscape(text: string, at: number): number {
-	const next = text[at + 1];
+	const next = text[at + 1] ?? '';
+	if (next !== '' && STRING_INTRODUCERS.includes(next)) return afterString(text, at + 2);
+	if (next !== '[') return at + 2;
 	// A control sequence ends at one byte from 0x40 to 0x7e.
-	if (next === '[') return find(text, at + 2, (code) => code >= 0x40 && code <= 0x7e) + 1;
-	if (next !== ']') return at + 2;
-	// A string sequence ends at BEL or at ESC and a backslash.
-	const end = find(text, at + 2, (code) => code === BEL || code === ESC);
-	return text.charCodeAt(end) === ESC ? end + 2 : end + 1;
+	const end = find(text, at + 2, (code) => code >= 0x40 && code <= 0x7e);
+	return end === text.length ? at + 2 : end + 1;
 }
 
 /** Whether a code is a control character that text may keep: a newline or a tab. */

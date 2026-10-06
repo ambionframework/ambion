@@ -18,7 +18,7 @@ import {
 	readPins,
 } from './files.ts';
 import { isRoomName, MAX_GOAL } from './names.ts';
-import type { Pin } from './pins.ts';
+import type { Pins } from './pins.ts';
 import { readCommitFile, readSnapshotFile } from './previews.ts';
 import { byRecency, type ProcessOutput, readOutput } from './processes.ts';
 import { fail, openRooms, type RoomAction, type RoomsOptions, type RoomView } from './rooms.ts';
@@ -71,10 +71,10 @@ export interface Workbench {
 	files(): Promise<FileEntry[]>;
 	/**
 	 * The files that agents pinned in a room with `show`, each read as its author. The
-	 * host reads again after a widget event and a room start, and polls nothing. A hidden
+	 * host reads again after a widget event, a room start, and the end of an activation, and polls nothing. A hidden
 	 * widget and a widget of an archived room are not pins.
 	 */
-	pins(room: string): Promise<Pin[]>;
+	pins(room: string): Promise<Pins>;
 	file(path: string): Promise<FileContent>;
 	/** The bytes of a snapshot ref of the workspace, from its object store. */
 	snapshot(ref: string): Promise<FileContent>;

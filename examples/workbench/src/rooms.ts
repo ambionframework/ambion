@@ -33,7 +33,7 @@ import {
 	keyVariable,
 	unavailableSeats,
 } from './kinds.ts';
-import { PIN_KINDS, type Pin } from './pins.ts';
+import { PIN_KINDS, type Pins } from './pins.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
@@ -66,7 +66,7 @@ interface RoomState {
 	/** The change listeners a caller registered with `watch`. They survive a stop. */
 	watchers: Set<() => void>;
 	/** The pins of the room, read at the last widget event or room start. */
-	pins: Promise<Pin[]> | undefined;
+	pins: Promise<Pins> | undefined;
 }
 
 /** What the rooms run on. A test passes `stream` and `executions` and needs no key. */
@@ -153,6 +153,8 @@ export async function openRooms(
 			log.logger(record);
 			const state = stateOf(record.room);
 			recordFailure(state, record.step);
+			// A file can change through any tool, so the end of an activation reads the pins again.
+			if (record.step.type === 'end') state.pins = undefined;
 			changed(state);
 		},
 	});
@@ -209,14 +211,14 @@ export async function openRooms(
 	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
 	/**
 	 * The pins of a room. `read` runs once after each widget event, room start,
-	 * and archive, and the answer stays until the next one. A stopped room reads
-	 * nothing again, and an archived room has no pins.
+	 * archive, and end of an activation, and the answer stays until the next one.
+	 * A stopped room reads nothing again, and an archived room has no pins.
 	 */
-	function pinned(
+	async function pinned(
 		name: string,
-		read: (widgets: readonly CanvasWidget[]) => Promise<Pin[]>,
-	): Promise<Pin[]> {
-		if (known(name).state === 'archived') return Promise.resolve([]);
+		read: (widgets: readonly CanvasWidget[]) => Promise<Pins>,
+	): Promise<Pins> {
+		if (known(name).state === 'archived') return { pins: [], more: 0 };
 		const state = stateOf(name);
 		state.pins ??= read(canvas.widgets(name)).catch((error: unknown) => {
 			state.pins = undefined;
@@ -376,10 +378,6 @@ function heardEvent(
 	// A widget event, a start, and an archive change what the pins show.
 	if (event.type === 'widget' || event.type === 'started' || event.type === 'archived')
 		state.pins = undefined;
-	if (event.type === 'widget') {
-		changed(state);
-		return;
-	}
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
 	changed(state);
 }

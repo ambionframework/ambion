@@ -97,7 +97,11 @@ export class Painter {
 		if (mode === 'files') this.panel.draw(this.session.browser);
 		if (mode === 'processes') this.processPanel.draw(this.processes);
 		// The pins share the side with the other panels, so a panel in use hides them.
-		this.pinsPanel.draw(this.session.pins, mode !== 'files' && mode !== 'processes');
+		this.pinsPanel.draw(
+			this.session.pins,
+			mode !== 'files' && mode !== 'processes',
+			this.session.view?.status === 'stopped',
+		);
 	}
 
 	private marks(picking: string | undefined): Marks {
