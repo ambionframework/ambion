@@ -14,12 +14,14 @@ import type { Marks, Transcript } from './transcript.ts';
 
 const HINTS: Partial<Record<Mode, string>> = {
 	compose: 'Enter sends   Ctrl+J newline   / commands   Ctrl+R rooms   Tab discussions',
-	browse: 'Up/Down choose   Enter open or close   e open all   c close all   r refs   Esc back',
+	browse:
+		'Up/Down choose   Enter open or close   e open all   c close all   r refs   a actions   Esc back',
 	refs: 'Up/Down choose a ref   Enter opens it   Esc back',
 };
 
 /** What the status line says while a side panel is open. */
 const PANEL_STATUS: Partial<Record<Mode, string>> = {
+	actions: 'Pressing the actions of the pins. Esc leaves.',
 	files: 'Browsing the workspace files. Esc closes the panel.',
 	processes: 'Watching the background processes. Esc closes the panel.',
 };

@@ -1,4 +1,5 @@
 import type { CanvasWidget, WidgetKind } from '@ambionframework/canvas';
+import type { ActionWidget, Answered } from './action-state.ts';
 import type { FileContent } from './files.ts';
 
 /** The kinds the host draws. Each one takes a file of the workspace. */
@@ -7,19 +8,19 @@ export const PIN_KINDS = [
 		name: 'markdown',
 		description: 'A Markdown file of the workspace, drawn with headings, lists, and code.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 	{
 		name: 'table',
 		description: 'The tables of a SQLite database file of the workspace.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 	{
 		name: 'image',
 		description: 'A picture file of the workspace: PNG, JPEG, GIF, or WebP.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 ] as const satisfies readonly WidgetKind[];
 
@@ -30,8 +31,7 @@ type PinKind = (typeof PIN_KINDS)[number]['name'];
 export const MAX_PINS = 4;
 
 /** One shown widget of a room, with the file it names read as its author. */
-export interface Pin {
-	name: string;
+export interface Pin extends ActionWidget {
 	title: string | undefined;
 	kind: PinKind;
 	author: string;
@@ -48,6 +48,17 @@ const isPinKind = (kind: string): kind is PinKind => PIN_KINDS.some((one) => one
 export interface Pins {
 	pins: Pin[];
 	more: number;
+}
+
+/** The pins with the answers of their revisions. A pin keeps its file. */
+export function answeredPins(list: Pins, answers: ReadonlyMap<string, Answered>): Pins {
+	return {
+		...list,
+		pins: list.pins.map((pin) => {
+			const answered = answers.get(pin.revision);
+			return answered ? { ...pin, answered } : pin;
+		}),
+	};
 }
 
 /** The shown widgets of the catalog that name a file, in the order of the canvas. */

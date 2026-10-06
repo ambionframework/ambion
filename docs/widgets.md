@@ -134,10 +134,10 @@ does not take. A kind with no source types takes no source, and a kind with
 source types needs one. The guidance lists the catalog, so an agent places
 only what the host can draw.
 
-| Host        | Catalog                                               | First widget  |
-| ----------- | ----------------------------------------------------- | ------------- |
-| Camera chat | `frame`: the newest frame that a process serves       | A viewfinder  |
-| Workbench   | `markdown`, `table`, `image`: a file of the workspace | A pinned file |
+| Host        | Catalog                                                             | First widget  |
+| ----------- | ------------------------------------------------------------------- | ------------- |
+| Camera chat | `frame`: the newest frame that a process serves                     | A viewfinder  |
+| Workbench   | `markdown`, `table`, `image`: a file of the workspace, with actions | A pinned file |
 
 **The canvas refuses actions on a kind that draws none.** A kind with
 `actions: false` takes no `actions` and no `for`. A `for` with no actions is
@@ -292,8 +292,8 @@ interface Canvas {
   widgets(room: string): readonly CanvasWidget[];
   /** One revision by id, or undefined. Read at resume. */
   revision(id: string): CanvasWidget | undefined;
-  /** The seq of the act that answers each answered revision of a room. Empty before resume. */
-  answers(room: string): ReadonlyMap<string, number>;
+  /** The act that answers each answered revision of a room: its seq and the person. Empty before resume. */
+  answers(room: string): ReadonlyMap<string, { readonly seq: number; readonly by: string }>;
   /** Checks an act, then sends it through the visit of the person in that room. */
   act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
 }

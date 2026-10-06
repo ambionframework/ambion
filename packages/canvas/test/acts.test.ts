@@ -223,7 +223,9 @@ describe('a once action', () => {
 		expect(canvas.answers('site').size).toBe(0);
 		const first = (await press()) as { kind: 'sent'; seq: number };
 		expect(first.kind).toBe('sent');
-		expect(canvas.answers('site')).toEqual(new Map([[shown.revision, first.seq]]));
+		expect(canvas.answers('site')).toEqual(
+			new Map([[shown.revision, { seq: first.seq, by: 'mira' }]]),
+		);
 		expect(answered).toEqual([
 			{ type: 'answered', room: 'site', revision: shown.revision, seq: first.seq },
 		]);
@@ -248,7 +250,7 @@ describe('a once action', () => {
 		const landed = await visit.send({ text: 'Keep it.', key: `act:${shown.revision}` });
 		expect(canvas.answers('site').size).toBe(0);
 		expect(await press()).toMatchObject({ kind: 'answered', seq: landed.from });
-		expect(canvas.answers('site').get(shown.revision)).toBe(landed.from);
+		expect(canvas.answers('site').get(shown.revision)).toEqual({ seq: landed.from, by: ola.name });
 	});
 
 	it('keeps the answer across a restart, since the journal holds it', async () => {
@@ -257,7 +259,9 @@ describe('a once action', () => {
 		const sent = (await first.press()) as { seq: number };
 		await first.canvas.close();
 		const second = await gallery({ store, storage: first.storage });
-		expect(second.canvas.answers('site')).toEqual(new Map([[first.shown.revision, sent.seq]]));
+		expect(second.canvas.answers('site')).toEqual(
+			new Map([[first.shown.revision, { seq: sent.seq, by: 'mira' }]]),
+		);
 		expect(second.canvas.answers('docs').size).toBe(0);
 		const again = await second.canvas.act(ola, {
 			room: 'site',

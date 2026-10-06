@@ -68,7 +68,7 @@ const room = await canvas.open({ name: 'site', goal: 'Plan the site.', agents: [
 | `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, `archived`, `widget`, and `answered`                                                |
 | `widgets(room)`        | The current revision of each widget of a room, hidden ones included                                                       |
 | `revision(id)`         | One widget revision by id, or `undefined`                                                                                 |
-| `answers(room)`        | The seq of the act that answers each answered revision of a room                                                          |
+| `answers(room)`        | The seq and the person of the act that answers each answered revision of a room                                           |
 | `act(person, act)`     | Checks an act, then sends it as a message of the person through the visit of that room                                    |
 
 **Each room receives its own definitions.** A root room receives the

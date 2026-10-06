@@ -137,6 +137,8 @@ agent does not come back to the say. The say in its discussion then reads
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
 | s                     | While browsing: show the steps of the chosen exchange      |
 | r                     | While browsing: choose a ref of a shown message            |
+| a                     | While browsing: take the actions of the pinned widgets     |
+| Up, Down, Enter, Esc  | In the actions: choose, press or send, leave               |
 | Up, Down, Enter       | While choosing a ref: move, open it, or jump to it         |
 | Esc                   | Close the palette, clear the search, or close the panel    |
 | PageUp, PageDown      | Scroll the conversation                                    |
@@ -159,6 +161,15 @@ OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
 (a SQLite database file), and `image`. The terminal draws the pinned files of
 the open room in a side area, each with its title and kind. `hide` removes
 a pin. The side area gives way to the files panel and the processes panel.
+
+**A pin can carry actions.** The side area draws each action as a button
+under its pin, with the person it is `for`. A widget that holds an answer
+reads `answered by <person> in #<seq>`, and its once actions read as done.
+Press Tab, then `a`, to take the keys. Up and Down choose an action, Enter
+presses it, and Esc leaves. An action with fields opens a form: type into a
+text or number field, press Space or Left and Right to change a boolean or a
+choice, and press Enter to send. The press reaches the room as a message of
+you, and the agent that wrote the pin answers it.
 
 **`/ps` shows the background processes that the agents started with
 `bash`.** The panel lists the running processes first, then the newest
@@ -398,6 +409,8 @@ workspace resources.
 | `src/composer.ts`        | The composer, room chip, palette, and paste detection   |
 | `src/browser.ts`         | The files panel state: search, matches, chosen file     |
 | `src/files-panel.ts`     | The files panel beside the conversation                 |
+| `src/action-state.ts`    | The actions of a pin: focus, form, press token, result  |
+| `src/widget-actions.ts`  | The buttons and the form of the actions, in OpenTUI     |
 | `src/processes.ts`       | The order of the processes, and the end of an output    |
 | `src/process-browser.ts` | The processes panel state: list, choice, and cancel     |
 | `src/process-panel.ts`   | The processes panel beside the conversation             |

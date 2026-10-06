@@ -15,6 +15,7 @@ import {
 	type CanvasWidget,
 	openCanvas,
 	sqliteCanvas,
+	type WidgetAct,
 } from '@ambionframework/canvas';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
@@ -23,8 +24,9 @@ import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+import type { Answered } from './action-state.ts';
 import { readApprovals } from './approvals.ts';
-import { team, workerNames } from './definitions.ts';
+import { type Person, team, workerNames } from './definitions.ts';
 import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
@@ -33,7 +35,7 @@ import {
 	keyVariable,
 	unavailableSeats,
 } from './kinds.ts';
-import { PIN_KINDS, type Pins } from './pins.ts';
+import { answeredPins, PIN_KINDS, type Pins } from './pins.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
@@ -208,7 +210,14 @@ export async function openRooms(
 	});
 	// The canvas exists first: an agent reads its bundle when it is defined.
 	const roomTeam = team(workspace, openInstrument({ lab, instruments }), canvas);
-	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
+	canvas.subscribe((event) =>
+		heardEvent(
+			event,
+			stateOf,
+			(name) => canvas.room(name),
+			(name) => canvas.answers(name),
+		),
+	);
 	/**
 	 * The pins of a room. `read` runs once after each widget event, room start,
 	 * archive, and end of an activation, and the answer stays until the next one.
@@ -216,11 +225,15 @@ export async function openRooms(
 	 */
 	async function pinned(
 		name: string,
-		read: (widgets: readonly CanvasWidget[]) => Promise<Pins>,
+		read: (
+			widgets: readonly CanvasWidget[],
+			answers: ReadonlyMap<string, Answered>,
+		) => Promise<Pins>,
 	): Promise<Pins> {
 		if (known(name).state === 'archived') return { pins: [], more: 0 };
 		const state = stateOf(name);
-		state.pins ??= read(canvas.widgets(name)).catch((error: unknown) => {
+		const widgets = canvas.widgets(name);
+		state.pins ??= read(widgets, canvas.answers(name)).catch((error: unknown) => {
 			state.pins = undefined;
 			throw error;
 		});
@@ -307,6 +320,11 @@ export async function openRooms(
 		create,
 		inRoom,
 		pinned,
+		/** Press an action of a widget as a person. The canvas checks it and sends it as a message. */
+		act(person: Person, act: WidgetAct) {
+			if (closing) fail('The host is stopping.');
+			return canvas.act(person, act);
+		},
 		watch,
 		withWorkspace,
 		workspace,
@@ -372,14 +390,27 @@ function heardEvent(
 	event: CanvasEvent,
 	stateOf: (name: string) => RoomState,
 	room: (name: string) => Room | undefined,
+	answers: (name: string) => ReadonlyMap<string, Answered>,
 ): void {
 	const name = roomOf(event);
 	const state = stateOf(name);
-	// A widget event, a start, and an archive change what the pins show.
-	if (event.type === 'widget' || event.type === 'started' || event.type === 'archived')
-		state.pins = undefined;
+	// A widget event, a start, and an archive change what the pins show. An answer adds to them.
+	if (['widget', 'started', 'archived'].includes(event.type)) state.pins = undefined;
+	// An answer changes no file, so the pins keep what they read.
+	else if (event.type === 'answered') putAnswers(state, answers(name));
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
 	changed(state);
+}
+
+/** Put the answers on the pins that the room holds, with no new read of a file. */
+function putAnswers(state: RoomState, answers: ReadonlyMap<string, Answered>): void {
+	const pending = state.pins;
+	if (!pending) return;
+	// A failed read has reset `state.pins` already, so the next read starts again.
+	const next = pending
+		.then((list) => answeredPins(list, answers))
+		.catch((): Pins => ({ pins: [], more: 0 }));
+	state.pins = next;
 }
 
 /** The name of the room that an event is about. */

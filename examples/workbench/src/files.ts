@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { CanvasWidget } from '@ambionframework/canvas';
 import type { Workspace } from '@ambionframework/workspace';
+import { type Answered, actionWidget } from './action-state.ts';
 import {
 	isDatabase,
 	isDatabasePath,
@@ -292,10 +293,20 @@ function cleaned(file: FileContent): FileContent {
 }
 
 /** One pin of a shown file widget, with the file read as its author. A failed read is a problem on the pin. */
-async function readPin(workspace: Workspace, widget: CanvasWidget): Promise<Pin> {
+async function readPin(
+	workspace: Workspace,
+	widget: CanvasWidget,
+	answers: ReadonlyMap<string, Answered>,
+): Promise<Pin> {
 	const kind = widget.kind as Pin['kind'];
 	const path = widget.source?.type === 'file' ? widget.source.path : '';
-	const pin = { name: widget.name, title: widget.title, kind, author: widget.author, path };
+	const pin = {
+		...actionWidget(widget, answers.get(widget.revision)),
+		title: widget.title,
+		kind,
+		author: widget.author,
+		path,
+	};
 	try {
 		const file = await readFile(workspace, path, { name: widget.author }, PIN_READS[kind]);
 		return { ...pin, file: cleaned(file) };
@@ -308,10 +319,11 @@ async function readPin(workspace: Workspace, widget: CanvasWidget): Promise<Pin>
 export async function readPins(
 	workspace: Workspace,
 	widgets: readonly CanvasWidget[],
+	answers: ReadonlyMap<string, Answered> = new Map(),
 ): Promise<Pins> {
 	const shown = shownFiles(widgets);
 	const pins = await Promise.all(
-		shown.slice(0, MAX_PINS).map((widget) => readPin(workspace, widget)),
+		shown.slice(0, MAX_PINS).map((widget) => readPin(workspace, widget, answers)),
 	);
 	return { pins, more: shown.length - pins.length };
 }

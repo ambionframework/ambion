@@ -7,10 +7,15 @@ import {
 	type TextChunk,
 	TextRenderable,
 } from '@opentui/core';
+import type { ActionPad } from './action-state.ts';
 import { tui as palette } from './brand.ts';
 import { describe, FileView } from './file-view.ts';
 import { type Pin, type Pins, plain } from './pins.ts';
+import { ActionsView, FOCUS_ID } from './widget-actions.ts';
 import type { FileContent } from './workbench.ts';
+
+/** Wait one layout pass, so a new line has its place before the scroll reads it. */
+const SETTLE_MS = 40;
 
 /** The side area of the files that agents pinned: a stack, each with its title and kind. */
 export class PinsPanel {
@@ -21,9 +26,15 @@ export class PinsPanel {
 	private drawn: Pins | undefined;
 	private readonly sections: (BoxRenderable | TextRenderable)[] = [];
 	private readonly note: TextRenderable;
+	private readonly hint: TextRenderable;
+	private readonly pad: ActionPad;
+	private revealing: ReturnType<typeof setTimeout> | undefined;
+	/** The actions drawn under each pin, by widget name. */
+	private readonly actions = new Map<string, ActionsView>();
 
-	constructor(renderer: CliRenderer) {
+	constructor(renderer: CliRenderer, pad: ActionPad) {
 		this.renderer = renderer;
+		this.pad = pad;
 		this.root = new BoxRenderable(renderer, {
 			flexDirection: 'column',
 			width: '40%',
@@ -49,8 +60,15 @@ export class PinsPanel {
 			'word',
 		);
 		this.note.visible = false;
+		this.hint = new TextRenderable(renderer, {
+			content: '',
+			flexShrink: 0,
+			wrapMode: 'none',
+			visible: false,
+		});
 		this.root.add(this.note);
 		this.root.add(this.scroll);
+		this.root.add(this.hint);
 	}
 
 	/**
@@ -61,8 +79,26 @@ export class PinsPanel {
 		this.root.visible = open && list.pins.length > 0;
 		if (!this.root.visible) return;
 		this.note.visible = stopped;
-		if (list === this.drawn) return;
+		if (list !== this.drawn) this.rebuild(list);
+		for (const [name, view] of this.actions) view.draw(this.pad.rows(name));
+		this.hint.visible = this.pad.active;
+		const hint = this.pad.hint();
+		this.hint.height = hint.length;
+		this.hint.content = new StyledText([fg(palette.dim)(hint.join('\n'))]);
+		this.reveal();
+	}
+
+	/** Bring the focused line into view once its layout exists. A later draw replaces a pending reveal. */
+	private reveal(): void {
+		clearTimeout(this.revealing);
+		this.revealing = this.pad.active
+			? setTimeout(() => this.scroll.scrollChildIntoView(FOCUS_ID), SETTLE_MS)
+			: undefined;
+	}
+
+	private rebuild(list: Pins): void {
 		this.drawn = list;
+		this.actions.clear();
 		for (const old of this.sections.splice(0)) {
 			this.scroll.remove(old);
 			old.destroyRecursively();
@@ -86,7 +122,7 @@ export class PinsPanel {
 		});
 	}
 
-	/** One pin: a title line, then the file as its kind draws it, or the problem. */
+	/** One pin: a title line, then the file as its kind draws it, or the problem, then its actions. */
 	private section(pin: Pin): BoxRenderable {
 		const box = new BoxRenderable(this.renderer, {
 			flexDirection: 'column',
@@ -111,6 +147,9 @@ export class PinsPanel {
 			const problem = plain(`${pin.path}: ${pin.problem ?? 'The file did not read.'}`);
 			box.add(this.text(fg(palette.red)(problem), 'word'));
 		}
+		const actions = new ActionsView(this.renderer);
+		this.actions.set(pin.name, actions);
+		box.add(actions.root);
 		return box;
 	}
 }

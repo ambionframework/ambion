@@ -27,6 +27,8 @@ export const HELP = [
 	'  to the composer.',
 	'  r, while browsing, chooses a ref of a shown message. Enter opens a file or a table',
 	'  in the files panel, or jumps to a message. Esc goes back.',
+	'  a, while browsing, takes the actions of the pinned widgets. Up and Down choose, Enter',
+	'  presses or sends a form, and Esc leaves.',
 	'  PageUp and PageDown scroll. Start a message with // to send a leading slash.',
 ].join('\n');
 

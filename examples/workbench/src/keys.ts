@@ -1,4 +1,5 @@
 import type { CliRenderer, KeyEvent } from '@opentui/core';
+import type { ActionPad } from './action-state.ts';
 import type { Composer } from './composer.ts';
 import type { Painter } from './draw.ts';
 import type { FilesPanel } from './files-panel.ts';
@@ -9,8 +10,8 @@ import type { Session } from './session.ts';
 import { discussionKeys } from './timeline.ts';
 import type { Transcript } from './transcript.ts';
 
-/** Which surface takes the keys: the composer, the discussions, the refs, or a side panel. */
-export type Mode = 'compose' | 'browse' | 'refs' | 'files' | 'processes';
+/** Which surface takes the keys: the composer, the discussions, the refs, the actions of the pins, or a side panel. */
+export type Mode = 'compose' | 'browse' | 'refs' | 'actions' | 'files' | 'processes';
 
 /** How far each browse key moves the selection. */
 /** How far each browse key, and each refs key, moves the selection. */
@@ -30,6 +31,8 @@ export interface KeyParts {
 	processPanel: ProcessesPanel;
 	processes: ProcessBrowser;
 	transcript: Transcript;
+	/** The actions of the pinned widgets. */
+	pad: ActionPad;
 	render: () => void;
 }
 
@@ -54,6 +57,7 @@ export class Keys {
 	private readonly processPanel: ProcessesPanel;
 	private readonly processes: ProcessBrowser;
 	private readonly transcript: Transcript;
+	private readonly pad: ActionPad;
 	private readonly render: () => void;
 
 	constructor(parts: KeyParts) {
@@ -66,6 +70,7 @@ export class Keys {
 		this.processPanel = parts.processPanel;
 		this.processes = parts.processes;
 		this.transcript = parts.transcript;
+		this.pad = parts.pad;
 		this.render = parts.render;
 	}
 
@@ -74,8 +79,13 @@ export class Keys {
 		this.palette.refresh(this.mode === 'compose', (text) => this.session.suggestions(text));
 	}
 
-	/** Keep the browse selection on a discussion that still exists. */
+	/**
+	 * Keep the browse selection on a discussion that still exists, and the actions on the pins
+	 * that still have them. A person whose pins lose every action leaves the actions.
+	 */
 	reconcile(): void {
+		this.pad.sync(this.session.pins.pins);
+		if (this.mode === 'actions' && !this.pad.active) this.exitActions();
 		const keys = discussionKeys(this.session.blocks);
 		if (this.browsing && !keys.includes(this.browsing)) this.browsing = keys.at(-1);
 		const ids = this.session.refItems.map((item) => item.id);
@@ -92,6 +102,10 @@ export class Keys {
 		}
 		if (this.mode === 'processes') {
 			this.processKey(key);
+			return;
+		}
+		if (this.mode === 'actions') {
+			this.actionsKey(key);
 			return;
 		}
 		if (key.name === 'pageup' || key.name === 'pagedown') {
@@ -220,6 +234,34 @@ export class Keys {
 		this.render();
 	}
 
+	// The actions of the pins
+
+	/** Take the keys for the actions of the pinned widgets. A room with none says so. */
+	private enterActions(): void {
+		if (!this.pad.enter()) {
+			this.session.say('No pinned widget has actions to press.');
+			return;
+		}
+		this.mode = 'actions';
+		this.composer.blur();
+		this.render();
+	}
+
+	/** Give the keys back to the composer. The caller draws. */
+	private exitActions(): void {
+		this.pad.leave();
+		this.mode = 'compose';
+		this.composer.focus();
+		this.painter.invalidate();
+	}
+
+	private actionsKey(key: KeyEvent): void {
+		key.preventDefault();
+		if (this.pad.key(key) !== 'leave') return;
+		this.exitActions();
+		this.render();
+	}
+
 	// Discussions
 
 	/** Enter browse mode. A direct reply has no discussion, so its refs alone are enough to enter. */
@@ -277,6 +319,7 @@ export class Keys {
 	private browseOther(name: string): void {
 		if (name === 's' && this.browsing) void this.session.showSteps(this.browsing);
 		else if (name === 'r') this.enterRefs();
+		else if (name === 'a') this.enterActions();
 		else if (name === 'tab' || name === 'escape' || name === 'i') this.exitBrowse();
 	}
 

@@ -107,8 +107,10 @@ class CanvasRun implements Canvas {
 		return found === undefined ? undefined : structuredClone(found);
 	}
 
-	answers(room: string): ReadonlyMap<string, number> {
-		return new Map([...this.answered.of(room)].map(([revision, answer]) => [revision, answer.seq]));
+	answers(room: string): ReadonlyMap<string, { readonly seq: number; readonly by: string }> {
+		return new Map(
+			[...this.answered.of(room)].map(([revision, answer]) => [revision, { ...answer }]),
+		);
 	}
 
 	act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult> {
