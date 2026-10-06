@@ -56,7 +56,7 @@ const OPENER_GUIDANCE = [
 	'A task that you delegate goes to the breakout room alone. Do not seat a specialist of this room, and do not ask one, for that task.',
 	'`tell` posts into a breakout room that you opened, and steers its workers.',
 	'`archive` ends a breakout room, and records `done` or `failed`. An archived room does not start again.',
-	'The workers answer in this room with a message that starts with `breakout <room>:`. When it arrives, archive the room as `done` or `failed`, and answer the person who asked with the result.',
+	'A report of the workers arrives in this room as a message that starts with `breakout <room>:`. When the report arrives, archive the room as `done` or `failed`, and answer the person who asked with the result. A close notice with the same start carries no result: use `tell` to ask the workers again.',
 	'Your reminder lists the breakout rooms that you hold. Read it before you say that a room failed.',
 ].join('\n');
 
@@ -71,7 +71,7 @@ export function openerBundle(port: BreakoutPort): ToolBundle {
 				name: 'breakout',
 				label: 'Open a breakout room',
 				description:
-					'Open a breakout room only when it is valuable: for independent work that runs in parallel while this room continues, or for a narrow task that would distract this room. Else answer in this room, or ask a specialist of this room. Opens the breakout room <your room>-<name> with a goal. Seat workers from the team, and post the first message to one worker or to all. A repeat call with the same name returns the room that you opened.',
+					'Open a breakout room only when it is valuable: for independent work that runs in parallel while this room continues, or for a narrow task that would distract this room. Else answer in this room, or ask a specialist of this room. The tool opens the breakout room <your room>-<name> with a goal. Seat workers from the team, and post the first message to one worker or to all. A repeat call with the same name returns the room that you opened.',
 				parameters: Type.Object({
 					name: Type.String({
 						description: 'The room is <your room>-<name>, at most 48 characters.',

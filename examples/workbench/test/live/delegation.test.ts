@@ -12,8 +12,8 @@
  *
  * Pi needs a key in the variable of the provider of `AMBION_MODEL`, or a stored sign-in for that
  * provider in `~/.ambion/pi/credentials.json`. Codex needs `CODEX_API_KEY`, or the host login
- * `auth.json` of Codex. Without a sign-in, the file skips. The other seats fail their
- * activations, and the test uses none of them.
+ * `auth.json` of Codex. Without a sign-in, the file skips. The seats of the other
+ * executor kinds fail their activations, and the test uses none of them.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -42,7 +42,7 @@ function signedIn(): boolean {
 	}
 }
 
-const kind: ExecutorKind = seatKinds.assistant ?? 'pi';
+const kind: ExecutorKind = seatKinds().assistant ?? 'pi';
 
 /** Whether the host has the login of Codex. The test checks that the file exists and reads none of it. */
 const codexLogin = () =>

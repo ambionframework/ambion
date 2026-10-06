@@ -31,6 +31,8 @@ start of one room no longer stops the host.
 opener bundle, and each worker holds the worker bundle with the workspace
 tools. The host opens the canvas before it defines the agents. The room
 view carries the `parent` of a breakout room, and `/room` shows it.
+
+**The opener guidance and a live delegation test.**
 `AMBION_EXECUTOR=codex` runs the assistant and the workers on Codex.
 A live file runs the delegation on Pi or Codex, on a key or a host login.
 The `breakout` tool says when a breakout room is valuable: parallel work, or
