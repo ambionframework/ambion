@@ -9,15 +9,22 @@
   <img alt="The canvas for people at the top, the workspace for agents at the bottom, and the agents between them. People visit a root room and a breakout room, and read a frame widget. Each room is a shared journal. Agent A on Pi and Agent B on Claude say in the root room. Agent B opens the breakout room, and Agent C on Codex says in it and shows the widget. The host reads the source of the widget, a process on $PORT. The agents call the workspace tools: files, snapshots, skills and compose, and processes." src="docs/assets/ambion-overview.svg">
 </picture>
 
-A room is a shared journal with rules for taking part. People ask questions
-and read results. Agents on any framework speak when they have something to
-add and stay silent when they do not. Each agent has its own owner,
-instructions, model, and executor. Every agent reaches the world through one
-shared set of tools: files, processes, snapshots, tables, repositories, and
-skills, joined by `compose`. A canvas is the counterpart of the workspace for
-people: it holds the rooms and the widgets that agents show. The kernel keeps
-the record and the rules, and a restart loses nothing. The application
-supplies hosting, agent definitions, credentials, and domain tools.
+A room is a shared journal with rules for taking part. An application
+takes three steps:
+
+- **Define your agents.** Each agent has its own owner, instructions,
+  model, and executor: Pi, the Claude Agent SDK, or Codex. Every agent
+  reaches the world through one shared set of tools: files, processes,
+  snapshots, tables, repositories, and skills, joined by `compose`.
+- **Start a room.** Agents read in parallel, speak when they have
+  something to add, and stay silent when they do not. The kernel keeps the
+  record and the rules, and a restart loses nothing.
+- **Let people in.** A person asks a question and reads the result. A
+  canvas holds the rooms, the breakout rooms that agents open for
+  background work, and the widgets that agents show to people.
+
+The application supplies hosting, agent definitions, credentials, and
+domain tools.
 
 ## Quickstart
 
@@ -82,6 +89,13 @@ when no seat has work left. The script prints one `name: text` line for
 each said message, in journal order. An agent that stays silent prints
 nothing.
 
+**One run printed these lines.** The text changes with the model.
+
+```text
+datasheets: A 3 A synchronous buck regulator holds 3.3 V at 2 A. Its datasheet gives the thermal limit.
+design: Choose a 3 A synchronous buck regulator. A 2 A load leaves 1 A of margin.
+```
+
 ## One team on three harnesses
 
 **One room runs Pi, the Claude Agent SDK, and Codex.** Install
@@ -118,6 +132,53 @@ when the room includes all three executor kinds.
 The room seats every agent at `broadcast` by default. Pass `seats` to choose
 another attention; see [Roster](docs/roster.md#configuration).
 [Executors](docs/executors.md) holds the contract for a new harness.
+
+## Let people in
+
+**A canvas holds the rooms of a deployment.** Install
+`@ambionframework/canvas`. The canvas stores one row for each room and
+resumes each running room after a restart. Give an agent `canvas.tools()`,
+and it can open a breakout room for background work. The workers report
+back to the room of the opener, and a person can visit any room.
+
+```ts
+import { memoryCanvas, openCanvas } from '@ambionframework/canvas';
+
+const canvasRuntime = createRuntime({ storage: memoryJournals(), execution: piExecution() });
+const canvas = openCanvas({
+  name: 'workshop',
+  runtime: canvasRuntime,
+  store: memoryCanvas(),
+  breakout: { team: ['scout'] },
+});
+
+const lead = defineAgent({
+  name: 'lead',
+  identity: 'Answers the person, and delegates long checks.',
+  executor: pi({
+    model,
+    instructions: 'Open a breakout room for a long check.',
+    bundles: [...bundles, canvas.tools()],
+  }),
+});
+const scout = defineAgent({
+  name: 'scout',
+  identity: 'Checks one part in depth.',
+  executor: pi({
+    model,
+    instructions: 'Report what you find.',
+    bundles: [...bundles, canvas.workerTools()],
+  }),
+});
+
+await canvas.resume({ agents: [lead, scout] });
+const bench = await canvas.open({ name: 'bench', goal: 'Qualify a part.' });
+```
+
+**`bench` is a room.** A person visits it with `bench.visit(priya)`. `canvas.widgetTools()`
+gives an agent `show` and `hide`, which put views, buttons, and forms in
+front of a person. [Canvas](docs/canvas.md) holds the lifecycle and the
+breakout rules. [Widgets](docs/widgets.md) holds the views and the acts.
 
 ## Evaluate the room
 
