@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { inflateSync } from 'node:zlib';
 import { createRuntime, defineAgent } from '@ambionframework/ambion';
 import { describeExecutor } from '@ambionframework/ambion/hosting';
@@ -897,4 +899,58 @@ describe('local bash backend', () => {
 		},
 	}))
 		it(c.name, c.run);
+});
+
+const run = promisify(execFile);
+const gitIn = async (cwd: string, ...args: string[]) =>
+	(await run('git', ['-C', cwd, ...args])).stdout.trim();
+
+it('commits the template of the host onto a stale template, and a fork with its own commit merges it', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'camera-chat-template-'));
+	try {
+		const root = join(directory, 'git');
+		const bare = join(root, 'templates', 'camera.git');
+		await localGitBackend(root);
+		const host = await gitIn(bare, 'rev-parse', 'main^{tree}');
+		// A state directory of an earlier build holds a template with other files.
+		const stale = join(directory, 'stale');
+		await run('git', ['clone', '-q', bare, stale]);
+		await writeFile(join(stale, 'server.ts'), '// stale\n');
+		await gitIn(stale, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'Stale');
+		await gitIn(bare, 'fetch', '-q', stale, 'HEAD:refs/heads/main', '--force');
+		const old = await gitIn(bare, 'rev-parse', 'main');
+		expect(await gitIn(bare, 'rev-parse', 'main^{tree}')).not.toBe(host);
+		const fork = join(directory, 'fork');
+		await run('git', ['clone', '-q', bare, fork]);
+		await writeFile(join(fork, 'notes.md'), 'fork\n');
+		await gitIn(fork, 'add', 'notes.md');
+		await gitIn(fork, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'Fork');
+		await localGitBackend(root);
+		expect(await gitIn(bare, 'rev-parse', 'main^{tree}')).toBe(host);
+		expect(await gitIn(bare, 'rev-parse', 'main^')).toBe(old);
+		const tip = await gitIn(bare, 'rev-parse', 'main');
+		// The command of the guidance.
+		await gitIn(
+			fork,
+			'-c',
+			'user.name=t',
+			'-c',
+			'user.email=t@t',
+			'pull',
+			'--no-rebase',
+			'--no-edit',
+			'-q',
+			bare,
+			'main',
+		);
+		await gitIn(fork, 'merge-base', '--is-ancestor', tip, 'HEAD');
+		expect(await gitIn(fork, 'show', 'HEAD:notes.md')).toBe('fork');
+		expect(await gitIn(fork, 'show', 'HEAD:server.ts')).toBe(
+			await gitIn(bare, 'show', 'main:server.ts'),
+		);
+		await localGitBackend(root);
+		expect(await gitIn(bare, 'rev-parse', 'main')).toBe(tip);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });

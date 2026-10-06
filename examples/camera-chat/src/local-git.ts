@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type {
@@ -10,12 +10,16 @@ import type {
 	GitEnv,
 	GitForkOutcome,
 	GitRepository,
+	SourceFiles,
 } from '@ambionframework/workspace';
+import { fromDirectory } from '@ambionframework/workspace';
 import {
 	assertAgent,
 	assertCommitHash,
 	byPath,
 	namespaceOf,
+	type RegistrationSteps,
+	registerRepositories,
 	revisionOf,
 	validName,
 } from '@ambionframework/workspace/git';
@@ -56,7 +60,15 @@ export async function localGitBackend(directory: string): Promise<GitBackend> {
 		);
 		const defaultBranch = await git(path, ['symbolic-ref', '--short', 'HEAD'], signal);
 		const source = await git(path, ['config', '--get', 'ambion.source'], signal).catch(() => '');
-		return { id, url: path, defaultBranch, branches, ...(source ? { source } : {}) };
+		const description = await describedAs(path);
+		return {
+			id,
+			url: path,
+			defaultBranch,
+			branches,
+			...(source ? { source } : {}),
+			...(description ? { description } : {}),
+		};
 	}
 	async function listNamespace(space: string, signal?: AbortSignal) {
 		if (!namespaceOf(`${space}/notes`)) return [];
@@ -118,14 +130,19 @@ export async function localGitBackend(directory: string): Promise<GitBackend> {
 		return { ok: true, repository };
 	}
 
-	const template = 'templates/camera-notes';
-	if (!(await get(template))) await seed(pathOf(template));
-	if (!(await get('templates/camera')))
-		await seed(
-			pathOf('templates/camera'),
-			fileURLToPath(new URL('../templates/camera', import.meta.url)),
-		);
-	await protect(pathOf(template));
+	await registerRepositories(localSteps(pathOf), {
+		templates: {
+			camera: {
+				source: fromDirectory(fileURLToPath(new URL('../templates/camera', import.meta.url))),
+			},
+			'camera-notes': {
+				source: {
+					'README.md': '# Camera notes\n\nSave observations and their evidence references here.\n',
+				},
+			},
+		},
+	});
+	await protect(pathOf('templates/camera-notes'));
 	await protect(pathOf('templates/camera'));
 	return {
 		label: 'localhost (local bare repositories)',
@@ -159,31 +176,129 @@ async function protect(repository: string): Promise<void> {
 	);
 }
 
-async function seed(destination: string, template?: string): Promise<void> {
-	const checkout = await mkdtemp(join(tmpdir(), 'camera-notes-'));
-	try {
-		await git(checkout, ['init', '-b', 'main']);
-		if (template) await cp(template, checkout, { recursive: true });
-		else
-			await writeFile(
-				join(checkout, 'README.md'),
-				'# Camera notes\n\nSave observations and their evidence references here.\n',
-			);
-		await git(checkout, ['add', '.']);
-		await git(checkout, [
-			'-c',
-			'user.name=Camera Chat',
-			'-c',
-			'user.email=camera@localhost',
-			'commit',
-			'-m',
-			'Seed template',
-		]);
-		await mkdir(resolve(destination, '..'), { recursive: true });
-		await execute('git', ['clone', '--bare', checkout, destination]);
-	} finally {
-		await rm(checkout, { recursive: true, force: true });
+const AUTHOR = { name: 'Camera Chat', email: 'camera@localhost' };
+const MAIN = 'refs/heads/main';
+
+/** Write `files` under `directory`. */
+async function writeFiles(directory: string, files: SourceFiles): Promise<void> {
+	await mkdir(directory, { recursive: true });
+	for (const [path, bytes] of Object.entries(files)) {
+		const target = join(directory, path);
+		await mkdir(dirname(target), { recursive: true });
+		await writeFile(target, bytes);
 	}
+}
+
+/** Run `work` with an empty temporary directory, and remove the directory after it. */
+async function inTemporary<T>(work: (directory: string) => Promise<T>): Promise<T> {
+	const directory = await mkdtemp(join(tmpdir(), 'camera-template-'));
+	try {
+		return await work(directory);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+}
+
+/** The description of a template, or an empty string. */
+const describedAs = (repository: string) =>
+	git(repository, ['config', '--get', 'ambion.description']).catch(() => '');
+
+async function exists(path: string): Promise<boolean> {
+	return stat(path).then(
+		() => true,
+		() => false,
+	);
+}
+
+/**
+ * Registration steps over the local bare repositories. A new template is a
+ * bare clone of a commit of the source. A changed template takes a commit of
+ * the source on its tip. The commit goes in with plumbing, so the
+ * `pre-receive` hook that refuses a push does not run.
+ */
+function localSteps(pathOf: (id: string) => string): RegistrationSteps {
+	const unused = async (): Promise<never> => {
+		throw new Error('This backend registers no shared repository.');
+	};
+	async function describe(repository: string, description: string | undefined): Promise<void> {
+		if ((await describedAs(repository)) === (description ?? '')) return;
+		if (description === undefined)
+			await git(repository, ['config', '--unset', 'ambion.description']);
+		else await git(repository, ['config', 'ambion.description', description]);
+	}
+	return {
+		async template(name, description) {
+			const repository = pathOf(`templates/${name}`);
+			if (!(await exists(repository))) return undefined;
+			await describe(repository, description);
+			const listing = await git(repository, ['ls-tree', '-r', '-z', 'main']).catch(() => '');
+			return new Map(
+				listing
+					.split('\0')
+					.filter(Boolean)
+					.map((line) => {
+						const [facts = '', path = ''] = line.split('\t');
+						return [path, facts.split(' ')[2] ?? ''] as const;
+					}),
+			);
+		},
+		async createTemplate(name, files, description) {
+			const repository = pathOf(`templates/${name}`);
+			await inTemporary(async (checkout) => {
+				await git(checkout, ['init', '-b', 'main']);
+				await writeFiles(checkout, files);
+				await git(checkout, ['add', '-f', '.']);
+				await git(checkout, [
+					'-c',
+					`user.name=${AUTHOR.name}`,
+					'-c',
+					`user.email=${AUTHOR.email}`,
+					'commit',
+					'-m',
+					`Register the template ${name}`,
+				]);
+				await mkdir(dirname(repository), { recursive: true });
+				await execute('git', ['clone', '--bare', checkout, repository]);
+			});
+			await describe(repository, description);
+		},
+		async updateTemplate(name, files, description) {
+			const repository = pathOf(`templates/${name}`);
+			const tip = await git(repository, ['rev-parse', '--verify', MAIN]);
+			await inTemporary(async (scratch) => {
+				const tree = join(scratch, 'files');
+				await writeFiles(tree, files);
+				const env = {
+					...process.env,
+					GIT_INDEX_FILE: join(scratch, 'index'),
+					GIT_AUTHOR_NAME: AUTHOR.name,
+					GIT_AUTHOR_EMAIL: AUTHOR.email,
+					GIT_COMMITTER_NAME: AUTHOR.name,
+					GIT_COMMITTER_EMAIL: AUTHOR.email,
+				};
+				const run = async (args: string[]) =>
+					(
+						await execute('git', ['--git-dir', repository, '--work-tree', tree, ...args], {
+							cwd: tree,
+							env,
+						})
+					).stdout.trim();
+				await run(['add', '-f', '-A']);
+				const commit = await run([
+					'commit-tree',
+					await run(['write-tree']),
+					'-p',
+					tip,
+					'-m',
+					`Register the template ${name}`,
+				]);
+				await run(['update-ref', MAIN, commit, tip]);
+			});
+			await describe(repository, description);
+		},
+		shared: unused,
+		seedShared: unused,
+	};
 }
 
 function parseCommit(data: string, hash: string, diff: string): GitCommit {
