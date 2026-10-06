@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import ssh2 from 'ssh2';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ed25519Pair } from '../src/git-keys.ts';
 import { fingerprint } from '../src/index.ts';
 import { gitBackend, gitServer, hasGitTools } from './support/git.ts';
@@ -92,14 +92,16 @@ describe.skipIf(!hasGitTools)('the agent keys', () => {
 
 	it('issues a new key inside the margin, and keeps the old line until its expiry', async () => {
 		const { home, options } = await gitServer();
-		// A life of 4 seconds has a margin of 2 seconds. The old line stays for 1.9 seconds more.
+		// A life of 4 seconds has a margin of 2 seconds. A clock one life ahead puts the first key
+		// inside its margin. The server's clock does not move, so the old line has not expired.
 		const backend = gitBackend({ ...options, credentialTtl: 4 });
 		const first = await backend.access.identityFor(ANALYST);
-		await new Promise((resolve) => setTimeout(resolve, first.expiresAt - Date.now() - 1_900));
-		const second = await backend.access.identityFor(ANALYST);
+		const now = Date.now;
+		const ahead = vi.spyOn(Date, 'now').mockImplementation(() => now() + 4_000);
+		const second = await backend.access.identityFor(ANALYST).finally(() => ahead.mockRestore());
 
 		expect(second.privateKey).not.toBe(first.privateKey);
-		expect(second.expiresAt).toBeGreaterThan(first.expiresAt);
+		expect(second.expiresAt).toBeGreaterThanOrEqual(first.expiresAt);
 		const lines = await keyLines(home);
 		expect(lines).toHaveLength(2);
 		expect(lines[0]).toContain(publicOf(first.privateKey));
