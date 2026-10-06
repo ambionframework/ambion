@@ -1,6 +1,7 @@
 /** The host interface of the canvas. The contract is `docs/canvas.md`. */
 import type {
 	AgentDefinition,
+	PersonDefinition,
 	Room,
 	Runtime,
 	StartRoomOptions,
@@ -38,7 +39,8 @@ export type CanvasOperation =
 	| 'mirror'
 	| 'show'
 	| 'hide'
-	| 'widget';
+	| 'widget'
+	| 'act';
 
 /** A failure that the canvas reports and survives. */
 export interface CanvasError {
@@ -79,7 +81,31 @@ export type CanvasEvent =
 	| { readonly type: 'opened'; readonly room: CanvasRoom }
 	| { readonly type: 'started' | 'stopped'; readonly room: string }
 	| { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose }
-	| { readonly type: 'widget'; readonly widget: CanvasWidget };
+	| { readonly type: 'widget'; readonly widget: CanvasWidget }
+	| {
+			readonly type: 'answered';
+			readonly room: string;
+			readonly revision: string;
+			readonly seq: number;
+	  };
+
+/** One press of a person on a widget. */
+export interface WidgetAct {
+	readonly room: string;
+	readonly widget: string;
+	/** The revision that the person saw. */
+	readonly revision: string;
+	readonly action: string;
+	readonly values?: Readonly<Record<string, string | number | boolean>>;
+	/** A token for one press. The host saves it before the call and reuses it on a retry. */
+	readonly press: string;
+}
+
+/** What an act did. `stale` and `answered` are results, since the host draws them. */
+export type WidgetActResult =
+	| { readonly kind: 'sent'; readonly seq: number }
+	| { readonly kind: 'stale'; readonly widget: CanvasWidget }
+	| { readonly kind: 'answered'; readonly seq: number };
 
 export interface Canvas {
 	readonly name: string;
@@ -125,5 +151,9 @@ export interface Canvas {
 	widgets(room: string): readonly CanvasWidget[];
 	/** One revision by id, or undefined. Read at `resume`. */
 	revision(id: string): CanvasWidget | undefined;
+	/** The seq of the act that answers each answered revision of a room. Empty before `resume`. */
+	answers(room: string): ReadonlyMap<string, number>;
+	/** Checks an act, then sends it through the visit of the person in that room. */
+	act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
 	subscribe(listener: (event: CanvasEvent) => void): () => void;
 }

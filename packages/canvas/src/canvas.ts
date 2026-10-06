@@ -2,6 +2,7 @@
 import {
 	type AgentDefinition,
 	AmbionError,
+	type PersonDefinition,
 	type Room,
 	readRoom,
 	resumeRoom,
@@ -10,19 +11,19 @@ import {
 } from '@ambionframework/ambion';
 import { isName } from '@ambionframework/ambion/names';
 import type { RoomMirror } from '@ambionframework/workspace';
+import { type ActPort, type Answer, Answers, actOn } from './acts.ts';
 import { type BreakoutPort, DEFAULT_PER_OPENER, startOf } from './breakout.ts';
 import { Bridge } from './bridge.ts';
 import {
 	assertNoTeam,
-	breakoutCast,
-	type Cast,
+	castOf,
 	type Definitions,
 	definitionsOf,
 	refuse,
-	rootCast,
+	rootStartOf,
 } from './cast.ts';
 import { Queues } from './queue.ts';
-import type { CanvasClose, CanvasRoom, CanvasWidget, RootStart } from './store.ts';
+import type { CanvasClose, CanvasRoom, CanvasWidget } from './store.ts';
 import { openerBundle, workerBundle } from './tools.ts';
 import type {
 	Canvas,
@@ -30,6 +31,8 @@ import type {
 	CanvasOperation,
 	CanvasRoomOptions,
 	OpenCanvasOptions,
+	WidgetAct,
+	WidgetActResult,
 	WidgetOptions,
 } from './types.ts';
 import { widgetBundle } from './widget-tools.ts';
@@ -48,30 +51,13 @@ const EVENT_OPERATION: Record<CanvasEvent['type'], CanvasOperation> = {
 	stopped: 'stop',
 	archived: 'archive',
 	widget: 'widget',
+	answered: 'act',
 };
 
 /** The room that an event is about. */
 function roomOf(event: CanvasEvent): string {
 	if (event.type === 'opened') return event.room.name;
 	return event.type === 'widget' ? event.widget.room : event.room;
-}
-
-function castOf(row: CanvasRoom, definitions: Definitions): Cast {
-	return row.start.kind === 'root'
-		? rootCast(row.start, definitions)
-		: breakoutCast(row.start, definitions);
-}
-
-/** The root start that `open` records: the options that the caller gave, and no other. */
-function rootStartOf(options: CanvasRoomOptions): RootStart {
-	return {
-		kind: 'root',
-		...(options.agents === undefined ? {} : { agents: options.agents }),
-		...(options.seats === undefined ? {} : { seats: options.seats }),
-		...(options.assistant === undefined ? {} : { assistant: options.assistant }),
-		...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
-		...(options.seating === undefined ? {} : { seating: options.seating }),
-	};
 }
 
 class CanvasRun implements Canvas {
@@ -83,6 +69,7 @@ class CanvasRun implements Canvas {
 	/** The widget calls of one room. A separate queue, so a stop that waits for a call never waits behind one. */
 	private readonly widgetQueues = new Queues();
 	private readonly revisions = new Map<string, CanvasWidget>();
+	private readonly answered = new Answers();
 	/** The current revision of each widget, by room and name. */
 	private readonly current = new Map<string, Map<string, CanvasWidget>>();
 	private readonly bridge: Bridge;
@@ -133,6 +120,33 @@ class CanvasRun implements Canvas {
 		return found === undefined ? undefined : structuredClone(found);
 	}
 
+	answers(room: string): ReadonlyMap<string, number> {
+		return new Map([...this.answered.of(room)].map(([revision, answer]) => [revision, answer.seq]));
+	}
+
+	act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult> {
+		return actOn(this.actPort(), person, act);
+	}
+
+	private actPort(): ActPort {
+		return {
+			canvas: this.name,
+			assertReady: () => this.assertReady(),
+			serial: (room, operation) => this.widgetQueues.run(room, operation),
+			row: (name) => this.rows.get(name),
+			current: (room, name) => this.current.get(room)?.get(name),
+			room: (name) => this.handles.get(name)?.room,
+			answer: (room, revision, answer) => this.answer(room, revision, answer),
+			fail: (room, error) => this.report(room, 'act', error),
+		};
+	}
+
+	/** Holds the answer, and tells the listeners when the revision had none. */
+	private answer(room: string, revision: string, answer: Answer): void {
+		if (this.answered.hold(room, revision, answer))
+			this.emit({ type: 'answered', room, revision, seq: answer.seq });
+	}
+
 	/** What the widget tools read and write: the rows and revisions of this run. */
 	private widgetPort(kinds: WidgetOptions['kinds']): WidgetPort {
 		return {
@@ -142,6 +156,7 @@ class CanvasRun implements Canvas {
 			row: (name) => this.rows.get(name),
 			widgets: (room) => this.widgets(room),
 			current: (room, name) => this.current.get(room)?.get(name),
+			answer: (room, revision) => this.answered.of(room).get(revision),
 			append: (widget, operation) => this.appendRevision(widget, operation),
 		};
 	}
@@ -427,6 +442,10 @@ class CanvasRun implements Canvas {
 		const handle: Handle = { room: await this.begin(row) };
 		this.handles.set(name, handle);
 		this.listen(row, handle);
+		// A failed read leaves the answers to the next act.
+		await this.answered
+			.learn(name, handle.room)
+			.catch((error: unknown) => this.report(name, 'start', error));
 		// A host subscribes to the room on `started`, so the event comes before the mirror and the start post.
 		this.emit({ type: 'started', room: name });
 		await this.attach(handle);

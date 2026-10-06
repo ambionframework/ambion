@@ -60,7 +60,41 @@ export interface CanvasWidget {
 	readonly title?: string;
 	/** The agent that wrote this revision. */
 	readonly author: string;
+	/** What a person can do. No actions: the widget is a view. */
+	readonly actions: readonly WidgetAction[];
+	/** The one person who may act. Absent: any person on a visit. */
+	readonly for?: string;
 }
+
+/** One thing that a person can do on a widget. */
+export interface WidgetAction {
+	/** The shared name syntax. */
+	readonly id: string;
+	/** One line, 40 characters at most. */
+	readonly label: string;
+	/** The first act on the revision answers it. Every later act on it is `answered`. */
+	readonly once?: boolean;
+	/** A form: 8 fields at most. */
+	readonly fields?: readonly WidgetField[];
+}
+
+/** One field of a form. `name` follows the name syntax, and `label` is one line of 40 characters at most. */
+export type WidgetField =
+	| { readonly name: string; readonly label: string; readonly type: 'text' }
+	| {
+			readonly name: string;
+			readonly label: string;
+			readonly type: 'number';
+			readonly min?: number;
+			readonly max?: number;
+	  }
+	| { readonly name: string; readonly label: string; readonly type: 'boolean' }
+	| {
+			readonly name: string;
+			readonly label: string;
+			readonly type: 'choice';
+			readonly options: readonly string[];
+	  };
 
 /** One kind of the catalog that the host can draw. */
 export interface WidgetKind {
@@ -69,6 +103,8 @@ export interface WidgetKind {
 	readonly description: string;
 	/** The source types that the kind takes. A kind with none takes no source. */
 	readonly sources: readonly WidgetSource['type'][];
+	/** True when the host can draw actions on this kind. */
+	readonly actions: boolean;
 }
 
 /**

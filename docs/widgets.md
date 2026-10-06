@@ -1,16 +1,18 @@
 # Widgets
 
-> **Status: views exist, and acts are a design.** The store of revisions,
-> `show`, `hide`, the reminder, the `widget` event, and the host reads
-> `widgets` and `revision` exist. [Design: acts](#design-acts) names
-> `actions`, `for`, `canvas.act`, `answers`, the `answered` event, and the
-> `ambion-canvas:` ref. Those parts are pending. The [canvas](canvas.md)
-> exists, and widgets extend it.
+> **Status: the package `@ambionframework/canvas` implements this page.** It
+> holds the store of revisions, `show`, `hide`, the reminder, the `widget`
+> and `answered` events, the acts of people, and the host reads. The
+> [canvas](canvas.md) holds the rooms, and widgets extend it.
 
 **A widget is a live view that an agent places in a room for people.** A
 view of a running process and a pinned test plan are widgets. The agent
 declares what the widget shows and where the data comes from. The host reads
 the data and draws it, with no activation.
+
+**A widget can also ask.** The agent declares actions on the widget, and a
+person presses one. The press becomes a message of the person in the room,
+and the author of the widget answers it.
 
 ## Four owners
 
@@ -30,9 +32,21 @@ a source.
 
 ### What a person can do
 
+**One question sorts each interaction: does it direct work?**
+
+| Interaction                                    | Directs work | Result                                |
+| ---------------------------------------------- | ------------ | ------------------------------------- |
+| Look: scroll, zoom, collapse, dismiss, reorder | No           | The host alone. No agent learns of it |
+| Act: press a button, submit a form             | Yes          | A message of the person               |
+| Speak: type in the composer                    | Yes          | A message of the person               |
+
 **A look stays in the host.** Scroll, zoom, collapse, dismiss, and reorder
 direct no work, so no agent learns of them. A dismiss hides a widget from
 that person alone. The host may keep it per person across restarts.
+
+**An act is speech.** A press becomes a message of the person, through the
+person's visit ([The acts](#the-acts)). No act writes to the canvas, and a
+lost canvas keeps every act, since each act is a message in the journal.
 
 **People do not write widget revisions.** A person who wants a widget gone
 for everyone says so, and an agent hides it. So each revision has an agent
@@ -57,6 +71,10 @@ interface CanvasWidget {
   readonly title?: string;
   /** The agent that wrote this revision. */
   readonly author: string;
+  /** What a person can do. No actions: the widget is a view. */
+  readonly actions: readonly WidgetAction[];
+  /** The one person who may act. Absent: any person on a visit. */
+  readonly for?: string;
 }
 
 type WidgetSource =
@@ -64,12 +82,43 @@ type WidgetSource =
   | { readonly type: 'file'; readonly path: string }
   | { readonly type: 'snapshot'; readonly ref: string };
 
+interface WidgetAction {
+  /** The shared name syntax. */
+  readonly id: string;
+  /** One line, 40 characters at most. */
+  readonly label: string;
+  /** The first act on the revision answers it. Every later act on it is `answered`. */
+  readonly once?: boolean;
+  /** A form: 8 fields at most. */
+  readonly fields?: readonly WidgetField[];
+}
+
+/** `name` follows the name syntax. `label` is one line, 40 characters at most. */
+type WidgetField =
+  | { readonly name: string; readonly label: string; readonly type: 'text' } // one line, 200 characters at most
+  | {
+      readonly name: string;
+      readonly label: string;
+      readonly type: 'number';
+      readonly min?: number;
+      readonly max?: number;
+    }
+  | { readonly name: string; readonly label: string; readonly type: 'boolean' }
+  | {
+      readonly name: string;
+      readonly label: string;
+      readonly type: 'choice';
+      readonly options: readonly string[];
+    }; // 10 options of 40 characters at most
+
 interface WidgetKind {
   readonly name: string;
   /** One line for the guidance. */
   readonly description: string;
   /** The source types that the kind takes. A kind with none takes no source. */
   readonly sources: readonly WidgetSource['type'][];
+  /** True when the host can draw actions on this kind. */
+  readonly actions: boolean;
 }
 
 interface WidgetOptions {
@@ -88,6 +137,14 @@ only what the host can draw.
 | Host        | Catalog                                         | First widget |
 | ----------- | ----------------------------------------------- | ------------ |
 | Camera chat | `frame`: the newest frame that a process serves | A viewfinder |
+
+**The canvas refuses actions on a kind that draws none.** A kind with
+`actions: false` takes no `actions` and no `for`. A `for` with no actions is
+a refusal too. A widget has 8 actions at most, with unique ids. An action
+has 8 fields at most, with unique names. A number field has a `min` that
+does not pass its `max`. A choice field has 1 to 10 options, each one line
+of 40 characters at most, with no repeat. The guidance tells each agent which
+kinds take actions.
 
 **A process source names the handle of a process of the author, and a path
 that the process serves on its port.** The agent takes the handle from the
@@ -124,18 +181,39 @@ its widgets end with `hide` alone.
 resolves by id for as long as the canvas exists.
 
 **A `show` that changes nothing writes nothing.** The content is `kind`,
-`source`, and `title`. A `show` with the content of a `shown` current
-revision writes no revision, so a retried activation changes nothing. A
-`show` of a `hidden` widget always writes one.
+`source`, `title`, `actions`, and `for`. A `show` with the content of a
+`shown` current revision writes no revision, so a retried activation changes
+nothing. A `show` of a `hidden` widget always writes one. A `show` that
+changes the actions or `for` writes a revision, so an act on the older
+revision is `stale`.
 
-| Event                               | Widgets                               |
-| ----------------------------------- | ------------------------------------- |
-| An agent shows or hides             | A new revision and a widget event     |
-| The author leaves or is unseated    | Stay; the reminder names the author   |
-| The host stops the room             | Drawn stopped; the host polls nothing |
-| The host starts or resumes the room | Bound again from the revisions        |
-| The opener archives a breakout room | Ended; the host draws nothing         |
-| The host closes the canvas          | Revisions kept                        |
+**A revision is `answered` when its room holds a message with the key
+`act:<revision>`.** Only an action with `once` writes that key. The canvas
+learns the answers in two ways. At each start of a room, it reads the keys
+of the room once. Each act then passes through `canvas.act`. The answers
+derive from the journal, so the store holds none, and a restart loses none.
+A retried activation leaves an answered question answered, since a `show` of
+equal content writes nothing. An agent that asks again changes the content or
+picks a new name.
+
+```mermaid
+stateDiagram-v2
+  shown --> answered: an act on a once action lands
+  answered --> shown: show with new content
+  answered --> hidden: hide
+  answered --> ended: breakout room archived
+```
+
+| Event                               | Widgets                               | Acts                                   |
+| ----------------------------------- | ------------------------------------- | -------------------------------------- |
+| An agent shows or hides             | A new revision and a widget event     | An act on an older revision is `stale` |
+| An act on a `once` action lands     | The revision is `answered`            | Every later act is `answered`          |
+| The author leaves or is unseated    | Stay; the reminder names the author   | Sent with no `to`                      |
+| The person leaves the room          | Stay                                  | A press opens a visit first            |
+| The host stops the room             | Drawn stopped; the host polls nothing | Refused                                |
+| The host starts or resumes the room | Bound again from the revisions        | Accepted                               |
+| The opener archives a breakout room | Ended; the host draws nothing         | Refused                                |
+| The host closes the canvas          | Revisions kept                        | Refused                                |
 
 **A stopped room polls nothing.** No seat can change its widgets. Its
 source can still run: a process stays up until an agent or the host
@@ -178,14 +256,14 @@ order.
 **`canvas.widgetTools()` gives an agent `show` and `hide`.** A host gives
 the bundle to the seats of root rooms and to the worker team.
 
-| Tool   | Parameters                          | Effect                                                           |
-| ------ | ----------------------------------- | ---------------------------------------------------------------- |
-| `show` | `name`, `kind`, `source?`, `title?` | Writes a new revision, `shown`. Equal content changes nothing    |
-| `hide` | `name`                              | Writes a new revision, `hidden`. A hidden widget changes nothing |
+| Tool   | Parameters                                              | Effect                                                           |
+| ------ | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `show` | `name`, `kind`, `source?`, `title?`, `actions?`, `for?` | Writes a new revision, `shown`. Equal content changes nothing    |
+| `hide` | `name`                                                  | Writes a new revision, `hidden`. A hidden widget changes nothing |
 
-**The widget calls of one room run one at a time.** `show` and `hide` run
-in a widget queue for the room name. So a check and the write after it see
-the same revision. The queue is apart from the lifecycle queue of the room,
+**The widget calls of one room run one at a time.** `show`, `hide`, and
+`act` run in a widget queue for the room name. So a check and the write
+after it see the same revision. The queue is apart from the lifecycle queue of the room,
 so a stop never waits behind a widget call.
 
 **Any seat of the room may change any widget.** One seat can already
@@ -193,12 +271,14 @@ steer another ([Trust](trust.md)). Each revision names its author. The hide
 revision copies the content and names the hider as its author.
 
 **The reminder lists the shown widgets of the room.** It reads the
-revisions from memory, so the reminder bound cannot cut it. It gives at
-most ten lines, then `and N more`.
+revisions and the answers from memory, so the reminder bound cannot cut it.
+It gives at most ten lines, then `and N more`. A line names the person that
+the widget is for, and the person who answered it with the seq of the act.
 
 ```text
 Widgets in this room:
 - front: frame from process bash-4k2 /status, by observer, rev 2
+- keep-clip: choice for mira, by observer, rev 1, answered by mira in #88
 ```
 
 ### The host interface
@@ -211,156 +291,14 @@ interface Canvas {
   widgets(room: string): readonly CanvasWidget[];
   /** One revision by id, or undefined. Read at resume. */
   revision(id: string): CanvasWidget | undefined;
-}
-
-/** `CanvasEvent` has this variant. */
-type WidgetEvent = { readonly type: 'widget'; readonly widget: CanvasWidget };
-```
-
-**A bad call of `show` or `hide` is a refusal.** It throws an `AmbionError`
-with the code `refused`. `CanvasOperation` has the values `show` and `hide`
-for a failed store write, and `widget` for a failing listener.
-
-### Durability
-
-| Write  | Key            | A repeat after a crash             |
-| ------ | -------------- | ---------------------------------- |
-| `show` | `(room, name)` | Equal content changes nothing      |
-| `hide` | `(room, name)` | Finds `hidden` and changes nothing |
-
-**Revision ids never repeat.** The canvas makes each one with
-`randomUUID`, so an id stays unique when a canvas store is lost and a new
-one starts.
-
-### Trust
-
-**Agent text reaches people, so the canvas bounds it.** Names follow the
-name syntax. Titles are one capped line, so they cannot forge a reminder
-line. The host draws text as text and drops terminal escapes.
-
-**A hidden widget does not stop its source.** Hiding a widget leaves
-the process running. The guidance tells the agent to cancel the process to
-stop it.
-
-## Design: acts
-
-> **This part is a design, and no code implements it.** Nothing here
-> exists in `@ambionframework/canvas`. The `show` schema refuses `actions`
-> and `for`.
-
-### How a person acts
-
-**One question sorts each interaction: does it direct work?**
-
-| Interaction                                    | Directs work | Result                                |
-| ---------------------------------------------- | ------------ | ------------------------------------- |
-| Look: scroll, zoom, collapse, dismiss, reorder | No           | The host alone. No agent learns of it |
-| Act: press a button, submit a form             | Yes          | A message of the person               |
-| Speak: type in the composer                    | Yes          | A message of the person               |
-
-**An act is speech.** A press becomes a message of the person, through
-the person's visit. The kernel rules for a message of a person apply
-unchanged ([Effects on the room](#effects-on-the-room)). No act writes to
-the canvas, and a lost canvas keeps every act, since each act is a message
-in the journal.
-
-### The model additions
-
-```ts
-/** `CanvasWidget` gains these fields. */
-interface CanvasWidgetActs {
-  /** What a person can do. No actions: the widget is a view. */
-  readonly actions: readonly WidgetAction[];
-  /** The one person who may act. Absent: any person on a visit. */
-  readonly for?: string;
-}
-
-interface WidgetAction {
-  /** The shared name syntax. */
-  readonly id: string;
-  /** One line, 40 characters at most. */
-  readonly label: string;
-  /** The first act on the revision answers it. Every later act on it is `answered`. */
-  readonly once?: boolean;
-  /** A form: 8 fields at most. */
-  readonly fields?: readonly WidgetField[];
-}
-
-/** `name` follows the name syntax. `label` is one line, 40 characters at most. */
-type WidgetField =
-  | { readonly name: string; readonly label: string; readonly type: 'text' } // one line, 200 characters at most
-  | {
-      readonly name: string;
-      readonly label: string;
-      readonly type: 'number';
-      readonly min?: number;
-      readonly max?: number;
-    }
-  | { readonly name: string; readonly label: string; readonly type: 'boolean' }
-  | {
-      readonly name: string;
-      readonly label: string;
-      readonly type: 'choice';
-      readonly options: readonly string[];
-    }; // 10 options of 40 characters at most
-
-/** `WidgetKind` gains this field. */
-interface WidgetKindActs {
-  /** True when the host can draw actions on this kind. */
-  readonly actions: boolean;
-}
-```
-
-**The canvas refuses actions on a kind that draws none.** The content of a
-revision then includes `actions` and `for`, so a `show` that changes either
-writes a revision. `show` takes `actions?` and `for?` as parameters.
-
-### The lifecycle additions
-
-```mermaid
-stateDiagram-v2
-  shown --> answered: an act on a once action lands
-  answered --> shown: show with new content
-  answered --> hidden: hide
-  answered --> ended: breakout room archived
-```
-
-**The store keeps `shown` or `hidden`, and the rest is derived.** A revision
-is `answered` when its room holds a message with the key `act:<revision>`.
-The canvas learns it in two ways: at each start of a room, it reads the keys
-of the room once, and each act passes through `canvas.act`. A retried
-activation leaves an answered question answered, since a `show` of equal
-content writes nothing. An agent that asks again changes the content or
-picks a new name.
-
-| Event                               | Acts                                   |
-| ----------------------------------- | -------------------------------------- |
-| An agent shows or hides             | An act on an older revision is `stale` |
-| An act on a `once` action lands     | Every later act is `answered`          |
-| The author leaves or is unseated    | Sent with no `to`                      |
-| The person leaves the room          | A press opens a visit first            |
-| The host stops the room             | Refused                                |
-| The host starts or resumes the room | Accepted                               |
-| The opener archives a breakout room | Refused                                |
-| The host closes the canvas          | Refused                                |
-
-**The reminder gains the answers.** It reads the answers from the room.
-
-```text
-- keep-clip: choice for mira, by observer, rev 1, answered by mira in #88
-```
-
-### The host interface additions
-
-```ts
-interface Canvas {
-  /** The seq of the act that answers each answered revision of a room. */
+  /** The seq of the act that answers each answered revision of a room. Empty before resume. */
   answers(room: string): ReadonlyMap<string, number>;
   /** Checks an act, then sends it through the visit of the person in that room. */
   act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
 }
 
-/** `CanvasEvent` gains this variant. */
+/** `CanvasEvent` has these variants. */
+type WidgetEvent = { readonly type: 'widget'; readonly widget: CanvasWidget };
 type AnsweredEvent = {
   readonly type: 'answered';
   readonly room: string;
@@ -385,12 +323,39 @@ type WidgetActResult =
   | { readonly kind: 'answered'; readonly seq: number };
 ```
 
-**`CanvasOperation` gains `act`.** `act` throws a `CanvasError` for a closed
-canvas, a room that does not run, a hidden or ended widget, an unknown
-action, a person outside `for`, values that break the fields, and a press
-key that landed with other content. A refusal of `visit.send` passes
-through. `stale` and `answered` are results, since the host draws them. The
-widget queue of the room also runs `act`.
+**A bad call of `show`, `hide`, or `act` is a refusal.** It throws an
+`AmbionError` with the code `refused`. `stale` and `answered` are results,
+since the host draws them. The `answered` event fires once for each revision,
+when the canvas learns its answer from an act. The host reads
+`canvas.answers(room)` on each room `started` event, as it reads the widgets.
+
+**`CanvasOperation` has four values for widgets.** `show` and `hide` name a
+failed store write. `widget` names a failing listener of the `widget` event.
+`act` names a failing listener of the `answered` event, and a failed act that
+is no refusal.
+
+### Durability
+
+| Write  | Key            | A repeat after a crash             |
+| ------ | -------------- | ---------------------------------- |
+| `show` | `(room, name)` | Equal content changes nothing      |
+| `hide` | `(room, name)` | Finds `hidden` and changes nothing |
+
+**Revision ids never repeat.** The canvas makes each one with
+`randomUUID`, so an id stays unique when a canvas store is lost and a new
+one starts.
+
+### Trust
+
+**Agent text reaches people, so the canvas bounds it.** Names follow the
+name syntax. Titles are one capped line, so they cannot forge a reminder
+line. The host draws text as text and drops terminal escapes.
+
+**A hidden widget does not stop its source.** Hiding a widget leaves
+the process running. The guidance tells the agent to cancel the process to
+stop it.
+
+## The acts
 
 ### An act, end to end
 
@@ -416,8 +381,8 @@ sequenceDiagram
 2. The widget is `shown`.
 3. `revision` is the current revision. Otherwise the result is `stale`
    with the current widget, and the host draws it again.
-4. The action exists, the person of the visit matches `for`, and the
-   values match the fields.
+4. The action exists, the person of the visit matches `for`, the values
+   match the fields, and `press` is one line of 100 characters at most.
 
 **The canvas sends through its own handle of the room.** It calls
 `room.visit(person)` on the handle of `act.room`, so the act lands in the
@@ -425,19 +390,24 @@ room of the widget. A second visit of a present person is the same visit.
 A person who has left arrives first, and the arrival enters the record
 before the act.
 
+**The values follow the fields.** Every field is required, and a value for
+no field is a refusal. A text value is one line of 1 to 200 characters. A
+number value is finite and inside `min` and `max`. A boolean value is a
+boolean. A choice value is one of the options.
+
 **The canvas composes the message.** The text names the widget and its
 rev, then quotes the title when the widget has one, the label, the action
-id, and one `label: value` line for each field. Every
-field is required. An agent reads it with no lookup:
+id, and one `label: value` line for each field. An agent reads it with no
+lookup:
 
 ```text
-status, rev 2: Look now [look]
+status, rev 2 "Status": Look now [look]
 ```
 
 **The message carries one ref to the revision.** The ref is
 `ambion-canvas://<canvas>/room/<room>/widget/<name>/revision/<id>`. The
-kernel accepts any scheme besides `ambion` and never reads behind a ref,
-so the kernel does not change. `canvas.revision(id)` resolves it.
+kernel accepts any scheme besides `ambion` and never reads behind a ref.
+`canvas.revision(id)` resolves it.
 
 **The recipient is the author when the author can hear.** The `to` is the
 author of the revision when the author is on the roster at an attention
@@ -454,12 +424,13 @@ canvas uses the same rule.
 The room refuses a repeated key with other content: another person,
 another action, other values, or another `to`. For a `once` key, the
 canvas reads that refusal as `answered` and finds the seq under the key,
-as the bridge does. A host that loses the result of an act sends it again with the same
-`press`, and the act lands once.
+as the bridge does. A host that loses the result of an act sends it again
+with the same `press`, and the act lands once.
 
 ### Effects on the room
 
-**An act is a message of a person.**
+**An act is a message of a person.** The kernel rules for a message of a
+person apply unchanged.
 
 | Room state when the act lands        | Effect                                                            |
 | ------------------------------------ | ----------------------------------------------------------------- |

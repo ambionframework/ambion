@@ -397,7 +397,9 @@ describe.each(storages)('a host that shows a widget on $name', (kind) => {
 	it('finds the revision after the revision lands and before the seat reads the result', async () => {
 		const base = kind.open();
 		const fault = new Fault(base);
-		const kinds = [{ name: 'frame', description: 'A frame.', sources: ['process'] }] as const;
+		const kinds = [
+			{ name: 'frame', description: 'A frame.', sources: ['process'], actions: false },
+		] as const;
 		const first = host({ store: fault.store_, storage: fault.storage, widgets: { kinds } });
 		const args = {
 			name: 'front',

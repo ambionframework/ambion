@@ -4,11 +4,14 @@
  * canvas, so the checks and the lifecycle read one set of rows.
  */
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { isName } from '@ambionframework/ambion/names';
+import { assertActions } from './actions.ts';
+import type { Answer } from './acts.ts';
 import type { Caller } from './breakout.ts';
 import { refuse } from './cast.ts';
-import { type BasePort, NAME_LIMIT } from './port.ts';
-import type { CanvasWidget, WidgetKind, WidgetSource } from './store.ts';
+import { assertLine, type BasePort, NAME_LIMIT } from './port.ts';
+import type { CanvasWidget, WidgetAction, WidgetKind, WidgetSource } from './store.ts';
 
 /** The most characters of a widget title. */
 export const WIDGET_TITLE_LIMIT = 80;
@@ -24,6 +27,8 @@ export interface WidgetPort extends BasePort {
 	widgets(room: string): readonly CanvasWidget[];
 	/** The current revision of a widget, hidden ones included. */
 	current(room: string, name: string): CanvasWidget | undefined;
+	/** The act that answers a revision, or undefined. */
+	answer(room: string, revision: string): Answer | undefined;
 	/** Writes one revision, then makes it current and tells the listeners. */
 	append(widget: CanvasWidget, operation: 'show' | 'hide'): Promise<void>;
 }
@@ -33,6 +38,8 @@ export interface ShowParams {
 	readonly kind: string;
 	readonly source?: WidgetSource;
 	readonly title?: string;
+	readonly actions?: readonly WidgetAction[];
+	readonly for?: string;
 }
 
 export interface WidgetResult {
@@ -43,15 +50,6 @@ export interface WidgetResult {
 	readonly state: 'shown' | 'hidden';
 	/** False when the call found the widget as it was and wrote nothing. */
 	readonly changed: boolean;
-}
-
-/** A text of one line: no line terminator and no control character. */
-const oneLine = (text: string): boolean => !/[\p{Cc}\u2028\u2029]/u.test(text);
-
-function assertLine(label: string, text: string, limit: number): void {
-	if (text === '' || !oneLine(text)) throw refuse(`${label} is one line of text.`);
-	if (text.length > limit)
-		throw refuse(`${label} has ${text.length} characters. The most is ${limit}.`);
 }
 
 /** Refuses a catalog that the host cannot draw from. It runs at `openCanvas`. */
@@ -96,12 +94,16 @@ function assertSource(source: WidgetSource): void {
 	}
 }
 
-function assertKind(kinds: readonly WidgetKind[], params: ShowParams): void {
+function kindOf(kinds: readonly WidgetKind[], params: ShowParams): WidgetKind {
 	const kind = kinds.find((one) => one.name === params.kind);
 	if (kind === undefined)
 		throw refuse(
 			`"${params.kind}" is not a widget kind. The kinds are: ${kinds.map((one) => one.name).join(', ')}.`,
 		);
+	return kind;
+}
+
+function assertSourceOf(kind: WidgetKind, params: ShowParams): void {
 	if (params.source === undefined) {
 		if (kind.sources.length > 0)
 			throw refuse(`The kind "${kind.name}" needs a source of type ${kind.sources.join(' or ')}.`);
@@ -116,7 +118,9 @@ function assertKind(kinds: readonly WidgetKind[], params: ShowParams): void {
 function assertShow(kinds: readonly WidgetKind[], params: ShowParams): void {
 	assertName(params.name);
 	if (params.title !== undefined) assertLine('The title', params.title, WIDGET_TITLE_LIMIT);
-	assertKind(kinds, params);
+	const kind = kindOf(kinds, params);
+	assertSourceOf(kind, params);
+	assertActions(kind, params.actions ?? [], params.for);
 }
 
 function assertName(name: string): void {
@@ -140,12 +144,14 @@ function assertRoom(port: WidgetPort, caller: Caller): void {
 const sameSource = (a: WidgetSource | undefined, b: WidgetSource | undefined): boolean =>
 	JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-/** The content of a revision is its kind, its source, and its title. */
+/** The content of a revision is its kind, its source, its title, its actions, and its person. */
 function sameContent(widget: CanvasWidget, params: ShowParams): boolean {
 	return (
 		widget.kind === params.kind &&
 		widget.title === params.title &&
-		sameSource(widget.source, params.source)
+		widget.for === params.for &&
+		sameSource(widget.source, params.source) &&
+		isDeepStrictEqual(widget.actions, params.actions ?? [])
 	);
 }
 
@@ -157,6 +163,27 @@ const resultOf = (widget: CanvasWidget, changed: boolean): WidgetResult => ({
 	state: widget.state,
 	changed,
 });
+
+/** The next revision of a widget, as the caller shows it. */
+function revisionOf(
+	caller: Caller,
+	params: ShowParams,
+	current: CanvasWidget | undefined,
+): CanvasWidget {
+	return {
+		room: caller.room,
+		name: params.name,
+		revision: randomUUID(),
+		rev: (current?.rev ?? 0) + 1,
+		state: 'shown',
+		kind: params.kind,
+		...(params.source === undefined ? {} : { source: params.source }),
+		...(params.title === undefined ? {} : { title: params.title }),
+		author: caller.agent,
+		actions: params.actions ?? [],
+		...(params.for === undefined ? {} : { for: params.for }),
+	};
+}
 
 /** Shows a widget, or changes its content. Equal content of a shown widget writes nothing. */
 export async function showWidget(
@@ -170,17 +197,7 @@ export async function showWidget(
 		assertRoom(port, caller);
 		const current = port.current(caller.room, params.name);
 		if (current?.state === 'shown' && sameContent(current, params)) return resultOf(current, false);
-		const widget: CanvasWidget = {
-			room: caller.room,
-			name: params.name,
-			revision: randomUUID(),
-			rev: (current?.rev ?? 0) + 1,
-			state: 'shown',
-			kind: params.kind,
-			...(params.source === undefined ? {} : { source: params.source }),
-			...(params.title === undefined ? {} : { title: params.title }),
-			author: caller.agent,
-		};
+		const widget = revisionOf(caller, params, current);
 		await port.append(widget, 'show');
 		return resultOf(widget, true);
 	});

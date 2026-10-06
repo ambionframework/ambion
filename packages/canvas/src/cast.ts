@@ -3,7 +3,7 @@
  * here reads a row and the definitions of the host, and starts nothing.
  */
 import { type AgentDefinition, AmbionError, type StartRoomOptions } from '@ambionframework/ambion';
-import type { BreakoutStart, RootStart } from './store.ts';
+import type { BreakoutStart, CanvasRoom, RootStart } from './store.ts';
 import type { CanvasRoomOptions } from './types.ts';
 
 /** The definitions that `resume` took, and the worker team. */
@@ -77,7 +77,7 @@ function rootMembers(
 }
 
 /** The cast of a root room. The assistant joins through `assistant`, never through `agents`. */
-export function rootCast(start: RootStart, definitions: Definitions): Cast {
+function rootCast(start: RootStart, definitions: Definitions): Cast {
 	const assistant =
 		start.assistant === undefined ? undefined : pick(definitions, start.assistant, 'assistant');
 	const members = rootMembers(start, definitions, assistant);
@@ -94,7 +94,7 @@ export function rootCast(start: RootStart, definitions: Definitions): Cast {
 }
 
 /** The cast of a breakout room: its workers at `broadcast`, no assistant, no reserve, no seating. */
-export function breakoutCast(start: BreakoutStart, definitions: Definitions): Cast {
+function breakoutCast(start: BreakoutStart, definitions: Definitions): Cast {
 	const members = start.agents.map((name) => pick(definitions, name, 'agent'));
 	return {
 		start: {
@@ -103,5 +103,23 @@ export function breakoutCast(start: BreakoutStart, definitions: Definitions): Ca
 			seating: false,
 		},
 		members,
+	};
+}
+
+export function castOf(row: CanvasRoom, definitions: Definitions): Cast {
+	return row.start.kind === 'root'
+		? rootCast(row.start, definitions)
+		: breakoutCast(row.start, definitions);
+}
+
+/** The root start that `open` records: the options that the caller gave, and no other. */
+export function rootStartOf(options: CanvasRoomOptions): RootStart {
+	return {
+		kind: 'root',
+		...(options.agents === undefined ? {} : { agents: options.agents }),
+		...(options.seats === undefined ? {} : { seats: options.seats }),
+		...(options.assistant === undefined ? {} : { assistant: options.assistant }),
+		...(options.summaryWriter === undefined ? {} : { summaryWriter: options.summaryWriter }),
+		...(options.seating === undefined ? {} : { seating: options.seating }),
 	};
 }
