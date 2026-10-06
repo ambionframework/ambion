@@ -47,6 +47,9 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../../packages/ambion
+      '@ambionframework/canvas':
+        specifier: workspace:*
+        version: link:../../packages/canvas
       '@ambionframework/codex':
         specifier: workspace:*
         version: link:../../packages/codex

@@ -1,10 +1,8 @@
 /** The reminder of the opener bundle: the breakout rooms that the seat holds. */
 import type { Reminder, Room } from '@ambionframework/ambion';
 import { type BreakoutPort, startOf } from './breakout.ts';
+import { reminderLines } from './port.ts';
 import type { CanvasRoom } from './store.ts';
-
-/** The most rooms that one reminder lists. */
-const REMINDER_ROOMS = 10;
 
 /** The last message of the exchange that holds the seq, or that seq. */
 async function lastMessage(room: Room, anchor: number): Promise<number> {
@@ -37,9 +35,7 @@ export function breakoutReminder(port: BreakoutPort): Reminder {
 			return row.state !== 'archived' && start?.opener === seat.agent && start.parent === seat.room;
 		});
 		if (rows.length === 0) return undefined;
-		const shown = rows.slice(0, REMINDER_ROOMS);
-		const lines = await Promise.all(shown.map((row) => lineOf(row, port.room(row.name))));
-		const more = rows.length - shown.length;
-		return ['Your breakout rooms:', ...lines, ...(more > 0 ? [`and ${more} more`] : [])].join('\n');
+		const lines = await reminderLines(rows, (row) => lineOf(row, port.room(row.name)));
+		return ['Your breakout rooms:', ...lines].join('\n');
 	};
 }

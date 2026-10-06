@@ -1,7 +1,7 @@
 /**
  * The host dies at each crash point of the canvas, and a fresh host resumes over the same
  * storage. Each case matches a row of the crash table in `docs/canvas.md`, and the last case
- * matches a crash between an archive and the stop of its room.
+ * of the seeded walk matches a crash between an archive and the stop of its room.
  *
  * A crash is a fault that fires at one write. The write lands or does not land, as the case says,
  * and every later call of the first host fails, the way a dead process fails. The seed picks
@@ -57,7 +57,7 @@ class Fault {
 	/** Decides for a journal write: the room, and the entry as text. */
 	journal: ((room: string, text: string) => Mode | undefined) | undefined;
 	/** Decides for a store write: the kind of write, and the room. */
-	store: ((write: 'insert' | 'archive', room: string) => boolean) | undefined;
+	store: ((write: 'insert' | 'archive' | 'appendRevision', room: string) => boolean) | undefined;
 
 	constructor(private readonly base: Base) {}
 
@@ -115,6 +115,16 @@ class Fault {
 			this.alive();
 			const result = await this.base.store.archive(name, close);
 			if (this.store?.('archive', name) === true) this.die();
+			return result;
+		},
+		revisions: async () => {
+			this.alive();
+			return this.base.store.revisions();
+		},
+		appendRevision: async (revision) => {
+			this.alive();
+			const result = await this.base.store.appendRevision(revision);
+			if (this.store?.('appendRevision', revision.room) === true) this.die();
 			return result;
 		},
 	};
@@ -380,6 +390,44 @@ describe.each(storages)('a host that crashes on $name', (kind) => {
 			expect(second.errors).toEqual([]);
 			await expectWhole(second, w.base, rooms.slice(0, hit));
 		});
+	});
+});
+
+describe.each(storages)('a host that shows a widget on $name', (kind) => {
+	it('finds the revision after the revision lands and before the seat reads the result', async () => {
+		const base = kind.open();
+		const fault = new Fault(base);
+		const kinds = [{ name: 'frame', description: 'A frame.', sources: ['process'] }] as const;
+		const first = host({ store: fault.store_, storage: fault.storage, widgets: { kinds } });
+		const args = {
+			name: 'front',
+			kind: 'frame',
+			source: { type: 'process', handle: 'bash-1', path: '/' },
+		};
+		const agentsOf = (of: Host) => [
+			tooled('ada', of.canvas.widgetTools()),
+			tooled('cy', of.canvas.workerTools()),
+		];
+		const call = (of: Host, tool: 'show' | 'hide', params: Record<string, unknown>, id: string) =>
+			callOf(of.canvas.widgetTools(), tool, params, contextOf('ada', 'site', id));
+		await base.store.insert(rootRow);
+		await first.canvas.resume({ agents: agentsOf(first) });
+		fault.store = (write) => write === 'appendRevision';
+		await expect(call(first, 'show', args, 'call-1')).rejects.toThrow('The host died.');
+		await first.canvas.close();
+		const second = host({ ...base, widgets: { kinds } });
+		await second.canvas.resume({ agents: agentsOf(second) });
+		const [shown] = second.canvas.widgets('site');
+		expect(shown).toMatchObject({ name: 'front', rev: 1, state: 'shown' });
+		expect(second.canvas.revision(shown?.revision ?? '')).toEqual(shown);
+		expect(await call(second, 'show', args, 'call-2')).toMatchObject({ rev: 1, changed: false });
+		expect(await base.store.revisions()).toHaveLength(1);
+		expect(await call(second, 'hide', { name: 'front' }, 'call-3')).toMatchObject({
+			rev: 2,
+			state: 'hidden',
+		});
+		expect(await base.store.revisions()).toHaveLength(2);
+		expect(second.errors).toEqual([]);
 	});
 });
 

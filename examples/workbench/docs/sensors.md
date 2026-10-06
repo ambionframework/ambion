@@ -2,7 +2,7 @@
 
 > **A sensor is a template process that serves HTTP on `$PORT`.** The
 > kernel knows no sensor. Any agent reads the process with `fetch`
-> ([Processes](processes.md#processes-that-serve-http)), and the workspace
+> ([Processes](../../../docs/processes.md#processes-that-serve-http)), and the workspace
 > keeps what it reads as a snapshot. Each sensor template ships an `observe`
 > macro over `fetch`. Both templates of this repository speak protocol
 > version 2.
@@ -74,7 +74,7 @@ flowchart LR
 
 **Templates are ordinary repositories in the Git backend.** The host
 registers `templates/sensor-server` as it registers other templates. The
-agent forks it and works in its own repository. [Git](git.md) owns names,
+agent forks it and works in its own repository. [Git](../../../docs/git.md) owns names,
 branches, and push authority.
 
 **Each template documents one complete lifecycle.** Its README states:
@@ -150,7 +150,7 @@ changes data that an older version reads.
 and do not start a supervisor. The process handle owns its lifetime. The
 default timeout is 600 seconds, so a long session sets `timeout`. A workspace
 disposal cancels its processes. After a crash, a process of the workstation
-stays available for adoption ([Processes](processes.md#recovery)).
+stays available for adoption ([Processes](../../../docs/processes.md#recovery)).
 
 ## Protocol version 2
 
@@ -202,11 +202,11 @@ to 299 as an error that holds the first 2 KiB of the body as process data.
 template ships it as `skills/<template>/macros/observe.js`, in a skill that
 has the name of the template. A seat runs it with `compose`, as
 `sensor-server/observe` or `camera/observe`
-([Macros](macros.md)).
+([Macros](../../../docs/macros.md)).
 
 | Argument     | Meaning                                       |
 | ------------ | --------------------------------------------- |
-| `process`    | The name of the running process               |
+| `process`    | The handle or the name of the running process |
 | `sensor`     | The sensor name from the index                |
 | `from`, `to` | A span, two UTC timestamps that come together |
 
@@ -217,10 +217,11 @@ replaced during the read. It returns the handle, the source, the count of
 observations, the measurement times, the paths and refs of the
 observation, the files, and the refs to cite.
 
-**An agent can skip the macro.** `fetch` reads any path. The camera chat
-example reads the camera with two `fetch` calls: the observation, then the
-frame at `/files/<digest>`. The agent cites both refs and states the
-measurement time.
+**An agent can skip the macro.** `fetch` reads any path. A host that loads
+no template skill reads a sensor with two `fetch` calls: the observation,
+then the frame at `/files/<digest>`. The agent cites both refs and states the
+measurement time. The camera chat loads the macro and runs it with the
+handle of the process.
 
 ### Load the skills of a template
 
@@ -243,12 +244,13 @@ const surveyor = defineAgent({
 **The macro that runs comes from the host's copy of the template.** An
 edit of `skills/` in a fork changes nothing that runs. Skills belong to a
 definition, and `approve` pins the hash that the host loaded
-([Macros](macros.md#review-a-macro)). Two sources that hold the same skill
-folder fail with a duplicate error ([Skills](skills.md#several-sources)).
+([Macros](../../../docs/macros.md#review-a-macro)). Two sources that hold the same skill
+folder fail with a duplicate error ([Skills](../../../docs/skills.md#several-sources)).
 
 **A host that loads no template skill still reads sensors.** The workbench
-and the camera chat load none. Their agents call `fetch` with the paths that
-the template README names.
+loads none. Its agents call `fetch` with the paths that the template README
+names. The camera chat loads the `camera` skill from its copy of the
+template.
 
 ## Read and retain evidence
 
@@ -262,7 +264,7 @@ snapshot. The next read of the same bytes writes the file again.
 
 **The ref holds the received bytes.** The workspace does not parse them.
 JSON and text show in the result as process data, and an image returns as an
-image part. [Workspace](workspace.md#read-a-process-with-fetch) holds the tool contract.
+image part. [Workspace](../../../docs/workspace.md#read-a-process-with-fetch) holds the tool contract.
 
 **Source metadata identifies the serving implementation.** It does not claim
 that this revision acquired every historical measurement. A server that
@@ -290,7 +292,7 @@ account is not a path on the Ambion host.
 home of the owner. The workspace receives the bytes over HTTP and writes the
 export in the home of the reader. On a workstation, any agent of the
 workspace can read any running process with GET
-([Trust](trust.md)).
+([Trust](../../../docs/trust.md)).
 
 ## Failure and lifecycle
 
@@ -318,13 +320,13 @@ hardware. The camera template of the camera chat serves frames of a Mac
 camera. Each template lists its own tests in its README, and each runs its
 server in a test.
 
-**The acceptance run exercises the lifecycle on a workstation.** The test
-`process-http-lifecycle.test.ts` starts the sensor-server template with
-`bash` in a host. A second agent reads an observation and a file with
-`fetch`. The test kills the host, opens a new workspace, and adopts the
-process. The second agent reads again. The owner cancels the process, and
-`fetch` refuses its name. The OpenSSH tier runs it, and the test skips when
-that tier is absent.
+**The workstation tests exercise the process lifecycle.** The test
+`process-http-lifecycle.test.ts` of the workstation package starts a small
+HTTP server with `bash` in a host. A second agent reads a JSON body and a
+file with `fetch`. The test kills the host, opens a new workspace, and
+adopts the process. The owner cancels the process, and `fetch` refuses its
+name. The OpenSSH tier runs it, and the test skips when that tier is
+absent.
 
 **The tests cover the essential boundaries.**
 

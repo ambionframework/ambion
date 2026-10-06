@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+**The sensor and actuator pages and rules belong to the workbench example.**
+The pages sit in `examples/workbench/docs`, with the sensor protocol and its
+rules. Ambion knows long-running processes that serve HTTP on `$PORT`, read
+with `fetch`.
+
+**Camera chat keeps its room on a canvas.** The host opens the root room
+`camera` through `openCanvas` and `sqliteCanvas` on the file `room.db`, and
+a restart resumes the room from its row. The observer holds no canvas
+tools.
+
+**Camera chat shows each camera as a named viewfinder widget.** The host
+declares the widget kind `frame`. The agent gives each camera a short widget
+name, starts the process with `bash`, and takes the handle from the result.
+It calls `show` with a process source that holds the handle and the path.
+Several cameras run at once. The host loads the `observe` macro of the camera
+template, and the agent runs it with the handle. A stop cancels the process
+and leaves the widget, and a new process needs a new `show`.
+
+**The camera chat preview binds one widget to one process.** The preview
+keeps one binding for each shown `frame` widget, four at most. A binding
+checks once that the author runs the handle, reads by handle, and binds again
+on the room start and on each widget event. A hide or the end of the process
+clears only its binding. The terminal draws one labelled box for each camera.
+The preview stops all timers while the person hides it, and rejects a frame
+body over 16 MiB.
+
+**The canvas holds widget views.** `openCanvas` takes
+`widgets: WidgetOptions`, a closed catalog of kinds. A process source is
+`{ type: 'process', handle, path }`: the handle of a process of the author and
+a path that the process serves. The canvas exports `NAME_LIMIT`, the limit of a
+room name and a widget name. `canvas.widgetTools()` is
+the widget bundle: `show`, `hide`, and a reminder that lists the shown
+widgets of the room, ten at most. A `show` of equal content writes nothing,
+and a `show` of a hidden widget always writes. The store keeps every revision:
+`CanvasStore` gains `revisions()` and `appendRevision()`, and `sqliteCanvas`
+writes the table `canvas_widget_revisions`. `canvas.widgets(room)` and
+`canvas.revision(id)` read the revisions that `resume` loads. `CanvasEvent`
+gains `widget`, and `CanvasOperation` gains `show`, `hide`, and `widget`.
+The widget calls of one room run in their own queue. [Widgets](docs/widgets.md) holds the contract. Acts are a design.
+
 **A new package, `@ambionframework/canvas`, holds the canvas store.**
 It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
 `sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of
@@ -365,7 +405,7 @@ its exit code.
 `$PORT`, prints nothing, and answers `GET /<sensor>/observe` with a query for
 a span. Each template ships a skill with an `observe` macro over `fetch`.
 The macro checks `api` and the digest of each file. See
-[Sensors](docs/sensors.md).
+[Sensors](examples/workbench/docs/sensors.md).
 
 #### The room
 
@@ -603,7 +643,7 @@ carries a step.
 template, customizes it, validates it, commits, and pushes. It runs the saved
 version as a workstation process, connects to it, and observes it. Each
 observation lands in the snapshots as retained evidence. The agent rolls back
-with the Git and process tools. See [Sensors](docs/sensors.md).
+with the Git and process tools. See [Sensors](examples/workbench/docs/sensors.md).
 
 **The workspace owns its port.** `@ambionframework/workspace`,
 `@ambionframework/workstation`, and `@ambionframework/just-bash` import no
@@ -765,7 +805,7 @@ backend has the tools `repos`, `clone`, and `fork`. See
 
 **An actuator is a controller command that an agent starts with `bash`.**
 Ambion adds no actuator tool, API, or server. The agent reads the command
-with `status` and stops it with `cancel`. [Actuators](docs/actuators.md)
+with `status` and stops it with `cancel`. [Actuators](examples/workbench/docs/actuators.md)
 states the pattern and a controller contract of seven rules: a command
 handles `TERM` first, and exit code 0 means that the device is safe. The
 template `examples/workbench/templates/actuator-controller` is a Node

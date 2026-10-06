@@ -11,8 +11,18 @@
 
 export { openCanvas } from './canvas.ts';
 export { memoryCanvas } from './memory.ts';
+export { NAME_LIMIT } from './port.ts';
 export { sqliteCanvas } from './sqlite.ts';
-export type { BreakoutStart, CanvasClose, CanvasRoom, CanvasStore, RootStart } from './store.ts';
+export type {
+	BreakoutStart,
+	CanvasClose,
+	CanvasRoom,
+	CanvasStore,
+	CanvasWidget,
+	RootStart,
+	WidgetKind,
+	WidgetSource,
+} from './store.ts';
 export type {
 	BreakoutOptions,
 	Canvas,
@@ -21,6 +31,7 @@ export type {
 	CanvasOperation,
 	CanvasRoomOptions,
 	OpenCanvasOptions,
+	WidgetOptions,
 } from './types.ts';
 
 /** Kept in step with package.json by a test. */

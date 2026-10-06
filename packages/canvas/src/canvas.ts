@@ -22,7 +22,7 @@ import {
 	rootCast,
 } from './cast.ts';
 import { Queues } from './queue.ts';
-import type { CanvasClose, CanvasRoom, RootStart } from './store.ts';
+import type { CanvasClose, CanvasRoom, CanvasWidget, RootStart } from './store.ts';
 import { openerBundle, workerBundle } from './tools.ts';
 import type {
 	Canvas,
@@ -30,7 +30,10 @@ import type {
 	CanvasOperation,
 	CanvasRoomOptions,
 	OpenCanvasOptions,
+	WidgetOptions,
 } from './types.ts';
+import { widgetBundle } from './widget-tools.ts';
+import { assertCatalog, type WidgetPort } from './widgets.ts';
 
 interface Handle {
 	readonly room: Room;
@@ -44,7 +47,14 @@ const EVENT_OPERATION: Record<CanvasEvent['type'], CanvasOperation> = {
 	started: 'start',
 	stopped: 'stop',
 	archived: 'archive',
+	widget: 'widget',
 };
+
+/** The room that an event is about. */
+function roomOf(event: CanvasEvent): string {
+	if (event.type === 'opened') return event.room.name;
+	return event.type === 'widget' ? event.widget.room : event.room;
+}
 
 function castOf(row: CanvasRoom, definitions: Definitions): Cast {
 	return row.start.kind === 'root'
@@ -70,6 +80,11 @@ class CanvasRun implements Canvas {
 	private readonly rows = new Map<string, CanvasRoom>();
 	private readonly handles = new Map<string, Handle>();
 	private readonly queues = new Queues();
+	/** The widget calls of one room. A separate queue, so a stop that waits for a call never waits behind one. */
+	private readonly widgetQueues = new Queues();
+	private readonly revisions = new Map<string, CanvasWidget>();
+	/** The current revision of each widget, by room and name. */
+	private readonly current = new Map<string, Map<string, CanvasWidget>>();
 	private readonly bridge: Bridge;
 	private readonly listeners = new Set<(event: CanvasEvent) => void>();
 	private definitions: Definitions | undefined;
@@ -81,10 +96,12 @@ class CanvasRun implements Canvas {
 	private resuming: Promise<void> | undefined;
 	private readonly port: BreakoutPort;
 	private bundles: { opener: ToolBundle; worker: ToolBundle } | undefined;
+	private widgetsBundle: ToolBundle | undefined;
 
 	constructor(options: OpenCanvasOptions) {
 		this.name = options.name;
 		this.options = options;
+		assertCatalog(options.widgets?.kinds ?? []);
 		this.bridge = this.bridgeOf();
 		this.port = this.portOf();
 	}
@@ -95,6 +112,55 @@ class CanvasRun implements Canvas {
 
 	workerTools(): ToolBundle {
 		return this.toolBundles().worker;
+	}
+
+	widgetTools(): ToolBundle {
+		const kinds = this.options.widgets?.kinds ?? [];
+		if (kinds.length === 0)
+			throw refuse(
+				`The canvas "${this.name}" has no widget kinds. Pass widgets: { kinds } to openCanvas.`,
+			);
+		this.widgetsBundle ??= widgetBundle(this.widgetPort(kinds));
+		return this.widgetsBundle;
+	}
+
+	widgets(room: string): readonly CanvasWidget[] {
+		return [...(this.current.get(room)?.values() ?? [])].map((widget) => structuredClone(widget));
+	}
+
+	revision(id: string): CanvasWidget | undefined {
+		const found = this.revisions.get(id);
+		return found === undefined ? undefined : structuredClone(found);
+	}
+
+	/** What the widget tools read and write: the rows and revisions of this run. */
+	private widgetPort(kinds: WidgetOptions['kinds']): WidgetPort {
+		return {
+			kinds,
+			assertReady: () => this.assertReady(),
+			serial: (room, operation) => this.widgetQueues.run(room, operation),
+			row: (name) => this.rows.get(name),
+			widgets: (room) => this.widgets(room),
+			current: (room, name) => this.current.get(room)?.get(name),
+			append: (widget, operation) => this.appendRevision(widget, operation),
+		};
+	}
+
+	/** Writes the revision, then makes it current, and tells the listeners. */
+	private async appendRevision(widget: CanvasWidget, operation: 'show' | 'hide'): Promise<void> {
+		await this.guard(widget.room, operation, async () => {
+			if ((await this.options.store.appendRevision(widget)) === 'exists')
+				throw new Error(`The store holds the revision "${widget.revision}" already.`);
+		});
+		this.holdRevision(widget);
+		this.emit({ type: 'widget', widget: structuredClone(widget) });
+	}
+
+	private holdRevision(widget: CanvasWidget): void {
+		this.revisions.set(widget.revision, widget);
+		const room = this.current.get(widget.room) ?? new Map<string, CanvasWidget>();
+		room.set(widget.name, widget);
+		this.current.set(widget.room, room);
 	}
 
 	private toolBundles(): { opener: ToolBundle; worker: ToolBundle } {
@@ -139,7 +205,11 @@ class CanvasRun implements Canvas {
 		this.resumed = true;
 		try {
 			for (const row of await this.options.store.list()) this.rows.set(row.name, row);
+			for (const widget of await this.options.store.revisions()) this.holdRevision(widget);
 		} catch (error) {
+			this.rows.clear();
+			this.revisions.clear();
+			this.current.clear();
 			this.resumed = false;
 			throw error;
 		}
@@ -217,11 +287,7 @@ class CanvasRun implements Canvas {
 			try {
 				listener(event);
 			} catch (error) {
-				this.report(
-					event.type === 'opened' ? event.room.name : event.room,
-					EVENT_OPERATION[event.type],
-					error,
-				);
+				this.report(roomOf(event), EVENT_OPERATION[event.type], error);
 			}
 		}
 	}
@@ -501,6 +567,7 @@ class CanvasRun implements Canvas {
 		this.closed = true;
 		await this.resuming?.catch(() => {});
 		await this.queues.settled();
+		await this.widgetQueues.settled();
 		await this.bridge.settled();
 		for (const name of [...this.handles.keys()])
 			await this.guard(name, 'close', () => this.release(name)).catch(() => {});

@@ -140,11 +140,14 @@ and a `name`, and the sweep runs past the exchange. A later exchange in the
 same room reads its state with `ps` or `wait`, and the reminder
 of each activation names it ([Processes](processes.md)).
 
-**The sensor server uses the workstation backend.** The running Workbench
-uses `directoryBackend`, which has no endpoints. Its terminal workspace
-has no `fetch` tool. A workstation with endpoints provides `fetch` for the
-same Git template. See [Sensors](sensors.md) and the
-[workstation acceptance](../packages/workstation/test/sshd/process-http-lifecycle.test.ts).
+**A process that serves HTTP needs the workstation backend.** The running
+Workbench uses `directoryBackend`, which has no endpoints. Its terminal
+workspace has no `fetch` tool. A workstation with endpoints provides `fetch`
+for a Git template that serves on `$PORT`. The Workbench shows two patterns
+over such processes: [Sensors](../examples/workbench/docs/sensors.md) and
+[Actuators](../examples/workbench/docs/actuators.md). The
+[workstation acceptance](../packages/workstation/test/sshd/process-http-lifecycle.test.ts)
+runs a process of this kind.
 
 The datasheets are simplified summaries for a runnable example. They are not
 the manufacturer datasheets.
@@ -294,6 +297,7 @@ examples/workbench/
     rooms.ts           the canvas of the root rooms and the host room view
     workbench.ts       the host: open, read, watch, send, control, create, files, processes
     names.ts           the room name and goal rules
+    sql.ts             the Sql of the journal and canvas stores over one SQLite database
     files.ts           the workspace list, one file preview, one lab table preview, and /attach
     attachments.ts     what /attach does, and what a pasted path names
     refs.ts            the refs of a message: parse, resolve, and one chip line

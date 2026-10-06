@@ -1,22 +1,31 @@
 # Camera Chat
 
-A macOS room chat with an agent-managed camera sensor. The conversation uses
-Workbench's transcript widgets and colors. A small image-only preview appears
-at the top right while a camera process runs and a frame arrives. While it is
-visible, the chat column narrows to keep text clear of the image. Hiding the
-preview or stopping the camera restores the full chat width. Referenced
-observation images appear beneath their messages, at the same size as the
-preview, and remain available after the camera stops.
+A macOS room chat with an agent-managed camera. The conversation uses
+Workbench's transcript widgets and colors. The room is a root room of a
+[canvas](../../docs/canvas.md). The agent places one viewfinder widget in the
+room for each camera. A small preview appears at the top right for each
+camera while its process runs and a frame arrives, and the previews stack
+without overlap. While a preview is visible, the chat column narrows to keep
+text clear of the images. Hiding the previews or stopping the cameras
+restores the full chat width. Referenced observation images appear
+beneath their messages, at the size of a single preview, and remain available
+after the camera stops.
 
 The host does not open the camera at startup. Ask:
 
-> Connect the built-in camera and tell me what you see.
+> Connect the built-in camera as front, and tell me what you see.
+
+Name each camera to run several, such as "Connect device 1 as desk".
 
 The agent forks `templates/camera`, clones it, validates and pushes the saved
-code, and starts its foreground server through `bash` with the name `camera`.
-The workspace gives the process a port in `$PORT`. The agent reads scenes with
-`fetch`: the observation at `/camera/observe`, then the frame at
-`/files/<digest>`. It cites both snapshot refs. There is no camera-specific
+code, and starts its foreground server through `bash` with the name of the camera and
+takes the handle from the result. The workspace gives the process a port in
+`$PORT`. The agent reads scenes with
+the `observe` macro of the camera template, which `compose` runs with the
+handle: it reads the index, the observation, and the frame, and it returns the
+snapshot refs. The agent cites the refs. The host loads the macro from its own
+copy of the template, so an edit of a fork changes nothing that runs. When the camera answers, the
+agent calls `show` with the handle to place the viewfinder. There is no camera-specific
 observation tool.
 
 ## Run on macOS
@@ -84,40 +93,85 @@ no physical device and makes no model request. Its reply does not perform
 visual inference. The demo also requires macOS. Demo state uses `.data/demo`;
 live state uses `.data/live`. `--directory <path>` selects another directory.
 
-## Preview and process lifetime
+## Cameras, names, and process lifetime
 
-The host subscribes to `workspace.processes`. A `started` event of a process
-named `camera` starts a timer of five reads each second. At open, one list of
-the running processes of the agent `observer` finds a camera that still runs
-from an earlier host run. The list reads the files of `observer`, and the
-read adopts the process. Each read
-calls `workspace.fetch` for `/camera/observe` and then for the frame, with no
-retention. A failed read shows "Camera starting". The `ended` event of the
-process stops the timer and hides the preview. Preview frames are temporary
-display data; the agent's `fetch` retains evidence independently in workspace
-snapshots. Inline images resolve those immutable snapshots, so later preview
-frames do not change the evidence shown with an answer. The agent's answer
-should cite the time of its own observation.
+The host opens the canvas `camera-chat` over the SQLite file of the room and
+declares one widget kind, `frame`: the newest frame that a process serves,
+with the source type `process`. The observer holds `canvas.widgetTools()` and
+no tool to open breakout rooms.
+
+**A widget binds to the handle that the agent passes.** The agent picks a
+short name for each camera, such as `front` or `desk`, or uses the name that the
+person gives. That name is the name of the widget. The title of the widget is a
+label for people, such as "Front door". The preview labels each box with the
+name and the title, so the person can say "hide desk". The agent starts the
+camera with `bash` and the same name, which helps the person read `ps`, and
+nothing binds by it. The agent takes the handle from the `bash` result. After
+the camera process answers, the agent calls:
+
+```ts
+show({
+  name: 'front',
+  kind: 'frame',
+  source: { type: 'process', handle: 'bash-4f1c9a02d7be', path: '/camera/observe' },
+  title: 'Front door',
+});
+```
+
+**Several cameras run at once.** One clone of the template serves several
+processes, because each process gets its own `$PORT`. The agent passes
+`--device <index>` for each camera. A process with no `--device` opens the
+built-in camera, so a second camera needs another index. Run
+`pnpm start --list-cameras` to see the indexes. Never open two processes for
+the same device. The agent checks its running processes first and reuses a
+process for that camera.
+
+**The preview keeps one binding for each shown `frame` widget** of the room
+`camera`, four at most. The preview lists a further widget in the status line
+and does not bind it. A binding checks once that the handle belongs to a running process of the
+author of its widget, then reads the path of that process by handle. The
+preview reads the widgets again on the `started` event of the room and on each
+`widget` event. An adopted process keeps its handle, so a restart finds the
+widgets in their rows and binds the cameras that still run from an earlier
+host run. A `show` with another handle binds the new process.
+
+A timer of each binding reads five times each second. Each read calls
+`workspace.fetch` for the path of the widget and then for the frame at
+`/files/<digest>`, with no retention. A body over 16 MiB is a failed read. A
+failed read shows "Camera starting" with the name of the camera. The `ended`
+event of the bound process clears the preview of that widget alone, and the
+widget stays until a new `show`. A `hide` of a widget
+removes the preview of that name alone. While the person hides the previews
+with Escape or Ctrl+P, all timers stop and no read runs. Preview frames are
+temporary display data; the agent's `fetch` retains evidence independently in
+workspace snapshots. Inline images resolve those immutable snapshots, so later
+preview frames do not change the evidence shown with an answer. The agent's
+answer cites the time of its own observation and names the camera.
 
 | Key               | Action                                      |
 | ----------------- | ------------------------------------------- |
 | Enter             | Send a room message                         |
 | Shift+Enter       | Insert a newline                            |
 | PageUp / PageDown | Scroll the conversation                     |
-| Escape            | Hide the preview while the camera runs      |
-| Ctrl+P            | Toggle the preview                          |
+| Escape            | Hide all previews while cameras run         |
+| Ctrl+P            | Toggle all previews                         |
 | Ctrl+C            | Close the room and stop workspace processes |
 
-Ask the agent to stop or turn off the camera to call `cancel` on the process.
-Process exit hides the preview. Ask the agent to start the camera again to
-start a new process. A host restart restores the room journal. The preview
-lists the processes of `observer` at open, so it shows a camera that still
-runs from the earlier host run before the agent acts.
+**Hide and stop are different requests.** "Hide front" calls `hide` on the
+widget `front`, and the camera stays on. "Stop front" or "turn off front"
+calls `cancel` on the process of `front`, and nothing else: the widget stays
+and draws nothing. "Start front again" starts a new process, then calls `show`
+with its new handle. Ask about a scene by naming the camera. With several
+cameras and no name, the agent asks which one or describes each. A
+host restart resumes the room from its canvas row and its journal. The
+previews bind the widget rows again by handle against the processes of
+`observer`, so they show the cameras that still run from the earlier host run before the
+agent acts.
 
 The standalone [camera template](templates/camera/README.md) documents runtime,
 validation, device selection, `$PORT`, Git source metadata, replacement, and
 rollback. It uses no runtime npm dependencies and implements version 2 of the
-[sensor protocol](../../docs/sensors.md). It buffers recent frames in memory and
+[sensor protocol](../workbench/docs/sensors.md). It buffers recent frames in memory and
 advertises no span support. The clone records its own launch source metadata.
 
 ## Local backends and storage
@@ -131,26 +185,26 @@ supplies `templates/camera` and `templates/camera-notes`. It checks names at
 its API boundary, but filesystem access does not enforce per-agent Git push
 permissions. The backend seeds a template repository when it is absent. A
 `pre-receive` hook refuses a push into a template; the shell can remove it.
-The room SQLite journal, Codex home, audit, checkouts, and snapshots stay
-under the selected data directory. The Codex home and snapshots can contain
-image data.
+The room SQLite file holds the journal and the canvas row of the room.
+The Codex home, audit, checkouts, and snapshots stay under the selected
+data directory. The Codex home and snapshots can contain image data.
 
 ## Code and validation
 
-| File                      | Responsibility                                  |
-| ------------------------- | ----------------------------------------------- |
-| `src/main.ts`             | CLI, Codex login check, room startup, cleanup   |
-| `src/host.ts`             | Durable room, Codex seat, workspace tool bundle |
-| `src/login.ts`            | Find the Codex login of the host                |
-| `src/demo.ts`             | Scripted seat for `--demo`                      |
-| `src/preview.ts`          | Process events and `workspace.fetch` polling    |
-| `src/reference-images.ts` | Resolve retained images cited by messages       |
-| `src/tui.ts`              | Workbench transcript and floating preview       |
-| `src/terminal.ts`         | Native graphics requirement                     |
-| `src/local-bash.ts`       | Local shell backend and loopback ports          |
-| `src/local-env.ts`        | Local files and `bash` on the workspace port    |
-| `src/local-git.ts`        | Template seeding and local repositories         |
-| `templates/camera/`       | Independently runnable, forkable camera server  |
+| File                      | Responsibility                                 |
+| ------------------------- | ---------------------------------------------- |
+| `src/main.ts`             | CLI, Codex login check, room startup, cleanup  |
+| `src/host.ts`             | Canvas, durable room, Codex seat, workspace    |
+| `src/login.ts`            | Find the Codex login of the host               |
+| `src/demo.ts`             | Scripted seat for `--demo`                     |
+| `src/preview.ts`          | One binding for each frame widget, polling     |
+| `src/reference-images.ts` | Resolve retained images cited by messages      |
+| `src/tui.ts`              | Workbench transcript and floating previews     |
+| `src/terminal.ts`         | Native graphics requirement                    |
+| `src/local-bash.ts`       | Local shell backend and loopback ports         |
+| `src/local-env.ts`        | Local files and `bash` on the workspace port   |
+| `src/local-git.ts`        | Template seeding and local repositories        |
+| `templates/camera/`       | Independently runnable, forkable camera server |
 
 ```sh
 pnpm check:types
@@ -158,7 +212,8 @@ pnpm test
 ```
 
 Tests run the real clone → validate → launch → fetch path with a scripted
-agent and synthetic frame. They check retained evidence, process lifetime,
-preview visibility, resizing, and native image dimensions. The template's own
-`node --test test.ts` runs the protocol cases. These tests open no physical
+agent and synthetic frame. They check retained evidence, the viewfinder
+widgets of two cameras, process lifetime, preview visibility, the size limit of a frame,
+resizing, and native image dimensions. The template's own `node --test
+test.ts` runs the protocol cases. These tests open no physical
 camera and make no live model request.

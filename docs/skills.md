@@ -151,7 +151,7 @@ its manifest has one list.
 ```ts
 const skills = await loadSkills(
   fromDirectory('./agents/surveyor/skills'),
-  fromDirectory('./templates/sensor-server/skills'),
+  fromDirectory('./templates/server/skills'),
 );
 ```
 
@@ -331,11 +331,11 @@ material to start from.** Use each for its own job.
 names the template and the steps: `fork` it, change the clone, and push.
 See [Git](git.md).
 
-**A template can ship a skill.** A sensor template holds a `skills/`
-folder with the skill and the `observe` macro of the sensor. The host loads
+**A template can ship a skill.** A template can hold a `skills/`
+folder with a skill and its macros. The host loads
 that folder from its own copy of the template, with `loadSkills`. An edit
 in the fork of an agent changes nothing that runs
-([Sensors](sensors.md#load-the-skills-of-a-template)).
+([example](../examples/workbench/docs/sensors.md#load-the-skills-of-a-template)).
 
 ## Limits
 

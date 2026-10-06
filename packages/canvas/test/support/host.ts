@@ -55,7 +55,7 @@ export interface Host {
 	readonly runtime: Runtime;
 }
 
-type HostOptions = Partial<Pick<OpenCanvasOptions, 'workspace' | 'breakout'>> & {
+type HostOptions = Partial<Pick<OpenCanvasOptions, 'workspace' | 'breakout' | 'widgets'>> & {
 	store?: CanvasStore;
 	storage?: JournalOpener;
 	script?: Script;
@@ -81,6 +81,7 @@ export function host(options: HostOptions = {}): Host {
 		store,
 		breakout: options.breakout ?? { team: ['cy'] },
 		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
+		...(options.widgets === undefined ? {} : { widgets: options.widgets }),
 		onError: (error) => void errors.push(error),
 	});
 	onTestFinished(() => canvas.close());

@@ -329,12 +329,12 @@ tool that the host owns, or write the work in the body.
 [Trust](trust.md#what-the-kernel-does-not-defend) states what the kernel does
 not defend.
 
-**A git template can ship a skill with macros.** A sensor template holds
-`skills/<template>/macros/observe.js`. The host loads that folder from its
+**A git template can ship a skill with macros.** A template can hold
+`skills/<template>/macros/<name>.js`. The host loads that folder from its
 own copy of the template with `loadSkills`, beside the skills of the agent
 ([Skills](skills.md#several-sources)). The macro that runs comes from the
 host's copy. An edit of `skills/` in the fork of an agent changes nothing
-that runs ([Sensors](sensors.md#the-observe-macro)).
+that runs ([the Workbench sensor template](../examples/workbench/docs/sensors.md#the-observe-macro)).
 
 **The guest has no global `fetch`, and `tools.fetch` is a binding.** The
 compose guest deletes the global `fetch`, so code reaches no network of its

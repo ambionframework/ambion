@@ -6,24 +6,18 @@
 import { AmbionError, type Room, roomUri, type ToolContext } from '@ambionframework/ambion';
 import { isName } from '@ambionframework/ambion/names';
 import { refuse } from './cast.ts';
+import { type BasePort, NAME_LIMIT } from './port.ts';
 import type { BreakoutStart, CanvasClose, CanvasRoom } from './store.ts';
 
-/** The most characters of a breakout room name, the parent included. */
-const NAME_LIMIT = 48;
 /** The default for `perOpener`. */
 export const DEFAULT_PER_OPENER = 3;
 
 /** What the breakout tools read and write on a canvas. */
-export interface BreakoutPort {
+export interface BreakoutPort extends BasePort {
 	readonly perOpener: number;
 	readonly team: ReadonlySet<string>;
-	/** Refuses before `resume` and after `close`. */
-	assertReady(): void;
-	/** Runs the operation after the calls in flight on that room name. */
-	serial<T>(name: string, operation: () => Promise<T>): Promise<T>;
 	/** Runs the operation in the chain of the bridge posts for one parent. */
 	ordered<T>(parent: string, operation: () => Promise<T>): Promise<T>;
-	row(name: string): CanvasRoom | undefined;
 	rows(): readonly CanvasRoom[];
 	room(name: string): Room | undefined;
 	mirror(name: string): string | undefined;
@@ -61,7 +55,7 @@ export interface BreakoutResult {
 }
 
 /** The caller of a tool, or a refusal when the call has no room. */
-export function callerOf(port: BreakoutPort, ctx: ToolContext): Caller {
+export function callerOf(port: Pick<BreakoutPort, 'assertReady'>, ctx: ToolContext): Caller {
 	port.assertReady();
 	if (ctx.room === undefined) throw refuse('The call has no room. A tool call needs a room.');
 	return {

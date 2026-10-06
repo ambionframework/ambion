@@ -40,9 +40,10 @@ newer, the OpenTUI floor.
   `justGitBackend` in `/git`.
 - `packages/workstation`: a bash backend over SSH to one server, one Unix
   account for each agent, and `workstationGitBackend`.
-- `examples/workbench`: rooms and an OpenTUI terminal in one process.
+- `examples/workbench`: rooms and an OpenTUI terminal in one process. Its
+  `docs/` hold the sensor and actuator patterns.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
-  sensor and a preview.
+  and a preview.
 - `planning/`: `next.md` is the 0.7.0 scope and plan, the canvas and
   breakout rooms. `backlog.md` is everything else. `risks.md` lists the
   robustness gaps the owner accepted.
@@ -58,8 +59,8 @@ newer, the OpenTUI floor.
 | The simulator                           | `docs/simulator.md`                                              |
 | The `compose` tool or a runtime         | `docs/compose.md`, then `macros`, `executors`, `limits`          |
 | The workspace or its tools              | `docs/workspace.md`, then `skills`, `macros`, `processes`, `git` |
+| The canvas or the widgets               | `docs/canvas.md`, `docs/widgets.md`                              |
 | The workstation                         | `docs/workstation.md`, `docs/workstation-git.md`                 |
-| Sensors or actuators                    | `docs/sensors.md`, `docs/actuators.md`                           |
 | A room open to untrusted agents         | `docs/trust.md`                                                  |
 | `.github/`, `scripts/`, a root config   | `docs/toolchain.md`                                              |
 | The example                             | `docs/example.md`                                                |
@@ -145,14 +146,6 @@ need the key. Read neither login file.
   changed. A test asserts what the code does, and asserts nothing about a
   removed name. `CHANGELOG.md` is the one record of change in the tree.
   `scripts/vocabulary.test.mjs` refuses the common phrases.
-- **A sensor template carries a protocol version.** A breaking change raises
-  `api`, and the template's macros refuse a server at another `api`. A forked
-  server does not upgrade with the host. Reducer state belongs to the server.
-  The workspace keeps what `fetch` reads through snapshot refs. Measurement
-  timestamps are the source of truth; host time governs host interactions.
-- **A sensor definition starts as a Git template.** The agent forks,
-  customizes, validates, commits, and pushes before it runs a saved version.
-  Replacement and rollback use the Git and process tools.
 - **Ambient means a room stays available between interactions.** A scheduled
   say brings an agent back on the room's clock. A host wakes a room with
   `room.post`.

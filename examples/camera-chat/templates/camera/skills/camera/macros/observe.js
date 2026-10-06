@@ -1,12 +1,12 @@
 /*---
-description: Look through a camera process. Returns the refs to cite, the measurement time, and the export path of the frame.
+description: Look through a camera process, by its handle or its name. Returns the refs to cite, the measurement time, and the export path of the frame.
 uses: [fetch]
 args:
   type: object
   additionalProperties: false
   required: [process]
   properties:
-    process: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{0,39}$' }
+    process: { type: string, description: 'The handle of the running process, or its name.', pattern: '^[a-z0-9][a-z0-9._-]{0,39}$' }
 ---*/
 const get = (path) => tools.fetch({ process: args.process, path });
 const index = await get('/');

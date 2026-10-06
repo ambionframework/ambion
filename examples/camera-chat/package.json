@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "A macOS room chat with an agent-managed camera sensor and floating preview.",
+	"description": "A macOS room chat with an agent-managed camera and floating preview.",
 	"engines": {
 		"node": ">=26.4.0"
 	},
@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@ambionframework-examples/workbench": "workspace:*",
 		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/canvas": "workspace:*",
 		"@ambionframework/codex": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",

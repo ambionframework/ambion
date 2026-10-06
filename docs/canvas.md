@@ -1,8 +1,8 @@
 # The canvas
 
 > **Status: the package `@ambionframework/canvas` implements this page.** It
-> holds the store, the lifecycle, the tools, and the bridge. The runtime
-> is a required parameter of each room operation.
+> holds the store, the lifecycle, the tools, the bridge, and the widget
+> views. The runtime is a required parameter of each room operation.
 > [The plan](../planning/next.md) owns delivery and evidence.
 
 **A canvas is a named collection of rooms.** It holds the rooms of a
@@ -16,12 +16,12 @@ bundle of tools, a reminder, and a view for the host.
 
 **Each concern keeps one owner.** The room owns its journal and every
 rule of collaboration. The workspace owns the substrate. The canvas owns
-which rooms exist, how they relate, and whether the host intends each one
-to run. Each journal stays the source of its room
+which rooms exist, how they relate, whether the host intends each one
+to run, and which widgets each room shows ([Widgets](widgets.md)). Each journal stays the source of its room
 ([Durability](durability.md)).
 
-**The host owns presentation.** The canvas defines no view, layout, or
-rendering contract. A host chooses how to show the rooms. A person
+**The host owns presentation.** The canvas defines no layout or rendering
+contract. A host chooses how to show the rooms and their widgets. A person
 speaks through the visit of the room that the person enters.
 
 ## Why a collection of rooms
@@ -44,9 +44,9 @@ has three options in Ambion today. Each option fails on one property.
 
 ## The model
 
-**The store holds one row for each room.** The row is the one durable
-record outside the journals. It holds hosting intent, the tree, and what
-a start needs. It holds no message, no lease, and no exchange
+**The store holds one row for each room.** The rows and the widget
+revisions are the durable records outside the journals. A row holds hosting
+intent, the tree, and what a start needs. It holds no message, no lease, and no exchange
 ([The store](#the-store)).
 
 **The depth is one.** A breakout room has no breakout rooms. Its workers
@@ -88,7 +88,9 @@ and the host operations on one room name run one at a time, as the
 `serial` queue of the workbench runs them
 (`examples/workbench/src/rooms.ts`). The kernel refuses a post to a
 stopped room with `room_stopped`, and the canvas maps it to a refusal.
-After `close`, every tool call is a refusal.
+After `close`, every tool call is a refusal. The widget calls of a room run
+in a queue of their own ([Widgets](widgets.md#the-tools)), so a stop never
+waits behind one.
 
 **Reads use the mirror.** The `RoomMirror` gives the path of the mirror
 file, and `breakout` returns it. The opener reads it with `jq`, as it reads
@@ -267,12 +269,13 @@ landed. The canvas keeps no cursor.
 | A `report`     | `breakout:<name>:<from>:report:<callId>` | Lands once for one call                  |
 | A close notice | `breakout:<name>:<from>`                 | The pass finds the key and posts nothing |
 
-| Crash point                                  | What the next start does                           |
-| -------------------------------------------- | -------------------------------------------------- |
-| After the row, before the room starts        | Starts the room from the row                       |
-| After the room starts, before the start post | Posts the start again under its key                |
-| After an exchange closes, before its notice  | The pass posts the notice under its key            |
-| During a host shutdown                       | `canvas.resume()` starts each `running` room again |
+| Crash point                                              | What the next start does                                 |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| After the row, before the room starts                    | Starts the room from the row                             |
+| After the room starts, before the start post             | Posts the start again under its key                      |
+| After an exchange closes, before its notice              | The pass posts the notice under its key                  |
+| After a revision lands, before the seat reads the result | The repeat `show` finds equal content and writes nothing |
+| During a host shutdown                                   | `canvas.resume()` starts each `running` room again       |
 
 **A retried activation can pick a new name.** The reminder shows the
 rooms that the opener holds, and `perOpener` caps the worst case. A tool
@@ -317,6 +320,8 @@ interface OpenCanvasOptions {
   /** With a workspace, the canvas attaches the mirror of each room. */
   readonly workspace?: Workspace;
   readonly breakout: BreakoutOptions;
+  /** The catalog of widget kinds that the host draws. Without it, widgetTools is a refusal. */
+  readonly widgets?: WidgetOptions;
   /** A failed start keeps its row `running`. The next `resume` tries again. */
   readonly onError?: (error: CanvasError) => void;
 }
@@ -327,10 +332,12 @@ interface Canvas {
   tools(): ToolBundle;
   /** The worker bundle: report. Call it before defineAgent. */
   workerTools(): ToolBundle;
+  /** The widget bundle: show, hide, and the reminder. A refusal with no widgets.kinds. Call it before defineAgent. */
+  widgetTools(): ToolBundle;
   /**
-   * Takes the definitions once, then starts or resumes each running root room,
-   * then each running breakout room, then runs one report pass for each live parent.
-   * A second call is a refusal.
+   * Takes the definitions once. Reads the rows and the widget revisions, then starts or
+   * resumes each running root room, then each running breakout room, then runs one
+   * report pass for each live parent. A second call is a refusal.
    */
   resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void>;
   /**
@@ -359,6 +366,10 @@ interface Canvas {
   /** The live handle of a room of this run, or undefined. */
   room(name: string): Room | undefined;
   rooms(): readonly CanvasRoom[];
+  /** The current revision of each widget of a room, hidden ones included. Empty before resume. */
+  widgets(room: string): readonly CanvasWidget[];
+  /** One revision by id, or undefined. Read at resume. */
+  revision(id: string): CanvasWidget | undefined;
   subscribe(listener: (event: CanvasEvent) => void): () => void;
 }
 
@@ -379,7 +390,8 @@ type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
 type CanvasEvent =
   | { readonly type: 'opened'; readonly room: CanvasRoom }
   | { readonly type: 'started' | 'stopped'; readonly room: string }
-  | { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose };
+  | { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose }
+  | { readonly type: 'widget'; readonly widget: CanvasWidget };
 
 interface CanvasError {
   readonly room: string;
@@ -394,7 +406,10 @@ interface CanvasError {
     | 'archive'
     | 'report'
     | 'notice'
-    | 'mirror';
+    | 'mirror'
+    | 'show'
+    | 'hide'
+    | 'widget';
   readonly error: unknown;
 }
 ```
@@ -438,6 +453,10 @@ interface CanvasStore {
   setState(name: string, state: 'running' | 'stopped'): Promise<void>;
   /** Sets the row to archived with its close. An archived row stays as it is. */
   archive(name: string, close: CanvasClose): Promise<CanvasClose>;
+  /** Every widget revision, in the order of insertion. */
+  revisions(): Promise<readonly CanvasWidget[]>;
+  /** Appends one revision. A revision id that exists stays as it is. */
+  appendRevision(widget: CanvasWidget): Promise<'inserted' | 'exists'>;
 }
 
 interface CanvasRoom {
@@ -479,8 +498,10 @@ function memoryCanvas(): CanvasStore;
 
 **`insert` returns `exists` on a repeat, so a write is idempotent.**
 `canvasStoreConformance` runs the same cases over both stores.
-`sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of the
-host, and the host can share it with `sqliteJournals`.
+`sqliteCanvas` writes the tables `canvas_rooms` and
+`canvas_widget_revisions` through the `Sql` of the host, and the host can
+share it with `sqliteJournals`. [Widgets](widgets.md) describes the
+revisions.
 
 ### The breakout options
 
@@ -496,6 +517,18 @@ interface BreakoutOptions {
 **`resume` refuses a team name that no definition resolves.** It also
 refuses two definitions of one name. `openCanvas` refuses a canvas name
 that is not a room name.
+
+### The widget options
+
+```ts
+interface WidgetOptions {
+  /** The kinds that the host draws. A `show` names one of them. */
+  readonly kinds: readonly WidgetKind[];
+}
+```
+
+**The catalog is the one widget option.** `openCanvas` refuses a catalog
+with a duplicate kind name. [Widgets](widgets.md#the-views) describes a kind.
 
 ### The tool schemas
 
@@ -562,7 +595,8 @@ notice of a refused `report` reaches the opener after the parent resumes.
 3. The name rule and its length, the team, and `perOpener`: a refusal
    names the bound that it broke. The full name `<parent>-<name>` follows
    the shared name syntax (`@ambionframework/ambion/names`) and holds at
-   most 48 characters.
+   most 48 characters. The package exports the limit as `NAME_LIMIT`, and a
+   widget name has the same limit.
 4. Otherwise the canvas inserts the row and starts the room. The result
    has `created: true`.
 

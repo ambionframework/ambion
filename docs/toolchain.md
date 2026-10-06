@@ -23,7 +23,7 @@ packages/
   workspace/    workspace resource, tool bundles, and backend helpers
   workstation/  workspace bash backend over SSH, one account for each agent
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
-examples/camera-chat/ Camera Chat: a room chat with an agent-managed camera sensor
+examples/camera-chat/ Camera Chat: a room chat with an agent-managed camera
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
 planning/       the plan for the next release and the backlog

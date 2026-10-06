@@ -1,7 +1,7 @@
 # Trust
 
-> [Sensors](sensors.md) lets agents run supplied server code and read its
-> port with `fetch`. The initial deployment trusts that workstation and code.
+> A process that serves HTTP lets agents run supplied server code and read
+> its port with `fetch`. The initial deployment trusts that workstation and code.
 > Its device access follows the process account; a read-only HTTP API does
 > not restrict its shell. Any agent of the workspace can read any running
 > process with GET, because the loopback network of a workstation is shared.

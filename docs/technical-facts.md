@@ -99,9 +99,8 @@ and the packages.
   [Processes](processes.md).
 - **A process can serve HTTP.** Every process has a port in `$PORT`. A
   workspace backend with endpoints adds `fetch`, which reads a path of a
-  running process with GET and keeps the body as a snapshot. A sensor is a
-  pattern over this read: the sensor template owns the protocol and its
-  `observe` macro. See [Sensors](sensors.md).
+  running process with GET and keeps the body as a snapshot. See
+  [Processes](processes.md).
 - **A clock that the agent sets.** An agent calls `schedule` with `delaySeconds`,
   and the room returns the say when it is due. The journal holds the
   schedule, and the host arms one alarm. See

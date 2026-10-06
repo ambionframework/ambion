@@ -5,8 +5,8 @@ The store keeps one row for each room: the name, the goal, the depth, the
 state, and what a start needs. It holds no message, no lease, and no
 exchange. The journal of each room stays the source of that room.
 
-The package holds the store, the lifecycle of the rooms, and the tools of
-the breakout rooms, and the bridge. [The canvas design](../../docs/canvas.md)
+The package holds the store, the lifecycle of the rooms, the tools of the
+breakout rooms, the bridge, and the widgets of each room. [The canvas design](../../docs/canvas.md)
 holds the contract.
 
 ## Install
@@ -65,7 +65,9 @@ const room = await canvas.open({ name: 'site', goal: 'Plan the site.', agents: [
 | `close()`              | Stops every handle. Each row keeps its state                                                                              |
 | `room(name)`           | The live handle of a room, or `undefined`                                                                                 |
 | `rooms()`              | The rows                                                                                                                  |
-| `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, and `archived`                                                                      |
+| `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, `archived`, and `widget`                                                            |
+| `widgets(room)`        | The current revision of each widget of a room, hidden ones included                                                       |
+| `revision(id)`         | One widget revision by id, or `undefined`                                                                                 |
 
 **Each room receives its own definitions.** A root room receives the
 definitions in its `agents`, or every definition outside the worker team. A
@@ -98,6 +100,38 @@ another opener, the name rule, the team, and `perOpener`, in that order. The
 reminder of the opener bundle lists the breakout rooms of the seat. Each
 refusal is an `AmbionError` with the code `refused`.
 
+## The widgets
+
+```ts
+const canvas = openCanvas({
+  name: 'lab',
+  runtime,
+  store,
+  breakout: { team: [] },
+  widgets: {
+    kinds: [{ name: 'frame', description: 'The newest frame of a process.', sources: ['process'] }],
+  },
+});
+const viewer = canvas.widgetTools(); // show, hide, and the reminder
+```
+
+| Tool   | Effect                                                                                 |
+| ------ | -------------------------------------------------------------------------------------- |
+| `show` | Writes a new `shown` revision. Equal content of a shown widget writes nothing          |
+| `hide` | Writes a new `hidden` revision. A hidden widget changes nothing. An unknown name fails |
+
+**A widget is a live view that an agent places in a room.** The canvas holds
+the pointer to the data and reads no source. The host draws the widget.
+`widgetTools()` is a refusal when `widgets.kinds` is absent or empty. A `show`
+checks the name, the title, the kind, and the source against the catalog. A
+process source is `{ type: 'process', handle, path }`: the handle of a process
+of the agent, and a path that the process serves on its port.
+
+**The canvas keeps every revision.** `resume` loads them, so `widgets(room)`
+and `revision(id)` are synchronous. Each write emits a `widget` event. The
+reminder lists the shown widgets of the room, ten at most. The calls of one
+room run one at a time.
+
 ## The bridge
 
 **The bridge carries each finished exchange of a breakout room to the
@@ -121,11 +155,14 @@ goes to `onError` with the operation `notice`, and the next pass posts it.
 | `insert(room)`         | Writes the row and returns `inserted`. A taken name returns `exists`      |
 | `setState(name, to)`   | Sets the row to `running` or `stopped`                                    |
 | `archive(name, close)` | Sets the row to `archived` with its close, and returns the recorded close |
+| `revisions()`          | Returns every widget revision in the order of insertion                   |
+| `appendRevision(w)`    | Appends one revision. A revision id that exists returns `exists`          |
 
 **An archived row is permanent.** `setState` on an archived row throws, and
 a repeat `archive` returns the first close. `setState` and `archive` on a
 name with no row throw an error that names the room. A repeat `insert`
-keeps the old row.
+keeps the old row. `sqliteCanvas` keeps the widget revisions in the table
+`canvas_widget_revisions`. A revision never changes.
 
 ## Conformance
 
