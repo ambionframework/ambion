@@ -457,10 +457,10 @@ widget and says to the person what it needs. The act arrives as a later
 message and activates it again.
 
 **A question to the opener of the exchange closes `complete`.** The
-exchange does not await that person
-(AP1 in [the plan](../planning/next.md) changes this rule). The act still arrives and opens
-the next exchange. Only the attention line of the host misses the open
-question.
+exchange does not await that person. AP1 in
+[the plan](../planning/next.md) changes this rule. The act still arrives
+and opens the next exchange. Only the attention line of the host misses
+the open question.
 
 **Agent changes are silent.** `show` and `hide` add no entry and activate
 no seat. An agent that wants people to notice a widget says so in the

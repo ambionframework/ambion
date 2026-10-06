@@ -73,8 +73,8 @@ exchange where no person spoke never folds. A monitor that ticks each ten
 minutes adds about 1,000 returned says in a week. The first step, a render
 rule for a closed exchange with no spoken message, is UR2 in
 [the plan](next.md). The second step lets a seat write a summary over its
-own range. **Condition:** a measured context cost from a self-scheduling
-seat after UR2.
+own range. **Condition:** the owner decides the second step in SI1 of the
+plan. If it stays out of 1.0.0, this item leaves the backlog.
 
 **The second step can make a close a message.** A close that routes to
 the summary writer makes the summary an ordinary respond activation. The
@@ -149,6 +149,16 @@ its seats as Durable Objects, and no canvas store or bridge runs there.
 
 **Condition:** a deployment that needs breakout rooms or widgets on
 Cloudflare.
+
+## Open proofs
+
+**FP1. The rules that decide liveness and spend have no proof.** The
+Dafny rules stop at the fold and the admissions. `routes`, `nextAlarm`,
+`renewUntil`, the window of the view, `classifyCause`, and
+`contributionMatches` run with tests alone. The robustness evaluation of
+2026-10-05 listed them. **Condition:** a defect in one of these functions,
+or a change of UR1, UR2, or UR5 in the plan that moves one of them into a
+`*.verified.ts`.
 
 ## Considered and kept
 
