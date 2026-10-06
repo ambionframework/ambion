@@ -12,6 +12,19 @@ each activation, and polls nothing. A hidden widget and a widget of an archived 
 files panel and the side area share the file views in `file-view.ts`.
 `readFile` takes the agent that reads, and `Workbench` gains `pins(room)`.
 
+**The workbench presses the actions of a pin.** The kinds `markdown`,
+`table`, and `image` take `actions`. The side area draws each action as a
+button under its pin, with the `for` of the widget, and draws a widget that
+holds an answer as `answered by <person> in #<seq>` with its once actions
+done. Tab, then `a`, takes the keys. Up and Down choose, Enter presses an
+action or sends its form, and Esc leaves. A form takes a text, a number, a
+boolean, and a choice, and shows the first problem before it sends. The host
+saves one press token for each call and reuses it on a retry. A `stale`
+result redraws the new revision. The host reads the pins again on the
+`answered` event. `Workbench` gains `act(person, act)`. The pure state is
+`ActionPad` in `action-state.ts`, and `ActionsView` in `widget-actions.ts`
+draws its rows, so another host can reuse both.
+
 **The sensor and actuator pages and rules belong to the workbench example.**
 The pages sit in `examples/workbench/docs`, with the sensor protocol and its
 rules. Ambion knows long-running processes that serve HTTP on `$PORT`, read

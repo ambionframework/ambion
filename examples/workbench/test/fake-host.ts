@@ -1,4 +1,5 @@
 import { snapshotUri } from '@ambionframework/ambion';
+import type { WidgetActResult } from '@ambionframework/canvas';
 import { people } from '../src/definitions.ts';
 import { Session } from '../src/session.ts';
 import type {
@@ -168,6 +169,9 @@ export class FakeHost implements Workbench {
 	}
 	async pins() {
 		return { pins: [], more: 0 };
+	}
+	async act(): Promise<WidgetActResult> {
+		throw new Error('The fake host takes no act.');
 	}
 	async labTables() {
 		return ['runs', 'results'];

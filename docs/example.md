@@ -237,6 +237,18 @@ interface.
   archived breakout room draws nothing. The side area
   draws text as text and drops terminal escapes, and it gives way to the
   files panel and the processes panel.
+- **Actions on a pin.** `show` also takes `actions` and `for` on these
+  kinds. The side area draws each action as a button under its pin, and it
+  shows `for` as `for mira`. A widget that holds an answer reads `answered by
+<person> in #<seq>`, and its once actions read as done. Tab, then `a`, takes
+  the keys: Up and Down choose an action, Enter presses it, and Esc leaves. An
+  action with fields opens a form of text, number, boolean, and choice fields.
+  The form checks the values and shows the first problem before it sends. A
+  press calls `canvas.act` as the person through `Workbench.act`. The host
+  saves one press token for each call, keeps it until the call settles, and
+  sends it again on a retry, so a press lands once. A `stale` result redraws
+  the new revision, and an `answered` result shows a line. The host reads the
+  pins again on the `answered` event as well as on the `widget` event.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
 
@@ -331,6 +343,8 @@ examples/workbench/
     files-panel.ts     the files panel beside the conversation
     file-view.ts       the views of one file: text, markdown, table, and picture
     pins-panel.ts      the side area of the pinned files
+    action-state.ts    the actions of a pin: focus, form, validation, press token, and result
+    widget-actions.ts  the buttons and the form of the actions, drawn in OpenTUI
     processes.ts       the order of the processes, and the end of an output
     process-browser.ts the processes panel state: list, choice, and cancel
     process-panel.ts   the processes panel beside the conversation

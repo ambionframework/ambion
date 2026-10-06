@@ -1,4 +1,5 @@
 import { BoxRenderable, type CliRenderer, createCliRenderer, type KeyEvent } from '@opentui/core';
+import { ActionPad } from './action-state.ts';
 import { tui as palette } from './brand.ts';
 import { parse } from './commands.ts';
 import { Composer } from './composer.ts';
@@ -44,7 +45,15 @@ class WorkbenchTui {
 		const header = new Header(renderer);
 		const transcript = new Transcript(renderer);
 		const panel = new FilesPanel(renderer);
-		const pinsPanel = new PinsPanel(renderer);
+		const pad = new ActionPad(
+			(act) => {
+				const person = this.session.identity;
+				if (!person) throw new Error('Pick a person first: /user <name>.');
+				return host.act(person.name, act);
+			},
+			() => this.render(),
+		);
+		const pinsPanel = new PinsPanel(renderer, pad);
 		const processPanel = new ProcessesPanel(renderer);
 		this.processes = new ProcessBrowser(host, () => this.render());
 		const body = new BoxRenderable(renderer, {
@@ -79,6 +88,7 @@ class WorkbenchTui {
 			processPanel,
 			processes: this.processes,
 			transcript,
+			pad,
 			render: () => this.render(),
 		});
 		const root = new BoxRenderable(renderer, {

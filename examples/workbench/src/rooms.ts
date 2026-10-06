@@ -15,6 +15,7 @@ import {
 	type CanvasWidget,
 	openCanvas,
 	sqliteCanvas,
+	type WidgetAct,
 } from '@ambionframework/canvas';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
@@ -23,8 +24,9 @@ import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
+import type { Answered } from './action-state.ts';
 import { readApprovals } from './approvals.ts';
-import { team, workerNames } from './definitions.ts';
+import { type Person, team, workerNames } from './definitions.ts';
 import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
@@ -216,15 +218,37 @@ export async function openRooms(
 	 */
 	async function pinned(
 		name: string,
-		read: (widgets: readonly CanvasWidget[]) => Promise<Pins>,
+		read: (
+			widgets: readonly CanvasWidget[],
+			answers: ReadonlyMap<string, Answered>,
+		) => Promise<Pins>,
 	): Promise<Pins> {
 		if (known(name).state === 'archived') return { pins: [], more: 0 };
 		const state = stateOf(name);
-		state.pins ??= read(canvas.widgets(name)).catch((error: unknown) => {
-			state.pins = undefined;
-			throw error;
-		});
+		const widgets = canvas.widgets(name);
+		state.pins ??= answered(name)
+			.then((answers) => read(widgets, answers))
+			.catch((error: unknown) => {
+				state.pins = undefined;
+				throw error;
+			});
 		return state.pins;
+	}
+	/** The answers of a room, each with the person who answered it. A stopped room names no person. */
+	async function answered(name: string): Promise<Map<string, Answered>> {
+		const seqs = canvas.answers(name);
+		const first = Math.min(...seqs.values());
+		const read =
+			seqs.size > 0 ? await canvas.room(name)?.read({ messages: { after: first - 1 } }) : undefined;
+		const from = new Map<number, string>();
+		for (const message of read?.messages ?? [])
+			if (message.kind === 'said') from.set(message.seq, message.from);
+		return new Map(
+			[...seqs].map(([revision, seq]) => {
+				const by = from.get(seq);
+				return [revision, by === undefined ? { seq } : { seq, by }];
+			}),
+		);
 	}
 	try {
 		await canvas.resume({ agents: roomTeam.agents });
@@ -307,6 +331,11 @@ export async function openRooms(
 		create,
 		inRoom,
 		pinned,
+		/** Press an action of a widget as a person. The canvas checks it and sends it as a message. */
+		act(person: Person, act: WidgetAct) {
+			if (closing) fail('The host is stopping.');
+			return canvas.act(person, act);
+		},
 		watch,
 		withWorkspace,
 		workspace,
@@ -375,9 +404,8 @@ function heardEvent(
 ): void {
 	const name = roomOf(event);
 	const state = stateOf(name);
-	// A widget event, a start, and an archive change what the pins show.
-	if (event.type === 'widget' || event.type === 'started' || event.type === 'archived')
-		state.pins = undefined;
+	// A widget event, an answer, a start, and an archive change what the pins show.
+	if (['widget', 'answered', 'started', 'archived'].includes(event.type)) state.pins = undefined;
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
 	changed(state);
 }

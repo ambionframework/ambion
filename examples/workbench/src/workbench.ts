@@ -1,6 +1,7 @@
 import { access, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { WidgetAct, WidgetActResult } from '@ambionframework/canvas';
 import type { PiExecutionOptions } from '@ambionframework/pi';
 import type { Process } from '@ambionframework/workspace';
 import type { Approval } from './approvals.ts';
@@ -71,10 +72,17 @@ export interface Workbench {
 	files(): Promise<FileEntry[]>;
 	/**
 	 * The files that agents pinned in a room with `show`, each read as its author. The
-	 * host reads again after a widget event, a room start, and the end of an activation, and polls nothing. A hidden
+	 * host reads again after a widget event, an answer, a room start, and the end of an activation, and
+	 * polls nothing. Each pin holds its actions and the act that answered it. A hidden
 	 * widget and a widget of an archived room are not pins.
 	 */
 	pins(room: string): Promise<Pins>;
+	/**
+	 * Press an action of a pinned widget as a person. The room gets the press as a message of
+	 * that person. A repeat with the same `press` token lands once, and `stale` and `answered`
+	 * are results, not failures. A refusal rejects.
+	 */
+	act(person: string, act: WidgetAct): Promise<WidgetActResult>;
 	file(path: string): Promise<FileContent>;
 	/** The bytes of a snapshot ref of the workspace, from its object store. */
 	snapshot(ref: string): Promise<FileContent>;
@@ -210,9 +218,10 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 		},
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
 		pins: (room) =>
-			rooms.pinned(room, (widgets) =>
-				rooms.withWorkspace(() => readPins(rooms.workspace, widgets)),
+			rooms.pinned(room, (widgets, answers) =>
+				rooms.withWorkspace(() => readPins(rooms.workspace, widgets, answers)),
 			),
+		act: async (person, act) => rooms.act(personNamed(person), act),
 		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path, browser)),
 		snapshot: (ref) => rooms.withWorkspace(() => readSnapshotFile(rooms.workspace, ref)),
 		commit: (ref) => rooms.withWorkspace(() => readCommitFile(rooms.workspace, ref)),

@@ -1,4 +1,5 @@
 import type { CanvasWidget, WidgetKind } from '@ambionframework/canvas';
+import type { ActionWidget } from './action-state.ts';
 import type { FileContent } from './files.ts';
 
 /** The kinds the host draws. Each one takes a file of the workspace. */
@@ -7,19 +8,19 @@ export const PIN_KINDS = [
 		name: 'markdown',
 		description: 'A Markdown file of the workspace, drawn with headings, lists, and code.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 	{
 		name: 'table',
 		description: 'The tables of a SQLite database file of the workspace.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 	{
 		name: 'image',
 		description: 'A picture file of the workspace: PNG, JPEG, GIF, or WebP.',
 		sources: ['file'],
-		actions: false,
+		actions: true,
 	},
 ] as const satisfies readonly WidgetKind[];
 
@@ -30,8 +31,7 @@ type PinKind = (typeof PIN_KINDS)[number]['name'];
 export const MAX_PINS = 4;
 
 /** One shown widget of a room, with the file it names read as its author. */
-export interface Pin {
-	name: string;
+export interface Pin extends ActionWidget {
 	title: string | undefined;
 	kind: PinKind;
 	author: string;
