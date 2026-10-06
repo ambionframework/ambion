@@ -44,9 +44,10 @@ newer, the OpenTUI floor.
   `docs/` hold the sensor and actuator patterns.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   and a preview.
-- `planning/`: `next.md` is the 0.7.0 scope and plan, the canvas and
-  breakout rooms. `backlog.md` is everything else. `risks.md` lists the
-  robustness gaps the owner accepted.
+- `planning/`: `next.md` is the plan to 1.0.0: traces in Phoenix,
+  unattended rooms, approvals, the settled interface, production
+  readiness, and the promise of compatibility. `backlog.md` is everything
+  else. `risks.md` lists the robustness gaps the owner accepted.
 
 ## Read before you change
 

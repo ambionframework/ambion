@@ -16,51 +16,6 @@ findings, and prior reviews. [Considered and kept](#considered-and-kept)
 and [Deferred by decision](#deferred-by-decision) stop a later review from
 proposing the same change again.
 
-## Pending decisions
-
-**Each item waits on a decision of the owner.** It joins a release only
-when the owner says yes.
-
-**Q1. The `assistant` room option.** `normalizeAssistant` in
-`packages/ambion/src/room.ts` turns the option into an `agents` entry, a
-`broadcast` seat, and the `summaryWriter`. The kernel then holds a role
-that it otherwise treats as ordinary. The question: does the option go,
-with a helper in `@ambionframework/assistant` that returns the three
-options? The executor of the assistant is settled: `defineAssistant`
-takes an `executor` function. A close as a message (D2) removes the
-option with it.
-
-**Q2. The `awaiting` rule for the opener.** A message to the author of the
-opening message closes the exchange `complete`
-(`packages/ambion/src/room/exchange.ts`). An agent that asks the opener
-a clarifying question or an approval therefore reads as done, and
-`awaitingFor` does not list it. A canvas form to the opener closes
-`complete` for the same reason ([The canvas](../docs/canvas.md)). The
-question: does a directed message that ends the exchange await its
-recipient, the opener included?
-**Condition:** a host that must show an open question to the opener, or
-a canvas form must await the opener.
-
-**Q3. Seat selection and seat options in one map.** With no `seats`, the
-room seats every agent at `broadcast`. With `seats: {}`, it seats nobody.
-A `seats` entry for one agent puts every other agent in the reserve
-(`initialSeats` in `packages/ambion/src/room.ts`). `roster.md` documents
-it. The question: do the initial roster and the per-seat options split,
-for example `seats: string[]` and `attention: Record<string, ...>`?
-Decide with Q1, since `assistant` expands into the same map, and with
-the 0.7.0 plan, since a breakout room opens with `seats`. **Condition:**
-Q1 is decided, or a host reports an agent that it configured and found
-unseated.
-
-**Q4. The order of an execution list.** `route` in
-`packages/ambion/src/execution/route.ts` takes the first execution that
-serves a kind, and an execution with no `kind` serves every kind. A
-kinded execution after a catch-all in the same list never runs. The
-catch-all is deliberate (`scripted`, the Cloudflare seat object), and the
-room list overrides the runtime list on purpose. The question: does the
-room refuse a list where a kind repeats or follows a catch-all?
-**Condition:** a host reports a seat that ran on the wrong execution.
-
 ## Known defects
 
 **F1. An agent that runs SQL can lift the append-only guard.** The guard
@@ -115,16 +70,16 @@ three bounds:
 
 **D2. Compaction with no person.** A summary goes to a person, so an
 exchange where no person spoke never folds. A monitor that ticks each ten
-minutes adds about 1,000 returned says in a week. The first step is a
-render rule: a closed exchange with no spoken message shows as one line,
-and `recall` still reads it. A later step lets a seat write a summary over
-its own range. **Condition:** a measured context cost from a
-self-scheduling seat.
+minutes adds about 1,000 returned says in a week. The first step, a render
+rule for a closed exchange with no spoken message, is UR2 in
+[the plan](next.md). The second step lets a seat write a summary over its
+own range. **Condition:** a measured context cost from a self-scheduling
+seat after UR2.
 
 **The second step can make a close a message.** A close that routes to
 the summary writer makes the summary an ordinary respond activation. The
 `closed` activation source, `owed.ts`, `closedLeases`, `closeFor`, and
-`summaryWriter` on the close then go, and Q1 goes with them. Due work
+`summaryWriter` on the close then go, and the `assistant` option goes with them. Due work
 becomes one list, and a scheduled say becomes one entry. The review of
 2026-10-02 priced the change:
 
@@ -144,17 +99,10 @@ no fence, so two runs of the host over one account adopt the same
 processes. **Condition:** a placement that runs two hosts over one
 account.
 
-**D4. One stored source for the roster.** A composition seeds the roster
-from its `agents`, and each seating and unseating changes it. A
-recomposition resets the roster, so it drops a seating that a seat made.
-The change writes one seating for each seat at a start and drops `agents`
-from the composition. **Condition:** a recomposition that must keep a
-seating that a seat made.
-
 ## Supporting work
 
-**These items stay outside the 0.7.0 scope.** Each enters a
-release only when its condition holds.
+**These items stay outside 1.0.0.** Each enters a release only when its
+condition holds.
 
 **RC1. Range recall in the own room.** `recall` grows two selections:
 
@@ -187,6 +135,20 @@ ChatGPT login runs before the cut and one after.
 
 **Evidence:** the token count of a bare seat before and after, and the
 two live runs.
+
+**V1. A remote viewer of the canvas.** A person watches a bench from
+another machine or a phone. The canvas keeps its handles in one process,
+and the workbench draws a terminal alone. A viewer reads the rooms, the
+widgets, and their sources through a second reader of the storage (PR3 in
+[the plan](next.md)), and the host owns the sign-in.
+
+**Condition:** a person who must watch a room away from its host.
+
+**C1. The canvas on Cloudflare.** The Cloudflare adapter runs a room and
+its seats as Durable Objects, and no canvas store or bridge runs there.
+
+**Condition:** a deployment that needs breakout rooms or widgets on
+Cloudflare.
 
 ## Considered and kept
 
