@@ -5,7 +5,7 @@ import { openHost } from './hosting.ts';
 
 describe('Workbench executor kinds', () => {
 	it('assigns each seat to an executor kind', () => {
-		expect(seatKinds).toEqual({
+		expect(seatKinds({})).toEqual({
 			assistant: 'pi',
 			datasheets: 'pi',
 			design: 'claude',

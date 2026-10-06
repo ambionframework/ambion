@@ -4,15 +4,21 @@ export type ExecutorKind = 'pi' | 'claude' | 'codex';
 /** The environment variables a run reads. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
-/** The seats that run on an executor kind, the assistant included. */
-export const seatKinds: Readonly<Record<string, ExecutorKind>> = {
-	assistant: 'pi',
-	datasheets: 'pi',
-	design: 'claude',
-	experiments: 'codex',
-	scout: 'pi',
-	maker: 'pi',
-};
+/**
+ * The executor kind of each seat, the assistant included. `AMBION_EXECUTOR=codex`
+ * moves the assistant and the workers to Codex. Any other value leaves them on Pi.
+ */
+export function seatKinds(env: Environment = process.env): Readonly<Record<string, ExecutorKind>> {
+	const opener: ExecutorKind = env.AMBION_EXECUTOR === 'codex' ? 'codex' : 'pi';
+	return {
+		assistant: opener,
+		datasheets: 'pi',
+		design: 'claude',
+		experiments: 'codex',
+		scout: opener,
+		maker: opener,
+	};
+}
 
 /** The model of the Pi seats. `AMBION_MODEL` overrides it. */
 export const piModel = (env: Environment = process.env): string =>
@@ -41,7 +47,7 @@ export const hasKey = (kind: ExecutorKind, env: Environment = process.env): bool
 export function unavailableSeats(
 	env: Environment = process.env,
 ): { seat: string; kind: ExecutorKind; variable: string }[] {
-	return Object.entries(seatKinds)
+	return Object.entries(seatKinds(env))
 		.filter(([, kind]) => !hasKey(kind, env))
 		.map(([seat, kind]) => ({ seat, kind, variable: keyVariable(kind, env) }));
 }

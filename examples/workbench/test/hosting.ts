@@ -12,7 +12,7 @@ import {
 	fauxAssistantMessage,
 	getCurrentSystemPrompt,
 } from '@earendil-works/pi-ai';
-import { onTestFinished } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 import { workerNames } from '../src/definitions.ts';
 import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbench.ts';
 
@@ -89,6 +89,9 @@ export async function freshDirectory(): Promise<string> {
 
 /** Open a host on scripted models, in a fresh directory unless the options name one. The test closes it. */
 export async function openHost(options: Partial<OpenOptions> = {}): Promise<Workbench> {
+	// The seat kinds read `AMBION_EXECUTOR`, and a scripted host runs the default kinds.
+	vi.stubEnv('AMBION_EXECUTOR', '');
+	onTestFinished(() => void vi.unstubAllEnvs());
 	const workbench = await openWorkbench({
 		stream: quietStream(),
 		executions: scriptedKinds(),

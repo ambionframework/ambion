@@ -77,7 +77,7 @@ const LIST =
 	'List every tool you can call, one tool name per line, with no other text. ' +
 	'Use the exact name as your tool list shows it. Send the list with one say.';
 
-const kindOf = (name: string): ExecutorKind => seatKinds[name] ?? 'pi';
+const kindOf = (name: string): ExecutorKind => seatKinds()[name] ?? 'pi';
 
 function asker() {
 	const [person] = people;

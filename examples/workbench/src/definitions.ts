@@ -165,7 +165,7 @@ function executorFor(
 	options: { instructions: string; bundles: readonly ToolBundle[] },
 	model: string,
 ) {
-	switch (seatKinds[name]) {
+	switch (seatKinds()[name]) {
 		case 'claude':
 			return claude({ ...options, model: CLAUDE_MODEL });
 		case 'codex':

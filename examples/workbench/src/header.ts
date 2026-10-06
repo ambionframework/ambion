@@ -36,7 +36,7 @@ const label = (participant: Participant, unavailable: readonly string[] = []): s
 
 /** The executor kind beside an agent, with a mark when the kind has no key. */
 function executorKind(participant: Participant, unavailable: readonly string[]): string {
-	const name = participant.kind === 'agent' ? seatKinds[participant.name] : undefined;
+	const name = participant.kind === 'agent' ? seatKinds()[participant.name] : undefined;
 	if (!name) return '';
 	return unavailable.includes(participant.name) ? ` (${name}, no key)` : ` (${name})`;
 }

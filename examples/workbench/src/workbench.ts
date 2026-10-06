@@ -103,7 +103,7 @@ export interface OpenOptions {
 	directory: string;
 	/** A model stream, for tests. The default calls the configured provider. */
 	stream?: PiExecutionOptions['stream'];
-	/** Scripted executions for the Claude and Codex seats, for tests. */
+	/** Executions that replace the executors of each kind, for tests and live runs. */
 	executions?: RoomsOptions['executions'];
 	/** The environment that holds the keys. The default is the environment of the process. */
 	env?: RoomsOptions['env'];

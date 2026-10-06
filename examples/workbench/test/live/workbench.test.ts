@@ -8,11 +8,11 @@ import { openWorkbench, type Workbench } from '../../src/workbench.ts';
 
 /**
  * A scenario runs when every executor kind it uses has a key: the assistant runs on
- * Pi, and each named specialist runs on the executor kind that `seatKinds` gives it.
+ * the kind that `AMBION_EXECUTOR` selects, and each named specialist runs on the executor kind that `seatKinds` gives it.
  */
 function missingKeys(scenario: Scenario): string[] {
-	const kinds = new Set<ExecutorKind>(['pi']);
-	for (const name of scenario.specialists) kinds.add(seatKinds[name] ?? 'pi');
+	const kinds = new Set<ExecutorKind>([seatKinds().assistant ?? 'pi']);
+	for (const name of scenario.specialists) kinds.add(seatKinds()[name] ?? 'pi');
 	return [...kinds].filter((kind) => !hasKey(kind)).map((kind) => keyVariable(kind));
 }
 
