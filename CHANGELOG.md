@@ -12,8 +12,8 @@ them. See [The canvas](docs/canvas.md) and [Widgets](docs/widgets.md).
 
 **The canvas decides nothing.** The canvas adds no journal entry kind and
 no kernel operation. Each breakout room has its own journal. The host
-composes `startRoom`, `resumeRoom`, and the visit of a person. A lost
-canvas keeps every act, because each act is a message in a journal.
+composes `startRoom`, `resumeRoom`, and the visit of a person. The journal
+keeps every act after a lost canvas, because each act is a message.
 
 **The workbench and camera chat host the canvas.** The workbench keeps its
 root rooms on the canvas, delegates work to breakout rooms, and pins files
@@ -75,7 +75,7 @@ a widget name. The canvas emits `started` before it attaches the mirror.
 
 #### Breakout rooms
 
-**An opener holds four tools and a reminder.** `canvas.tools()` is the
+**An opener holds three tools and a reminder.** `canvas.tools()` is the
 opener bundle: `breakout`, `tell`, `archive`, and a reminder that lists the
 breakout rooms of the seat. `canvas.workerTools()` is the worker bundle:
 `report`. `breakout` is idempotent by name, checks the worker team and
@@ -269,8 +269,8 @@ Cancellation and departure keep their own keys across uncertain writes.
 Arrival keeps its name and identity checks.
 
 **Names have one syntax.** `@ambionframework/ambion/names` exports
-`isName` and `NAME_SYNTAX`. The core, workspace, workstation, and workbench
-use that syntax. The workbench keeps its limit of 48 characters.
+`isName` and `NAME_SYNTAX`. The core, workspace, workstation, canvas, and
+workbench use that syntax. The workbench keeps its limit of 48 characters.
 
 **Scheduled returns use one verified rule.** Planning and commit validation
 call `returnable` with due time, current time, and roster membership.
@@ -371,14 +371,15 @@ older database of its rooms.
   `NAME_SYNTAX`.
 - **`@ambionframework/ambion/hosting`.** Removes `defineExecution`.
 - **`@ambionframework/canvas`.** New package. Exports `openCanvas`,
-  `memoryCanvas`, `sqliteCanvas`, `NAME_LIMIT`, and the types
+  `memoryCanvas`, `sqliteCanvas`, `NAME_LIMIT`, `PACKAGE_NAME`, and the types
   `BreakoutStart`, `CanvasClose`, `CanvasRoom`, `CanvasStore`,
   `CanvasWidget`, `RootStart`, `WidgetAction`, `WidgetField`, `WidgetKind`,
   `WidgetSource`, `BreakoutOptions`, `Canvas`, `CanvasError`, `CanvasEvent`,
   `CanvasOperation`, `CanvasRoomOptions`, `OpenCanvasOptions`, `WidgetAct`,
   `WidgetActResult`, and `WidgetOptions`.
 - **`@ambionframework/canvas/conformance`.** New entry. Exports
-  `canvasStoreConformance`.
+  `canvasStoreConformance` and the types `CanvasStoreFixture`,
+  `ConformanceCase`, and `OpenedCanvasStore`.
 
 ## 0.6.0 (2026-10-04)
 
