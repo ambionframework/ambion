@@ -314,7 +314,7 @@ and the model runs the macro by name. See [Compose](docs/compose.md) and
 - [Contributing](CONTRIBUTING.md) covers builds and checks.
   [Toolchain](docs/toolchain.md#9-release-and-publishing) covers dev builds
   of `main`.
-- [The plan](planning/next.md) names the scope of the next release.
+- [The road to 1.0.0](planning/1.0.0.md) names the scope of each release.
   [The changelog](CHANGELOG.md) lists the changes of each release.
 
 ## License

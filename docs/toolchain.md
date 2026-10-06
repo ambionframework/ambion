@@ -2,7 +2,7 @@
 
 This is the repository guide for building, checking, testing, and releasing
 Ambion. The code is a pnpm workspace coordinated by Turborepo. Package and
-platform plans live in [the plan](../planning/next.md) and
+platform plans live in [the road to 1.0.0](../planning/1.0.0.md) and
 [the backlog](../planning/backlog.md); they are not API references.
 
 ## 1. Repository layout
@@ -26,7 +26,7 @@ examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 examples/camera-chat/ Camera Chat: a room chat with an agent-managed camera
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
-planning/       the plan for the next release and the backlog
+planning/       one scope file for each release, and the backlog
 .github/        CI, live, and dev-release workflows
 ```
 

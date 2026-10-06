@@ -6,6 +6,10 @@ import test from 'node:test';
 const root = join(import.meta.dirname, '..');
 // The Node 22 CI job deletes the examples, so a link into them resolves only when they exist.
 const examples = existsSync(join(root, 'examples/workbench'));
+const releases = readdirSync(join(root, 'planning'))
+	.filter((name) => /^\d+\.\d+\.\d+\.md$/.test(name))
+	.map((name) => `planning/${name}`);
+assert.ok(releases.length > 0, 'planning/ holds no release file');
 const pages = [
 	...readdirSync(join(root, 'docs'))
 		.filter((name) => name.endsWith('.md'))
@@ -15,9 +19,8 @@ const pages = [
 	...(examples
 		? ['examples/workbench/docs/actuators.md', 'examples/workbench/docs/sensors.md']
 		: []),
-	'planning/next.md',
+	...releases,
 	'planning/backlog.md',
-	'planning/risks.md',
 ];
 
 const slug = (heading) =>
@@ -88,15 +91,6 @@ const stepsOf = (body) =>
 		].map((s) => [s[1], s[2].replace(/\s+/g, ' ')]),
 	);
 
-const phasesOf = (scope) => {
-	const phases = new Map();
-	const parts = scope.split(/^### Phase (\d+)\./m).slice(1);
-	for (let i = 0; i < parts.length; i += 2) {
-		phases.set(parts[i], stepsOf(parts[i + 1]));
-	}
-	return phases;
-};
-
 const unknownItems = (body, itemIds) =>
 	[...body.matchAll(/\b([A-Z]+\d+)\b(?=[,)])/g)]
 		.filter(([, id]) => !itemIds.has(id))
@@ -108,46 +102,33 @@ const badNeeds = (body, steps, n) =>
 		.filter((ref) => !steps.has(ref) || ref === n)
 		.map((ref) => `bad Needs ${ref}`);
 
-const badStepRefs = (body, phases) =>
-	[...body.matchAll(/phase (\d+) step (\d+)/g)]
-		.filter(([, p, s]) => !phases.get(p)?.has(s))
-		.map(([, p, s]) => `phase ${p} has no step ${s}`);
-
-const problemsOfStep = (phases, phase, n, itemIds) => {
-	const steps = phases.get(phase);
-	const body = steps.get(n);
-	return [
-		...unknownItems(body, itemIds),
-		...badNeeds(body, steps, n),
-		...badStepRefs(body, phases),
-	].map((problem) => `phase ${phase} step ${n}: ${problem}`);
-};
-
-test('a plan step names only open steps and items that the plan holds', () => {
-	const text = readFileSync(join(root, 'planning/next.md'), 'utf8');
-	const [scope, items = ''] = text.split('## The items');
-	const phases = phasesOf(scope);
-	const itemIds = new Set([...items.matchAll(/^\*\*([A-Z]+\d+)\./gm)].map((m) => m[1]));
-	const problems = [...phases].flatMap(([phase, steps]) =>
-		[...steps.keys()].flatMap((n) => problemsOfStep(phases, phase, n, itemIds)),
+const problemsOfStep = (steps, n, itemIds) =>
+	[...unknownItems(steps.get(n), itemIds), ...badNeeds(steps.get(n), steps, n)].map(
+		(problem) => `step ${n}: ${problem}`,
 	);
-	assert.deepEqual(problems, []);
+
+const itemsOf = (text) => new Set([...text.matchAll(/^\*\*([A-Z]+\d+)\./gm)].map((m) => m[1]));
+
+test('a release step names only open steps and items that the release holds', () => {
+	for (const release of releases) {
+		const text = readFileSync(join(root, release), 'utf8');
+		const [head, items = ''] = text.split('## The items');
+		const work = head.split('## The work')[1] ?? '';
+		const steps = stepsOf(work);
+		const problems = [...steps.keys()].flatMap((n) => problemsOfStep(steps, n, itemsOf(items)));
+		assert.deepEqual(problems, [], release);
+	}
 });
 
-test('the plan checks report a bad item, a bad Needs, and a bad step reference', () => {
+test('the release checks report a bad item and a bad Needs', () => {
 	const steps = new Map([
 		['1', 'Done (C1). Needs 1.'],
-		['2', 'See phase 9 step 9 and SN99, more.'],
+		['2', 'See SN99, more.'],
 	]);
-	const phases = new Map([['1', steps]]);
-	const found = problemsOfStep(phases, '1', '2', new Set(['C1']));
-	assert.deepEqual(found, [
-		'phase 1 step 2: item SN99 is not in the items',
-		'phase 1 step 2: phase 9 has no step 9',
+	assert.deepEqual(problemsOfStep(steps, '2', new Set(['C1'])), [
+		'step 2: item SN99 is not in the items',
 	]);
-	assert.deepEqual(problemsOfStep(phases, '1', '1', new Set(['C1'])), [
-		'phase 1 step 1: bad Needs 1',
-	]);
+	assert.deepEqual(problemsOfStep(steps, '1', new Set(['C1'])), ['step 1: bad Needs 1']);
 });
 
 test('room.md documents the room-level context cap', () => {
@@ -156,25 +137,27 @@ test('room.md documents the room-level context cap', () => {
 	assert.ok(text.includes('earlier messages not shown'));
 });
 
-const badNextCites = (text, itemIds) =>
-	[...text.replace(/\s+/g, ' ').matchAll(/\b([A-Z]+\d+)(?:'s)? in `next\.md`/g)]
-		.filter(([, id]) => !itemIds.has(id))
-		.map(([, id]) => id);
+const badReleaseCites = (text, itemsOfRelease) =>
+	[...text.replace(/\s+/g, ' ').matchAll(/\b([A-Z]+\d+)(?:'s)? in `(\d+\.\d+\.\d+)\.md`/g)]
+		.filter(([, id, version]) => !itemsOfRelease(version).has(id))
+		.map(([, id, version]) => `${id} in ${version}`);
 
-test('the next.md citation check finds a pruned item, also in the possessive', () => {
-	const ids = new Set(['C1']);
-	assert.deepEqual(badNextCites('C1 in `next.md` and D3 in\n`next.md`.', ids), ['D3']);
-	assert.deepEqual(badNextCites("Z9's in `next.md` cite.", ids), ['Z9']);
+test('the release citation check finds a pruned item, also in the possessive', () => {
+	const of = (version) => new Set(version === '0.8.0' ? ['C1'] : []);
+	assert.deepEqual(badReleaseCites('C1 in `0.8.0.md` and D3 in\n`0.8.0.md`.', of), ['D3 in 0.8.0']);
+	assert.deepEqual(badReleaseCites("C1's in `0.9.0.md` cite.", of), ['C1 in 0.9.0']);
 });
 
-test('a page that cites an item "in `next.md`" cites an item that the plan holds', () => {
-	const plan = readFileSync(join(root, 'planning/next.md'), 'utf8');
-	const itemIds = new Set([...plan.matchAll(/^\*\*([A-Z]+\d+)\./gm)].map((m) => m[1]));
+test('a page that cites an item "in `<release>.md`" cites an item that the release holds', () => {
+	const itemsOfRelease = (version) => {
+		const file = join(root, 'planning', `${version}.md`);
+		return existsSync(file) ? itemsOf(readFileSync(file, 'utf8')) : new Set();
+	};
 	for (const dir of ['docs', 'planning']) {
 		for (const name of readdirSync(join(root, dir)).filter((n) => n.endsWith('.md'))) {
 			const text = readFileSync(join(root, dir, name), 'utf8');
-			for (const id of badNextCites(text, itemIds)) {
-				assert.fail(`${dir}/${name}: item ${id} is not in next.md`);
+			for (const cite of badReleaseCites(text, itemsOfRelease)) {
+				assert.fail(`${dir}/${name}: item ${cite} is not in that release`);
 			}
 		}
 	}
