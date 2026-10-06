@@ -81,6 +81,7 @@ describe('readPins', () => {
 		kind,
 		source: { type: 'file' as const, path },
 		author,
+		actions: [],
 	});
 
 	it('reads each file as its author, and gives a failed read or a wrong kind as a problem', async () => {

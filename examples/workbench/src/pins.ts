@@ -7,16 +7,19 @@ export const PIN_KINDS = [
 		name: 'markdown',
 		description: 'A Markdown file of the workspace, drawn with headings, lists, and code.',
 		sources: ['file'],
+		actions: false,
 	},
 	{
 		name: 'table',
 		description: 'The tables of a SQLite database file of the workspace.',
 		sources: ['file'],
+		actions: false,
 	},
 	{
 		name: 'image',
 		description: 'A picture file of the workspace: PNG, JPEG, GIF, or WebP.',
 		sources: ['file'],
+		actions: false,
 	},
 ] as const satisfies readonly WidgetKind[];
 
