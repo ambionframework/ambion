@@ -20,6 +20,8 @@ export type {
 	CanvasStore,
 	CanvasWidget,
 	RootStart,
+	WidgetAction,
+	WidgetField,
 	WidgetKind,
 	WidgetSource,
 } from './store.ts';
@@ -31,6 +33,8 @@ export type {
 	CanvasOperation,
 	CanvasRoomOptions,
 	OpenCanvasOptions,
+	WidgetAct,
+	WidgetActResult,
 	WidgetOptions,
 } from './types.ts';
 

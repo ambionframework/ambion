@@ -48,7 +48,10 @@ export async function recipientOf(parent: Room, opener: string): Promise<string 
 export async function land(parent: Room, post: BridgePost): Promise<number> {
 	try {
 		const handle = await parent.post(post);
-		return (await seqUnder(parent, post.key, handle.from - 1)) ?? handle.from;
+		const seq = await seqUnder(parent, post.key, handle.from - 1);
+		if (seq === undefined)
+			throw new Error(`The room holds no message under the key "${post.key}".`);
+		return seq;
 	} catch (error) {
 		// A refusal may mean that the key landed with other content. The record has no cheaper anchor than its start.
 		const seq =

@@ -1,8 +1,8 @@
 # The canvas
 
 > **Status: the package `@ambionframework/canvas` implements this page.** It
-> holds the store, the lifecycle, the tools, the bridge, and the widget
-> views. The runtime is a required parameter of each room operation.
+> holds the store, the lifecycle, the tools, the bridge, and the widgets with
+> their acts. The runtime is a required parameter of each room operation.
 > [The plan](../planning/next.md) owns delivery and evidence.
 
 **A canvas is a named collection of rooms.** It holds the rooms of a
@@ -370,6 +370,10 @@ interface Canvas {
   widgets(room: string): readonly CanvasWidget[];
   /** One revision by id, or undefined. Read at resume. */
   revision(id: string): CanvasWidget | undefined;
+  /** The seq of the act that answers each answered revision of a room. Empty before resume. */
+  answers(room: string): ReadonlyMap<string, number>;
+  /** Checks an act, then sends it through the visit of the person in that room. */
+  act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
   subscribe(listener: (event: CanvasEvent) => void): () => void;
 }
 
@@ -391,7 +395,13 @@ type CanvasEvent =
   | { readonly type: 'opened'; readonly room: CanvasRoom }
   | { readonly type: 'started' | 'stopped'; readonly room: string }
   | { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose }
-  | { readonly type: 'widget'; readonly widget: CanvasWidget };
+  | { readonly type: 'widget'; readonly widget: CanvasWidget }
+  | {
+      readonly type: 'answered';
+      readonly room: string;
+      readonly revision: string;
+      readonly seq: number;
+    };
 
 interface CanvasError {
   readonly room: string;
@@ -409,7 +419,8 @@ interface CanvasError {
     | 'mirror'
     | 'show'
     | 'hide'
-    | 'widget';
+    | 'widget'
+    | 'act';
   readonly error: unknown;
 }
 ```
@@ -528,7 +539,9 @@ interface WidgetOptions {
 ```
 
 **The catalog is the one widget option.** `openCanvas` refuses a catalog
-with a duplicate kind name. [Widgets](widgets.md#the-views) describes a kind.
+with a duplicate kind name. [Widgets](widgets.md#the-views) describes a kind
+and its actions. [Widgets](widgets.md#the-acts) describes `act`, `answers`,
+and `WidgetAct`.
 
 ### The tool schemas
 

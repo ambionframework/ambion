@@ -1,6 +1,7 @@
 /** What the widget port and the breakout port share: the base port, the name limit, and the reminder tail. */
 import type { ToolResult } from '@ambionframework/ambion';
-import type { CanvasRoom } from './store.ts';
+import { refuse } from './cast.ts';
+import type { CanvasRoom, CanvasWidget } from './store.ts';
 
 /** The most characters of a room name or a widget name. */
 export const NAME_LIMIT = 48;
@@ -15,6 +16,12 @@ export interface BasePort {
 	/** Runs the operation after the calls in flight on that name. */
 	serial<T>(name: string, operation: () => Promise<T>): Promise<T>;
 	row(name: string): CanvasRoom | undefined;
+}
+
+/** A base port that also reads the current revision of each widget. */
+export interface CurrentPort extends BasePort {
+	/** The current revision of a widget, hidden ones included. */
+	current(room: string, name: string): CanvasWidget | undefined;
 }
 
 /** The items of a reminder as at most ten lines. `line` writes one line, and `and N more` ends a longer list. */
@@ -32,3 +39,13 @@ export const text = <T>(summary: string, details: T): ToolResult<T> => ({
 	content: [{ type: 'text', text: summary }],
 	details,
 });
+
+/** A text of one line: no line terminator and no control character. */
+export const oneLine = (text: string): boolean => !/[\p{Cc}\u2028\u2029]/u.test(text);
+
+/** Refuses an empty text, a text of more than one line, and a text over the limit. */
+export function assertLine(label: string, text: string, limit: number): void {
+	if (text === '' || !oneLine(text)) throw refuse(`${label} is one line of text.`);
+	if (text.length > limit)
+		throw refuse(`${label} has ${text.length} characters. The most is ${limit}.`);
+}

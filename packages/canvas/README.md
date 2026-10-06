@@ -65,9 +65,11 @@ const room = await canvas.open({ name: 'site', goal: 'Plan the site.', agents: [
 | `close()`              | Stops every handle. Each row keeps its state                                                                              |
 | `room(name)`           | The live handle of a room, or `undefined`                                                                                 |
 | `rooms()`              | The rows                                                                                                                  |
-| `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, `archived`, and `widget`                                                            |
+| `subscribe(listener)`  | Hears `opened`, `started`, `stopped`, `archived`, `widget`, and `answered`                                                |
 | `widgets(room)`        | The current revision of each widget of a room, hidden ones included                                                       |
 | `revision(id)`         | One widget revision by id, or `undefined`                                                                                 |
+| `answers(room)`        | The seq of the act that answers each answered revision of a room                                                          |
+| `act(person, act)`     | Checks an act, then sends it as a message of the person through the visit of that room                                    |
 
 **Each room receives its own definitions.** A root room receives the
 definitions in its `agents`, or every definition outside the worker team. A
@@ -109,7 +111,14 @@ const canvas = openCanvas({
   store,
   breakout: { team: [] },
   widgets: {
-    kinds: [{ name: 'frame', description: 'The newest frame of a process.', sources: ['process'] }],
+    kinds: [
+      {
+        name: 'frame',
+        description: 'The newest frame of a process.',
+        sources: ['process'],
+        actions: true,
+      },
+    ],
   },
 });
 const viewer = canvas.widgetTools(); // show, hide, and the reminder
@@ -131,6 +140,13 @@ of the agent, and a path that the process serves on its port.
 and `revision(id)` are synchronous. Each write emits a `widget` event. The
 reminder lists the shown widgets of the room, ten at most. The calls of one
 room run one at a time.
+
+**A widget can carry actions.** `show` takes `actions` and `for` on a kind
+with `actions: true`. A person presses an action, and the host calls
+`canvas.act(person, act)`. The canvas checks the press, then sends it as a
+message of the person to the author of the widget. An action with `once`
+answers its revision, and `answers(room)` reads the answers from the journal.
+[Widgets](../../docs/widgets.md#the-acts) holds the contract.
 
 ## The bridge
 

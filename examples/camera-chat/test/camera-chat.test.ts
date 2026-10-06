@@ -469,7 +469,12 @@ function fakeWorkspace(running: Process[]) {
 	return { workspace, fetched, queries, running, state, emit };
 }
 
-const frameKind = { name: 'frame', description: 'A frame.', sources: ['process'] } as const;
+const frameKind = {
+	name: 'frame',
+	description: 'A frame.',
+	sources: ['process'],
+	actions: false,
+} as const;
 
 /** The bound widget of that name, as the host reads it. */
 const bound = (preview: ReturnType<typeof cameraPreview>, name = 'front') =>

@@ -79,6 +79,7 @@ const widget = (
 	source: { type: 'process', handle: 'bash-1', path: '/status' },
 	title: 'Status',
 	author: 'observer',
+	actions: [],
 	...extra,
 });
 
@@ -241,6 +242,20 @@ const cases: readonly (readonly [name: string, body: Body])[] = [
 				name: 'plan',
 				kind: 'markdown',
 				source: { type: 'file', path: '/plan.md' },
+				actions: [
+					{
+						id: 'keep',
+						label: 'Keep',
+						once: true,
+						fields: [
+							{ name: 'note', label: 'Note', type: 'text' },
+							{ name: 'size', label: 'Size', type: 'number', min: 1, max: 9 },
+							{ name: 'loud', label: 'Loud', type: 'boolean' },
+							{ name: 'mode', label: 'Mode', type: 'choice', options: ['a', 'b'] },
+						],
+					},
+				],
+				for: 'mira',
 			});
 			const fourth = widget('r-4', 1, { name: 'proof', source: { type: 'snapshot', ref: 's1' } });
 			const bare = widget('r-5', 1, { name: 'bare', kind: 'text' });

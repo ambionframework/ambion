@@ -30,6 +30,7 @@ const FRAME_KIND = {
 	name: 'frame',
 	description: 'The newest frame that a camera process serves.',
 	sources: ['process'],
+	actions: false,
 } as const;
 
 /** The Codex model of the seat. `--model` selects another. */

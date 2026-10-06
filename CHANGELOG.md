@@ -40,7 +40,27 @@ and a `show` of a hidden widget always writes. The store keeps every revision:
 writes the table `canvas_widget_revisions`. `canvas.widgets(room)` and
 `canvas.revision(id)` read the revisions that `resume` loads. `CanvasEvent`
 gains `widget`, and `CanvasOperation` gains `show`, `hide`, and `widget`.
-The widget calls of one room run in their own queue. [Widgets](docs/widgets.md) holds the contract. Acts are a design.
+The widget calls of one room run in their own queue. [Widgets](docs/widgets.md) holds the contract.
+
+**A person can act on a widget.** `show` takes `actions` and `for`. An action
+has an id, a label, an optional `once`, and a form of at most eight fields:
+`text`, `number`, `boolean`, and `choice`. `WidgetKind` gains `actions`, and
+a kind with `actions: false` refuses actions and `for`. `CanvasWidget` gains
+`actions` and `for`, so the content of a revision includes them.
+`canvas.act(person, act)` checks the press in the widget queue of the room:
+the room runs, the widget is shown, the revision is current (otherwise the
+result is `stale`), and the action, the person, and the values fit. It then
+sends the press through the visit of the person as a message with the ref
+`ambion-canvas://<canvas>/room/<room>/widget/<name>/revision/<id>`. The
+message goes to the author when the author sits on the roster at an attention
+other than `none`. The key is `act:<revision>` for a `once` action and
+`act:<revision>:<press>` for any other, so a retried press lands once. A
+second act on a `once` revision is `answered`, with the seq of the first.
+`canvas.answers(room)` derives the answers from the keys of the journal, read
+once at each room start and at each act. `CanvasEvent` gains `answered`,
+`CanvasOperation` gains `act`, and the widget reminder names the person and
+the answer of each widget. `WidgetAct`, `WidgetActResult`, `WidgetAction`, and
+`WidgetField` are new exports.
 
 **A new package, `@ambionframework/canvas`, holds the canvas store.**
 It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.

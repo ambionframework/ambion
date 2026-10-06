@@ -1,70 +1,22 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { ToolBundle } from '@ambionframework/ambion';
-import { byAgent, callTool, type Script, settled } from '@ambionframework/ambion/testing';
-import type { JournalOpener } from '@ambionframework/journal';
+import { byAgent, callTool, settled } from '@ambionframework/ambion/testing';
 import { describe, expect, it } from 'vitest';
 import {
-	type CanvasEvent,
 	type CanvasStore,
 	memoryCanvas,
 	openCanvas,
 	sqliteCanvas,
 	type WidgetKind,
 } from '../src/index.ts';
+import { gallery, kinds, refusal, statusSource } from './support/gallery.ts';
 import { breakoutRow, callOf, contextOf, host, live, tooled } from './support/host.ts';
 import { sqlOver } from './support/sql.ts';
-
-const kinds: readonly WidgetKind[] = [
-	{ name: 'frame', description: 'The newest frame of a process.', sources: ['process'] },
-	{ name: 'pin', description: 'A pinned document.', sources: ['file', 'snapshot'] },
-	{ name: 'note', description: 'A line of text.', sources: [] },
-];
-
-const statusSource = { type: 'process', handle: 'bash-1', path: '/status' } as const;
 
 const stores: readonly { name: string; open: () => CanvasStore }[] = [
 	{ name: 'memory', open: () => memoryCanvas() },
 	{ name: 'native SQLite', open: () => sqliteCanvas(sqlOver(new DatabaseSync(':memory:'))) },
 ];
-
-const refusal = (promise: Promise<unknown>, cause?: RegExp) =>
-	expect(promise).rejects.toMatchObject({
-		name: 'AmbionError',
-		code: 'refused',
-		...(cause === undefined ? {} : { message: expect.stringMatching(cause) }),
-	});
-
-/** A canvas with the root room `site`, an agent that holds the widget bundle, and its calls. */
-async function gallery(
-	options: { store?: CanvasStore; storage?: JournalOpener; script?: Script } = {},
-) {
-	const context = host({
-		widgets: { kinds },
-		breakout: { team: ['cy'] },
-		...(options.store === undefined ? {} : { store: options.store }),
-		...(options.storage === undefined ? {} : { storage: options.storage }),
-		...(options.script === undefined ? {} : { script: options.script }),
-	});
-	const { canvas } = context;
-	const bundle = canvas.widgetTools();
-	const agents = [tooled('ada', bundle), tooled('bob', bundle), tooled('cy', bundle)];
-	const events: CanvasEvent[] = [];
-	canvas.subscribe((event) => void events.push(event));
-	await canvas.resume({ agents });
-	const site = await canvas.open({ name: 'site', goal: 'Plan.', agents: ['ada', 'bob'] });
-	let count = 0;
-	const call = (
-		agent: string,
-		tool: string,
-		args: Record<string, unknown>,
-		room = 'site',
-		extra: Parameters<typeof contextOf>[3] = {},
-	) => callOf(bundle, tool, args, contextOf(agent, room, `call-${++count}`, extra));
-	const show = (args: Record<string, unknown> = {}, agent = 'ada') =>
-		call(agent, 'show', { name: 'status', kind: 'frame', source: statusSource, ...args });
-	const widgetEvents = () => events.flatMap((event) => (event.type === 'widget' ? [event] : []));
-	return { ...context, site, bundle, agents, call, show, widgetEvents };
-}
 
 describe.each(stores)('widgets on the $name store', ({ open }) => {
 	it('writes a revision, emits it, and answers the reads of the canvas', async () => {
@@ -83,6 +35,7 @@ describe.each(stores)('widgets on the $name store', ({ open }) => {
 			source: statusSource,
 			title: 'Status',
 			author: 'ada',
+			actions: [],
 		});
 		expect(canvas.widgets('site')).toEqual([stored]);
 		expect(canvas.revision(stored?.revision ?? '')).toEqual(stored);
@@ -188,12 +141,6 @@ describe('the rules of a call', () => {
 		const { show, bundle } = await gallery();
 		await refusal(show(args), cause);
 		expect(bundle.tools).toHaveLength(2);
-	});
-
-	it('refuses an action and a person that this release does not take', async () => {
-		const { show } = await gallery();
-		await expect(show({ actions: [] })).rejects.toThrow(/Invalid arguments for tool 'show'/);
-		await expect(show({ for: 'mira' })).rejects.toThrow(/Invalid arguments for tool 'show'/);
 	});
 
 	it('accepts a name of 48 characters, a kind with no source, and a file or snapshot source', async () => {
@@ -384,8 +331,10 @@ describe('the reminder', () => {
 
 	it('carries the guidance with the catalog', async () => {
 		const { bundle } = await gallery();
-		expect(bundle.guidance).toContain('- frame: The newest frame of a process. Sources: process.');
-		expect(bundle.guidance).toContain('- note: A line of text. Sources: none.');
+		expect(bundle.guidance).toContain(
+			'- frame: The newest frame of a process. Sources: process. Actions: yes.',
+		);
+		expect(bundle.guidance).toContain('- note: A line of text. Sources: none. Actions: no.');
 		expect(bundle.guidance).toContain('cancel the process');
 	});
 });
