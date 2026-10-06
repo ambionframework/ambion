@@ -9,7 +9,7 @@ and camera chat hosts the viewfinder.
 
 ## Status
 
-**Implementation is done. A paid live run remains, on request.** [The canvas](../docs/canvas.md) owns the contract: the store,
+**Implementation is done, and the 0.7.0 release is prepared. A paid live run remains, on request.** [The canvas](../docs/canvas.md) owns the contract: the store,
 the interface, the tools, and the bridge. [Widgets](../docs/widgets.md)
 owns the widget contract. This file owns
 delivery and evidence. [The backlog](backlog.md) holds work outside this
@@ -34,8 +34,8 @@ journal entry kind and no kernel operation. Each breakout room has its
 own journal. RT1 changes the signatures of the room operations and adds
 no operation.
 
-**Widget views are in 0.7.0, and widget acts are out.** A person sees a
-widget. Buttons and forms wait in [D5](backlog.md#designs-with-a-shape).
+**Widget views and widget acts are in 0.7.0.** A person sees a widget,
+presses its buttons, and sends its forms.
 
 ## The order of work
 
@@ -197,8 +197,7 @@ change in the same commit.
 
 ## Out of scope
 
-- Widget acts (buttons and forms), layout tools, and code from an agent
-  ([D5](backlog.md#designs-with-a-shape)).
+- Layout tools and code from an agent.
 - Native executor subagents and vendor UI surfaces.
 - Nested breakout rooms, and a general protocol to reconcile interrupted
   work.

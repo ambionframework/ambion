@@ -39,7 +39,7 @@ a clarifying question or an approval therefore reads as done, and
 question: does a directed message that ends the exchange await its
 recipient, the opener included?
 **Condition:** a host that must show an open question to the opener, or
-the canvas ships forms (D5).
+a canvas form must await the opener.
 
 **Q3. Seat selection and seat options in one map.** With no `seats`, the
 room seats every agent at `broadcast`. With `seats: {}`, it seats nobody.
@@ -150,13 +150,6 @@ recomposition resets the roster, so it drops a seating that a seat made.
 The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
-
-**D5. Widget acts: buttons and forms.** 0.7.0 ships widget views: a
-person sees a widget and cannot act on it. [Widgets](../docs/widgets.md#the-acts)
-holds the design of acts. An act is a `visit.send` as the person, keyed
-once for each revision. Acts also need the answer of Q2 for a form to the
-opener. **Condition:** a host that needs a person to answer through a
-widget.
 
 ## Supporting work
 
