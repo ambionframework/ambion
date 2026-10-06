@@ -15,6 +15,7 @@ const viewfinder = (handle: string) => ({
 	kind: 'frame',
 	source: { type: 'process', handle, path: PATH },
 	title: 'Front door',
+	actions: [{ id: 'look', label: 'Look now' }],
 });
 
 /** The macro call that looks through the camera of the process `handle`. */
@@ -35,6 +36,25 @@ function notReady(status: string) {
 	return callTool('say', {
 		to: 'you',
 		text: `Demo agent: the camera server did not answer the observe macro. Last result:\n${status}`,
+	});
+}
+
+/** The widget name that a press names, or undefined when the newest message is no press. */
+function pressOf(step: ScriptStep): string | undefined {
+	const message = step.view.context.messages.at(-1);
+	const press = message?.kind === 'said' && message.key?.startsWith('act:');
+	return press ? /^([a-z0-9_-]+),/.exec(message.text)?.[1] : undefined;
+}
+
+/** A press of Look now: observe the camera, then say the result. */
+function answerPress(step: ScriptStep, handle: string) {
+	const name = pressOf(step);
+	if (name === undefined || step.results.length > 1) return quiet();
+	if (step.results.length === 0) return observe(handle);
+	return callTool('say', {
+		to: 'you',
+		text: `Demo agent: a fresh look at ${name} through the observe macro. This scripted reply does not perform visual inference.`,
+		refs: refsOf(step.results[0]?.text ?? ''),
 	});
 }
 
@@ -90,7 +110,7 @@ export function demoExecution() {
 					refs: seen,
 				});
 			default:
-				return quiet();
+				return answerPress(step, handle);
 		}
 	});
 }

@@ -253,6 +253,8 @@ interface.
   when `for` names another person or the room is stopped. The host reads the
   pins again on the `widget` event, and it adds the answer to the pins on the
   `answered` event with no new file read.
+  [Camera Chat](../examples/camera-chat/README.md) reuses `ActionPad` and
+  `ActionsView` for the `look` action of its viewfinders.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
 

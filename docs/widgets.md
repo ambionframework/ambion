@@ -136,7 +136,7 @@ only what the host can draw.
 
 | Host        | Catalog                                                             | First widget  |
 | ----------- | ------------------------------------------------------------------- | ------------- |
-| Camera chat | `frame`: the newest frame that a process serves                     | A viewfinder  |
+| Camera chat | `frame`: the newest frame that a process serves, with actions       | A viewfinder  |
 | Workbench   | `markdown`, `table`, `image`: a file of the workspace, with actions | A pinned file |
 
 **The canvas refuses actions on a kind that draws none.** A kind with
