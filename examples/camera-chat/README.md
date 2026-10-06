@@ -202,8 +202,10 @@ host's permissions. Use this example with trusted agents.
 Git uses local bare repositories and filesystem clone URLs. The backend
 supplies `templates/camera` and `templates/camera-notes`. It checks names at
 its API boundary, but filesystem access does not enforce per-agent Git push
-permissions. The backend seeds a template repository when it is absent. A
-`pre-receive` hook refuses a push into a template; the shell can remove it.
+permissions. On every start the backend creates a missing template. It commits the
+source of the host onto the tip of a template that differs, so a fork of the
+template fast-forwards. A `pre-receive` hook refuses a push into a template;
+the shell can remove it.
 The room SQLite file holds the journal and the canvas row of the room.
 The Codex home, audit, checkouts, and snapshots stay under the selected
 data directory. The Codex home and snapshots can contain image data.
