@@ -151,18 +151,12 @@ The change writes one seating for each seat at a start and drops `agents`
 from the composition. **Condition:** a recomposition that must keep a
 seating that a seat made.
 
-**D5. Widgets and the camera-chat viewfinder.** 0.7.0 ships the canvas
-as a room collection with breakout tools, and no widgets
-([Canvas](../docs/canvas.md)). The first consumer of a widget is the
-viewfinder of camera-chat. Today its host follows any process with the
-name `camera` (`examples/camera-chat/src/preview.ts`). The smallest change
-gives the observer one durable fact that the host reads: a declaration
-file in the home of the observer that names a process handle and a path.
-It needs no canvas store and no widget operations. A widget contract on
-the canvas waits for a second consumer.
-
-One canvas holds the rooms of a deployment. **Condition:** the owner schedules the
-viewfinder, or a second widget consumer appears.
+**D5. Widget acts: buttons and forms.** 0.7.0 ships widget views: a
+person sees a widget and cannot act on it. [Widgets](../docs/widgets.md#design-acts)
+holds the design of acts. An act is a `visit.send` as the person, keyed
+once for each revision. Acts also need the answer of Q2 for a form to the
+opener. **Condition:** a host that needs a person to answer through a
+widget.
 
 ## Supporting work
 

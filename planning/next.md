@@ -1,15 +1,17 @@
 # Next: the scope for 0.7.0
 
-**0.7.0 brings the canvas and breakout rooms: background work that a
-person can visit.** A canvas holds the rooms of a deployment. An agent
-opens a breakout room for background work, and the room reports back to
-it. The workbench is the first host.
+**0.7.0 brings the canvas, breakout rooms, and widgets: background work
+that a person can visit, and views that a person can see.** A canvas holds
+the rooms of a deployment and what each room shows. An agent opens a
+breakout room for background work, and the room reports back to it. An
+agent shows and hides named widgets. The workbench hosts breakout rooms,
+and camera chat hosts the viewfinder.
 
 ## Status
 
-**Implementation is done. A paid live run remains, on request.**
-[The canvas](../docs/canvas.md) owns the contract: the store, the
-interface, the tools, and the bridge. This file owns
+**Implementation is done. A paid live run remains, on request.** [The canvas](../docs/canvas.md) owns the contract: the store,
+the interface, the tools, and the bridge. [Widgets](../docs/widgets.md)
+owns the widget contract. This file owns
 delivery and evidence. [The backlog](backlog.md) holds work outside this
 release.
 
@@ -24,15 +26,16 @@ release.
 | BR1  | `breakout`, `tell`, `archive`, `report`, the reminder, bounds  | [The tools](../docs/canvas.md#the-tools)           |
 | BR2  | The bridge: close notices, replay, and recipients              | [The bridge](../docs/canvas.md#the-bridge)         |
 | BR3  | Delegation in the workbench                                    | [Phase 3](#phase-3-breakout-rooms)                 |
+| WG1  | Widget views: `show`, `hide`, revisions, and the kind catalog  | [Widgets](../docs/widgets.md)                      |
+| WG2  | The camera-chat viewfinder on a canvas                         | [Phase 5](#phase-5-widgets)                        |
 
 **The host composes existing kernel operations.** The canvas adds no
 journal entry kind and no kernel operation. Each breakout room has its
 own journal. RT1 changes the signatures of the room operations and adds
 no operation.
 
-**Widgets and the camera-chat viewfinder are out of 0.7.0.**
-[D5](backlog.md#designs-with-a-shape) holds the smallest design for the
-viewfinder.
+**Widget views are in 0.7.0, and widget acts are out.** A person sees a
+widget. Buttons and forms wait in [D5](backlog.md#designs-with-a-shape).
 
 ## The order of work
 
@@ -44,6 +47,8 @@ flowchart LR
   P1[1. Canvas store and lifecycle] --> P2[2. Workbench root rooms]
   P2 --> P3[3. Breakout rooms]
   P3 --> P4[4. Evidence and release]
+  P1 --> P5[5. Widgets]
+  P5 --> P4
 ```
 
 ### Phase 1. The canvas store and lifecycle
@@ -159,6 +164,19 @@ changelog names the dropped `workbench_rooms` table.
 chaos case passes. Packaging and `pnpm check` pass. A paid live run needs an
 explicit request for release evidence.
 
+### Phase 5. Widgets
+
+- [x] **1.** Widget revisions in the canvas store, `canvas.widgetTools()`,
+      the reminder, the `widget` event, and the kind catalog.
+- [x] **2.** Camera chat on a canvas: one viewfinder for each shown
+      `frame` widget, bound to the process handle of the agent.
+- [x] **3.** Move the sensor and actuator pages and rules to the
+      workbench example.
+
+**Evidence:** both stores pass the widget conformance cases. Camera chat
+draws one box for each shown camera, and a hide removes it. The
+changelog names each widget change. `pnpm check` passes.
+
 ## The items
 
 **RT1. A room operation requires a runtime, and a runtime its storage.**
@@ -179,8 +197,8 @@ change in the same commit.
 
 ## Out of scope
 
-- Widgets, the camera-chat viewfinder, layout tools, and code from an
-  agent ([D5](backlog.md#designs-with-a-shape)).
+- Widget acts (buttons and forms), layout tools, and code from an agent
+  ([D5](backlog.md#designs-with-a-shape)).
 - Native executor subagents and vendor UI surfaces.
 - Nested breakout rooms, and a general protocol to reconcile interrupted
   work.
