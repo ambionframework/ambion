@@ -1,6 +1,158 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-10-06)
+
+<img alt="Ambion 0.7.0: the canvas, breakout rooms, and widgets. A canvas holds the rooms of a deployment, an agent opens a breakout room for background work and the room reports back, and an agent shows named widgets that a person sees and acts on. Canvas: the thirteenth package, canvas, with openCanvas, memoryCanvas, sqliteCanvas, and a lifecycle of resume, open, start, stop, archive, and close. Breakout rooms: the breakout, tell, archive, and report tools, and a bridge that carries each close notice to the opener. Widgets: show and hide for named views, and buttons and forms that send an act as a message of the person. Workbench: delegation to scout and maker, and pinned files. Camera chat: a viewfinder for each camera, with a Look now action. Breaking: a room operation requires a runtime, createRuntime requires its storage, and an execution is explicit." src="docs/assets/ambion-0.7.0.png" width="800">
+
+**0.7.0 brings the canvas, breakout rooms, and widgets.** A canvas holds
+the rooms of a deployment, and one stored row describes each room. An agent
+opens a breakout room for background work, and the room reports back to the
+agent. An agent shows named widgets, and a person sees them and acts on
+them. See [The canvas](docs/canvas.md) and [Widgets](docs/widgets.md).
+
+**The canvas decides nothing.** The canvas adds no journal entry kind and
+no kernel operation. Each breakout room has its own journal. The host
+composes `startRoom`, `resumeRoom`, and the visit of a person. The journal
+keeps every act after a lost canvas, because each act is a message.
+
+**The workbench and camera chat host the canvas.** The workbench keeps its
+root rooms on the canvas, delegates work to breakout rooms, and pins files
+as widgets. Camera chat shows each camera as a viewfinder with a "Look now"
+action.
+
+**A room operation requires a runtime, and a runtime requires its
+storage.** `startRoom`, `resumeRoom`, and `readRoom` require `runtime`, and
+`createRuntime` requires `storage`. `defaultRuntime` is removed. A host
+passes an execution, such as `piExecution()`, to `createRuntime`,
+`startRoom`, or `resumeRoom`. See [Breaking changes](#breaking-changes).
+
+**The release hardens the record and the rules.** The room derives its
+notifications from journal transitions. A close decision carries its
+outcome. Scheduled returns, names, and control calls each have one owner.
+The workstation bounds a file read, and a Pi seat reports a session
+fallback in the trace.
+
+**No journal body changes.** The golden journals keep their form. The
+canvas adds two SQLite tables, and the workbench drops one. See
+[Journal and stored data](#journal-and-stored-data).
+
+### Packages
+
+**The twelve packages of 0.6.0 ship at 0.7.0, and one package joins.**
+`@ambionframework/canvas` is the thirteenth publishable package. The
+examples `examples/workbench` and `examples/camera-chat` stay private.
+Every library package needs Node 22.19 or newer.
+
+- **Canvas.** `@ambionframework/canvas` has two entry points. The root
+  exports `openCanvas`, `memoryCanvas`, `sqliteCanvas`, `NAME_LIMIT`, and
+  the types of the store and the host interface. The `/conformance` entry
+  exports `canvasStoreConformance`. It depends on `@ambionframework/ambion`,
+  `@ambionframework/journal`, `@ambionframework/workspace`, and `typebox`.
+- **Ambion.** `@ambionframework/ambion` gains the entry point `./names`.
+- **Workstation.** `@ambionframework/workstation` moves
+  `@ambionframework/ambion` from its development dependencies to its
+  dependencies, for the name syntax.
+- **Other packages.** `@ambionframework/assistant`,
+  `@ambionframework/pi`, `@ambionframework/simulator`, and
+  `@ambionframework/workspace` gain `@ambionframework/journal` as a
+  development dependency, for the storage that a runtime requires. No other
+  package adds or removes an entry point or a dependency.
+
+### New
+
+#### Canvas
+
+**A new package, `@ambionframework/canvas`, holds the canvas store.**
+It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
+`sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of
+`sqliteJournals`. The `/conformance` entry exports `canvasStoreConformance`.
+
+**`openCanvas` runs the lifecycle of the rooms.** The calls are `resume`,
+`open`, `start`, `stop`, `archive`, and `close`. The canvas serializes the
+calls on one room name, attaches the workspace mirror of each room, and
+reports failures to `onError`. `NAME_LIMIT` is the limit of a room name and
+a widget name. The canvas emits `started` before it attaches the mirror.
+
+#### Breakout rooms
+
+**An opener holds three tools and a reminder.** `canvas.tools()` is the
+opener bundle: `breakout`, `tell`, `archive`, and a reminder that lists the
+breakout rooms of the seat. `canvas.workerTools()` is the worker bundle:
+`report`. `breakout` is idempotent by name, checks the worker team and
+`perOpener`, and posts its first message under `breakout-start:<name>`.
+
+**The bridge carries each finished exchange to the opener.** A breakout room
+sends a `report`, or else one close notice under the key
+`breakout:<name>:<from>`. Each `resume` and `start` replays the retained
+journals, stopped rooms included, and posts each missing notice once.
+`report` and the notices share one ordered chain for each parent.
+
+**The opener guidance and a live delegation test.** The `breakout` tool says
+when a breakout room is valuable: parallel work, or a narrow task that would
+distract the room. The opener guidance sends a delegated task to the room
+alone, and on the report the opener archives the room and answers the
+person. `AMBION_EXECUTOR=codex` runs the assistant and the workers on Codex,
+and a live file runs the delegation on Pi or Codex, on a key or a host
+login.
+
+**`pnpm chaos` crashes a canvas at each point of the canvas crash table.**
+One case covers each row of the table in `docs/canvas.md`, and one covers a
+crash between the archive row and the stop. Each case resumes a second
+canvas on the same storage and checks the rows and the notices. The
+consistency sweep allows one error for each disk fault on a lease entry.
+
+#### Widgets
+
+**The canvas holds widget views.** `openCanvas` takes
+`widgets: WidgetOptions`, a closed catalog of kinds. A process source is
+`{ type: 'process', handle, path }`: the handle of a process of the author
+and a path that the process serves. `canvas.widgetTools()` is the widget
+bundle: `show`, `hide`, and a reminder that lists the shown widgets of the
+room, ten at most. A `show` of equal content writes nothing, and a `show` of
+a hidden widget always writes. The store keeps every revision:
+`CanvasStore` gains `revisions()` and `appendRevision()`, and `sqliteCanvas`
+writes the table `canvas_widget_revisions`. `canvas.widgets(room)` and
+`canvas.revision(id)` read the revisions that `resume` loads. `CanvasEvent`
+gains `widget`, and `CanvasOperation` gains `show`, `hide`, and `widget`.
+The widget calls of one room run in their own queue. [Widgets](docs/widgets.md)
+holds the contract.
+
+**A person can act on a widget.** `show` takes `actions` and `for`. An action
+has an id, a label, an optional `once`, and a form of at most eight fields:
+`text`, `number`, `boolean`, and `choice`. `WidgetKind` gains `actions`, and
+a kind with `actions: false` refuses actions and `for`. `CanvasWidget` gains
+`actions` and `for`, so the content of a revision includes them.
+
+**`canvas.act(person, act)` sends a press as a message of the person.** It
+checks the press in the widget queue of the room: the room runs, the widget
+is shown, the revision is current (otherwise the result is `stale`), and the
+action, the person, and the values fit. It then sends the press through the
+visit of the person as a message with the ref
+`ambion-canvas://<canvas>/room/<room>/widget/<name>/revision/<id>`. The
+message goes to the author when the author sits on the roster at an
+attention other than `none`.
+
+**A retried press lands once.** The key is `act:<revision>` for a `once`
+action and `act:<revision>:<press>` for any other. A second act on a `once`
+revision is `answered`, with the seq of the first. `canvas.answers(room)`
+derives the answers from the keys of the journal, read once at each room
+start and at each act. `CanvasEvent` gains `answered`, `CanvasOperation`
+gains `act`, and the widget reminder names the person and the answer of each
+widget. `WidgetAct`, `WidgetActResult`, `WidgetAction`, and `WidgetField` are
+new exports.
+
+#### Workbench
+
+**The workbench keeps its root rooms on the canvas.** The canvas owns the
+room rows, the resume at the start, the mirror, and the stop. A failed stop
+leaves the room stopped, and a failed start of one room no longer stops the
+host. The table `workbench_rooms` is dropped.
+
+**The workbench delegates work to breakout rooms.** The worker team is
+`scout` and `maker`, and no root room seats them. The assistant holds the
+opener bundle, and each worker holds the worker bundle with the workspace
+tools. The host opens the canvas before it defines the agents. The room
+view carries the `parent` of a breakout room, and `/room` shows it.
 
 **The workbench pins a file for people.** The host declares the widget kinds
 `markdown`, `table`, and `image`, and each takes a file source. Every seat of
@@ -8,9 +160,10 @@ a root room and every worker holds `canvas.widgetTools()`. An agent calls
 `show` with a file path, and the terminal draws the shown files of the open
 room in a side area, each with its title and kind. The host reads each file
 as its author, after each widget event, each room start, and the end of
-each activation, and polls nothing. A hidden widget and a widget of an archived room draw nothing. The
-files panel and the side area share the file views in `file-view.ts`.
-`readFile` takes the agent that reads, and `Workbench` gains `pins(room)`.
+each activation, and polls nothing. A hidden widget and a widget of an
+archived room draw nothing. The files panel and the side area share the file
+views in `file-view.ts`. `readFile` takes the agent that reads, and
+`Workbench` gains `pins(room)`.
 
 **The workbench presses the actions of a pin.** The kinds `markdown`,
 `table`, and `image` take `actions`. The side area draws each action as a
@@ -18,27 +171,24 @@ button under its pin, with the `for` of the widget, and draws a widget that
 holds an answer as `answered by <person> in #<seq>` with its once actions
 done. Tab, then `a`, takes the keys. Up and Down choose, Enter presses an
 action or sends its form, and Esc leaves. A form takes a text, a number, a
-boolean, and a choice, and shows the first problem before it sends. The host
-saves the act of each call until it gives a result, and sends it again as it
-was on a retry. A refusal shows its reason alone, and a button is inactive
-when `for` names another person or the room is stopped. A `stale` result
-redraws the new revision, and the `answered` event adds the answer to the
-pins. `canvas.answers(room)` gives the seq and the person of each answer. `Workbench` gains `act(person, act)`. The pure state is
-`ActionPad` in `action-state.ts`, and `ActionsView` in `widget-actions.ts`
-draws its rows, so another host can reuse both.
+boolean, and a choice, and shows the first problem before it sends.
 
-**Camera chat presses the actions of a viewfinder.** The widget kind `frame`
-takes `actions`. The agent shows each viewfinder with a `look` action,
-"Look now", and the terminal draws the action as a button under the preview
-of that camera. Ctrl+L takes the keys, and Up and Down choose, Enter presses,
-and Esc leaves. A press calls `canvas.act` as the person `you`. The agent
-receives it as a message and observes that camera. The host reuses
-`ActionPad` and `ActionsView` from the workbench.
+**A press in the workbench is safe to retry.** The host saves the act of each
+call until it gives a result, and sends it again as it was on a retry. A
+refusal shows its reason alone, and a button is inactive when `for` names
+another person or the room is stopped. A `stale` result redraws the new
+revision, and the `answered` event adds the answer to the pins.
+`canvas.answers(room)` gives the seq and the person of each answer.
+`Workbench` gains `act(person, act)`. The pure state is `ActionPad` in
+`action-state.ts`, and `ActionsView` in `widget-actions.ts` draws its rows,
+so another host can reuse both.
 
 **The sensor and actuator pages and rules belong to the workbench example.**
 The pages sit in `examples/workbench/docs`, with the sensor protocol and its
 rules. Ambion knows long-running processes that serve HTTP on `$PORT`, read
 with `fetch`.
+
+#### Camera chat
 
 **Camera chat keeps its room on a canvas.** The host opens the root room
 `camera` through `openCanvas` and `sqliteCanvas` on the file `room.db`, and
@@ -53,97 +203,31 @@ Several cameras run at once. The host loads the `observe` macro of the camera
 template, and the agent runs it with the handle. A stop cancels the process
 and leaves the widget, and a new process needs a new `show`.
 
-**The camera chat preview binds one widget to one process.** The preview
-keeps one binding for each shown `frame` widget, four at most. A binding
-checks once that the author runs the handle, reads by handle, and binds again
-on the room start and on each widget event. A hide or the end of the process
-clears only its binding. The terminal draws one labelled box for each camera.
-The preview stops all timers while the person hides it, and rejects a frame
-body over 16 MiB.
+**The preview binds one widget to one process.** The preview keeps one
+binding for each shown `frame` widget, four at most. A binding checks once
+that the author runs the handle, reads by handle, and binds again on the
+room start and on each widget event. A hide or the end of the process clears
+only its binding. The terminal draws one labelled box for each camera. The
+preview stops all timers while the person hides it, and rejects a frame body
+over 16 MiB.
 
-**The canvas holds widget views.** `openCanvas` takes
-`widgets: WidgetOptions`, a closed catalog of kinds. A process source is
-`{ type: 'process', handle, path }`: the handle of a process of the author and
-a path that the process serves. The canvas exports `NAME_LIMIT`, the limit of a
-room name and a widget name. `canvas.widgetTools()` is
-the widget bundle: `show`, `hide`, and a reminder that lists the shown
-widgets of the room, ten at most. A `show` of equal content writes nothing,
-and a `show` of a hidden widget always writes. The store keeps every revision:
-`CanvasStore` gains `revisions()` and `appendRevision()`, and `sqliteCanvas`
-writes the table `canvas_widget_revisions`. `canvas.widgets(room)` and
-`canvas.revision(id)` read the revisions that `resume` loads. `CanvasEvent`
-gains `widget`, and `CanvasOperation` gains `show`, `hide`, and `widget`.
-The widget calls of one room run in their own queue. [Widgets](docs/widgets.md) holds the contract.
+**Camera chat presses the actions of a viewfinder.** The widget kind `frame`
+takes `actions`. The agent shows each viewfinder with a `look` action,
+"Look now", and the terminal draws the action as a button under the preview
+of that camera. Ctrl+L takes the keys, and Up and Down choose, Enter presses,
+and Esc leaves. A press calls `canvas.act` as the person `you`. The agent
+receives it as a message and observes that camera. The host reuses
+`ActionPad` and `ActionsView` from the workbench.
 
-**A person can act on a widget.** `show` takes `actions` and `for`. An action
-has an id, a label, an optional `once`, and a form of at most eight fields:
-`text`, `number`, `boolean`, and `choice`. `WidgetKind` gains `actions`, and
-a kind with `actions: false` refuses actions and `for`. `CanvasWidget` gains
-`actions` and `for`, so the content of a revision includes them.
-`canvas.act(person, act)` checks the press in the widget queue of the room:
-the room runs, the widget is shown, the revision is current (otherwise the
-result is `stale`), and the action, the person, and the values fit. It then
-sends the press through the visit of the person as a message with the ref
-`ambion-canvas://<canvas>/room/<room>/widget/<name>/revision/<id>`. The
-message goes to the author when the author sits on the roster at an attention
-other than `none`. The key is `act:<revision>` for a `once` action and
-`act:<revision>:<press>` for any other, so a retried press lands once. A
-second act on a `once` revision is `answered`, with the seq of the first.
-`canvas.answers(room)` derives the answers from the keys of the journal, read
-once at each room start and at each act. `CanvasEvent` gains `answered`,
-`CanvasOperation` gains `act`, and the widget reminder names the person and
-the answer of each widget. `WidgetAct`, `WidgetActResult`, `WidgetAction`, and
-`WidgetField` are new exports.
+**Camera chat registers the camera templates on every start.** The local git
+backend registers `templates/camera` and the second template through
+`registerRepositories`, as `justGitBackend` and the workstation do. A
+template that differs from the source of the host takes a commit of that
+source on its tip, and a data directory that an earlier start filled no
+longer keeps an older template. The guidance tells the agent to run
+`git pull --no-rebase <template url> main` in an existing clone.
 
-**A new package, `@ambionframework/canvas`, holds the canvas store.**
-It exports the `CanvasStore` port, `memoryCanvas`, and `sqliteCanvas`.
-`sqliteCanvas` writes the table `canvas_rooms` through the `Sql` of
-`sqliteJournals`. The `/conformance` entry exports `canvasStoreConformance`.
-`openCanvas` runs the lifecycle: `resume`, `open`, `start`, `stop`,
-`archive`, and `close`. It serializes the calls on one room name, attaches
-the workspace mirror of each room, and reports failures to `onError`.
-`canvas.tools()` is the opener bundle: `breakout`, `tell`, `archive`, and a
-reminder that lists the breakout rooms of the seat. `canvas.workerTools()`
-is the worker bundle: `report`. `breakout` is idempotent by name, checks
-the worker team and `perOpener`, and posts its first message under
-`breakout-start:<name>`. The canvas emits `started` before it attaches the
-mirror. The bridge carries each finished exchange of a breakout room to
-the opener: a `report`, or else one close notice under the key
-`breakout:<name>:<from>`. Each `resume` and `start` replays the retained
-journals, stopped rooms included, and posts each missing notice once.
-`report` and the notices share one ordered chain for each parent.
-
-**The workbench keeps its root rooms on the canvas.** The table
-`workbench_rooms` is dropped, and the workbench reads no older database of
-its rooms. The canvas owns the room rows, the resume at the start, the
-mirror, and the stop. A failed stop leaves the room stopped, and a failed
-start of one room no longer stops the host.
-
-**The workbench delegates work to breakout rooms.** The worker team is
-`scout` and `maker`, and no root room seats them. The assistant holds the
-opener bundle, and each worker holds the worker bundle with the workspace
-tools. The host opens the canvas before it defines the agents. The room
-view carries the `parent` of a breakout room, and `/room` shows it.
-
-**The opener guidance and a live delegation test.**
-`AMBION_EXECUTOR=codex` runs the assistant and the workers on Codex.
-A live file runs the delegation on Pi or Codex, on a key or a host login.
-The `breakout` tool says when a breakout room is valuable: parallel work, or
-a narrow task that would distract the room. The opener guidance sends a
-delegated task to the room alone, and on the report the opener archives
-the room and answers the person.
-
-**`pnpm chaos` crashes a canvas at each point of the canvas crash table.** One
-case covers each row of the table in `docs/canvas.md`, and one covers a
-crash between the archive row and the stop. Each case resumes a second
-canvas on the same storage and checks the rows and the notices. The
-consistency sweep allows one error for each disk fault on a lease entry.
-
-**A room operation requires a runtime, and a runtime its storage.**
-`startRoom`, `resumeRoom`, and `readRoom` require `runtime`.
-`createRuntime` requires `storage`. A test or a quickstart that wants memory
-passes `memoryJournals()` from `@ambionframework/journal`. The
-`defaultRuntime` export is removed.
+#### The workstation, the trace, and the mirror
 
 **A workstation read has a size limit.** The workstation reads at most
 10 MiB of one regular file. A larger file, a device file such as
@@ -152,42 +236,23 @@ answers `unknown`.
 
 **The trace reports a Pi session fallback.** The trace carries a warning
 notice with the error when the disk refuses to create a session, cannot
-read it, or the harness cannot resume it. `CreatedSession` gains `fallback`,
-and `PiSessions.open` rejects for a session it cannot read.
+read it, or the harness cannot resume it. `CreatedSession` gains the
+optional `fallback`, and `PiSessions.open` rejects for a session it cannot
+read.
 
 **The room mirror writes no reading preferences.** An `arrived` message
 holds the reading preferences of a person. The mirror leaves them out, as
 the room view does. `@ambionframework/ambion` exports `withoutPreferences`.
 The workbench shows a failed mirror attach in the activity of the room.
 
-**Resource contracts have one documentation owner.** `resources.md` states
-resource lifecycle, tool bundles, and provenance. `workspace.md` states
-workspace behavior and backend details.
-
-**Terms name one concept.** The documentation uses limits and fold cost,
-journal entry, and proof scope. The limits page is `docs/limits.md`, and
-its benchmark is `scripts/projection-cost.mjs`.
-
-**Scheduled returns use one verified rule.** Planning and commit validation
-call `returnable` with due time, current time, and roster membership.
-The contracts state eligibility and its preservation as time advances.
-
-**Concurrent control calls share one operation.** Cancellation, departure,
-and stop use one promise lifecycle. Failed operations permit a retry.
-Cancellation and departure keep their own keys across uncertain writes.
-Arrival keeps its name and identity checks.
-
-**Names have one syntax.** `@ambionframework/ambion/names` exports
-`isName` and `NAME_SYNTAX`. The core, workspace, workstation, and workbench
-use that syntax. Names now reject trailing line terminators consistently.
-The workbench keeps its limit of 48 characters.
+### Simplification
 
 **Execution configuration is explicit.** Pass an execution, such as
 `piExecution()`, to `createRuntime`, `startRoom`, or `resumeRoom`.
-Importing an executor package no longer configures rooms.
-The `defineExecution` export is removed. Custom executor packages build
-their execution values with `localExecution`. Room executions precede
-runtime executions, and the first matching execution serves each seat.
+Importing an executor package no longer configures rooms. Room executions
+precede runtime executions, and the first matching execution serves each
+seat. Custom executor packages build their execution values with
+`localExecution`.
 
 **Notifications follow each journal transition.** The room derives lease
 and close notifications from the projection before and after each entry.
@@ -198,10 +263,123 @@ Recovered entries publish once, in order, and initial replay stays silent.
 `admitted`, `obsolete`, or `replan`. Planning and commit validation use that
 rule. The runtime follows the queued outcome without reconstructing it.
 
+**Concurrent control calls share one operation.** Cancellation, departure,
+and stop use one promise lifecycle. Failed operations permit a retry.
+Cancellation and departure keep their own keys across uncertain writes.
+Arrival keeps its name and identity checks.
+
+**Names have one syntax.** `@ambionframework/ambion/names` exports
+`isName` and `NAME_SYNTAX`. The core, workspace, workstation, canvas, and
+workbench use that syntax. The workbench keeps its limit of 48 characters.
+
+**Scheduled returns use one verified rule.** Planning and commit validation
+call `returnable` with due time, current time, and roster membership.
+The contracts state eligibility and its preservation as time advances.
+
 **Shared room snapshots have read-only types.** Collections and nested
 records reject mutation through typed access. Only replay can select the
 private step that mutates its own containers. Public reads keep detached
 values. These changes preserve the journal format and runtime behavior.
+
+**Resource contracts have one documentation owner.** `resources.md` states
+resource lifecycle, tool bundles, and provenance. `workspace.md` states
+workspace behavior and backend details.
+
+**Terms name one concept.** The documentation uses limits and fold cost,
+journal entry, and proof scope. The limits page is `docs/limits.md`, and
+its benchmark is `scripts/projection-cost.mjs`. The text and the tests
+describe the current state, and the vocabulary check refuses history
+phrases.
+
+### Fixes
+
+**A workstation read of a large file or a device no longer exhausts the
+host.** The read checks the file type and the size before it opens the file,
+and it counts the bytes that arrive. See the limit in
+[The workstation, the trace, and the mirror](#the-workstation-the-trace-and-the-mirror).
+
+**A started camera chat finds the current camera template.** A data
+directory that an earlier start filled no longer keeps the older template
+that the host's `observe` macro refuses.
+
+**A failed start of one workbench room leaves the host running.** A failed
+stop leaves the room stopped.
+
+**The mirror keeps reading preferences private.** The mirror no longer
+writes them, and a failed attach shows in the activity of the room.
+
+**A Pi session that falls back shows in the trace.** The activation runs on
+with a fresh session, and the warning keeps the cause.
+
+**The Cloudflare seat object passes a memory storage.** `configure` builds
+its runtime with `memoryJournals()`, because a seat object keeps no record.
+
+### Breaking changes
+
+#### What to change
+
+**Each bullet names an action.**
+
+- **Pass `runtime` to `startRoom`, `resumeRoom`, and `readRoom`.** Build it
+  with `createRuntime`. Remove each use of `defaultRuntime`.
+- **Pass `storage` to `createRuntime`.** A test or a quickstart that wants
+  memory passes `memoryJournals()` from `@ambionframework/journal`.
+- **Pass an execution.** Give `createRuntime`, `startRoom`, or `resumeRoom`
+  an execution such as `piExecution()`, `claudeExecution()`, or
+  `codexExecution()`. A room with no execution for the kind of a seat fails
+  the activation with `no_execution`.
+- **Drop `defineExecution`.** A custom executor package builds its execution
+  values with `localExecution` from `@ambionframework/ambion/hosting`.
+- **Start the workbench on a new data directory, or recreate its rooms.**
+  The workbench no longer reads the table `workbench_rooms`. Its root rooms
+  live in the canvas table `canvas_rooms`.
+- **Read the sensor and actuator pages in `examples/workbench/docs`.** The
+  pages and the sensor protocol left the main `docs/` directory.
+- **Expect an error from a read over 10 MiB on the workstation.** The read
+  fails with `invalid` for a larger file, a device file, and a FIFO.
+- **Expect names that reject a trailing line terminator.** The shared syntax
+  matches the whole value.
+- **Expect no reading preferences in the mirror.** Read them from the
+  journal.
+- **Expect a failure from `PiSessions.open`.** A custom store of Pi sessions
+  rejects for a session that it cannot read. The executor records the cause
+  in the trace and starts a fresh session.
+- **Fix the types that mutate a room snapshot.** A shared snapshot has
+  read-only collections and records, and a write through typed access no
+  longer compiles.
+- **Install `@ambionframework/ambion` with the workstation.** It is now a
+  dependency of `@ambionframework/workstation`, and a package manager
+  installs it.
+
+#### Journal and stored data
+
+**No journal body changes.** The golden journals keep their form. A journal
+of 0.6.0 opens on 0.7.0.
+
+**The canvas adds two SQLite tables.** `sqliteCanvas` writes `canvas_rooms`
+and `canvas_widget_revisions`. The widget revisions keep every `show`,
+including the `actions` and `for` of each.
+
+**The workbench drops the table `workbench_rooms`.** The workbench reads no
+older database of its rooms.
+
+#### Exports
+
+- **`@ambionframework/ambion`.** Adds `withoutPreferences`. Removes
+  `defaultRuntime`.
+- **`@ambionframework/ambion/names`.** New entry. Exports `isName` and
+  `NAME_SYNTAX`.
+- **`@ambionframework/ambion/hosting`.** Removes `defineExecution`.
+- **`@ambionframework/canvas`.** New package. Exports `openCanvas`,
+  `memoryCanvas`, `sqliteCanvas`, `NAME_LIMIT`, `PACKAGE_NAME`, and the types
+  `BreakoutStart`, `CanvasClose`, `CanvasRoom`, `CanvasStore`,
+  `CanvasWidget`, `RootStart`, `WidgetAction`, `WidgetField`, `WidgetKind`,
+  `WidgetSource`, `BreakoutOptions`, `Canvas`, `CanvasError`, `CanvasEvent`,
+  `CanvasOperation`, `CanvasRoomOptions`, `OpenCanvasOptions`, `WidgetAct`,
+  `WidgetActResult`, and `WidgetOptions`.
+- **`@ambionframework/canvas/conformance`.** New entry. Exports
+  `canvasStoreConformance` and the types `CanvasStoreFixture`,
+  `ConformanceCase`, and `OpenedCanvasStore`.
 
 ## 0.6.0 (2026-10-04)
 
