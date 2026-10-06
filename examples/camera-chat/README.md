@@ -11,6 +11,10 @@ restores the full chat width. Referenced observation images appear
 beneath their messages, at the size of a single preview, and remain available
 after the camera stops.
 
+Each viewfinder carries one action, "Look now". Press Ctrl+L to choose it,
+and press Enter to send it. The agent receives the press as a message of
+yours, observes that camera, and answers.
+
 The host does not open the camera at startup. Ask:
 
 > Connect the built-in camera as front, and tell me what you see.
@@ -97,8 +101,8 @@ live state uses `.data/live`. `--directory <path>` selects another directory.
 
 The host opens the canvas `camera-chat` over the SQLite file of the room and
 declares one widget kind, `frame`: the newest frame that a process serves,
-with the source type `process`. The observer holds `canvas.widgetTools()` and
-no tool to open breakout rooms.
+with the source type `process`, and with actions. The observer holds
+`canvas.widgetTools()` and no tool to open breakout rooms.
 
 **A widget binds to the handle that the agent passes.** The agent picks a
 short name for each camera, such as `front` or `desk`, or uses the name that the
@@ -115,6 +119,7 @@ show({
   kind: 'frame',
   source: { type: 'process', handle: 'bash-4f1c9a02d7be', path: '/camera/observe' },
   title: 'Front door',
+  actions: [{ id: 'look', label: 'Look now' }],
 });
 ```
 
@@ -155,7 +160,21 @@ answer cites the time of its own observation and names the camera.
 | PageUp / PageDown | Scroll the conversation                     |
 | Escape            | Hide all previews while cameras run         |
 | Ctrl+P            | Toggle all previews                         |
+| Ctrl+L            | Take the keys for the actions of a preview  |
 | Ctrl+C            | Close the room and stop workspace processes |
+
+**An action sits under its preview.** The terminal draws `ActionsView` of
+the workbench under the box of each camera whose widget has actions. One
+`ActionPad` holds the state and reads only the widgets that the screen
+draws, in screen order. Ctrl+L takes the keys. Up and Down choose an action,
+Enter presses it, and Esc leaves.
+
+**The actions take the keys from the composer.** While they hold the keys,
+Esc does not hide the previews. PageUp and PageDown still scroll. The
+composer takes the keys back when the pad leaves, also when the agent hides
+the widget. The pad sends each press through `canvas.act` as the person
+`you`. A `stale` result redraws the new revision. A short terminal draws the
+first cameras that fit with their action rows.
 
 **Hide and stop are different requests.** "Hide front" calls `hide` on the
 widget `front`, and the camera stays on. "Stop front" or "turn off front"
@@ -199,7 +218,7 @@ data directory. The Codex home and snapshots can contain image data.
 | `src/demo.ts`             | Scripted seat for `--demo`                     |
 | `src/preview.ts`          | One binding for each frame widget, polling     |
 | `src/reference-images.ts` | Resolve retained images cited by messages      |
-| `src/tui.ts`              | Workbench transcript and floating previews     |
+| `src/tui.ts`              | Workbench transcript, previews, and actions    |
 | `src/terminal.ts`         | Native graphics requirement                    |
 | `src/local-bash.ts`       | Local shell backend and loopback ports         |
 | `src/local-env.ts`        | Local files and `bash` on the workspace port   |

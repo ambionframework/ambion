@@ -137,7 +137,13 @@ async function showFrame(
 	const show = host.canvas.widgetTools().tools.find((tool) => tool.name === 'show');
 	const handle = (started as { details: { process: Process } }).details.process.handle;
 	await show?.invoke(
-		{ name, kind: 'frame', title, source: { type: 'process', handle, path: '/camera/observe' } },
+		{
+			name,
+			kind: 'frame',
+			title,
+			source: { type: 'process', handle, path: '/camera/observe' },
+			actions: [{ id: 'look', label: 'Look now' }],
+		},
 		{
 			...context,
 			callId: `show-${name}`,
@@ -183,6 +189,63 @@ async function startAgain(
 
 type Setup = Awaited<ReturnType<typeof createTestRenderer>>;
 
+/** The viewfinder draws its `look` action. A press sends the act as a message of the person. */
+async function checkLook(setup: Setup, host: Host) {
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return setup.captureCharFrame();
+		})
+		.toContain('[ Look now ]');
+	expect(setup.captureCharFrame()).toContain('Ctrl+L: actions');
+	setup.mockInput.pressKey('l', { ctrl: true });
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return setup.captureCharFrame();
+		})
+		.toContain('Enter press');
+	expect(setup.captureCharFrame()).toContain('▸ [ Look now ]');
+	setup.mockInput.pressEnter();
+	const revision = host.canvas.widgets('camera')[0]?.revision;
+	const pressed = async () =>
+		(await host.room.read()).messages.find(
+			(message) => message.kind === 'said' && message.key?.startsWith(`act:${revision}:`),
+		);
+	await expect.poll(pressed).toMatchObject({
+		from: 'you',
+		to: 'observer',
+		text: expect.stringContaining('Look now [look]'),
+	});
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return setup.captureCharFrame();
+		})
+		.toContain('Sent as #');
+	// The agent observes the camera that the press names, and answers.
+	await expect
+		.poll(async () =>
+			(await host.room.read()).messages.some(
+				(message) =>
+					message.kind === 'said' &&
+					message.from === 'observer' &&
+					message.text.includes('fresh look at front') &&
+					(message.refs?.length ?? 0) > 0,
+			),
+		)
+		.toBe(true);
+	// Escape leaves the actions, and the previews stay.
+	setup.mockInput.pressEscape();
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return setup.captureCharFrame();
+		})
+		.toContain('Ctrl+L: actions');
+	expect(setup.renderer.root.findDescendantById('camera-modal-front')?.visible).toBe(true);
+}
+
 /** A second camera gets a second box, stacked under the first without overlap, and a hide removes one box. */
 async function checkTwoCameras(
 	setup: Setup,
@@ -212,7 +275,16 @@ async function checkTwoCameras(
 		})
 		.toEqual([true, true]);
 	const [upper, lower] = boxes().map((id) => setup.renderer.root.findDescendantById(id));
-	expect((upper?.y ?? 0) + (upper?.height ?? 0)).toBeLessThanOrEqual(lower?.y ?? 0);
+	// One row of actions sits between the boxes.
+	expect((upper?.y ?? 0) + (upper?.height ?? 0) + 1).toBeLessThanOrEqual(lower?.y ?? 0);
+	// A short terminal keeps both boxes with their actions above the status line.
+	setup.resize(80, 16);
+	await setup.renderOnce();
+	await setup.renderOnce();
+	const frame = setup.captureCharFrame();
+	expect(frame.split('[ Look now ]')).toHaveLength(3);
+	expect(frame).toContain('Cameras: front, desk');
+	expect((lower?.y ?? 0) + (lower?.height ?? 0) + 1).toBeLessThanOrEqual(15);
 	expect(lower instanceof BoxRenderable && lower.title).toBe(' desk · Desk ');
 	expect(setup.captureCharFrame()).toContain('Cameras: front, desk');
 	// A hide of one widget removes only its box.
@@ -307,6 +379,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		expect((chat?.x ?? 0) + (chat?.width ?? 0)).toBeLessThan(modal?.x ?? 0);
 		expect(setup.captureCharFrame()).not.toContain('Camera preview');
 		expect(setup.captureCharFrame()).not.toContain('Frame ');
+		await checkLook(setup, host);
 
 		const picture = setup.renderer.root.findDescendantById('camera-frame-front');
 		if (!(picture instanceof ImageRenderable)) throw new Error('No native image renderer.');

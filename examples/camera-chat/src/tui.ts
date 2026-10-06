@@ -1,7 +1,9 @@
 import type { Message } from '@ambionframework/ambion';
+import type { Row } from '@ambionframework-examples/workbench/src/action-state.ts';
 import { tui as palette } from '@ambionframework-examples/workbench/src/brand.ts';
 import type { Block } from '@ambionframework-examples/workbench/src/timeline.ts';
 import { Transcript } from '@ambionframework-examples/workbench/src/transcript.ts';
+import { ActionsView } from '@ambionframework-examples/workbench/src/widget-actions.ts';
 import {
 	BoxRenderable,
 	type CliRenderer,
@@ -19,12 +21,38 @@ import { nativeProtocol } from './terminal.ts';
 /** One floating box of a bound camera widget. */
 interface Tile {
 	readonly box: BoxRenderable;
+	/** The actions of the widget, drawn under the box. */
+	readonly actions: ActionsView;
 	readonly picture: ImageRenderable;
 	digest: string | undefined;
 }
 
 const KEYS =
 	'Enter: send · Shift+Enter: newline · PgUp/PgDn: scroll · Ctrl+P: previews · Ctrl+C: quit';
+const SCROLL_KEYS = new Set(['pageup', 'pagedown']);
+const ACTION_KEY = 'Ctrl+L: actions · ';
+
+/** The lines that the actions of one widget take at `width` cells. A button takes one line. */
+function linesOf(rows: readonly Row[], width: number): number {
+	const cells = Math.max(1, width - 4);
+	return rows.reduce((sum, row) => {
+		if (row.type === 'button') return sum + 1;
+		const text = row.type === 'note' ? row.text : `   ${row.label}: ${row.value}`;
+		return sum + Math.max(1, Math.ceil(text.length / cells));
+	}, 0);
+}
+
+/** How many cameras fit in `budget` rows: each needs a box of three rows and its lines. At least one. */
+function fitCount(lines: readonly number[], budget: number): number {
+	let used = 0;
+	let count = 0;
+	for (const one of lines) {
+		used += 3 + one;
+		if (used > budget && count > 0) break;
+		count++;
+	}
+	return count;
+}
 
 /** Workbench conversation widgets with floating, connection-driven camera previews, one for each bound widget. */
 export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolean) {
@@ -35,6 +63,9 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 	let dirty = false;
 	let dismissed = false;
 	let follows = 0;
+	const { pad } = host;
+	/** Whether a drawn camera has actions to press. */
+	let actable = false;
 	const tiles = new Map<string, Tile>();
 	const size = { width: 42, height: 15 };
 	let transcriptVersion = '';
@@ -193,13 +224,17 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		});
 		box.add(picture);
 		root.add(box);
-		const tile: Tile = { box, picture, digest: undefined };
+		const actions = new ActionsView(renderer);
+		Object.assign(actions.root, { position: 'absolute', right: 1, zIndex: 20 });
+		root.add(actions.root);
+		const tile: Tile = { box, actions, picture, digest: undefined };
 		tiles.set(name, tile);
 		return tile;
 	}
 	function dropTile(name: string, tile: Tile) {
 		tiles.delete(name);
 		tile.box.destroyRecursively();
+		tile.actions.root.destroyRecursively();
 	}
 	function paint() {
 		if (stopped) return;
@@ -212,6 +247,8 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 			? []
 			: host.preview.bindings.filter((binding) => binding.handle && binding.latest);
 		layoutTiles(shown);
+		// The pad leaves by itself when no drawn widget has an action. The composer takes the keys back.
+		if (!pad.active && !input.focused) input.focus();
 		status.content = statusText();
 	}
 	/** Drop the boxes of removed widgets, and hide the boxes of cameras that show no frame. */
@@ -222,29 +259,55 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 			else if (!shown.some((binding) => binding.name === name)) hideTile(tile);
 		}
 	}
-	/** Stack one box for each shown camera at the top right. The title of a box names its widget. */
+	/** The pad reads the widgets that the screen draws, in screen order. */
+	function readActions(drawn: readonly PreviewBinding[]) {
+		pad.sync(drawn.flatMap((binding) => host.actionWidget(binding.name) ?? []));
+		return new Map(drawn.map((binding) => [binding.name, pad.rows(binding.name)]));
+	}
+	/**
+	 * Stack one box for each shown camera at the top right, each with its actions under it. The
+	 * stack gets the rows of the screen except the top row and the status. A box needs three
+	 * rows, so a short terminal draws the first cameras that fit with their actions.
+	 */
 	function layoutTiles(shown: readonly PreviewBinding[]) {
-		// Each box needs three rows, so a short terminal draws the first boxes that fit.
-		const fit = shown.slice(0, Math.max(1, Math.floor((renderer.height - 2) / 3)));
+		const budget = renderer.height - 2;
+		let rows = readActions(shown);
+		const count = fitCount(
+			shown.map((binding) => linesOf(rows.get(binding.name) ?? [], size.width)),
+			budget,
+		);
+		const fit = shown.slice(0, count);
+		if (count < shown.length) rows = readActions(fit);
 		syncTiles(fit);
-		const each = fit.length > 1 ? Math.floor((renderer.height - 2) / fit.length) : size.height;
-		const height = Math.max(3, Math.min(size.height, each));
+		actable = fit.some((binding) => (rows.get(binding.name)?.length ?? 0) > 0);
+		const lines = fit.map((binding) => linesOf(rows.get(binding.name) ?? [], size.width));
+		const spare = budget - lines.reduce((sum, one) => sum + one, 0) - 3 * fit.length;
+		const height = Math.max(
+			3,
+			Math.min(size.height, 3 + Math.floor(spare / Math.max(1, fit.length))),
+		);
+		let top = 1;
 		fit.forEach((binding, index) => {
 			const tile = tileOf(binding.name);
-			Object.assign(tile.box, {
-				width: size.width,
-				height,
-				top: 1 + index * height,
-				visible: true,
-			});
+			Object.assign(tile.box, { width: size.width, height, top, visible: true });
 			tile.box.title = ` ${[binding.name, binding.title].filter(Boolean).join(' · ')} `;
 			if (binding.latest && binding.latest.digest !== tile.digest)
 				updatePicture(tile, binding.latest);
+			// Rows past the bottom of the screen are clipped.
+			const room = Math.max(0, renderer.height - 1 - (top + height));
+			tile.actions.draw(rows.get(binding.name) ?? []);
+			Object.assign(tile.actions.root, {
+				width: size.width,
+				top: top + height,
+				height: Math.min(lines[index] ?? 0, room),
+			});
+			top += height + (lines[index] ?? 0);
 		});
 		chat.width = fit.length ? Math.max(1, renderer.width - size.width - 4) : '100%';
 	}
 	function hideTile(tile: Tile) {
 		tile.box.visible = false;
+		tile.actions.draw([]);
 		tile.picture.source = undefined;
 		tile.digest = undefined;
 	}
@@ -255,7 +318,8 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 			.filter(Boolean)
 			.join(' · ');
 		const cameras = bindings.filter((binding) => binding.handle).map((binding) => binding.name);
-		return `${cameras.length ? `Cameras: ${cameras.join(', ')} · ` : ''}${line}\n${KEYS}`;
+		const keys = pad.active ? pad.hint().join(' · ') : `${actable ? ACTION_KEY : ''}${KEYS}`;
+		return `${cameras.length ? `Cameras: ${cameras.join(', ')} · ` : ''}${line}\n${keys}`;
 	}
 	function updatePicture(tile: Tile, frame: PreviewFrame) {
 		try {
@@ -297,7 +361,23 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		paint();
 		if (dirty) void refresh();
 	}
-	const keys = (key: KeyEvent) => {
+	/** Give the keys to the actions of the viewfinders. A screen with none keeps the composer. */
+	function enterActions() {
+		if (!actable || !pad.enter()) return;
+		input.blur();
+		paint();
+	}
+	function leaveActions() {
+		pad.leave();
+		input.focus();
+		paint();
+	}
+	/** The keys of the actions. A key with Ctrl falls through to the keys of the screen. */
+	function actionKey(key: KeyEvent) {
+		key.preventDefault();
+		if (pad.key(key) === 'leave') leaveActions();
+	}
+	function screenKey(key: KeyEvent) {
 		if (key.name === 'pageup') transcript.scrollBy(-8);
 		if (key.name === 'pagedown') transcript.scrollBy(8);
 		if (key.name === 'escape') {
@@ -308,6 +388,13 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 			dismissed = !dismissed;
 			paint();
 		}
+	}
+	const keys = (key: KeyEvent) => {
+		if (pad.active && !key.ctrl && !SCROLL_KEYS.has(key.name)) actionKey(key);
+		else if (key.ctrl && key.name === 'l') {
+			key.preventDefault();
+			enterActions();
+		} else screenKey(key);
 	};
 	const unwatch = host.watch(() => {
 		paint();

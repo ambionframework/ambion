@@ -27,6 +27,14 @@ pins. `canvas.answers(room)` gives the seq and the person of each answer. `Workb
 `ActionPad` in `action-state.ts`, and `ActionsView` in `widget-actions.ts`
 draws its rows, so another host can reuse both.
 
+**Camera chat presses the actions of a viewfinder.** The widget kind `frame`
+takes `actions`. The agent shows each viewfinder with a `look` action,
+"Look now", and the terminal draws the action as a button under the preview
+of that camera. Ctrl+L takes the keys, and Up and Down choose, Enter presses,
+and Esc leaves. A press calls `canvas.act` as the person `you`. The agent
+receives it as a message and observes that camera. The host reuses
+`ActionPad` and `ActionsView` from the workbench.
+
 **The sensor and actuator pages and rules belong to the workbench example.**
 The pages sit in `examples/workbench/docs`, with the sensor protocol and its
 rules. Ambion knows long-running processes that serve HTTP on `$PORT`, read
