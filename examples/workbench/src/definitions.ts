@@ -49,6 +49,7 @@ export const shared =
 	'Respect explicit human constraints; they override role defaults. When the person says not to edit files, do not call write or shell tools that change files; give the answer with say. ' +
 	'The lab database is the shared database of `sql`. ' +
 	'Cite what you rely on in `refs`, one URI each. A lab table is lab:///<table>, for example lab:///runs. A ref that names a snapshot, a table, or a message opens for the person; any other ref shows as a mark. ' +
+	'To pin a file for the people in the room, call show with kind markdown, table, or image and a file source, and call hide to remove it. ' +
 	'Report only actions your tool results support. You have no web or email. ';
 
 /** What the assistant reads as application instructions. */
@@ -113,11 +114,11 @@ export const workerNames: readonly string[] = workers.map((worker) => worker.nam
 export function team(
 	workspace: Workspace,
 	instrument: Instrument,
-	canvas: Pick<Canvas, 'tools' | 'workerTools'>,
+	canvas: Pick<Canvas, 'tools' | 'workerTools' | 'widgetTools'>,
 ) {
 	const model = piModel();
 	// One list of bundles serves every specialist, so every seat holds the same tools over one workspace.
-	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools()];
+	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools(), canvas.widgetTools()];
 	// The assistant plans the work of a person, so it alone can open a breakout room.
 	const assistant = defineAssistant({
 		instructions: assistantInstructions,
@@ -131,7 +132,11 @@ export function team(
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
-	const workerBundles: ToolBundle[] = [workspace.tools(), canvas.workerTools()];
+	const workerBundles: ToolBundle[] = [
+		workspace.tools(),
+		canvas.workerTools(),
+		canvas.widgetTools(),
+	];
 	const workerDefinitions = workers.map(({ instructions, ...definition }) =>
 		defineAgent({
 			...definition,

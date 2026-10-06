@@ -12,6 +12,7 @@ import {
 	type CanvasError,
 	type CanvasEvent,
 	type CanvasRoom,
+	type CanvasWidget,
 	openCanvas,
 	sqliteCanvas,
 } from '@ambionframework/canvas';
@@ -32,6 +33,7 @@ import {
 	keyVariable,
 	unavailableSeats,
 } from './kinds.ts';
+import { PIN_KINDS, type Pin } from './pins.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
@@ -63,6 +65,8 @@ interface RoomState {
 	failures: Map<string, string>;
 	/** The change listeners a caller registered with `watch`. They survive a stop. */
 	watchers: Set<() => void>;
+	/** The pins of the room, read at the last widget event or room start. */
+	pins: Promise<Pin[]> | undefined;
 }
 
 /** What the rooms run on. A test passes `stream` and `executions` and needs no key. */
@@ -134,6 +138,7 @@ export async function openRooms(
 			activity: [],
 			failures: new Map<string, string>(),
 			watchers: new Set<() => void>(),
+			pins: undefined,
 		};
 		states.set(name, created);
 		return created;
@@ -196,11 +201,29 @@ export async function openRooms(
 		store: sqliteCanvas(sql),
 		workspace,
 		breakout: { team: workerNames },
+		widgets: { kinds: PIN_KINDS },
 		onError: (failure) => reportFailure(stateOf(failure.room), failure),
 	});
 	// The canvas exists first: an agent reads its bundle when it is defined.
 	const roomTeam = team(workspace, openInstrument({ lab, instruments }), canvas);
 	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
+	/**
+	 * The pins of a room. `read` runs once after each widget event, room start,
+	 * and archive, and the answer stays until the next one. A stopped room reads
+	 * nothing again, and an archived room has no pins.
+	 */
+	function pinned(
+		name: string,
+		read: (widgets: readonly CanvasWidget[]) => Promise<Pin[]>,
+	): Promise<Pin[]> {
+		if (known(name).state === 'archived') return Promise.resolve([]);
+		const state = stateOf(name);
+		state.pins ??= read(canvas.widgets(name)).catch((error: unknown) => {
+			state.pins = undefined;
+			throw error;
+		});
+		return state.pins;
+	}
 	try {
 		await canvas.resume({ agents: roomTeam.agents });
 	} catch (error) {
@@ -281,6 +304,7 @@ export async function openRooms(
 	return {
 		create,
 		inRoom,
+		pinned,
 		watch,
 		withWorkspace,
 		workspace,
@@ -347,12 +371,23 @@ function heardEvent(
 	stateOf: (name: string) => RoomState,
 	room: (name: string) => Room | undefined,
 ): void {
-	// The workbench draws no widget.
-	if (event.type === 'widget') return;
-	const name = event.type === 'opened' ? event.room.name : event.room;
+	const name = roomOf(event);
 	const state = stateOf(name);
+	// A widget event, a start, and an archive change what the pins show.
+	if (event.type === 'widget' || event.type === 'started' || event.type === 'archived')
+		state.pins = undefined;
+	if (event.type === 'widget') {
+		changed(state);
+		return;
+	}
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
 	changed(state);
+}
+
+/** The name of the room that an event is about. */
+function roomOf(event: CanvasEvent): string {
+	if (event.type === 'widget') return event.widget.room;
+	return event.type === 'opened' ? event.room.name : event.room;
 }
 
 /** A failure that the canvas survived goes to the activity list, where the person reads it. */

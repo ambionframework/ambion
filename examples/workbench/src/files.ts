@@ -1,6 +1,7 @@
 import { readFile as readLocalFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import type { CanvasWidget } from '@ambionframework/canvas';
 import type { Workspace } from '@ambionframework/workspace';
 import {
 	isDatabase,
@@ -11,6 +12,7 @@ import {
 	tableNames,
 	tablesText,
 } from './database.ts';
+import { type Pin, plain, shownFiles } from './pins.ts';
 import { labUri, tableOfUri } from './refs.ts';
 import { fail } from './rooms.ts';
 
@@ -19,7 +21,8 @@ export type { TableView };
 /** Where an attached local file lands in the workspace. */
 const ATTACHMENTS_DIR = '/attachments';
 
-const browser = { name: 'assistant' };
+/** The identity that the files panel reads as. */
+export const browser = { name: 'assistant' };
 
 /** The extensions the panel previews as a picture, and the type each names. */
 const IMAGE_TYPES: Record<string, string> = {
@@ -132,7 +135,12 @@ export async function attachFile(workspace: Workspace, localPath: string): Promi
 	return { path, size: bytes.length, ref };
 }
 
-export async function readFile(workspace: Workspace, path: string): Promise<FileContent> {
+/** Read one file of the workspace as `agent`. The size checks run before the read. */
+export async function readFile(
+	workspace: Workspace,
+	path: string,
+	agent: { name: string },
+): Promise<FileContent> {
 	const parts = path.split('/').slice(1);
 	if (
 		!path.startsWith('/') ||
@@ -141,7 +149,7 @@ export async function readFile(workspace: Workspace, path: string): Promise<File
 		fail('Use an absolute workspace file path.');
 	}
 	const kind = isDatabasePath(path) ? 'database' : isImagePath(path) ? 'image' : 'text';
-	return workspace.use(browser, async (env) => {
+	return workspace.use(agent, async (env) => {
 		await checkAncestors(env, parts, kind);
 		if (kind === 'database') return readDatabase(env, path);
 		if (kind === 'image') return readImage(env, path);
@@ -246,4 +254,46 @@ export function readLabTable(location: string, uri: string): FileContent {
 	}
 	if (!table) return fail('No such lab table.');
 	return { path: labUri(name), text: tablesText([table]), truncated: false, tables: [table] };
+}
+
+/** The problem of a file that does not fit the kind of its pin, or undefined. */
+function mismatch(kind: Pin['kind'], file: FileContent): string | undefined {
+	if (kind === 'image') return file.image ? undefined : 'This file is not a picture.';
+	if (kind === 'table') return file.tables ? undefined : 'This file is not a SQLite database.';
+	return file.image || file.tables ? 'This file is not text.' : undefined;
+}
+
+/** The file with terminal escapes dropped from its text and its tables. */
+function cleaned(file: FileContent): FileContent {
+	const tables = file.tables?.map((table) => ({
+		...table,
+		name: plain(table.name),
+		columns: table.columns.map(plain),
+		rows: table.rows.map((row) => row.map(plain)),
+	}));
+	return { ...file, text: plain(file.text), ...(tables ? { tables } : {}) };
+}
+
+/** One pin of a shown file widget, with the file read as its author. A failed read is a problem on the pin. */
+async function readPin(workspace: Workspace, widget: CanvasWidget): Promise<Pin> {
+	const path = widget.source?.type === 'file' ? widget.source.path : '';
+	const pin = {
+		name: widget.name,
+		title: widget.title === undefined ? undefined : plain(widget.title),
+		kind: widget.kind as Pin['kind'],
+		author: widget.author,
+		path,
+	};
+	try {
+		const file = await readFile(workspace, path, { name: widget.author });
+		const problem = mismatch(pin.kind, file);
+		return problem ? { ...pin, problem } : { ...pin, file: cleaned(file) };
+	} catch (error) {
+		return { ...pin, problem: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/** The pins of the shown file widgets of a room, in the order of the canvas. */
+export function readPins(workspace: Workspace, widgets: readonly CanvasWidget[]): Promise<Pin[]> {
+	return Promise.all(shownFiles(widgets).map((widget) => readPin(workspace, widget)));
 }

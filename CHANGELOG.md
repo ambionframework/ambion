@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**The workbench pins a file for people.** The host declares the widget kinds
+`markdown`, `table`, and `image`, and each takes a file source. Every seat of
+a root room and every worker holds `canvas.widgetTools()`. An agent calls
+`show` with a file path, and the terminal draws the shown files of the open
+room in a side area, each with its title and kind. The host reads each file
+as its author, after each widget event and each room start, and polls
+nothing. A hidden widget and a widget of an archived room draw nothing. The
+files panel and the side area share the file views in `file-view.ts`.
+`readFile` takes the agent that reads, and `Workbench` gains `pins(room)`.
+
 **The sensor and actuator pages and rules belong to the workbench example.**
 The pages sit in `examples/workbench/docs`, with the sensor protocol and its
 rules. Ambion knows long-running processes that serve HTTP on `$PORT`, read

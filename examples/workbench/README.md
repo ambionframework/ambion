@@ -155,6 +155,11 @@ with the first 50 rows of each. The panel opens the database read-only. It
 shows a picture (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, up to 8 MiB) with
 OpenTUI's own terminal image rendering, negotiated to the terminal's protocol.
 
+**An agent pins a file with `show`.** The kinds are `markdown`, `table`
+(a SQLite database file), and `image`. The terminal draws the pinned files of
+the open room in a side area, each with its title and kind. `hide` removes
+a pin. The side area gives way to the files panel and the processes panel.
+
 **`/ps` shows the background processes that the agents started with
 `bash`.** The panel lists the running processes first, then the newest
 start. Each row gives the name or the handle, the owner agent, the state,

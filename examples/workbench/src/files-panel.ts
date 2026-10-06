@@ -3,71 +3,18 @@ import {
 	bg,
 	type CliRenderer,
 	fg,
-	ImageRenderable,
-	MarkdownRenderable,
 	ScrollBoxRenderable,
 	StyledText,
-	SyntaxStyle,
 	TextRenderable,
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
 import type { FileBrowser } from './browser.ts';
-import type { FileContent, FileEntry, ImageContent, TableView } from './workbench.ts';
+import { bytes, describe, FileView } from './file-view.ts';
+import type { FileContent, FileEntry, TableView } from './workbench.ts';
 
 export const LIST_ROWS = 8;
 const HINT = 'Type to search   Up/Down choose   PgUp/PgDn scroll   Ctrl+Y copy   Esc close';
 const TABLE_HINT = 'Left/Right table   ';
-const MAX_COLUMN = 40;
-/** Terminal rows the picture preview takes. A cell is roughly twice as tall as wide. */
-const IMAGE_ROWS = 24;
-
-/** How markdown looks on the panel: headings in the accent, code in the summary color. */
-function markdownStyle(): SyntaxStyle {
-	return SyntaxStyle.fromStyles({
-		default: { fg: palette.text },
-		'markup.heading': { fg: palette.accent, bold: true },
-		'markup.heading.1': { fg: palette.accent, bold: true, underline: true },
-		'markup.strong': { fg: palette.text, bold: true },
-		'markup.italic': { fg: palette.text, italic: true },
-		'markup.strikethrough': { fg: palette.dim },
-		'markup.raw': { fg: palette.summary },
-		'markup.raw.block': { fg: palette.summary },
-		'markup.link': { fg: palette.accent, underline: true },
-		'markup.link.label': { fg: palette.accent, underline: true },
-		'markup.link.url': { fg: palette.dim },
-		'markup.list': { fg: palette.accent },
-		'markup.quote': { fg: palette.muted, italic: true },
-		conceal: { fg: palette.dim },
-	});
-}
-
-/** The size and shape of one file, for the title. */
-function describe(file: FileContent): string {
-	if (file.tables) return `${file.tables.length} ${file.tables.length === 1 ? 'table' : 'tables'}`;
-	if (file.image) return `${bytes(file.image.data.length)}, ${file.image.mimeType}`;
-	const lines = file.text.split('\n').length;
-	const size = bytes(new TextEncoder().encode(file.text).length);
-	return `${size}, ${lines} ${lines === 1 ? 'line' : 'lines'}${file.truncated ? ', truncated' : ''}`;
-}
-
-/** One table as aligned columns: a header, a rule, and the rows. */
-function tableText(table: TableView): StyledText {
-	const widths = table.columns.map((name, at) =>
-		Math.min(MAX_COLUMN, Math.max(name.length, ...table.rows.map((row) => (row[at] ?? '').length))),
-	);
-	const line = (cells: readonly string[]) =>
-		cells.map((text, at) => text.slice(0, MAX_COLUMN).padEnd(widths[at] ?? 0)).join('  ');
-	const rule = widths.map((width) => '─'.repeat(width)).join('  ');
-	const shown = table.rows.length;
-	const more =
-		table.count > shown ? [fg(palette.dim)(`\nFirst ${shown} of ${table.count} rows.`)] : [];
-	return new StyledText([
-		fg(palette.accent)(line(table.columns)),
-		fg(palette.line)(`\n${rule}\n`),
-		fg(palette.text)(table.rows.map(line).join('\n') || '(no rows)'),
-		...more,
-	]);
-}
 
 /** The tab line above a table: every table, with the shown one marked. */
 function tabsText(tables: readonly TableView[], shown: number): StyledText {
@@ -80,9 +27,6 @@ function tabsText(tables: readonly TableView[], shown: number): StyledText {
 		]),
 	);
 }
-
-const bytes = (size: number): string =>
-	size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
 
 /** The box of a side panel: beside the conversation, and hidden until it opens. */
 export function sidePanel(renderer: CliRenderer): BoxRenderable {
@@ -112,9 +56,7 @@ export class FilesPanel {
 	private readonly search: TextRenderable;
 	private readonly list: TextRenderable;
 	private readonly title: TextRenderable;
-	private readonly body: TextRenderable;
-	private readonly markdown: MarkdownRenderable;
-	private readonly image: ImageRenderable;
+	private readonly view: FileView;
 	private readonly tabs: TextRenderable;
 	private readonly scroll: ScrollBoxRenderable;
 	private readonly hint: TextRenderable;
@@ -133,22 +75,7 @@ export class FilesPanel {
 			wrapMode: 'none',
 		});
 		this.title = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'none' });
-		this.body = new TextRenderable(renderer, { content: '', wrapMode: 'word', width: '100%' });
-		this.markdown = new MarkdownRenderable(renderer, {
-			content: '',
-			syntaxStyle: markdownStyle(),
-			fg: palette.text,
-			conceal: true,
-			width: '100%',
-			visible: false,
-		});
-		this.image = new ImageRenderable(renderer, {
-			fit: 'fit',
-			width: '100%',
-			height: IMAGE_ROWS,
-			visible: false,
-			onError: () => this.flash('Cannot decode this picture.'),
-		});
+		this.view = new FileView(renderer, () => this.flash('Cannot decode this picture.'));
 		this.tabs = new TextRenderable(renderer, {
 			content: '',
 			flexShrink: 0,
@@ -163,12 +90,8 @@ export class FilesPanel {
 				trackOptions: { backgroundColor: palette.bg, foregroundColor: palette.line },
 			},
 		});
-		// The padding keeps the text clear of the scrollbar.
-		const padded = new BoxRenderable(renderer, { paddingRight: 2, width: '100%' });
-		padded.add(this.body);
-		padded.add(this.markdown);
-		padded.add(this.image);
-		this.scroll.add(padded);
+		// The padding of the view keeps the text clear of the scrollbar.
+		this.scroll.add(this.view.root);
 		this.hint = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'word' });
 		for (const part of [this.search, this.list, this.title, this.tabs, this.scroll, this.hint])
 			this.root.add(part);
@@ -221,7 +144,7 @@ export class FilesPanel {
 		if (browser.problem || !file) {
 			const text = browser.problem ?? 'Choose a file to read it.';
 			this.title.content = new StyledText([fg(browser.problem ? palette.red : palette.dim)(text)]);
-			this.showBody('');
+			this.view.showText('');
 			this.shown = undefined;
 			return;
 		}
@@ -238,42 +161,11 @@ export class FilesPanel {
 	/** The one view a file takes: a picture, a table, markdown, or plain text. */
 	private showFile(file: FileContent, at: number): void {
 		const table = file.tables?.[at];
-		if (file.image) this.showImage(file.image);
-		else if (file.tables && table) this.showTable(file.tables, table, at);
-		else if (/\.md$/i.test(file.path)) this.showMarkdown(file.text);
-		else this.showBody(file.text);
-	}
-
-	private showTable(tables: readonly TableView[], table: TableView, at: number): void {
-		this.tabs.visible = true;
-		this.tabs.content = tabsText(tables, at);
-		this.body.content = tableText(table);
-		this.body.wrapMode = 'none';
-		this.markdown.visible = false;
-		this.image.visible = false;
-		this.body.visible = true;
-	}
-
-	private showBody(text: string): void {
-		this.body.content = new StyledText([fg(palette.text)(text)]);
-		this.body.wrapMode = 'word';
-		this.markdown.visible = false;
-		this.image.visible = false;
-		this.body.visible = true;
-	}
-
-	private showMarkdown(text: string): void {
-		if (this.markdown.content !== text) this.markdown.content = text;
-		this.body.visible = false;
-		this.image.visible = false;
-		this.markdown.visible = true;
-	}
-
-	private showImage(image: ImageContent): void {
-		this.body.visible = false;
-		this.markdown.visible = false;
-		this.image.source = image.data;
-		this.image.visible = true;
+		if (table && file.tables && !file.image) {
+			this.tabs.visible = true;
+			this.tabs.content = tabsText(file.tables, at);
+		}
+		this.view.show(file, at);
 	}
 
 	private hintText(): string {

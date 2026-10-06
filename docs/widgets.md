@@ -134,9 +134,10 @@ does not take. A kind with no source types takes no source, and a kind with
 source types needs one. The guidance lists the catalog, so an agent places
 only what the host can draw.
 
-| Host        | Catalog                                         | First widget |
-| ----------- | ----------------------------------------------- | ------------ |
-| Camera chat | `frame`: the newest frame that a process serves | A viewfinder |
+| Host        | Catalog                                               | First widget  |
+| ----------- | ----------------------------------------------------- | ------------- |
+| Camera chat | `frame`: the newest frame that a process serves       | A viewfinder  |
+| Workbench   | `markdown`, `table`, `image`: a file of the workspace | A pinned file |
 
 **The canvas refuses actions on a kind that draws none.** A kind with
 `actions: false` takes no `actions` and no `for`. A `for` with no actions is
