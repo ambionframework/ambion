@@ -53,8 +53,9 @@ export class Session {
 	noticeSeq = 0;
 	/** The name of a room that waits for its goal. The next submission is the goal. */
 	awaitingGoal: string | undefined;
-	/** The operations of the open room that wait for an answer. */
+	/** What the open room holds beside its messages: operations that wait, and pinned files. */
 	approvals: Approval[] = [];
+	pins: Awaited<ReturnType<Workbench['pins']>> = { pins: [], more: 0 };
 	/** The activation whose steps the terminal shows. It re-reads on each room change. */
 	steps: { id: string; read: ActivationSteps | undefined } | undefined;
 	pendingRefs: StagedAttachment[] = [];
@@ -169,12 +170,14 @@ export class Session {
 	/** Read what a room read does not hold: the operations and the open steps. A failure keeps the last answer. */
 	private async readSide(room: string): Promise<void> {
 		const steps = this.steps;
-		const [approvals, read] = await Promise.all([
+		const [approvals, pins, read] = await Promise.all([
 			this.host.approvals(room).catch(() => undefined),
+			this.host.pins(room).catch(() => undefined),
 			steps ? this.host.activation(room, steps.id).catch(() => undefined) : undefined,
 		]);
 		if (this.room !== room) return;
 		if (approvals) this.approvals = approvals;
+		if (pins) this.pins = pins;
 		if (steps && read && this.steps?.id === steps.id) this.steps = { id: steps.id, read };
 	}
 
@@ -330,6 +333,7 @@ export class Session {
 		this.focus = undefined;
 		this.expanded.clear();
 		this.approvals = [];
+		this.pins = { pins: [], more: 0 };
 		this.steps = undefined;
 		this.notice = undefined;
 		this.pendingRefs = [];

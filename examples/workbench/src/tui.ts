@@ -7,6 +7,7 @@ import { FilesPanel } from './files-panel.ts';
 import { Header } from './header.ts';
 import { Keys } from './keys.ts';
 import { Palette } from './palette.ts';
+import { PinsPanel } from './pins-panel.ts';
 import { ProcessBrowser } from './process-browser.ts';
 import { ProcessesPanel } from './process-panel.ts';
 import { type Intent, Session } from './session.ts';
@@ -43,6 +44,7 @@ class WorkbenchTui {
 		const header = new Header(renderer);
 		const transcript = new Transcript(renderer);
 		const panel = new FilesPanel(renderer);
+		const pinsPanel = new PinsPanel(renderer);
 		const processPanel = new ProcessesPanel(renderer);
 		this.processes = new ProcessBrowser(host, () => this.render());
 		const body = new BoxRenderable(renderer, {
@@ -60,6 +62,7 @@ class WorkbenchTui {
 			transcript,
 			composer: this.composer,
 			panel,
+			pinsPanel,
 			processPanel,
 			processes: this.processes,
 			header,
@@ -89,6 +92,7 @@ class WorkbenchTui {
 		root.add(header.root);
 		body.add(transcript.root);
 		body.add(panel.root);
+		body.add(pinsPanel.root);
 		body.add(processPanel.root);
 		root.add(body);
 		root.add(this.composer.root);

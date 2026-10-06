@@ -166,6 +166,9 @@ export class FakeHost implements Workbench {
 			this.processWatchers.delete(changed);
 		};
 	}
+	async pins() {
+		return { pins: [], more: 0 };
+	}
 	async labTables() {
 		return ['runs', 'results'];
 	}

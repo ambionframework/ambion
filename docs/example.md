@@ -224,6 +224,19 @@ interface.
   picture path into an empty composer fills `/attach` for the person,
   through the terminal's bracketed paste.
   The person picks an identity on the first screen.
+- **Pins.** An agent pins a file for the people in a room with
+  `show({ name, kind, source: { type: 'file', path }, title? })`. The kinds
+  are `markdown`, `table` (a SQLite database file), and `image`. The terminal
+  draws the shown files of the open room in a side area, one after the other,
+  each with its title or name and its kind. The host reads each file as its
+  author, with the size limits of the files panel, and it checks the size
+  again on the bytes that it reads. It reads again after each widget event,
+  each room start, and the end of each activation, and it polls nothing. The
+  area draws four pins at most and says `and N more`. It marks a stopped
+  room, whose files stay as last read. `hide` removes a pin. A widget of an
+  archived breakout room draws nothing. The side area
+  draws text as text and drops terminal escapes, and it gives way to the
+  files panel and the processes panel.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
 
@@ -298,7 +311,8 @@ examples/workbench/
     workbench.ts       the host: open, read, watch, send, control, create, files, processes
     names.ts           the room name and goal rules
     sql.ts             the Sql of the journal and canvas stores over one SQLite database
-    files.ts           the workspace list, one file preview, one lab table preview, and /attach
+    files.ts           the workspace list, one file preview, one lab table preview, /attach, and the pins
+    pins.ts            the widget kinds, the pin of one shown file, and the removal of terminal escapes
     attachments.ts     what /attach does, and what a pasted path names
     refs.ts            the refs of a message: parse, resolve, and one chip line
     session.ts         the terminal's state and commands, without OpenTUI
@@ -315,6 +329,8 @@ examples/workbench/
     palette.ts         the palette state: rows, the picked row, and dismissal
     browser.ts         the files panel state: search and the chosen file
     files-panel.ts     the files panel beside the conversation
+    file-view.ts       the views of one file: text, markdown, table, and picture
+    pins-panel.ts      the side area of the pinned files
     processes.ts       the order of the processes, and the end of an output
     process-browser.ts the processes panel state: list, choice, and cancel
     process-panel.ts   the processes panel beside the conversation

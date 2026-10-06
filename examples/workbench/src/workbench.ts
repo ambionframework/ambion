@@ -8,14 +8,17 @@ import { type Person, people } from './definitions.ts';
 import {
 	type Attachment,
 	attachFile,
+	browser,
 	type FileContent,
 	type FileEntry,
 	listFiles,
 	listLabTables,
 	readFile,
 	readLabTable,
+	readPins,
 } from './files.ts';
 import { isRoomName, MAX_GOAL } from './names.ts';
+import type { Pins } from './pins.ts';
 import { readCommitFile, readSnapshotFile } from './previews.ts';
 import { byRecency, type ProcessOutput, readOutput } from './processes.ts';
 import { fail, openRooms, type RoomAction, type RoomsOptions, type RoomView } from './rooms.ts';
@@ -66,6 +69,12 @@ export interface Workbench {
 	approvals(room: string): Promise<Approval[]>;
 	create(name: string, goal: string): Promise<RoomView>;
 	files(): Promise<FileEntry[]>;
+	/**
+	 * The files that agents pinned in a room with `show`, each read as its author. The
+	 * host reads again after a widget event, a room start, and the end of an activation, and polls nothing. A hidden
+	 * widget and a widget of an archived room are not pins.
+	 */
+	pins(room: string): Promise<Pins>;
 	file(path: string): Promise<FileContent>;
 	/** The bytes of a snapshot ref of the workspace, from its object store. */
 	snapshot(ref: string): Promise<FileContent>;
@@ -200,7 +209,11 @@ function hosted(rooms: Rooms, database: DatabaseSync, labPath: string): Workbenc
 			return rooms.create(name, trimmed);
 		},
 		files: () => rooms.withWorkspace(() => listFiles(rooms.workspace)),
-		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path)),
+		pins: (room) =>
+			rooms.pinned(room, (widgets) =>
+				rooms.withWorkspace(() => readPins(rooms.workspace, widgets)),
+			),
+		file: (path) => rooms.withWorkspace(() => readFile(rooms.workspace, path, browser)),
 		snapshot: (ref) => rooms.withWorkspace(() => readSnapshotFile(rooms.workspace, ref)),
 		commit: (ref) => rooms.withWorkspace(() => readCommitFile(rooms.workspace, ref)),
 		attach: (localPath) => rooms.withWorkspace(() => attachFile(rooms.workspace, localPath)),

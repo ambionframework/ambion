@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
 import { afterEach, describe, expect, it } from 'vitest';
-import { attachFile, isImagePath, readFile } from '../src/files.ts';
+import { attachFile, browser, isImagePath, readFile } from '../src/files.ts';
 import { readSnapshotFile } from '../src/previews.ts';
 
 const scribe = { name: 'scribe' };
@@ -33,7 +33,7 @@ describe('readFile on a picture', () => {
 		const site = openWorkspace({ name: 'files-image', backend: { bash: memoryBackend() } });
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/photo.png', FAKE_PNG));
 
-		const file = await readFile(site, '/home/scribe/photo.png');
+		const file = await readFile(site, '/home/scribe/photo.png', browser);
 
 		expect(file.image).toEqual({ data: FAKE_PNG, mimeType: 'image/png' });
 		expect(file.text).toBe('');
@@ -47,7 +47,7 @@ describe('readFile on a picture', () => {
 		big.set(FAKE_PNG);
 		await site.use(scribe, (env) => env.writeFile('/home/scribe/big.png', big));
 
-		await expect(readFile(site, '/home/scribe/big.png')).rejects.toThrow(/8 MiB/);
+		await expect(readFile(site, '/home/scribe/big.png', browser)).rejects.toThrow(/8 MiB/);
 		await site.dispose();
 	});
 });

@@ -113,11 +113,11 @@ export const workerNames: readonly string[] = workers.map((worker) => worker.nam
 export function team(
 	workspace: Workspace,
 	instrument: Instrument,
-	canvas: Pick<Canvas, 'tools' | 'workerTools'>,
+	canvas: Pick<Canvas, 'tools' | 'workerTools' | 'widgetTools'>,
 ) {
 	const model = piModel();
 	// One list of bundles serves every specialist, so every seat holds the same tools over one workspace.
-	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools()];
+	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools(), canvas.widgetTools()];
 	// The assistant plans the work of a person, so it alone can open a breakout room.
 	const assistant = defineAssistant({
 		instructions: assistantInstructions,
@@ -131,7 +131,11 @@ export function team(
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
-	const workerBundles: ToolBundle[] = [workspace.tools(), canvas.workerTools()];
+	const workerBundles: ToolBundle[] = [
+		workspace.tools(),
+		canvas.workerTools(),
+		canvas.widgetTools(),
+	];
 	const workerDefinitions = workers.map(({ instructions, ...definition }) =>
 		defineAgent({
 			...definition,

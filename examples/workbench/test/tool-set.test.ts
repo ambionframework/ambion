@@ -58,6 +58,9 @@ describe('the Workbench tool set', () => {
 			agent.executor.tools.map((tool) => tool.name);
 		expect(names(built.assistant)).toEqual(expect.arrayContaining(['breakout', 'tell', 'archive']));
 		expect(names(built.assistant)).not.toContain('report');
+		// Every seat of a root room and every worker can pin a file.
+		for (const agent of [built.assistant, ...built.specialists, ...built.workers])
+			expect(names(agent), agent.name).toEqual(expect.arrayContaining(['show', 'hide']));
 		for (const agent of built.specialists)
 			expect(names(agent), agent.name).not.toEqual(expect.arrayContaining(['breakout', 'report']));
 		expect(built.workers.map((worker) => worker.name)).toEqual(['scout', 'maker']);

@@ -4,6 +4,7 @@ import type { Composer } from './composer.ts';
 import type { FilesPanel } from './files-panel.ts';
 import type { Header } from './header.ts';
 import type { Mode } from './keys.ts';
+import type { PinsPanel } from './pins-panel.ts';
 import type { ProcessBrowser } from './process-browser.ts';
 import type { ProcessesPanel } from './process-panel.ts';
 import type { RefItem } from './refs.ts';
@@ -32,6 +33,7 @@ export interface DrawParts {
 	transcript: Transcript;
 	composer: Composer;
 	panel: FilesPanel;
+	pinsPanel: PinsPanel;
 	processPanel: ProcessesPanel;
 	processes: ProcessBrowser;
 	header: Header;
@@ -53,6 +55,7 @@ export class Painter {
 	private readonly transcript: Transcript;
 	private readonly composer: Composer;
 	private readonly panel: FilesPanel;
+	private readonly pinsPanel: PinsPanel;
 	private readonly processPanel: ProcessesPanel;
 	private readonly processes: ProcessBrowser;
 	private readonly header: Header;
@@ -65,6 +68,7 @@ export class Painter {
 		this.transcript = parts.transcript;
 		this.composer = parts.composer;
 		this.panel = parts.panel;
+		this.pinsPanel = parts.pinsPanel;
 		this.processPanel = parts.processPanel;
 		this.processes = parts.processes;
 		this.header = parts.header;
@@ -92,6 +96,12 @@ export class Painter {
 		this.drawChrome(mode, picking);
 		if (mode === 'files') this.panel.draw(this.session.browser);
 		if (mode === 'processes') this.processPanel.draw(this.processes);
+		// The pins share the side with the other panels, so a panel in use hides them.
+		this.pinsPanel.draw(
+			this.session.pins,
+			mode !== 'files' && mode !== 'processes',
+			this.session.view?.status === 'stopped',
+		);
 	}
 
 	private marks(picking: string | undefined): Marks {
