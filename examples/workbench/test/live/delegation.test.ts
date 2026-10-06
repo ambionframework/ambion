@@ -1,12 +1,14 @@
 /**
  * Delegation through a breakout room on a real model. The assistant, scout, and maker run on the
- * executor kind that `AMBION_EXECUTOR` selects: `pi` (the default) or `codex`. Four claims:
+ * executor kind that `AMBION_EXECUTOR` selects: `pi` (the default) or `codex`. Five claims:
  *
  * - The assistant opens a breakout room whose parent is `bringup`.
  * - The only agent in that room is `scout`.
  * - The report of the room reaches the journal of `bringup` as a message that starts with
  *   `breakout <room>:`.
  * - The assistant archives the room, and the canvas row of the room has the state `archived`.
+ * - The assistant says the value to `mira` in `bringup`: a said message from `assistant` to `mira`
+ *   that matches `20 mA`.
  *
  * Pi needs a key in the variable of the provider of `AMBION_MODEL`, or a stored sign-in for that
  * provider in `~/.ambion/pi/credentials.json`. Codex needs `CODEX_API_KEY`, or the host login
@@ -64,6 +66,8 @@ const REQUEST =
 	'forward current of the red LED. When the report arrives, archive the breakout room as done, ' +
 	'and tell me the value.';
 
+const VALUE = /20\s*mA/i;
+
 const textsOf = (messages: readonly object[]) =>
 	messages.map((message) => ('text' in message ? String(message.text) : ''));
 
@@ -79,6 +83,21 @@ function archivedState(directory: string, room: string): unknown {
 	}
 }
 
+/** Whether the parent journal holds a said message from `assistant` to `mira` that gives the value. */
+function answered(messages: readonly object[]): boolean {
+	return messages.some(
+		(message) =>
+			'kind' in message &&
+			message.kind === 'said' &&
+			'from' in message &&
+			message.from === 'assistant' &&
+			'to' in message &&
+			message.to === 'mira' &&
+			'text' in message &&
+			VALUE.test(String(message.text)),
+	);
+}
+
 /** The breakout room of `bringup` once the assistant archived it, or the reason it has not. */
 async function archivedBreakout(workbench: Workbench, directory: string): Promise<string> {
 	const rooms = await workbench.rooms();
@@ -92,12 +111,19 @@ async function archivedBreakout(workbench: Workbench, directory: string): Promis
 	return child.name;
 }
 
+/** Throws until the assistant has answered the person with the value. */
+async function requireAnswer(workbench: Workbench): Promise<void> {
+	if (!answered((await workbench.read('bringup', 0)).messages))
+		throw new Error('The parent holds no said message from `assistant` to `mira` with the value.');
+}
+
 async function describeRun(workbench: Workbench): Promise<string> {
 	const rooms = await workbench.rooms();
 	const parent = textsOf((await workbench.read('bringup', 0)).messages);
 	return JSON.stringify(
 		{
 			parentMessages: parent,
+			answeredPerson: answered((await workbench.read('bringup', 0)).messages),
 			rooms: rooms.map(({ name, parent: of, status }) => ({ name, parent: of, status })),
 		},
 		null,
@@ -107,7 +133,7 @@ async function describeRun(workbench: Workbench): Promise<string> {
 
 describe.skipIf(!runnable)(`Workbench delegation on a real ${kind} model`, () => {
 	it(
-		'opens a breakout room for scout, receives its report, and archives the room',
+		'opens a breakout room for scout, receives its report, archives the room, and answers the person',
 		async () => {
 			const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-delegation-live-'));
 			const workbench = await openWorkbench({
@@ -127,7 +153,9 @@ describe.skipIf(!runnable)(`Workbench delegation on a real ${kind} model`, () =>
 				let reason = '';
 				while (Date.now() < deadline && name === '') {
 					try {
-						name = await archivedBreakout(workbench, directory);
+						const archived = await archivedBreakout(workbench, directory);
+						await requireAnswer(workbench);
+						name = archived;
 					} catch (error) {
 						reason = error instanceof Error ? error.message : String(error);
 						await new Promise((resolve) => setTimeout(resolve, 2_000));
