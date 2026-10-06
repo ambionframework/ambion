@@ -1,12 +1,8 @@
 /** The two bundles of the canvas: the opener bundle, and the worker bundle. */
-import {
-	defineTool,
-	type ToolBundle,
-	type ToolContext,
-	type ToolResult,
-} from '@ambionframework/ambion';
+import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { archiveRoom, type BreakoutPort, callerOf, openBreakout, tellRoom } from './breakout.ts';
+import { text } from './port.ts';
 import { breakoutReminder } from './reminder.ts';
 import { reportToParent } from './report.ts';
 
@@ -43,11 +39,6 @@ const ReportOutput = Type.Object({
 	room: Type.String({ description: 'The parent room.' }),
 	from: Type.Integer({ description: 'The seq of the message that the report landed as.' }),
 	to: Type.Optional(Type.String({ description: 'The opener, when the report went to it.' })),
-});
-
-const text = <T>(summary: string, details: T): ToolResult<T> => ({
-	content: [{ type: 'text', text: summary }],
-	details,
 });
 
 const OPENER_GUIDANCE = [

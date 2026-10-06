@@ -33,8 +33,8 @@ adds `fetch`. Start a server on `$PORT`, then call
 status, the body, an export path, and a snapshot ref. An image returns as an
 image, and the text of the result names its export path. A `read` of an image
 does the same with `Image path: <path>`. `drive.fetch` reads a process for the
-host. See [Sensors](https://github.com/ambionframework/ambion/blob/main/docs/sensors.md)
-for the sensor pattern.
+host. See [Processes](https://github.com/ambionframework/ambion/blob/main/docs/processes.md)
+for processes that serve HTTP.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';

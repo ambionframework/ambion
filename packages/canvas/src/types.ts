@@ -7,7 +7,7 @@ import type {
 	ToolBundle,
 } from '@ambionframework/ambion';
 import type { Workspace } from '@ambionframework/workspace';
-import type { CanvasClose, CanvasRoom, CanvasStore } from './store.ts';
+import type { CanvasClose, CanvasRoom, CanvasStore, CanvasWidget, WidgetKind } from './store.ts';
 
 /** The bounds and the worker team of the breakout rooms. */
 export interface BreakoutOptions {
@@ -15,6 +15,12 @@ export interface BreakoutOptions {
 	readonly team: readonly string[];
 	/** The most running breakout rooms for one opener in one parent. Default 3. */
 	readonly perOpener?: number;
+}
+
+/** The widget catalog of the host. */
+export interface WidgetOptions {
+	/** The kinds that the host draws. A `show` names one of them. */
+	readonly kinds: readonly WidgetKind[];
 }
 
 /** The operation that failed, as `onError` reports it. */
@@ -29,7 +35,10 @@ export type CanvasOperation =
 	| 'archive'
 	| 'report'
 	| 'notice'
-	| 'mirror';
+	| 'mirror'
+	| 'show'
+	| 'hide'
+	| 'widget';
 
 /** A failure that the canvas reports and survives. */
 export interface CanvasError {
@@ -46,6 +55,8 @@ export interface OpenCanvasOptions {
 	/** With a workspace, the canvas attaches the mirror of each room. */
 	readonly workspace?: Workspace;
 	readonly breakout: BreakoutOptions;
+	/** The catalog of widget kinds that the host draws. Without it, `widgetTools` is a refusal. */
+	readonly widgets?: WidgetOptions;
 	/** A failed start keeps its row `running`. The next `resume` tries again. */
 	readonly onError?: (error: CanvasError) => void;
 }
@@ -67,7 +78,8 @@ export type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
 export type CanvasEvent =
 	| { readonly type: 'opened'; readonly room: CanvasRoom }
 	| { readonly type: 'started' | 'stopped'; readonly room: string }
-	| { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose };
+	| { readonly type: 'archived'; readonly room: string; readonly close: CanvasClose }
+	| { readonly type: 'widget'; readonly widget: CanvasWidget };
 
 export interface Canvas {
 	readonly name: string;
@@ -75,6 +87,8 @@ export interface Canvas {
 	tools(): ToolBundle;
 	/** The worker bundle: `report`. Call it before `defineAgent`. */
 	workerTools(): ToolBundle;
+	/** The widget bundle: `show`, `hide`, and the reminder. A refusal with no `widgets.kinds`. Call it before `defineAgent`. */
+	widgetTools(): ToolBundle;
 	/**
 	 * Takes the definitions once, then starts or resumes each running root room,
 	 * then each running breakout room whose parent runs. A second call is a refusal.
@@ -107,5 +121,9 @@ export interface Canvas {
 	room(name: string): Room | undefined;
 	/** The rows of the store, read at `resume`. Empty before `resume`. */
 	rooms(): readonly CanvasRoom[];
+	/** The current revision of each widget of a room, hidden ones included. Empty before `resume`. */
+	widgets(room: string): readonly CanvasWidget[];
+	/** One revision by id, or undefined. Read at `resume`. */
+	revision(id: string): CanvasWidget | undefined;
 	subscribe(listener: (event: CanvasEvent) => void): () => void;
 }

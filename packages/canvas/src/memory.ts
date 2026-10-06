@@ -4,12 +4,14 @@ import {
 	type CanvasClose,
 	type CanvasRoom,
 	type CanvasStore,
+	type CanvasWidget,
 	missingRoom,
 } from './store.ts';
 
 /** A canvas store that a restart loses. A test and a one-shot host use it. */
 export function memoryCanvas(): CanvasStore {
 	const rows = new Map<string, CanvasRoom>();
+	const revisions = new Map<string, CanvasWidget>();
 	const row = (name: string): CanvasRoom => {
 		const found = rows.get(name);
 		if (found === undefined) throw missingRoom(name);
@@ -36,6 +38,12 @@ export function memoryCanvas(): CanvasStore {
 			const recorded: CanvasClose = structuredClone(close);
 			rows.set(name, { ...found, state: 'archived', close: recorded });
 			return structuredClone(recorded);
+		},
+		revisions: async () => [...revisions.values()].map((widget) => structuredClone(widget)),
+		appendRevision: async (widget) => {
+			if (revisions.has(widget.revision)) return 'exists';
+			revisions.set(widget.revision, structuredClone(widget));
+			return 'inserted';
 		},
 	};
 }

@@ -1,9 +1,9 @@
 # Actuators
 
 > **Actuators are a pattern over processes.** The workbench ships the
-> [actuator controller template](../examples/workbench/templates/actuator-controller),
+> [actuator controller template](../templates/actuator-controller),
 > and its tests pass. A cancel sends `SIGTERM`, waits the `grace` of the
-> `bash` call, then sends `SIGKILL` ([Processes](processes.md#the-cancel)).
+> `bash` call, then sends `SIGKILL` ([Processes](../../../docs/processes.md#the-cancel)).
 
 **An actuator is a controller command that runs as a process.** The
 command drives a device toward a desired state, runs to completion, and
@@ -43,7 +43,7 @@ which devices an agent reaches.
 **A Git template carries the practice.** The host registers
 `templates/actuator-controller` as it registers the sensor template. The
 agent forks it, writes the driver, tunes the law on a simulated plant,
-and saves each version on a branch. [Git](git.md) owns that lifecycle.
+and saves each version on a branch. [Git](../../../docs/git.md) owns that lifecycle.
 
 ## The loop
 
@@ -286,7 +286,7 @@ command. A sensor confirms it.
 
 **The kernel does not defend physical effects.** A command changes the
 world before any `say` commits. The room does not run an effect once
-([Durability](durability.md#5-what-the-room-does-not-promise)).
+([Durability](../../../docs/durability.md#5-what-the-room-does-not-promise)).
 
 ## Decisions taken
 

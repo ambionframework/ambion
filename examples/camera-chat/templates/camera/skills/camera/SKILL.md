@@ -5,10 +5,11 @@ description: Look through a running camera process and get the frame with its me
 
 # Look through the camera
 
-The camera process serves HTTP on its `$PORT`. Start it with `bash` and the
-name `camera` first.
+The camera process serves HTTP on its `$PORT`. Start it with `bash` first, and
+keep the handle that `bash` returns.
 
-1. Run the macro `camera/observe` with `{ "process": "camera" }`.
+1. Run the macro `camera/observe` with `{ "process": "<handle>" }`, using the
+   handle of the process. A process name works when one running process has it.
 2. Read the image at `frame.path` with `read`.
 3. Cite both returned `refs` in your say, and state the time in `at`.
    Describe visible evidence and uncertainty.

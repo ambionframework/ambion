@@ -4,11 +4,17 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 const root = join(import.meta.dirname, '..');
+// The Node 22 CI job deletes the examples, so a link into them resolves only when they exist.
+const examples = existsSync(join(root, 'examples/workbench'));
 const pages = [
+	...readdirSync(join(root, 'docs'))
+		.filter((name) => name.endsWith('.md'))
+		.map((name) => `docs/${name}`),
 	'CLAUDE.md',
 	'README.md',
-	'docs/actuators.md',
-	'docs/sensors.md',
+	...(examples
+		? ['examples/workbench/docs/actuators.md', 'examples/workbench/docs/sensors.md']
+		: []),
 	'planning/next.md',
 	'planning/backlog.md',
 	'planning/risks.md',
@@ -34,6 +40,7 @@ test('every relative Markdown link with a fragment resolves to a heading', () =>
 		const text = readFileSync(join(root, page), 'utf8');
 		for (const [, target, fragment] of text.matchAll(/\]\(([^)#:\s]+\.md)#([^)\s]+)\)/g)) {
 			const file = join(root, dirname(page), target);
+			if (!examples && file.startsWith(join(root, 'examples'))) continue;
 			assert.ok(existsSync(file), `${page}: ${target} does not exist`);
 			assert.ok(
 				anchorsOf(readFileSync(file, 'utf8')).has(fragment),

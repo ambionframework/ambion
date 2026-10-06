@@ -1,0 +1,34 @@
+/** What the widget port and the breakout port share: the base port, the name limit, and the reminder tail. */
+import type { ToolResult } from '@ambionframework/ambion';
+import type { CanvasRoom } from './store.ts';
+
+/** The most characters of a room name or a widget name. */
+export const NAME_LIMIT = 48;
+
+/** The most lines that one reminder lists. */
+const REMINDER_LINES = 10;
+
+/** What every port of the canvas reads: the readiness, the queue of one name, and the rows. */
+export interface BasePort {
+	/** Refuses before `resume` and after `close`. */
+	assertReady(): void;
+	/** Runs the operation after the calls in flight on that name. */
+	serial<T>(name: string, operation: () => Promise<T>): Promise<T>;
+	row(name: string): CanvasRoom | undefined;
+}
+
+/** The items of a reminder as at most ten lines. `line` writes one line, and `and N more` ends a longer list. */
+export async function reminderLines<T>(
+	items: readonly T[],
+	line: (item: T) => string | Promise<string>,
+): Promise<string[]> {
+	const shown = await Promise.all(items.slice(0, REMINDER_LINES).map(line));
+	const more = items.length - shown.length;
+	return more > 0 ? [...shown, `and ${more} more`] : shown;
+}
+
+/** A tool result with one line of text for the seat and the details for the host. */
+export const text = <T>(summary: string, details: T): ToolResult<T> => ({
+	content: [{ type: 'text', text: summary }],
+	details,
+});

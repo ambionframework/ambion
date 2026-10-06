@@ -2,16 +2,26 @@ import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
+import { createRuntime, defineAgent } from '@ambionframework/ambion';
+import { describeExecutor } from '@ambionframework/ambion/hosting';
+import { byAgent, scripted } from '@ambionframework/ambion/testing';
+import { memoryCanvas, openCanvas } from '@ambionframework/canvas';
+import { memoryJournals } from '@ambionframework/journal';
 import type { Process, ProcessEvent, Workspace } from '@ambionframework/workspace';
 import { workspaceConformance } from '@ambionframework/workspace/conformance';
-import { ImageRenderable, imageInfo, type TerminalCapabilities } from '@opentui/core';
+import {
+	BoxRenderable,
+	ImageRenderable,
+	imageInfo,
+	type TerminalCapabilities,
+} from '@opentui/core';
 import { createTestRenderer } from '@opentui/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL, openHost } from '../src/host.ts';
 import { localBashBackend } from '../src/local-bash.ts';
 import { localGitBackend } from '../src/local-git.ts';
 import { hostLogin, requireLogin } from '../src/login.ts';
-import { cameraPreview } from '../src/preview.ts';
+import { cameraPreview, MAX_BINDINGS, MAX_FRAME_BYTES } from '../src/preview.ts';
 import { nativeProtocol } from '../src/terminal.ts';
 import { cameraView } from '../src/tui.ts';
 import { parseCameras } from '../templates/camera/camera.ts';
@@ -114,33 +124,114 @@ async function checkEvidence(
 
 type Invoke = (name: string, args: object) => unknown;
 
-/** After a cancel, `fetch` refuses the name. A new process of that name restarts the preview, and `fetch` reads it twice. */
+type Host = Awaited<ReturnType<typeof openHost>>;
+
+/** The agent calls `show` for the widget `name`, with the handle of the process that `bash` started. */
+async function showFrame(
+	host: Host,
+	name: string,
+	started: unknown,
+	title: string,
+	context: { agent: { name: string; identity: string } },
+) {
+	const show = host.canvas.widgetTools().tools.find((tool) => tool.name === 'show');
+	const handle = (started as { details: { process: Process } }).details.process.handle;
+	await show?.invoke(
+		{ name, kind: 'frame', title, source: { type: 'process', handle, path: '/camera/observe' } },
+		{
+			...context,
+			callId: `show-${name}`,
+			room: 'camera',
+			activation: 'a-1',
+			exchange: { from: 1 },
+		},
+	);
+}
+
+/** After a cancel, `fetch` refuses the name, and the widget stays. A `show` with the handle of a new process binds it, and `fetch` reads it twice. */
 async function startAgain(
 	invoke: Invoke,
-	host: Awaited<ReturnType<typeof openHost>>,
+	host: Host,
 	previous: string,
+	context: { agent: { name: string; identity: string } },
 ): Promise<Process> {
-	await expect(invoke('fetch', { process: 'camera', path: '/camera/observe' })).rejects.toThrow(
-		"No running process is named 'camera'",
+	await expect(invoke('fetch', { process: 'front', path: '/camera/observe' })).rejects.toThrow(
+		"No running process is named 'front'",
 	);
 	const started = await invoke('bash', {
 		command: 'cd ~/camera && AMBION_SENSOR_REPOSITORY=observer/camera node main.ts --demo',
-		name: 'camera',
+		name: 'front',
 		wait: 1,
 		timeout: 86400,
 	});
 	const again = (started as { details: { process: Process } }).details.process;
 	expect(again.handle).not.toBe(previous);
-	await expect.poll(() => host.preview.latest?.digest).toBe(demoFrame().digest);
-	expect(host.preview.handle).toBe(again.handle);
-	const look = await invoke('fetch', { process: 'camera', path: '/camera/observe' });
+	// The new process has no binding until the agent shows its handle.
+	expect(host.preview.bindings[0]?.handle).toBeUndefined();
+	await showFrame(host, 'front', started, 'Front door', context);
+	await expect.poll(() => host.preview.bindings[0]?.latest?.digest).toBe(demoFrame().digest);
+	expect(host.preview.bindings[0]?.handle).toBe(again.handle);
+	const look = await invoke('fetch', { process: 'front', path: '/camera/observe' });
 	expect((look as { details: { status: number; handle: string } }).details).toMatchObject({
 		status: 200,
 		handle: again.handle,
 	});
-	const frame = await invoke('fetch', { process: 'camera', path: `/files/${demoFrame().digest}` });
+	const frame = await invoke('fetch', { process: 'front', path: `/files/${demoFrame().digest}` });
 	expect((frame as { details: { sha256: string } }).details.sha256).toBe(demoFrame().digest);
 	return again;
+}
+
+type Setup = Awaited<ReturnType<typeof createTestRenderer>>;
+
+/** A second camera gets a second box, stacked under the first without overlap, and a hide removes one box. */
+async function checkTwoCameras(
+	setup: Setup,
+	host: Host,
+	invoke: Invoke,
+	context: { agent: { name: string; identity: string }; callId: string },
+) {
+	// A second camera gets a second box, stacked under the first without overlap.
+	const launch = (name: string) =>
+		invoke('bash', {
+			command: 'cd ~/camera && AMBION_SENSOR_REPOSITORY=observer/camera node main.ts --demo',
+			name,
+			wait: 1,
+			timeout: 86400,
+		});
+	const hide = host.canvas.widgetTools().tools.find((tool) => tool.name === 'hide');
+	const widgetContext = { ...context, room: 'camera', activation: 'a-1', exchange: { from: 1 } };
+	await showFrame(host, 'desk', await launch('desk'), 'Desk', context);
+	await showFrame(host, 'front', await launch('front'), 'Front door', context);
+	const boxes = () => ['front', 'desk'].map((name) => `camera-modal-${name}`);
+	const found = () =>
+		boxes().map((id) => setup.renderer.root.findDescendantById(id)?.visible ?? false);
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return found();
+		})
+		.toEqual([true, true]);
+	const [upper, lower] = boxes().map((id) => setup.renderer.root.findDescendantById(id));
+	expect((upper?.y ?? 0) + (upper?.height ?? 0)).toBeLessThanOrEqual(lower?.y ?? 0);
+	expect(lower instanceof BoxRenderable && lower.title).toBe(' desk · Desk ');
+	expect(setup.captureCharFrame()).toContain('Cameras: front, desk');
+	// A hide of one widget removes only its box.
+	await hide?.invoke({ name: 'desk' }, { ...widgetContext, callId: 'hide-desk' });
+	await expect
+		.poll(async () => {
+			await setup.renderOnce();
+			return found();
+		})
+		.toEqual([true, false]);
+	expect(host.preview.bindings.map((binding) => binding.name)).toEqual(['front']);
+	await host.workspace.processes.cancel(
+		(await host.workspace.processes.list({ running: true })).find((one) => one.name === 'front')
+			?.handle ?? '',
+	);
+	await host.workspace.processes.cancel(
+		(await host.workspace.processes.list({ running: true })).find((one) => one.name === 'desk')
+			?.handle ?? '',
+	);
 }
 
 it('clones and launches the actual template, reads it with fetch, and drives the preview lifecycle', async () => {
@@ -167,10 +258,9 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		expect(shell).toContain(`HOME=${directory}/workspace/homes/observer`);
 		expect(shell).not.toContain('host-only-key');
 		await setup.renderOnce();
-		const modal = setup.renderer.root.findDescendantById('camera-modal');
 		const chat = setup.renderer.root.findDescendantById('room-chat');
 		const fullWidth = chat?.width;
-		expect(modal?.visible).toBe(false);
+		expect(setup.renderer.root.findDescendantById('camera-modal-front')).toBeUndefined();
 		const messages = await (
 			await host.visit.send({
 				text: 'Connect the camera and tell me what you see.',
@@ -180,7 +270,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		const answer = messages.find(
 			(message) => message.kind === 'said' && message.from === 'observer',
 		);
-		expect(answer && 'text' in answer && answer.text).toContain('received a synthetic frame');
+		expect(answer && 'text' in answer && answer.text).toContain('through the observe macro');
 		await expect(
 			invoke('bash', {
 				command: `cd ~/camera && git push ${directory}/git/templates/camera.git HEAD:refs/heads/x`,
@@ -188,13 +278,27 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		).rejects.toThrow('A template is read-only');
 		await checkEvidence(host, answer && 'refs' in answer ? answer.refs : undefined);
 		const camera = (await host.workspace.processes.list({ running: true })).find(
-			(process) => process.name === 'camera',
+			(process) => process.name === 'front',
 		);
 		if (!camera) throw new Error('No running camera process.');
 		expect(camera.port).toBeGreaterThan(0);
-		await expect.poll(() => host.preview.latest?.digest).toBe(demoFrame().digest);
+		expect(host.canvas.widgets('camera')).toMatchObject([
+			{
+				name: 'front',
+				title: 'Front door',
+				kind: 'frame',
+				state: 'shown',
+				author: 'observer',
+				source: { type: 'process', handle: camera.handle, path: '/camera/observe' },
+			},
+		]);
+		expect(host.preview.bindings.map((binding) => binding.name)).toEqual(['front']);
+		await expect.poll(() => host.preview.bindings[0]?.latest?.digest).toBe(demoFrame().digest);
 		await setup.renderOnce();
+		const modal = setup.renderer.root.findDescendantById('camera-modal-front');
 		expect(modal?.visible).toBe(true);
+		expect(modal instanceof BoxRenderable && modal.title).toBe(' front · Front door ');
+		expect(setup.captureCharFrame()).toContain('Cameras: front');
 		expect(modal?.x).toBeGreaterThan(60);
 		expect(modal?.width).toBeLessThan(55);
 		expect(modal?.height).toBeLessThan(18);
@@ -204,7 +308,7 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		expect(setup.captureCharFrame()).not.toContain('Camera preview');
 		expect(setup.captureCharFrame()).not.toContain('Frame ');
 
-		const picture = setup.renderer.root.findDescendantById('camera-frame');
+		const picture = setup.renderer.root.findDescendantById('camera-frame-front');
 		if (!(picture instanceof ImageRenderable)) throw new Error('No native image renderer.');
 		await expect.poll(() => picture.image?.width).toBe(1280);
 		expect(picture.image?.height).toBe(720);
@@ -220,24 +324,37 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		expect((savedPicture as ImageRenderable).image?.height).toBe(720);
 		expect(inline?.parent?.id).toBe(`message-${answer?.seq}`);
 		expect(setup.captureCharFrame()).toContain('Ambion');
+		// The workspace reads the process through the global fetch.
+		const reads = vi.spyOn(globalThis, 'fetch');
+		const observed = () =>
+			reads.mock.calls.filter(([url]) => String(url).endsWith('/camera/observe')).length;
 		setup.mockInput.pressEscape();
 		await expect.poll(() => modal?.visible).toBe(false);
 		await setup.renderOnce();
 		expect(chat?.width).toBe(fullWidth);
-		expect(host.preview.handle).toBe(camera.handle);
+		expect(host.preview.bindings[0]?.handle).toBe(camera.handle);
+		// A hidden preview reads nothing.
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		const hiddenReads = observed();
+		await new Promise((resolve) => setTimeout(resolve, 700));
+		expect(observed()).toBe(hiddenReads);
 		setup.mockInput.pressKey('p', { ctrl: true });
 		await expect.poll(() => modal?.visible).toBe(true);
+		await expect.poll(observed).toBeGreaterThan(hiddenReads);
+		reads.mockRestore();
 		await invoke('cancel', { handle: camera.handle });
-		await expect.poll(() => host.preview.handle).toBeUndefined();
+		await expect.poll(() => host.preview.bindings[0]?.handle).toBeUndefined();
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
-		expect(host.preview.latest).toBeUndefined();
+		expect(host.preview.bindings[0]?.latest).toBeUndefined();
+		// A stop is a cancel: the widget stays shown and draws nothing.
+		expect(host.canvas.widgets('camera')).toMatchObject([{ name: 'front', state: 'shown' }]);
 		expect(setup.renderer.root.findDescendantById(inlineId)).toBeDefined();
 		expect(
 			(await host.workspace.processes.list()).find((process) => process.handle === camera.handle)
 				?.state,
 		).toBe('exited');
-		const again = await startAgain(invoke, host, camera.handle);
+		const again = await startAgain(invoke, host, camera.handle, context);
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(true);
 		setup.resize(80, 25);
@@ -249,9 +366,10 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 		expect(setup.renderer.root.findDescendantById(inlineId)?.height).toBe(modal?.height);
 		expect((chat?.x ?? 0) + (chat?.width ?? 0)).toBeLessThan(modal?.x ?? 0);
 		await host.workspace.processes.cancel(again.handle);
-		await expect.poll(() => host.preview.handle).toBeUndefined();
+		await expect.poll(() => host.preview.bindings[0]?.handle).toBeUndefined();
 		await setup.renderOnce();
 		expect(modal?.visible).toBe(false);
+		await checkTwoCameras(setup, host, invoke, context);
 	} finally {
 		vi.unstubAllEnvs();
 		view.close();
@@ -261,7 +379,18 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 	}
 	const reopened = await openHost(options);
 	try {
-		expect(reopened.preview.handle).toBeUndefined();
+		// The canvas resumes the room from its row, and the room keeps its record.
+		expect(reopened.canvas.rooms()).toMatchObject([
+			{ name: 'camera', depth: 0, state: 'running', start: { kind: 'root', agents: ['observer'] } },
+		]);
+		expect(reopened.canvas.room('camera')).toBe(reopened.room);
+		// The widget row survives the restart, and no camera process runs to bind.
+		expect(reopened.canvas.widgets('camera')).toMatchObject([
+			{ name: 'front', state: 'shown' },
+			{ name: 'desk', state: 'hidden' },
+		]);
+		expect(reopened.preview.bindings.map((binding) => binding.name)).toEqual(['front']);
+		expect(reopened.preview.bindings[0]?.handle).toBeUndefined();
 		expect(
 			(await reopened.room.read()).messages.some(
 				(message) => message.kind === 'said' && message.from === 'observer',
@@ -273,30 +402,62 @@ it('clones and launches the actual template, reads it with fetch, and drives the
 	}
 }, 30000);
 
-it('follows the camera process, adopts one that runs at open, and downloads a frame once for one digest', async () => {
+const digest = 'a'.repeat(64);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Resolve when a count has not changed between two polls: the reads in flight have ended. */
+async function quiet(count: () => number) {
+	let last = -1;
+	await expect
+		.poll(
+			() => {
+				const same = count() === last;
+				last = count();
+				return same;
+			},
+			{ interval: 100 },
+		)
+		.toBe(true);
+}
+
+/** A process of the fake workspace. A later `start` is a newer start. */
+const camera = (handle: string, start: number, agent = 'observer', name = 'front') =>
+	({
+		handle,
+		name,
+		agent,
+		state: 'running',
+		startedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, start)).toISOString(),
+	}) as Process;
+
+/**
+ * A workspace that holds a list of running processes and answers each read with a frame. `fetched`
+ * records each read, and `body` answers a read of a file.
+ */
+function fakeWorkspace(running: Process[]) {
 	const listeners: ((event: ProcessEvent) => void)[] = [];
-	const digest = 'a'.repeat(64);
 	const fetched: string[] = [];
 	const queries: unknown[] = [];
-	let failing = false;
-	const process = (handle: string, name?: string) =>
-		({ handle, ...(name ? { name } : {}), state: 'running' }) as Process;
+	const state = {
+		failing: false,
+		file: (): Response => new Response(new Uint8Array([1])),
+	};
 	const workspace = {
 		processes: {
 			subscribe: (listener: (event: ProcessEvent) => void) => {
 				listeners.push(listener);
 				return () => {};
 			},
-			list: async (query: unknown) => {
+			list: async (query: { agent?: string }) => {
 				queries.push(query);
-				return [process('bash-other', 'build'), process('bash-adopted', 'camera')];
+				return running.filter((process) => process.agent === query.agent);
 			},
 		},
 		fetch: async (handle: string, path: string) => {
 			fetched.push(`${handle} ${path}`);
-			if (failing) return new Response('no', { status: 503 });
+			if (state.failing) return new Response('no', { status: 503 });
 			return path.startsWith('/files/')
-				? new Response(new Uint8Array([1]))
+				? state.file()
 				: Response.json({
 						observations: [
 							{ at: new Date().toISOString(), parts: [{ kind: 'frame', file: digest }] },
@@ -304,35 +465,297 @@ it('follows the camera process, adopts one that runs at open, and downloads a fr
 					});
 		},
 	} as unknown as Workspace;
-	const preview = cameraPreview(workspace, () => {}, 'observer');
-	const emit = (type: ProcessEvent['type'], handle: string, name?: string) =>
-		listeners[0]?.({ type, process: process(handle, name) });
-	try {
-		await expect.poll(() => preview.handle).toBe('bash-adopted');
-		// The list names the agent, so the workspace reads an agent that has not acted yet.
-		expect(queries).toEqual([{ agent: 'observer', running: true }]);
-		await expect.poll(() => preview.latest?.digest).toBe(digest);
-		await new Promise((resolve) => setTimeout(resolve, 700));
-		expect(fetched.filter((call) => call.includes('/files/'))).toEqual([
-			`bash-adopted /files/${digest}`,
+	const emit = (type: ProcessEvent['type'], process: Process) => listeners[0]?.({ type, process });
+	return { workspace, fetched, queries, running, state, emit };
+}
+
+const frameKind = { name: 'frame', description: 'A frame.', sources: ['process'] } as const;
+
+/** The bound widget of that name, as the host reads it. */
+const bound = (preview: ReturnType<typeof cameraPreview>, name = 'front') =>
+	preview.bindings.find((binding) => binding.name === name);
+
+/** A canvas with the room `camera` and the widget bundle of the observer, over one store and storage. */
+async function viewfinderCanvas(store = memoryCanvas(), storage = memoryJournals()) {
+	const runtime = createRuntime({ storage, execution: scripted(byAgent({})) });
+	const canvas = openCanvas({
+		name: 'cam',
+		runtime,
+		store,
+		breakout: { team: [] },
+		widgets: { kinds: [frameKind] },
+	});
+	const bundle = canvas.widgetTools();
+	const agent = defineAgent({
+		name: 'observer',
+		identity: 'Observer.',
+		executor: describeExecutor({ kind: 'scripted', instructions: 'Answer.', bundles: [bundle] }),
+	});
+	let calls = 0;
+	const call = (tool: string, args: object) => {
+		const found = bundle.tools.find((one) => one.name === tool);
+		if (!found) throw new Error(`Missing ${tool}`);
+		return found.invoke(args, {
+			agent: { name: 'observer', identity: 'Observer.' },
+			callId: `call-${++calls}`,
+			room: 'camera',
+			activation: 'act-1',
+			exchange: { from: 1 },
+		});
+	};
+	const show = (name = 'front', handle = `bash-${name}`) =>
+		call('show', {
+			name,
+			kind: 'frame',
+			title: `Camera ${name}`,
+			source: { type: 'process', handle, path: '/camera/observe' },
+		});
+	const start = async () => {
+		await canvas.resume({ agents: [agent] });
+		await canvas.open({ name: 'camera', goal: 'Look.', agents: ['observer'] });
+	};
+	return { canvas, store, storage, call, show, start };
+}
+
+describe('the previews', () => {
+	it('binds a shown frame widget by its handle, and rebinds on a new show', async () => {
+		const { workspace, fetched, queries, running, emit } = fakeWorkspace([
+			camera('bash-front', 1),
+			camera('bash-other', 9, 'someone'),
+			camera('bash-build', 9, 'observer', 'build'),
 		]);
-		expect(fetched).toContain('bash-adopted /camera/observe');
-		emit('started', 'bash-build', 'build');
-		emit('ended', 'bash-build', 'build');
-		expect(preview.handle).toBe('bash-adopted');
-		failing = true;
-		await expect.poll(() => preview.failure).toBe('Camera starting');
-		expect(preview.latest?.digest).toBe(digest);
-		emit('ended', 'bash-adopted', 'camera');
-		expect(preview.handle).toBeUndefined();
-		expect(preview.latest).toBeUndefined();
-		failing = false;
-		emit('started', 'bash-next', 'camera');
-		expect(preview.handle).toBe('bash-next');
-		await expect.poll(() => preview.latest?.digest).toBe(digest);
-	} finally {
-		preview.close();
-	}
+		const { canvas, show, call, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		try {
+			// No widget, no read of the process list.
+			expect(preview.bindings).toEqual([]);
+			expect(queries).toEqual([]);
+			// The handle of another agent binds nothing, and the preview reads nothing from it.
+			await show('front', 'bash-other');
+			await expect.poll(() => queries.length).toBe(1);
+			expect(queries).toEqual([{ agent: 'observer', running: true }]);
+			expect(bound(preview)?.title).toBe('Camera front');
+			expect(bound(preview)?.handle).toBeUndefined();
+			await wait(300);
+			expect(fetched).toEqual([]);
+			// The handle of a running process of the author binds, and one digest downloads once.
+			await show('front', 'bash-front');
+			await expect.poll(() => bound(preview)?.handle).toBe('bash-front');
+			expect(queries).toHaveLength(2);
+			await expect.poll(() => bound(preview)?.latest?.digest).toBe(digest);
+			await wait(700);
+			expect(fetched.filter((read) => read.includes('/files/'))).toEqual([
+				`bash-front /files/${digest}`,
+			]);
+			expect(queries).toHaveLength(2);
+			// A start of a process binds nothing: only a `show` with its handle does.
+			const follows = preview.follows;
+			running.push(camera('bash-next', 3));
+			emit('started', camera('bash-next', 3));
+			expect(bound(preview)?.handle).toBe('bash-front');
+			// A new show with another handle binds that process.
+			await show('front', 'bash-next');
+			await expect.poll(() => bound(preview)?.handle).toBe('bash-next');
+			expect(preview.follows).toBe(follows + 1);
+			await expect.poll(() => bound(preview)?.latest?.digest).toBe(digest);
+			// The end of another process changes nothing. The end of the bound one clears the frame.
+			emit('ended', camera('bash-front', 1));
+			expect(bound(preview)?.handle).toBe('bash-next');
+			emit('ended', camera('bash-next', 3));
+			expect(bound(preview)?.handle).toBeUndefined();
+			expect(bound(preview)?.latest).toBeUndefined();
+			expect(preview.bindings).toHaveLength(1);
+			// A hide removes the binding and stops the reads.
+			await call('hide', { name: 'front' });
+			expect(preview.bindings).toEqual([]);
+			await quiet(() => fetched.length);
+			const reads = fetched.length;
+			await wait(500);
+			expect(fetched).toHaveLength(reads);
+		} finally {
+			preview.close();
+			await canvas.close();
+		}
+	});
+
+	it('binds two widgets, and a hide or a process end clears only that binding', async () => {
+		const { workspace, fetched, running, emit } = fakeWorkspace([
+			camera('bash-front', 1),
+			camera('bash-desk', 1, 'observer', 'desk'),
+		]);
+		const { canvas, show, call, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		try {
+			await show('front');
+			await show('desk');
+			await expect.poll(() => bound(preview, 'front')?.handle).toBe('bash-front');
+			await expect.poll(() => bound(preview, 'desk')?.handle).toBe('bash-desk');
+			await expect.poll(() => bound(preview, 'front')?.latest?.digest).toBe(digest);
+			await expect.poll(() => bound(preview, 'desk')?.latest?.digest).toBe(digest);
+			expect(preview.bindings.map((binding) => binding.title)).toEqual([
+				'Camera front',
+				'Camera desk',
+			]);
+			// The end of the process `desk` clears that binding alone.
+			emit('ended', camera('bash-desk', 1, 'observer', 'desk'));
+			expect(bound(preview, 'desk')?.handle).toBeUndefined();
+			expect(bound(preview, 'desk')?.latest).toBeUndefined();
+			expect(bound(preview, 'front')?.latest?.digest).toBe(digest);
+			// A show of `desk` with a new handle binds it, and the other binding keeps its process.
+			running.push(camera('bash-desk2', 2, 'observer', 'desk'));
+			await show('desk', 'bash-desk2');
+			await expect.poll(() => bound(preview, 'desk')?.handle).toBe('bash-desk2');
+			expect(bound(preview, 'front')?.handle).toBe('bash-front');
+			await expect.poll(() => bound(preview, 'desk')?.latest?.digest).toBe(digest);
+			// A hide of `front` removes that binding alone and stops its reads.
+			await call('hide', { name: 'front' });
+			expect(preview.bindings.map((binding) => binding.name)).toEqual(['desk']);
+			expect(bound(preview, 'desk')?.handle).toBe('bash-desk2');
+			await quiet(() => fetched.filter((read) => read.startsWith('bash-front')).length);
+			const reads = fetched.filter((read) => read.startsWith('bash-front')).length;
+			await wait(500);
+			expect(fetched.filter((read) => read.startsWith('bash-front'))).toHaveLength(reads);
+			await expect
+				.poll(() => fetched.filter((read) => read.startsWith('bash-desk2')).length)
+				.toBeGreaterThan(1);
+		} finally {
+			preview.close();
+			await canvas.close();
+		}
+	});
+
+	it('binds at most four widgets, and ignores the others with a note', async () => {
+		const names = ['a', 'b', 'c', 'd', 'e'];
+		const { workspace } = fakeWorkspace(
+			names.map((name, index) => camera(`bash-${name}`, index, 'observer', name)),
+		);
+		const { canvas, show, call, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		try {
+			for (const name of names) await show(name);
+			await expect.poll(() => bound(preview, 'd')?.handle).toBe('bash-d');
+			expect(MAX_BINDINGS).toBe(4);
+			expect(preview.bindings.map((binding) => binding.name)).toEqual(['a', 'b', 'c', 'd']);
+			expect(preview.notice).toContain('e');
+			// A hide frees a place, and the ignored widget takes it.
+			await call('hide', { name: 'b' });
+			await expect.poll(() => bound(preview, 'e')?.handle).toBe('bash-e');
+			expect(preview.bindings.map((binding) => binding.name)).toEqual(['a', 'c', 'd', 'e']);
+			expect(preview.notice).toBeUndefined();
+		} finally {
+			preview.close();
+			await canvas.close();
+		}
+	});
+
+	it('binds again from the rows when the room starts, and not for a hidden widget', async () => {
+		const first = await viewfinderCanvas();
+		await first.start();
+		await first.show('front');
+		await first.show('desk');
+		await first.canvas.close();
+		const restart = async () => {
+			const { workspace } = fakeWorkspace([
+				camera('bash-front', 1),
+				camera('bash-desk', 1, 'observer', 'desk'),
+			]);
+			const again = await viewfinderCanvas(first.store, first.storage);
+			// The preview exists before the canvas resumes, as the host builds it.
+			const preview = cameraPreview(workspace, again.canvas, () => {}, 'camera');
+			await again.start();
+			return { ...again, preview };
+		};
+		const shown = await restart();
+		try {
+			expect(shown.canvas.widgets('camera')).toMatchObject([{ name: 'front' }, { name: 'desk' }]);
+			await expect.poll(() => bound(shown.preview, 'front')?.handle).toBe('bash-front');
+			await expect.poll(() => bound(shown.preview, 'desk')?.handle).toBe('bash-desk');
+			await expect.poll(() => bound(shown.preview, 'desk')?.latest?.digest).toBe(digest);
+			await shown.call('hide', { name: 'front' });
+			expect(shown.preview.bindings.map((binding) => binding.name)).toEqual(['desk']);
+			await shown.call('hide', { name: 'desk' });
+			expect(shown.preview.bindings).toEqual([]);
+		} finally {
+			shown.preview.close();
+			await shown.canvas.close();
+		}
+		const hidden = await restart();
+		try {
+			await expect
+				.poll(() => hidden.canvas.widgets('camera').map((widget) => widget.state))
+				.toEqual(['hidden', 'hidden']);
+			expect(hidden.preview.bindings).toEqual([]);
+		} finally {
+			hidden.preview.close();
+			await hidden.canvas.close();
+		}
+	});
+
+	it('reads nothing while the person hides the previews, and reads again for both when it shows', async () => {
+		const { workspace, fetched } = fakeWorkspace([
+			camera('bash-front', 1),
+			camera('bash-desk', 1, 'observer', 'desk'),
+		]);
+		const { canvas, show, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		const reads = (handle: string) => fetched.filter((read) => read.startsWith(handle)).length;
+		try {
+			await show('front');
+			await show('desk');
+			await expect.poll(() => bound(preview, 'front')?.latest?.digest).toBe(digest);
+			await expect.poll(() => bound(preview, 'desk')?.latest?.digest).toBe(digest);
+			preview.view(false);
+			await quiet(() => fetched.length);
+			const before = fetched.length;
+			await wait(600);
+			expect(fetched).toHaveLength(before);
+			expect(preview.bindings.map((binding) => binding.handle)).toEqual([
+				'bash-front',
+				'bash-desk',
+			]);
+			const front = reads('bash-front');
+			const desk = reads('bash-desk');
+			preview.view(false);
+			preview.view(true);
+			await expect.poll(() => reads('bash-front')).toBeGreaterThan(front);
+			await expect.poll(() => reads('bash-desk')).toBeGreaterThan(desk);
+		} finally {
+			preview.close();
+			await canvas.close();
+		}
+	});
+
+	it.each([
+		[
+			'a content length over the limit',
+			() =>
+				new Response(new Uint8Array([1]), {
+					headers: { 'content-length': `${MAX_FRAME_BYTES + 1}` },
+				}),
+		],
+		['a body over the limit', () => new Response(new Uint8Array(MAX_FRAME_BYTES + 1))],
+	])('rejects %s, and reads the next frame', async (_label, oversize) => {
+		const { workspace, state } = fakeWorkspace([camera('bash-front', 1)]);
+		state.file = oversize;
+		const { canvas, show, start } = await viewfinderCanvas();
+		await start();
+		const preview = cameraPreview(workspace, canvas, () => {}, 'camera');
+		try {
+			await show();
+			await expect.poll(() => bound(preview)?.failure).toBe('Camera starting');
+			expect(bound(preview)?.latest).toBeUndefined();
+			state.file = () => new Response(new Uint8Array(MAX_FRAME_BYTES));
+			await expect.poll(() => bound(preview)?.latest?.png.byteLength).toBe(MAX_FRAME_BYTES);
+			expect(bound(preview)?.failure).toBeUndefined();
+		} finally {
+			preview.close();
+			await canvas.close();
+		}
+	});
 });
 
 /** A simulated terminal advertising native Kitty graphics. */

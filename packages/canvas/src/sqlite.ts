@@ -5,6 +5,7 @@ import {
 	type CanvasClose,
 	type CanvasRoom,
 	type CanvasStore,
+	type CanvasWidget,
 	missingRoom,
 } from './store.ts';
 
@@ -16,6 +17,16 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS canvas_rooms (
 	state TEXT NOT NULL,
 	start TEXT NOT NULL,
 	close TEXT
+)`;
+
+const REVISIONS_SCHEMA = `CREATE TABLE IF NOT EXISTS canvas_widget_revisions (
+	position INTEGER PRIMARY KEY AUTOINCREMENT,
+	id TEXT NOT NULL UNIQUE,
+	room TEXT NOT NULL,
+	name TEXT NOT NULL,
+	rev INTEGER NOT NULL,
+	body TEXT NOT NULL,
+	UNIQUE (room, name, rev)
 )`;
 
 const COLUMNS = 'name, goal, depth, state, start, close';
@@ -39,6 +50,7 @@ function toRoom(row: Row): CanvasRoom {
  */
 export function sqliteCanvas(sql: Sql): CanvasStore {
 	sql.run(SCHEMA);
+	sql.run(REVISIONS_SCHEMA);
 	const find = (name: string): CanvasRoom => {
 		const [row] = sql.all(`SELECT ${COLUMNS} FROM canvas_rooms WHERE name = ?`, name);
 		if (row === undefined) throw missingRoom(name);
@@ -81,6 +93,24 @@ export function sqliteCanvas(sql: Sql): CanvasStore {
 			const recorded: CanvasClose | undefined = find(name).close;
 			if (recorded === undefined) throw archivedRoom(name);
 			return recorded;
+		},
+		revisions: async () =>
+			sql
+				.all('SELECT body FROM canvas_widget_revisions ORDER BY position ASC')
+				.map((row): CanvasWidget => JSON.parse(String(row.body))),
+		appendRevision: async (widget) => {
+			const written = sql.all(
+				`INSERT INTO canvas_widget_revisions (id, room, name, rev, body)
+				 VALUES (?, ?, ?, ?, ?)
+				 ON CONFLICT (id) DO NOTHING
+				 RETURNING id`,
+				widget.revision,
+				widget.room,
+				widget.name,
+				widget.rev,
+				JSON.stringify(widget),
+			);
+			return written.length === 0 ? 'exists' : 'inserted';
 		},
 	};
 }

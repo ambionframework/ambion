@@ -61,7 +61,7 @@ names `server`. The port passed to `endpoints.forward` is the remote HTTP servic
 port. `options.port` is the SSH login port. The transport URL uses a
 temporary host loopback port. The private URL is an HTTP root. The workspace
 exports the `WorkspaceEndpoint` and `WorkspaceEndpoints` types from its root entry.
-The owner runs a sensor server as an ordinary process from its Git
+The owner runs a server as an ordinary process from its Git
 repository, and any agent reads it with `fetch`.
 
 ```ts

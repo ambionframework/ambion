@@ -103,7 +103,7 @@ async function cancelOrphan(): Promise<void> {
 	const { workspace, bash } = await openRecovery();
 	try {
 		const listing = await runToolRoom(workspace, 'analyst', [action('ps', {})]);
-		const handle = /\|\s*(bash-[a-f0-9]+)\s*\|\s*sensor-server\s*\|/.exec(
+		const handle = /\|\s*(bash-[a-f0-9]+)\s*\|\s*http-process\s*\|/.exec(
 			latest(listing.results, 'ps'),
 		)?.[1];
 		if (handle !== undefined)

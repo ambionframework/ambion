@@ -37,6 +37,40 @@ export interface CanvasRoom {
 	readonly close?: CanvasClose;
 }
 
+/** Where the data of a widget comes from. The canvas holds the pointer and reads no source. */
+export type WidgetSource =
+	| { readonly type: 'process'; readonly handle: string; readonly path: string }
+	| { readonly type: 'file'; readonly path: string }
+	| { readonly type: 'snapshot'; readonly ref: string };
+
+/** One revision of a widget. A revision never changes. */
+export interface CanvasWidget {
+	readonly room: string;
+	/** Unique in the room. The shared name syntax, 48 characters at most. */
+	readonly name: string;
+	/** A new id for each revision. */
+	readonly revision: string;
+	/** Counts the revisions of this name, from 1. */
+	readonly rev: number;
+	readonly state: 'shown' | 'hidden';
+	/** One kind of the host catalog. */
+	readonly kind: string;
+	readonly source?: WidgetSource;
+	/** One line, 80 characters at most. */
+	readonly title?: string;
+	/** The agent that wrote this revision. */
+	readonly author: string;
+}
+
+/** One kind of the catalog that the host can draw. */
+export interface WidgetKind {
+	readonly name: string;
+	/** One line for the guidance. */
+	readonly description: string;
+	/** The source types that the kind takes. A kind with none takes no source. */
+	readonly sources: readonly WidgetSource['type'][];
+}
+
 /**
  * The rows of a canvas. The store has no fence: one host owns a canvas.
  *
@@ -55,6 +89,10 @@ export interface CanvasStore {
 	 * An archived row stays as it is, and the call returns the close that the row holds.
 	 */
 	archive(name: string, close: CanvasClose): Promise<CanvasClose>;
+	/** Every widget revision, in the order of insertion. */
+	revisions(): Promise<readonly CanvasWidget[]>;
+	/** Appends one revision. A revision id that exists stays as it is. */
+	appendRevision(widget: CanvasWidget): Promise<'inserted' | 'exists'>;
 }
 
 /** The error for a name with no row. */

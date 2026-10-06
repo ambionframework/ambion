@@ -11,40 +11,39 @@ each page.
 
 ## Contracts
 
-| Document                              | Use it for                                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                                              |
-| [Technical facts](technical-facts.md) | Key facts and system limits                                                                   |
-| [Definitions and tools](agent.md)     | Definitions and tools                                                                         |
-| [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                                         |
-| [Compose](compose.md)                 | The `compose` tool: join tools in one call through short code                                 |
-| [Macros](macros.md)                   | Skill macros: compose programs that a skill stores and the model runs by name                 |
-| [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                                         |
-| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing                                |
-| [Codex](codex.md)                     | The Codex executor: install, options, trust, and testing                                      |
-| [Assistant](assistant.md)             | The default assistant package and the `assistant` room option                                 |
-| [Exchange](exchange.md)               | Human questions, completion, and durable result handles                                       |
-| [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                                    |
-| [Roster](roster.md)                   | Agent seating, reserve, and attention                                                         |
-| [Sensors](sensors.md)                 | A pattern over processes: protocol version 2, the template lifecycle, and the `observe` macro |
-| [Actuators](actuators.md)             | A pattern over processes: the controller contract and the template                            |
-| [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend                        |
-| [Patterns](patterns.md)               | The human collaboration patterns the room represents                                          |
-| [Summaries](summary.md)               | Optional closing work and context replacement                                                 |
-| [Resources](resources.md)             | The resource contract, tool bundles, references, and provenance                               |
-| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                                          |
-| [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders                   |
-| [Canvas](canvas.md)                   | The collection of rooms, and breakout rooms for background work                               |
-| [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent                           |
-| [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes                                 |
-| [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys                     |
-| [Example](example.md)                 | The one runnable example: an agentic lab workspace                                            |
-| [Simulator](simulator.md)             | A design: evals where an agent plays a person, with checks and a judge                        |
-| [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                                    |
-| [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                                  |
-| [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits                                    |
-| [Limits and fold cost](limits.md)     | Configurable limits and the measured cost of the fold                                         |
-| [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                                              |
+| Document                              | Use it for                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| [Room](room.md)                       | Overview, glossary, and the room-wide mechanisms                              |
+| [Technical facts](technical-facts.md) | Key facts and system limits                                                   |
+| [Definitions and tools](agent.md)     | Definitions and tools                                                         |
+| [Executors](executors.md)             | The executor contract, steps, the trace, and adapters                         |
+| [Compose](compose.md)                 | The `compose` tool: join tools in one call through short code                 |
+| [Macros](macros.md)                   | Skill macros: compose programs that a skill stores and the model runs by name |
+| [Pi executor](pi.md)                  | The Pi package: options, exchange continuity, testing                         |
+| [Claude executor](claude.md)          | The Claude Agent SDK package: policy, trust, sessions, testing                |
+| [Codex](codex.md)                     | The Codex executor: install, options, trust, and testing                      |
+| [Assistant](assistant.md)             | The default assistant package and the `assistant` room option                 |
+| [Exchange](exchange.md)               | Human questions, completion, and durable result handles                       |
+| [Presence](presence.md)               | Visits, arrivals, departures, and catch-up                                    |
+| [Roster](roster.md)                   | Agent seating, reserve, and attention                                         |
+| [Trust](trust.md)                     | What one owner guarantees another, and what the kernel does not defend        |
+| [Patterns](patterns.md)               | The human collaboration patterns the room represents                          |
+| [Summaries](summary.md)               | Optional closing work and context replacement                                 |
+| [Resources](resources.md)             | The resource contract, tool bundles, references, and provenance               |
+| [Workspace](workspace.md)             | The workspace interface, its backends, and its tools                          |
+| [Processes](processes.md)             | Background processes: `bash`, `ps`, handles, the host's view, and reminders   |
+| [Canvas](canvas.md)                   | The collection of rooms, and breakout rooms for background work               |
+| [Widgets](widgets.md)                 | Live views that agents show on the canvas, and the design of acts             |
+| [Workstation](workstation.md)         | A remote server as a workspace over SSH, one account for each agent           |
+| [Git](git.md)                         | A git backend: read-only templates, forks, clones, and pushes                 |
+| [Workstation git](workstation-git.md) | The git backend on the workstation: one account, git over SSH, agent keys     |
+| [Example](example.md)                 | The one runnable example: an agentic lab workspace                            |
+| [Simulator](simulator.md)             | A design: evals where an agent plays a person, with checks and a judge        |
+| [Durability](durability.md)           | Journal guarantees, recovery, leases, and failure evidence                    |
+| [Formal](formal.md)                   | The verified rules, their proofs, and how the gate runs them                  |
+| [Deployment](deployment.md)           | Host placement, storage, reconnect, and operational limits                    |
+| [Limits and fold cost](limits.md)     | Configurable limits and the measured cost of the fold                         |
+| [Toolchain](toolchain.md)             | Package layout, checks, CI, and release commands                              |
 
 ## Navigation hints
 

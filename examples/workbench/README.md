@@ -65,7 +65,7 @@ Node controller for one actuator over a simulated plant. The harness
 installs the stop handlers first, holds a deadline, logs JSON lines, and
 exits 0 only after the device is safe. `start` takes a lock and replaces
 itself with `node`. Its `npm test` sends real signals to the controller.
-[Actuators](../../docs/actuators.md) states the pattern.
+[Actuators](docs/actuators.md) states the pattern.
 
 ## Sensor server template
 
@@ -82,7 +82,19 @@ It does not add `fetch` to the terminal workspace, and it loads no template
 skill. The workstation flow reads the template with `fetch`. The Workbench's
 `test/sensor-template.test.ts` covers the Git fork, push, fresh clone, and
 rejection of an invalid fixture change. The OpenSSH acceptance is in the
-workstation package. See [Sensors](../../docs/sensors.md).
+workstation package. See [Sensors](docs/sensors.md).
+
+## Rules of the sensor and actuator patterns
+
+- **A sensor template carries a protocol version.** A breaking change raises
+  `api`, and the macros of the template refuse a server at another `api`. A
+  forked server does not upgrade with the host. Reducer state belongs to the
+  server. The workspace keeps what `fetch` reads through snapshot refs.
+  Measurement timestamps are the source of truth; host time governs host
+  interactions.
+- **A sensor definition starts as a Git template.** The agent forks,
+  customizes, validates, commits, and pushes before it runs a saved version.
+  Replacement and rollback use the Git and process tools.
 
 ## The terminal
 
@@ -370,6 +382,7 @@ workspace resources.
 | `src/workbench.ts`       | The host API the terminal calls in process              |
 | `src/files.ts`           | The workspace list, one file preview, and `/attach`     |
 | `src/names.ts`           | The room name and goal rules                            |
+| `src/sql.ts`             | The `Sql` of the stores over one SQLite database        |
 | `src/session.ts`         | The terminal state and commands, without OpenTUI        |
 | `src/feed.ts`            | The room feed: one read at a time                       |
 | `src/commands.ts`        | The slash commands and their suggestions                |

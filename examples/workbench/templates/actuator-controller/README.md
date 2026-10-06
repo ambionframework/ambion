@@ -6,7 +6,7 @@ end. It needs Node 22.19 or newer and Git. `start` also needs `flock`
 from util-linux. It has no dependencies. The default device is a
 simulated plant, so the template runs with no hardware.
 
-[Actuators](../../../../docs/actuators.md) states the pattern that this
+[Actuators](../../docs/actuators.md) states the pattern that this
 template follows.
 
 ## The files

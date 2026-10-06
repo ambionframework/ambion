@@ -17,7 +17,7 @@ import {
 } from '@ambionframework/canvas';
 import { claudeExecution } from '@ambionframework/claude';
 import { codexExecution } from '@ambionframework/codex';
-import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
+import { sqliteJournals } from '@ambionframework/journal';
 import { directoryBackend } from '@ambionframework/just-bash';
 import { type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 import { openWorkspace } from '@ambionframework/workspace';
@@ -35,6 +35,7 @@ import {
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
+import { sqlOf } from './sql.ts';
 import { stepLog } from './steps.ts';
 import { unavailable } from './unavailable.ts';
 
@@ -119,12 +120,7 @@ export async function openRooms(
 	directory: string,
 	options: RoomsOptions = {},
 ) {
-	const sql: Sql = {
-		run: (query, ...params) => {
-			database.prepare(query).run(...params);
-		},
-		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
-	};
+	const sql = sqlOf(database);
 	// A test that supplies executions runs no live executor, so no seat lacks a key.
 	const missing =
 		options.stream || options.executions
@@ -351,6 +347,8 @@ function heardEvent(
 	stateOf: (name: string) => RoomState,
 	room: (name: string) => Room | undefined,
 ): void {
+	// The workbench draws no widget.
+	if (event.type === 'widget') return;
 	const name = event.type === 'opened' ? event.room.name : event.room;
 	const state = stateOf(name);
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));

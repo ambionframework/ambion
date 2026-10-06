@@ -12,11 +12,21 @@ import {
 	TextRenderable,
 } from '@opentui/core';
 import type { CameraHost } from './host.ts';
-import type { PreviewFrame } from './preview.ts';
+import type { PreviewBinding, PreviewFrame } from './preview.ts';
 import { referenceImages } from './reference-images.ts';
 import { nativeProtocol } from './terminal.ts';
 
-/** Workbench conversation widgets with a floating, connection-driven camera preview. */
+/** One floating box of a bound camera widget. */
+interface Tile {
+	readonly box: BoxRenderable;
+	readonly picture: ImageRenderable;
+	digest: string | undefined;
+}
+
+const KEYS =
+	'Enter: send · Shift+Enter: newline · PgUp/PgDn: scroll · Ctrl+P: previews · Ctrl+C: quit';
+
+/** Workbench conversation widgets with floating, connection-driven camera previews, one for each bound widget. */
 export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolean) {
 	const protocol = nativeProtocol(renderer);
 	let stopped = false;
@@ -24,8 +34,9 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 	let reading = false;
 	let dirty = false;
 	let dismissed = false;
-	let revision = 0;
-	let displayedDigest: string | undefined;
+	let follows = 0;
+	const tiles = new Map<string, Tile>();
+	const size = { width: 42, height: 15 };
 	let transcriptVersion = '';
 	const root = new BoxRenderable(renderer, {
 		width: '100%',
@@ -62,8 +73,8 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		references.get(message).map((bytes, index) => {
 			const box = new BoxRenderable(renderer, {
 				id: `reference-image-${message.seq}-${index}`,
-				width: camera.width,
-				height: camera.height,
+				width: size.width,
+				height: size.height,
 				border: true,
 				borderColor: palette.line,
 				flexDirection: 'column',
@@ -112,30 +123,8 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 	});
 	composer.add(input);
 	const status = new TextRenderable(renderer, { content: '', height: 2, fg: palette.muted });
-	const camera = new BoxRenderable(renderer, {
-		id: 'camera-modal',
-		position: 'absolute',
-		top: 1,
-		right: 1,
-		width: 42,
-		height: 15,
-		zIndex: 20,
-		border: true,
-		borderColor: palette.line,
-		flexDirection: 'column',
-		overflow: 'hidden',
-		visible: false,
-	});
-	const picture = new ImageRenderable(renderer, {
-		id: 'camera-frame',
-		width: '100%',
-		flexGrow: 1,
-		minHeight: 0,
-		fit: 'fit',
-		protocol,
-		onError: report,
-	});
-	camera.add(picture);
+	// The ruler reads the cell shape of the terminal for the size of a tile.
+	const ruler = new ImageRenderable(renderer, { protocol });
 	const chat = new BoxRenderable(renderer, {
 		id: 'room-chat',
 		width: '100%',
@@ -150,7 +139,6 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 	chat.add(composer);
 	chat.add(status);
 	root.add(chat);
-	root.add(camera);
 	renderer.root.add(root);
 	input.focus();
 	async function send() {
@@ -168,41 +156,113 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		}
 	}
 	function resize() {
-		camera.width = Math.max(22, Math.min(54, Math.floor(renderer.width * 0.38)));
-		camera.height = Math.max(
+		size.width = Math.max(22, Math.min(54, Math.floor(renderer.width * 0.38)));
+		size.height = Math.max(
 			1,
 			Math.min(
 				Math.floor(renderer.height * 0.48),
-				Math.round(((camera.width - 2) * 9) / (16 * picture.cellAspectRatio)) + 2,
+				Math.round(((size.width - 2) * 9) / (16 * ruler.cellAspectRatio)) + 2,
 			),
 		);
 		paint();
 		void refresh();
 	}
+	function tileOf(name: string): Tile {
+		const found = tiles.get(name);
+		if (found) return found;
+		const box = new BoxRenderable(renderer, {
+			id: `camera-modal-${name}`,
+			position: 'absolute',
+			right: 1,
+			zIndex: 20,
+			border: true,
+			borderColor: palette.line,
+			titleColor: palette.accent,
+			flexDirection: 'column',
+			overflow: 'hidden',
+			visible: false,
+		});
+		const picture = new ImageRenderable(renderer, {
+			id: `camera-frame-${name}`,
+			width: '100%',
+			flexGrow: 1,
+			minHeight: 0,
+			fit: 'fit',
+			protocol,
+			onError: report,
+		});
+		box.add(picture);
+		root.add(box);
+		const tile: Tile = { box, picture, digest: undefined };
+		tiles.set(name, tile);
+		return tile;
+	}
+	function dropTile(name: string, tile: Tile) {
+		tiles.delete(name);
+		tile.box.destroyRecursively();
+	}
 	function paint() {
 		if (stopped) return;
-		if (revision !== host.preview.revision) {
-			revision = host.preview.revision;
+		if (follows !== host.preview.follows) {
+			follows = host.preview.follows;
 			dismissed = false;
 		}
-		fitChat();
-		const frame = host.preview.latest;
-		if (!frame) {
-			picture.source = undefined;
-			displayedDigest = undefined;
-		} else if (frame.digest !== displayedDigest) updatePicture(frame);
-		status.content = `${host.preview.failure ?? host.activity}\nEnter: send · Shift+Enter: newline · PgUp/PgDn: scroll · Ctrl+P: preview · Ctrl+C: quit`;
+		host.preview.view(!dismissed);
+		const shown = dismissed
+			? []
+			: host.preview.bindings.filter((binding) => binding.handle && binding.latest);
+		layoutTiles(shown);
+		status.content = statusText();
 	}
-	function fitChat() {
-		camera.visible = Boolean(host.preview.handle && host.preview.latest) && !dismissed;
-		chat.width = camera.visible ? Math.max(1, renderer.width - camera.width - 4) : '100%';
+	/** Drop the boxes of removed widgets, and hide the boxes of cameras that show no frame. */
+	function syncTiles(shown: readonly PreviewBinding[]) {
+		const names = new Set(host.preview.bindings.map((binding) => binding.name));
+		for (const [name, tile] of tiles) {
+			if (!names.has(name)) dropTile(name, tile);
+			else if (!shown.some((binding) => binding.name === name)) hideTile(tile);
+		}
 	}
-	function updatePicture(frame: PreviewFrame) {
+	/** Stack one box for each shown camera at the top right. The title of a box names its widget. */
+	function layoutTiles(shown: readonly PreviewBinding[]) {
+		// Each box needs three rows, so a short terminal draws the first boxes that fit.
+		const fit = shown.slice(0, Math.max(1, Math.floor((renderer.height - 2) / 3)));
+		syncTiles(fit);
+		const each = fit.length > 1 ? Math.floor((renderer.height - 2) / fit.length) : size.height;
+		const height = Math.max(3, Math.min(size.height, each));
+		fit.forEach((binding, index) => {
+			const tile = tileOf(binding.name);
+			Object.assign(tile.box, {
+				width: size.width,
+				height,
+				top: 1 + index * height,
+				visible: true,
+			});
+			tile.box.title = ` ${[binding.name, binding.title].filter(Boolean).join(' · ')} `;
+			if (binding.latest && binding.latest.digest !== tile.digest)
+				updatePicture(tile, binding.latest);
+		});
+		chat.width = fit.length ? Math.max(1, renderer.width - size.width - 4) : '100%';
+	}
+	function hideTile(tile: Tile) {
+		tile.box.visible = false;
+		tile.picture.source = undefined;
+		tile.digest = undefined;
+	}
+	function statusText() {
+		const { bindings, notice } = host.preview;
+		const failed = bindings.find((binding) => binding.failure);
+		const line = [notice, failed ? `${failed.name}: ${failed.failure}` : host.activity]
+			.filter(Boolean)
+			.join(' · ');
+		const cameras = bindings.filter((binding) => binding.handle).map((binding) => binding.name);
+		return `${cameras.length ? `Cameras: ${cameras.join(', ')} · ` : ''}${line}\n${KEYS}`;
+	}
+	function updatePicture(tile: Tile, frame: PreviewFrame) {
 		try {
 			const image = NativeImage.decode(frame.png);
 			try {
-				picture.source = image;
-				displayedDigest = frame.digest;
+				tile.picture.source = image;
+				tile.digest = frame.digest;
 			} finally {
 				image.dispose();
 			}
@@ -211,11 +271,11 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 		}
 	}
 	function showChat(messages: readonly Message[]) {
-		const version = `${messages.at(-1)?.seq}:${host.activity}:${camera.width}:${camera.height}`;
+		const version = `${messages.at(-1)?.seq}:${host.activity}:${size.width}:${size.height}`;
 		if (transcriptVersion === version) return;
 		transcriptVersion = version;
 		transcript.render(chatBlocks(messages, host.activity), undefined, undefined);
-		status.content = `${host.activity}\nEnter: send · Shift+Enter: newline · PgUp/PgDn: scroll · Ctrl+P: preview · Ctrl+C: quit`;
+		status.content = statusText();
 	}
 	function report(error: unknown) {
 		if (!stopped) status.content = String(error);
@@ -263,7 +323,8 @@ export function cameraView(renderer: CliRenderer, host: CameraHost, demo: boolea
 			unwatch();
 			renderer.off('resize', resize);
 			renderer.keyInput.off('keypress', keys);
-			if (!picture.isDestroyed) picture.source = undefined;
+			for (const tile of tiles.values())
+				if (!tile.picture.isDestroyed) tile.picture.source = undefined;
 		},
 	};
 }
@@ -301,7 +362,7 @@ function chatBlocks(messages: readonly Message[], activity: string): Block[] {
 	if (!blocks.length)
 		blocks.push({
 			type: 'note',
-			text: 'Ask the agent to connect the camera. The preview appears while the camera process runs.',
+			text: 'Ask the agent to connect the camera. A preview appears while a camera process runs.',
 		});
 	if (activity !== 'Ready') blocks.push({ type: 'live', text: activity });
 	return blocks;

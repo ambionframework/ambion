@@ -3,10 +3,10 @@
 > Every process has a port in `$PORT`. A process that listens on it serves
 > HTTP, and any agent reads it with `fetch`
 > ([Processes that serve HTTP](#processes-that-serve-http)).
-> [Sensor servers](sensors.md#run-a-server-from-git) are such processes.
->
-> [Actuators](actuators.md) describes a device controller that runs as a
-> `bash` process, with a grace that fits the device.
+> The Workbench example runs
+> [sensor servers](../examples/workbench/docs/sensors.md#run-a-server-from-git)
+> and [device controllers](../examples/workbench/docs/actuators.md) as such
+> processes.
 
 **`bash` starts every command as a background process.** The call gives a
 handle for the process. `cancel` takes that handle, `wait` takes a list of
@@ -969,7 +969,7 @@ the two handle tools stay as they are.
 | The default timeout is 600 seconds, and the agent can raise it  | An adopted process needs a bound from its spec                                                       |
 | A name is a label, and the handle is the key                    | Two processes can have one name with no rule for which one a call takes                              |
 | Every process gets a port in `$PORT`                            | A server needs no flag, no registration, and no output line to be read; the workspace knows its port |
-| `fetch` sends GET alone                                         | A request that asks a process to act is the actuator pattern                                         |
+| `fetch` sends GET alone                                         | A request that asks a process to act needs a tool of its own                                         |
 | `ps` writes an audit entry                                      | The audit log records every tool call                                                                |
 | A process wakes no seat, and the agent waits for its result     | The kernel adds no wake source for the end of a process, and a host that wants one calls `room.post` |
 | The agent comes back to a long process with a scheduled say     | The room keeps one clock, and the agent chooses when to look again                                   |

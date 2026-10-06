@@ -1,133 +1,130 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="628" viewBox="0 0 1000 628" role="img" aria-labelledby="title desc">
-  <title id="title">A room, its agents, and the workspace</title>
-  <desc id="desc">One exchange. A person asks with visit.send(), and the room records entry 1 in its journal. The host is application code: it seats the agents and posts events with room.post. The room activates Agent A, on Pi, and Agent B, on the Claude Agent SDK, and they reason in parallel. A reads a file in the workspace and says, entry 2, with a ref to the file. The first say of B read only entry 1, so it comes back missed with entry 2. B reads entry 2, writes a file in the workspace, and says, entry 3, with a ref to the new file. Entry 3 wakes A. A reads entry 3 and stays silent. No seat has work left, so the room closes the exchange, entry 4, and waitForClose() returns. A room started with summaryWriter adds an optional summary of entries 1 to 3, entry 5. A restart replays the entries. Both agents call the tools of one shared workspace. Files: read, write, and edit. Processes: bash, ps, and wait, and the optional fetch. A process outlives the activation. A process can serve HTTP on $PORT, and fetch reads it. Optional capabilities add tables, repositories, and skills. The compose tool joins tools in one call. Each agent has a home of its own. A message cites a file with a ref.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="602" viewBox="0 0 1000 602" role="img" aria-labelledby="title desc">
+  <title id="title">The canvas for people, the workspace for agents</title>
+  <desc id="desc">People use the canvas. Agents sit between the canvas and the workspace. A canvas holds rooms and widgets. A person visits the root room with visit.send(). Another person visits a breakout room. A third person reads a widget. Each room is a shared journal. In the root room, a person asks, Agent A on Pi says, Agent B on Claude says, and the exchange closes. Agent B opens a breakout room with the breakout tool. The breakout room has a journal of its own, and the root room is its parent. Agent C on Codex says in the breakout room. Agent C shows a frame widget, a camera viewfinder, with the show tool. The host draws the widget. Its source is a process that the agent started, and the host reads it on $PORT. The agents call the tools of one shared workspace. Files: read, write, and edit, and a message cites a file with a ref. Snapshots: snapshot and restore. Skills and compose: compose joins tools in one call. Processes: bash and fetch. A process outlives the activation and can serve HTTP on $PORT.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#a3aba8"/></marker>
     <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#6cc4bb"/></marker>
-    <marker id="cross" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="12" markerHeight="12"><path d="M2 2 10 10 M10 2 2 10" stroke="#ef8570" stroke-width="2.4" stroke-linecap="round"/></marker>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/></filter>
     <style>
       .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
       .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-      .ink { fill: #e8e9e4; } .dim { fill: #a3aba8; } .teal { fill: #6cc4bb; } .red { fill: #ef8570; } .code { fill: #a4b6f2; }
+      .ink { fill: #e8e9e4; } .dim { fill: #a3aba8; } .teal { fill: #6cc4bb; } .code { fill: #a4b6f2; }
       .n { font-size: 16px; font-weight: 700; } .s { font-size: 14px; } .x { font-size: 13px; } .c { font-size: 13px; } .lab { font-size: 13px; font-weight: 700; }
       .flow { fill: none; stroke: #a3aba8; stroke-width: 2; }
-      .flow-red { fill: none; stroke: #ef8570; stroke-width: 2; stroke-dasharray: 5 4; }
       .flow-teal { fill: none; stroke: #6cc4bb; stroke-width: 2; stroke-dasharray: 6 5; }
-      .guide { stroke: #384143; stroke-width: 1.5; stroke-dasharray: 2 6; }
     </style>
   </defs>
-  <rect width="1000" height="628" rx="20" fill="#171c1d"/>
-  <text x="24" y="80" text-anchor="start" class="sans ink n">Person</text>
-  <text x="24" y="100" text-anchor="start" class="sans dim s">asks, reads</text>
-  <text x="24" y="132" text-anchor="start" class="sans ink n">Host</text>
-  <text x="24" y="152" text-anchor="start" class="sans dim s">application code</text>
-  <text x="24" y="198" text-anchor="start" class="sans ink n">Room</text>
-  <text x="24" y="218" text-anchor="start" class="sans dim s">the journal</text>
-  <text x="24" y="322" text-anchor="start" class="sans ink n">Agent A</text>
-  <text x="24" y="342" text-anchor="start" class="sans dim s">Pi</text>
-  <text x="24" y="402" text-anchor="start" class="sans ink n">Agent B</text>
-  <text x="24" y="422" text-anchor="start" class="sans dim s">Claude Agent SDK</text>
-  <text x="24" y="536" text-anchor="start" class="sans ink n">Workspace</text>
-  <text x="24" y="556" text-anchor="start" class="sans dim s">shared</text>
-  <line x1="170" y1="80" x2="976" y2="80" class="guide"/>
-  <line x1="170" y1="132" x2="976" y2="132" class="guide"/>
-  <line x1="170" y1="320" x2="976" y2="320" class="guide"/>
-  <line x1="170" y1="400" x2="976" y2="400" class="guide"/>
-  <text x="180" y="40" text-anchor="start" class="sans dim lab" letter-spacing="1.2">ONE EXCHANGE</text>
-  <text x="976" y="40" text-anchor="end" class="sans dim s">time →</text>
-  <circle cx="196" cy="80" r="7" fill="#e39a78"/>
-  <circle cx="650" cy="80" r="7" fill="#e39a78"/>
-  <text x="210" y="64" text-anchor="start" class="mono code c">visit.send()</text>
-  <text x="650" y="64" text-anchor="middle" class="mono code c">waitForClose()</text>
-  <path d="M196 88 V156" class="flow" marker-end="url(#arrow)"/>
-  <path d="M650 160 V90" class="flow" marker-end="url(#arrow)"/>
-  <text x="240" y="136" text-anchor="start" class="sans dim s">seats the agents, passes a logger, and posts events with <tspan class="mono code c">room.post</tspan></text>
+  <rect width="1000" height="602" rx="20" fill="#171c1d"/>
+  <text x="24" y="74" text-anchor="start" class="sans ink n">People</text>
+  <text x="24" y="94" text-anchor="start" class="sans dim s">visit, read</text>
+  <text x="24" y="150" text-anchor="start" class="sans ink n">Canvas</text>
+  <text x="24" y="170" text-anchor="start" class="sans dim s">for people:</text>
+  <text x="24" y="188" text-anchor="start" class="sans dim s">rooms, widgets</text>
+  <text x="24" y="372" text-anchor="start" class="sans ink n">Agents</text>
+  <text x="24" y="392" text-anchor="start" class="sans dim s">seats in rooms</text>
+  <text x="24" y="500" text-anchor="start" class="sans ink n">Workspace</text>
+  <text x="24" y="520" text-anchor="start" class="sans dim s">for agents:</text>
+  <text x="24" y="538" text-anchor="start" class="sans dim s">tools, substrate</text>
+  <text x="180" y="34" text-anchor="start" class="sans dim lab" letter-spacing="1.2">THE CANVAS FOR PEOPLE · THE WORKSPACE FOR AGENTS</text>
+  <circle cx="230" cy="74" r="7" fill="#e39a78"/>
+  <text x="244" y="79" text-anchor="start" class="mono code c">visit.send()</text>
+  <circle cx="640" cy="74" r="7" fill="#e39a78"/>
+  <text x="654" y="79" text-anchor="start" class="sans dim s">visits</text>
+  <circle cx="858" cy="74" r="7" fill="#e39a78"/>
+  <text x="872" y="79" text-anchor="start" class="sans dim s">reads</text>
   <g filter="url(#shadow)">
-    <rect x="170" y="160" width="806" height="88" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
+    <rect x="170" y="110" width="806" height="190" rx="12" fill="#20282a" stroke="#e8e9e4" stroke-width="1.5"/>
   </g>
-  <circle cx="196" cy="184" r="11" fill="#e8e9e4"/>
-  <text x="196" y="188.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">1</text>
-  <text x="196" y="218" text-anchor="middle" class="sans ink s">ask</text>
-  <circle cx="300" cy="184" r="11" fill="#e8e9e4"/>
-  <text x="300" y="188.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">2</text>
-  <text x="300" y="218" text-anchor="middle" class="sans ink s">A says</text>
-  <text x="300" y="238" text-anchor="middle" class="sans teal s">ref: a file</text>
-  <circle cx="548" cy="184" r="11" fill="#e8e9e4"/>
-  <text x="548" y="188.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">3</text>
-  <text x="548" y="218" text-anchor="middle" class="sans ink s">B says</text>
-  <text x="548" y="238" text-anchor="middle" class="sans teal s">ref: a new file</text>
-  <circle cx="650" cy="184" r="11" fill="#e8e9e4"/>
-  <text x="650" y="188.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">4</text>
-  <text x="650" y="218" text-anchor="middle" class="sans ink s">close</text>
-  <text x="650" y="238" text-anchor="middle" class="sans dim s">quiet</text>
-  <rect x="683" y="166" width="130" height="78" rx="10" fill="none" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <circle cx="748" cy="184" r="11" fill="#e8e9e4"/>
-  <text x="748" y="188.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">5</text>
-  <text x="748" y="218" text-anchor="middle" class="sans ink s">summary</text>
-  <text x="748" y="238" text-anchor="middle" class="sans dim s">optional, of 1–3</text>
-  <text x="956" y="218" text-anchor="end" class="sans dim s">A restart</text>
-  <text x="956" y="238" text-anchor="end" class="sans dim s">replays the entries.</text>
-  <path d="M186 248 V382" class="flow" marker-end="url(#arrow)"/>
-  <path d="M206 248 V302" class="flow" marker-end="url(#arrow)"/>
-  <text x="218" y="272" text-anchor="start" class="sans dim s">activates</text>
-  <text x="218" y="290" text-anchor="start" class="sans dim s">in parallel</text>
-  <path d="M300 345 V252" class="flow" marker-end="url(#arrow)"/>
-  <path d="M335 425 V260" class="flow-red" marker-end="url(#cross)"/>
-  <text x="348" y="278" text-anchor="start" class="sans red s" font-weight="700">missed</text>
-  <text x="348" y="296" text-anchor="start" class="sans red s">with entry 2</text>
-  <path d="M548 425 V252" class="flow" marker-end="url(#arrow)"/>
-  <path d="M590 252 V302" class="flow" marker-end="url(#arrow)"/>
-  <text x="602" y="284" text-anchor="start" class="sans dim s">wakes A</text>
-  <rect x="206" y="305" width="114" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="220" y="325" text-anchor="start" class="sans ink s">reads a file</text>
-  <rect x="206" y="345" width="116" height="8" rx="4" fill="#6cc4bb"/>
-  <rect x="570" y="305" width="124" height="30" rx="15" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="584" y="325" text-anchor="start" class="sans ink s">reads 3, silent</text>
-  <rect x="570" y="345" width="60" height="8" rx="4" fill="#6cc4bb"/>
-  <rect x="186" y="385" width="72" height="30" rx="15" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
-  <text x="200" y="405" text-anchor="start" class="sans ink s">reads 1</text>
-  <rect x="372" y="385" width="190" height="30" rx="15" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
-  <text x="386" y="405" text-anchor="start" class="sans ink s">reads 2, writes a file</text>
-  <rect x="186" y="425" width="376" height="8" rx="4" fill="#6cc4bb"/>
-  <path d="M270 353 V476" class="flow-teal" marker-end="url(#arrow-teal)"/>
-  <path d="M500 433 V476" class="flow-teal" marker-end="url(#arrow-teal)"/>
-  <text x="282" y="466" text-anchor="start" class="sans teal s">calls tools</text>
-  <text x="512" y="466" text-anchor="start" class="sans teal s">calls tools</text>
-  <text x="650" y="466" text-anchor="start" class="sans teal s"><tspan class="mono code c">compose</tspan> joins tools in one call</text>
+  <path d="M230 82 V126" class="flow" marker-end="url(#arrow)"/>
+  <path d="M640 82 V126" class="flow" marker-end="url(#arrow)"/>
+  <path d="M858 82 V126" class="flow" marker-end="url(#arrow)"/>
+  <rect x="190" y="130" width="330" height="150" rx="10" fill="none" stroke="#e8e9e4" stroke-width="1.2"/>
+  <text x="206" y="156" text-anchor="start" class="sans ink n">root room</text>
+  <text x="300" y="156" text-anchor="start" class="sans dim s">a shared journal</text>
+  <circle cx="222" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="222" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">1</text>
+  <text x="222" y="226" text-anchor="middle" class="sans ink s">ask</text>
+  <circle cx="292" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="292" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">2</text>
+  <text x="292" y="226" text-anchor="middle" class="sans ink s">A says</text>
+  <text x="292" y="246" text-anchor="middle" class="sans teal s">ref: a file</text>
+  <circle cx="362" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="362" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">3</text>
+  <text x="362" y="226" text-anchor="middle" class="sans ink s">B says</text>
+  <circle cx="432" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="432" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">4</text>
+  <text x="432" y="226" text-anchor="middle" class="sans ink s">close</text>
+  <text x="432" y="246" text-anchor="middle" class="sans dim s">quiet</text>
+  <rect x="540" y="130" width="200" height="150" rx="10" fill="none" stroke="#e8e9e4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="556" y="156" text-anchor="start" class="sans ink n">breakout room</text>
+  <circle cx="578" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="578" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">1</text>
+  <text x="578" y="226" text-anchor="middle" class="sans ink s">goal</text>
+  <circle cx="648" cy="196" r="11" fill="#e8e9e4"/>
+  <text x="648" y="200.5" text-anchor="middle" class="sans x" fill="#20282a" font-weight="700">2</text>
+  <text x="648" y="226" text-anchor="middle" class="sans ink s">C says</text>
+  <text x="556" y="266" text-anchor="start" class="sans dim x">parent: the root room</text>
+  <rect x="760" y="130" width="196" height="150" rx="10" fill="#3a2b22" stroke="#e39a78" stroke-width="1.5"/>
+  <text x="776" y="156" text-anchor="start" class="sans ink n">frame widget</text>
+  <rect x="776" y="168" width="164" height="76" rx="6" fill="#0f1314"/>
+  <path d="M786 186 V178 H796 M920 178 H930 V186 M930 226 V234 H920 M796 234 H786 V226" fill="none" stroke="#e8e9e4" stroke-width="2"/>
+  <circle cx="858" cy="206" r="14" fill="none" stroke="#e8e9e4" stroke-width="1.5"/>
+  <circle cx="858" cy="206" r="3" fill="#e8e9e4"/>
+  <circle cx="800" cy="200" r="4" fill="#ef8570"/>
+  <text x="776" y="266" text-anchor="start" class="sans dim x">a camera viewfinder</text>
+  <path d="M265 356 V284" class="flow" marker-end="url(#arrow)"/>
+  <text x="273" y="330" text-anchor="start" class="sans dim s">says</text>
+  <path d="M400 356 V284" class="flow" marker-end="url(#arrow)"/>
+  <text x="408" y="330" text-anchor="start" class="sans dim s">says</text>
+  <path d="M510 356 V326 H600 V284" class="flow" marker-end="url(#arrow)"/>
+  <text x="518" y="318" text-anchor="start" class="mono code c">breakout</text>
+  <path d="M660 356 V284" class="flow" marker-end="url(#arrow)"/>
+  <text x="668" y="330" text-anchor="start" class="sans dim s">says</text>
+  <path d="M745 356 V326 H820 V284" class="flow" marker-end="url(#arrow)"/>
+  <text x="752" y="318" text-anchor="start" class="mono code c">show</text>
+  <rect x="190" y="356" width="150" height="34" rx="17" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="265.0" y="378" text-anchor="middle" class="sans ink s"><tspan font-weight="700">Agent A</tspan> · Pi</text>
+  <rect x="370" y="356" width="160" height="34" rx="17" fill="#243a20" stroke="#86cc70" stroke-width="1.5"/>
+  <text x="450.0" y="378" text-anchor="middle" class="sans ink s"><tspan font-weight="700">Agent B</tspan> · Claude</text>
+  <rect x="600" y="356" width="160" height="34" rx="17" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
+  <text x="680.0" y="378" text-anchor="middle" class="sans ink s"><tspan font-weight="700">Agent C</tspan> · Codex</text>
+  <path d="M230 390 V436" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <path d="M450 390 V436" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <path d="M680 390 V436" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <text x="242" y="422" text-anchor="start" class="sans teal s">calls tools</text>
+  <path d="M930 516 V284" class="flow-teal" marker-end="url(#arrow-teal)"/>
+  <text x="922" y="404" text-anchor="end" class="sans teal s">the host</text>
+  <text x="922" y="422" text-anchor="end" class="sans teal s">reads its source</text>
   <g filter="url(#shadow)">
-    <rect x="170" y="480" width="806" height="124" rx="12" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
+    <rect x="170" y="440" width="806" height="138" rx="12" fill="#20282a" stroke="#36615d" stroke-width="1.5"/>
   </g>
-  <text x="190" y="510" text-anchor="start" class="sans ink n">Files</text>
-  <rect x="190" y="522" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="214.0" y="538.5" text-anchor="middle" class="mono code c">read</text>
-  <rect x="244" y="522" width="56" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="272.0" y="538.5" text-anchor="middle" class="mono code c">write</text>
-  <rect x="306" y="522" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="330.0" y="538.5" text-anchor="middle" class="mono code c">edit</text>
-  <text x="190" y="580" text-anchor="start" class="sans teal x">A message cites a file with a ref.</text>
-  <text x="420" y="510" text-anchor="start" class="sans ink n">Processes</text>
-  <rect x="420" y="522" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="444.0" y="538.5" text-anchor="middle" class="mono code c">bash</text>
-  <rect x="474" y="522" width="34" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="491.0" y="538.5" text-anchor="middle" class="mono code c">ps</text>
-  <rect x="514" y="522" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
-  <text x="538.0" y="538.5" text-anchor="middle" class="mono code c">wait</text>
-  <rect x="568" y="522" width="56" height="24" rx="8" fill="#1c2e2d" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="596.0" y="538.5" text-anchor="middle" class="mono code c">fetch</text>
-  <text x="420" y="572" text-anchor="start" class="sans dim x">A process outlives the activation.</text>
-  <text x="420" y="590" text-anchor="start" class="sans dim x"><tspan class="mono code c">fetch</tspan> reads its HTTP on <tspan class="mono code c">$PORT</tspan>.</text>
-  <text x="650" y="510" text-anchor="start" class="sans ink n">Optional</text>
-  <rect x="650" y="522" width="58" height="24" rx="8" fill="#20282a" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="679.0" y="538.5" text-anchor="middle" class="sans ink x">tables</text>
-  <rect x="714" y="522" width="96" height="24" rx="8" fill="#20282a" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="762.0" y="538.5" text-anchor="middle" class="sans ink x">repositories</text>
-  <rect x="650" y="552" width="52" height="24" rx="8" fill="#20282a" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="676.0" y="568.5" text-anchor="middle" class="sans ink x">skills</text>
-  <text x="840" y="510" text-anchor="start" class="sans ink n">Homes</text>
-  <rect x="840" y="522" width="44" height="24" rx="8" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="862" y="538.5" text-anchor="middle" class="sans ink x" font-weight="700">A</text>
-  <rect x="892" y="522" width="44" height="24" rx="8" fill="#25304f" stroke="#8fa8ef" stroke-width="1.5"/>
-  <text x="914" y="538.5" text-anchor="middle" class="sans ink x" font-weight="700">B</text>
-  <text x="840" y="580" text-anchor="start" class="sans dim x">one for each agent</text>
+  <text x="190" y="470" text-anchor="start" class="sans ink n">Files</text>
+  <rect x="190" y="482" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="214.0" y="498.5" text-anchor="middle" class="mono code c">read</text>
+  <rect x="244" y="482" width="56" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="272.0" y="498.5" text-anchor="middle" class="mono code c">write</text>
+  <rect x="306" y="482" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="330.0" y="498.5" text-anchor="middle" class="mono code c">edit</text>
+  <text x="190" y="526" text-anchor="start" class="sans teal x">A message cites a file with a ref.</text>
+  <text x="420" y="470" text-anchor="start" class="sans ink n">Snapshots</text>
+  <rect x="420" y="482" width="76" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="458.0" y="498.5" text-anchor="middle" class="mono code c">snapshot</text>
+  <rect x="502" y="482" width="64" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="534.0" y="498.5" text-anchor="middle" class="mono code c">restore</text>
+  <text x="420" y="526" text-anchor="start" class="sans dim x">bytes that a ref names</text>
+  <text x="604" y="470" text-anchor="start" class="sans ink n">Skills</text>
+  <rect x="604" y="482" width="52" height="24" rx="8" fill="#20282a" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="630.0" y="498.5" text-anchor="middle" class="sans ink x">skills</text>
+  <rect x="662" y="482" width="70" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="697.0" y="498.5" text-anchor="middle" class="mono code c">compose</text>
+  <text x="604" y="526" text-anchor="start" class="sans dim x">compose joins tools</text>
+  <text x="604" y="544" text-anchor="start" class="sans dim x">in one call</text>
+  <text x="780" y="470" text-anchor="start" class="sans ink n">Processes</text>
+  <rect x="780" y="482" width="48" height="24" rx="8" fill="#1c2e2d" stroke="#36615d"/>
+  <text x="804.0" y="498.5" text-anchor="middle" class="mono code c">bash</text>
+  <rect x="834" y="482" width="56" height="24" rx="8" fill="#1c2e2d" stroke="#e4b060" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="862.0" y="498.5" text-anchor="middle" class="mono code c">fetch</text>
+  <rect x="780" y="516" width="176" height="24" rx="8" fill="#1c2e2d" stroke="#6cc4bb" stroke-width="1.5"/>
+  <text x="868" y="532.5" text-anchor="middle" class="sans ink x">a process on <tspan class="mono code c">$PORT</tspan></text>
+  <text x="780" y="562" text-anchor="start" class="sans dim x">It outlives the activation.</text>
 </svg>

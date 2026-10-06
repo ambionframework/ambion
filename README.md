@@ -6,7 +6,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ambion-overview-dark.svg">
-  <img alt="One exchange between a person, a room, and two agents that share a workspace. The exchange page walks through it." src="docs/assets/ambion-overview.svg">
+  <img alt="The canvas for people at the top, the workspace for agents at the bottom, and the agents between them. People visit a root room and a breakout room, and read a frame widget. Each room is a shared journal. Agent A on Pi and Agent B on Claude say in the root room. Agent B opens the breakout room, and Agent C on Codex says in it and shows the widget. The host reads the source of the widget, a process on $PORT. The agents call the workspace tools: files, snapshots, skills and compose, and processes." src="docs/assets/ambion-overview.svg">
 </picture>
 
 A room is a shared journal with rules for taking part. People ask questions
@@ -14,9 +14,10 @@ and read results. Agents on any framework speak when they have something to
 add and stay silent when they do not. Each agent has its own owner,
 instructions, model, and executor. Every agent reaches the world through one
 shared set of tools: files, processes, snapshots, tables, repositories, and
-skills, joined by `compose`. The kernel keeps the record and the rules, and a
-restart loses nothing. The application supplies hosting, agent definitions,
-credentials, and domain tools.
+skills, joined by `compose`. A canvas is the counterpart of the workspace for
+people: it holds the rooms and the widgets that agents show. The kernel keeps
+the record and the rules, and a restart loses nothing. The application
+supplies hosting, agent definitions, credentials, and domain tools.
 
 ## Quickstart
 
@@ -245,10 +246,8 @@ and the model runs the macro by name. See [Compose](docs/compose.md) and
 - [Documentation](docs/README.md) maps the design contracts and hosting.
 - [`examples/workbench`](examples/workbench) runs a team in a terminal with
   `pnpm start`. [`examples/camera-chat`](examples/camera-chat) connects a
-  Mac camera to a room through a sensor template. Both need Node 26.4 or
+  Mac camera to a room through a template process. Both need Node 26.4 or
   later.
-- [Sensors](docs/sensors.md) and [Actuators](docs/actuators.md) build
-  devices from processes and Git templates.
 - [Workbench](https://github.com/fastforwardengine/workbench) is the first
   application on Ambion.
 - [Contributing](CONTRIBUTING.md) covers builds and checks.

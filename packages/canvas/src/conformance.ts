@@ -9,7 +9,7 @@
  * });
  * ```
  */
-import type { BreakoutStart, CanvasClose, CanvasRoom, CanvasStore } from './store.ts';
+import type { BreakoutStart, CanvasClose, CanvasRoom, CanvasStore, CanvasWidget } from './store.ts';
 
 /** One case a test runner names and awaits. It throws on failure. */
 export interface ConformanceCase {
@@ -64,6 +64,23 @@ const toAll = (name: string, parent: string): CanvasRoom => {
 	const { to: _to, ...start } = breakout(name, parent).start as BreakoutStart;
 	return { ...breakout(name, parent), start };
 };
+
+const widget = (
+	revision: string,
+	rev: number,
+	extra: Partial<CanvasWidget> = {},
+): CanvasWidget => ({
+	room: 'site',
+	name: 'status',
+	revision,
+	rev,
+	state: 'shown',
+	kind: 'frame',
+	source: { type: 'process', handle: 'bash-1', path: '/status' },
+	title: 'Status',
+	author: 'observer',
+	...extra,
+});
 
 const done: CanvasClose = { result: 'done', note: 'Shipped.' };
 const failed: CanvasClose = { result: 'failed' };
@@ -206,6 +223,53 @@ const cases: readonly (readonly [name: string, body: Body])[] = [
 			await refuses(() => store.setState('ghost', 'running'), 'ghost', 'setState');
 			await refuses(() => store.archive('ghost', done), 'ghost', 'archive');
 			same(await store.list(), [], 'list after the refusals');
+		},
+	],
+	[
+		'starts with no widget revision',
+		async (store) => {
+			same(await store.revisions(), [], 'revisions of an empty store');
+		},
+	],
+	[
+		'appends revisions and lists them in the order of insertion, with every field',
+		async (store) => {
+			const first = widget('r-2', 1);
+			const second = widget('r-1', 2, { state: 'hidden' });
+			const third = widget('r-3', 1, {
+				room: 'site-survey',
+				name: 'plan',
+				kind: 'markdown',
+				source: { type: 'file', path: '/plan.md' },
+			});
+			const fourth = widget('r-4', 1, { name: 'proof', source: { type: 'snapshot', ref: 's1' } });
+			const bare = widget('r-5', 1, { name: 'bare', kind: 'text' });
+			const { source: _source, title: _title, ...plain } = bare;
+			for (const one of [first, second, third, fourth, plain])
+				same(await store.appendRevision(one), 'inserted', 'append of a new id');
+			same(await store.revisions(), [first, second, third, fourth, plain], 'revisions');
+		},
+	],
+	[
+		'returns exists for a repeat revision id and keeps the old revision',
+		async (store) => {
+			await store.appendRevision(widget('r-1', 1));
+			same(
+				await store.appendRevision(widget('r-1', 2, { state: 'hidden' })),
+				'exists',
+				'append of a taken id',
+			);
+			same(await store.revisions(), [widget('r-1', 1)], 'revisions after the repeat');
+		},
+	],
+	[
+		'keeps widget revisions apart from the room rows',
+		async (store) => {
+			await store.insert(root('site'));
+			await store.appendRevision(widget('r-1', 1));
+			await store.archive('site', done);
+			same(namesOf(await store.list()), ['site'], 'rows');
+			same(await store.revisions(), [widget('r-1', 1)], 'revisions after an archive');
 		},
 	],
 ];

@@ -1,4 +1,4 @@
-/** A disposable host that starts the sensor-server template through a real workspace tool. */
+/** A disposable host that starts the fixture server through a real workspace tool. */
 
 import { openWorkspace } from '@ambionframework/workspace';
 import { workstationBackend } from '@ambionframework/workstation';
@@ -13,7 +13,7 @@ const command = process.env.AMBION_PROCESS_HTTP_COMMAND;
 try {
 	if (command === undefined) throw new Error('The crash host needs the launch command.');
 	const started = await runToolRoom(workspace, owner, [
-		action('bash', { command, name: 'sensor-server', wait: 1, timeout: 86400 }),
+		action('bash', { command, name: 'http-process', wait: 1, timeout: 86400 }),
 	]);
 	const text = latest(started.results, 'bash');
 	const identity = { handle: processHandle(text), port: portOf(text) };

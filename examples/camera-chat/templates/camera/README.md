@@ -13,7 +13,7 @@ fork({ source: 'templates/camera', name: 'camera', clone: '~/camera' });
 bash({ command: 'cd ~/camera && node --test test.ts && git push origin main' });
 bash({
   command: 'cd ~/camera && AMBION_SENSOR_REPOSITORY=observer/camera node main.ts',
-  name: 'camera',
+  name: 'front',
   wait: 1,
   timeout: 86400,
 });
@@ -25,10 +25,18 @@ The workspace sets `PORT` for every process, and the server listens on it. The
 server prints nothing. Until the first frame arrives, a read answers `503`. A
 permission request can delay the first frame.
 
-Read the camera with `fetch({ process: 'camera', path: '/camera/observe' })`,
-then fetch the frame at `/files/<digest>` from its result. Cite both refs. The
-`observe` macro of the `camera` skill in `skills/` does both reads and checks
-the digest of the frame. The host's preview opens while the process runs.
+The process name helps a person read `ps`, such as `front` or `desk`. The
+handle that `bash` returns identifies the process. One clone
+serves several processes, and each process gets its own `PORT`. Start one
+process for each device, with `--device <index>`.
+
+Read the camera with the `observe` macro of the `camera` skill in `skills/`:
+`compose({ macro: 'camera/observe', args: { process: '<handle>' } })`. It
+reads the index, the observation, and the frame at `/files/<digest>`, and it
+checks the digest of the frame. Cite both returned refs. A host that loads no
+skill reads the same paths with `fetch({ process: '<handle>', path:
+'/camera/observe' })`, then the frame. The host draws the viewfinder after
+the agent calls `show` with the handle.
 
 `node main.ts --demo` serves a synthetic frame without opening any device. Use
 this flag only for a demonstration. `--device <index>` selects a specific
@@ -58,5 +66,5 @@ Edit `camera.ts` for device selection and sampling, `frame.ts` for resolution,
 and `server.ts` for acquisition delivery. Validate with `node --test test.ts`.
 Commit and push edits before launching saved code. Stop with `cancel({ handle
 })`. For replacement or rollback, cancel the previous process, change the
-checkout, and start again with the name `camera`. Never open two capture
+checkout, and start again with the same process name. Never open two capture
 processes for the same device. After a host restart, list the running processes before you start one.
