@@ -148,8 +148,12 @@ describe('ActionPad', () => {
 		expect(sent[2]?.act.press).not.toBe(sent[0]?.act.press);
 	});
 
-	it('sends a failed act again as it was, even after a new revision, and drops it for another person', async () => {
-		const { pad, sent, state } = padOn([new Error('Lost.'), new Error('Lost.')]);
+	it('sends a failed act again as it was, even after a new revision, and drops it for another person or room', async () => {
+		const { pad, sent, state } = padOn([
+			new Error('Lost.'),
+			new Error('Lost.'),
+			new Error('Lost.'),
+		]);
 		pad.sync([widget('r1')]);
 		pad.enter();
 		await pad.press();
@@ -158,11 +162,16 @@ describe('ActionPad', () => {
 		expect(sent[1]).toEqual(sent[0]);
 		expect(sent[1]?.act.revision).toBe('r1');
 
+		pad.sync([widget('b1', { room: 'power' })]);
+		await pad.press();
+		expect(sent[2]?.act).toMatchObject({ room: 'power', revision: 'b1' });
+		pad.sync([widget('r2')]);
+
 		state.person = 'theo';
 		await pad.press();
-		expect(sent[2]?.person).toBe('theo');
-		expect(sent[2]?.act.revision).toBe('r2');
-		expect(sent[2]?.act.press).not.toBe(sent[0]?.act.press);
+		expect(sent[3]?.person).toBe('theo');
+		expect(sent[3]?.act.revision).toBe('r2');
+		expect(sent[3]?.act.press).not.toBe(sent[0]?.act.press);
 	});
 
 	it('shows a refusal with no retry, and sends the next press as a new act', async () => {

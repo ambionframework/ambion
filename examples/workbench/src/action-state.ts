@@ -411,12 +411,13 @@ export class ActionPad {
 
 	/**
 	 * The act of a call. The act of a failed call comes again as it was, for the same person,
-	 * action, and values. Any other call makes a new act with a new press token.
+	 * room, widget, action, and values. Any other call makes a new act with a new press token.
 	 */
 	private actOf(person: string, widget: ActionWidget, action: WidgetAction, values?: Values) {
 		const before = this.failed;
 		if (
 			before?.person === person &&
+			before.act.room === widget.room &&
 			before.act.widget === widget.name &&
 			before.act.action === action.id &&
 			sameValues(before.act.values, values)
