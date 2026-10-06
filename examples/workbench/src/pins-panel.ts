@@ -9,7 +9,7 @@ import {
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
 import { describe, FileView } from './file-view.ts';
-import type { Pin, Pins } from './pins.ts';
+import { type Pin, type Pins, plain } from './pins.ts';
 import type { FileContent } from './workbench.ts';
 
 /** The side area of the files that agents pinned: a stack, each with its title and kind. */
@@ -108,7 +108,7 @@ export class PinsPanel {
 			view.show(pin.file, firstWithRows(pin.file), pin.kind === 'markdown');
 			box.add(view.root);
 		} else {
-			const problem = `${pin.path}: ${pin.problem ?? 'The file did not read.'}`;
+			const problem = plain(`${pin.path}: ${pin.problem ?? 'The file did not read.'}`);
 			box.add(this.text(fg(palette.red)(problem), 'word'));
 		}
 		return box;
