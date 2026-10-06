@@ -20,7 +20,7 @@ bash({
 ```
 
 The template can be newer than your fork. In an existing clone, run `git pull
-<url of templates/camera from repos> main`, test, and push.
+--no-rebase <url of templates/camera from repos> main`, test, and push.
 
 Use your own fork ID in `AMBION_SENSOR_REPOSITORY`. The process stays in the
 foreground; do not use `&`, `nohup`, or daemonize it. Capture starts at launch.

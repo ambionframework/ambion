@@ -247,7 +247,7 @@ function localSteps(pathOf: (id: string) => string): RegistrationSteps {
 			await inTemporary(async (checkout) => {
 				await git(checkout, ['init', '-b', 'main']);
 				await writeFiles(checkout, files);
-				await git(checkout, ['add', '.']);
+				await git(checkout, ['add', '-f', '.']);
 				await git(checkout, [
 					'-c',
 					`user.name=${AUTHOR.name}`,
@@ -283,7 +283,7 @@ function localSteps(pathOf: (id: string) => string): RegistrationSteps {
 							env,
 						})
 					).stdout.trim();
-				await run(['add', '-A']);
+				await run(['add', '-f', '-A']);
 				const commit = await run([
 					'commit-tree',
 					await run(['write-tree']),
