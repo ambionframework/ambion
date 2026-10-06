@@ -87,7 +87,7 @@ interface WidgetAction {
   readonly id: string;
   /** One line, 40 characters at most. */
   readonly label: string;
-  /** The first act on the revision answers it. Every later act on it is `answered`. */
+  /** The first act on the revision answers it. A later act with other content is `answered`. */
   readonly once?: boolean;
   /** A form: 8 fields at most. */
   readonly fields?: readonly WidgetField[];
@@ -204,16 +204,16 @@ stateDiagram-v2
   answered --> ended: breakout room archived
 ```
 
-| Event                               | Widgets                               | Acts                                   |
-| ----------------------------------- | ------------------------------------- | -------------------------------------- |
-| An agent shows or hides             | A new revision and a widget event     | An act on an older revision is `stale` |
-| An act on a `once` action lands     | The revision is `answered`            | Every later act is `answered`          |
-| The author leaves or is unseated    | Stay; the reminder names the author   | Sent with no `to`                      |
-| The person leaves the room          | Stay                                  | A press opens a visit first            |
-| The host stops the room             | Drawn stopped; the host polls nothing | Refused                                |
-| The host starts or resumes the room | Bound again from the revisions        | Accepted                               |
-| The opener archives a breakout room | Ended; the host draws nothing         | Refused                                |
-| The host closes the canvas          | Revisions kept                        | Refused                                |
+| Event                               | Widgets                               | Acts                                                      |
+| ----------------------------------- | ------------------------------------- | --------------------------------------------------------- |
+| An agent shows or hides             | A new revision and a widget event     | An act on an older revision or a hidden widget is `stale` |
+| An act on a `once` action lands     | The revision is `answered`            | A later act with other content is `answered`              |
+| The author leaves or is unseated    | Stay; the reminder names the author   | Sent with no `to`                                         |
+| The person leaves the room          | Stay                                  | A press opens a visit first                               |
+| The host stops the room             | Drawn stopped; the host polls nothing | Refused                                                   |
+| The host starts or resumes the room | Bound again from the revisions        | Accepted                                                  |
+| The opener archives a breakout room | Ended; the host draws nothing         | Refused                                                   |
+| The host closes the canvas          | Revisions kept                        | Refused                                                   |
 
 **A stopped room polls nothing.** No seat can change its widgets. Its
 source can still run: a process stays up until an agent or the host
@@ -378,9 +378,13 @@ sequenceDiagram
 **The canvas checks in a fixed order.**
 
 1. The canvas is open, and the room row is `running` with a live handle.
-2. The widget is `shown`.
-3. `revision` is the current revision. Otherwise the result is `stale`
-   with the current widget, and the host draws it again.
+2. The press has not landed. The revision of the act fixes both keys, so
+   the canvas looks them up in the journal before any other check. A press
+   that landed returns its result, as the key table says, even when the
+   author has since hidden the widget, shown a new revision, or left.
+3. The widget is `shown` and `revision` is its current revision. Otherwise
+   the result is `stale` with the current widget, and the host draws it
+   again. A widget that the room does not hold is a refusal.
 4. The action exists, the person of the visit matches `for`, the values
    match the fields, and `press` is one line of 100 characters at most.
 
@@ -416,16 +420,24 @@ canvas uses the same rule.
 
 **The key makes an act land once.**
 
-| Action    | Key                      | A repeat with the same content | A repeat with other content |
-| --------- | ------------------------ | ------------------------------ | --------------------------- |
-| `once`    | `act:<revision>`         | Returns the landed message     | `answered`, with its seq    |
-| Any other | `act:<revision>:<press>` | Returns the landed message     | A refusal: a host defect    |
+| Action    | Key                      | A repeat of the same press | A repeat with other content |
+| --------- | ------------------------ | -------------------------- | --------------------------- |
+| `once`    | `act:<revision>`         | Returns the landed message | `answered`, with its seq    |
+| Any other | `act:<revision>:<press>` | Returns the landed message | A refusal: a host defect    |
 
-The room refuses a repeated key with other content: another person,
-another action, other values, or another `to`. For a `once` key, the
-canvas reads that refusal as `answered` and finds the seq under the key,
-as the bridge does. A host that loses the result of an act sends it again
-with the same `press`, and the act lands once.
+The same press has the same person, text, and ref. The `to` is not part of
+the match, so a retry after the author left the roster finds the landed
+message. A `once` key with other content is `answered`, with the seq under
+the key. A press key with other content is a refusal. A host that loses
+the result of an act sends it again with the same `press`, and the act
+lands once. A second press on a `once` revision with the same content is
+the same press, so it returns `sent`. A non-once action on that revision
+lands under its own key.
+
+**A stop or an archive can race an act.** The widget queue and the
+lifecycle queue of a room are apart. An act that passed its checks before a
+stop or an archive may still land, and an act that meets the stop in its
+send is a refusal.
 
 ### Effects on the room
 
@@ -468,7 +480,10 @@ the person saw, and its ref names the revision.
 identity, and `for` limits who may act. A resource that must verify a
 decision checks the act message in the journal: its author, its key, and
 its revision ref. Give each decision a `for`. Titles, labels, options, and
-text values are one capped line, so they cannot forge a reminder line.
+text values are one capped line, so they cannot forge a reminder line. The
+reminder holds names, kinds, sources, and seqs, and no label. The act
+message quotes the labels, so a label can imitate a `label: value` line
+inside that one message.
 
 ## Out of scope
 

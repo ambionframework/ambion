@@ -40,6 +40,9 @@ function assertOptions(where: string, options: readonly string[]): void {
 }
 
 function assertNumber(where: string, field: NumberField): void {
+	for (const bound of [field.min, field.max])
+		if (bound !== undefined && !Number.isFinite(bound))
+			throw refuse(`${where} has a bound that is not a finite number.`);
 	if (field.min !== undefined && field.max !== undefined && field.min > field.max)
 		throw refuse(`${where} has a min above its max.`);
 }
@@ -72,7 +75,7 @@ export function assertActions(
 	actions: readonly WidgetAction[],
 	person: string | undefined,
 ): void {
-	if (person !== undefined) assertId('a person name', person);
+	if (person !== undefined && !isName(person)) throw refuse(`"${person}" is not a person name.`);
 	if (actions.length === 0) {
 		if (person !== undefined)
 			throw refuse('`for` limits who may act, and the widget has no actions.');

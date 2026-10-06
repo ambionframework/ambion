@@ -72,7 +72,7 @@ export interface WidgetAction {
 	readonly id: string;
 	/** One line, 40 characters at most. */
 	readonly label: string;
-	/** The first act on the revision answers it. Every later act on it is `answered`. */
+	/** The first act on the revision answers it. A later act with other content is `answered`. */
 	readonly once?: boolean;
 	/** A form: 8 fields at most. */
 	readonly fields?: readonly WidgetField[];

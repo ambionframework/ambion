@@ -1,13 +1,19 @@
 /**
- * What an act does. A function here checks a press against the rows and the widget revisions,
- * then sends it as a message of the person through the room of the widget. The answers of a
- * room come from the keys of its journal, so no store holds them.
+ * What an act does. A function here finds a press that landed already, or checks it against the
+ * rows and the widget revisions and sends it as a message of the person through the room of the
+ * widget. The answers of a room come from the keys of its journal, so no store holds them.
  */
-import { AmbionError, type PersonDefinition, type Room } from '@ambionframework/ambion';
+import {
+	AmbionError,
+	type Message,
+	type PersonDefinition,
+	type Room,
+	type SaidMessage,
+} from '@ambionframework/ambion';
 import { type ActValues, assertValues, valueLines } from './actions.ts';
 import { recipientOf } from './bridge.ts';
 import { refuse } from './cast.ts';
-import { assertLine, type BasePort } from './port.ts';
+import { assertLine, type CurrentPort } from './port.ts';
 import type { CanvasWidget, WidgetAction } from './store.ts';
 import type { WidgetAct, WidgetActResult } from './types.ts';
 
@@ -21,15 +27,15 @@ export interface Answer {
 }
 
 /** What `act` reads and writes on a canvas. */
-export interface ActPort extends BasePort {
+export interface ActPort extends CurrentPort {
 	/** The name of the canvas. */
 	readonly canvas: string;
-	/** The current revision of a widget, hidden ones included. */
-	current(room: string, name: string): CanvasWidget | undefined;
+	/** One revision by id. */
+	revision(id: string): CanvasWidget | undefined;
 	/** The live handle of a room of this run. */
 	room(name: string): Room | undefined;
 	/** Holds the answer, and tells the listeners when it is new. */
-	answer(room: string, revision: string, answer: Answer): void;
+	hold(room: string, revision: string, answer: Answer): void;
 	/** Reports a failure that is no refusal to `onError`. */
 	fail(room: string, error: unknown): void;
 }
@@ -60,23 +66,31 @@ export class Answers {
 /** The key of a once action. A key with a press token after the revision answers nothing. */
 const ONCE_KEY = /^act:([^:]+)$/;
 
-/** The answers that the journal of a room holds: one for each message under a once key. */
+/** Whether a message is a person's speech under a key. A message of an agent or the host is no act. */
+function isActUnder(message: Message, key: string): message is SaidMessage {
+	return message.key === key && message.kind === 'said' && message.activation === undefined;
+}
+
+/** The answers that the journal of a room holds: one for each message of a person under a once key. */
 async function readAnswers(room: Room): Promise<ReadonlyMap<string, Answer>> {
 	const found = new Map<string, Answer>();
 	for (const message of (await room.read()).messages) {
 		const revision = message.key === undefined ? undefined : ONCE_KEY.exec(message.key)?.[1];
-		if (revision !== undefined && message.kind === 'said' && !found.has(revision))
+		if (revision !== undefined && message.kind === 'said' && message.activation === undefined)
 			found.set(revision, { seq: message.seq, by: message.from });
 	}
 	return found;
 }
 
-/** The message under a key, read from after a seq. */
-async function landedUnder(room: Room, key: string, after: number): Promise<Answer | undefined> {
-	const found = (await room.read({ messages: { after } })).messages.find(
-		(message) => message.key === key,
-	);
-	return found?.kind === 'said' ? { seq: found.seq, by: found.from } : undefined;
+/** The message of a person under a key, read from after a seq. */
+async function messageUnder(
+	room: Room,
+	key: string,
+	after: number,
+): Promise<SaidMessage | undefined> {
+	return (await room.read({ messages: { after } })).messages.find((message) =>
+		isActUnder(message, key),
+	) as SaidMessage | undefined;
 }
 
 /** The running room of an act: the canvas holds its row, and it has a live handle. */
@@ -89,10 +103,9 @@ function runningRoom(port: ActPort, name: string): Room {
 	return room;
 }
 
-function shownWidget(port: ActPort, act: WidgetAct): CanvasWidget {
+function currentWidget(port: ActPort, act: WidgetAct): CanvasWidget {
 	const widget = port.current(act.room, act.widget);
 	if (widget === undefined) throw refuse(`The room "${act.room}" has no widget "${act.widget}".`);
-	if (widget.state !== 'shown') throw refuse(`The widget "${act.widget}" is hidden.`);
 	return widget;
 }
 
@@ -126,13 +139,45 @@ function textOf(widget: CanvasWidget, action: WidgetAction, values: ActValues | 
 }
 
 /** A once action lands under the key of its revision, and any other action under its press. */
-const keyOf = (widget: CanvasWidget, action: WidgetAction, act: WidgetAct): string =>
-	action.once === true ? `act:${widget.revision}` : `act:${widget.revision}:${act.press}`;
+const keyOf = (revision: CanvasWidget, action: WidgetAction, act: WidgetAct): string =>
+	action.once === true ? `act:${revision.revision}` : `act:${revision.revision}:${act.press}`;
+
+/** The revision that the act names, and its action, when the canvas holds both. */
+function seenBy(port: ActPort, act: WidgetAct): [CanvasWidget, WidgetAction] | undefined {
+	const seen = port.revision(act.revision);
+	const action = seen?.actions.find((one) => one.id === act.action);
+	const same = seen?.room === act.room && seen.name === act.widget;
+	return seen === undefined || action === undefined || !same ? undefined : [seen, action];
+}
 
 /**
- * Sends the act under its key. A once key that the room holds with other content means that
- * another act answered the revision, and the answer is the seq under the key.
+ * The result of a press that landed already. The revision of the act fixes the key, so the
+ * lookup needs no current widget. The same person, text, and ref make the press the landed one,
+ * whatever its `to`. A once key with other content is `answered`. A press key with other content
+ * is a refusal. A press that did not land gives undefined.
  */
+async function landedResult(
+	port: ActPort,
+	room: Room,
+	person: PersonDefinition,
+	act: WidgetAct,
+): Promise<WidgetActResult | undefined> {
+	const seen = seenBy(port, act);
+	if (seen === undefined) return undefined;
+	const [revision, action] = seen;
+	const found = await messageUnder(room, keyOf(revision, action, act), 0);
+	if (found === undefined) return undefined;
+	const same =
+		found.from === person.name &&
+		found.text === textOf(revision, action, act.values) &&
+		JSON.stringify(found.refs ?? []) === JSON.stringify([refOf(port.canvas, revision)]);
+	if (action.once === true) port.hold(act.room, act.revision, { seq: found.seq, by: found.from });
+	if (same) return { kind: 'sent', seq: found.seq };
+	if (action.once === true) return { kind: 'answered', seq: found.seq };
+	throw refuse(`The press "${act.press}" landed with other content at #${found.seq}.`);
+}
+
+/** Sends the act under its key, and reads the seq under the key. */
 async function send(
 	port: ActPort,
 	room: Room,
@@ -151,34 +196,54 @@ async function send(
 			refs: [refOf(port.canvas, widget)],
 			key,
 		});
-		const landed = await landedUnder(room, key, handle.from - 1);
-		const answer = landed ?? { seq: handle.from, by: person.name };
-		if (action.once === true) port.answer(widget.room, widget.revision, answer);
-		return { kind: 'sent', seq: answer.seq };
+		const landed = await messageUnder(room, key, handle.from - 1);
+		if (landed === undefined) throw new Error(`The room holds no message under the key "${key}".`);
+		if (action.once === true)
+			port.hold(widget.room, widget.revision, { seq: landed.seq, by: person.name });
+		return { kind: 'sent', seq: landed.seq };
 	} catch (error) {
-		return settle(port, room, widget, action, key, error);
+		return afterFailure(port, room, person, act, error);
 	}
 }
 
-/** A refusal of a once key is `answered`. Any other failure reaches the caller. */
-async function settle(
+/**
+ * A send that failed. A stopped room is a refusal. A refused key may hold this press with other
+ * `to`, or hold another act, so the lookup runs again.
+ */
+async function afterFailure(
 	port: ActPort,
 	room: Room,
-	widget: CanvasWidget,
-	action: WidgetAction,
-	key: string,
+	person: PersonDefinition,
+	act: WidgetAct,
 	error: unknown,
 ): Promise<WidgetActResult> {
-	if (!(error instanceof AmbionError)) port.fail(widget.room, error);
-	if (!(error instanceof AmbionError) || error.code !== 'refused' || action.once !== true)
-		throw error;
-	const answer = await landedUnder(room, key, 0);
-	if (answer === undefined) throw error;
-	port.answer(widget.room, widget.revision, answer);
-	return { kind: 'answered', seq: answer.seq };
+	if (!(error instanceof AmbionError)) throw error;
+	if (error.code === 'room_stopped') throw refuse(`The room "${act.room}" stopped.`);
+	const result = error.code === 'refused' ? await landedResult(port, room, person, act) : undefined;
+	if (result === undefined) throw error;
+	return result;
 }
 
-/** Checks an act in the widget queue of its room, and sends it as a message of the person. */
+/** The steps after the room check: a landed press, then the widget checks, then the send. */
+async function actInRoom(
+	port: ActPort,
+	room: Room,
+	person: PersonDefinition,
+	act: WidgetAct,
+): Promise<WidgetActResult> {
+	const landed = await landedResult(port, room, person, act);
+	if (landed !== undefined) return landed;
+	const widget = currentWidget(port, act);
+	if (widget.state !== 'shown' || widget.revision !== act.revision)
+		return { kind: 'stale', widget: structuredClone(widget) };
+	return send(port, room, person, widget, checkedAction(widget, person, act), act);
+}
+
+/**
+ * Finds a press that landed already, or checks the act in the widget queue of its room and
+ * sends it as a message of the person. A stop or an archive that wins the race with a send is
+ * a refusal, and an act that passed its checks before the stop may still land.
+ */
 export async function actOn(
 	port: ActPort,
 	person: PersonDefinition,
@@ -188,9 +253,11 @@ export async function actOn(
 	return port.serial(act.room, async () => {
 		port.assertReady();
 		const room = runningRoom(port, act.room);
-		const widget = shownWidget(port, act);
-		if (widget.revision !== act.revision) return { kind: 'stale', widget: structuredClone(widget) };
-		const action = checkedAction(widget, person, act);
-		return send(port, room, person, widget, action, act);
+		try {
+			return await actInRoom(port, room, person, act);
+		} catch (error) {
+			if (!(error instanceof AmbionError)) port.fail(act.room, error);
+			throw error;
+		}
 	});
 }

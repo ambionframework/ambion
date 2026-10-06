@@ -22,6 +22,8 @@ import {
 	refuse,
 	rootStartOf,
 } from './cast.ts';
+import { EVENT_OPERATION, roomOf } from './events.ts';
+import type { CurrentPort } from './port.ts';
 import { Queues } from './queue.ts';
 import type { CanvasClose, CanvasRoom, CanvasWidget } from './store.ts';
 import { openerBundle, workerBundle } from './tools.ts';
@@ -43,21 +45,6 @@ interface Handle {
 	mirror?: RoomMirror;
 	/** Ends the subscription of the bridge to a breakout room. */
 	unsubscribe?: () => void;
-}
-
-const EVENT_OPERATION: Record<CanvasEvent['type'], CanvasOperation> = {
-	opened: 'open',
-	started: 'start',
-	stopped: 'stop',
-	archived: 'archive',
-	widget: 'widget',
-	answered: 'act',
-};
-
-/** The room that an event is about. */
-function roomOf(event: CanvasEvent): string {
-	if (event.type === 'opened') return event.room.name;
-	return event.type === 'widget' ? event.widget.room : event.room;
 }
 
 class CanvasRun implements Canvas {
@@ -128,15 +115,23 @@ class CanvasRun implements Canvas {
 		return actOn(this.actPort(), person, act);
 	}
 
-	private actPort(): ActPort {
+	/** What the widget calls of a room share: the readiness, the widget queue, the rows, and the current revisions. */
+	private currentPort(): CurrentPort {
 		return {
-			canvas: this.name,
 			assertReady: () => this.assertReady(),
 			serial: (room, operation) => this.widgetQueues.run(room, operation),
 			row: (name) => this.rows.get(name),
 			current: (room, name) => this.current.get(room)?.get(name),
+		};
+	}
+
+	private actPort(): ActPort {
+		return {
+			...this.currentPort(),
+			canvas: this.name,
+			revision: (id) => this.revisions.get(id),
 			room: (name) => this.handles.get(name)?.room,
-			answer: (room, revision, answer) => this.answer(room, revision, answer),
+			hold: (room, revision, answer) => this.answer(room, revision, answer),
 			fail: (room, error) => this.report(room, 'act', error),
 		};
 	}
@@ -150,12 +145,9 @@ class CanvasRun implements Canvas {
 	/** What the widget tools read and write: the rows and revisions of this run. */
 	private widgetPort(kinds: WidgetOptions['kinds']): WidgetPort {
 		return {
+			...this.currentPort(),
 			kinds,
-			assertReady: () => this.assertReady(),
-			serial: (room, operation) => this.widgetQueues.run(room, operation),
-			row: (name) => this.rows.get(name),
 			widgets: (room) => this.widgets(room),
-			current: (room, name) => this.current.get(room)?.get(name),
 			answer: (room, revision) => this.answered.of(room).get(revision),
 			append: (widget, operation) => this.appendRevision(widget, operation),
 		};

@@ -10,7 +10,7 @@ import { assertActions } from './actions.ts';
 import type { Answer } from './acts.ts';
 import type { Caller } from './breakout.ts';
 import { refuse } from './cast.ts';
-import { assertLine, type BasePort, NAME_LIMIT } from './port.ts';
+import { assertLine, type CurrentPort, NAME_LIMIT } from './port.ts';
 import type { CanvasWidget, WidgetAction, WidgetKind, WidgetSource } from './store.ts';
 
 /** The most characters of a widget title. */
@@ -21,12 +21,10 @@ const SOURCE_LIMIT = 200;
 const SOURCE_TYPES: readonly WidgetSource['type'][] = ['process', 'file', 'snapshot'];
 
 /** What the widget tools read and write on a canvas. */
-export interface WidgetPort extends BasePort {
+export interface WidgetPort extends CurrentPort {
 	readonly kinds: readonly WidgetKind[];
 	/** The current revision of each widget of a room, hidden ones included. */
 	widgets(room: string): readonly CanvasWidget[];
-	/** The current revision of a widget, hidden ones included. */
-	current(room: string, name: string): CanvasWidget | undefined;
 	/** The act that answers a revision, or undefined. */
 	answer(room: string, revision: string): Answer | undefined;
 	/** Writes one revision, then makes it current and tells the listeners. */

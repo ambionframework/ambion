@@ -53,6 +53,8 @@ async function desk(options: { store?: CanvasStore; actions?: WidgetAction[]; fo
 	return { ...lab, answered, ask, shown, press };
 }
 
+type Lab = Awaited<ReturnType<typeof desk>>;
+
 /** The messages of a room that a person said. */
 async function saidIn(room: Room) {
 	return (await room.read()).messages.flatMap((message) =>
@@ -163,6 +165,36 @@ describe('an act', () => {
 		expect(await saidIn(site)).toHaveLength(2);
 	});
 
+	it.each([
+		[
+			'hides the widget',
+			async (lab: Lab) => void (await lab.call('ada', 'hide', { name: 'status' })),
+		],
+		['shows a new revision', async (lab: Lab) => void (await lab.ask({ title: 'New' }))],
+		['leaves the roster', async (lab: Lab) => lab.site.unseat('ada')],
+	])('returns the landed press for a retry after the author %s', async (_label, react) => {
+		const lab = await desk();
+		const first = await lab.press();
+		await react(lab);
+		expect(await lab.press()).toEqual(first);
+		expect(await saidIn(lab.site)).toHaveLength(1);
+	});
+
+	it.each([
+		[
+			'hides the widget',
+			async (lab: Lab) => void (await lab.call('ada', 'hide', { name: 'status' })),
+		],
+		['shows a new revision', async (lab: Lab) => void (await lab.ask({ title: 'New' }))],
+		['leaves the roster', async (lab: Lab) => lab.site.unseat('ada')],
+	])('returns sent for a once retry after the author %s', async (_label, react) => {
+		const lab = await desk({ actions: [keep] });
+		const first = await lab.press();
+		await react(lab);
+		expect(await lab.press()).toEqual(first);
+		expect(await saidIn(lab.site)).toHaveLength(1);
+	});
+
 	it('refuses a press that landed with other values, as a defect of the host', async () => {
 		const { press, ask } = await desk({ actions: [form] });
 		const { revision } = await ask();
@@ -170,7 +202,7 @@ describe('an act', () => {
 		await press({ revision, action: 'file-it', values });
 		await refusal(
 			press({ revision, action: 'file-it', values: { ...values, note: 'b' } }),
-			/names a different room operation/,
+			/landed with other content/,
 		);
 	});
 
@@ -308,12 +340,17 @@ describe('the refusals of an act', () => {
 		expect(await press()).toMatchObject({ kind: 'sent' });
 	});
 
-	it('refuses a hidden widget, an unknown widget, and an unknown room', async () => {
-		const { press, call } = await desk();
+	it('refuses an unknown widget and an unknown room', async () => {
+		const { press } = await desk();
 		await refusal(press({ widget: 'ghost' }), /no widget "ghost"/);
 		await refusal(press({ room: 'docs' }), /"docs" is not on the canvas/);
+	});
+
+	it('returns stale with the hidden widget for an act on a hidden widget', async () => {
+		const { press, call, canvas, site } = await desk();
 		await call('ada', 'hide', { name: 'status' });
-		await refusal(press(), /widget "status" is hidden/);
+		expect(await press()).toEqual({ kind: 'stale', widget: canvas.widgets('site')[0] });
+		expect(await saidIn(site)).toEqual([]);
 	});
 
 	it('refuses a room that is stopped, archived, or closed', async () => {
@@ -333,13 +370,13 @@ describe('the refusals of an act', () => {
 		await refusal(press({ press: 'p2' }), /is closed/);
 	});
 
-	it('checks in a fixed order: the room, the widget, the revision, then the action', async () => {
+	it('checks in a fixed order: the room, the widget and its revision, then the action', async () => {
 		const { press, ask, call, canvas } = await desk();
 		await ask({ title: 'New' });
 		const stale = { action: 'drop' };
 		expect(await press(stale)).toMatchObject({ kind: 'stale' });
 		await call('ada', 'hide', { name: 'status' });
-		await refusal(press(stale), /is hidden/);
+		expect(await press(stale)).toMatchObject({ kind: 'stale' });
 		await canvas.stop('site');
 		await refusal(press(stale), /is stopped/);
 	});
