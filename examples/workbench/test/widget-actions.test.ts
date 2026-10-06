@@ -24,10 +24,12 @@ const pin = (name: string, extra: Partial<Pin> = {}): Pin => ({
 describe('PinsPanel actions', () => {
 	it('draws each action as a button under its pin, with its form, its answer, and the hints', async () => {
 		const setup = await createTestRenderer({ width: 70, height: 40 });
-		const pad = new ActionPad(
-			async () => ({ kind: 'sent', seq: 1 }),
-			() => {},
-		);
+		const pad = new ActionPad({
+			send: async () => ({ kind: 'sent', seq: 1 }),
+			person: () => 'mira',
+			stopped: () => false,
+			changed: () => {},
+		});
 		const panel = new PinsPanel(setup.renderer, pad);
 		// The side area sits in a row that has the height of the terminal, as in the terminal.
 		const body = new BoxRenderable(setup.renderer, {
@@ -88,13 +90,15 @@ describe('the keys of the actions', () => {
 	it('takes the actions from browse mode, sends a press, and leaves on Esc', async () => {
 		const { session } = await started();
 		const sent: string[] = [];
-		const pad = new ActionPad(
-			async (act) => {
+		const pad = new ActionPad({
+			send: async (_person, act) => {
 				sent.push(act.action);
 				return { kind: 'sent', seq: 5 };
 			},
-			() => {},
-		);
+			person: () => 'mira',
+			stopped: () => false,
+			changed: () => {},
+		});
 		const log: string[] = [];
 		const keys = new Keys({
 			renderer: { width: 120 },

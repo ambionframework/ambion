@@ -14,6 +14,9 @@ import { type Pin, type Pins, plain } from './pins.ts';
 import { ActionsView, FOCUS_ID } from './widget-actions.ts';
 import type { FileContent } from './workbench.ts';
 
+/** Wait one layout pass, so a new line has its place before the scroll reads it. */
+const SETTLE_MS = 40;
+
 /** The side area of the files that agents pinned: a stack, each with its title and kind. */
 export class PinsPanel {
 	readonly root: BoxRenderable;
@@ -25,6 +28,7 @@ export class PinsPanel {
 	private readonly note: TextRenderable;
 	private readonly hint: TextRenderable;
 	private readonly pad: ActionPad;
+	private revealing: ReturnType<typeof setTimeout> | undefined;
 	/** The actions drawn under each pin, by widget name. */
 	private readonly actions = new Map<string, ActionsView>();
 
@@ -81,7 +85,15 @@ export class PinsPanel {
 		const hint = this.pad.hint();
 		this.hint.height = hint.length;
 		this.hint.content = new StyledText([fg(palette.dim)(hint.join('\n'))]);
-		if (this.pad.active) this.scroll.scrollChildIntoView(FOCUS_ID);
+		this.reveal();
+	}
+
+	/** Bring the focused line into view once its layout exists. A later draw replaces a pending reveal. */
+	private reveal(): void {
+		clearTimeout(this.revealing);
+		this.revealing = this.pad.active
+			? setTimeout(() => this.scroll.scrollChildIntoView(FOCUS_ID), SETTLE_MS)
+			: undefined;
 	}
 
 	private rebuild(list: Pins): void {

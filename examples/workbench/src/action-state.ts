@@ -1,3 +1,4 @@
+import { AmbionError } from '@ambionframework/ambion';
 import type {
 	CanvasWidget,
 	WidgetAct,
@@ -7,10 +8,10 @@ import type {
 } from '@ambionframework/canvas';
 import { plain } from './pins.ts';
 
-/** The act that answers a revision: its seq, and the person when the host can name them. */
+/** The act that answers a revision: its seq and the person. */
 export interface Answered {
 	seq: number;
-	by?: string;
+	by: string;
 }
 
 /** One widget as the actions need it: what the person can press, and whether it is answered. */
@@ -39,8 +40,18 @@ export function actionWidget(widget: CanvasWidget, answered?: Answered): ActionW
 	};
 }
 
-/** Sends one act through the host as the person, and gives the canvas result. */
-export type SendAct = (act: WidgetAct) => Promise<WidgetActResult>;
+/** Sends one act through the host as a person, and gives the canvas result. */
+type SendAct = (person: string, act: WidgetAct) => Promise<WidgetActResult>;
+
+/** What the pad reads from the host, and how it asks for a redraw. */
+export interface PadOptions {
+	send: SendAct;
+	/** The person who presses, or undefined while nobody is chosen. */
+	person: () => string | undefined;
+	/** True while the room of the widgets is stopped. */
+	stopped: () => boolean;
+	changed: () => void;
+}
 
 type Values = Record<string, string | number | boolean>;
 
@@ -50,7 +61,7 @@ export type Tone = 'dim' | 'info' | 'error';
 /** One line of the actions of a widget. The drawing maps each row to one styled line. */
 export type Row =
 	| { type: 'note'; text: string; tone: Tone }
-	| { type: 'button'; label: string; focused: boolean; done: boolean }
+	| { type: 'button'; label: string; focused: boolean; done: boolean; blocked?: string }
 	| { type: 'field'; label: string; value: string; active: boolean };
 
 /** The key as the pad reads it: a subset of the key event of the terminal. */
@@ -125,8 +136,7 @@ function draftValue(draft: Draft): { value: string | number | boolean } | { prob
 
 /** The values of a form, or the first problem and the field that has it. */
 export function checkForm(
-	fields: readonly WidgetField[],
-	drafts: readonly Draft[] = fields.map(draftOf),
+	drafts: readonly Draft[],
 ): { values: Values } | { problem: string; at: number } {
 	const values: Values = {};
 	for (const [at, draft] of drafts.entries()) {
@@ -175,24 +185,31 @@ interface Focus {
 	action: string;
 }
 
-const answeredText = ({ seq, by }: Answered): string =>
-	by === undefined ? `answered in #${seq}` : `answered by ${plain(by)} in #${seq}`;
+const answeredText = ({ seq, by }: Answered): string => `answered by ${plain(by)} in #${seq}`;
 
 const MOVES: Record<string, number> = { up: -1, k: -1, down: 1, j: 1 };
 /** Each hint is a few short lines, so it fits the narrowest side area. */
 const LIST_HINT = ['Up/Down choose', 'Enter press   Esc leave'];
 const FORM_HINT = ['Up/Down field  Enter send', 'Left/Right/Space change', 'Esc cancel'];
 
+/** The act of a call that threw, with the person who sent it. A retry sends it again as it was. */
+interface Failed {
+	person: string;
+	act: WidgetAct;
+}
+
+const sameValues = (left: Values | undefined, right: Values | undefined): boolean =>
+	JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+
 /**
  * The state of the actions of the widgets that a side area draws: the focus, the open form,
- * the press token of each call, and the last result of each widget. It draws nothing and
- * reads no terminal. `send` calls `canvas.act` as the person. `changed` asks for a redraw.
+ * the act of a failed call, and the last result of each widget. It draws nothing and reads
+ * no terminal. `send` calls `canvas.act` as the person, and `changed` asks for a redraw.
  */
 export class ActionPad {
 	/** True while the keys of the person reach the pad. */
 	active = false;
-	private readonly send: SendAct;
-	private readonly changed: () => void;
+	private readonly options: PadOptions;
 	private source: readonly ActionWidget[] = [];
 	/** The newer revision that a stale result gave, by widget name. */
 	private readonly newer = new Map<string, ActionWidget>();
@@ -200,13 +217,16 @@ export class ActionPad {
 	private form: Form | undefined;
 	/** The note of each revision, by revision id. */
 	private readonly notes = new Map<string, Row & { type: 'note' }>();
-	/** The press token of each call that has not settled, by revision, action, and values. */
-	private readonly tokens = new Map<string, string>();
+	/** The call that threw. A result or a refusal drops it, and so does a change of person. */
+	private failed: Failed | undefined;
 	private sending = false;
 
-	constructor(send: SendAct, changed: () => void) {
-		this.send = send;
-		this.changed = changed;
+	constructor(options: PadOptions) {
+		this.options = options;
+	}
+
+	private changed(): void {
+		this.options.changed();
 	}
 
 	/** The widgets with actions, as the pad draws them. */
@@ -232,6 +252,7 @@ export class ActionPad {
 	/** Read the widgets that the host drew last. The focus, the form, and the notes follow the revisions. */
 	sync(widgets: readonly ActionWidget[]): void {
 		this.source = widgets;
+		if (this.failed && this.failed.person !== this.options.person()) this.failed = undefined;
 		for (const [name, newer] of this.newer)
 			if (!widgets.some((widget) => widget.name === name && widget.rev < newer.rev))
 				this.newer.delete(name);
@@ -262,11 +283,6 @@ export class ActionPad {
 		this.form = undefined;
 	}
 
-	/** Whether a widget has actions to draw. */
-	has(name: string): boolean {
-		return this.widgets.some((widget) => widget.name === name);
-	}
-
 	/** The key hints for the state of the pad, one short line each. */
 	hint(): readonly string[] {
 		return this.form ? FORM_HINT : LIST_HINT;
@@ -285,15 +301,35 @@ export class ActionPad {
 			rows.push({ type: 'note', text: `for ${plain(widget.for)}`, tone: 'dim' });
 		if (widget.answered)
 			rows.push({ type: 'note', text: answeredText(widget.answered), tone: 'info' });
-		for (const action of widget.actions) {
-			const focused = this.active && this.focus?.name === name && this.focus.action === action.id;
-			const done = action.once === true && widget.answered !== undefined;
-			rows.push({ type: 'button', label: plain(action.label), focused, done });
-			if (this.form?.revision === widget.revision && this.form.action.id === action.id)
-				rows.push(...this.fieldRows(this.form));
-		}
+		for (const action of widget.actions) rows.push(...this.actionRows(widget, action));
 		const note = this.notes.get(widget.revision);
 		return note ? [...rows, note] : rows;
+	}
+
+	/** The button of one action, and its form when it is open. */
+	private actionRows(widget: ActionWidget, action: WidgetAction): Row[] {
+		const focused =
+			this.active && this.focus?.name === widget.name && this.focus.action === action.id;
+		const done = action.once === true && widget.answered !== undefined;
+		const blocked = done ? undefined : this.blocked(widget);
+		const button: Row = {
+			type: 'button',
+			label: plain(action.label),
+			focused,
+			done,
+			...(blocked === undefined ? {} : { blocked }),
+		};
+		const open = this.form?.revision === widget.revision && this.form.action.id === action.id;
+		return open && this.form ? [button, ...this.fieldRows(this.form)] : [button];
+	}
+
+	/** Why the person cannot press the actions of a widget now, or undefined. */
+	private blocked(widget: ActionWidget): string | undefined {
+		if (this.options.stopped()) return 'room stopped';
+		const person = this.options.person();
+		return widget.for !== undefined && person !== undefined && widget.for !== person
+			? `for ${plain(widget.for)} only`
+			: undefined;
 	}
 
 	private fieldRows(form: Form): Row[] {
@@ -347,7 +383,10 @@ export class ActionPad {
 		const slot = this.chosen();
 		if (!slot || this.sending) return;
 		const { widget, action } = slot;
-		if (action.once === true && widget.answered) {
+		const blocked = this.blocked(widget);
+		if (blocked !== undefined && !(action.once === true && widget.answered)) {
+			this.note(widget, `Not available: ${blocked}.`, 'info');
+		} else if (action.once === true && widget.answered) {
 			this.note(widget, `This was ${answeredText(widget.answered)}.`, 'info');
 		} else if (action.fields && action.fields.length > 0) {
 			const drafts = action.fields.map(draftOf);
@@ -360,7 +399,7 @@ export class ActionPad {
 		const form = this.form;
 		const widget = this.widgets.find((one) => one.revision === form?.revision);
 		if (!form || !widget) return;
-		const checked = checkForm(form.action.fields ?? [], form.drafts);
+		const checked = checkForm(form.drafts);
 		if ('problem' in checked) {
 			form.at = checked.at;
 			this.note(widget, checked.problem, 'error');
@@ -371,35 +410,62 @@ export class ActionPad {
 	}
 
 	/**
-	 * Send one press. The token is saved before the call and stays until the call settles, so
-	 * a retry after a failure sends the same press. Other values make a new press.
+	 * The act of a call. The act of a failed call comes again as it was, for the same person,
+	 * action, and values. Any other call makes a new act with a new press token.
+	 */
+	private actOf(person: string, widget: ActionWidget, action: WidgetAction, values?: Values) {
+		const before = this.failed;
+		if (
+			before?.person === person &&
+			before.act.widget === widget.name &&
+			before.act.action === action.id &&
+			sameValues(before.act.values, values)
+		)
+			return before.act;
+		return {
+			room: widget.room,
+			widget: widget.name,
+			revision: widget.revision,
+			action: action.id,
+			...(values ? { values } : {}),
+			press: crypto.randomUUID(),
+		};
+	}
+
+	/**
+	 * Send one press. The act is saved before the call and stays until the call gives a result,
+	 * so a retry after a failure sends that act again, as the same person. A refusal never
+	 * lands, so it drops the act and shows its reason alone.
 	 */
 	private async call(widget: ActionWidget, action: WidgetAction, values?: Values): Promise<void> {
+		const person = this.options.person();
 		if (this.sending) return;
+		if (person === undefined) {
+			this.note(widget, 'Pick a person first: /user <name>.', 'error');
+			return;
+		}
 		this.sending = true;
-		const id = JSON.stringify([widget.revision, action.id, values ?? null]);
-		const press = this.tokens.get(id) ?? crypto.randomUUID();
-		this.tokens.set(id, press);
+		const act = this.actOf(person, widget, action, values);
+		this.failed = { person, act };
 		this.note(widget, 'Sending.', 'dim');
 		this.changed();
 		try {
-			const result = await this.send({
-				room: widget.room,
-				widget: widget.name,
-				revision: widget.revision,
-				action: action.id,
-				...(values ? { values } : {}),
-				press,
-			});
-			this.tokens.delete(id);
+			const result = await this.options.send(person, act);
+			this.failed = undefined;
 			this.settle(widget, result);
 		} catch (error) {
-			const reason = error instanceof Error ? error.message : String(error);
-			this.note(widget, `${plain(reason)} Press again to retry.`, 'error');
+			this.fail(widget, error);
 		} finally {
 			this.sending = false;
 			this.changed();
 		}
+	}
+
+	private fail(widget: ActionWidget, error: unknown): void {
+		const reason = plain(error instanceof Error ? error.message : String(error));
+		const refused = error instanceof AmbionError && error.code === 'refused';
+		if (refused) this.failed = undefined;
+		this.note(widget, refused ? reason : `${reason} Press again to retry.`, 'error');
 	}
 
 	private settle(widget: ActionWidget, result: WidgetActResult): void {

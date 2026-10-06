@@ -245,10 +245,14 @@ interface.
   action with fields opens a form of text, number, boolean, and choice fields.
   The form checks the values and shows the first problem before it sends. A
   press calls `canvas.act` as the person through `Workbench.act`. The host
-  saves one press token for each call, keeps it until the call settles, and
-  sends it again on a retry, so a press lands once. A `stale` result redraws
-  the new revision, and an `answered` result shows a line. The host reads the
-  pins again on the `answered` event as well as on the `widget` event.
+  saves the act of each call, with its press token, until the call gives a
+  result. After a failure, the next press of the same action sends that act
+  again as the same person, so a press lands once. A refusal drops the act
+  and shows its reason alone. A `stale` result redraws the new revision, and
+  an `answered` result shows a line. A button is inactive, with the reason,
+  when `for` names another person or the room is stopped. The host reads the
+  pins again on the `widget` event, and it adds the answer to the pins on the
+  `answered` event with no new file read.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
 

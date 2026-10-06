@@ -28,6 +28,8 @@ function chunksOf(row: Row): TextChunk[] {
 			fg(palette.text)(row.value),
 		];
 	if (row.done) return [fg(palette.dim)(`  ✓ ${row.label}  done`)];
+	if (row.blocked !== undefined)
+		return [fg(palette.dim)(`${row.focused ? '▸' : ' '} [ ${row.label} ]  ${row.blocked}`)];
 	if (row.focused) return [bg(palette.selected)(fg(palette.accent)(`▸ [ ${row.label} ]`))];
 	return [fg(palette.text)(`  [ ${row.label} ]`)];
 }

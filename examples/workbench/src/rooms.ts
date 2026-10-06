@@ -35,7 +35,7 @@ import {
 	keyVariable,
 	unavailableSeats,
 } from './kinds.ts';
-import { PIN_KINDS, type Pins } from './pins.ts';
+import { answeredPins, PIN_KINDS, type Pins } from './pins.ts';
 import { WORKSPACE } from './refs.ts';
 import { labRepositories } from './repositories.ts';
 import { instruments, labAppendOnly, labSchema, scenarios, seedWorkspace } from './scenarios.ts';
@@ -210,7 +210,14 @@ export async function openRooms(
 	});
 	// The canvas exists first: an agent reads its bundle when it is defined.
 	const roomTeam = team(workspace, openInstrument({ lab, instruments }), canvas);
-	canvas.subscribe((event) => heardEvent(event, stateOf, (name) => canvas.room(name)));
+	canvas.subscribe((event) =>
+		heardEvent(
+			event,
+			stateOf,
+			(name) => canvas.room(name),
+			(name) => canvas.answers(name),
+		),
+	);
 	/**
 	 * The pins of a room. `read` runs once after each widget event, room start,
 	 * archive, and end of an activation, and the answer stays until the next one.
@@ -226,29 +233,11 @@ export async function openRooms(
 		if (known(name).state === 'archived') return { pins: [], more: 0 };
 		const state = stateOf(name);
 		const widgets = canvas.widgets(name);
-		state.pins ??= answered(name)
-			.then((answers) => read(widgets, answers))
-			.catch((error: unknown) => {
-				state.pins = undefined;
-				throw error;
-			});
+		state.pins ??= read(widgets, canvas.answers(name)).catch((error: unknown) => {
+			state.pins = undefined;
+			throw error;
+		});
 		return state.pins;
-	}
-	/** The answers of a room, each with the person who answered it. A stopped room names no person. */
-	async function answered(name: string): Promise<Map<string, Answered>> {
-		const seqs = canvas.answers(name);
-		const first = Math.min(...seqs.values());
-		const read =
-			seqs.size > 0 ? await canvas.room(name)?.read({ messages: { after: first - 1 } }) : undefined;
-		const from = new Map<number, string>();
-		for (const message of read?.messages ?? [])
-			if (message.kind === 'said') from.set(message.seq, message.from);
-		return new Map(
-			[...seqs].map(([revision, seq]) => {
-				const by = from.get(seq);
-				return [revision, by === undefined ? { seq } : { seq, by }];
-			}),
-		);
 	}
 	try {
 		await canvas.resume({ agents: roomTeam.agents });
@@ -401,13 +390,27 @@ function heardEvent(
 	event: CanvasEvent,
 	stateOf: (name: string) => RoomState,
 	room: (name: string) => Room | undefined,
+	answers: (name: string) => ReadonlyMap<string, Answered>,
 ): void {
 	const name = roomOf(event);
 	const state = stateOf(name);
-	// A widget event, an answer, a start, and an archive change what the pins show.
-	if (['widget', 'answered', 'started', 'archived'].includes(event.type)) state.pins = undefined;
+	// A widget event, a start, and an archive change what the pins show. An answer adds to them.
+	if (['widget', 'started', 'archived'].includes(event.type)) state.pins = undefined;
+	// An answer changes no file, so the pins keep what they read.
+	else if (event.type === 'answered') putAnswers(state, answers(name));
 	if (event.type === 'started') room(name)?.subscribe((heard) => notify(state, heard));
 	changed(state);
+}
+
+/** Put the answers on the pins that the room holds, with no new read of a file. */
+function putAnswers(state: RoomState, answers: ReadonlyMap<string, Answered>): void {
+	const pending = state.pins;
+	if (!pending) return;
+	// A failed read has reset `state.pins` already, so the next read starts again.
+	const next = pending
+		.then((list) => answeredPins(list, answers))
+		.catch((): Pins => ({ pins: [], more: 0 }));
+	state.pins = next;
 }
 
 /** The name of the room that an event is about. */

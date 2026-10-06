@@ -1,5 +1,6 @@
+import { AmbionError } from '@ambionframework/ambion';
 import type { CanvasWidget, WidgetAct, WidgetActResult } from '@ambionframework/canvas';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
 	ActionPad,
 	type ActionWidget,
@@ -30,15 +31,20 @@ const widget = (revision: string, extra: Partial<ActionWidget> = {}): ActionWidg
 
 /** A pad on a recorded `send`. `results` answers the calls in order; a rejection is an Error. */
 function padOn(results: (WidgetActResult | Error)[] = []) {
-	const sent: WidgetAct[] = [];
-	const redraws = vi.fn();
-	const pad = new ActionPad(async (act) => {
-		sent.push(act);
-		const result = results.shift() ?? { kind: 'sent' as const, seq: 7 };
-		if (result instanceof Error) throw result;
-		return result;
-	}, redraws);
-	return { pad, sent, redraws };
+	const sent: { person: string; act: WidgetAct }[] = [];
+	const state = { person: 'mira' as string | undefined, stopped: false };
+	const pad = new ActionPad({
+		send: async (person, act) => {
+			sent.push({ person, act });
+			const result = results.shift() ?? { kind: 'sent' as const, seq: 7 };
+			if (result instanceof Error) throw result;
+			return result;
+		},
+		person: () => state.person,
+		stopped: () => state.stopped,
+		changed: () => {},
+	});
+	return { pad, sent, state };
 }
 
 const press = (name: string, sequence = ''): KeyInput => ({ name, sequence });
@@ -62,7 +68,7 @@ describe('checkForm', () => {
 			on: false,
 			pick: 0,
 		}));
-		expect(checkForm(FIELDS, drafts)).toEqual({ problem, at });
+		expect(checkForm(drafts)).toEqual({ problem, at });
 	});
 
 	it('gives each value its type', () => {
@@ -72,7 +78,7 @@ describe('checkForm', () => {
 			on: true,
 			pick: 1,
 		}));
-		expect(checkForm(FIELDS, drafts)).toEqual({
+		expect(checkForm(drafts)).toEqual({
 			values: { note: 'ok', count: 3.5, urgent: true, color: 'blue' },
 		});
 	});
@@ -113,7 +119,7 @@ describe('ActionPad', () => {
 
 		await pad.submit();
 		expect(sent).toHaveLength(1);
-		expect(sent[0]).toMatchObject({
+		expect(sent[0]?.act).toMatchObject({
 			room: 'bringup',
 			widget: 'plan',
 			revision: 'r1',
@@ -135,11 +141,55 @@ describe('ActionPad', () => {
 		});
 		await pad.press();
 		expect(sent).toHaveLength(2);
-		expect(sent[1]?.press).toBe(sent[0]?.press);
-		expect(sent[0]?.values).toBeUndefined();
+		expect(sent[1]).toEqual(sent[0]);
+		expect(sent[0]?.act.values).toBeUndefined();
 
 		await pad.press();
-		expect(sent[2]?.press).not.toBe(sent[0]?.press);
+		expect(sent[2]?.act.press).not.toBe(sent[0]?.act.press);
+	});
+
+	it('sends a failed act again as it was, even after a new revision, and drops it for another person', async () => {
+		const { pad, sent, state } = padOn([new Error('Lost.'), new Error('Lost.')]);
+		pad.sync([widget('r1')]);
+		pad.enter();
+		await pad.press();
+		pad.sync([widget('r2')]);
+		await pad.press();
+		expect(sent[1]).toEqual(sent[0]);
+		expect(sent[1]?.act.revision).toBe('r1');
+
+		state.person = 'theo';
+		await pad.press();
+		expect(sent[2]?.person).toBe('theo');
+		expect(sent[2]?.act.revision).toBe('r2');
+		expect(sent[2]?.act.press).not.toBe(sent[0]?.act.press);
+	});
+
+	it('shows a refusal with no retry, and sends the next press as a new act', async () => {
+		const { pad, sent } = padOn([new AmbionError('refused', 'The widget "plan" is for ola.')]);
+		pad.sync([widget('r1')]);
+		pad.enter();
+		await pad.press();
+		expect(pad.rows('plan').at(-1)).toEqual({
+			type: 'note',
+			text: 'The widget "plan" is for ola.',
+			tone: 'error',
+		});
+		await pad.press();
+		expect(sent[1]?.act.press).not.toBe(sent[0]?.act.press);
+	});
+
+	it('draws buttons as blocked for another person and for a stopped room, and sends nothing', async () => {
+		const { pad, sent, state } = padOn();
+		pad.sync([widget('r1', { for: 'ola' })]);
+		pad.enter();
+		expect(pad.rows('plan')[1]).toMatchObject({ type: 'button', blocked: 'for ola only' });
+		await pad.press();
+		expect(pad.rows('plan').at(-1)).toMatchObject({ text: 'Not available: for ola only.' });
+		state.stopped = true;
+		expect(pad.rows('plan')[1]).toMatchObject({ blocked: 'room stopped' });
+		await pad.press();
+		expect(sent).toEqual([]);
 	});
 
 	it('draws a once action as done once its widget is answered, and sends nothing for it', async () => {

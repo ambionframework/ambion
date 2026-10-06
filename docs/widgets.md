@@ -292,8 +292,8 @@ interface Canvas {
   widgets(room: string): readonly CanvasWidget[];
   /** One revision by id, or undefined. Read at resume. */
   revision(id: string): CanvasWidget | undefined;
-  /** The seq of the act that answers each answered revision of a room. Empty before resume. */
-  answers(room: string): ReadonlyMap<string, number>;
+  /** The act that answers each answered revision of a room: its seq and the person. Empty before resume. */
+  answers(room: string): ReadonlyMap<string, { readonly seq: number; readonly by: string }>;
   /** Checks an act, then sends it through the visit of the person in that room. */
   act(person: PersonDefinition, act: WidgetAct): Promise<WidgetActResult>;
 }

@@ -1,5 +1,5 @@
 import type { CanvasWidget, WidgetKind } from '@ambionframework/canvas';
-import type { ActionWidget } from './action-state.ts';
+import type { ActionWidget, Answered } from './action-state.ts';
 import type { FileContent } from './files.ts';
 
 /** The kinds the host draws. Each one takes a file of the workspace. */
@@ -48,6 +48,17 @@ const isPinKind = (kind: string): kind is PinKind => PIN_KINDS.some((one) => one
 export interface Pins {
 	pins: Pin[];
 	more: number;
+}
+
+/** The pins with the answers of their revisions. A pin keeps its file. */
+export function answeredPins(list: Pins, answers: ReadonlyMap<string, Answered>): Pins {
+	return {
+		...list,
+		pins: list.pins.map((pin) => {
+			const answered = answers.get(pin.revision);
+			return answered ? { ...pin, answered } : pin;
+		}),
+	};
 }
 
 /** The shown widgets of the catalog that name a file, in the order of the canvas. */

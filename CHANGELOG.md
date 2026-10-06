@@ -19,9 +19,11 @@ holds an answer as `answered by <person> in #<seq>` with its once actions
 done. Tab, then `a`, takes the keys. Up and Down choose, Enter presses an
 action or sends its form, and Esc leaves. A form takes a text, a number, a
 boolean, and a choice, and shows the first problem before it sends. The host
-saves one press token for each call and reuses it on a retry. A `stale`
-result redraws the new revision. The host reads the pins again on the
-`answered` event. `Workbench` gains `act(person, act)`. The pure state is
+saves the act of each call until it gives a result, and sends it again as it
+was on a retry. A refusal shows its reason alone, and a button is inactive
+when `for` names another person or the room is stopped. A `stale` result
+redraws the new revision, and the `answered` event adds the answer to the
+pins. `canvas.answers(room)` gives the seq and the person of each answer. `Workbench` gains `act(person, act)`. The pure state is
 `ActionPad` in `action-state.ts`, and `ActionsView` in `widget-actions.ts`
 draws its rows, so another host can reuse both.
 

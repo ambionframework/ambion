@@ -45,14 +45,12 @@ class WorkbenchTui {
 		const header = new Header(renderer);
 		const transcript = new Transcript(renderer);
 		const panel = new FilesPanel(renderer);
-		const pad = new ActionPad(
-			(act) => {
-				const person = this.session.identity;
-				if (!person) throw new Error('Pick a person first: /user <name>.');
-				return host.act(person.name, act);
-			},
-			() => this.render(),
-		);
+		const pad = new ActionPad({
+			send: (person, act) => host.act(person, act),
+			person: () => this.session.identity?.name,
+			stopped: () => this.session.view?.status === 'stopped',
+			changed: () => this.render(),
+		});
 		const pinsPanel = new PinsPanel(renderer, pad);
 		const processPanel = new ProcessesPanel(renderer);
 		this.processes = new ProcessBrowser(host, () => this.render());
