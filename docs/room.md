@@ -32,12 +32,12 @@ call is work that the room does not replay.
 | Resource         | Application data that an agent's tools reach, with provenance. `WorkspaceResource` is the handle that serialises operations on one backend              | [resources.md](resources.md)                                                      |
 | Journal          | The ordered, append-only record that the room folds into its state                                                                                      | [durability.md](durability.md)                                                    |
 | Entry            | One item that the journal holds                                                                                                                         | [durability.md](durability.md)                                                    |
-| Message          | One item of the record: a say, a post, a presence change, a summary, or a dismissal                                                                     | [agent.md](agent.md), [presence.md](presence.md)                                  |
+| Message          | One item of the record: a say, a system message, a presence change, a summary, or a dismissal                                                           | [agent.md](agent.md), [presence.md](presence.md)                                  |
 | Presence message | A change in who is in the room: a person or a seat                                                                                                      | [presence.md](presence.md)                                                        |
 | Record           | The messages of the journal in seq order, as a seat or a person reads them. `readThrough` and the record window are positions on it                     | [durability.md](durability.md)                                                    |
 | Summary          | A closing message that stands for a closed exchange in agent context                                                                                    | [summary.md](summary.md)                                                          |
-| Post             | A message of the system with no author: a post of the host, or a returned say                                                                           | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
-| Returned say     | A post that gives a say that an agent scheduled for itself back when it is due                                                                          | [exchange.md](exchange.md#6-a-scheduled-say)                                      |
+| System message   | A message of the system with no author: one that the host posts, or a returned say                                                                      | [exchange.md](exchange.md#7-the-edges-a-host-sees)                                |
+| Returned say     | A system message that gives a say that an agent scheduled for itself back when it is due                                                                | [exchange.md](exchange.md#6-a-scheduled-say)                                      |
 | Lease            | The time-limited right of one activation to run and commit                                                                                              | [durability.md](durability.md)                                                    |
 | Commit           | The write of a seat to the room: a say, a seating change, or a dismissal. The two-word term `commit ref` and `CommitUri` use the git sense              | [durability.md](durability.md)                                                    |
 | Ref              | One absolute URI that a message cites                                                                                                                   | [agent.md](agent.md)                                                              |
@@ -78,10 +78,10 @@ call is work that the room does not replay.
 
 ## The two spans
 
-| Span           | Starts                                                            | Ends                                         |
-| -------------- | ----------------------------------------------------------------- | -------------------------------------------- |
-| **activation** | The room wakes one seat                                           | That seat's work ends                        |
-| **exchange**   | A person's said message or a post lands while no exchange is open | The room reaches quiescence or terminal work |
+| Span           | Starts                                                                      | Ends                                         |
+| -------------- | --------------------------------------------------------------------------- | -------------------------------------------- |
+| **activation** | The room wakes one seat                                                     | That seat's work ends                        |
+| **exchange**   | A person's said message or a system message lands while no exchange is open | The room reaches quiescence or terminal work |
 
 An activation may contain more than one provider request. The exchange spans
 every activation from its opening question to its durable close. See
@@ -134,8 +134,8 @@ recorded entries. A host can resume the same behavior by replaying the
 journal.
 
 The journal records messages, seating changes, leases, exchange closes,
-composition, cancellation boundaries, and run fences. A post is a message
-of the system, with no author: the host writes one with `room.post`, and
+composition, cancellation boundaries, and run fences. A system message
+has no author: the host writes one with `room.post`, and
 the room writes a returned say when a scheduled say is due. It also records the
 activation id that authorized an agent contribution. The room stamps
 provenance fields. A caller cannot claim the name of another participant.

@@ -5,7 +5,8 @@
  * change that a host makes while a script ends. Then the memory backend's
  * seed function and `readFiles`.
  */
-import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, symlinkSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DEFAULT_TIMEOUT_SECONDS } from '@ambionframework/workspace';
@@ -184,6 +185,58 @@ describe('the just-bash adapter', () => {
 			]);
 		expect(await settles(beta)).toBe('settled');
 		expect(await settles(alpha.writeFile('after.txt', 'x'))).toBe('settled');
+	});
+});
+
+// -- a range of a file on the directory backend --------------------------------
+
+describe('the range read of the directory backend', () => {
+	const size = 12 * 1024 * 1024;
+
+	async function connectDirectory() {
+		const { dir, dispose } = await tempDir('ambion-range-');
+		onTestFinished(dispose);
+		const backend = directoryBackend(dir);
+		onTestFinished(() => backend.dispose?.());
+		return { dir, env: await backend.connect({ name: 'ada' }) };
+	}
+
+	it('reads a range past 10 MiB, and a whole read of that file still fails', async () => {
+		const { dir, env } = await connectDirectory();
+		const bytes = Buffer.alloc(size, 97);
+		bytes.write('target', size - 100);
+		await mkdir(join(dir, 'home/ada'), { recursive: true });
+		await writeFile(join(dir, 'home/ada/big.bin'), bytes);
+		const range = await env.readRange('big.bin', size - 100, 200);
+		expect(range.ok && new TextDecoder().decode(range.value.subarray(0, 6))).toBe('target');
+		expect(range.ok && range.value.length).toBe(100);
+		expect(await env.readBinaryFile('big.bin')).toMatchObject({
+			ok: false,
+			error: { code: 'invalid' },
+		});
+	});
+
+	it('refuses a link, a path out of the root, and a FIFO, and names the virtual path', async () => {
+		const { dir, env } = await connectDirectory();
+		const home = join(dir, 'home/ada');
+		await mkdir(home, { recursive: true });
+		await writeFile(join(home, 'real.txt'), 'real');
+		const outside = await tempDir('ambion-outside-');
+		onTestFinished(outside.dispose);
+		await writeFile(join(outside.dir, 'secret.txt'), 'outside');
+		symlinkSync(join(home, 'real.txt'), join(home, 'inside-link'));
+		symlinkSync(join(outside.dir, 'secret.txt'), join(home, 'outside-link'));
+		spawnSync('mkfifo', [join(home, 'pipe')]);
+		for (const [path, code] of [
+			['inside-link', 'not_found'],
+			['outside-link', 'not_found'],
+			['../../../etc/passwd', 'not_found'],
+			['pipe', 'invalid'],
+		] as const) {
+			const refused = await env.readRange(path, 0, 8);
+			expect(refused).toMatchObject({ ok: false, error: { code } });
+			expect(refused.ok ? '' : refused.error.message).not.toContain(dir);
+		}
 	});
 });
 

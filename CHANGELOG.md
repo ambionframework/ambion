@@ -22,6 +22,26 @@ records the request and tells the seat to report it to the opener. The Workbench
 `maker`: every seat holds the one canvas bundle, and specialists staff the
 breakout rooms.
 
+**The message kind `posted` is now `system`.** A message that the system
+writes has the body kind `system`: a host post with `room.post`, or a say
+that the room returns. The types and the guard follow: `PostedMessage` is
+`SystemMessage`, and `isPosted` is `isSystem`. The agent prompt reads
+`[system → ...]`, and the opening line of an exchange reads "A system message
+reports an event". `room.post` and `PostInput` keep their names. A stored
+journal that holds the kind `posted` does not resume.
+
+**`read` of a text file has no size limit.** `WorkspaceEnv` has a new
+member, `readRange(path, start, length, signal?)`. It gives at most `length`
+bytes from the byte `start`, and it has no size limit. `FileOperations` has
+the same member. The directory backend, the workstation, and the local
+backend of `camera-chat` read the range from the file. The memory backend cuts
+the range from the whole file. `read` scans a text file in ranges of 1 MiB
+and keeps the lines of the view. So a file of any size gives a view, and an
+offset and a limit read past 10 MiB. `details.lines` is present only when the
+scan reached the end of the file. When it is absent, the notices omit the
+line count. A whole-file read keeps the limit of its backend. So do an
+image, `edit`, `apply_patch`, and a snapshot.
+
 **The Pi executor records a `session` step.** The step opens each
 activation, before the first model step. It holds the name `pi`, the model
 string of the executor options, the session id, and the names of the tools.

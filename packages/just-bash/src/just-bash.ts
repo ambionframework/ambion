@@ -29,8 +29,9 @@
  * between an agent's commands and the machine.
  */
 
-import { mkdir } from 'node:fs/promises';
-import { posix } from 'node:path';
+import { constants, realpathSync } from 'node:fs';
+import { mkdir, open } from 'node:fs/promises';
+import { join, posix, resolve } from 'node:path';
 import {
 	type BashBackend,
 	DEFAULT_AUDIT_LOG,
@@ -44,6 +45,7 @@ import {
 	type IFileSystem,
 	InMemoryFs,
 	ReadWriteFs,
+	type ReadWriteFsOptions,
 } from 'just-bash';
 import { createGit, type Git } from 'just-git';
 import { BashEnv } from './bash-env.ts';
@@ -51,6 +53,7 @@ import { DEV_DIR, withDevices } from './devices.ts';
 // Type imports alone: the git module loads `node:sqlite`, and the root entry does not.
 import type { JustGitAccess } from './git/access.ts';
 import type { JustGitBackend } from './git/backend.ts';
+import type { RangeFs } from './range-fs.ts';
 
 /**
  * Where the just-bash backends keep the audit log, the room mirrors, and
@@ -265,6 +268,42 @@ function trusted(change: () => Promise<void>): Promise<void> {
 	return DefenseInDepthBox.runTrustedAsync(change);
 }
 
+/** Read at most `length` bytes of the regular file at `real` from the byte `start`. */
+async function readSpan(
+	real: string,
+	path: string,
+	start: number,
+	length: number,
+): Promise<Uint8Array> {
+	const flags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+	const handle = await open(real, flags);
+	try {
+		const info = await handle.stat();
+		if (info.isDirectory()) {
+			throw new Error(`EISDIR: illegal operation on a directory, read '${path}'`);
+		}
+		if (!info.isFile()) throw new Error(`EINVAL: not a regular file, read '${path}'`);
+		const bytes = Buffer.alloc(Math.min(length, Math.max(0, info.size - start)));
+		let total = 0;
+		while (total < bytes.length) {
+			const read = await handle.read(bytes, total, bytes.length - total, start + total);
+			if (read.bytesRead === 0) break;
+			total += read.bytesRead;
+		}
+		return new Uint8Array(bytes.buffer, bytes.byteOffset, total);
+	} finally {
+		await handle.close();
+	}
+}
+
+/** An error of the disk, with the code of the system and the virtual path. */
+function sanitized(error: unknown, path: string): Error {
+	const code = (error as NodeJS.ErrnoException | null)?.code;
+	if (typeof code !== 'string') return error instanceof Error ? error : new Error(String(error));
+	if (code === 'ELOOP') return new Error(`EACCES: permission denied, '${path}' is a symlink`);
+	return new Error(`${code}: read '${path}'`);
+}
+
 /**
  * The filesystem of `directoryBackend`. `ReadWriteFs` 3.6.0 makes one
  * change at a time on a root. The change that ends starts the next change
@@ -276,12 +315,35 @@ function trusted(change: () => Promise<void>): Promise<void> {
  * here runs as trusted code, so the defense layer wraps none of its
  * callbacks.
  */
-class DirectoryFs extends ReadWriteFs {
+class DirectoryFs extends ReadWriteFs implements RangeFs {
+	/** The root with every link resolved, as `ReadWriteFs` holds it. */
+	private readonly realRoot: string;
+
+	constructor(options: ReadWriteFsOptions) {
+		super(options);
+		this.realRoot = realpathSync(resolve(options.root));
+	}
+
 	override async lstat(path: string) {
 		// ReadWriteFs 3.6.0 validates the parent of / outside its own root.
 		// The virtual root is a directory, never a traversable symlink;
 		// stat keeps the backend's root validation without inspecting its parent.
 		return posix.normalize(path) === '/' ? this.stat('/') : super.lstat(path);
+	}
+	/**
+	 * At most `length` bytes of a file from the byte `start`, with no size
+	 * limit. `realpath` of `ReadWriteFs` keeps the path inside the root and
+	 * refuses a link. The open refuses a link as its last component, and does
+	 * not wait for a FIFO. The error carries the virtual path, never the
+	 * path on the disk.
+	 */
+	async readRange(path: string, start: number, length: number): Promise<Uint8Array> {
+		const real = join(this.realRoot, await this.realpath(path));
+		try {
+			return await readSpan(real, path, start, length);
+		} catch (error) {
+			throw sanitized(error, path);
+		}
 	}
 	override writeFile(...args: Parameters<ReadWriteFs['writeFile']>): Promise<void> {
 		return trusted(() => super.writeFile(...args));

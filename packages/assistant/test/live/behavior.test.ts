@@ -543,7 +543,7 @@ live('the default assistant, driven by the simulator', () => {
 				key: 'stock-sync-0940',
 			});
 			const discussion = await posted.waitForClose();
-			expect(discussion[0]).toMatchObject({ kind: 'posted', wakes: ['assistant'] });
+			expect(discussion[0]).toMatchObject({ kind: 'system', wakes: ['assistant'] });
 			// The post wakes the assistant, and the real model runs the activation to its release.
 			const closed = (await room.read({ messages: false })).exchanges.find(
 				(exchange) => exchange.from === posted.from,

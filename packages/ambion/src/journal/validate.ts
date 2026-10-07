@@ -9,11 +9,11 @@ import {
 	leaseEndedSchema,
 	leaseRunningSchema,
 	leaseSchema,
-	postedSchema,
 	presenceSchema,
 	runSchema,
 	saidSchema,
 	summarySchema,
+	systemSchema,
 } from '../bodies.ts';
 import { refsRefusal } from '../refs.ts';
 import type { Kind } from './journal.ts';
@@ -21,7 +21,7 @@ import type { Kind } from './journal.ts';
 const messageSchemas: Record<string, TSchema> = {
 	said: saidSchema,
 	dismissed: dismissedSchema,
-	posted: postedSchema,
+	system: systemSchema,
 	arrived: presenceSchema,
 	left: presenceSchema,
 	seated: presenceSchema,
@@ -31,7 +31,7 @@ const messageSchemas: Record<string, TSchema> = {
 const message = Type.Union([
 	saidSchema,
 	dismissedSchema,
-	postedSchema,
+	systemSchema,
 	presenceSchema,
 	summarySchema,
 ]);
@@ -70,7 +70,7 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 }
 
 /**
- * A scheduled say goes to its author. The system writes a post, so it has no
+ * A scheduled say goes to its author. The system writes a system message, so it has no
  * author, and a returned say goes to the seat of the say.
  */
 function validateSchedule(kind: string, body: Record<string, unknown> | undefined): void {
@@ -78,8 +78,8 @@ function validateSchedule(kind: string, body: Record<string, unknown> | undefine
 	const fail = (path: string, reason: string) => {
 		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
 	};
-	if (body.kind === 'posted' && body.from !== undefined) fail('body.from', 'expected no author');
-	if (body.kind === 'posted' && body.returns !== undefined && body.to === undefined)
+	if (body.kind === 'system' && body.from !== undefined) fail('body.from', 'expected no author');
+	if (body.kind === 'system' && body.returns !== undefined && body.to === undefined)
 		fail('body.to', 'expected the seat of the returned say');
 	if (body.kind === 'said' && body.delaySeconds !== undefined && body.to !== body.from)
 		fail('body.to', 'expected the author');
@@ -107,7 +107,7 @@ function validateDismissal(kind: string, body: Record<string, unknown> | undefin
 /** The refs of a message with text follow the grammar the commit path applies. */
 function validateRefs(kind: string, body: Record<string, unknown> | undefined): void {
 	if (kind !== 'message' || body === undefined) return;
-	if (body.kind !== 'said' && body.kind !== 'summary' && body.kind !== 'posted') return;
+	if (body.kind !== 'said' && body.kind !== 'summary' && body.kind !== 'system') return;
 	if (body.refs === undefined) return;
 	const reason = refsRefusal(body.refs);
 	if (reason === undefined) return;

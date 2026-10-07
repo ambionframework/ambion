@@ -61,6 +61,10 @@ describe.each(backends)('the root and the null device on $name', (backend) => {
 				ok: true,
 				value: new Uint8Array(),
 			});
+			expect(await env.readRange('/dev/null', 0, 16)).toEqual({
+				ok: true,
+				value: new Uint8Array(),
+			});
 		}));
 
 	it('is a character device that swallows stderr and keeps the exit code, beside the same devices', () =>

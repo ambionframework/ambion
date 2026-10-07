@@ -5,7 +5,7 @@
  * tools reproduce.
  */
 import type { ToolContent } from '@ambionframework/ambion';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { memoryBackend } from '../../just-bash/src/index.ts';
 import { backends } from '../../just-bash/test/support/backends.ts';
 import type { BashBackend } from '../src/backend.ts';
@@ -185,6 +185,22 @@ const cases: readonly Case[] = [
 				maxBytes: 51200,
 			},
 		},
+	},
+	{
+		name: 'a file with a byte order mark',
+		tool: 'read',
+		files: { 'a.txt': '\ufeffone\ntwo\n' },
+		args: { path: 'a.txt' },
+		content: text('one\ntwo\n'),
+		details: { path: `${home}/a.txt`, text: 'one\ntwo\n', from: 1, to: 2, lines: 2 },
+	},
+	{
+		name: 'an empty file',
+		tool: 'read',
+		files: { 'a.txt': '' },
+		args: { path: 'a.txt' },
+		content: text(''),
+		details: { path: `${home}/a.txt`, text: '', from: 1, to: 0, lines: 0 },
 	},
 	{
 		name: 'a PNG image',
@@ -546,6 +562,174 @@ describe.each(backends)('the file tools on the $name backend', (fixture) => {
 			await site.dispose();
 			await dispose();
 		}
+	});
+});
+
+/** One line of the large file: 99 characters and a newline, so every line is 100 bytes. */
+const row = (number: number): string => `row ${number}`.padEnd(99, '.');
+
+const ROWS = 130_000;
+const RANGE = 1024 * 1024;
+
+interface LargeCase {
+	readonly name: string;
+	readonly args: { path: string; offset?: number; limit?: number };
+	readonly content?: string;
+	/** The details that the call must have. */
+	readonly details?: Record<string, unknown>;
+	/** True when the scan reached the end of the file, so `lines` is set. */
+	readonly lines?: number;
+	readonly error?: string;
+}
+
+const rows = (from: number, to: number): string =>
+	Array.from({ length: to - from + 1 }, (_, index) => row(from + index)).join('\n');
+
+const largeCases: readonly LargeCase[] = [
+	{
+		name: 'a limit at an offset past 10 MiB, in a range that is not the last',
+		args: { path: 'big.txt', offset: 110_000, limit: 3 },
+		content: `${rows(110_000, 110_002)}\n\n[More lines in file. Use offset=110003 to continue.]`,
+		details: { from: 110_000, to: 110_002, next: 110_003 },
+	},
+	{
+		name: 'the end of a file past 10 MiB, which sets the line count',
+		args: { path: 'big.txt', offset: 129_999 },
+		content: `${rows(129_999, 130_000)}\n`,
+		details: { from: 129_999, to: 130_000 },
+		lines: ROWS,
+	},
+	{
+		name: 'a line that spans the boundary of two ranges',
+		args: { path: 'big.txt', offset: Math.ceil(RANGE / 100), limit: 2 },
+		content: `${rows(Math.ceil(RANGE / 100), Math.ceil(RANGE / 100) + 1)}\n\n[More lines in file. Use offset=${Math.ceil(RANGE / 100) + 2} to continue.]`,
+		details: { from: Math.ceil(RANGE / 100), to: Math.ceil(RANGE / 100) + 1 },
+	},
+	{
+		name: 'the byte limit past the first range, with no line count in the notice',
+		args: { path: 'big.txt', offset: 110_000 },
+		content: `${rows(110_000, 110_511)}\n\n[Showing lines 110000-110511 (50.0KB limit). Use offset=110512 to continue.]`,
+		details: {
+			from: 110_000,
+			to: 110_511,
+			next: 110_512,
+			truncation: { truncated: true, truncatedBy: 'bytes' },
+		},
+	},
+	{
+		name: 'the byte limit of a file that fills more than one range',
+		args: { path: 'big.txt' },
+		content: `${rows(1, 512)}\n\n[Showing lines 1-512 (50.0KB limit). Use offset=513 to continue.]`,
+		details: {
+			from: 1,
+			to: 512,
+			next: 513,
+			truncation: { truncated: true, truncatedBy: 'bytes' },
+		},
+	},
+	{
+		name: 'the line limit of a file that fills more than one range',
+		args: { path: 'short.txt' },
+		content: `${'x\n'.repeat(1999)}x\n\n[Showing lines 1-2000. Use offset=2001 to continue.]`,
+		details: {
+			from: 1,
+			to: 2000,
+			next: 2001,
+			truncation: { truncated: true, truncatedBy: 'lines' },
+		},
+	},
+	{
+		name: 'an offset past the end of the file',
+		args: { path: 'big.txt', offset: 999_999 },
+		error: `Offset 999999 is beyond end of file (${ROWS + 1} lines total)`,
+	},
+	{
+		name: 'a multi-byte character that spans the boundary of two ranges',
+		args: { path: 'wide.txt', offset: 349_526, limit: 2 },
+		content: 'é\né\n\n[50474 more lines in file. Use offset=349528 to continue.]',
+		details: { from: 349_526, to: 349_527, next: 349_528 },
+		lines: 400_000,
+	},
+	{
+		name: 'a first line over the byte limit, longer than a range',
+		args: { path: 'long.txt' },
+		content: `[Line 1 is 3.0MB, exceeds 50.0KB limit. Use bash: sed -n '1p' long.txt | head -c 51200]`,
+		details: { from: 1, to: 0, text: '', truncation: { firstLineExceedsLimit: true } },
+		lines: 2,
+	},
+];
+
+describe.each(backends)('a read of a file past 10 MiB on the $name backend', (fixture) => {
+	let site: ReturnType<typeof openWorkspace>;
+	let dispose: () => Promise<void>;
+
+	beforeAll(async () => {
+		const opened = await fixture.open();
+		dispose = opened.dispose;
+		site = openWorkspace({ name: 'large', backend: { bash: opened.backend } });
+		await seed(site, {
+			'big.txt': `${rows(1, ROWS)}\n`,
+			'short.txt': 'x\n'.repeat(700_000),
+			'wide.txt': 'é\n'.repeat(400_000),
+			'long.txt': `${'y'.repeat(3 * RANGE)}\ntail\n`,
+		});
+	}, 60_000);
+
+	afterAll(async () => {
+		await site.dispose();
+		await dispose();
+	});
+
+	it.each(largeCases)(
+		'$name',
+		async (item) => {
+			const outcome = call(site, 'read', item.args);
+			if (item.error !== undefined) {
+				await expect(outcome).rejects.toThrow(item.error);
+				return;
+			}
+			const result = await outcome;
+			if (typeof result === 'string') throw new Error('The read tool gave a string.');
+			expect(result.content).toEqual(text(item.content ?? ''));
+			expect(result.details).toMatchObject({ path: `${home}/${item.args.path}`, ...item.details });
+			expect((result.details as { lines?: number }).lines).toBe(item.lines);
+		},
+		30_000,
+	);
+});
+
+describe('an abort between two ranges of a read', () => {
+	/** A backend whose `readRange` aborts `controller` once it has read the first range. */
+	function abortingAfterFirstRange(controller: AbortController): BashBackend {
+		const inner = memoryBackend();
+		return {
+			...inner,
+			connect: async (who, signal) => {
+				const env = await inner.connect(who, signal);
+				const read = env.readRange.bind(env);
+				env.readRange = async (path, start, length, signal) => {
+					const result = await read(path, start, length, signal);
+					if (start === 0) controller.abort();
+					return result;
+				};
+				return env;
+			},
+		};
+	}
+
+	it('stops the read before it reads the next range', async () => {
+		const controller = new AbortController();
+		const site = openWorkspace({
+			name: 'cut',
+			backend: { bash: abortingAfterFirstRange(controller) },
+		});
+		await seed(site, { 'f.txt': 'x\n'.repeat(700_000) });
+		const outcome = toolOf(site, 'read').invoke(
+			{ path: 'f.txt', offset: 650_000 },
+			callAs(agent.name, { signal: controller.signal }),
+		);
+		await expect(outcome).rejects.toThrow('Operation aborted');
+		await site.dispose();
 	});
 });
 
