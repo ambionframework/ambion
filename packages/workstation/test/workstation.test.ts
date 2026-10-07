@@ -22,7 +22,7 @@ import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import type { SFTPWrapper } from 'ssh2';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type WorkstationOptions, workstationBackend } from '../src/index.ts';
-import { readBounded } from '../src/sftp.ts';
+import { readBounded, readRange } from '../src/sftp.ts';
 import { startSshServer, type TestServer } from './support/server.ts';
 import { hasSetsid } from './support/setsid.ts';
 
@@ -419,7 +419,70 @@ describe.skipIf(!hasSetsid)('a workstation read', () => {
 	});
 });
 
+describe.skipIf(!hasSetsid)('a workstation range read', () => {
+	it('reads a range past 10 MiB across several requests, and refuses a directory, a device file, and a FIFO', async () => {
+		const started = await server();
+		const home = started.homes.get('ada') ?? '';
+		const limit = 10 * 1024 * 1024;
+		const bytes = Buffer.alloc(limit + 1024 * 1024, 97);
+		bytes.write('marker', limit + 100);
+		await writeFile(join(home, 'big.bin'), bytes);
+		spawnSync('mkfifo', [join(home, 'pipe')]);
+		const backend = backendFor(started.options);
+		await withEnv(backend, 'ada', async (env) => {
+			const past = await env.readRange('big.bin', limit + 100, 16);
+			expect(past.ok && Buffer.from(past.value).toString('utf8', 0, 6)).toBe('marker');
+			const wide = await env.readRange('big.bin', 100, 700_000);
+			expect(wide.ok && Buffer.from(wide.value).equals(bytes.subarray(100, 700_100))).toBe(true);
+			const tail = await env.readRange('big.bin', bytes.length - 10, 64);
+			expect(tail.ok && tail.value.length).toBe(10);
+			const beyond = await env.readRange('big.bin', bytes.length + 5, 64);
+			expect(beyond.ok && beyond.value.length).toBe(0);
+			expect(await env.readRange('.', 0, 8)).toMatchObject({
+				ok: false,
+				error: { code: 'is_directory' },
+			});
+			for (const path of ['/dev/zero', 'pipe']) {
+				expect(await env.readRange(path, 0, 8)).toMatchObject({
+					ok: false,
+					error: { code: 'invalid' },
+				});
+			}
+		});
+	});
+});
+
 describe('a bounded read', () => {
+	it('closes the handle of a range read, and stops when the session ends', async () => {
+		let closed = 0;
+		let requests = 0;
+		const sftp = {
+			stat: (_path: string, done: (error: undefined, stats: object) => void) =>
+				done(undefined, { isDirectory: () => false, isFile: () => true, size: 1e9 }),
+			open: (_path: string, _flag: string, done: (error: undefined, handle: Buffer) => void) =>
+				done(undefined, Buffer.from('h')),
+			read: (
+				_handle: Buffer,
+				_chunk: Buffer,
+				_offset: number,
+				length: number,
+				_position: number,
+				done: (error: undefined, count: number) => void,
+			) => {
+				requests += 1;
+				done(undefined, length);
+			},
+			close: (_handle: Buffer, done: () => void) => {
+				closed += 1;
+				done();
+			},
+		} as unknown as SFTPWrapper;
+		const range = await readRange(sftp, 'wide', 0, 600_000, () => false);
+		expect([range.length, requests, closed]).toEqual([600_000, 3, 1]);
+		await expect(readRange(sftp, 'wide', 0, 600_000, () => true)).rejects.toThrow('session ended');
+		expect(closed).toBe(2);
+	});
+
 	it('stops at the limit when a file grows past the size that `stat` reported, and closes the handle', async () => {
 		let buffered = 0;
 		let closed = 0;

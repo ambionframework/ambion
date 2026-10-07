@@ -25,11 +25,11 @@ const rootRow = (): CanvasRoom => ({
 
 /** The posts of the bridge about one breakout room, in the record of its parent. */
 const noticesOf = async (
-	posted: (
+	systemMessages: (
 		name: string,
 	) => Promise<readonly { key?: string | undefined; to?: string | undefined }[]>,
 	room = 'site-survey',
-) => (await posted('site')).filter((m) => m.key?.startsWith(`breakout:${room}:`));
+) => (await systemMessages('site')).filter((m) => m.key?.startsWith(`breakout:${room}:`));
 
 const refusal = (promise: Promise<unknown>, cause?: RegExp) =>
 	expect(promise).rejects.toMatchObject({
@@ -96,14 +96,14 @@ async function lab(
 			agents: ['cy'],
 			...extra,
 		});
-	const posted = async (name: string) =>
-		(await live(canvas, name).read()).messages.flatMap((m) => (m.kind === 'posted' ? [m] : []));
-	return { ...context, site, opener, worker, call, open, posted, agents };
+	const systemMessages = async (name: string) =>
+		(await live(canvas, name).read()).messages.flatMap((m) => (m.kind === 'system' ? [m] : []));
+	return { ...context, site, opener, worker, call, open, systemMessages, agents };
 }
 
 describe('breakout', () => {
 	it('opens a room with a goal and a message, and gives the mirror path', async () => {
-		const { canvas, open, store, posted } = await lab({ workspace: true });
+		const { canvas, open, store, systemMessages } = await lab({ workspace: true });
 		const result = await open();
 		expect(result).toMatchObject({
 			room: 'site-survey',
@@ -117,7 +117,7 @@ describe('breakout', () => {
 		expect(read.goal).toBe('Survey the options.');
 		expect(read.participants).toMatchObject([{ name: 'cy', attention: 'broadcast' }]);
 		expect(read.reserve).toEqual([]);
-		expect(await posted('site-survey')).toMatchObject([
+		expect(await systemMessages('site-survey')).toMatchObject([
 			{ text: 'Survey it.', key: 'breakout-start:site-survey' },
 		]);
 		expect(await store.list()).toMatchObject([
@@ -132,17 +132,17 @@ describe('breakout', () => {
 	});
 
 	it('posts the first message to one worker when `to` names it', async () => {
-		const { open, posted } = await lab();
+		const { open, systemMessages } = await lab();
 		await open('pair', { agents: ['cy', 'dan'], to: 'dan' });
-		expect(await posted('site-pair')).toMatchObject([{ to: 'dan' }]);
+		expect(await systemMessages('site-pair')).toMatchObject([{ to: 'dan' }]);
 	});
 
 	it('returns the same room on a repeat, posts nothing, and ignores the other parameters', async () => {
-		const { open, posted, canvas, call } = await lab({ perOpener: 1 });
+		const { open, systemMessages, canvas, call } = await lab({ perOpener: 1 });
 		const first = await open();
 		const again = await open('survey', { goal: 'Other.', message: 'Other.', agents: ['dan'] });
 		expect(again).toEqual({ ...(first as object), created: false });
-		expect(await posted('site-survey')).toHaveLength(1);
+		expect(await systemMessages('site-survey')).toHaveLength(1);
 		await canvas.stop('site-survey');
 		const stopped = await open();
 		expect(stopped).toMatchObject({ state: 'stopped', created: false });
@@ -261,7 +261,7 @@ describe('the start of a row', () => {
 		await store.insert(breakoutRow('site-a', 'site'));
 		await canvas.resume({ agents: [tooled('ada', canvas.tools()), cy] });
 		const read = await live(canvas, 'site-a').read();
-		expect(read.messages.filter((m) => m.kind === 'posted')).toMatchObject([
+		expect(read.messages.filter((m) => m.kind === 'system')).toMatchObject([
 			{ text: 'Start.', key: 'breakout-start:site-a' },
 		]);
 		expect(errors).toEqual([]);
@@ -278,7 +278,7 @@ describe('the start of a row', () => {
 			const next = host({ store: first.store, storage: first.storage });
 			await next.canvas.resume({ agents: [tooled('ada', next.canvas.tools()), cy] });
 			const read = await live(next.canvas, 'site-a').read();
-			expect(read.messages.filter((m) => m.kind === 'posted')).toHaveLength(1);
+			expect(read.messages.filter((m) => m.kind === 'system')).toHaveLength(1);
 			await next.canvas.close();
 		}
 	});
@@ -296,13 +296,13 @@ describe('the start of a row', () => {
 		await next.canvas.resume({ agents: [tooled('ada', next.canvas.tools()), cy] });
 		expect(next.canvas.room('site-a')).toBeUndefined();
 		const read = await readRoom('site-a', { runtime: next.runtime });
-		expect(read.messages.some((m) => m.kind === 'posted')).toBe(true);
+		expect(read.messages.some((m) => m.kind === 'system')).toBe(true);
 	});
 });
 
 describe('tell', () => {
 	it('steers a worker, lands once for one call, and opens a new exchange that the bridge reports', async () => {
-		const { open, call, canvas, posted } = await lab();
+		const { open, call, canvas, systemMessages } = await lab();
 		await open();
 		const room = live(canvas, 'site-survey');
 		await settled(room);
@@ -314,10 +314,10 @@ describe('tell', () => {
 		await settled(room);
 		const read = await room.read();
 		expect(
-			read.messages.filter((m) => m.kind === 'posted' && m.text === 'Narrow it.'),
+			read.messages.filter((m) => m.kind === 'system' && m.text === 'Narrow it.'),
 		).toHaveLength(1);
 		expect(read.exchanges.filter((e) => e.status === 'closed')).toHaveLength(2);
-		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(2));
+		await vi.waitFor(async () => expect(await noticesOf(systemMessages)).toHaveLength(2));
 		expect(
 			await call('ada', 'tell', { room: 'site-survey', text: 'More.', to: 'cy' }),
 		).toMatchObject({
@@ -472,7 +472,7 @@ describe('report', () => {
 		await settled(live(canvas, 'site-survey'));
 		// The start of the room replays its parent in the chain of the bridge, so every post has landed.
 		await canvas.start('site-survey');
-		const messages = (await site.read()).messages.flatMap((m) => (m.kind === 'posted' ? [m] : []));
+		const messages = (await site.read()).messages.flatMap((m) => (m.kind === 'system' ? [m] : []));
 		expect(messages.slice(1)).toMatchObject([
 			{
 				to: 'ada',
@@ -491,7 +491,7 @@ describe('report', () => {
 		expect(first).toMatchObject({ room: 'site', to: 'ada' });
 		const read = await site.read();
 		expect(read.messages.at(-1)).toMatchObject({
-			kind: 'posted',
+			kind: 'system',
 			to: 'ada',
 			text: 'breakout site-survey: Done.',
 			key: 'breakout:site-survey:7:report:call-2',
@@ -608,17 +608,17 @@ describe('the reminder', () => {
 
 describe('the bridge', () => {
 	it('posts one close notice for an exchange with no report, and finds its key at the next pass', async () => {
-		const { open, canvas, posted, errors } = await lab();
+		const { open, canvas, systemMessages, errors } = await lab();
 		await open();
-		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(1));
+		await vi.waitFor(async () => expect(await noticesOf(systemMessages)).toHaveLength(1));
 		const closed = (await live(canvas, 'site-survey').read()).exchanges.flatMap((e) =>
 			e.status === 'closed' ? [e] : [],
 		);
 		expect(closed).toHaveLength(1);
 		const { from, through } = closed[0] ?? { from: 0, through: 0 };
-		expect(await noticesOf(posted)).toMatchObject([
+		expect(await noticesOf(systemMessages)).toMatchObject([
 			{
-				kind: 'posted',
+				kind: 'system',
 				to: 'ada',
 				text: `breakout site-survey: exchange #${from} is complete, messages #${from} to #${through}.`,
 				refs: [`ambion://room/site-survey/message/${through}`],
@@ -626,7 +626,7 @@ describe('the bridge', () => {
 			},
 		]);
 		await canvas.start('site-survey');
-		expect(await noticesOf(posted)).toHaveLength(1);
+		expect(await noticesOf(systemMessages)).toHaveLength(1);
 		expect(errors).toEqual([]);
 	});
 
@@ -634,23 +634,23 @@ describe('the bridge', () => {
 		['at none', { seats: { ada: 'none', bob: 'broadcast' } as const }, false],
 		['absent from the roster', {}, true],
 	])('posts the notice with no `to` for an opener %s', async (_label, options, unseat) => {
-		const { open, site, posted } = await lab(options);
+		const { open, site, systemMessages } = await lab(options);
 		if (unseat) await site.unseat('ada');
 		await open();
-		await vi.waitFor(async () => expect(await noticesOf(posted)).toHaveLength(1));
-		expect((await noticesOf(posted))[0]).not.toHaveProperty('to');
+		await vi.waitFor(async () => expect(await noticesOf(systemMessages)).toHaveLength(1));
+		expect((await noticesOf(systemMessages))[0]).not.toHaveProperty('to');
 	});
 
 	it('reports a failed post to onError, leaves its exchange without a key, and posts it at the next pass', async () => {
-		const { open, site, posted, errors, canvas } = await lab();
+		const { open, site, systemMessages, errors, canvas } = await lab();
 		vi.spyOn(site, 'post').mockRejectedValueOnce(new Error('The disk is full.'));
 		await open();
 		await vi.waitFor(() =>
 			expect(errors).toMatchObject([{ room: 'site-survey', operation: 'notice' }]),
 		);
-		expect(await noticesOf(posted)).toEqual([]);
+		expect(await noticesOf(systemMessages)).toEqual([]);
 		await canvas.start('site-survey');
-		expect(await noticesOf(posted)).toHaveLength(1);
+		expect(await noticesOf(systemMessages)).toHaveLength(1);
 		expect(errors).toHaveLength(1);
 	});
 });
@@ -663,7 +663,7 @@ describe('a visit', () => {
 		const visit = await room.visit(definePerson({ name: 'priya', identity: 'Priya.' }));
 		const sent = await visit.send({ text: 'How is it going?', key: 'visit-1' });
 		await sent.waitForClose();
-		expect((await room.read()).messages.some((m) => m.kind === 'said' || m.kind === 'posted')).toBe(
+		expect((await room.read()).messages.some((m) => m.kind === 'said' || m.kind === 'system')).toBe(
 			true,
 		);
 	});

@@ -82,7 +82,7 @@ start of the range through its end. A
 range that holds only the words of people, such as a request that no
 specialist answered, gets a close with no summary writer. The close keeps its
 messages whole, and the outcome of the summary is `silent`. A seat change, a
-dismissal, and a post of the system are no agent message. The room cannot
+dismissal, and a system message are no agent message. The room cannot
 judge whether an agent message reports anything, because an agent message
 can be a routing request. The writer judges that case, and it ends the
 activation without `say` when the messages report nothing.

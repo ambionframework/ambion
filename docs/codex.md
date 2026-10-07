@@ -19,7 +19,7 @@ the workspace tools, behind the workspace port, so it makes no difference
 whether the workspace is in memory, a directory, or a remote workstation.
 The seat reaches the world through the room tools and the tools that you
 give it, as a Pi seat does. [Workspace](workspace.md#give-the-resource-to-an-agent)
-states the workspace tools: `read`, `write`, `edit`, `bash`, and the
+states the workspace tools: `read`, `write`, `edit`, `apply_patch`, `bash`, and the
 others. A seat of any executor kind joins one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution. Pass `codexExecution({ codexPath, env, home, login })` for

@@ -86,7 +86,6 @@ export type {
 	Participant,
 	PersonDefinition,
 	PersonParticipant,
-	PostedMessage,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
@@ -99,6 +98,7 @@ export type {
 	Step,
 	SummaryMessage,
 	SummaryOutcome,
+	SystemMessage,
 	TracedStep,
 	TraceLogger,
 	TracePolicy,
@@ -106,7 +106,7 @@ export type {
 	Usage,
 	VendorSession,
 } from './types.ts';
-export { addUsage, isPosted, isPresence, isSaid, isSummary, withoutPreferences } from './types.ts';
+export { addUsage, isPresence, isSaid, isSummary, isSystem, withoutPreferences } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

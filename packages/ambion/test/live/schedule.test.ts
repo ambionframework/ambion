@@ -5,7 +5,7 @@
  * wakes on the room's clock to finish the work.
  */
 import { expect, it } from 'vitest';
-import { isPosted, isSaid, type PostedMessage } from '../../src/index.ts';
+import { isSaid, isSystem, type SystemMessage } from '../../src/index.ts';
 import { enter, messagesOf } from '../support/room.ts';
 import {
 	agent,
@@ -43,9 +43,9 @@ live('schedule', () => {
 		});
 		const { session, events } = await open('schedule', { agents: [follower] }, LIMITS);
 		const visit = await enter(session, person);
-		const returned = new Promise<PostedMessage>((resolve) => {
+		const returned = new Promise<SystemMessage>((resolve) => {
 			session.subscribe((e) => {
-				if (e.type === 'message' && isPosted(e.message) && e.message.returns !== undefined)
+				if (e.type === 'message' && isSystem(e.message) && e.message.returns !== undefined)
 					resolve(e.message);
 			});
 		});

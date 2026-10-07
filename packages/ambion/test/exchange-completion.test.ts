@@ -237,7 +237,7 @@ describe('exchange completion handles', () => {
 		expect(posted).toMatchObject({ opened: true });
 		expect(posted).not.toHaveProperty('person');
 		await expect(posted.waitForClose()).resolves.toMatchObject([
-			{ kind: 'posted', to: alpha.name, text: post.text, refs: post.refs, key: 'ci-412' },
+			{ kind: 'system', to: alpha.name, text: post.text, refs: post.refs, key: 'ci-412' },
 			{ kind: 'said', from: alpha.name, text: 'Seen: ci: build 412' },
 		]);
 		await expect(posted.waitForSummary()).resolves.toBeUndefined();
@@ -261,7 +261,7 @@ describe('exchange completion handles', () => {
 			code: 'unknown_participant',
 		});
 		await expect(room.post({ to: assistant.name, text: 'x' })).rejects.toThrow(/wakes for nothing/);
-		expect((await messagesOf(room)).filter((message) => message.kind === 'posted')).toHaveLength(2);
+		expect((await messagesOf(room)).filter((message) => message.kind === 'system')).toHaveLength(2);
 		// A resumed room finds the exchange that the post opened.
 		await room.stop();
 		const resumed = stopAtEnd(

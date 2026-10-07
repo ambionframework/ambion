@@ -115,7 +115,7 @@ export interface Room {
 	exchange(from: Seq): ExchangeHandle | undefined;
 	visit(person: PersonDefinition): Promise<people.Visit>;
 	/**
-	 * Post a message as the system: to a seat, a person, or the room. The post
+	 * Post a message as the system: to a seat, a person, or the room. The system message
 	 * has no author, wakes and steers as the room routes it, and opens an
 	 * exchange when none is open. A repeated `key` lands once.
 	 */

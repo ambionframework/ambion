@@ -246,14 +246,14 @@ schedule({
 
 **A loop uses five workspace capabilities and the actuator pattern.**
 
-| Part         | Tools                            | Role in a loop                                               |
-| ------------ | -------------------------------- | ------------------------------------------------------------ |
-| Files        | `read`, `write`, `edit`          | The common medium: logs, exports, working copies, and plans  |
-| Processes    | `bash`, `ps`, `wait`, `cancel`   | The life of every command, and the checks of the agent       |
-| Repositories | `repos`, `fork`                  | The versions of the controller                               |
-| Tables       | `sql`                            | Shared plans, schedules, and results                         |
-| Sensors      | `fetch`                          | The agent's own view of the stock, retained as evidence      |
-| Actuators    | `bash` and the actuator template | The controller: a command that stops safe and logs its state |
+| Part         | Tools                                  | Role in a loop                                               |
+| ------------ | -------------------------------------- | ------------------------------------------------------------ |
+| Files        | `read`, `write`, `edit`, `apply_patch` | The common medium: logs, exports, working copies, and plans  |
+| Processes    | `bash`, `ps`, `wait`, `cancel`         | The life of every command, and the checks of the agent       |
+| Repositories | `repos`, `fork`                        | The versions of the controller                               |
+| Tables       | `sql`                                  | Shared plans, schedules, and results                         |
+| Sensors      | `fetch`                                | The agent's own view of the stock, retained as evidence      |
+| Actuators    | `bash` and the actuator template       | The controller: a command that stops safe and logs its state |
 
 **An agent builds a new loop while the application runs.** A new loop
 needs no restart of the host and no new host code. An agent can build

@@ -185,7 +185,7 @@
 	{
 		"kind": "message",
 		"body": {
-			"kind": "posted",
+			"kind": "system",
 			"at": "2026-01-01T09:10:00.000Z",
 			"to": "worker",
 			"returns": 6,

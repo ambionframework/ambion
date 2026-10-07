@@ -9,12 +9,47 @@ one `system` step in the first pass. The new trace policy field
 `input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
 `limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
 
+**The message kind `posted` is now `system`.** A message that the system
+writes has the body kind `system`: a host post with `room.post`, or a say
+that the room returns. The types and the guard follow: `PostedMessage` is
+`SystemMessage`, and `isPosted` is `isSystem`. The agent prompt reads
+`[system → ...]`, and the opening line of an exchange reads "A system message
+reports an event". `room.post` and `PostInput` keep their names. A stored
+journal that holds the kind `posted` does not resume.
+
+**`read` of a text file has no size limit.** `WorkspaceEnv` has a new
+member, `readRange(path, start, length, signal?)`. It gives at most `length`
+bytes from the byte `start`, and it has no size limit. `FileOperations` has
+the same member. The directory backend, the workstation, and the local
+backend of `camera-chat` read the range from the file. The memory backend cuts
+the range from the whole file. `read` scans a text file in ranges of 1 MiB
+and keeps the lines of the view. So a file of any size gives a view, and an
+offset and a limit read past 10 MiB. `details.lines` is present only when the
+scan reached the end of the file. When it is absent, the notices omit the
+line count. A whole-file read keeps the limit of its backend. So do an
+image, `edit`, `apply_patch`, and a snapshot.
+
+**The Pi executor records a `session` step.** The step opens each
+activation, before the first model step. It holds the name `pi`, the model
+string of the executor options, the session id, and the names of the tools.
+
 **The dependencies are at their latest versions.** The release moves
 `vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
 3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
 to 0.3.291, and the Pi packages to 1.0.4. `@ambionframework/cloudflare` stays
 on `vitest` 4, the range that `@cloudflare/vitest-pool-workers` accepts.
 The directory backend runs `createExclusive` as trusted code of just-bash.
+
+**Every workspace has an `apply_patch` tool.** One call adds, deletes,
+updates, and moves several files with a patch in the envelope of the Codex
+tool of the same name. The tool parses the envelope, runs every operation in
+memory, and writes only when each one succeeded. A hunk matches exactly, then
+with the whitespace at the end of each line dropped, then with both ends
+dropped. The tool keeps the line endings, the byte order mark, and a missing
+final newline. The result lists each operation, and `details.patch` holds the
+unified diff. The text work derives from `applyDiff` of the OpenAI Agents SDK
+(MIT License). Every seat that has the workspace bundle gets `apply_patch`
+beside `edit`, and the note on the file tools names it.
 
 **A macro can name a room tool.** The check of a macro reads the compose
 catalog that `compose` binds, so a macro that uses `say`, `recall`, or any

@@ -100,6 +100,34 @@ async function fileErrorCodes(env: WorkspaceEnv): Promise<void> {
 	);
 }
 
+async function rangeReads(env: WorkspaceEnv): Promise<void> {
+	await env.writeFile('range.txt', 'abcdefghij');
+	const cases: readonly [number, number, string][] = [
+		[2, 3, 'cde'],
+		[0, 100, 'abcdefghij'],
+		[8, 5, 'ij'],
+		[10, 3, ''],
+		[40, 3, ''],
+		[4, 0, ''],
+	];
+	for (const [start, length, expected] of cases) {
+		const range = await env.readRange('range.txt', start, length);
+		const text = range.ok ? new TextDecoder().decode(range.value) : range.error.message;
+		check(text === expected, `readRange(${start}, ${length}) gave ${JSON.stringify(text)}`);
+	}
+	await env.createDir('range-dir', undefined);
+	const asDirectory = await env.readRange('range-dir', 0, 4);
+	check(
+		!asDirectory.ok && asDirectory.error.code === 'is_directory',
+		'a range read of a directory did not answer is_directory',
+	);
+	const missing = await env.readRange('range-missing.txt', 0, 4);
+	check(
+		!missing.ok && missing.error.code === 'not_found',
+		'a range read of a missing file did not answer not_found',
+	);
+}
+
 async function tildeAndRelativePaths(env: WorkspaceEnv): Promise<void> {
 	const home = env.cwd;
 	const tilde = await env.absolutePath('~');
@@ -153,6 +181,7 @@ const CASES: readonly [string, Body][] = [
 	['createDir with recursive creates missing parent directories', recursiveCreateDir],
 	['remove succeeds with force on a missing path, and recursive removes a tree', forcedRemove],
 	['classifies not_found, is_directory, and not_directory as FileError codes', fileErrorCodes],
+	['readRange gives the bytes of a range, and a directory or a missing file fails', rangeReads],
 	['~ and ~/x expand to the home, and a relative path resolves under cwd', tildeAndRelativePaths],
 	['tells an aborted signal apart from a timeout', abortApartFromTimeout],
 	['bounds exec output for onUpdate, with truncation metadata', boundedOutput],

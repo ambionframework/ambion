@@ -13,11 +13,11 @@ import type {
 	dismissedSchema,
 	endReasonSchema,
 	failureCauseSchema,
-	postedSchema,
 	presenceChangeSchema,
 	presenceSchema,
 	saidSchema,
 	summarySchema,
+	systemSchema,
 	usageSchema,
 	vendorSessionSchema,
 } from './bodies.ts';
@@ -195,7 +195,7 @@ export interface SaidMessage extends Landed, Static<typeof saidSchema> {}
  * scheduled say. It has no author, and the room is not a participant. When no
  * exchange is open, it opens one, as a person's question does.
  */
-export interface PostedMessage extends Landed, Static<typeof postedSchema> {
+export interface SystemMessage extends Landed, Static<typeof systemSchema> {
 	/** The system wrote it, so it has no author. */
 	from?: undefined;
 }
@@ -226,7 +226,7 @@ export interface DismissedMessage extends Landed, Static<typeof dismissedSchema>
 
 /** One entry on a room's record. */
 export type Message =
-	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
+	SaidMessage | PresenceMessage | SummaryMessage | SystemMessage | DismissedMessage;
 
 /** A shared message in a room snapshot. Its lists and summary range are read-only. */
 export type MessageSnapshot<T extends Message = Message> = T extends Message
@@ -265,10 +265,10 @@ export function isSaid<T extends Message | MessageSnapshot>(
 	return message.kind === 'said';
 }
 
-export function isPosted<T extends Message | MessageSnapshot>(
+export function isSystem<T extends Message | MessageSnapshot>(
 	message: T,
-): message is Extract<T, { kind: 'posted' }> {
-	return message.kind === 'posted';
+): message is Extract<T, { kind: 'system' }> {
+	return message.kind === 'system';
 }
 
 export function isSummary<T extends Message | MessageSnapshot>(

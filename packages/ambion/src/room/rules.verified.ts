@@ -727,7 +727,7 @@ export function stampedSummary(person: string, from: number, through: number): S
 	return { to: person, covers: { from, through } };
 }
 
-//@ contract A message reports in a range when an agent said it inside the range. The words of a person, a post of the system, and a change of presence report nothing.
+//@ contract A message reports in a range when an agent said it inside the range. The words of a person, a system message, and a change of presence report nothing.
 function reports(
 	message: Message,
 	people: readonly string[],
@@ -757,18 +757,18 @@ export function owesSummary(
 	return messages.some((message) => reports(message, people, from, through));
 }
 
-//@ contract A message opens an exchange after the last close when a person spoke it, or when the system posted it: agent speech, arrivals and departures open nothing.
+//@ contract A message opens an exchange after the last close when a person spoke it, or when it is a system message: agent speech, arrivals and departures open nothing.
 function opensExchange(
 	message: Message,
 	people: readonly string[],
 	closedThrough: number,
 ): boolean {
 	//@ ensures message.kind == 'said' ==> (\result <==> people.includes(message.from) && message.seq > closedThrough)
-	//@ ensures message.kind == 'posted' ==> (\result <==> message.seq > closedThrough)
-	//@ ensures message.kind != 'said' && message.kind != 'posted' ==> !\result
+	//@ ensures message.kind == 'system' ==> (\result <==> message.seq > closedThrough)
+	//@ ensures message.kind != 'said' && message.kind != 'system' ==> !\result
 	//@ ensures message.seq <= closedThrough ==> !\result
 	if (message.seq <= closedThrough) return false;
-	if (message.kind === 'posted') return true;
+	if (message.kind === 'system') return true;
 	return message.kind === 'said' && people.includes(message.from);
 }
 

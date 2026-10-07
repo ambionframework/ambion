@@ -10,14 +10,14 @@
 
 import type { Body } from '../journal/journal.ts';
 import type { ScheduledSay, ScheduleLimits } from '../scheduling.ts';
-import type { Message, MessageSnapshot, PostedMessage, Seq } from '../types.ts';
+import type { Message, MessageSnapshot, Seq, SystemMessage } from '../types.ts';
 import { returnable } from './rules.verified.ts';
 
-/** Whether a message is a returned say: a post that gives a scheduled say back to its seat. */
+/** Whether a message is a returned say: a system message that gives a scheduled say back to its seat. */
 function returnsSay(
 	message: Message,
-): message is PostedMessage & { readonly returns: Seq; readonly to: string } {
-	return message.kind === 'posted' && message.returns !== undefined;
+): message is SystemMessage & { readonly returns: Seq; readonly to: string } {
+	return message.kind === 'system' && message.returns !== undefined;
 }
 
 /** Whether a message is a scheduled say. */
@@ -84,7 +84,7 @@ export function scheduleRefusal(
 }
 
 /**
- * The post that the room writes for one say now, or nothing: the say
+ * The system message that the room writes for one say now, or nothing: the say
  * no longer waits, or it is not `returnable`. A second write of the same
  * say finds it gone.
  */
@@ -93,7 +93,7 @@ export function returning(
 	roster: readonly { readonly name: string }[],
 	seq: Seq,
 	now: number,
-): Body<PostedMessage> | undefined {
+): Body<SystemMessage> | undefined {
 	const say = list.find((candidate) => candidate.seq === seq);
 	if (
 		say === undefined ||
@@ -105,7 +105,7 @@ export function returning(
 	)
 		return undefined;
 	return {
-		kind: 'posted',
+		kind: 'system',
 		at: new Date(now).toISOString(),
 		to: say.seat,
 		returns: say.seq,

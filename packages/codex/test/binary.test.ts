@@ -532,6 +532,7 @@ describe.skipIf(!hasBinary && process.env.CI === undefined)(
 					// The workspace tools sit beside the room tools. Codex lists nothing else: no native tool.
 					expect(toolsOf(first)).toEqual({
 						functions: [
+							'apply_patch',
 							'bash',
 							'cancel',
 							'compose',

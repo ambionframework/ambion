@@ -128,7 +128,7 @@ describe('the room runs the verified rules', () => {
 			expect(run()).toMatchObject(
 				path === 'plan'
 					? [{ type: 'return', message: 2 }]
-					: { entry: { kind: 'message', body: { kind: 'posted', returns: 2 } } },
+					: { entry: { kind: 'message', body: { kind: 'system', returns: 2 } } },
 			);
 			// An admission from the rule also controls a say before its deadline.
 			bind.once(rules.returnable, true);
@@ -139,7 +139,7 @@ describe('the room runs the verified rules', () => {
 			expect(early).toMatchObject(
 				path === 'plan'
 					? [{ type: 'return', message: 2 }]
-					: { entry: { kind: 'message', body: { kind: 'posted', returns: 2 } } },
+					: { entry: { kind: 'message', body: { kind: 'system', returns: 2 } } },
 			);
 		},
 	);
