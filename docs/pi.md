@@ -472,16 +472,16 @@ model did.
 the trace policy. The table below gives the harness event behind each step. The
 driver writes `pass`, `room`, and `end`.
 
-| Step          | Source in Pi                                                                                                                           |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `thinking`    | `message_update` thinking deltas, then `message_end`. A block the stream did not send arrives whole.                                   |
-| `text`        | `message_update` text deltas, then `message_end`. A block the stream did not send arrives whole.                                       |
-| `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                                                            |
-| `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.                                         |
-| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.                                          |
-| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                                          |
-| `session`     | Never. The executor records one at the start of each activation: `pi`, the model string of the options, the session id, and the tools. |
-| `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                               |
+| Step          | Source in Pi                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking`    | `message_update` thinking deltas, then `message_end`. A block the stream did not send arrives whole.                                              |
+| `text`        | `message_update` text deltas, then `message_end`. A block the stream did not send arrives whole.                                                  |
+| `tool_call`   | `tool_execution_start`, with the call id, the tool name, and the arguments.                                                                       |
+| `tool_result` | `tool_execution_end`, with the result. A failed call adds `error` with the text of the result.                                                    |
+| `steer`       | Never. The core records it. The executor calls `read` when a provider request holds the line.                                                     |
+| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                                                     |
+| `session`     | No harness event. The executor records one at the start of each activation: `pi`, the model string of the options, the session id, and the tools. |
+| `usage`       | The `usage_changed` event, one for each answer. The compaction spend joins the last one.                                                          |
 
 A redacted thinking block adds no step. The trace policy of the definition
 sets how much of `thinking` and tool output the journal keeps.
