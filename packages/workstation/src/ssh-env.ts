@@ -5,12 +5,11 @@
  * the SFTP operations, and `classify`, the error classifier. The workspace's
  * helpers supply the path rule.
  *
- * SFTP needs eight adjustments:
+ * SFTP needs seven adjustments:
  *
- * - a read opens the file, refuses a file that is not regular, and counts
- *   bytes against `MAX_READ_BYTES` (`sftp.ts`)
- * - a range read opens the file, refuses a file that is not regular, and
- *   asks for the range in requests of `CHUNK_BYTES`, with no size limit (`sftp.ts`)
+ * - a read refuses a file that is not regular before the open. A whole-file
+ *   read counts bytes against `MAX_READ_BYTES`, and a range read has no
+ *   size limit (`sftp.ts`)
  * - a coarse SFTP status becomes a code of the port through one `lstat` (`sftp.ts`)
  * - `writeFile` and `appendFile` make each missing parent first
  * - `renameFile` calls `posix-rename@openssh.com`, which replaces the
