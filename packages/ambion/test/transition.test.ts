@@ -521,7 +521,7 @@ describe('a scheduled say', () => {
 		expect(early.steps).toEqual([]);
 		expect(early.effects.alarmAt).toBe(due);
 		const returned = {
-			kind: 'posted',
+			kind: 'system',
 			at: new Date(due).toISOString(),
 			to: 'product',
 			returns: 5,
@@ -677,9 +677,9 @@ describe('a scheduled say', () => {
 			lease('message:3:product:1', 4),
 			lease('message:3:writer:1', 5),
 			scheduled(6),
-			message(7, { kind: 'posted', to: 'product', returns: 6, text: 'Check.' }),
-			message(8, { kind: 'posted', to: 'product', text: 'lab: process build ended.' }),
-			message(9, { kind: 'posted', text: 'ci: build 412 failed.' }),
+			message(7, { kind: 'system', to: 'product', returns: 6, text: 'Check.' }),
+			message(8, { kind: 'system', to: 'product', text: 'lab: process build ended.' }),
+			message(9, { kind: 'system', text: 'ci: build 412 failed.' }),
 		);
 		expect(state.deliveries.get(6)).toEqual({ wakes: [], steers: [] });
 		// A post with `to` steers its target alone, and a post to the room steers each seat at work.

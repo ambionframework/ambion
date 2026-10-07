@@ -147,7 +147,7 @@ range alone, so the bridge reads the outcome with `readRoom`. `readRoom`
 reads a live room and a stopped room alike.
 
 **A report pass looks for each key first.** For each closed exchange of a
-breakout room, the bridge reads the `key` of each `posted` message in the
+breakout room, the bridge reads the `key` of each `system` message in the
 record of the parent. A key `breakout:<name>:<from>`, or a key that starts
 with `breakout:<name>:<from>:`, means that the exchange is done. For an
 exchange with no such key, the bridge posts the close notice:
@@ -166,7 +166,7 @@ chain of its own for each parent, apart from the queue of a room name. It
 picks the recipient inside that order. `report` posts in the same chain.
 The recipient is the opener when the opener is on the roster of the parent
 at an attention other than `none`.
-Otherwise the post has no `to`, and the room stays open. A key conflict
+Otherwise the notice has no `to`, and the room stays open. A key conflict
 counts as landed. `report` follows the same rule for its recipient.
 
 **The chain never waits on a queue of a room name.** A stop of a root
@@ -196,7 +196,7 @@ its notice then. A pass skips an archived room, so an archived room gets
 no notice. A post to a parent that stops is no failure: the next pass
 posts it.
 
-**A post owes no summary.** A post opens an exchange with no person, so
+**A system message owes no summary.** A system message opens an exchange with no person, so
 the exchange owes no summary
 ([Exchange](exchange.md#4-who-directs-one-and-who-receives-its-result)).
 
@@ -292,8 +292,8 @@ before the next one opens the same store.
 reads its exchanges and can speak. A worker can ask a visiting person a
 question with `say({ to })`, and the `awaiting` outcome holds the wait.
 
-**A post has no author.** A worker reads a `tell` post as a message of
-the system, and the label in its text names the source. The canvas adds
+**A system message has no author.** A worker reads a `tell` notice as a
+system message, and the label in its text names the source. The canvas adds
 no author across rooms, so it adds no new trust surface.
 
 **The rooms of a canvas share one workspace.** The mirror needs it, and a

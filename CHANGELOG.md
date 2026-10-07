@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**The message kind `posted` is now `system`.** A message that the system
+writes has the body kind `system`: a host post with `room.post`, or a say
+that the room returns. The types and the guard follow: `PostedMessage` is
+`SystemMessage`, and `isPosted` is `isSystem`. The agent prompt reads
+`[system → ...]`, and the opening line of an exchange reads "A system message
+reports an event". `room.post` and `PostInput` keep their names. A stored
+journal that holds the kind `posted` does not resume.
+
 **The Pi executor records a `session` step.** The step opens each
 activation, before the first model step. It holds the name `pi`, the model
 string of the executor options, the session id, and the names of the tools.

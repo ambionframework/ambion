@@ -25,14 +25,14 @@ export function messageDelivery(
 	for (const lease of leases.values()) {
 		const { source, seat } = lease.activation;
 		// A message steers a respond lease that was at work when it landed, and
-		// never the author's seat or a seat it wakes. A post with `to` steers
-		// only its target, a post to the room steers each seat at work, and a
+		// never the author's seat or a seat it wakes. A system message with `to` steers
+		// only its target, a system message to the room steers each seat at work, and a
 		// say to oneself steers no seat. The first lease at a seat, in journal
 		// order, is the one it steers.
 		const steers =
 			source === 'message' &&
 			seat !== message.from &&
-			(message.kind !== 'posted' || message.to === undefined || seat === message.to) &&
+			(message.kind !== 'system' || message.to === undefined || seat === message.to) &&
 			!(message.kind === 'said' && message.delaySeconds !== undefined) &&
 			message.kind !== 'dismissed' &&
 			!wakes.has(seat) &&

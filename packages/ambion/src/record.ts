@@ -6,9 +6,9 @@
  */
 
 import {
-	isPosted,
 	isSaid,
 	isSummary,
+	isSystem,
 	type MessageSnapshot as Message,
 	type Seq,
 	type SummaryMessage,
@@ -34,9 +34,9 @@ function lineBody(message: Message): string {
 	if (message.kind === 'dismissed') {
 		return `· ${message.from ?? 'the host'} dismissed say #${message.message}`;
 	}
-	if (isPosted(message)) {
+	if (isSystem(message)) {
 		const returns = message.returns === undefined ? '' : `, returns #${message.returns}`;
-		return `[posted → ${message.to ?? 'the room'}${returns}] ${message.text}${refsOf(message)}`;
+		return `[system → ${message.to ?? 'the room'}${returns}] ${message.text}${refsOf(message)}`;
 	}
 	if (isSaid(message) || isSummary(message)) return saidLine(message);
 	const by = message.from === undefined || message.from === message.subject;

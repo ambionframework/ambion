@@ -190,7 +190,7 @@ function exchangeOf(
 	message: Message,
 ): ExchangeRef | undefined {
 	const changes =
-		message.kind === 'said' || message.kind === 'posted' || message.kind === 'arrived';
+		message.kind === 'said' || message.kind === 'system' || message.kind === 'arrived';
 	if (!changes) return known;
 	return exchangeAfter(projection.tail, [...projection.people.keys()], projection.boundary);
 }
@@ -201,7 +201,7 @@ function notedBy(
 	message: Message,
 	step: FoldStep,
 ): { tail: Message[]; summaryFacts: Message[] } {
-	const opens = message.kind === 'said' || message.kind === 'posted';
+	const opens = message.kind === 'said' || message.kind === 'system';
 	const speaks = opens && message.seq > prev.boundary;
 	const keeps = message.kind === 'summary' || message.kind === 'unseated';
 	return {

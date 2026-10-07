@@ -11,13 +11,13 @@
  */
 import {
 	type ExchangeActivation,
-	isPosted,
 	isSaid,
 	isSummary,
+	isSystem,
 	type Message,
 	type PersonDefinition,
-	type PostedMessage,
 	type RoomNotification,
+	type SystemMessage,
 } from '@ambionframework/ambion';
 import type { SeenExchange, Simulation } from './types.ts';
 
@@ -35,7 +35,7 @@ function messageLine(message: Message): string {
 	if (isSaid(message)) {
 		return `[${message.seq}] ${message.from} to ${message.to ?? 'the room'}: ${text}`;
 	}
-	if (isPosted(message)) return postedLine(message, text);
+	if (isSystem(message)) return systemLine(message, text);
 	if (message.kind === 'dismissed') {
 		return `[${message.seq}] ${message.from ?? 'the host'} dismissed say ${message.message}`;
 	}
@@ -44,9 +44,9 @@ function messageLine(message: Message): string {
 	return `[${message.seq}] ${message.subject} ${message.kind}${by}`;
 }
 
-/** A post of the host, or a say that the room returned to its seat. */
-function postedLine(message: PostedMessage, text: string): string {
-	const verb = message.returns === undefined ? 'the host posted' : 'the room returned a say';
+/** A system message of the host, or a say that the room returned to its seat. */
+function systemLine(message: SystemMessage, text: string): string {
+	const verb = message.returns === undefined ? 'system' : 'the room returned a say';
 	return `[${message.seq}] ${verb} to ${message.to ?? 'the room'}: ${text}`;
 }
 

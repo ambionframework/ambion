@@ -204,8 +204,8 @@ own.** A later review does not propose them again.
   lowers only the types of its own file.
 - **`startRoom` and `resumeRoom`.** A start writes a composition, and a
   resume keeps the recorded one.
-- **`visit.send` and `room.post`.** A send has an author, and a post is a
-  message of the system.
+- **`visit.send` and `room.post`.** A send has an author, and a system
+  message has none.
 - **`sqlite.ts` and `sqlite-guard.ts`.** They are one concept in two files.
 - **The port suite and the executor suite.** Cloudflare runs the port
   suite.

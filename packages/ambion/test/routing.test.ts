@@ -30,8 +30,8 @@ describe('what a message reaches', () => {
 		text: 'go',
 		...(to === undefined ? {} : { to }),
 	});
-	const posted = (to?: string): Message => ({
-		kind: 'posted',
+	const system = (to?: string): Message => ({
+		kind: 'system',
 		seq: 2,
 		at,
 		text: 'ci: build 412 failed.',
@@ -57,11 +57,11 @@ describe('what a message reaches', () => {
 		['product', 'none', 'a say to product', said('product'), true],
 		['other', 'presence', 'a say to product', said('product'), false],
 		// a post routes as a say does
-		['product', 'broadcast', 'a post to the room', posted(), true],
-		['product', 'named', 'a post to the room', posted(), false],
-		['product', 'named', 'a post to product', posted('product'), true],
-		['other', 'presence', 'a post to product', posted('product'), false],
-		['product', 'presence', 'a post to a person', posted('priya'), false],
+		['product', 'broadcast', 'a system message to the room', system(), true],
+		['product', 'named', 'a system message to the room', system(), false],
+		['product', 'named', 'a system message to product', system('product'), true],
+		['other', 'presence', 'a system message to product', system('product'), false],
+		['product', 'presence', 'a system message to a person', system('priya'), false],
 		['product', 'none', 'a summary', summary, false],
 		['product', 'named', 'a summary', summary, false],
 		['product', 'broadcast', 'a summary', summary, false],

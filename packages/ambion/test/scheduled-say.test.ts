@@ -46,7 +46,7 @@ const checksLater: PiScript = (context) => {
 	const last = toolResultTexts(context).at(-1);
 	if (last !== undefined) results.push(last);
 	if (last?.startsWith('said #') || last?.startsWith('scheduled')) return quiet();
-	if (contextText(context).includes('[posted → worker, returns'))
+	if (contextText(context).includes('[system → worker, returns'))
 		return say('The build passed.', 'priya');
 	return callTool('schedule', {
 		text: 'Check the build.',
@@ -135,8 +135,8 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		const from = await opened;
 		await room.exchange(from)?.waitForClose();
 		const { messages } = await room.read({ messages: {} });
-		expect(kinds(messages)).toEqual(['said', 'said', 'posted', 'said']);
-		const returned = messages.find((message) => message.kind === 'posted');
+		expect(kinds(messages)).toEqual(['said', 'said', 'system', 'said']);
+		const returned = messages.find((message) => message.kind === 'system');
 		expect(returned).toMatchObject({
 			to: 'worker',
 			returns: say?.seq,
@@ -148,7 +148,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		expect(second).toMatchObject({ from: returned?.seq });
 		expect(second).not.toHaveProperty('person');
 		await expect(second?.waitForClose()).resolves.toMatchObject([
-			{ kind: 'posted', returns: say?.seq },
+			{ kind: 'system', returns: say?.seq },
 			{ kind: 'said', from: 'worker', to: 'priya', text: 'The build passed.' },
 		]);
 		const after = await room.read({ messages: false });
@@ -178,7 +178,7 @@ describe.each(storages)('a scheduled say on $name', (storage) => {
 		await clock.advance(DELAY_SECONDS * 1000);
 		await waitForRoom(resumed);
 		const { messages } = await resumed.read({ messages: {} });
-		expect(kinds(messages).filter((kind) => kind === 'posted')).toHaveLength(1);
+		expect(kinds(messages).filter((kind) => kind === 'system')).toHaveLength(1);
 		expect(messages.at(-1)).toMatchObject({ from: 'worker', text: 'The build passed.' });
 	});
 

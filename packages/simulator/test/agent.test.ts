@@ -214,7 +214,7 @@ describe('agentJudge', () => {
 	it('writes a returned say in the record as the room giving the say back', async () => {
 		const simulation = await injectedSimulation();
 		const returned: Message = {
-			kind: 'posted',
+			kind: 'system',
 			seq: 20,
 			at: '2026-01-01T09:10:00.000Z',
 			to: 'desk',
