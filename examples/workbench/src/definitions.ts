@@ -83,79 +83,40 @@ const specialists = [
 ];
 
 /**
- * The worker team. No root room seats these definitions, so each one has a
- * home and a process list of its own. A worker has no instrument: an
- * operation above the limit needs a person, and a breakout room has none.
- */
-const workers = [
-	{
-		name: 'scout',
-		identity:
-			'Scout. Reads the datasheets and the lab records and reports what they say, with the path of each source.',
-		instructions:
-			'Read /library, /shared, and the lab database with `sql`. Change no file and add no record. Report with `report` once, with the facts and their sources.',
-	},
-	{
-		name: 'maker',
-		identity:
-			'Maker. Writes the files and the lab records that a delegated task needs, and reports what it wrote.',
-		instructions:
-			'Write the files under /shared that the task names, and add the lab records with `sql`. Report with `report` once, with the path of each file and the id of each record.',
-	},
-];
-
-/** The names of the worker team, for `breakout.team`. */
-export const workerNames: readonly string[] = workers.map((worker) => worker.name);
-
-/**
  * Build the team for one workspace. Every room reuses these definitions. The
  * canvas comes first, because `defineAgent` reads a bundle when it defines an agent.
  */
 export function team(
 	workspace: Workspace,
 	instrument: Instrument,
-	canvas: Pick<Canvas, 'tools' | 'workerTools' | 'widgetTools'>,
+	canvas: Pick<Canvas, 'tools' | 'widgetTools'>,
 ) {
 	const model = piModel();
-	// One list of bundles serves every specialist, so every seat holds the same tools over one workspace.
-	const bundles: ToolBundle[] = [workspace.tools(), instrument.tools(), canvas.widgetTools()];
-	// The assistant plans the work of a person, so it alone can open a breakout room.
+	// One list of bundles serves every seat, so every seat holds the same tools over one workspace.
+	// A specialist works in a root room and in a breakout room that another seat opened.
+	const bundles: ToolBundle[] = [
+		workspace.tools(),
+		instrument.tools(),
+		canvas.widgetTools(),
+		canvas.tools(),
+	];
 	const assistant = defineAssistant({
 		instructions: assistantInstructions,
-		bundles: [...bundles, canvas.tools()],
+		bundles,
 		executor: (parts) => executorFor('assistant', parts, model),
 	});
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) => {
 		const options = {
-			instructions: `${shared}${instructions} Your assignment is the message addressed to you, or the marked request when it names your field. Without one, end silently. Report your result with a say that has no to. Answer a question that another specialist addressed to you with a directed say to that specialist. Hand an artifact that a colleague continues to that colleague with a directed say. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+			instructions: `${shared}${instructions} Your assignment is the message addressed to you, or the marked request when it names your field. Without one, end silently. Report your result with a say that has no to, and in a breakout room with \`report\`. Answer a question that another specialist addressed to you with a directed say to that specialist. Hand an artifact that a colleague continues to that colleague with a directed say. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
 			bundles,
 		};
 		return defineAgent({ ...definition, executor: executorFor(definition.name, options, model) });
 	});
-	const workerBundles: ToolBundle[] = [
-		workspace.tools(),
-		canvas.workerTools(),
-		canvas.widgetTools(),
-	];
-	const workerDefinitions = workers.map(({ instructions, ...definition }) =>
-		defineAgent({
-			...definition,
-			executor: executorFor(
-				definition.name,
-				{
-					instructions: `${shared}${instructions} Your assignment is the message addressed to you. Call \`report\` inside the exchange that activated you. Stay silent when there is no new work.`,
-					bundles: workerBundles,
-				},
-				model,
-			),
-		}),
-	);
 	return {
 		workspace,
 		assistant,
 		specialists: specialistDefinitions,
-		workers: workerDefinitions,
-		agents: [assistant, ...specialistDefinitions, ...workerDefinitions],
+		agents: [assistant, ...specialistDefinitions],
 	};
 }
 

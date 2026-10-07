@@ -48,22 +48,17 @@ uses `defineAssistant` from `@ambionframework/assistant`, seated at
 Each room seats the specialists it needs. The reserve holds the rest. The
 specialists collaborate through directed messages and report once to the room.
 
-**A worker team does delegated work in breakout rooms.** The team has two
-definitions, `scout` and `maker`. Both run on Pi. No root room seats them.
-They hold the workspace tools and `report`, and no instrument, because a
-breakout room has no person to approve an operation.
+**Specialists do delegated work in breakout rooms.** The assistant and
+every specialist hold the one canvas bundle: `breakout`, `tell`, `archive`,
+and `report`. The assistant opens a breakout room and names the specialists
+that staff it. A specialist works in a root room and in a breakout room with
+one definition, one home, and the same tools. The room decides what it does.
+In a breakout room it sends its result with `report`. A question for a person
+goes to a person who is present. When nobody is present, the specialist
+reports the question to the opener.
 
-| Worker    | Scope                                                           |
-| --------- | --------------------------------------------------------------- |
-| **Scout** | Reads `/library`, `/shared`, and the lab records, and reports   |
-| **Maker** | Writes the files and lab records that a task names, and reports |
-
-Both workers hold every workspace tool. The instructions of a worker set its
-scope, and no tool enforces it.
-
-The assistant holds the opener bundle of the canvas: `breakout`, `tell`, and
-`archive`. It delegates a long task, and the specialists keep their narrow
-scope in the room of the person. The report of a worker reaches the
+The assistant delegates a long task, and the specialists keep their narrow
+scope in the room of the person. The report of a specialist reaches the
 assistant in the parent room.
 
 **The team runs on three executor kinds.** The `seatKinds` table names the
@@ -207,10 +202,10 @@ interface.
   It resumes each running room at the start, attaches the room mirror, and
   stops the rooms at the close. The host keeps the feed, the composer, and
   the scenarios. The answer of a person to an approval stays a room
-  message. The worker team is `scout` and `maker`. A breakout room is a
-  room of the canvas with a parent, and the room list shows it beside the
-  root rooms. A person visits it like any other room. A restart resumes the
-  breakout rooms that ran, and replays the notices that no journal holds.
+  message. A breakout room is a room of the canvas with a parent, and the
+  room list shows it beside the root rooms. A person visits it like any other
+  room. A restart resumes the breakout rooms that ran, and replays the
+  notices that no journal holds.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
   or room, create a room, search workspace files in a side panel, watch and cancel the agents'
@@ -269,7 +264,7 @@ domain instructions, and the terminal.
 | A kit project             | One room per topic; rooms persist across questions                |
 | A person                  | A visit with a definition and reading preferences                 |
 | Four definitions          | The assistant and three specialists; the reserve holds spares     |
-| Delegated work            | A breakout room that a worker team serves                         |
+| Delegated work            | A breakout room that specialists staff                            |
 | The assistant             | The assistant definition, seated at `broadcast`, with the summary |
 | Bring in a specialist     | Attention `named`, and a directed say                             |
 | Specialists work together | Directed says between seats                                       |

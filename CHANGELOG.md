@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**One agent definition works in a root room and in a breakout room.** The
+composition of the room decides how an agent behaves: who is present, and
+whether the room has an opener in a parent. `Canvas.workerTools()` and
+`BreakoutOptions.team` are gone, and so is the worker team. `canvas.tools()`
+returns one bundle with `breakout`, `tell`, `archive`, and `report`. The row
+of the room still refuses a call: `report` in a root room, and `breakout`,
+`tell`, and `archive` at depth one. `breakout` seats any name that `resume`
+took, and a root room defaults to every definition. `OpenCanvasOptions.breakout`
+is optional. The guidance of the bundle has one rule for a question: a
+question for a person goes to a person who is present in the room, with
+`say({ to })`, and when nobody is present and the room has an opener, the
+agent reports it. In a breakout room, the reminder names the opener, the
+parent room, and the goal. The close notice of an exchange that closed
+`awaiting` names the awaited person. The Workbench drops `scout` and
+`maker`: every seat holds the one canvas bundle, and specialists staff the
+breakout rooms.
+
 **The Pi executor records a `session` step.** The step opens each
 activation, before the first model step. It holds the name `pi`, the model
 string of the executor options, the session id, and the names of the tools.

@@ -10,8 +10,6 @@ describe('Workbench executor kinds', () => {
 			datasheets: 'pi',
 			design: 'claude',
 			experiments: 'codex',
-			scout: 'pi',
-			maker: 'pi',
 		});
 	});
 
@@ -27,7 +25,7 @@ describe('Workbench executor kinds', () => {
 			"Seat 'experiments' cannot run: CODEX_API_KEY is not set, and the codex executor needs it.",
 		]);
 		expect(describeUnavailable({ ANTHROPIC_API_KEY: 'k', CODEX_API_KEY: 'k' })).toEqual([]);
-		expect(describeUnavailable({})).toHaveLength(6);
+		expect(describeUnavailable({})).toHaveLength(4);
 	});
 });
 
@@ -39,8 +37,6 @@ describe('Workbench with no key', () => {
 			'datasheets',
 			'design',
 			'experiments',
-			'scout',
-			'maker',
 		]);
 		await workbench.visit('sensing', 'theo');
 		await workbench.send('sensing', 'theo', 'nokey-1', 'Plan a test.');

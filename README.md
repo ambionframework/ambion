@@ -149,7 +149,6 @@ const canvas = openCanvas({
   name: 'workshop',
   runtime: canvasRuntime,
   store: memoryCanvas(),
-  breakout: { team: ['scout'] },
 });
 
 const lead = defineAgent({
@@ -167,12 +166,12 @@ const scout = defineAgent({
   executor: pi({
     model,
     instructions: 'Report what you find.',
-    bundles: [...bundles, canvas.workerTools()],
+    bundles: [...bundles, canvas.tools()],
   }),
 });
 
 await canvas.resume({ agents: [lead, scout] });
-const bench = await canvas.open({ name: 'bench', goal: 'Qualify a part.' });
+const bench = await canvas.open({ name: 'bench', goal: 'Qualify a part.', agents: ['lead'] });
 ```
 
 **`bench` is a room.** A person visits it with `bench.visit(priya)`. `canvas.widgetTools()`

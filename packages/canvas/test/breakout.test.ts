@@ -1,5 +1,5 @@
 import { definePerson, readRoom, startRoom } from '@ambionframework/ambion';
-import { byAgent, callTool, type Script, settled } from '@ambionframework/ambion/testing';
+import { byAgent, callTool, type Script, say, settled } from '@ambionframework/ambion/testing';
 import { memoryBackend } from '@ambionframework/just-bash';
 import { openWorkspace } from '@ambionframework/workspace';
 import { describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ import {
 	cy,
 	host,
 	live,
+	membersOf,
 	statesOf,
 	tooled,
 } from './support/host.ts';
@@ -27,7 +28,9 @@ const rootRow = (): CanvasRoom => ({
 const noticesOf = async (
 	posted: (
 		name: string,
-	) => Promise<readonly { key?: string | undefined; to?: string | undefined }[]>,
+	) => Promise<
+		readonly { key?: string | undefined; to?: string | undefined; text?: string | undefined }[]
+	>,
 	room = 'site-survey',
 ) => (await posted('site')).filter((m) => m.key?.startsWith(`breakout:${room}:`));
 
@@ -51,26 +54,18 @@ async function lab(
 		? openWorkspace({ name: 'lab', backend: { bash: memoryBackend() }, rooms: true })
 		: undefined;
 	const context = host({
-		breakout: {
-			team: ['cy', 'dan'],
-			...(options.perOpener === undefined ? {} : { perOpener: options.perOpener }),
-		},
+		breakout: options.perOpener === undefined ? {} : { perOpener: options.perOpener },
 		...(options.script === undefined ? {} : { script: options.script }),
 		...(workspace === undefined ? {} : { workspace }),
 	});
 	const { canvas } = context;
-	const opener = canvas.tools();
-	const worker = canvas.workerTools();
-	const agents = [
-		tooled('ada', opener),
-		tooled('bob', opener),
-		tooled('cy', worker),
-		tooled('dan', worker),
-	];
+	const bundle = canvas.tools();
+	const agents = ['ada', 'bob', 'cy', 'dan'].map((name) => tooled(name, bundle));
 	await canvas.resume({ agents });
 	const site = await canvas.open({
 		name: 'site',
 		goal: 'Plan.',
+		agents: ['ada', 'bob'],
 		...(options.seats === undefined ? {} : { seats: options.seats }),
 	});
 	let count = 0;
@@ -81,13 +76,7 @@ async function lab(
 		args: Record<string, unknown>,
 		room = 'site',
 		extra: Parameters<typeof contextOf>[3] = {},
-	) =>
-		callOf(
-			tool === 'report' ? worker : opener,
-			tool,
-			args,
-			contextOf(agent, room, `call-${++count}`, extra),
-		);
+	) => callOf(bundle, tool, args, contextOf(agent, room, `call-${++count}`, extra));
 	const open = (name = 'survey', extra: Record<string, unknown> = {}) =>
 		call('ada', 'breakout', {
 			name,
@@ -98,7 +87,7 @@ async function lab(
 		});
 	const posted = async (name: string) =>
 		(await live(canvas, name).read()).messages.flatMap((m) => (m.kind === 'posted' ? [m] : []));
-	return { ...context, site, opener, worker, call, open, posted, agents };
+	return { ...context, site, bundle, call, open, posted, agents };
 }
 
 describe('breakout', () => {
@@ -156,12 +145,19 @@ describe('breakout', () => {
 		});
 	});
 
+	it('seats an agent of a root room in a breakout room of the same canvas', async () => {
+		const { open, canvas } = await lab();
+		expect(await open('twin', { agents: ['ada', 'cy'] })).toMatchObject({ created: true });
+		expect((await membersOf(live(canvas, 'site-twin'))).seated).toEqual(['ada', 'cy']);
+		expect((await membersOf(live(canvas, 'site'))).seated).toEqual(['ada', 'bob']);
+	});
+
 	it.each([
 		['a name that breaks the syntax', { name: 'Bad Name' }, /not a room name/],
 		['an empty name', { name: '' }, /not a room name/],
 		['a name that makes the room name too long', { name: 'x'.repeat(44) }, /49 characters.*48/],
 		['no agents', { agents: [] }, /names no worker/],
-		['an agent outside the team', { agents: ['ada'] }, /"ada" is not in the worker team/],
+		['an agent that no definition resolves', { agents: ['ghost'] }, /resolves the agent "ghost"/],
 		['an agent twice', { agents: ['cy', 'cy'] }, /"cy" twice/],
 	])('refuses %s', async (_label, extra, cause) => {
 		const { open, store } = await lab();
@@ -507,16 +503,16 @@ describe('report', () => {
 	});
 
 	it('has no `to` when the opener left the roster, and counts a key conflict as landed', async () => {
-		const { open, site, worker } = await lab();
+		const { open, site, bundle } = await lab();
 		await open();
 		const ctx = contextOf('cy', 'site-survey', 'same-call');
-		const first = await callOf(worker, 'report', { text: 'Done.' }, ctx);
+		const first = await callOf(bundle, 'report', { text: 'Done.' }, ctx);
 		expect(first).toMatchObject({ to: 'ada' });
 		await site.unseat('ada');
-		const second = await callOf(worker, 'report', { text: 'Done.' }, ctx);
+		const second = await callOf(bundle, 'report', { text: 'Done.' }, ctx);
 		expect(second).toMatchObject({ room: 'site', from: (first as { from: number }).from });
 		const fresh = await callOf(
-			worker,
+			bundle,
 			'report',
 			{ text: 'Other.' },
 			contextOf('cy', 'site-survey', 'next'),
@@ -547,11 +543,17 @@ describe('report', () => {
 		);
 	});
 
-	it('gives a worker no opener bundle', async () => {
-		const { opener, worker } = await lab();
-		expect(opener.tools.map((tool) => tool.name)).toEqual(['breakout', 'tell', 'archive']);
-		expect(worker.tools.map((tool) => tool.name)).toEqual(['report']);
-		expect(worker.remind).toBeUndefined();
+	it('holds one bundle with the question rule in its guidance', async () => {
+		const { bundle } = await lab();
+		expect(bundle.tools.map((tool) => tool.name)).toEqual([
+			'breakout',
+			'tell',
+			'archive',
+			'report',
+		]);
+		expect(bundle.guidance).toContain(
+			'A question for a person goes to a person who is present in this room, with `say({ to })`. When nobody is present and this room has an opener, `report` the question.',
+		);
 	});
 });
 
@@ -564,42 +566,52 @@ describe('the reminder', () => {
 		);
 
 	it('gives no text for a seat with no breakout room', async () => {
-		const { opener } = await lab();
-		expect(await remind(opener)).toBeUndefined();
+		const { bundle } = await lab();
+		expect(await remind(bundle)).toBeUndefined();
 	});
 
 	it('lists a running room and a stopped room, and omits an archived room', async () => {
-		const { opener, open, call, canvas } = await lab();
+		const { bundle, open, call, canvas } = await lab();
 		await open('one');
 		await open('two');
 		await open('three');
 		await settled(live(canvas, 'site-one'));
 		await canvas.stop('site-two');
 		await call('ada', 'archive', { room: 'site-three', result: 'done' });
-		const text = await remind(opener);
+		const text = await remind(bundle);
 		expect(text).toMatch(
 			/^Your breakout rooms:\n- site-one: running, no exchange open, last message #\d+\n- site-two: stopped$/,
 		);
-		expect(await remind(opener, { ...seat, agent: 'bob' })).toBeUndefined();
-		expect(await remind(opener, { ...seat, room: 'docs' })).toBeUndefined();
+		expect(await remind(bundle, { ...seat, agent: 'bob' })).toBeUndefined();
+		expect(await remind(bundle, { ...seat, room: 'docs' })).toBeUndefined();
+	});
+
+	it('names the opener, the parent, and the goal in a breakout room, and the report rule', async () => {
+		const { bundle, open } = await lab();
+		await open('one');
+		const inRoom = { agent: 'cy', room: 'site-one', activation: 'act-1' };
+		expect(await remind(bundle, inRoom)).toBe(
+			'ada opened this room from site for: Survey the options.\n`report` carries your result, or a question that needs a person, to ada.',
+		);
+		expect(await remind(bundle, { ...inRoom, agent: 'ada' })).toMatch(/^ada opened this room/);
 	});
 
 	it('names the open exchange and the last message', async () => {
-		const { opener, open, canvas } = await lab({
+		const { bundle, open, canvas } = await lab({
 			script: () => new Promise(() => {}),
 		});
 		await open('one');
 		const read = await live(canvas, 'site-one').read();
 		const last = read.messages.at(-1)?.seq;
-		expect(await remind(opener)).toBe(
+		expect(await remind(bundle)).toBe(
 			`Your breakout rooms:\n- site-one: running, exchange #${read.exchange?.from} open, last message #${last}`,
 		);
 	});
 
 	it('lists at most ten rooms, then the rest', async () => {
-		const { opener, open } = await lab({ perOpener: 12 });
+		const { bundle, open } = await lab({ perOpener: 12 });
 		for (let n = 1; n <= 12; n++) await open(`r${n}`);
-		const lines = (await remind(opener))?.split('\n') ?? [];
+		const lines = (await remind(bundle))?.split('\n') ?? [];
 		expect(lines).toHaveLength(12);
 		expect(lines[0]).toBe('Your breakout rooms:');
 		expect(lines.at(-1)).toBe('and 2 more');
@@ -628,6 +640,31 @@ describe('the bridge', () => {
 		await canvas.start('site-survey');
 		expect(await noticesOf(posted)).toHaveLength(1);
 		expect(errors).toEqual([]);
+	});
+
+	it('names the awaited person when the exchange closes awaiting', async () => {
+		let ask = false;
+		const script: Script = byAgent({
+			cy: () => {
+				if (!ask) return [];
+				ask = false;
+				return say('May I turn the output on?', 'priya');
+			},
+		});
+		const { open, canvas, posted } = await lab({ script });
+		await open();
+		const room = live(canvas, 'site-survey');
+		await room.visit(definePerson({ name: 'priya', identity: 'Priya.' }));
+		await settled(room);
+		ask = true;
+		await room.post({ to: 'cy', text: 'Ask Priya.' });
+		await settled(room);
+		await vi.waitFor(async () =>
+			expect((await noticesOf(posted)).map((m) => m.text)).toEqual([
+				expect.stringMatching(/is complete, /),
+				expect.stringMatching(/^breakout site-survey: exchange #\d+ is awaiting priya, /),
+			]),
+		);
 	});
 
 	it.each([

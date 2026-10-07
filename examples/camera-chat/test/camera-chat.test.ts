@@ -562,7 +562,6 @@ async function viewfinderCanvas(store = memoryCanvas(), storage = memoryJournals
 		name: 'cam',
 		runtime,
 		store,
-		breakout: { team: [] },
 		widgets: { kinds: [frameKind] },
 	});
 	const bundle = canvas.widgetTools();

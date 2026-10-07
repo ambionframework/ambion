@@ -15,7 +15,8 @@ export const DEFAULT_PER_OPENER = 3;
 /** What the breakout tools read and write on a canvas. */
 export interface BreakoutPort extends BasePort {
 	readonly perOpener: number;
-	readonly team: ReadonlySet<string>;
+	/** The definitions that `resume` took, by name. */
+	hasDefinition(name: string): boolean;
 	/** Runs the operation in the chain of the bridge posts for one parent. */
 	ordered<T>(parent: string, operation: () => Promise<T>): Promise<T>;
 	rows(): readonly CanvasRoom[];
@@ -106,10 +107,8 @@ function assertName(parent: string, name: string): string {
 
 function assertAgents(port: BreakoutPort, agents: readonly string[]): void {
 	if (agents.length === 0) throw refuse('agents names no worker. Name one or more.');
-	const team = [...port.team].join(', ');
 	for (const [index, name] of agents.entries()) {
-		if (!port.team.has(name))
-			throw refuse(`"${name}" is not in the worker team. The team is: ${team}.`);
+		if (!port.hasDefinition(name)) throw refuse(`No definition resolves the agent "${name}".`);
 		if (agents.indexOf(name) !== index) throw refuse(`agents names "${name}" twice.`);
 	}
 }
