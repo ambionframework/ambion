@@ -13,6 +13,17 @@ to 0.3.291, and the Pi packages to 1.0.4. `@ambionframework/cloudflare` stays
 on `vitest` 4, the range that `@cloudflare/vitest-pool-workers` accepts.
 The directory backend runs `createExclusive` as trusted code of just-bash.
 
+**Every workspace has an `apply_patch` tool.** One call adds, deletes,
+updates, and moves several files with a patch in the envelope of the Codex
+tool of the same name. The tool parses the envelope, runs every operation in
+memory, and writes only when each one succeeded. A hunk matches exactly, then
+with the whitespace at the end of each line dropped, then with both ends
+dropped. The tool keeps the line endings, the byte order mark, and a missing
+final newline. The result lists each operation, and `details.patch` holds the
+unified diff. The text work derives from `applyDiff` of the OpenAI Agents SDK
+(MIT License). Every seat that has the workspace bundle gets `apply_patch`
+beside `edit`, and the note on the file tools names it.
+
 **A macro can name a room tool.** The check of a macro reads the compose
 catalog that `compose` binds, so a macro that uses `say`, `recall`, or any
 other room tool passes. The room tool list has one owner in `define.ts`.

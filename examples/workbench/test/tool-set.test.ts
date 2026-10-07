@@ -50,7 +50,17 @@ describe('the Workbench tool set', () => {
 		const [first, ...rest] = built.specialists;
 		const expected = shapeOf(first?.executor.tools ?? []);
 		expect(expected.map((tool) => tool.name)).toEqual(
-			expect.arrayContaining(['read', 'write', 'edit', 'bash', 'sql', 'repos', 'fork', 'operate']),
+			expect.arrayContaining([
+				'read',
+				'write',
+				'edit',
+				'apply_patch',
+				'bash',
+				'sql',
+				'repos',
+				'fork',
+				'operate',
+			]),
 		);
 		for (const agent of rest) expect(shapeOf(agent.executor.tools), agent.name).toEqual(expected);
 		// Only the assistant opens a breakout room, and only a worker reports.

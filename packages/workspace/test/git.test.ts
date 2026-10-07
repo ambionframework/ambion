@@ -66,6 +66,7 @@ describe('the tools and the guidance', () => {
 			'read',
 			'write',
 			'edit',
+			'apply_patch',
 			'bash',
 			'ps',
 			'wait',
@@ -91,7 +92,7 @@ describe('the tools and the guidance', () => {
 	it('states the full guidance of a bundle with sql, git and audit', async () => {
 		const { workspace } = await lab({ sql: true, audit: true });
 		expect(workspace.tools().guidance).toMatchInlineSnapshot(`
-			"read, write, edit and bash work on shared files. Other agents connected to this
+			"read, write, edit, apply_patch and bash work on shared files. Other agents connected to this
 			workspace read and write the same files.
 
 			bash starts each command as a background process and returns its handle.

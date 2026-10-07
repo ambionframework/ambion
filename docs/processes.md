@@ -525,7 +525,7 @@ export type ProcessEvent =
 
 **`list` reads the tables of the agents that used the workspace in this
 run.** An agent joins that set on its first process tool call or
-reminder. A `read`, `write`, or `edit` call adds no agent.
+reminder. A `read`, `write`, `edit`, or `apply_patch` call adds no agent.
 `running: true` gives the running processes alone.
 
 **`list({ agent })` reads the table of the named agent.** It reads the files
