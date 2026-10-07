@@ -4,6 +4,7 @@ import {
 	appendFile,
 	lstat,
 	mkdir,
+	open,
 	readdir,
 	readFile,
 	realpath,
@@ -139,6 +140,17 @@ export class LocalEnv extends HomeEnv implements WorkspaceEnv {
 	protected readonly files: FileOperations = {
 		readText: (path) => readFile(path, 'utf8'),
 		readBinary: async (path) => new Uint8Array(await readFile(path)),
+		readRange: async (path, start, length) => {
+			const handle = await open(path, 'r');
+			try {
+				const { size } = await handle.stat();
+				const bytes = Buffer.alloc(Math.min(length, Math.max(0, size - start)));
+				const { bytesRead } = await handle.read(bytes, 0, bytes.length, start);
+				return new Uint8Array(bytes.buffer, bytes.byteOffset, bytesRead);
+			} finally {
+				await handle.close();
+			}
+		},
 		write: async (path, content) => {
 			await mkdir(posix.dirname(path), { recursive: true });
 			await writeFile(path, content);
