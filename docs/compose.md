@@ -1,6 +1,6 @@
 # Compose
 
-**Status: the current contract of 0.7.0.** Every Pi, Claude, and Codex seat
+**Status: the current contract of 0.8.0.** Every Pi, Claude, and Codex seat
 has the `compose` tool and the `describe` tool, with `quickjsRuntime()` by
 default. A seat cannot turn them off. The main entry exports the types of the
 option and `COMPOSE_GUIDANCE`.

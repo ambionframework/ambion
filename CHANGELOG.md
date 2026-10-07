@@ -1,78 +1,139 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-10-07)
+
+<img alt="Ambion 0.8.0: trace hooks and one agent definition. A host receives the steps that a trace backend needs, and one agent definition works in a root room and in a breakout room. Trace: an input step with the system part and the record of each pass, the input policy and the inputBytes limit, a session step from the Pi executor with its model, the exchange on each step, and one Claude usage step for each model request. Breakout rooms: no worker team, one bundle of breakout, tell, archive, and report, and a root room that seats every definition. Workspace: the apply_patch tool, and read of a text file of any size through the readRange member of the port, and a process view that keeps the head and the tail of a long output. Seat prompt: respondPolicy and summaryPolicy replace every advice block, and a macro names a room tool. Dependencies: every one at its latest version. Breaking: posted is system, Canvas.workerTools() is gone, readRange is required, and respondPolicy replaces speaking." src="docs/assets/ambion-0.8.0.png" width="800">
+
+**0.8.0 gives a host the trace hooks that a trace backend needs, and one
+agent definition for root rooms and breakout rooms.** A `TraceLogger` can
+receive the input of each pass, the exchange of each step, the session of
+a Pi activation, and the usage of each Claude request. One definition
+seats in a root room and in a breakout room, and the room decides how the
+agent behaves. `apply_patch` changes several files in one call, and `read`
+has no size limit. See [Executors](docs/executors.md) and
+[The canvas](docs/canvas.md).
+
+**The trace hooks are the first part of the road to a trace backend.** The
+journal records what a room decided. The trace records how a seat got there.
+This release adds four hooks:
+
+- **The `input` step.** It holds the text that the driver renders for a pass:
+  the system part and the record. The trace policy field `input: 'full'`
+  turns it on, and `limits.trace.inputBytes` cuts the text.
+- **The Pi `session` step.** It opens each Pi activation with the model, the
+  session id, and the tools. Claude and Codex already recorded it.
+- **The exchange on each step.** `TracedStep.exchange` holds the seq of the
+  message that opened the exchange of the activation.
+- **Claude usage for each request.** The Claude trace has one `usage` step
+  for each model request, as Pi and Codex do.
+
+**One agent definition works in a root room and in a breakout room.** The
+canvas keeps no worker team. `canvas.tools()` gives one bundle with
+`breakout`, `tell`, `archive`, and `report`. A root room seats every
+definition by default, and `breakout` seats any definition that `resume`
+took. See [Breaking changes](#breaking-changes).
+
+**The workspace edits files by patch and reads a file of any size.**
+`apply_patch` adds, deletes, updates, and moves several files, and writes
+only when every operation succeeded. `read` scans a text file in ranges
+through the new `readRange` member of the port. A process view keeps the
+start and the end of a long output.
+
+**A host can replace the respond and summary policies.** `respondPolicy`
+replaces the whole respond policy, and `summaryPolicy` replaces the summary
+policy. A macro can name any room tool.
+
+**The dependencies are at their latest versions.** `vitest` is at 5.0,
+`diff` at 9.0, `just-bash` at 3.6, and the Pi packages at 1.0.4.
+
+**The message kind `posted` is now `system`.** A stored journal that holds
+`posted` does not resume. See [Journal and stored data](#journal-and-stored-data).
+
+### Packages
+
+**The thirteen packages of 0.7.0 ship at 0.8.0.** No package joins, and no
+package adds or removes an entry point. The examples `examples/workbench`
+and `examples/camera-chat` stay private. Every library package needs Node
+22.19 or newer. The dependencies move as follows:
+
+- **All packages.** `typebox` moves to 1.3.36 where a package uses it. The
+  development dependencies `vitest` and `@vitest/coverage-v8` move to 5.0.
+- **Claude.** `@anthropic-ai/claude-agent-sdk` moves from 0.3.284 to
+  0.3.291.
+- **Codex.** `@openai/codex` moves from 0.159.2 to 0.160.1.
+- **Pi.** `@earendil-works/pi-ai`, `@earendil-works/chord`, and
+  `@earendil-works/pi-durable` move to 1.0.4.
+- **Just-bash.** `just-bash` moves to 3.6 and `just-git` to 1.9. The
+  directory backend runs `createExclusive` as trusted code of just-bash.
+- **Workspace.** `diff` moves from 8.0.4 to 9.0.0.
+- **Cloudflare.** `@ambionframework/cloudflare` keeps `vitest` at 4. The
+  range of `@cloudflare/vitest-pool-workers` accepts no later major.
+
+### New
+
+#### The trace
+
+**The trace can record the input of the model.** A new `input` step holds
+the text that the driver renders for a pass. The `part` field says `system`
+or `record`. The driver records one `record` step for each pass that reads a
+record, and one `system` step in the first pass, right after the `pass`
+step. The `system` text is the mechanism and the agent part of the prompt,
+joined by a blank line. An executor can send more than the step holds: the
+seat note of Codex, and the resumed note of a Claude query.
+
+**A trace policy turns the `input` step on.** The new field
+`input: 'omit' | 'full'` of the trace policy defaults to `omit`, so no host
+changes. The policy `full` copies the record to the logger, secrets
+included. `limits.trace.inputBytes` cuts the text of the step and defaults to
+1 MiB. The scripted executor reads the record of each pass, so a scripted
+activation records the `input` step too.
+
+**The Pi executor records a `session` step.** The step opens each
+activation, before the first model step. It holds the name `pi`, the model
+string of the executor options, the session id, and the names of the tools.
+An activation that closes while its session opens records none.
 
 **A traced step names its exchange.** `TracedStep` has a new optional field,
 `exchange`. It holds the seq of the message that opened the exchange that the
 activation works on. A summary activation names the exchange that it
 summarizes. The field is absent when the activation works outside an
-exchange, or ends before its first pass. `TraceSink.startPass` takes the exchange as a third argument, and
-the sink stamps it on every step of the activation.
-
-**The trace can record the input of the model.** A new `input` step holds
-the text that the driver renders for the pass. The `part` field says
-`system` or `record`. The driver records one `record` step for each pass
-that reads a record, and one `system` step in the first pass. The new trace policy field
-`input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
-`limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+exchange, or ends before its first pass. `TraceSink.startPass` takes the
+exchange as a third argument, and the sink stamps it on every step of the
+activation.
 
 **The Claude trace has one `usage` step for each model request.** The step
 comes from the `usage` of the `message_start` event, the `message_delta`
-events, and the assistant messages of a top-level request. It comes
-before the tool results of the request and before the next request. The step of the last request
-carries the cost of the result and the tokens that the requests did not
-report, so the steps sum to the totals of the results.
+events, and the assistant messages of a top-level request. It comes before
+the tool results of the request and before the next request. The step of
+the last request carries the cost of the result and the tokens that the
+requests did not report, so the steps sum to the totals of the results.
+
+#### Breakout rooms
 
 **One agent definition works in a root room and in a breakout room.** The
 composition of the room decides how an agent behaves: who is present, and
-whether the room has an opener in a parent. `Canvas.workerTools()` and
-`BreakoutOptions.team` are gone, and so is the worker team. `canvas.tools()`
-returns one bundle with `breakout`, `tell`, `archive`, and `report`. The row
-of the room still refuses a call: `report` in a root room, and `breakout`,
-`tell`, and `archive` at depth one. `breakout` seats any name that `resume`
-took, and a root room defaults to every definition. `OpenCanvasOptions.breakout`
-is optional. A stored root row with no `agents` now seats every definition,
-and a breakout row that names a removed definition fails to start at
-`resume`. The guidance of the bundle has one rule for a question: a question
-for a person goes to a person who is present in the room, with `say({ to })`,
-and when nobody is present and the room has an opener, the agent reports it.
-In a breakout room, the reminder names the opener, the parent room, and the
-goal. The close notice of an exchange that closed `awaiting` names the
-awaited person. An `operate` above the limit with no person in the exchange
-records the request and tells the seat to report it to the opener. The Workbench drops `scout` and
-`maker`: every seat holds the one canvas bundle, and specialists staff the
-breakout rooms.
+whether the room has an opener in a parent. The worker team is gone, so no
+product builds a twin of each specialist. `breakout` seats any name that
+`resume` took, and a root room defaults to every definition.
+`OpenCanvasOptions.breakout` is optional.
 
-**The message kind `posted` is now `system`.** A message that the system
-writes has the body kind `system`: a host post with `room.post`, or a say
-that the room returns. The types and the guard follow: `PostedMessage` is
-`SystemMessage`, and `isPosted` is `isSystem`. The agent prompt reads
-`[system → ...]`, and the opening line of an exchange reads "A system message
-reports an event". `room.post` and `PostInput` keep their names. A stored
-journal that holds the kind `posted` does not resume.
+**`canvas.tools()` returns one bundle.** It holds `breakout`, `tell`,
+`archive`, and `report`. The row of the room still refuses a call: `report`
+in a root room, and `breakout`, `tell`, and `archive` at depth one.
 
-**`read` of a text file has no size limit.** `WorkspaceEnv` has a new
-member, `readRange(path, start, length, signal?)`. It gives at most `length`
-bytes from the byte `start`, and it has no size limit. `FileOperations` has
-the same member. The directory backend, the workstation, and the local
-backend of `camera-chat` read the range from the file. The memory backend cuts
-the range from the whole file. `read` scans a text file in ranges of 1 MiB
-and keeps the lines of the view. So a file of any size gives a view, and an
-offset and a limit read past 10 MiB. `details.lines` is present only when the
-scan reached the end of the file. When it is absent, the notices omit the
-line count. A whole-file read keeps the limit of its backend. So do an
-image, `edit`, `apply_patch`, and a snapshot.
+**The guidance has one rule for a question.** A question for a person goes
+to a person who is present in the room, with `say({ to })`. When nobody is
+present and the room has an opener, the agent reports the question. In a
+breakout room, the reminder names the opener, the parent room, and the goal.
+The close notice of an exchange that closed `awaiting` names the awaited
+person.
 
-**The Pi executor records a `session` step.** The step opens each
-activation, before the first model step. It holds the name `pi`, the model
-string of the executor options, the session id, and the names of the tools.
+**The workbench staffs breakout rooms with specialists.** The workbench
+drops `scout` and `maker`, and every seat holds the one canvas bundle. An
+`operate` above the limit with no person in the exchange records the request
+and tells the seat to report it to the opener.
 
-**The dependencies are at their latest versions.** The release moves
-`vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
-3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
-to 0.3.291, and the Pi packages to 1.0.4. `@ambionframework/cloudflare` stays
-on `vitest` 4, the range that `@cloudflare/vitest-pool-workers` accepts.
-The directory backend runs `createExclusive` as trusted code of just-bash.
+#### The workspace
 
 **Every workspace has an `apply_patch` tool.** One call adds, deletes,
 updates, and moves several files with a patch in the envelope of the Codex
@@ -92,6 +153,34 @@ view leaves out in the terms of `read`: `offset` and `limit`. The result
 `details` hold the same range in `omitted`. A cut view reads the first 50
 KB and the last 50 KB of the new part, and the 200 KB read is gone.
 
+**`read` of a text file has no size limit.** `WorkspaceEnv` has a new
+member, `readRange(path, start, length, signal?)`. It gives at most `length`
+bytes from the byte `start`, and it has no size limit. `FileOperations` has
+the same member. The directory backend, the workstation, and the local
+backend of `camera-chat` read the range from the file. The memory backend cuts
+the range from the whole file. `read` scans a text file in ranges of 1 MiB
+and keeps the lines of the view. So a file of any size gives a view, and an
+offset and a limit read past 10 MiB. `details.lines` is present only when the
+scan reached the end of the file. When it is absent, the notices omit the
+line count. A whole-file read keeps the limit of its backend. So do an
+image, `edit`, `apply_patch`, and a snapshot. `workspaceConformance` has a
+case for `readRange`.
+
+#### The seat prompt and macros
+
+**An application can replace the respond and summary policies of the seat
+prompt in full.** `respondPolicy` replaces the whole respond policy: the
+speaking text, the paragraph on arrivals and departures, the paragraph on
+hand-off, and the closing reminder of the respond ask line. A new
+`summaryPolicy` option replaces the summary duties and the advice in the
+summary ask line. The main entry exports `DEFAULT_RESPOND_POLICY` and
+`DEFAULT_SUMMARY_POLICY`. The kernel keeps the mechanism of the protocol. A
+replaced respond policy reads one mechanism line in the ask line: what the
+`[new]` prefix means. The default prompt changes in one place: the hand-off
+paragraph no longer says "Seat them first if they are in the reserve",
+because `DEFAULT_RESPOND_POLICY` already states that seating a colleague is
+the hand-off.
+
 **A macro can name a room tool.** The check of a macro reads the compose
 catalog that `compose` binds, so a macro that uses `say`, `recall`, or any
 other room tool passes. The room tool list has one owner in `define.ts`.
@@ -100,17 +189,86 @@ other room tool passes. The room tool list has one owner in `define.ts`.
 room tool of the activation. `dismiss` commits, and `recall` gives the text
 of its result.
 
-**An application can replace the respond and summary policies of the seat
-prompt in full.** `respondPolicy` now replaces the whole respond policy: the speaking
-text, the paragraph on arrivals and departures, the paragraph on hand-off,
-and the closing reminder of the respond ask line. A new `summaryPolicy` option
-replaces the summary duties and the advice in the summary ask line. The main
-entry exports `DEFAULT_SUMMARY_POLICY`. The kernel keeps the mechanism of the
-protocol. The default prompt changes in one place: the hand-off paragraph no
-longer says "Seat them first if they are in the reserve", because
-`DEFAULT_RESPOND_POLICY` already states that seating a colleague is the hand-off.
-A replaced respond policy reads one mechanism line in the ask line: what
-the `[new]` prefix means.
+### Simplification
+
+**The message kind of the system has one name.** The body kind `system`
+covers a host post with `room.post` and a say that the room returns. The
+agent prompt reads `[system → ...]`, and the opening line of an exchange
+reads "A system message reports an event". The labels of the simulator and
+the workbench read `system`. `room.post` and `PostInput` keep their names.
+
+**The canvas keeps one bundle and no team.** `workerTools()`,
+`BreakoutOptions.team`, and the worker guidance are removed.
+
+**The room tools have one list.** `define.ts` holds the ordered list. The
+names, the compose catalog, the commit set, and the scripted calls derive
+from it.
+
+### Fixes
+
+**A macro that names a room tool no longer fails its check.** A macro that
+used `say` or `recall` failed at definition with "which the compose catalog
+does not hold".
+
+**A scripted call of `dismiss` or `recall` no longer fails.** The script
+failed with "The seat has no tool".
+
+### Breaking changes
+
+#### What to change
+
+**Each bullet names an action.**
+
+- **Read the body kind `system`.** A host message and a returned say have
+  the kind `system`. Replace `PostedMessage` with `SystemMessage` and
+  `isPosted` with `isSystem`. A record rendered for a model reads
+  `[system → ...]`.
+- **Start on a new journal.** A stored journal that holds the kind `posted`
+  does not resume, and no reader accepts it.
+- **Drop `Canvas.workerTools()` and `BreakoutOptions.team`.** Give every
+  seat `canvas.tools()`. Pass `breakout` to `openCanvas` only for
+  `perOpener`.
+- **Name the agents of a root room that you want seated.** A stored root row
+  with no `agents` now seats every definition, the former worker team
+  included.
+- **Keep every definition that a breakout row names.** A breakout row that
+  names a removed definition fails to start at `resume`. The canvas reports
+  the error to `onError`, and the row stays `running`.
+- **Implement `readRange` in a custom backend.** `WorkspaceEnv` and
+  `FileOperations` require it. It gives at most `length` bytes from the byte
+  `start`, and the result is empty at the end of the file. Run
+  `workspaceConformance` to check it.
+- **Rename `speaking` to `respondPolicy`.** The option replaces the whole
+  respond policy. Add the paragraphs on arrivals and departures and on
+  hand-off to a text that held only the speaking text. `DEFAULT_SPEAKING` is
+  now `DEFAULT_RESPOND_POLICY`, and it holds all three paragraphs.
+- **Handle the `input` step.** A `switch` over `Step` needs a case for it.
+- **Expect no `details.lines` for a long file.** `read` leaves it out when
+  the view ends before the end of the file.
+
+#### Journal and stored data
+
+**The body kind `posted` is now `system`.** The golden journal
+`scheduled.journal.json` changes in one line. The other golden journals keep
+their form. A journal of 0.7.0 opens on 0.8.0 only when it holds no entry of
+the kind `posted`.
+
+**No SQLite table changes.** The canvas rows keep their form. A root row
+with no `agents` reads as every definition.
+
+#### Exports
+
+- **`@ambionframework/ambion`.** Adds `SystemMessage`, `isSystem`,
+  `DEFAULT_RESPOND_POLICY`, and `DEFAULT_SUMMARY_POLICY`. Removes
+  `PostedMessage`, `isPosted`, and `DEFAULT_SPEAKING`. `Step` gains the
+  member `input`, `TracedStep` gains `exchange`, `TracePolicy` gains `input`,
+  and `Limits['trace']` gains `inputBytes`. The executor options and
+  `Executor` replace `speaking` with `respondPolicy` and add `summaryPolicy`.
+- **`@ambionframework/canvas`.** `Canvas` loses `workerTools()`.
+  `BreakoutOptions` loses `team`, and `OpenCanvasOptions.breakout` is
+  optional.
+- **`@ambionframework/workspace`.** `WorkspaceEnv` and `FileOperations` gain
+  `readRange`.
 
 ## 0.7.0 (2026-10-06)
 
