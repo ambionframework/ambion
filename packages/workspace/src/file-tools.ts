@@ -1,11 +1,13 @@
 /**
- * The three file tools of every workspace: `read`, `write`, and `edit`. Each
- * one runs over the port of a bash backend, through the whole-operation
- * queue of the resource, so a call sees the files as the previous call left
- * them.
+ * The four file tools of every workspace: `read`, `write`, `edit`, and
+ * `apply_patch`. Each one runs over the port of a bash backend, through the
+ * whole-operation queue of the resource, so a call sees the files as the
+ * previous call left them.
  *
- * The names, parameters, and results derive from the file tools of the agent
- * harness of Pi (earendil-works/pi, MIT License, Mario Zechner).
+ * The names, parameters, and results of `read`, `write`, and `edit` derive
+ * from the file tools of the agent harness of Pi (earendil-works/pi, MIT
+ * License, Mario Zechner). The envelope of `apply_patch` follows the
+ * `apply_patch` tool of Codex.
  */
 
 import {
@@ -15,6 +17,12 @@ import {
 	type ToolResult,
 } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
+import {
+	APPLY_PATCH_DESCRIPTION,
+	applyPatchFiles,
+	applyPatchSchema,
+	prepareApplyPatchArguments,
+} from './apply-patch-tool.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import {
 	applyEdits,
@@ -25,8 +33,8 @@ import {
 	stripBom,
 	unifiedPatch,
 } from './edit-diff.ts';
+import { accessError, assertLive, readEditable, resolvePath, text, value } from './file-support.ts';
 import { imageMimeType } from './image-type.ts';
-import type { FileError, Result } from './port.ts';
 import { TruncationFacts } from './process-schema.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from './truncate.ts';
@@ -97,33 +105,6 @@ const editSchema = Type.Object({
 type ReadParams = Static<typeof readSchema>;
 type WriteParams = Static<typeof writeSchema>;
 type EditParams = Static<typeof editSchema>;
-
-/** The value of a result, or its error thrown. */
-function value<T>(result: Result<T, FileError>): T {
-	if (!result.ok) throw result.error;
-	return result.value;
-}
-
-function assertLive(signal: AbortSignal | undefined): void {
-	if (signal?.aborted) throw new Error('Operation aborted');
-}
-
-function text(message: string): ToolResult<undefined>;
-function text<D>(message: string, details: D): ToolResult<D>;
-function text(message: string, details?: unknown): ToolResult {
-	return { content: [{ type: 'text', text: message }], details };
-}
-
-/** An error for a file that the tool could not reach, with the cause. */
-function accessError(path: string, error: FileError): Error {
-	return new Error(`Could not edit file: ${path}. Error code: ${error.code}.`, { cause: error });
-}
-
-/** The absolute path of a tool path. A leading `@` and the Unicode spaces of a pasted path go. */
-async function resolvePath(env: WorkspaceEnv, path: string, signal?: AbortSignal): Promise<string> {
-	const plain = path.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
-	return value(await env.absolutePath(plain.startsWith('@') ? plain.slice(1) : plain, signal));
-}
 
 /**
  * The path of a file to read. A screenshot name can differ from the name that
@@ -268,23 +249,6 @@ async function writeFile(
 	return text(`Successfully wrote to ${path}`);
 }
 
-/** The content of a file that `edit` may change, or the error that names why it may not. */
-async function readEditable(
-	env: WorkspaceEnv,
-	path: string,
-	absolute: string,
-	signal?: AbortSignal,
-): Promise<string> {
-	const info = await env.fileInfo(absolute, signal);
-	if (!info.ok) throw accessError(path, info.error);
-	if (info.value.kind !== 'file' && info.value.kind !== 'symlink') {
-		throw new Error(`Could not edit file: ${path}. Path is not a file.`);
-	}
-	const content = await env.readTextFile(absolute, signal);
-	if (!content.ok) throw accessError(path, content.error);
-	return content.value;
-}
-
 async function editFile(
 	env: WorkspaceEnv,
 	{ path, edits }: EditParams,
@@ -354,7 +318,7 @@ function prepareEditArguments(input: unknown): EditParams {
 	return { ...rest, edits: [...listed, { oldText, newText }] } as EditParams;
 }
 
-/** The three file tools, run through the queue of `use`. */
+/** The four file tools, run through the queue of `use`. */
 export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly AmbionTool[] {
 	const through =
 		<P, R extends ToolResult>(
@@ -387,6 +351,14 @@ export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly
 			parameters: editSchema,
 			prepareArguments: prepareEditArguments,
 			execute: through(editFile),
+		}),
+		defineTool({
+			name: 'apply_patch',
+			label: 'apply_patch',
+			description: APPLY_PATCH_DESCRIPTION,
+			parameters: applyPatchSchema,
+			prepareArguments: prepareApplyPatchArguments,
+			execute: through(applyPatchFiles),
 		}),
 	]);
 }

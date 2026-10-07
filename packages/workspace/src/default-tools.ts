@@ -1,7 +1,7 @@
 /**
- * The neutral layer's file tools, read, write and edit.
+ * The neutral layer's file tools, read, write, edit and apply_patch.
  *
- * Every workspace gets these three tools, the four process tools
+ * Every workspace gets these four tools, the four process tools
  * (`./process-tools.ts`: bash, ps, wait and cancel), and `snapshot`
  * and `restore` (`./snapshots.ts`) before any tool its bash backend adds of
  * its own. A workspace with a SQL backend also gets
@@ -17,11 +17,11 @@ import type { WorkspaceResource } from './resource.ts';
 
 /** The note on the file tools and the bash tool. */
 const FILES_NOTE = [
-	`read, write, edit and bash work on shared files. Other agents connected to this`,
+	`read, write, edit, apply_patch and bash work on shared files. Other agents connected to this`,
 	`workspace read and write the same files.`,
 ].join('\n');
 
-/** The file capability: the three file tools on the bash resource, and their note. */
+/** The file capability: the four file tools on the bash resource, and their note. */
 export function fileCapability(bash: WorkspaceResource<WorkspaceEnv>['use']): Capability {
 	return { tools: fileTools(bash), notes: [FILES_NOTE] };
 }

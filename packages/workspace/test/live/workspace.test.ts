@@ -78,7 +78,9 @@ live('the workspace', () => {
 			e.type === 'tool_call' && e.seat === 'librarian' ? [e.name] : [],
 		);
 		expect(tools.some((tool) => tool === 'read' || tool === 'bash')).toBe(true);
-		expect(tools.some((tool) => ['write', 'edit', 'bash'].includes(tool))).toBe(true);
+		expect(tools.some((tool) => ['write', 'edit', 'apply_patch', 'bash'].includes(tool))).toBe(
+			true,
+		);
 		// `say` is the room's own event, never surfaced as a tool.
 		expect(tools).not.toContain('say');
 		const answer = saidBy((await session.read()).messages, 'librarian');

@@ -83,7 +83,7 @@ console.log(drive.mirrorAgent); // { name: 'town-host' }
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds three file tools first: `read`, `write`, and `edit`. The four process
+binds four file tools first: `read`, `write`, `edit`, and `apply_patch`. The four process
 tools come next: `bash`, `ps`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle reminds each seat of its processes.
@@ -123,8 +123,8 @@ The workspace tools share these rules:
   process that ended badly gives its output and its state line. A refused
   statement names the database and the fault. An unknown handle names
   `bash`, which returns the handle.
-- **The workspace implements the file tools.** `read`, `write`, and `edit`
-  run over the port of the bash backend. They report a bad path as a tool
+- **The workspace implements the file tools.** `read`, `write`, `edit`, and
+  `apply_patch` run over the port of the bash backend. They report a bad path as a tool
   error.
 
 ```ts
@@ -165,6 +165,66 @@ const readPlan = defineTool({
 
 [Resources](resources.md#references-and-provenance) states the provenance
 that a tool receives through `ToolContext`.
+
+### Apply a patch
+
+**`apply_patch` changes several files in one call.** Its `input` argument is
+a patch in the envelope of the Codex tool of the same name. Every seat that
+has the workspace bundle gets `apply_patch` and `edit`. The model chooses
+between them.
+
+```text
+*** Begin Patch
+*** Add File: docs/new.md
++first line
++second line
+*** Update File: src/a.ts
+*** Move to: src/b.ts
+@@ class Parser
+ unchanged line
+-removed line
++added line
+*** Delete File: old.txt
+*** End Patch
+```
+
+| Line                      | Meaning                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `*** Add File: <path>`    | Creates the file, or replaces it. Each line of the body starts with `+`. |
+| `*** Delete File: <path>` | Removes the file. The operation has no body.                             |
+| `*** Update File: <path>` | Changes the file with the hunks of the body.                             |
+| `*** Move to: <path>`     | Follows `Update File`. The result goes to the new path.                  |
+
+**A hunk is an anchor and lines.** `@@ <text>` moves the search to the line
+after the first line that equals the text. Stacked `@@` lines narrow the
+search, and each one must match. A line that starts with a space is context.
+A line that starts with `-` leaves the file, and a line that starts with `+`
+enters it. The first hunk of a file needs no anchor. `*** End of File` after a
+hunk matches its lines at the end of the file. An update with a `Move to`
+line and no hunk moves the file with no change of content.
+
+**A hunk matches in three passes.** `applyDiff` searches forward from the end
+of the previous hunk. It tries the lines exactly, then with the whitespace at
+the end of each line dropped, then with the whitespace at both ends dropped.
+An anchor matches exactly, then with both ends dropped. A hunk with no match
+is an error that shows the lines it looked for. The tool keeps the line
+endings of the file, its byte order mark, and a missing final newline. The
+tool ends the last line of an added file with a newline.
+
+**A patch applies in full or not at all.** The tool parses the envelope first.
+It then reads each file once, through the queue of the resource, and
+computes every result in memory. A later operation on the same path sees the
+result of the earlier one. The tool writes and removes files after every
+operation succeeds. Update, delete, and move need an existing file. A port
+fault during the writes is the one case that can leave part of a patch. Its
+error names the file and the code.
+
+**The result lists each operation.** The text reads `Applied patch: A
+docs/new.md, M src/a.ts -> src/b.ts, D old.txt`. `details.files` holds one
+entry for each operation: `path`, `action` (`add`, `update`, `delete`, or
+`move`), and `to` for a move. `details.patch` is the unified diff of every
+change. A failure names the file as the patch gives it, the operation, and the
+reason. It states that nothing was written.
 
 ## Give an agent skills
 
@@ -1108,8 +1168,8 @@ backend exists. That backend moves them back to the conformance entry
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares
-none, so `compose` binds it as text. `write` and `edit`
-declare none, because code needs only their success or their rejection.
+none, so `compose` binds it as text. `write`, `edit`, and
+`apply_patch` declare none, because code needs only their success or their rejection.
 
 **Each output has a named type.** The schema carries an `$id`, which is the
 name in the `Type` column. The description of `compose` lists `name -> Type`
@@ -1187,7 +1247,7 @@ names `WorkspaceEnv`, the port of a bash backend ([The port](#the-port)).
 optional guidance about the backend's own shell and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)).
 The workspace binds its tools over every backend.
-`openWorkspace` opens the bash resource, builds the three file tools, and
+`openWorkspace` opens the bash resource, builds the four file tools, and
 binds them to its `use` method. It also opens
 the process table and builds the four process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the

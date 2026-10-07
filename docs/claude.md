@@ -269,8 +269,8 @@ aborts when the activation is cut.
 
 **The tools of the seat come from the room and the definition.** They are the
 room tools and `pass.tools`. `pass.tools` holds the tools of the definition
-and of its bundles. The workspace bundle gives `read`, `write`, `edit`, and
-`bash`.
+and of its bundles. The workspace bundle gives `read`, `write`, `edit`,
+`apply_patch`, and `bash`.
 
 ## Policy and the trust boundary
 
@@ -590,7 +590,7 @@ live tests of the Workbench also run the `design` seat. See
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Each seat fails at once with `no_execution`                           | No supplied execution serves the kind of the seat. Pass `claudeExecution()` to the room or runtime.                                                                                 |
 | `Cannot run an executor of kind 'pi': this seat needs 'claude'.`      | A Pi seat reached a Claude executor through an execution with no kind. Pass the execution of each kind.                                                                             |
-| The model cannot see `Bash` or `Read`                                 | A Claude seat has no built-in tool. Give the seat a workspace bundle. Its `bash`, `read`, `write`, and `edit` tools take the place.                                                 |
+| The model cannot see `Bash` or `Read`                                 | A Claude seat has no built-in tool. Give the seat a workspace bundle. Its `bash`, `read`, `write`, `edit`, and `apply_patch` tools take the place.                                  |
 | A project MCP server is missing                                       | `strictMcpConfig` is on. The query reads the room server only.                                                                                                                      |
 | The seat is abandoned after one attempt with an authentication text   | A permanent failure. Pass `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A seat does not read the sign-in of `claude login`. A custom `env` may have set the key to `undefined`. |
 | `The Claude session ended before the pass did.`                       | The process exited. Check `pathToClaudeCodeExecutable` and `env`. The message ends with the last 2,000 characters of the process stderr. The text never changes the failure class.  |

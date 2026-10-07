@@ -71,7 +71,7 @@ workspace supplies everything that holds on every backend
 | `layout`: the audit log, rooms, snapshots   | The workstation, from its options                               |
 | `guidance` about the shell                  | The workstation                                                 |
 | `endpoints.forward()` for loopback services | The workstation                                                 |
-| `read`, `write`, `edit`                     | The workspace: the three file tools                             |
+| `read`, `write`, `edit`, `apply_patch`      | The workspace: the four file tools                              |
 | `bash`, `ps`, `wait`, `cancel`              | The workspace: the process tools ([Processes](processes.md))    |
 | `snapshot`, `restore`                       | The workspace ([Snapshot a file](workspace.md#snapshot-a-file)) |
 | `sql`                                       | The workspace, when `backend.sql` is set                        |
