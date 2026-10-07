@@ -41,7 +41,7 @@ import {
 import { roundTrip } from '../src/protocol.ts';
 import { fakeClock } from '../src/testing.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
-import { quiet, say, scriptedStream } from './support/scripted.ts';
+import { byAgent, type PiScript, quiet, say, scriptedStream } from './support/scripted.ts';
 import { stopAtEnd } from './support/stop.ts';
 import { collectSteps } from './support/trace.ts';
 
@@ -76,7 +76,16 @@ async function traced(
 	const started = events.find((event) => event.type === 'activation_start');
 	if (started?.type !== 'activation_start') throw new Error('No activation started.');
 	const id = started.activation;
-	return { runtime, room, name, id, steps: log.of(id), records: log.records };
+	const opened = events.find((event) => event.type === 'exchange_opened');
+	return {
+		runtime,
+		room,
+		name,
+		id,
+		exchange: opened?.type === 'exchange_opened' ? opened.exchange.from : undefined,
+		steps: log.of(id),
+		records: log.records,
+	};
 }
 
 /** A stream that thinks, then calls `tool`, then stops. */
@@ -91,7 +100,7 @@ const thinksThenCalls = (thinking: string, tool: string, input: JsonObject = {})
 
 describe('the trace of a room activation', () => {
 	it('gives each step to the logger, stamped, in order, with the room and the seat', async () => {
-		const { runtime, room, name, id, steps, records } = await traced(
+		const { runtime, room, name, id, exchange, steps, records } = await traced(
 			thinksThenCalls('weighing it', 'say', { text: 'Yes.' }),
 		);
 		expect(sorted(steps)).toEqual([
@@ -110,6 +119,8 @@ describe('the trace of a room activation', () => {
 		expect(steps.every((step) => step.activation === id && step.pass === 1)).toBe(true);
 		expect(steps.every((step) => !Number.isNaN(Date.parse(step.at)))).toBe(true);
 		expect(records.every((record) => record.room === name && record.seat === 'product')).toBe(true);
+		expect(exchange).toBeDefined();
+		expect(records.every((record) => record.exchange === exchange)).toBe(true);
 		expect(steps.find((step) => step.type === 'room')).toMatchObject({
 			result: 'committed',
 			intent: { kind: 'said', text: 'Yes.' },
@@ -135,6 +146,83 @@ describe('the trace of a room activation', () => {
 		const { steps } = await traced(deltaStream(['al', 'pha', ' beta']));
 		const texts = steps.filter((step) => step.type === 'text');
 		expect(texts).toEqual([expect.objectContaining({ text: 'alpha beta', final: true })]);
+	});
+});
+
+describe('the exchange of a traced step', () => {
+	const assistant = defineAgent({
+		name: 'assistant',
+		identity: 'Writes the one message a person reads.',
+		executor: pi({ instructions: 'Summarise.', model: 'scripted/assistant' }),
+	});
+	const greeter = defineAgent({
+		name: 'greeter',
+		identity: 'Meets people at the door.',
+		executor: pi({ instructions: 'Greet.', model: 'scripted/greeter' }),
+	});
+
+	/** A room with a presence seat and a summary writer, and the steps that its seats log. */
+	async function open(script: PiScript) {
+		const log = collectSteps();
+		const room = stopAtEnd(
+			await startRoom({
+				name: roomName('exchange-stamp'),
+				agents: [product, greeter, assistant],
+				seats: { product: 'broadcast', greeter: 'presence', assistant: 'none' },
+				summaryWriter: assistant.name,
+				runtime: createRuntime({ storage: memoryJournals(), logger: log.logger }),
+				execution: piExecution({ sessions: 'memory', stream: scriptedStream(script) }),
+			}),
+		);
+		return { room, records: log.records, events: collect(room) };
+	}
+
+	const script: PiScript = byAgent({
+		product: (_context, _name, request) => (request === 1 ? say('Yes.') : quiet()),
+		assistant: (_context, _name, request) => (request === 1 ? say('Ready, yes.') : quiet()),
+	});
+
+	it('stamps the opening message of the exchange on a response and on its summary', async () => {
+		const { room, records, events } = await open(script);
+		await (await room.visit(andrei)).send({ text: 'Ready?' });
+		await waitForRoom(room, 'quiet', 2_000);
+		const opened = events.find((event) => event.type === 'exchange_opened');
+		if (opened?.type !== 'exchange_opened') throw new Error('No exchange opened.');
+		const stepsOf = (seat: string) => records.filter((record) => record.seat === seat);
+		for (const seat of ['product', 'assistant']) {
+			expect(stepsOf(seat).map((record) => record.step.type)).toContain('end');
+			expect(stepsOf(seat).every((record) => record.exchange === opened.exchange.from)).toBe(true);
+		}
+	});
+
+	it('stamps none on an activation outside an exchange', async () => {
+		const { room, records, events } = await open(script);
+		await room.visit(andrei);
+		await waitForRoom(room, 'quiet', 2_000);
+		expect(events.some((event) => event.type === 'exchange_opened')).toBe(false);
+		expect(records.length).toBeGreaterThan(0);
+		for (const record of records) expect(record).not.toHaveProperty('exchange');
+		expect(records.map((record) => record.seat)).toContain('greeter');
+	});
+
+	it('fixes the exchange at the first pass and keeps it to the end', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'fixed',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.record({ type: 'notice', level: 'info', text: 'Before any pass.' });
+		sink.startPass('view', 5, 2);
+		sink.startPass('delta', 6, 4);
+		sink.record({ type: 'end', stop: 'stopped' });
+		await sink.close();
+		expect(log.records.map((record) => record.exchange)).toEqual([undefined, 2, 2, 2]);
+		expect(log.records[0]).not.toHaveProperty('exchange');
 	});
 });
 
@@ -687,7 +775,7 @@ describe('a sink that closes late', () => {
 						const sink = opener.open(activation);
 						if (activation !== first) return sink;
 						return {
-							startPass: (input, through) => sink.startPass(input, through),
+							startPass: (input, through, exchange) => sink.startPass(input, through, exchange),
 							record: (step) => sink.record(step),
 							usage: () => sink.usage(),
 							close: async () => {
