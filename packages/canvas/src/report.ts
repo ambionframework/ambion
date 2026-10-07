@@ -22,7 +22,9 @@ export async function reportToParent(
 ): Promise<ReportResult> {
 	// A call from a root room is refused at once: it never waits in the queue of a root.
 	if (startOf(port.row(caller.room)) === undefined)
-		throw refuse(`"${caller.room}" is not a breakout room. Only a worker in one reports.`);
+		throw refuse(
+			`"${caller.room}" is not a breakout room. Only an agent in a breakout room reports.`,
+		);
 	return port.serial(caller.room, () => reportQueued(port, caller, params));
 }
 
@@ -34,7 +36,9 @@ async function reportQueued(
 	const row = port.row(caller.room);
 	const start = startOf(row);
 	if (row === undefined || start === undefined)
-		throw refuse(`"${caller.room}" is not a breakout room. Only a worker in one reports.`);
+		throw refuse(
+			`"${caller.room}" is not a breakout room. Only an agent in a breakout room reports.`,
+		);
 	const parent = port.room(start.parent);
 	if (parent === undefined) throw refuse(`The parent "${start.parent}" is not running.`);
 	if (caller.exchange === undefined)

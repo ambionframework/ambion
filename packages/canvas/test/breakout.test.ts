@@ -157,7 +157,11 @@ describe('breakout', () => {
 		['an empty name', { name: '' }, /not a room name/],
 		['a name that makes the room name too long', { name: 'x'.repeat(44) }, /49 characters.*48/],
 		['no agents', { agents: [] }, /names no worker/],
-		['an agent that no definition resolves', { agents: ['ghost'] }, /resolves the agent "ghost"/],
+		[
+			'an agent that no definition resolves',
+			{ agents: ['ghost'] },
+			/resolves the agent "ghost"\. The definitions are: ada, bob, cy, dan\./,
+		],
 		['an agent twice', { agents: ['cy', 'cy'] }, /"cy" twice/],
 	])('refuses %s', async (_label, extra, cause) => {
 		const { open, store } = await lab();
@@ -551,6 +555,9 @@ describe('report', () => {
 			'archive',
 			'report',
 		]);
+		expect(bundle.guidance).toContain(
+			'In a root room, your reminder lists the breakout rooms that you hold.',
+		);
 		expect(bundle.guidance).toContain(
 			'A question for a person goes to a person who is present in this room, with `say({ to })`. When nobody is present and this room has an opener, `report` the question.',
 		);

@@ -74,8 +74,8 @@ executor kind, because it checks keys and lets a test script an executor.
 | Claude | `claude-sonnet-5`                  | `ANTHROPIC_API_KEY` | Design                |
 | Codex  | `gpt-5.6-luna`, reasoning `medium` | `CODEX_API_KEY`     | Experiments           |
 
-`AMBION_EXECUTOR=codex` moves the assistant and the two workers to Codex.
-Any other value leaves them on Pi. The live delegation test uses this.
+`AMBION_EXECUTOR=codex` moves the assistant to Codex.
+Any other value leaves it on Pi. The live delegation test uses this.
 
 A seat with no key reports the missing variable and does not run. The other
 seats run. The scripted tests give the Claude and Codex seats a scripted
@@ -285,7 +285,7 @@ automated test yet.
 | --------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A resistor question is answered from `led-5mm.md` in `/library`             | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`                                                                                                                                                                 |
 | The assistant routes a question to the Design specialist                    | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks                                                                                                                                                          |
-| The assistant delegates a task to a worker in a breakout room               | A report reaches the opener, who archives  | Scripted: a `breakout`, a `report` in the parent room, an `archive`, and a close notice for an exchange with no report. A restart resumes the room and posts no notice twice                                                          |
+| The assistant delegates a task to a specialist in a breakout room           | A report reaches the opener, who archives  | Scripted: a `breakout`, a `report` in the parent room, an `archive`, and a close notice for an exchange with no report. A restart resumes the room and posts no notice twice                                                          |
 | A specialist writes a file to the workspace                                 | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                                                                                                                                                                         |
 | The Experiments specialist plans a distance test                            | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file                                                                                                                                                                      |
 | A person adds a constraint while an agent works                             | Steering an open exchange                  | By hand: the thread shows the message in order                                                                                                                                                                                        |
@@ -316,7 +316,7 @@ examples/workbench/
   package.json
   src/
     brand.ts           the product name and the terminal palette
-    definitions.ts     the assistant, three specialists, two workers, and the people
+    definitions.ts     the assistant, three specialists, and the people
     scenarios.ts       the rooms, the workspace seed, the lab schema, and the instruments
     repositories.ts    the git backend and its firmware-sketch template
     instrument.ts      the simulated instruments and their approval step

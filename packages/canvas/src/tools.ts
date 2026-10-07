@@ -42,13 +42,13 @@ const ReportOutput = Type.Object({
 });
 
 const GUIDANCE = [
-	'A breakout room is a room of its own for background work. Its workers are agents of the canvas.',
+	'A breakout room is a room of its own for background work. `breakout` seats agents by name.',
 	'`breakout` opens one with a goal and a first message. A repeat call with the same name returns the same room.',
-	'A task that you delegate goes to the breakout room alone. Do not do it in this room, and do not ask a specialist of this room for it.',
+	'A task that you delegate goes to the breakout room alone. Do not ask for it in this room.',
 	'`tell` posts into a breakout room that you opened, and steers its workers.',
 	'`archive` ends a breakout room, and records `done` or `failed`. An archived room does not start again.',
 	'A report of the workers arrives in this room as a message that starts with `breakout <room>:`. When the report arrives, archive the room as `done` or `failed`, and answer the person who asked with the result. A close notice with the same start carries no result: use `tell` to ask the workers again.',
-	'Your reminder lists the breakout rooms that you hold. Read it before you say that a room failed.',
+	'In a root room, your reminder lists the breakout rooms that you hold. Read it before you say that a room failed.',
 	'In a breakout room, `report` posts your result into the room that opened yours. Call it inside the exchange that activated you.',
 	'A question for a person goes to a person who is present in this room, with `say({ to })`. When nobody is present and this room has an opener, `report` the question.',
 ].join('\n');

@@ -25,9 +25,10 @@ export interface Instrument {
 const GUIDANCE =
 	'The bench has simulated instruments. Drive one with `operate`. ' +
 	'An operation above the safe limit of an instrument does not run. The tool records it as requested, with its operation id. ' +
-	'Ask the person of the exchange with a directed say, then end your activation. ' +
+	'Ask a person who is present in the room with a directed say, then end your activation. ' +
+	'When nobody is present and the room has an opener, `report` the question with the operation id to the opener, then end your activation. ' +
 	'When the answer reaches you in a later message, call `approve_operation` with the operation id and the decision. ' +
-	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of that person. ' +
+	'The instrument checks the numeric limit. It does not verify who approved, so relay only the answer of the person that you asked. ' +
 	'Every operation lands in the operations table with its provenance.';
 
 function provenanceOf(ctx: ToolContext): SqlProvenance {
@@ -158,18 +159,22 @@ async function runOperate(
 		return `Operation ${id} done. ${spec.name} at ${setpoint} ${spec.unit}, reading ${reading} ${spec.unit}.`;
 	}
 	const person = ctx.exchange?.person;
-	if (person === undefined) {
-		throw new Error('An operation above the limit needs an open exchange where a person spoke.');
-	}
 	const id = await recordOperation(
 		env,
 		{ instrument: spec.name, setpoint, outcome: 'requested' },
 		ctx,
 	);
-	return (
+	const refused =
 		`Operation ${id} did not run. The setpoint ${setpoint} ${spec.unit} is above the limit ${spec.limit} ${spec.unit} of ${spec.name}. ` +
-		`It exceeds it by ${setpoint - spec.limit} ${spec.unit}. ` +
-		`Ask ${person}, the person of the exchange, to allow or deny operation ${id}. ` +
+		`It exceeds it by ${setpoint - spec.limit} ${spec.unit}. `;
+	if (person === undefined)
+		return (
+			`${refused}No person is in this exchange. ` +
+			`Report the request with operation id ${id} to the opener with \`report\`, and end your activation. ` +
+			`When the answer arrives, call approve_operation with id ${id} and the answer.`
+		);
+	return (
+		`${refused}Ask ${person}, the person of the exchange, to allow or deny operation ${id}. ` +
 		`Then call approve_operation with id ${id} and the answer.`
 	);
 }

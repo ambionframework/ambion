@@ -166,7 +166,7 @@ class CanvasRun implements Canvas {
 	private portOf(): BreakoutPort {
 		return {
 			perOpener: this.options.breakout?.perOpener ?? DEFAULT_PER_OPENER,
-			hasDefinition: (name) => this.definitions?.byName.has(name) ?? false,
+			definitionNames: () => [...(this.definitions?.byName.keys() ?? [])],
 			assertReady: () => this.assertReady(),
 			serial: (name, operation) => this.serial(name, operation),
 			ordered: (parent, operation) => this.bridge.order(parent, operation),
