@@ -92,8 +92,9 @@ recall({ last })              // the N most recent messages
 
 A result has a byte cap and names the next `from` on its last line. The
 authority does not change: a live lease, and a summary reads only through
-its exchange. `room.view` takes the selection, so the Durable Object wire
-changes. A long worker reads its own room past its window on every host,
+its exchange. `room.view` takes the selection. SR8 in `0.10.0.md` gives
+the call its selection object, so the feature adds fields and breaks no
+call. A long worker reads its own room past its window on every host,
 Cloudflare included, with no mirror.
 
 **Condition:** a measured need for own-room reads beyond the window.
@@ -124,7 +125,7 @@ delay needs an optional field on the `ended` body.
 another machine or a phone. The canvas keeps its handles in one process,
 and the workbench draws a terminal alone. A viewer reads the rooms, the
 widgets, and their sources through a second reader of the storage (PR3 in
-`0.12.0.md`), and the host owns the sign-in.
+`1.1.0.md`), and the host owns the sign-in.
 
 **Condition:** a person who must watch a room away from its host.
 
