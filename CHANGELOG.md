@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**An application can replace every piece of behavioral advice in the seat
+prompt.** `speaking` now replaces the whole respond policy: the speaking
+text, the paragraph on arrivals and departures, the paragraph on hand-off,
+and the closing reminder of the respond ask line. A new `summarizing` option
+replaces the summary duties and the advice in the summary ask line. The main
+entry exports `DEFAULT_SUMMARIZING`. The kernel keeps the mechanism of the
+protocol. The default prompt changes in one place: the hand-off paragraph no
+longer says "Seat them first if they are in the reserve", because
+`DEFAULT_SPEAKING` and the `seat` tool already state that seating a colleague
+is the hand-off.
+
 ## 0.7.0 (2026-10-06)
 
 <img alt="Ambion 0.7.0: the canvas, breakout rooms, and widgets. A canvas holds the rooms of a deployment, an agent opens a breakout room for background work and the room reports back, and an agent shows named widgets that a person sees and acts on. Canvas: the thirteenth package, canvas, with openCanvas, memoryCanvas, sqliteCanvas, and a lifecycle of resume, open, start, stop, archive, and close. Breakout rooms: the breakout, tell, archive, and report tools, and a bridge that carries each close notice to the opener. Widgets: show and hide for named views, and buttons and forms that send an act as a message of the person. Workbench: delegation to scout and maker, and pinned files. Camera chat: a viewfinder for each camera, with a Look now action. Breaking: a room operation requires a runtime, createRuntime requires its storage, and an execution is explicit." src="docs/assets/ambion-0.7.0.png" width="800">

@@ -52,6 +52,7 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 		'AmbionError',
 		'COMPOSE_GUIDANCE',
 		'DEFAULT_SPEAKING',
+		'DEFAULT_SUMMARIZING',
 		'PACKAGE_NAME',
 		'REF_LIMITS',
 		'addUsage',

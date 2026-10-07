@@ -124,18 +124,19 @@ an execution.
 **`pi(options)` returns a frozen executor of kind `pi`.** The kernel
 validates the shared fields. Pi adds `model` and `compaction`.
 
-| Option                 | Required | Default             | Meaning                                                                                                |
-| ---------------------- | -------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
-| `instructions`         | Yes      | None                | The private guidance of the agent.                                                                     |
-| `model`                | Yes      | None                | A Pi model id, `provider/model-id`.                                                                    |
-| `tools`                | No       | None                | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
-| `bundles`              | No       | None                | Tool bundles. Their guidance joins the prompt after the speaking policy.                               |
-| `compose`              | No       | `quickjsRuntime()`  | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
-| `speaking`             | No       | `DEFAULT_SPEAKING`  | The speaking policy. It replaces the default.                                                          |
-| `activationTokenLimit` | No       | The whole record    | The token limit of the record one activation reads. A positive integer.                                |
-| `estimateTokens`       | No       | `'length'`          | The name of the estimator in the runtime that counts tokens. It needs the limit.                       |
-| `compaction`           | No       | The harness default | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
-| `thinking`             | No       | `'off'`             | How much the model reasons before it answers. A Pi thinking level.                                     |
+| Option                 | Required | Default               | Meaning                                                                                                |
+| ---------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `instructions`         | Yes      | None                  | The private guidance of the agent.                                                                     |
+| `model`                | Yes      | None                  | A Pi model id, `provider/model-id`.                                                                    |
+| `tools`                | No       | None                  | The tools of the agent, from `defineTool` or `fromPiTool`.                                             |
+| `bundles`              | No       | None                  | Tool bundles. Their guidance joins the prompt after the speaking policy.                               |
+| `compose`              | No       | `quickjsRuntime()`    | The `compose` and `describe` tools of the seat: a runtime and optional limits ([Compose](compose.md)). |
+| `speaking`             | No       | `DEFAULT_SPEAKING`    | The speaking policy. It replaces the default.                                                          |
+| `summarizing`          | No       | `DEFAULT_SUMMARIZING` | The summary policy. It replaces the default.                                                           |
+| `activationTokenLimit` | No       | The whole record      | The token limit of the record one activation reads. A positive integer.                                |
+| `estimateTokens`       | No       | `'length'`            | The name of the estimator in the runtime that counts tokens. It needs the limit.                       |
+| `compaction`           | No       | The harness default   | When the harness compacts the session. A partial Pi `CompactionPolicy`.                                |
+| `thinking`             | No       | `'off'`               | How much the model reasons before it answers. A Pi thinking level.                                     |
 
 **Compaction is on by default.** The harness holds the default policy. The
 executor passes `compaction` to the harness as it is, and a field that the

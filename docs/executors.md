@@ -219,9 +219,15 @@ of a respond activation then reads the reminders, the scheduled says, and
 the messages beyond `after`. Pi passes it; Claude and Codex read the whole
 view.
 
-**A definition can replace the speaking policy.** The main entry exports
-`DEFAULT_SPEAKING`. An executor takes a `speaking` option that replaces it.
-Tool bundle guidance stays in the `guidance` field and follows the policy.
+**A definition can replace each policy.** The main entry exports
+`DEFAULT_SPEAKING` and `DEFAULT_SUMMARIZING`. An executor takes a `speaking`
+option and a `summarizing` option. `speaking` replaces the whole respond
+policy: when to speak, how to read an arrival, how to hand work to a
+colleague, and the closing reminder of the ask line. `summarizing` replaces
+the summary duties and the advice of the summary ask line. The kernel keeps
+the mechanism: the room, the roster, the record, the opening message, the
+range of a summary, and the tools. Tool bundle guidance stays in the
+`guidance` field and follows the respond policy.
 The driver resolves the `reminders` of the bundles once for each respond
 activation, when `record()` has something to send. Each reminder has 5
 seconds to answer, and at that bound the driver aborts the signal that it

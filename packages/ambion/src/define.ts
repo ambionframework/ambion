@@ -73,6 +73,8 @@ export interface ExecutorBaseOptions {
 	readonly bundles?: readonly ToolBundle[];
 	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
 	readonly speaking?: string;
+	/** The summary policy. It replaces `DEFAULT_SUMMARIZING`. Absent uses the default. */
+	readonly summarizing?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
 	/**
@@ -150,6 +152,7 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 		...(guidance === undefined ? {} : { guidance }),
 		...(reminders === undefined ? {} : { reminders }),
 		...(options.speaking === undefined ? {} : { speaking: options.speaking }),
+		...(options.summarizing === undefined ? {} : { summarizing: options.summarizing }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
 }
