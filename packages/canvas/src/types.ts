@@ -10,10 +10,8 @@ import type {
 import type { Workspace } from '@ambionframework/workspace';
 import type { CanvasClose, CanvasRoom, CanvasStore, CanvasWidget, WidgetKind } from './store.ts';
 
-/** The bounds and the worker team of the breakout rooms. */
+/** The bounds of the breakout rooms. */
 export interface BreakoutOptions {
-	/** The worker team. No root room seats these definitions. */
-	readonly team: readonly string[];
 	/** The most running breakout rooms for one opener in one parent. Default 3. */
 	readonly perOpener?: number;
 }
@@ -56,7 +54,7 @@ export interface OpenCanvasOptions {
 	readonly store: CanvasStore;
 	/** With a workspace, the canvas attaches the mirror of each room. */
 	readonly workspace?: Workspace;
-	readonly breakout: BreakoutOptions;
+	readonly breakout?: BreakoutOptions;
 	/** The catalog of widget kinds that the host draws. Without it, `widgetTools` is a refusal. */
 	readonly widgets?: WidgetOptions;
 	/** A failed start keeps its row `running`. The next `resume` tries again. */
@@ -66,7 +64,7 @@ export interface OpenCanvasOptions {
 export type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
 	readonly name: string;
 	readonly goal: string;
-	/** The definitions of this room. Default: every definition outside the worker team. */
+	/** The definitions of this room. Default: every definition. */
 	readonly agents?: readonly string[];
 	/**
 	 * The name of a definition given at resume. A name that no definition resolves is a
@@ -109,10 +107,8 @@ export type WidgetActResult =
 
 export interface Canvas {
 	readonly name: string;
-	/** The opener bundle: `breakout`, `tell`, `archive`, and the reminder. Call it before `defineAgent`. */
+	/** The breakout bundle: `breakout`, `tell`, `archive`, `report`, and the reminder. Call it before `defineAgent`. */
 	tools(): ToolBundle;
-	/** The worker bundle: `report`. Call it before `defineAgent`. */
-	workerTools(): ToolBundle;
 	/** The widget bundle: `show`, `hide`, and the reminder. A refusal with no `widgets.kinds`. Call it before `defineAgent`. */
 	widgetTools(): ToolBundle;
 	/**

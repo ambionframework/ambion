@@ -107,7 +107,6 @@ export async function openHost(options: {
 		name: 'camera-chat',
 		runtime,
 		store: sqliteCanvas(sql),
-		breakout: { team: [] },
 		widgets: { kinds: [FRAME_KIND] },
 		onError: (failure) => {
 			activity = failure.error instanceof Error ? failure.error.message : String(failure.error);

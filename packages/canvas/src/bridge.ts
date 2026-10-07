@@ -8,6 +8,7 @@
  */
 import {
 	AmbionError,
+	type ExchangeOutcome,
 	type ExchangeRange,
 	messageUri,
 	type Room,
@@ -77,9 +78,14 @@ function isDone(keys: readonly string[], name: string, from: number): boolean {
 	return keys.some((key) => key === own || key.startsWith(`${own}:`));
 }
 
+/** The outcome as the notice words it: `awaiting` names the person that the exchange waits for. */
+function outcomeOf(outcome: ExchangeOutcome): string {
+	return outcome.kind === 'awaiting' ? `awaiting ${outcome.person}` : outcome.kind;
+}
+
 /** Names the outcome and the range, and cites the last message. It holds no excerpt. */
-function noticeOf(name: string, exchange: ExchangeRange, outcome: string): string {
-	return `breakout ${name}: exchange #${exchange.from} is ${outcome}, messages #${exchange.from} to #${exchange.through}.`;
+function noticeOf(name: string, exchange: ExchangeRange, outcome: ExchangeOutcome): string {
+	return `breakout ${name}: exchange #${exchange.from} is ${outcomeOf(outcome)}, messages #${exchange.from} to #${exchange.through}.`;
 }
 
 export class Bridge {
@@ -128,7 +134,7 @@ export class Bridge {
 			for (const exchange of read.exchanges) {
 				if (exchange.status !== 'closed' || isDone(keys, name, exchange.from)) continue;
 				if (!this.open(name)) return;
-				await this.notify(parent, name, start.opener, exchange, exchange.outcome.kind);
+				await this.notify(parent, name, start.opener, exchange, exchange.outcome);
 			}
 		} catch (error) {
 			this.host.fail(name, error);
@@ -141,7 +147,7 @@ export class Bridge {
 		name: string,
 		opener: string,
 		exchange: ExchangeRange,
-		outcome: string,
+		outcome: ExchangeOutcome,
 	): Promise<void> {
 		try {
 			const to = await recipientOf(parent, opener);

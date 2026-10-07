@@ -4,10 +4,30 @@
 
 **The trace can record the input of the model.** A new `input` step holds
 the text that the driver renders for the pass. The `part` field says
-`system` or `record`. The driver records one `record` step for each pass that reads a record, and
-one `system` step in the first pass. The new trace policy field
+`system` or `record`. The driver records one `record` step for each pass
+that reads a record, and one `system` step in the first pass. The new trace policy field
 `input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
 `limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+
+**One agent definition works in a root room and in a breakout room.** The
+composition of the room decides how an agent behaves: who is present, and
+whether the room has an opener in a parent. `Canvas.workerTools()` and
+`BreakoutOptions.team` are gone, and so is the worker team. `canvas.tools()`
+returns one bundle with `breakout`, `tell`, `archive`, and `report`. The row
+of the room still refuses a call: `report` in a root room, and `breakout`,
+`tell`, and `archive` at depth one. `breakout` seats any name that `resume`
+took, and a root room defaults to every definition. `OpenCanvasOptions.breakout`
+is optional. A stored root row with no `agents` now seats every definition,
+and a breakout row that names a removed definition fails to start at
+`resume`. The guidance of the bundle has one rule for a question: a question
+for a person goes to a person who is present in the room, with `say({ to })`,
+and when nobody is present and the room has an opener, the agent reports it.
+In a breakout room, the reminder names the opener, the parent room, and the
+goal. The close notice of an exchange that closed `awaiting` names the
+awaited person. An `operate` above the limit with no person in the exchange
+records the request and tells the seat to report it to the opener. The Workbench drops `scout` and
+`maker`: every seat holds the one canvas bundle, and specialists staff the
+breakout rooms.
 
 **The message kind `posted` is now `system`.** A message that the system
 writes has the body kind `system`: a host post with `room.post`, or a say

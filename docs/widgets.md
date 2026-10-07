@@ -255,7 +255,7 @@ order.
 ### The tools
 
 **`canvas.widgetTools()` gives an agent `show` and `hide`.** A host gives
-the bundle to the seats of root rooms and to the worker team.
+the bundle to the seats of root rooms and of breakout rooms.
 
 | Tool   | Parameters                                              | Effect                                                           |
 | ------ | ------------------------------------------------------- | ---------------------------------------------------------------- |

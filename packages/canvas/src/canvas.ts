@@ -14,19 +14,12 @@ import type { RoomMirror } from '@ambionframework/workspace';
 import { type ActPort, type Answer, Answers, actOn } from './acts.ts';
 import { type BreakoutPort, DEFAULT_PER_OPENER, startOf } from './breakout.ts';
 import { Bridge } from './bridge.ts';
-import {
-	assertNoTeam,
-	castOf,
-	type Definitions,
-	definitionsOf,
-	refuse,
-	rootStartOf,
-} from './cast.ts';
+import { castOf, type Definitions, definitionsOf, refuse, rootStartOf } from './cast.ts';
 import { EVENT_OPERATION, roomOf } from './events.ts';
 import type { CurrentPort } from './port.ts';
 import { Queues } from './queue.ts';
 import type { CanvasClose, CanvasRoom, CanvasWidget } from './store.ts';
-import { openerBundle, workerBundle } from './tools.ts';
+import { breakoutBundle } from './tools.ts';
 import type {
 	Canvas,
 	CanvasEvent,
@@ -69,7 +62,7 @@ class CanvasRun implements Canvas {
 	/** The launch pass of `resume`. `close` waits for it. */
 	private resuming: Promise<void> | undefined;
 	private readonly port: BreakoutPort;
-	private bundles: { opener: ToolBundle; worker: ToolBundle } | undefined;
+	private bundle: ToolBundle | undefined;
 	private widgetsBundle: ToolBundle | undefined;
 
 	constructor(options: OpenCanvasOptions) {
@@ -81,11 +74,8 @@ class CanvasRun implements Canvas {
 	}
 
 	tools(): ToolBundle {
-		return this.toolBundles().opener;
-	}
-
-	workerTools(): ToolBundle {
-		return this.toolBundles().worker;
+		this.bundle ??= breakoutBundle(this.port);
+		return this.bundle;
 	}
 
 	widgetTools(): ToolBundle {
@@ -172,16 +162,11 @@ class CanvasRun implements Canvas {
 		this.current.set(widget.room, room);
 	}
 
-	private toolBundles(): { opener: ToolBundle; worker: ToolBundle } {
-		this.bundles ??= { opener: openerBundle(this.port), worker: workerBundle(this.port) };
-		return this.bundles;
-	}
-
 	/** What the breakout tools read and write: the rows and handles of this run. */
 	private portOf(): BreakoutPort {
 		return {
-			perOpener: this.options.breakout.perOpener ?? DEFAULT_PER_OPENER,
-			team: this.team(),
+			perOpener: this.options.breakout?.perOpener ?? DEFAULT_PER_OPENER,
+			definitionNames: () => [...(this.definitions?.byName.keys() ?? [])],
 			assertReady: () => this.assertReady(),
 			serial: (name, operation) => this.serial(name, operation),
 			ordered: (parent, operation) => this.bridge.order(parent, operation),
@@ -210,7 +195,7 @@ class CanvasRun implements Canvas {
 	async resume(options: { readonly agents: readonly AgentDefinition[] }): Promise<void> {
 		this.assertNotClosed();
 		if (this.resumed) throw refuse('The canvas resumed already. It takes its definitions once.');
-		const definitions = definitionsOf(options.agents, this.options.breakout.team);
+		const definitions = definitionsOf(options.agents);
 		this.resumed = true;
 		try {
 			for (const row of await this.options.store.list()) this.rows.set(row.name, row);
@@ -241,7 +226,6 @@ class CanvasRun implements Canvas {
 	async open(options: CanvasRoomOptions): Promise<Room> {
 		this.assertReady();
 		if (!isName(options.name)) throw refuse(`"${options.name}" is not a room name.`);
-		assertNoTeam(options, this.team());
 		return this.serial(options.name, () => this.openRow(options));
 	}
 
@@ -285,10 +269,6 @@ class CanvasRun implements Canvas {
 	private assertReady(): void {
 		this.assertNotClosed();
 		if (!this.ready) throw refuse(`The canvas "${this.name}" needs resume first.`);
-	}
-
-	private team(): ReadonlySet<string> {
-		return new Set(this.options.breakout.team);
 	}
 
 	private emit(event: CanvasEvent): void {

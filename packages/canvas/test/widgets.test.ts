@@ -181,7 +181,7 @@ describe('the rules of a call', () => {
 	});
 
 	it('refuses before resume and after close', async () => {
-		const { canvas } = host({ widgets: { kinds }, breakout: { team: [] } });
+		const { canvas } = host({ widgets: { kinds } });
 		const bundle = canvas.widgetTools();
 		const args = { name: 'status', kind: 'frame', source: statusSource };
 		const ctx = (id: string) => contextOf('ada', 'site', id);
@@ -202,7 +202,6 @@ describe('the rules of a call', () => {
 				name: 'lab',
 				runtime: host().runtime,
 				store: memoryCanvas(),
-				breakout: { team: [] },
 				widgets: { kinds: list },
 			});
 		const frame = kinds[0] as WidgetKind;

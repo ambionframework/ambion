@@ -152,10 +152,7 @@ function world(base: Base, script: Script = byAgent({}), clock?: FakeClock) {
 		...(clock === undefined ? {} : { clock }),
 	});
 	let count = 0;
-	const agents = (of: Host) => [
-		tooled('ada', of.canvas.tools()),
-		tooled('cy', of.canvas.workerTools()),
-	];
+	const agents = (of: Host) => [tooled('ada', of.canvas.tools()), tooled('cy', of.canvas.tools())];
 	const call = (of: Host, tool: 'breakout' | 'archive', args: Record<string, unknown>) =>
 		callOf(of.canvas.tools(), tool, args, contextOf('ada', 'site', `call-${++count}`));
 	const open = (of: Host, name: string) =>
@@ -408,7 +405,7 @@ describe.each(storages)('a host that shows a widget on $name', (kind) => {
 		};
 		const agentsOf = (of: Host) => [
 			tooled('ada', of.canvas.widgetTools()),
-			tooled('cy', of.canvas.workerTools()),
+			tooled('cy', of.canvas.tools()),
 		];
 		const call = (of: Host, tool: 'show' | 'hide', params: Record<string, unknown>, id: string) =>
 			callOf(of.canvas.widgetTools(), tool, params, contextOf('ada', 'site', id));
