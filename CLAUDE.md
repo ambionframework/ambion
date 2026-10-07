@@ -45,8 +45,9 @@ newer, the OpenTUI floor.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   and a preview.
 - `planning/`: one scope file for each release on the road to 1.0.0,
-  from `0.8.0.md` to `1.0.0.md`. `1.0.0.md` holds the road. `backlog.md`
-  holds everything else and the risks that the owner accepted.
+  from `0.8.0.md` to `1.0.0.md`, and `1.1.0.md` after it. `1.0.0.md`
+  holds the road and the gates. `backlog.md` holds everything else and
+  the risks that the owner accepted.
 
 ## Read before you change
 
