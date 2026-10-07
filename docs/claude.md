@@ -491,9 +491,10 @@ messages. The SDK can send several assistant messages with one id, and
 their counts can be stale. The counts of one request only grow, so the
 executor keeps the largest value of each count. A request has one step.
 
-**A request ends when the next one starts.** The step of a request comes
-before the first step of the next request. The last request ends at the
-`result`. A request with no tokens adds no step.
+**A request ends when the next one starts, or when its tool results
+arrive.** The step of a request comes before the first step of the next
+request and before the tool results of the request. The last request ends
+at the `result`. A request with no tokens adds no step.
 
 **The `result` closes the last request.** The executor sums `modelUsage`
 over every model of the result for `input`, `output`, `cacheRead`, and

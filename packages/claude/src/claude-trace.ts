@@ -170,7 +170,7 @@ export class ClaudeSteps {
 			case 'assistant':
 				return message.parent_tool_use_id === null ? this.assistant(message) : [];
 			case 'user':
-				return message.parent_tool_use_id === null ? this.results(message.message.content) : [];
+				return message.parent_tool_use_id === null ? this.user(message.message.content) : [];
 			case 'result':
 				return this.spent(message);
 			default:
@@ -210,13 +210,16 @@ export class ClaudeSteps {
 			this.pending = { id, tokens: join(this.pending.tokens, tokens, Math.max) };
 			return [];
 		}
-		const ended = this.pending === undefined ? [] : this.end(this.pending.tokens);
+		const ended = this.end();
 		this.pending = { id, tokens };
 		return ended;
 	}
 
-	/** The step of a request that ended before the result. */
-	private end(tokens: Tokens): Step[] {
+	/** The step of the pending request, which ends before the result. */
+	private end(): Step[] {
+		const tokens = this.pending?.tokens;
+		this.pending = undefined;
+		if (tokens === undefined) return [];
 		this.emitted = join(this.emitted, tokens, (x, y) => x + y);
 		return usageStep(tokens);
 	}
@@ -252,6 +255,11 @@ export class ClaudeSteps {
 		];
 	}
 
+	/** A user message answers the pending request, so the step of the request comes first. */
+	private user(content: unknown): Step[] {
+		return this.end().concat(this.results(content));
+	}
+
 	private results(content: unknown): Step[] {
 		return blocksOf(content).flatMap((block): Step[] => {
 			if (block.type !== 'tool_result' || block.tool_use_id === undefined) return [];
@@ -271,8 +279,8 @@ export class ClaudeSteps {
 	 * Every result carries the running totals of the session. The last
 	 * request takes what this result added beyond the request steps already
 	 * emitted, with the cost, so the steps sum to the totals. A request keeps
-	 * its own counts when they exceed that share. The share holds the tokens of subagents and the tokens that the stream did not
-	 * report.
+	 * its own counts when they exceed that share. The share holds the tokens
+	 * of subagents and the tokens that the stream did not report.
 	 */
 	private spent(result: SDKResultMessage): Step[] {
 		const total = totalOf(result);
@@ -283,6 +291,6 @@ export class ClaudeSteps {
 		const last = join(this.pending?.tokens ?? NO_TOKENS, rest, Math.max);
 		this.pending = undefined;
 		this.emitted = NO_TOKENS;
-		return usageStep({ ...last, cost: (total.cost ?? 0) - (before.cost ?? 0) });
+		return usageStep({ ...last, cost: Math.max(0, (total.cost ?? 0) - (before.cost ?? 0)) });
 	}
 }

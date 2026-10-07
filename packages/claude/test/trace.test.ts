@@ -157,7 +157,7 @@ it('ignores the messages of a subagent and the echo of a plain user message', ()
 	).toEqual([]);
 });
 
-it('gives each top-level model request one usage step, before the steps of the next', () => {
+it('gives each top-level model request one usage step, before its tool results and the next request', () => {
 	const text = [{ type: 'text', text: 'Saturday.' }];
 	const call = { type: 'tool_use', id: 't1', name: 'Read', input: {} };
 	expect(
@@ -178,8 +178,8 @@ it('gives each top-level model request one usage step, before the steps of the n
 		{ type: 'text', text: 'Saturday.', final: false },
 		{ type: 'text', text: '', final: true },
 		{ type: 'tool_call', call: 't1', name: 'Read', input: {} },
-		{ type: 'tool_result', call: 't1', output: [{ type: 'text', text: 'ok' }] },
 		{ type: 'usage', input: 100, output: 20, cacheRead: 10, cacheWrite: 5 },
+		{ type: 'tool_result', call: 't1', output: [{ type: 'text', text: 'ok' }] },
 		{ type: 'text', text: 'Done.', final: false },
 		{ type: 'text', text: '', final: true },
 		{ type: 'usage', input: 160, output: 10, cacheRead: 110, cacheWrite: 0, cost: 0.5 },
@@ -199,6 +199,32 @@ it('takes a request from the assistant message when the stream did not send it',
 		{ type: 'text', text: 'B', final: true },
 		{ type: 'usage', input: 20, output: 3, cacheRead: 0, cacheWrite: 0, cost: 0.1 },
 	]);
+});
+
+it('starts each pass of one session with no pending request and no emitted tokens', () => {
+	const steps = new ClaudeSteps();
+	const pass = (requests: [id: string, input: number][], cost: number, usage: object) =>
+		[
+			...requests.map(([id, input]) => assistant(id, [], used(input, 1))),
+			result({ total_cost_usd: cost, modelUsage: { a: usage } }),
+		].flatMap((message) => steps.steps(message));
+	expect(
+		pass(
+			[
+				['m1', 10],
+				['m2', 10],
+			],
+			0.25,
+			model(30, 5),
+		),
+	).toEqual([
+		{ type: 'usage', input: 10, output: 1, cacheRead: 0, cacheWrite: 0 },
+		{ type: 'usage', input: 20, output: 4, cacheRead: 0, cacheWrite: 0, cost: 0.25 },
+	]);
+	expect(pass([['m3', 5]], 0.75, model(40, 8))).toEqual([
+		{ type: 'usage', input: 10, output: 3, cacheRead: 0, cacheWrite: 0, cost: 0.5 },
+	]);
+	expect(pass([], 0, model(0, 0))).toEqual([]);
 });
 
 it('emits no step for a request or a result that used nothing', () => {
