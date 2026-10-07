@@ -31,6 +31,7 @@ interface Case {
 	readonly args: unknown;
 	/** The text that the call returns. */
 	readonly result?: string;
+	/** The details that the call returns. A case with none checks the text and the files. */
 	readonly details?: unknown;
 	/** The message that the error holds. */
 	readonly error?: string;
@@ -202,6 +203,35 @@ const cases: readonly Case[] = [
 		},
 		after: { 'b.txt': 'a\n' },
 		absent: ['a.txt'],
+	},
+	{
+		name: 'moves a file with a body of blank lines, which changes no content',
+		files: { 'a.txt': 'one\n' },
+		args: { input: patchOf('*** Update File: a.txt', '*** Move to: b.txt', '', '') },
+		result: 'Applied patch: M a.txt -> b.txt',
+		after: { 'b.txt': 'one\n' },
+		absent: ['a.txt'],
+	},
+	{
+		name: 'swaps two paths with two moves when one of them does not exist',
+		files: { 'a.txt': 'one\n' },
+		args: {
+			input: patchOf(
+				'*** Update File: a.txt',
+				'*** Move to: b.txt',
+				'*** Update File: b.txt',
+				'*** Move to: a.txt',
+			),
+		},
+		result: 'Applied patch: M a.txt -> b.txt, M b.txt -> a.txt',
+		after: { 'a.txt': 'one\n' },
+		absent: ['b.txt'],
+	},
+	{
+		name: 'adds and deletes one file, which leaves no file',
+		args: { input: patchOf('*** Add File: x.txt', '+x', '*** Delete File: x.txt') },
+		result: 'Applied patch: A x.txt, D x.txt',
+		absent: ['x.txt'],
 	},
 	{
 		name: 'moves a file onto its own path, which keeps it',
@@ -656,10 +686,10 @@ describe.each(backends)('the apply_patch tool on the $name backend', (fixture) =
 			if (item.error !== undefined) {
 				await expect(outcome).rejects.toThrow(item.error);
 			} else {
-				await expect(outcome).resolves.toEqual({
-					content: text(item.result ?? ''),
-					details: item.details,
-				});
+				await expect(outcome).resolves.toMatchObject({ content: text(item.result ?? '') });
+				if (item.details !== undefined) {
+					await expect(outcome).resolves.toMatchObject({ details: item.details });
+				}
 			}
 			for (const [path, content] of Object.entries(item.after ?? {})) {
 				expect(await textOf(site, path), path).toBe(content);

@@ -125,7 +125,7 @@ async function stageUpdate(
 	const before = await existingContent(run, path, absolute);
 	if (body.trim() === '' && moveTo === undefined) throw new Error('The update holds no change.');
 	const { bom, text: plain } = stripBom(before);
-	const updated = applyDiff(plain, body);
+	const updated = body.trim() === '' ? plain : applyDiff(plain, body);
 	const patch = unifiedPatch(path, normalizeToLF(plain), normalizeToLF(updated), moveTo);
 	if (moveTo === undefined) {
 		run.staged.set(absolute, { path, content: bom + updated });
@@ -165,12 +165,12 @@ async function stageOperation(run: PatchRun, operation: PatchOperation): Promise
 	}
 }
 
-/** Write each staged file, and delete each staged deletion. */
+/** Write each staged file, and delete each staged deletion. A deletion of a file that is not there does nothing. */
 async function commitPatch(run: PatchRun): Promise<void> {
 	for (const [absolute, { path, content }] of run.staged) {
 		const done =
 			content === null
-				? await run.env.remove(absolute, undefined, run.signal)
+				? await run.env.remove(absolute, { force: true }, run.signal)
 				: await run.env.writeFile(absolute, content, run.signal);
 		if (!done.ok) {
 			throw new Error(
