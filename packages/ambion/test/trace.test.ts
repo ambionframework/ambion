@@ -95,6 +95,7 @@ describe('the trace of a room activation', () => {
 		);
 		expect(sorted(steps)).toEqual([
 			'pass',
+			'session',
 			'thinking',
 			'usage',
 			'tool_call',
@@ -104,7 +105,7 @@ describe('the trace of a room activation', () => {
 			'usage',
 			'end',
 		]);
-		expect(steps.map((step) => step.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+		expect(steps.map((step) => step.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 		expect(steps.every((step) => step.activation === id && step.pass === 1)).toBe(true);
 		expect(steps.every((step) => !Number.isNaN(Date.parse(step.at)))).toBe(true);
 		expect(records.every((record) => record.room === name && record.seat === 'product')).toBe(true);
@@ -242,7 +243,7 @@ describe('the trace limits and policy', () => {
 
 	it('drops steps past limits.trace.stepsPerPass and keeps the end', async () => {
 		const { steps } = await run(asker(), { limits: { trace: { stepsPerPass: 2 } } });
-		expect(sorted(steps)).toEqual(['pass', 'thinking', 'end']);
+		expect(sorted(steps)).toEqual(['pass', 'session', 'end']);
 	});
 
 	it('redacts a tool result image before it counts against toolOutputBytes', async () => {
