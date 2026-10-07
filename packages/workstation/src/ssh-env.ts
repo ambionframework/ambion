@@ -5,10 +5,12 @@
  * the SFTP operations, and `classify`, the error classifier. The workspace's
  * helpers supply the path rule.
  *
- * SFTP needs seven adjustments:
+ * SFTP needs eight adjustments:
  *
  * - a read opens the file, refuses a file that is not regular, and counts
  *   bytes against `MAX_READ_BYTES` (`sftp.ts`)
+ * - a range read opens the file, refuses a file that is not regular, and
+ *   asks for the range in requests of `CHUNK_BYTES`, with no size limit (`sftp.ts`)
  * - a coarse SFTP status becomes a code of the port through one `lstat` (`sftp.ts`)
  * - `writeFile` and `appendFile` make each missing parent first
  * - `renameFile` calls `posix-rename@openssh.com`, which replaces the
@@ -52,6 +54,7 @@ import {
 	lstat,
 	readBounded,
 	readdir,
+	readRange,
 	stat,
 	statusOf,
 	toFileError,
@@ -110,6 +113,8 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 	protected readonly files: FileOperations = {
 		readText: (path) => this.guarded(async () => (await this.readBuffer(path)).toString('utf8')),
 		readBinary: (path) => this.guarded(async () => new Uint8Array(await this.readBuffer(path))),
+		readRange: (path, start, length) =>
+			this.guarded(async () => new Uint8Array(await this.readSpan(path, start, length))),
 		write: (path, content) => this.guarded(() => this.putWithParents(path, content, 'w')),
 		append: (path, content) => this.guarded(() => this.putWithParents(path, content, 'a')),
 		rename: (source, destination) => this.guarded(() => this.rename(source, destination)),
@@ -126,12 +131,21 @@ export class SshEnv extends HomeEnv implements WorkspaceEnv {
 		remove: (path, options, signal) => this.guarded(() => this.removeOne(path, options, signal)),
 	};
 
-	private readBuffer(path: string): Promise<Buffer> {
+	/** `read`, with a flag that turns true when the session ends. */
+	private untilEnded<T>(read: (ended: () => boolean) => Promise<T>): Promise<T> {
 		let ended = false;
 		const stop = this.session.whenEnded(() => {
 			ended = true;
 		});
-		return readBounded(this.sftp, path, () => ended).finally(stop);
+		return read(() => ended).finally(stop);
+	}
+
+	private readBuffer(path: string): Promise<Buffer> {
+		return this.untilEnded((ended) => readBounded(this.sftp, path, ended));
+	}
+
+	private readSpan(path: string, start: number, length: number): Promise<Buffer> {
+		return this.untilEnded((ended) => readRange(this.sftp, path, start, length, ended));
 	}
 
 	private put(path: string, content: string | Uint8Array, flag: 'w' | 'a'): Promise<void> {

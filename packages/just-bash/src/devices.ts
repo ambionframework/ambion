@@ -15,6 +15,7 @@
 
 import { posix } from 'node:path';
 import type { ByteString, FsStat, IFileSystem } from 'just-bash';
+import { type RangeFs, rangeReader } from './range-fs.ts';
 
 type Dirent = Awaited<ReturnType<NonNullable<IFileSystem['readdirWithFileTypes']>>>[number];
 
@@ -61,6 +62,11 @@ class DeviceFs implements IFileSystem {
 			this.readFileBytes = async (path) =>
 				deviceAt(path) === 'file' ? ('' as unknown as ByteString) : readBytes(path);
 		}
+		const readRange = rangeReader(base);
+		if (readRange) {
+			this.readRange = async (path, start, length) =>
+				deviceAt(path) === 'file' ? new Uint8Array() : readRange(path, start, length);
+		}
 		this.forwardSeeder(base);
 		const readTyped = base.readdirWithFileTypes?.bind(base);
 		if (readTyped) this.readdirWithFileTypes = (path) => this.typedEntries(path, readTyped);
@@ -91,6 +97,9 @@ class DeviceFs implements IFileSystem {
 
 	/** Present only when the base filesystem reads bytes; just-bash falls back to `readFileBuffer`. */
 	readFileBytes?: (path: string) => Promise<ByteString>;
+
+	/** Present only when the base filesystem reads a range; `BashEnv` falls back to `readFileBuffer`. */
+	readRange?: RangeFs['readRange'];
 
 	async readFileBuffer(path: string) {
 		return deviceAt(path) === 'file' ? new Uint8Array() : this.base.readFileBuffer(path);

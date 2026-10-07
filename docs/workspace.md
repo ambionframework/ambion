@@ -550,7 +550,10 @@ the object store's. The just-bash directory backend reads at most 10 MiB of
 one file. The memory backend holds 128 MiB in all. On those backends, a
 larger file fails with the backend's own error. The workstation reads at
 most 10 MiB of one regular file. A larger file, a device file, and a FIFO
-fail with `invalid`.
+fail with `invalid`. These limits apply to a whole-file read: `readBinaryFile`
+and `readTextFile`, and the tools that use them. The `read` tool of a text
+file reads byte ranges with `readRange`, which has no size limit. A range
+read of a device file or a FIFO fails with `invalid` on the workstation.
 
 ## The object backend
 
@@ -1195,14 +1198,28 @@ inside them.
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.
 `from` and `to` are the first and the last line of `text`, counted from 1.
-`lines` is the count of lines in the file. `next` is the offset that
-continues the read. It is present when lines remain after a `limit` or after
-the cut at 2000 lines or 50 KB. `truncation` is present with that
-cut. When the first line alone exceeds 50 KB, `text` is empty, and
-`truncation.firstLineExceedsLimit` is true. For an image, `text` is empty,
-`image.mimeType` names the format, and the other line fields are absent. The `text` of a `read` and of a process tool
-is also in the content of the result, so a record that keeps both with
-`toolOutput: 'full'` holds the shown output twice.
+`lines` is the count of lines in the file. It is present when the scan
+reached the end of the file, and absent when the view ended before it.
+`next` is the offset that continues the read. It is present when lines
+remain after a `limit` or after the cut at 2000 lines or 50 KB.
+`truncation` is present with that cut. Its totals count the lines and the
+bytes that the scan saw. When the first line alone exceeds 50 KB, `text` is
+empty, and `truncation.firstLineExceedsLimit` is true. For an image, `text`
+is empty, `image.mimeType` names the format, and the other line fields are
+absent. The `text` of a `read` and of a process tool is also in the content
+of the result, so a record that keeps both with `toolOutput: 'full'` holds
+the shown output twice.
+
+**`read` scans a text file in ranges of 1 MiB.** The scan reads the first
+range with `readRange`, and reads the next range while the view is not
+complete. It counts the newline bytes, skips the lines before `offset`, and
+keeps the bytes of the view. The scan holds one range and the view, so the
+memory use does not depend on the size of the file. A file of any size gives
+a view. When the view ends before the end of the file, the notices omit the
+line count: `[Showing lines 1-2000. Use offset=2001 to continue.]`. A file
+under 1 MiB is scanned to its end, so its result has `lines` and the line
+count in each notice. An image still reads whole, and the limit of the
+backend applies to it.
 
 **The git, snapshot, and fetch tools declare the facts that they already
 report.** `repos` gives `repositories` as data, with the branches and the
@@ -1317,6 +1334,7 @@ signal. A caller that has no signal passes none.
 | `cwd`                               | The home of the agent, and the directory of a relative path    |
 | `absolutePath`, `canonicalPath`     | The absolute path, and the path with every link resolved       |
 | `readTextFile`, `readBinaryFile`    | Read a file as text or as bytes                                |
+| `readRange(path, start, length)`    | Read at most `length` bytes from the byte `start`, at any size |
 | `writeFile`, `appendFile`           | Create or extend a file, and create each missing parent        |
 | `renameFile`, `remove`, `createDir` | Move a path, remove a path, and make a directory               |
 | `fileInfo`, `listDir`, `exists`     | The facts of a path, the children of a directory, and presence |
