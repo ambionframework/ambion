@@ -114,6 +114,8 @@ function loggedContentPart(part: unknown): unknown {
 class Trace implements TraceSink {
 	private readonly options: TraceOptions & { readonly activation: string };
 	private pass = 0;
+	/** The exchange of the activation, fixed by the first pass. */
+	private exchange: Seq | undefined;
 	private index = 0;
 	/** The steps logged in this pass, against `stepsPerPass`. */
 	private written = 0;
@@ -124,8 +126,9 @@ class Trace implements TraceSink {
 		this.options = options;
 	}
 
-	startPass(input: 'view' | 'delta', through: Seq): void {
+	startPass(input: 'view' | 'delta', through: Seq, exchange?: Seq): void {
 		this.flush();
+		if (this.pass === 0) this.exchange = exchange;
 		this.pass += 1;
 		this.index = 0;
 		this.written = 0;
@@ -144,7 +147,8 @@ class Trace implements TraceSink {
 			return;
 		}
 		this.flush();
-		this.stamp(this.limited(step));
+		const limited = this.limited(step);
+		if (limited !== undefined) this.stamp(limited);
 	}
 
 	async close(): Promise<void> {
@@ -169,9 +173,13 @@ class Trace implements TraceSink {
 		this.stamp({ type: block.type, text, final: true });
 	}
 
-	/** The policy and the byte limit applied to a step. */
-	private limited(step: Step): Step {
+	/** The policy and the byte limit applied to a step. A step the policy omits gives nothing. */
+	private limited(step: Step): Step | undefined {
 		switch (step.type) {
+			case 'input':
+				return this.options.policy.input === 'full'
+					? { ...step, text: bounded(step.text, this.options.limits.inputBytes) as string }
+					: undefined;
 			case 'tool_call':
 				return { ...step, input: plain(step.input) };
 			case 'tool_result': {
@@ -193,6 +201,7 @@ class Trace implements TraceSink {
 	/** Stamp a step and log it. A pass past its cap drops all but `end`. */
 	private stamp(step: Step): void {
 		const { logger, limits, room, seat, activation } = this.options;
+		const { exchange } = this;
 		if (logger === undefined) return;
 		if (this.written >= limits.stepsPerPass && step.type !== 'end') return;
 		const traced: TraceStep = {
@@ -205,7 +214,12 @@ class Trace implements TraceSink {
 		this.index += 1;
 		this.written += 1;
 		try {
-			const result: unknown = logger({ room, seat, step: traced });
+			const result: unknown = logger({
+				room,
+				seat,
+				...(exchange === undefined ? {} : { exchange }),
+				step: traced,
+			});
 			if (result instanceof Promise) result.catch(() => {});
 		} catch {
 			// The trace never fails an activation.

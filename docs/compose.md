@@ -553,8 +553,8 @@ interface ToolContext {
 **The workspace tools declare their outputs.** `sql`, `snapshot`, `read`,
 `restore`, `bash`, `cancel`, `wait`, `ps`, `repos`, `fork`,
 and `fetch` set `compose: { output }`, and each output has an
-`$id` that names its type. `write` and `edit`
-bind as text, because the code needs only their success or
+`$id` that names its type. `write`, `edit`, and
+`apply_patch` bind as text, because the code needs only their success or
 their rejection. [Workspace](workspace.md#declared-outputs) states
 the shape of each output.
 
@@ -689,13 +689,13 @@ in the same way, and the compose result shows that line.
 starts the calls. The resource behind a tool decides whether their work
 overlaps. The shipped workspace gives these results:
 
-| Calls in one `Promise.all`              | Their work                    | Why                                                                              |
-| --------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------- |
-| Tools outside the workspace             | Runs together, up to the cap  | No resource queue holds them.                                                    |
-| `sql` and `sql`                         | Runs one call after the other | The SQLite handle runs one call at a time.                                       |
-| `read`, `write`, `edit`, and `snapshot` | Runs one operation at a time  | The workspace queue runs one operation at a time ([Workspace](workspace.md)).    |
-| `sql` and a file tool                   | Runs together                 | The database and the files have separate queues.                                 |
-| The processes that `bash` starts        | Runs together                 | A process runs in the background, outside the queue ([Processes](processes.md)). |
+| Calls in one `Promise.all`                             | Their work                    | Why                                                                              |
+| ------------------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------------- |
+| Tools outside the workspace                            | Runs together, up to the cap  | No resource queue holds them.                                                    |
+| `sql` and `sql`                                        | Runs one call after the other | The SQLite handle runs one call at a time.                                       |
+| `read`, `write`, `edit`, `apply_patch`, and `snapshot` | Runs one operation at a time  | The workspace queue runs one operation at a time ([Workspace](workspace.md)).    |
+| `sql` and a file tool                                  | Runs together                 | The database and the files have separate queues.                                 |
+| The processes that `bash` starts                       | Runs together                 | A process runs in the background, outside the queue ([Processes](processes.md)). |
 
 **A tool call can hold several operations.** `snapshot` finds the files in
 one operation and reads each file in another. Two calls of such a tool

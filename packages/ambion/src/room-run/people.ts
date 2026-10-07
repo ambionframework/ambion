@@ -43,14 +43,14 @@ export interface Visit {
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 
-/** Compare a delivery or a post with the body returned by a same-key journal retry. */
+/** Compare a delivery or a system message with the body returned by a same-key journal retry. */
 function deliveryMatches(
 	command: Extract<RoomCommand, { type: 'deliver' | 'post' }>,
 	message: Message,
 ): boolean {
 	if (command.type === 'post')
 		return (
-			message.kind === 'posted' &&
+			message.kind === 'system' &&
 			message.returns === undefined &&
 			saidContentMatches(message, command)
 		);
@@ -250,13 +250,13 @@ export interface PostInput {
 	to?: string;
 	text: string;
 	refs?: string[];
-	/** The idempotency token of the post, in a key space of its own. */
+	/** The idempotency token of the system message, in a key space of its own. */
 	key?: string;
 }
 
 /**
- * The host posts as the system. The post has no author, and it opens an
- * exchange when none is open. A repeated key lands once, and the post it
+ * The host posts as the system. The system message has no author, and it opens an
+ * exchange when none is open. A repeated key lands once, and the system message it
  * landed carries it back.
  */
 export async function post(run: RoomRunState, input: PostInput): Promise<ExchangeHandle> {

@@ -216,7 +216,7 @@ describe('the session step', () => {
 			{
 				type: 'session',
 				name: 'codex',
-				version: '0.159.2',
+				version: '0.160.1',
 				model: 'gpt-5.6-luna',
 				cwd: expect.any(String),
 				session: 'thread-1',

@@ -262,22 +262,32 @@ describe('the steps of a real pass', () => {
 		});
 		const steps: Step[] = [];
 		const session = stateOf(opener, definition, {
-			trace: { record: (step) => void steps.push(step) },
+			// The test reads the steps of the executor: the driver's `input` steps stay out.
+			trace: { record: (step) => void (step.type !== 'input' && steps.push(step)) },
 		});
 		const view = await viewOf('message:1:worker:1');
 		await session.pass({ kind: 'view', view: { ...view, spec: { ...view.spec, seat: 'worker' } } });
 		expect(steps.map((step) => step.type)).toEqual([
+			'session',
 			'usage',
 			'tool_call',
 			'tool_result',
 			'text',
 			'usage',
 		]);
-		expect(steps[1]).toMatchObject({ type: 'tool_call', name: 'book', input: { day: 'Friday' } });
-		expect(steps[2]).toMatchObject({
+		expect(steps[0]).toEqual({
+			type: 'session',
+			name: 'pi',
+			model: 'scripted/worker',
+			session: 'message:1:worker:1',
+			tools: expect.arrayContaining(['book', 'say']),
+			servers: [],
+		});
+		expect(steps[2]).toMatchObject({ type: 'tool_call', name: 'book', input: { day: 'Friday' } });
+		expect(steps[3]).toMatchObject({
 			type: 'tool_result',
 			output: { content: [{ type: 'text', text: 'booked Friday' }] },
 		});
-		expect(steps[3]).toMatchObject({ type: 'text', text: 'nothing to add', final: true });
+		expect(steps[4]).toMatchObject({ type: 'text', text: 'nothing to add', final: true });
 	});
 });

@@ -3,7 +3,7 @@
  *
  * These types are hand-written from the experimental TypeScript bindings
  * that `codex app-server generate-ts --experimental` printed for codex-cli
- * 0.159.2. The package pins that version, so the bindings are the contract.
+ * 0.160.1. The package pins that version, so the bindings are the contract.
  * A field that the executor never reads is left out.
  */
 

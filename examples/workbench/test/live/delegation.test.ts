@@ -1,9 +1,9 @@
 /**
- * Delegation through a breakout room on a real model. The assistant, scout, and maker run on the
+ * Delegation through a breakout room on a real model. The assistant runs on the
  * executor kind that `AMBION_EXECUTOR` selects: `pi` (the default) or `codex`. Five claims:
  *
  * - The assistant opens a breakout room whose parent is `bringup`.
- * - The only agent in that room is `scout`.
+ * - The only agent in that room is `datasheets`.
  * - The report of the room reaches the journal of `bringup` as a message that starts with
  *   `breakout <room>:`.
  * - The assistant archives the room, and the canvas row of the room has the state `archived`.
@@ -61,8 +61,8 @@ function execution() {
 }
 
 const REQUEST =
-	'Delegate this to a breakout room with the worker scout, and do not read the files yourself. ' +
-	'Scout reads the LED datasheet /library/led-5mm.md in the shared library and reports the maximum ' +
+	'Delegate this to a breakout room with the specialist datasheets, and do not read the files yourself. ' +
+	'Datasheets reads the LED datasheet /library/led-5mm.md in the shared library and reports the maximum ' +
 	'forward current of the red LED. When the report arrives, archive the breakout room as done, ' +
 	'and tell me the value.';
 
@@ -133,7 +133,7 @@ async function describeRun(workbench: Workbench): Promise<string> {
 
 describe.skipIf(!runnable)(`Workbench delegation on a real ${kind} model`, () => {
 	it(
-		'opens a breakout room for scout, receives its report, archives the room, and answers the person',
+		'opens a breakout room for datasheets, receives its report, archives the room, and answers the person',
 		async () => {
 			const directory = await mkdtemp(join(tmpdir(), 'ambion-workbench-delegation-live-'));
 			const workbench = await openWorkbench({
@@ -168,7 +168,7 @@ describe.skipIf(!runnable)(`Workbench delegation on a real ${kind} model`, () =>
 				const breakout = await workbench.read(name, 0);
 				expect(
 					breakout.participants.filter((seat) => seat.kind === 'agent').map((seat) => seat.name),
-				).toEqual(['scout']);
+				).toEqual(['datasheets']);
 				expect(archivedState(directory, name)).toBe('archived');
 			} finally {
 				await workbench.close().catch(() => undefined);

@@ -48,7 +48,6 @@ const canvas = openCanvas({
   runtime,
   store: sqliteCanvas(sql),
   workspace,
-  breakout: { team: ['scout'] },
   onError: (failure) => console.error(failure.room, failure.operation),
 });
 await canvas.resume({ agents: [planner, writer, scout] });
@@ -72,7 +71,7 @@ const room = await canvas.open({ name: 'site', goal: 'Plan the site.', agents: [
 | `act(person, act)`     | Checks an act, then sends it as a message of the person through the visit of that room                                    |
 
 **Each room receives its own definitions.** A root room receives the
-definitions in its `agents`, or every definition outside the worker team. A
+definitions in its `agents`, or every definition. A
 breakout room receives the definitions of its row, at `broadcast`, with no
 assistant, no summary writer, an empty reserve, and `seating: false`.
 
@@ -85,22 +84,23 @@ and its row stays `running`. With a `workspace`, the canvas attaches
 ## The tools
 
 ```ts
-const opener = canvas.tools(); // breakout, tell, archive, and the reminder
-const worker = canvas.workerTools(); // report
+const bundle = canvas.tools(); // breakout, tell, archive, report, and the reminder
 ```
 
-| Tool       | Bundle | Effect                                                                          |
-| ---------- | ------ | ------------------------------------------------------------------------------- |
-| `breakout` | Opener | Opens `<parent>-<name>`, seats workers of the team, and posts the first message |
-| `tell`     | Opener | Posts into a running breakout room that the caller opened                       |
-| `archive`  | Opener | Records `done` or `failed`, then stops the room                                 |
-| `report`   | Worker | Posts into the parent room, to the opener, with the label `breakout <name>:`    |
+| Tool       | Effect                                                                                |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `breakout` | Opens `<parent>-<name>`, seats definitions of the canvas, and posts the first message |
+| `tell`     | Posts into a running breakout room that the caller opened                             |
+| `archive`  | Records `done` or `failed`, then stops the room                                       |
+| `report`   | Posts into the parent room, to the opener, with the label `breakout <name>:`          |
 
-**Call both bundles before `defineAgent`.** A tool call before `resume`
-or after `close` is a refusal. `breakout` checks a repeat, a name held by
-another opener, the name rule, the team, and `perOpener`, in that order. The
-reminder of the opener bundle lists the breakout rooms of the seat. Each
-refusal is an `AmbionError` with the code `refused`.
+**Call `tools()` before `defineAgent`.** A tool call before `resume`
+or after `close` is a refusal. `report` works in a breakout room alone, and
+`breakout`, `tell`, and `archive` work in a root room alone. `breakout`
+checks a repeat, a name held by another opener, the name rule, the agents,
+and `perOpener`, in that order. In a breakout room, the reminder names the
+opener, the parent, and the goal. In a root room, it lists the breakout
+rooms of the seat. Each refusal is an `AmbionError` with the code `refused`.
 
 ## The widgets
 
@@ -109,7 +109,6 @@ const canvas = openCanvas({
   name: 'lab',
   runtime,
   store,
-  breakout: { team: [] },
   widgets: {
     kinds: [
       {

@@ -53,7 +53,7 @@ export const stat = (sftp: SFTPWrapper, path: string): Promise<Stats> =>
 export const readdir = (sftp: SFTPWrapper, path: string): Promise<FileEntryWithStats[]> =>
 	call<FileEntryWithStats[]>((done) => sftp.readdir(path, done));
 
-/** The most bytes that one file read returns. The directory backend of just-bash uses the same 10 MiB. */
+/** The most bytes that one whole-file read returns. A range read has no such limit. */
 const MAX_READ_BYTES = 10 * 1024 * 1024;
 
 /** The size of one SFTP read request. `ssh2` splits a request that is longer than the server takes. */
@@ -89,10 +89,20 @@ async function readChunks(
 }
 
 /**
- * Read one regular file of at most `MAX_READ_BYTES`. The check runs before
- * the open, because an open of a FIFO blocks the SFTP server. The size that
- * `stat` reports and the bytes that arrive both count, so a file that grows
- * or reports size 0 stops at the limit. The handle closes on every path.
+ * The facts of the regular file at `path`. The check runs before an open,
+ * because an open of a FIFO blocks the SFTP server.
+ */
+async function regularFile(sftp: SFTPWrapper, path: string): Promise<Stats> {
+	const stats = await stat(sftp, path);
+	if (stats.isDirectory()) throw new FileError('is_directory', `${path} is a directory.`, path);
+	if (!stats.isFile()) throw new FileError('invalid', `${path} is not a regular file.`, path);
+	return stats;
+}
+
+/**
+ * Read one regular file of at most `MAX_READ_BYTES`. The size that `stat`
+ * reports and the bytes that arrive both count, so a file that grows or
+ * reports size 0 stops at the limit. The handle closes on every path.
  * `stopped` ends the loop when the session ends.
  */
 export async function readBounded(
@@ -100,13 +110,57 @@ export async function readBounded(
 	path: string,
 	stopped: () => boolean,
 ): Promise<Buffer> {
-	const stats = await stat(sftp, path);
-	if (stats.isDirectory()) throw new FileError('is_directory', `${path} is a directory.`, path);
-	if (!stats.isFile()) throw new FileError('invalid', `${path} is not a regular file.`, path);
+	const stats = await regularFile(sftp, path);
 	if (stats.size > MAX_READ_BYTES) throw refuseSize(path, `${stats.size} bytes`);
 	const handle = await call<Buffer>((done) => sftp.open(path, 'r', done));
 	try {
 		return await readChunks(sftp, handle, path, stopped);
+	} finally {
+		sftp.close(handle, () => undefined);
+	}
+}
+
+/** Read `length` bytes of an open handle from `start`, or fewer at the end of the file. */
+async function readFrom(
+	sftp: SFTPWrapper,
+	handle: Buffer,
+	start: number,
+	length: number,
+	stopped: () => boolean,
+): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	let total = 0;
+	while (total < length) {
+		if (stopped()) throw new Error('The session ended during the read.');
+		const want = Math.min(CHUNK_BYTES, length - total);
+		const chunk = Buffer.allocUnsafe(want);
+		const count = await call<number>((done) =>
+			sftp.read(handle, chunk, 0, want, start + total, done),
+		);
+		if (count === 0) break;
+		total += count;
+		chunks.push(chunk.subarray(0, count));
+	}
+	return Buffer.concat(chunks, total);
+}
+
+/**
+ * Read at most `length` bytes of one regular file from the byte `start`. The
+ * read has no size limit: it asks for `CHUNK_BYTES` at a time and stops at
+ * `length` bytes or at the end of the file. The handle closes on every path.
+ * `stopped` ends the loop when the session ends.
+ */
+export async function readRange(
+	sftp: SFTPWrapper,
+	path: string,
+	start: number,
+	length: number,
+	stopped: () => boolean,
+): Promise<Buffer> {
+	await regularFile(sftp, path);
+	const handle = await call<Buffer>((done) => sftp.open(path, 'r', done));
+	try {
+		return await readFrom(sftp, handle, start, length, stopped);
 	} finally {
 		sftp.close(handle, () => undefined);
 	}

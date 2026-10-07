@@ -59,8 +59,12 @@ export const TruncationFacts = Type.Object(
 		truncatedBy: Type.Union([Type.Literal('lines'), Type.Literal('bytes'), Type.Null()], {
 			description: 'The limit that the cut reached first, or null for no cut.',
 		}),
-		totalLines: Type.Integer({ description: 'The lines of the whole text.' }),
-		totalBytes: Type.Integer({ description: 'The bytes of the whole text.' }),
+		totalLines: Type.Integer({
+			description: 'The lines of the whole text. For `read`, the lines that the scan saw.',
+		}),
+		totalBytes: Type.Integer({
+			description: 'The bytes of the whole text. For `read`, the bytes that the scan saw.',
+		}),
 		outputLines: Type.Integer({ description: 'The lines that the view holds.' }),
 		outputBytes: Type.Integer({ description: 'The bytes that the view holds.' }),
 		lastLinePartial: Type.Boolean({

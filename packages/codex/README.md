@@ -83,10 +83,10 @@ flag can turn it off. The executor patches the catalog entry of the model,
 turns off every feature and tool that the config controls, and removes the
 skills block. It runs the thread on a read-only sandbox in an empty
 directory with no network. A model with no catalog entry fails as
-permanent. A default seat produces no config warning on 0.159.2.
+permanent. A default seat produces no config warning on 0.160.1.
 
 **Pin the version, and run the exclusivity test on an upgrade.** The recipe
-belongs to `codex` 0.159.2. The binary tier fails when a default seat
+belongs to `codex` 0.160.1. The binary tier fails when a default seat
 gets a native tool, a skills block, or a config warning. Trust a newer
 version only when that tier and `test/live/exclusive.test.ts` pass on it.
 

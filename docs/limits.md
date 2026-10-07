@@ -28,6 +28,7 @@ the table. `Limits` in
 | `limits.schedule.maxDelaySeconds` | The most `delaySeconds` of a scheduled say                  | 604,800 (7 days)       |
 | `limits.schedule.waiting`         | Scheduled says of one seat that wait to return              | 4                      |
 | `limits.trace.toolOutputBytes`    | Bytes of tool output that a logged step keeps               | 65,536                 |
+| `limits.trace.inputBytes`         | Bytes of text that a logged `input` step keeps              | 1,048,576              |
 | `limits.trace.stepsPerPass`       | Steps that one pass logs                                    | 1,000                  |
 
 **Two limits change what the room does with a message.**

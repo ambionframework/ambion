@@ -30,6 +30,8 @@ class FixedEnv extends HomeEnv {
 			return text;
 		},
 		readBinary: async (path) => new TextEncoder().encode(this.contents[path]),
+		readRange: async (path, start, length) =>
+			new TextEncoder().encode(this.contents[path]).subarray(start, start + length),
 		write: async () => {},
 		append: async () => {},
 		rename: async () => {},
@@ -57,6 +59,12 @@ describe('HomeEnv', () => {
 		const env = new FixedEnv({});
 		expect(env.cwd).toBe('/home/ada');
 		expect(await env.absolutePath('~/sub/../b')).toEqual({ ok: true, value: '/home/ada/b' });
+	});
+
+	it('reads a range of the resolved path', async () => {
+		const env = new FixedEnv({ '/home/ada/a.txt': 'abcdef' });
+		const range = await env.readRange('a.txt', 2, 3);
+		expect(range.ok && new TextDecoder().decode(range.value)).toBe('cde');
 	});
 
 	it('resolves the path, awaits the classifier with the path and the hint, and checks the abort first', async () => {

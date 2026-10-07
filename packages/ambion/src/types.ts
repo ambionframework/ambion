@@ -13,11 +13,11 @@ import type {
 	dismissedSchema,
 	endReasonSchema,
 	failureCauseSchema,
-	postedSchema,
 	presenceChangeSchema,
 	presenceSchema,
 	saidSchema,
 	summarySchema,
+	systemSchema,
 	usageSchema,
 	vendorSessionSchema,
 } from './bodies.ts';
@@ -195,7 +195,7 @@ export interface SaidMessage extends Landed, Static<typeof saidSchema> {}
  * scheduled say. It has no author, and the room is not a participant. When no
  * exchange is open, it opens one, as a person's question does.
  */
-export interface PostedMessage extends Landed, Static<typeof postedSchema> {
+export interface SystemMessage extends Landed, Static<typeof systemSchema> {
 	/** The system wrote it, so it has no author. */
 	from?: undefined;
 }
@@ -226,7 +226,7 @@ export interface DismissedMessage extends Landed, Static<typeof dismissedSchema>
 
 /** One entry on a room's record. */
 export type Message =
-	SaidMessage | PresenceMessage | SummaryMessage | PostedMessage | DismissedMessage;
+	SaidMessage | PresenceMessage | SummaryMessage | SystemMessage | DismissedMessage;
 
 /** A shared message in a room snapshot. Its lists and summary range are read-only. */
 export type MessageSnapshot<T extends Message = Message> = T extends Message
@@ -265,10 +265,10 @@ export function isSaid<T extends Message | MessageSnapshot>(
 	return message.kind === 'said';
 }
 
-export function isPosted<T extends Message | MessageSnapshot>(
+export function isSystem<T extends Message | MessageSnapshot>(
 	message: T,
-): message is Extract<T, { kind: 'posted' }> {
-	return message.kind === 'posted';
+): message is Extract<T, { kind: 'system' }> {
+	return message.kind === 'system';
 }
 
 export function isSummary<T extends Message | MessageSnapshot>(
@@ -437,6 +437,16 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 export type Step =
 	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
 	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
+	/**
+	 * The text that the driver renders for the pass. `system` is the system
+	 * part of the seat: the mechanism and the agent, joined by a blank line.
+	 * `record` is the record that one pass reads. An executor can add text of
+	 * its own, and the step does not hold it: the seat note of Codex, and the
+	 * resumed note and the agent part in a resumed query of Claude. A host
+	 * puts the system part in a system message and the record in a user
+	 * message.
+	 */
+	| { type: 'input'; part: 'system' | 'record'; text: string }
 	/** A block of the model's reasoning. `final` closes the block. */
 	| { type: 'thinking'; text: string; final: boolean }
 	/** A block of the model's text. `final` closes the block. */
@@ -484,6 +494,11 @@ export interface TracedStep {
 	readonly room: string;
 	/** The seat that ran the activation. */
 	readonly seat: string;
+	/**
+	 * The seq of the message that opened the exchange that the activation
+	 * works on. Absent outside an exchange, and before the first pass.
+	 */
+	readonly exchange?: Seq;
 	/** The step, stamped with `activation`, `pass`, `index` and `at`. */
 	readonly step: TraceStep;
 }
@@ -500,6 +515,12 @@ export interface TracePolicy {
 	/** `start` keeps the start of each block. */
 	readonly thinking: 'omit' | 'start' | 'full';
 	readonly toolOutput: 'omit' | 'full';
+	/**
+	 * `full` logs an `input` step with the text the model received. Absent
+	 * reads as `omit`. The text holds whatever the record holds, secrets
+	 * included.
+	 */
+	readonly input?: 'omit' | 'full';
 }
 
 /** The room's event stream: room facts and activation events, under one `subscribe`. */

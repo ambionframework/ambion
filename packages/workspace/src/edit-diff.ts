@@ -276,9 +276,14 @@ export function applyEdits(
 	return { baseContent: content, newContent };
 }
 
-/** A unified patch of the change. */
-export function unifiedPatch(path: string, oldContent: string, newContent: string): string {
-	return createTwoFilesPatch(path, path, oldContent, newContent, undefined, undefined, {
+/** A unified patch of the change. `to` names the file after a move. */
+export function unifiedPatch(
+	path: string,
+	oldContent: string,
+	newContent: string,
+	to: string = path,
+): string {
+	return createTwoFilesPatch(path, to, oldContent, newContent, undefined, undefined, {
 		context: CONTEXT_LINES,
 		headerOptions: FILE_HEADERS_ONLY,
 	});

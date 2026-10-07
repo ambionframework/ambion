@@ -59,7 +59,7 @@ import { passOutcome } from './failure.ts';
 import { type Range, recordDraft, steerDraft } from './freshness.ts';
 import { type OpenHarness, openHarness, shutdown } from './harness.ts';
 import { streamModels } from './models.ts';
-import { PiSteps } from './pi-trace.ts';
+import { PiSteps, sessionStep } from './pi-trace.ts';
 import type { ExecutionServices } from './services.ts';
 import type { PiSessions, SessionScope } from './sessions.ts';
 import { toolsFor } from './tools.ts';
@@ -105,9 +105,10 @@ interface Part {
 	readonly text: string;
 }
 
-/** The harness of an activation, the id of its session, and the steps of its events. */
+/** The harness of an activation, its session id, its tool names, and the steps of its events. */
 interface Opened extends OpenHarness {
 	readonly id: string;
+	readonly tools: readonly string[];
 	readonly steps: PiSteps;
 }
 
@@ -251,7 +252,10 @@ class Activation implements RunningActivation {
 		return this.hold(await this.openSession(pass, model));
 	}
 
-	/** Take the harness as this activation's, unless the activation closed while it opened. */
+	/**
+	 * Take the harness as this activation's, unless the activation closed while
+	 * it opened. The `session` step comes before any event of the harness.
+	 */
 	private hold(opened: Opened): Opened | undefined {
 		this.sessionId = opened.id;
 		this.opened = opened;
@@ -259,6 +263,7 @@ class Activation implements RunningActivation {
 			this.release();
 			return undefined;
 		}
+		this.trace.record(sessionStep(modelOf(this.definition.executor), opened.id, opened.tools));
 		if (opened.base !== undefined) {
 			this.base = opened.base;
 			this.activation.read({ after: 0, through: opened.base });
@@ -320,11 +325,12 @@ class Activation implements RunningActivation {
 		const def = this.definition;
 		const { view } = pass;
 		try {
+			const tools = toolsFor(view, def, pass.tools, this.trace, () => this.view ?? view);
 			const open = await openHarness({
 				storage,
 				models: streamModels(model, this.options.stream),
 				model,
-				tools: toolsFor(view, def, pass.tools, this.trace, () => this.view ?? view),
+				tools,
 				systemPrompt: () => this.systemPrompt,
 				compaction: compactionOf(def.executor),
 				thinking: thinkingOf(def.executor),
@@ -334,7 +340,7 @@ class Activation implements RunningActivation {
 			});
 			const steps = new PiSteps(open.events.snapshot.usage);
 			open.events.start(async (events) => this.note(steps, events));
-			return { ...open, id, steps };
+			return { ...open, id, tools: tools.map((tool) => tool.name), steps };
 		} catch (error) {
 			await storage.close(CONTEXT).catch(noop);
 			throw error;

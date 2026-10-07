@@ -848,13 +848,13 @@ function opensExchange(message: Message, people: seq<string>, closedThrough: int
   if (message.seq_ <= closedThrough) then
     false
   else
-    ((message.kind == "posted") || ((message.kind == "said") && (message.from in people)))
+    ((message.kind == "system") || ((message.kind == "said") && (message.from in people)))
 }
 
 lemma opensExchange_ensures(message: Message, people: seq<string>, closedThrough: int)
   ensures ((message.kind == "said") ==> (opensExchange(message, people, closedThrough) <==> ((message.from in people) && (message.seq_ > closedThrough))))
-  ensures ((message.kind == "posted") ==> (opensExchange(message, people, closedThrough) <==> (message.seq_ > closedThrough)))
-  ensures ((message.kind != "said") ==> (message.kind != "posted") ==> !(opensExchange(message, people, closedThrough)))
+  ensures ((message.kind == "system") ==> (opensExchange(message, people, closedThrough) <==> (message.seq_ > closedThrough)))
+  ensures ((message.kind != "said") ==> (message.kind != "system") ==> !(opensExchange(message, people, closedThrough)))
   ensures ((message.seq_ <= closedThrough) ==> !(opensExchange(message, people, closedThrough)))
 {
 }

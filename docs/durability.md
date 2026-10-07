@@ -262,7 +262,7 @@ one.
   [`test/golden`](../packages/ambion/test/golden) replay to the committed
   fold in CI, and each scenario writes its committed journal again.
 - **A key of a caller's operation carries a space prefix.** A delivery key
-  starts with `delivery:`, a commit key with `commit:`, and a post key with
+  starts with `delivery:`, a commit key with `commit:`, and a `room.post` key with
   `post:`, so equal text in two spaces never collides. A presence key and a
   cancel key carry no prefix. The room reads each key back without its
   prefix.

@@ -149,7 +149,6 @@ const canvas = openCanvas({
   name: 'workshop',
   runtime: canvasRuntime,
   store: memoryCanvas(),
-  breakout: { team: ['scout'] },
 });
 
 const lead = defineAgent({
@@ -167,12 +166,12 @@ const scout = defineAgent({
   executor: pi({
     model,
     instructions: 'Report what you find.',
-    bundles: [...bundles, canvas.workerTools()],
+    bundles: [...bundles, canvas.tools()],
   }),
 });
 
 await canvas.resume({ agents: [lead, scout] });
-const bench = await canvas.open({ name: 'bench', goal: 'Qualify a part.' });
+const bench = await canvas.open({ name: 'bench', goal: 'Qualify a part.', agents: ['lead'] });
 ```
 
 **`bench` is a room.** A person visits it with `bench.visit(priya)`. `canvas.widgetTools()`
@@ -250,15 +249,15 @@ eval as a vitest test.
 message cites it.** Each agent has a home, and each capability is a set of
 tools.
 
-| Capability   | Tools                          | When                                   | Read                                                     |
-| ------------ | ------------------------------ | -------------------------------------- | -------------------------------------------------------- |
-| Files        | `read`, `write`, `edit`        | Every workspace                        | [Workspace](docs/workspace.md)                           |
-| Snapshots    | `snapshot`, `restore`          | Every workspace                        | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
-| Processes    | `bash`, `ps`, `cancel`, `wait` | Every workspace                        | [Processes](docs/processes.md)                           |
-| HTTP reads   | `fetch`                        | With a bash backend that has endpoints | [Processes](docs/processes.md#processes-that-serve-http) |
-| Tables       | `sql`                          | With a SQL backend                     | [Workspace](docs/workspace.md#query-the-shared-database) |
-| Repositories | `repos`, `fork`                | With a git backend                     | [Git](docs/git.md)                                       |
-| Skills       | `read`, `bash`                 | When the host passes skills            | [Skills](docs/skills.md)                                 |
+| Capability   | Tools                                  | When                                   | Read                                                     |
+| ------------ | -------------------------------------- | -------------------------------------- | -------------------------------------------------------- |
+| Files        | `read`, `write`, `edit`, `apply_patch` | Every workspace                        | [Workspace](docs/workspace.md)                           |
+| Snapshots    | `snapshot`, `restore`                  | Every workspace                        | [Snapshot a file](docs/workspace.md#snapshot-a-file)     |
+| Processes    | `bash`, `ps`, `cancel`, `wait`         | Every workspace                        | [Processes](docs/processes.md)                           |
+| HTTP reads   | `fetch`                                | With a bash backend that has endpoints | [Processes](docs/processes.md#processes-that-serve-http) |
+| Tables       | `sql`                                  | With a SQL backend                     | [Workspace](docs/workspace.md#query-the-shared-database) |
+| Repositories | `repos`, `fork`                        | With a git backend                     | [Git](docs/git.md)                                       |
+| Skills       | `read`, `bash`                         | When the host passes skills            | [Skills](docs/skills.md)                                 |
 
 **A process outlives the activation that starts it.** Each process gets a
 `$PORT`. `fetch` reads a path of a running process with GET, and the

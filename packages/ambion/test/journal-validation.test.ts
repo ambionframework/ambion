@@ -17,8 +17,8 @@ const summary = {
 	text: 'x',
 	covers: { from: 1, through: 2 },
 };
-const returned = { kind: 'posted', at, to: 'alpha', returns: 3, text: 'x' };
-const posted = { kind: 'posted', at, text: 'x' };
+const returned = { kind: 'system', at, to: 'alpha', returns: 3, text: 'x' };
+const system = { kind: 'system', at, text: 'x' };
 const ended = { id: 'message:1:alpha:1', phase: 'ended', reason: 'released', at, readThrough: 3 };
 
 /** A journal that replays these stored entries, one place each. */
@@ -50,8 +50,8 @@ describe('room journal body validation', () => {
 		['message', summary],
 		['message', { kind: 'said', at, from: 'alpha', to: 'alpha', text: 'x', delaySeconds: 600 }],
 		['message', { ...returned, refs: ['https://x/a'], wakes: ['alpha'] }],
-		['message', posted],
-		['message', { ...posted, to: 'priya', refs: ['https://x/a'] }],
+		['message', system],
+		['message', { ...system, to: 'priya', refs: ['https://x/a'] }],
 		['message', { kind: 'dismissed', at, message: 3 }],
 		[
 			'message',
@@ -115,9 +115,9 @@ describe('room journal body validation', () => {
 			'body.delaySeconds',
 		],
 		['message', { ...returned, returns: 0 }, 'body.returns'],
-		['message', { ...posted, returns: 3 }, 'body.to'],
+		['message', { ...system, returns: 3 }, 'body.to'],
 		['message', { ...returned, from: 'alpha' }, 'body.from'],
-		['message', { ...posted, from: 'host' }, 'body.from'],
+		['message', { ...system, from: 'host' }, 'body.from'],
 		['message', { kind: 'returned', at, to: 'alpha', message: 3, text: 'x' }, 'body'],
 		['message', { kind: 'dismissed', at, message: 0 }, 'body.message'],
 		['message', { kind: 'dismissed', at, message: 3, from: 'alpha' }, 'body.activation'],

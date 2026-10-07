@@ -157,6 +157,16 @@ export function sessionToResume(view: ActivationView, kind: string): string | un
 	return resume?.kind === kind ? resume.id : undefined;
 }
 
+/**
+ * The seq of the message that opened the exchange that a view works on. A
+ * response works on the open exchange, and a summary works on the exchange it
+ * closes. A response outside an exchange gives nothing.
+ */
+export function exchangeOf(view: ActivationView): Seq | undefined {
+	const { purpose } = view.spec;
+	return purpose.kind === 'respond' ? view.context.exchange?.from : purpose.exchange;
+}
+
 export type { Intent };
 
 /** A seating change or a dismissal that the record already holds. */

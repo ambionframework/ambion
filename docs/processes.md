@@ -550,7 +550,7 @@ export type ProcessEvent =
 
 **`list` reads the tables of the agents that used the workspace in this
 run.** An agent joins that set on its first process tool call or
-reminder. A `read`, `write`, or `edit` call adds no agent.
+reminder. A `read`, `write`, `edit`, or `apply_patch` call adds no agent.
 `running: true` gives the running processes alone.
 
 **`list({ agent })` reads the table of the named agent.** It reads the files
@@ -781,8 +781,8 @@ process before it returns the say.
 
 **A host that wants a wake posts a message when a process ends.**
 `workspace.processes.subscribe` gives an `ended` event. The host calls
-`room.post` to the owner agent, under a key that names the handle. The post
-starts an activation, so the owner seat reads the end in its reminder, and
+`room.post` to the owner agent, under a key that names the handle. The system
+message starts an activation, so the owner seat reads the end in its reminder, and
 `wait` with `timeout: 0` gives the output. The kernel adds nothing else for this.
 
 ```ts
@@ -799,14 +799,14 @@ workspace.processes.subscribe((event) => {
 });
 ```
 
-**The post is a message of the system**
+**The post writes a system message**
 ([Exchange](exchange.md#7-the-edges-a-host-sees)).
 
 - It opens an exchange when none is open. That exchange has no `person`
   until a person speaks in it, so it owes no summary. When an exchange is
-  open, the post joins it and steers the seat of the owner agent alone.
-- The owner agent must hold a seat in that room. The room refuses a post to
-  an agent in the reserve, and `post` rejects. A stopped room rejects too,
+  open, the system message joins it and steers the seat of the owner agent alone.
+- The owner agent must hold a seat in that room. The room refuses a system message
+  to an agent in the reserve, and `post` rejects. A stopped room rejects too,
   so the host catches each post.
 - The key makes a second post of one end land once, for example after a
   restart of the host.

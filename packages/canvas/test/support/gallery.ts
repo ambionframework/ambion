@@ -30,7 +30,6 @@ export async function gallery(
 ) {
 	const context = host({
 		widgets: { kinds },
-		breakout: { team: ['cy'] },
 		...(options.store === undefined ? {} : { store: options.store }),
 		...(options.storage === undefined ? {} : { storage: options.storage }),
 		...(options.script === undefined ? {} : { script: options.script }),

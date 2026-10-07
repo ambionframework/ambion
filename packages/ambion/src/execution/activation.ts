@@ -16,7 +16,7 @@
  */
 import type { ActivationView } from '../protocol.ts';
 import { sessionToResume } from '../protocol.ts';
-import type { ActivationEvent, AgentDefinition, Seq, VendorSession } from '../types.ts';
+import type { ActivationEvent, AgentDefinition, Seq, Step, VendorSession } from '../types.ts';
 import type {
 	ActivationOpener,
 	BoundTool,
@@ -45,6 +45,17 @@ export interface ActivationInput {
 	/** The sink of the activation. The driver owns it and closes it. */
 	readonly trace: StepSink;
 }
+
+/** The system part that the driver renders: the mechanism and the agent, joined by a blank line. */
+const systemText = ({ mechanism, agent }: { mechanism: string; agent: string }): string =>
+	`${mechanism}\n\n${agent}`;
+
+/** The `input` step of text that the model received. */
+const inputStep = (part: 'system' | 'record', text: string): Step => ({
+	type: 'input',
+	part,
+	text,
+});
 
 /** A line that landed while the activation worked. */
 interface Steered {
@@ -246,13 +257,25 @@ export class ActivationState {
 	private passOf(input: PassInput): Pass {
 		const { view } = input;
 		const resumeId = sessionToResume(view, this.input.definition.executor.kind);
+		const system = renderSystem(view, this.input.definition);
+		if (input.kind === 'view') this.input.trace.record(inputStep('system', systemText(system)));
 		return {
 			...input,
-			...renderSystem(view, this.input.definition),
-			record: (after) => this.record(input, after),
+			...system,
+			record: (after) => this.recorded(input, after),
 			...(resumeId === undefined ? {} : { resumeId }),
 			tools: this.toolsOf(view),
 		};
+	}
+
+	/** The record a pass reads, with the `input` step of the text that it renders. */
+	private async recorded(
+		input: PassInput,
+		after: Seq | undefined,
+	): Promise<PassRecord | undefined> {
+		const rendered = await this.record(input, after);
+		if (rendered !== undefined) this.input.trace.record(inputStep('record', rendered.text));
+		return rendered;
 	}
 
 	/**

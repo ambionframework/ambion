@@ -49,8 +49,14 @@ revisions are the durable records outside the journals. A row holds hosting
 intent, the tree, and what a start needs. It holds no message, no lease, and no exchange
 ([The store](#the-store)).
 
-**The depth is one.** A breakout room has no breakout rooms. Its workers
-get the worker bundle and no opener bundle, so they cannot open a room.
+**The depth is one.** A breakout room has no breakout rooms. The row of a
+breakout room has depth one, and `breakout`, `tell`, and `archive` refuse a
+call from it.
+
+**A breakout room is a regular room.** An agent behaves in it as the
+composition of the room says: who is present, and whether the room has an
+opener in a parent. One definition works in a root room and in a breakout
+room.
 
 ## Breakout rooms
 
@@ -59,17 +65,23 @@ get the worker bundle and no opener bundle, so they cannot open a room.
 **An agent opens a breakout room with a goal and a first message.** The
 message opens the first exchange and activates the workers. The workers
 speak in the journal of the breakout room, and a person can visit it at
-any time. The canvas gives two bundles. `canvas.tools()` is the opener
-bundle: the authority to open a room. `canvas.workerTools()` is the
-worker bundle. A host gives the opener bundle to agents of root rooms, and
-the worker bundle to the worker team.
+any time. `canvas.tools()` gives one bundle with four tools and a
+reminder. A host gives it to every agent that takes part in delegation. The
+row of the room decides which call works: `report` works in a breakout room
+alone, and `breakout`, `tell`, and `archive` work in a root room alone.
 
-| Tool       | Bundle | Parameters                                 | Effect                                                                         |
-| ---------- | ------ | ------------------------------------------ | ------------------------------------------------------------------------------ |
-| `breakout` | Opener | `name`, `goal`, `message`, `agents`, `to?` | Opens `<parent>-<name>`, seats `agents`, and posts `message` to `to` or to all |
-| `tell`     | Opener | `room`, `text`, `to?`, `refs?`             | Posts into a running breakout room that the caller opened                      |
-| `archive`  | Opener | `room`, `result`, `note?`                  | Stops a breakout room that the caller opened, and records `done` or `failed`   |
-| `report`   | Worker | `text`, `refs?`                            | Posts into the parent room, to the opener, with the label `breakout <name>:`   |
+| Tool       | Parameters                                 | Effect                                                                         |
+| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `breakout` | `name`, `goal`, `message`, `agents`, `to?` | Opens `<parent>-<name>`, seats `agents`, and posts `message` to `to` or to all |
+| `tell`     | `room`, `text`, `to?`, `refs?`             | Posts into a running breakout room that the caller opened                      |
+| `archive`  | `room`, `result`, `note?`                  | Stops a breakout room that the caller opened, and records `done` or `failed`   |
+| `report`   | `text`, `refs?`                            | Posts into the parent room, to the opener, with the label `breakout <name>:`   |
+
+**The guidance carries one rule for a question.** A question for a person
+goes to a person who is present in the room, with `say({ to })`. When nobody
+is present and the room has an opener, the agent reports the question with
+`report`. The rule reads the same in a root room and in a breakout room.
+The opener reads the question as a report in the parent room.
 
 **`breakout` is idempotent by name.** A repeat call by the same opener in
 the same parent returns the same room. The start post keys on
@@ -97,7 +109,17 @@ file, and `breakout` returns it. The opener reads it with `jq`, as it reads
 its own room ([Workspace](workspace.md#mirror-a-rooms-messages)).
 `recall` reads the own room alone ([Trust](trust.md)).
 
-**The reminder lists the breakout rooms of the seat.** It lists the rows
+**The reminder reads the row of the room of the seat.** In a breakout room,
+it names the opener, the parent room, and the goal, and it says that
+`report` carries the result, or a question that needs a person, to the
+opener:
+
+```text
+ada opened this room from design for: Survey the options.
+`report` carries your result, or a question that needs a person, to ada.
+```
+
+In a root room, it lists the breakout rooms of the seat. It lists the rows
 whose opener is the seat agent and whose parent is the seat room, and
 omits archived rows. It reads the rows of the canvas, and `room.read()` of
 each live handle, within the reminder bound. A running row with no live
@@ -109,8 +131,8 @@ Your breakout rooms:
 - design-tests: stopped
 ```
 
-It gives at most ten lines, then `and 3 more`. A seat with no breakout
-room gets no reminder text.
+It gives at most ten lines, then `and 3 more`. A seat in a root room with no
+breakout room gets no reminder text.
 
 ### The composition
 
@@ -119,12 +141,13 @@ summary writer. Each worker attends at `broadcast`. The reserve is empty,
 and seating is off (`seating: false`), so no worker can seat another
 agent. A visitor gets no summary.
 
-**A breakout room seats only definitions that no root room seats.** The
-workspace keys homes, processes, and the process reminder by the agent
-name ([Workspace](workspace.md)). Two seats of one name in two rooms
-share one home and one process list. A host therefore names a worker
-team: definitions that it seats in no root room. The `agents` of a
-`breakout` call come from that team.
+**A breakout room seats any definition that `resume` took.** The `agents` of
+a `breakout` call name definitions of the canvas, and a definition that a
+root room seats is one of them. The workspace keys homes, processes, and the
+process reminder by the agent name ([Workspace](workspace.md)). Two seats
+of one name in two rooms share one home and one process list, as two root
+rooms do. An agent that the opener seats in its own breakout room works in
+two rooms over one home.
 
 ### Bounds
 
@@ -147,26 +170,30 @@ range alone, so the bridge reads the outcome with `readRoom`. `readRoom`
 reads a live room and a stopped room alike.
 
 **A report pass looks for each key first.** For each closed exchange of a
-breakout room, the bridge reads the `key` of each `posted` message in the
-record of the parent. A key `breakout:<name>:<from>`, or a key that starts
+breakout room, the bridge reads the `key` of each message in the record
+of the parent. A key `breakout:<name>:<from>`, or a key that starts
 with `breakout:<name>:<from>:`, means that the exchange is done. For an
 exchange with no such key, the bridge posts the close notice:
 
 ```ts
 await parent.post({
   to: recipient, // the opener, or undefined; see below
-  text: `breakout ${name}: exchange #${exchange.from} is ${exchange.outcome.kind}, messages #${exchange.from} to #${exchange.through}.`,
+  text: `breakout ${name}: exchange #${exchange.from} is ${outcome}, messages #${exchange.from} to #${exchange.through}.`,
   refs: [messageUri(name, exchange.through)],
   key: `breakout:${name}:${exchange.from}`,
 });
 ```
+
+`outcome` is the kind of the outcome of the exchange. For `awaiting`, it is
+`awaiting <person>`, with the name of the person that the exchange waits
+for.
 
 **The bridge posts for one parent in order, one at a time.** It keeps a
 chain of its own for each parent, apart from the queue of a room name. It
 picks the recipient inside that order. `report` posts in the same chain.
 The recipient is the opener when the opener is on the roster of the parent
 at an attention other than `none`.
-Otherwise the post has no `to`, and the room stays open. A key conflict
+Otherwise the notice has no `to`, and the room stays open. A key conflict
 counts as landed. `report` follows the same rule for its recipient.
 
 **The chain never waits on a queue of a room name.** A stop of a root
@@ -174,8 +201,8 @@ waits for the queues of its breakout rooms from inside the queue of the
 root. A bridge post that waited on a queue of a room name could close a
 cycle. A bridge post waits on the kernel alone.
 
-**A notice contains no excerpt.** It names the outcome and the range and
-cites the last message. The text of a result travels in `report`.
+**A notice contains no excerpt.** It names the outcome, and the person for
+`awaiting`, and the range, and it cites the last message. The text of a result travels in `report`.
 
 **A report waits for a live parent.** A parent with no live handle in
 this run gets no post. The pass of the next `resume` or `start` of the
@@ -196,7 +223,7 @@ its notice then. A pass skips an archived room, so an archived room gets
 no notice. A post to a parent that stops is no failure: the next pass
 posts it.
 
-**A post owes no summary.** A post opens an exchange with no person, so
+**A system message owes no summary.** A system message opens an exchange with no person, so
 the exchange owes no summary
 ([Exchange](exchange.md#4-who-directs-one-and-who-receives-its-result)).
 
@@ -292,8 +319,8 @@ before the next one opens the same store.
 reads its exchanges and can speak. A worker can ask a visiting person a
 question with `say({ to })`, and the `awaiting` outcome holds the wait.
 
-**A post has no author.** A worker reads a `tell` post as a message of
-the system, and the label in its text names the source. The canvas adds
+**A system message has no author.** A worker reads a `tell` notice as a
+system message, and the label in its text names the source. The canvas adds
 no author across rooms, so it adds no new trust surface.
 
 **The rooms of a canvas share one workspace.** The mirror needs it, and a
@@ -319,7 +346,7 @@ interface OpenCanvasOptions {
   readonly store: CanvasStore;
   /** With a workspace, the canvas attaches the mirror of each room. */
   readonly workspace?: Workspace;
-  readonly breakout: BreakoutOptions;
+  readonly breakout?: BreakoutOptions;
   /** The catalog of widget kinds that the host draws. Without it, widgetTools is a refusal. */
   readonly widgets?: WidgetOptions;
   /** A failed start keeps its row `running`. The next `resume` tries again. */
@@ -328,10 +355,8 @@ interface OpenCanvasOptions {
 
 interface Canvas {
   readonly name: string;
-  /** The opener bundle: breakout, tell, archive, and the reminder. Call it before defineAgent. */
+  /** The breakout bundle: breakout, tell, archive, report, and the reminder. Call it before defineAgent. */
   tools(): ToolBundle;
-  /** The worker bundle: report. Call it before defineAgent. */
-  workerTools(): ToolBundle;
   /** The widget bundle: show, hide, and the reminder. A refusal with no widgets.kinds. Call it before defineAgent. */
   widgetTools(): ToolBundle;
   /**
@@ -380,7 +405,7 @@ interface Canvas {
 type CanvasRoomOptions = Pick<StartRoomOptions, 'seats' | 'seating'> & {
   readonly name: string;
   readonly goal: string;
-  /** The definitions of this room. Default: every definition outside the worker team. */
+  /** The definitions of this room. Default: every definition. */
   readonly agents?: readonly string[];
   /**
    * The name of a definition given at resume. A name that no definition resolves is a
@@ -426,8 +451,8 @@ interface CanvasError {
 ```
 
 **The definitions arrive at `resume`.** `defineAgent` reads the bundles
-of an agent when it defines the agent. So the host calls `tools()` and
-`workerTools()`, defines its agents, and then calls `resume({ agents })`.
+of an agent when it defines the agent. So the host calls `tools()`,
+defines its agents, and then calls `resume({ agents })`.
 `open`, `start`, and every tool call before `resume` are refusals.
 
 **Each room receives the definitions that it names.** A resume adds to the
@@ -435,14 +460,14 @@ reserve each definition that the composition does not hold
 (`resumeRoom`). The canvas therefore passes each room its own
 definitions:
 
-| Room            | Definitions that the canvas passes                                |
-| --------------- | ----------------------------------------------------------------- |
-| A root room     | Its `agents`; by default every definition outside the worker team |
-| A breakout room | The definitions that its row names in `start.agents`              |
+| Room            | Definitions that the canvas passes                   |
+| --------------- | ---------------------------------------------------- |
+| A root room     | Its `agents`; by default every definition            |
+| A breakout room | The definitions that its row names in `start.agents` |
 
-**`canvas.open` refuses a team name.** A team name in `agents`, `seats`,
-`assistant`, or `summaryWriter` is a refusal. At a start, the canvas
-removes the assistant from the definitions that it passes, because
+**`canvas.open` refuses a name that no definition resolves.** A name in
+`agents`, `assistant`, or `summaryWriter` that no definition holds is a
+refusal. At a start, the canvas removes the assistant from the definitions that it passes, because
 `startRoom` refuses an assistant that `agents` also holds. With no
 `seats`, a root room seats every definition that it receives.
 
@@ -518,15 +543,12 @@ revisions.
 
 ```ts
 interface BreakoutOptions {
-  /** The worker team. No root room seats these definitions. */
-  readonly team: readonly string[];
   /** The most running breakout rooms for one opener in one parent. Default 3. */
   readonly perOpener?: number;
 }
 ```
 
-**`resume` refuses a team name that no definition resolves.** It also
-refuses two definitions of one name. `openCanvas` refuses a canvas name
+**`resume` refuses two definitions of one name.** `openCanvas` refuses a canvas name
 that is not a room name.
 
 ### The widget options
@@ -550,7 +572,7 @@ breakout({
   name: string,        // the room is <parent>-<name>: the shared name syntax, 48 characters at most
   goal: string,
   message: string,     // the initial message
-  agents: string[],    // one or more names of the team
+  agents: string[],    // one or more names of definitions of the canvas
   to?: string,         // a worker; omit to post to every worker
 }) -> { room: string, uri: string, mirror?: string, state: 'running' | 'stopped' | 'archived', created: boolean, close?: CanvasClose }
 
@@ -583,6 +605,7 @@ and the opener from the row of `ctx.room`, and the exchange from
 | Any tool                      | `ctx.room` is absent, or the room is not on the canvas                  |
 | Any tool                      | `resume` has not run, or `close` has run                                |
 | `breakout`, `tell`, `archive` | The caller is in a breakout room                                        |
+| `breakout`                    | `agents` names a definition that `resume` did not take                  |
 | `archive`                     | The room is a root room, or another opener holds it                     |
 | `tell`                        | The row is archived or stopped, or the room has no live handle          |
 | `tell`, `breakout`            | `to` is outside `agents`, or a worker at `none` (kernel refusal)        |
@@ -605,7 +628,7 @@ notice of a refused `report` reaches the opener after the parent resumes.
    picks a new name.
 2. A row of the room name with another opener, or a root row of that
    name: a refusal.
-3. The name rule and its length, the team, and `perOpener`: a refusal
+3. The name rule and its length, `agents`, and `perOpener`: a refusal
    names the bound that it broke. The full name `<parent>-<name>` follows
    the shared name syntax (`@ambionframework/ambion/names`) and holds at
    most 48 characters. The package exports the limit as `NAME_LIMIT`, and a

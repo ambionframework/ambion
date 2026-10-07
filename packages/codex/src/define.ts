@@ -12,7 +12,7 @@ import {
 } from '@ambionframework/ambion/hosting';
 import { quickjsRuntime } from '@ambionframework/compose/runtime';
 
-/** How much the model reasons before it answers. Codex 0.159.2 takes these values. */
+/** How much the model reasons before it answers. Codex 0.160.1 takes these values. */
 type ModelReasoningEffort =
 	'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | 'persistent';
 

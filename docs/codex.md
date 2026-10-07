@@ -19,7 +19,7 @@ the workspace tools, behind the workspace port, so it makes no difference
 whether the workspace is in memory, a directory, or a remote workstation.
 The seat reaches the world through the room tools and the tools that you
 give it, as a Pi seat does. [Workspace](workspace.md#give-the-resource-to-an-agent)
-states the workspace tools: `read`, `write`, `edit`, `bash`, and the
+states the workspace tools: `read`, `write`, `edit`, `apply_patch`, `bash`, and the
 others. A seat of any executor kind joins one room.
 [Executors](executors.md#the-executor-contract) states how a room resolves
 an execution. Pass `codexExecution({ codexPath, env, home, login })` for
@@ -27,7 +27,7 @@ another binary, environment overlay, Codex home, or login.
 
 **The kernel gains no dependency.** `@ambionframework/ambion` imports no model
 library. `@openai/codex` belongs to this package only, pinned to the exact
-version 0.159.2.
+version 0.160.1.
 
 ## Install and sign in
 
@@ -641,7 +641,7 @@ need.** `check_for_update_on_startup`, `analytics.enabled`, and
 `check_for_update_on_startup`, and `codex app-server` starts no update check.
 The config sets the key so that a later version keeps the same behavior. `memories.generate_memories` and
 `memories.use_memories` are `false`, and so is the `memories` feature. Codex
-0.159.2 recognizes each key and reports no warning for it. With a dummy API
+0.160.1 recognizes each key and reports no warning for it. With a dummy API
 key, a run makes no request except the model requests and opens no outbound
 connection, with these keys. The binary tier asserts it.
 A seat on a ChatGPT sign-in is the case that the keys protect, and the
@@ -656,7 +656,7 @@ permanent. The message names the model. The executor never leaves native
 tools on by accident. Use a model that `codex debug models` lists.
 
 **The version pin guards the recipe.** The package pins `@openai/codex`
-0.159.2. The feature names, the config keys,
+0.160.1. The feature names, the config keys,
 and the catalog fields belong to that version. A newer `codex` can add a
 native tool that the recipe does not turn off, and it can drop a key that
 the recipe sets. Codex then warns about the key. The binary tier asserts
@@ -816,7 +816,7 @@ variable, the suite writes nothing.
 
 **The recorded fixtures come from the binary.** `test/fixtures/` holds the
 notifications that a real `codex app-server` 0.159.2 sent for one plain
-answer, and the catalog `catalog-0.159.2.json` from the same binary. The
+answer, and the catalog `catalog-0.160.1.json` of the pinned binary. The
 tests map the notifications to steps and count usage. Pure parts have their
 own tests: the options, the config flags, and the failure classification.
 

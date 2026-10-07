@@ -16,11 +16,11 @@
  * comes in resolved (`reminders.ts`).
  */
 
-import type { ActivationView, ContextParticipant } from '../protocol.ts';
+import { type ActivationView, type ContextParticipant, exchangeOf } from '../protocol.ts';
 import { type Block, blocks, refsOf, renderLine } from '../record.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
-import { isSummary, type Message, type PostedMessage, type Seq } from '../types.ts';
+import { isSummary, type Message, type Seq, type SystemMessage } from '../types.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -346,13 +346,7 @@ function renderContext(
 		renderPeople(people, context.now),
 		``,
 		`The record of '${context.name}' so far:`,
-		renderRecord(
-			context.messages,
-			people,
-			context.now,
-			view.spec.purpose.kind === 'respond' ? context.exchange?.from : view.spec.purpose.exchange,
-			context.omitted,
-		),
+		renderRecord(context.messages, people, context.now, exchangeOf(view), context.omitted),
 		``,
 		...paragraph(renderScheduled(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),
@@ -388,21 +382,21 @@ function renderReserve(reserve: readonly { name: string; identity: string }[]): 
 	];
 }
 
-/** The open exchange, named by its opening message: a person's question, or a post. */
+/** The open exchange, named by its opening message: a person's question, or a system message. */
 function openingLine({ context: { exchange, messages, name } }: ActivationView, seat: string) {
 	if (exchange === undefined) return '';
 	const uri = `The opening message's URI is ${messageUri(name, exchange.from)}. `;
 	const opening = messages.find((message) => message.seq === exchange.from);
-	if (opening?.kind === 'posted') return `${postOpening(opening, exchange.from, seat)}${uri}`;
+	if (opening?.kind === 'system') return `${systemOpening(opening, exchange.from, seat)}${uri}`;
 	const asker = opening?.from ?? exchange.person;
 	if (asker === undefined) return `Exchange ${exchange.from} is active. ${uri}`;
 	return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
 }
 
-/** A post of the host reports an event. A post that returns a say is the work of its seat. */
-function postOpening(opening: PostedMessage, from: Seq, seat: string): string {
+/** A system message from the host reports an event. A returned say is the work of its seat. */
+function systemOpening(opening: SystemMessage, from: Seq, seat: string): string {
 	if (opening.returns === undefined)
-		return `The host opened exchange ${from} with message ${opening.seq}. A post reports an event and gives no direction. `;
+		return `The host opened exchange ${from} with message ${opening.seq}. A system message reports an event and gives no direction. `;
 	const whose = opening.to === seat ? 'you' : opening.to;
 	return `Exchange ${from} is active: message ${opening.seq} is a say ${whose} scheduled, and the room returned it. `;
 }

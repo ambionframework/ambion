@@ -4,7 +4,8 @@
  * real provider has to accept those schemas, and a real model has to pick up
  * the file tools and use them against a filesystem it has never seen. The
  * process tools reach the same home: a model starts two processes and calls
- * `wait` with their handles until both end.
+ * `wait` with their handles until both end. A model changes three files in one
+ * `apply_patch` call: it adds one, updates one, and deletes one.
  */
 
 import type { TracedStep } from '@ambionframework/ambion';
@@ -78,7 +79,9 @@ live('the workspace', () => {
 			e.type === 'tool_call' && e.seat === 'librarian' ? [e.name] : [],
 		);
 		expect(tools.some((tool) => tool === 'read' || tool === 'bash')).toBe(true);
-		expect(tools.some((tool) => ['write', 'edit', 'bash'].includes(tool))).toBe(true);
+		expect(tools.some((tool) => ['write', 'edit', 'apply_patch', 'bash'].includes(tool))).toBe(
+			true,
+		);
 		// `say` is the room's own event, never surfaced as a tool.
 		expect(tools).not.toContain('say');
 		const answer = saidBy((await session.read()).messages, 'librarian');
@@ -179,6 +182,48 @@ live('the workspace', () => {
 		const text = answer.map((m) => m.text).join(' ');
 		expect(text).toContain('alpha-ok');
 		expect(text).toContain('beta-ok');
+		await invariants(session, events);
+		report('the workspace', await spent(session));
+		await session.stop();
+		await store.dispose();
+	});
+
+	it('a seat adds, updates, and deletes three files in one apply_patch call', async () => {
+		const backend = memoryBackend({
+			seed: async ({ writeFile }) => {
+				await writeFile('/home/editor/site/config.txt', 'title = Draft\nport = 8080\n');
+				await writeFile('/home/editor/site/old.txt', 'obsolete\n');
+			},
+		});
+		const store = openWorkspace({ name: roomName('live-patch'), backend: { bash: backend } });
+		const editor = agent('editor', {
+			identity: 'Edits the site files.',
+			instructions: `
+				To change the site, make one apply_patch call with three file
+				operations, in your home directory. Add site/notes.txt with the one
+				line "release 2". In site/config.txt, change the line "port = 8080"
+				to "port = 9090". Delete site/old.txt. Then answer with one say, in
+				one sentence.
+			`,
+			bundles: [store.tools()],
+		});
+		const { session, events, records } = await open('workspace', { agents: [editor] });
+		const visit = await enter(session, person);
+		const exchange = await visit.send({ text: 'Make the release 2 change to the site.' });
+		await exchange.waitForSummary();
+
+		const patches = callsOf(records, 'editor', 'apply_patch');
+		const failed = patches.filter((call) => call.error !== undefined);
+		process.stdout.write(
+			`live · apply_patch on ${LIVE_KIND}: ${patches.length} calls, ${failed.length} failed: ` +
+				`${JSON.stringify(failed.map((call) => call.error))}\n`,
+		);
+		expect(patches.length).toBeGreaterThanOrEqual(1);
+		expect(patches.at(-1)?.error).toBeUndefined();
+		const files = new Map((await backend.readFiles()).map((f) => [f.path, f.text]));
+		expect(files.get('/home/editor/site/notes.txt')).toMatch(/release 2/);
+		expect(files.get('/home/editor/site/config.txt')).toBe('title = Draft\nport = 9090\n');
+		expect(files.has('/home/editor/site/old.txt')).toBe(false);
 		await invariants(session, events);
 		report('the workspace', await spent(session));
 		await session.stop();

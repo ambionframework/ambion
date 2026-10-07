@@ -46,7 +46,7 @@ describe('resume', () => {
 		);
 		await canvas.resume({ agents: everyone });
 		expect(await membersOf(live(canvas, 'site'))).toEqual({
-			seated: ['ada', 'bob', 'helper'],
+			seated: ['ada', 'bob', 'cy', 'helper'],
 			reserve: [],
 		});
 		expect(await membersOf(live(canvas, 'docs'))).toEqual({ seated: ['bob'], reserve: [] });
@@ -71,9 +71,9 @@ describe('resume', () => {
 		expect(second.errors).toEqual([]);
 	});
 
-	it('takes the definitions once, and refuses a team name that no definition resolves', async () => {
-		const { canvas } = host({ breakout: { team: ['ghost'] } });
-		await refusal(canvas.resume({ agents: everyone }));
+	it('takes the definitions once, and refuses a name that two definitions hold', async () => {
+		const { canvas } = host();
+		await refusal(canvas.resume({ agents: [ada, ada] }));
 		const again = host();
 		await again.canvas.resume({ agents: everyone });
 		await refusal(again.canvas.resume({ agents: everyone }));
@@ -140,17 +140,13 @@ describe('open', () => {
 		expect(events[0]).toMatchObject({ room: { name: 'site' } });
 	});
 
-	it('refuses before resume, a bad name, a team name, an unresolved name, and a breakout name', async () => {
+	it('refuses before resume, a bad name, an unresolved name, and a breakout name', async () => {
 		const { canvas, store } = host();
 		await refusal(canvas.open({ name: 'site', goal: 'Plan.' }));
 		await canvas.resume({ agents: everyone });
 		await store.insert(breakoutRow('site-a', 'site'));
 		const bad = [
 			{ name: 'Bad Name' },
-			{ name: 'one', agents: ['cy'] },
-			{ name: 'one', seats: { cy: 'broadcast' as const } },
-			{ name: 'one', assistant: 'cy' },
-			{ name: 'one', summaryWriter: 'cy' },
 			{ name: 'one', agents: ['ghost'] },
 			{ name: 'one', assistant: 'ghost' },
 		];
@@ -184,7 +180,7 @@ describe('open', () => {
 		});
 		expect((await membersOf(room)).seated).toEqual(['helper', 'ada']);
 		await first.canvas.close();
-		const small = { store: first.store, storage: first.storage, breakout: { team: [] } };
+		const small = { store: first.store, storage: first.storage };
 		const second = host(small);
 		await second.canvas.resume({ agents: [ada, helper] });
 		expect(second.errors).toEqual([]);
@@ -415,7 +411,6 @@ describe('on SQLite', () => {
 					name: 'lab',
 					runtime,
 					store: sqliteCanvas(sql),
-					breakout: { team: ['cy'] },
 				});
 				await canvas.resume({ agents: everyone });
 				return { canvas, database };

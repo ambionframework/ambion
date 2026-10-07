@@ -30,7 +30,7 @@ ref that starts a job is a later design, and it builds on this one.
 | Find a template     | The `repos` tool: each template with its description and clone URL                                |
 | Fork a template     | The `fork` tool: a fork in the agent's own namespace                                              |
 | Clone into the home | `git clone <url> <path>` in `bash` for any repository, or `fork` with `clone` for a writable fork |
-| Edit                | The `read`, `write`, and `edit` tools, or `bash`                                                  |
+| Edit                | The `read`, `write`, `edit`, and `apply_patch` tools, or `bash`                                   |
 | Work on a branch    | Ordinary `git` in `bash`: `switch -c`, `add`, `commit`, `merge`                                   |
 | Persist the edits   | `git push origin <branch>`                                                                        |
 | Review a peer       | `git clone` the peer's fork in `bash`                                                             |

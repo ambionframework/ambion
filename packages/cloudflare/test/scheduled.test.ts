@@ -20,7 +20,7 @@ it("returns a scheduled say through the room object's alarm, into an exchange wi
 	expect(before.scheduled).toMatchObject([{ seat: 'checker' }]);
 	const find = (test: (message: Message) => boolean) => async () =>
 		(await stub.read()).messages.find(test);
-	const returned = await until(find((message) => message.kind === 'posted'));
+	const returned = await until(find((message) => message.kind === 'system'));
 	expect(returned).toMatchObject({ to: 'checker', returns: expect.any(Number) });
 	expect(returned).toMatchObject({ text: 'Check the pour log.' });
 	await until(
@@ -61,7 +61,7 @@ it('posts through the room object into an exchange with no person, once for each
 	expect(await stub.post(post)).toEqual(posted);
 	const conversation = await stub.waitForClose(posted.from);
 	expect(conversation).toMatchObject([
-		{ kind: 'posted', to: 'product', text: 'lab: pour 7 is set.' },
+		{ kind: 'system', to: 'product', text: 'lab: pour 7 is set.' },
 		{ kind: 'said', from: 'product' },
 	]);
 });

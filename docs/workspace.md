@@ -83,7 +83,7 @@ console.log(drive.mirrorAgent); // { name: 'town-host' }
 ## Give the resource to an agent
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. The neutral layer
-binds three file tools first: `read`, `write`, and `edit`. The four process
+binds four file tools first: `read`, `write`, `edit`, and `apply_patch`. The four process
 tools come next: `bash`, `ps`, `wait`, and `cancel`. `bash` starts
 each command as a background process and returns its handle
 ([Processes](processes.md)). The bundle reminds each seat of its processes.
@@ -123,8 +123,8 @@ The workspace tools share these rules:
   process that ended badly gives its output and its state line. A refused
   statement names the database and the fault. An unknown handle names
   `bash`, which returns the handle.
-- **The workspace implements the file tools.** `read`, `write`, and `edit`
-  run over the port of the bash backend. They report a bad path as a tool
+- **The workspace implements the file tools.** `read`, `write`, `edit`, and
+  `apply_patch` run over the port of the bash backend. They report a bad path as a tool
   error.
 
 ```ts
@@ -165,6 +165,66 @@ const readPlan = defineTool({
 
 [Resources](resources.md#references-and-provenance) states the provenance
 that a tool receives through `ToolContext`.
+
+### Apply a patch
+
+**`apply_patch` changes several files in one call.** Its `input` argument is
+a patch in the envelope of the Codex tool of the same name. Every seat that
+has the workspace bundle gets `apply_patch` and `edit`. The model chooses
+between them.
+
+```text
+*** Begin Patch
+*** Add File: docs/new.md
++first line
++second line
+*** Update File: src/a.ts
+*** Move to: src/b.ts
+@@ class Parser
+ unchanged line
+-removed line
++added line
+*** Delete File: old.txt
+*** End Patch
+```
+
+| Line                      | Meaning                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `*** Add File: <path>`    | Creates the file, or replaces it. Each line of the body starts with `+`. |
+| `*** Delete File: <path>` | Removes the file. The operation has no body.                             |
+| `*** Update File: <path>` | Changes the file with the hunks of the body.                             |
+| `*** Move to: <path>`     | Follows `Update File`. The result goes to the new path.                  |
+
+**A hunk is an anchor and lines.** `@@ <text>` moves the search to the line
+after the first line that equals the text. Stacked `@@` lines narrow the
+search, and each one must match. A line that starts with a space is context.
+A line that starts with `-` leaves the file, and a line that starts with `+`
+enters it. The first hunk of a file needs no anchor. `*** End of File` after a
+hunk matches its lines at the end of the file. An update with a `Move to`
+line and no hunk moves the file with no change of content.
+
+**A hunk matches in three passes.** `applyDiff` searches forward from the end
+of the previous hunk. It tries the lines exactly, then with the whitespace at
+the end of each line dropped, then with the whitespace at both ends dropped.
+An anchor matches exactly, then with both ends dropped. A hunk with no match
+is an error that shows the lines it looked for. The tool keeps the line
+endings of the file, its byte order mark, and a missing final newline. The
+tool ends the last line of an added file with a newline.
+
+**A patch applies in full or not at all.** The tool parses the envelope first.
+It then reads each file once, through the queue of the resource, and
+computes every result in memory. A later operation on the same path sees the
+result of the earlier one. The tool writes and removes files after every
+operation succeeds. Update, delete, and move need an existing file. A port
+fault during the writes is the one case that can leave part of a patch. Its
+error names the file and the code.
+
+**The result lists each operation.** The text reads `Applied patch: A
+docs/new.md, M src/a.ts -> src/b.ts, D old.txt`. `details.files` holds one
+entry for each operation: `path`, `action` (`add`, `update`, `delete`, or
+`move`), and `to` for a move. `details.patch` is the unified diff of every
+change. A failure names the file as the patch gives it, the operation, and the
+reason. It states that nothing was written.
 
 ## Give an agent skills
 
@@ -353,7 +413,7 @@ carries `at`, an ISO timestamp the runtime stamps when the message lands.
 | `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`                                                                  |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `said`                                  | `from`, `to` (absent for a broadcast), `text`, `refs`, and `delaySeconds` on a scheduled say               |
-| `posted`                                | `to` (absent for the room), `text`, `refs`, and `returns` (the seq of the scheduled say) on a returned say |
+| `system`                                | `to` (absent for the room), `text`, `refs`, and `returns` (the seq of the scheduled say) on a returned say |
 | `dismissed`                             | `from` (absent for the host), `message` (the seq of the scheduled say)                                     |
 | `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated`                                                        |
 | `summary`                               | `from`, `to`, `text`, `covers: { from, through }`, `refs`                                                  |
@@ -490,7 +550,10 @@ the object store's. The just-bash directory backend reads at most 10 MiB of
 one file. The memory backend holds 128 MiB in all. On those backends, a
 larger file fails with the backend's own error. The workstation reads at
 most 10 MiB of one regular file. A larger file, a device file, and a FIFO
-fail with `invalid`.
+fail with `invalid`. These limits apply to a whole-file read: `readBinaryFile`
+and `readTextFile`, and the tools that use them. The `read` tool of a text
+file reads byte ranges with `readRange`, which has no size limit. A range
+read of a device file or a FIFO fails with `invalid` on the workstation.
 
 ## The object backend
 
@@ -1108,8 +1171,8 @@ backend exists. That backend moves them back to the conformance entry
 `compose: { output }` with a TypeBox schema. A `compose` call binds the tool
 as its `details` and checks them against the schema at every call
 ([Compose](compose.md#bindings)). A tool that is not in the table declares
-none, so `compose` binds it as text. `write` and `edit`
-declare none, because code needs only their success or their rejection.
+none, so `compose` binds it as text. `write`, `edit`, and
+`apply_patch` declare none, because code needs only their success or their rejection.
 
 **Each output has a named type.** The schema carries an `$id`, which is the
 name in the `Type` column. The description of `compose` lists `name -> Type`
@@ -1135,14 +1198,28 @@ inside them.
 **The `read` details give the text with no notice.** `text` holds the lines
 that the result shows, and the notice lines of a direct call stay out of it.
 `from` and `to` are the first and the last line of `text`, counted from 1.
-`lines` is the count of lines in the file. `next` is the offset that
-continues the read. It is present when lines remain after a `limit` or after
-the cut at 2000 lines or 50 KB. `truncation` is present with that
-cut. When the first line alone exceeds 50 KB, `text` is empty, and
-`truncation.firstLineExceedsLimit` is true. For an image, `text` is empty,
-`image.mimeType` names the format, and the other line fields are absent. The `text` of a `read` and of a process tool
-is also in the content of the result, so a record that keeps both with
-`toolOutput: 'full'` holds the shown output twice.
+`lines` is the count of lines in the file. It is present when the scan
+reached the end of the file, and absent when the view ended before it.
+`next` is the offset that continues the read. It is present when lines
+remain after a `limit` or after the cut at 2000 lines or 50 KB.
+`truncation` is present with that cut. Its totals count the lines and the
+bytes that the scan saw. When the first line alone exceeds 50 KB, `text` is
+empty, and `truncation.firstLineExceedsLimit` is true. For an image, `text`
+is empty, `image.mimeType` names the format, and the other line fields are
+absent. The `text` of a `read` and of a process tool is also in the content
+of the result, so a record that keeps both with `toolOutput: 'full'` holds
+the shown output twice.
+
+**`read` scans a text file in ranges of 1 MiB.** The scan reads the first
+range with `readRange`, and reads the next range while the view is not
+complete. It counts the newline bytes, skips the lines before `offset`, and
+keeps the bytes of the view. The scan holds one range and the view, so the
+memory use does not depend on the size of the file. A file of any size gives
+a view. When the view ends before the end of the file, the notices omit the
+line count: `[Showing lines 1-2000. Use offset=2001 to continue.]`. A file
+under 1 MiB is scanned to its end, so its result has `lines` and the line
+count in each notice. An image still reads whole, and the limit of the
+backend applies to it.
 
 **The git, snapshot, and fetch tools declare the facts that they already
 report.** `repos` gives `repositories` as data, with the branches and the
@@ -1187,7 +1264,7 @@ names `WorkspaceEnv`, the port of a bash backend ([The port](#the-port)).
 optional guidance about the backend's own shell and a required `layout` (see
 [The layout and the host identity](#the-layout-and-the-host-identity)).
 The workspace binds its tools over every backend.
-`openWorkspace` opens the bash resource, builds the three file tools, and
+`openWorkspace` opens the bash resource, builds the four file tools, and
 binds them to its `use` method. It also opens
 the process table and builds the four process tools over it
 ([Processes](processes.md)). `workspace.processes` gives the host the
@@ -1257,6 +1334,7 @@ signal. A caller that has no signal passes none.
 | `cwd`                               | The home of the agent, and the directory of a relative path    |
 | `absolutePath`, `canonicalPath`     | The absolute path, and the path with every link resolved       |
 | `readTextFile`, `readBinaryFile`    | Read a file as text or as bytes                                |
+| `readRange(path, start, length)`    | Read at most `length` bytes from the byte `start`, at any size |
 | `writeFile`, `appendFile`           | Create or extend a file, and create each missing parent        |
 | `renameFile`, `remove`, `createDir` | Move a path, remove a path, and make a directory               |
 | `fileInfo`, `listDir`, `exists`     | The facts of a path, the children of a directory, and presence |

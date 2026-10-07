@@ -50,26 +50,26 @@ describe('the Workbench tool set', () => {
 		const [first, ...rest] = built.specialists;
 		const expected = shapeOf(first?.executor.tools ?? []);
 		expect(expected.map((tool) => tool.name)).toEqual(
-			expect.arrayContaining(['read', 'write', 'edit', 'bash', 'sql', 'repos', 'fork', 'operate']),
+			expect.arrayContaining([
+				'read',
+				'write',
+				'edit',
+				'apply_patch',
+				'bash',
+				'sql',
+				'repos',
+				'fork',
+				'operate',
+			]),
 		);
 		for (const agent of rest) expect(shapeOf(agent.executor.tools), agent.name).toEqual(expected);
-		// Only the assistant opens a breakout room, and only a worker reports.
+		// Every seat holds the one canvas bundle and the pin tools.
 		const names = (agent: { executor: { tools: readonly { name: string }[] } }) =>
 			agent.executor.tools.map((tool) => tool.name);
-		expect(names(built.assistant)).toEqual(expect.arrayContaining(['breakout', 'tell', 'archive']));
-		expect(names(built.assistant)).not.toContain('report');
-		// Every seat of a root room and every worker can pin a file.
-		for (const agent of [built.assistant, ...built.specialists, ...built.workers])
-			expect(names(agent), agent.name).toEqual(expect.arrayContaining(['show', 'hide']));
-		for (const agent of built.specialists)
-			expect(names(agent), agent.name).not.toEqual(expect.arrayContaining(['breakout', 'report']));
-		expect(built.workers.map((worker) => worker.name)).toEqual(['scout', 'maker']);
-		for (const worker of built.workers) {
-			expect(names(worker), worker.name).toEqual(expect.arrayContaining(['read', 'sql', 'report']));
-			expect(names(worker), worker.name).not.toEqual(
-				expect.arrayContaining(['breakout', 'operate']),
+		for (const agent of [built.assistant, ...built.specialists])
+			expect(names(agent), agent.name).toEqual(
+				expect.arrayContaining(['breakout', 'tell', 'archive', 'report', 'show', 'hide']),
 			);
-		}
 		const [firstSpecialist, ...otherSpecialists] = built.specialists;
 		for (const agent of otherSpecialists)
 			expect(agent.executor.guidance, agent.name).toEqual(firstSpecialist?.executor.guidance);

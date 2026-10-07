@@ -2,6 +2,82 @@
 
 ## Unreleased
 
+**A traced step names its exchange.** `TracedStep` has a new optional field,
+`exchange`. It holds the seq of the message that opened the exchange that the
+activation works on. A summary activation names the exchange that it
+summarizes. The field is absent when the activation works outside an
+exchange, or ends before its first pass. `TraceSink.startPass` takes the exchange as a third argument, and
+the sink stamps it on every step of the activation.
+
+**The trace can record the input of the model.** A new `input` step holds
+the text that the driver renders for the pass. The `part` field says
+`system` or `record`. The driver records one `record` step for each pass
+that reads a record, and one `system` step in the first pass. The new trace policy field
+`input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
+`limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+
+**One agent definition works in a root room and in a breakout room.** The
+composition of the room decides how an agent behaves: who is present, and
+whether the room has an opener in a parent. `Canvas.workerTools()` and
+`BreakoutOptions.team` are gone, and so is the worker team. `canvas.tools()`
+returns one bundle with `breakout`, `tell`, `archive`, and `report`. The row
+of the room still refuses a call: `report` in a root room, and `breakout`,
+`tell`, and `archive` at depth one. `breakout` seats any name that `resume`
+took, and a root room defaults to every definition. `OpenCanvasOptions.breakout`
+is optional. A stored root row with no `agents` now seats every definition,
+and a breakout row that names a removed definition fails to start at
+`resume`. The guidance of the bundle has one rule for a question: a question
+for a person goes to a person who is present in the room, with `say({ to })`,
+and when nobody is present and the room has an opener, the agent reports it.
+In a breakout room, the reminder names the opener, the parent room, and the
+goal. The close notice of an exchange that closed `awaiting` names the
+awaited person. An `operate` above the limit with no person in the exchange
+records the request and tells the seat to report it to the opener. The Workbench drops `scout` and
+`maker`: every seat holds the one canvas bundle, and specialists staff the
+breakout rooms.
+
+**The message kind `posted` is now `system`.** A message that the system
+writes has the body kind `system`: a host post with `room.post`, or a say
+that the room returns. The types and the guard follow: `PostedMessage` is
+`SystemMessage`, and `isPosted` is `isSystem`. The agent prompt reads
+`[system → ...]`, and the opening line of an exchange reads "A system message
+reports an event". `room.post` and `PostInput` keep their names. A stored
+journal that holds the kind `posted` does not resume.
+
+**`read` of a text file has no size limit.** `WorkspaceEnv` has a new
+member, `readRange(path, start, length, signal?)`. It gives at most `length`
+bytes from the byte `start`, and it has no size limit. `FileOperations` has
+the same member. The directory backend, the workstation, and the local
+backend of `camera-chat` read the range from the file. The memory backend cuts
+the range from the whole file. `read` scans a text file in ranges of 1 MiB
+and keeps the lines of the view. So a file of any size gives a view, and an
+offset and a limit read past 10 MiB. `details.lines` is present only when the
+scan reached the end of the file. When it is absent, the notices omit the
+line count. A whole-file read keeps the limit of its backend. So do an
+image, `edit`, `apply_patch`, and a snapshot.
+
+**The Pi executor records a `session` step.** The step opens each
+activation, before the first model step. It holds the name `pi`, the model
+string of the executor options, the session id, and the names of the tools.
+
+**The dependencies are at their latest versions.** The release moves
+`vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
+3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
+to 0.3.291, and the Pi packages to 1.0.4. `@ambionframework/cloudflare` stays
+on `vitest` 4, the range that `@cloudflare/vitest-pool-workers` accepts.
+The directory backend runs `createExclusive` as trusted code of just-bash.
+
+**Every workspace has an `apply_patch` tool.** One call adds, deletes,
+updates, and moves several files with a patch in the envelope of the Codex
+tool of the same name. The tool parses the envelope, runs every operation in
+memory, and writes only when each one succeeded. A hunk matches exactly, then
+with the whitespace at the end of each line dropped, then with both ends
+dropped. The tool keeps the line endings, the byte order mark, and a missing
+final newline. The result lists each operation, and `details.patch` holds the
+unified diff. The text work derives from `applyDiff` of the OpenAI Agents SDK
+(MIT License). Every seat that has the workspace bundle gets `apply_patch`
+beside `edit`, and the note on the file tools names it.
+
 **A process view keeps the start and the end of a long output.** A new part
 of more than 2000 lines or 50 KB shows its first and its last 1000 lines or
 25 KB, with a marker line between them. The marker names the lines that the

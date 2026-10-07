@@ -26,7 +26,7 @@ import { openWorkspace } from '@ambionframework/workspace';
 import { sqliteBackend } from '@ambionframework/workspace/sqlite';
 import type { Answered } from './action-state.ts';
 import { readApprovals } from './approvals.ts';
-import { type Person, team, workerNames } from './definitions.ts';
+import { type Person, team } from './definitions.ts';
 import { openInstrument } from './instrument.ts';
 import {
 	type Environment,
@@ -204,7 +204,6 @@ export async function openRooms(
 		runtime,
 		store: sqliteCanvas(sql),
 		workspace,
-		breakout: { team: workerNames },
 		widgets: { kinds: PIN_KINDS },
 		onError: (failure) => reportFailure(stateOf(failure.room), failure),
 	});
