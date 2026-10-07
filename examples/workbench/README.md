@@ -280,17 +280,18 @@ its `executor` function builds the executor of the kind that `seatKinds` names. 
 room seats the specialists it needs. The reserve holds the rest. The header
 of the terminal shows the executor kind beside each agent name.
 
-**The assistant delegates to a worker team.** The team has `scout`, which
-reads and reports, and `maker`, which writes files and lab records. No root
-room seats a worker. The assistant holds `breakout`, `tell`, and `archive`.
-A worker holds the workspace tools and `report`, and no instrument. A
-breakout room is named `<parent>-<name>`. The room list shows it with its
-parent, and `/room` completes it with `breakout of <parent>`. A person
-visits it as any other room. The report of the worker lands in the parent
-room, and the assistant archives the breakout room when the work is done.
-See [the canvas](../../docs/canvas.md).
+**The assistant delegates to a breakout room that specialists staff.** Every
+seat holds the one canvas bundle: `breakout`, `tell`, `archive`, and
+`report`. A specialist works in a root room and in a breakout room, with the
+same definition and the same home. A breakout room is named
+`<parent>-<name>`. The room list shows it with its parent, and `/room`
+completes it with `breakout of <parent>`. A person visits it as any other
+room. A specialist in a breakout room sends its result with `report`, and the
+report lands in the parent room. The assistant archives the breakout room
+when the work is done. See [the canvas](../../docs/canvas.md).
 
-The specialists hold the workspace and instrument bundles. The assistant adds the opener bundle, and a worker holds the workspace bundle and the worker bundle.
+The seats hold one list of bundles: the workspace, the instrument, the
+widgets, and the canvas.
 `src/rooms.ts` passes a list of three executions, one for each executor
 kind. Each execution checks keys, sets the environment, and
 lets a test script an executor. Every host supplies the execution for each
@@ -389,36 +390,36 @@ workspace resources.
 
 ## Files
 
-| File                     | What                                                    |
-| ------------------------ | ------------------------------------------------------- |
-| `src/definitions.ts`     | The assistant, the specialists, the workers, the people |
-| `src/scenarios.ts`       | The rooms, and the workspace seed                       |
-| `src/repositories.ts`    | The git backend and its templates                       |
-| `src/rooms.ts`           | The canvas of the root rooms and the host room view     |
-| `src/workbench.ts`       | The host API the terminal calls in process              |
-| `src/files.ts`           | The workspace list, one file preview, and `/attach`     |
-| `src/names.ts`           | The room name and goal rules                            |
-| `src/sql.ts`             | The `Sql` of the stores over one SQLite database        |
-| `src/session.ts`         | The terminal state and commands, without OpenTUI        |
-| `src/feed.ts`            | The room feed: one read at a time                       |
-| `src/commands.ts`        | The slash commands and their suggestions                |
-| `src/timeline.ts`        | The record grouped into questions, threads, summaries   |
-| `src/steps.ts`           | The steps of an activation, and the cost of a run       |
-| `src/approvals.ts`       | The instrument operations that wait for an answer       |
-| `src/transcript.ts`      | The conversation, with open and closed threads          |
-| `src/composer.ts`        | The composer, room chip, palette, and paste detection   |
-| `src/browser.ts`         | The files panel state: search, matches, chosen file     |
-| `src/files-panel.ts`     | The files panel beside the conversation                 |
-| `src/action-state.ts`    | The actions of a pin: focus, form, press token, result  |
-| `src/widget-actions.ts`  | The buttons and the form of the actions, in OpenTUI     |
-| `src/processes.ts`       | The order of the processes, and the end of an output    |
-| `src/process-browser.ts` | The processes panel state: list, choice, and cancel     |
-| `src/process-panel.ts`   | The processes panel beside the conversation             |
-| `src/database.ts`        | The SQLite preview: tables and their first rows         |
-| `src/refs.ts`            | The refs of a message: parse, resolve, and one chip     |
-| `src/tui.ts`             | The terminal: layout, keys, and the run loop            |
-| `src/kinds.ts`           | The executor kind, model, and key of each seat          |
-| `src/unavailable.ts`     | The execution of a kind that has no key                 |
-| `src/main.ts`            | The entry point                                         |
-| `src/brand.ts`           | The product name and the terminal palette               |
-| `library/`               | The datasheets                                          |
+| File                     | What                                                   |
+| ------------------------ | ------------------------------------------------------ |
+| `src/definitions.ts`     | The assistant, the specialists, the people             |
+| `src/scenarios.ts`       | The rooms, and the workspace seed                      |
+| `src/repositories.ts`    | The git backend and its templates                      |
+| `src/rooms.ts`           | The canvas of the root rooms and the host room view    |
+| `src/workbench.ts`       | The host API the terminal calls in process             |
+| `src/files.ts`           | The workspace list, one file preview, and `/attach`    |
+| `src/names.ts`           | The room name and goal rules                           |
+| `src/sql.ts`             | The `Sql` of the stores over one SQLite database       |
+| `src/session.ts`         | The terminal state and commands, without OpenTUI       |
+| `src/feed.ts`            | The room feed: one read at a time                      |
+| `src/commands.ts`        | The slash commands and their suggestions               |
+| `src/timeline.ts`        | The record grouped into questions, threads, summaries  |
+| `src/steps.ts`           | The steps of an activation, and the cost of a run      |
+| `src/approvals.ts`       | The instrument operations that wait for an answer      |
+| `src/transcript.ts`      | The conversation, with open and closed threads         |
+| `src/composer.ts`        | The composer, room chip, palette, and paste detection  |
+| `src/browser.ts`         | The files panel state: search, matches, chosen file    |
+| `src/files-panel.ts`     | The files panel beside the conversation                |
+| `src/action-state.ts`    | The actions of a pin: focus, form, press token, result |
+| `src/widget-actions.ts`  | The buttons and the form of the actions, in OpenTUI    |
+| `src/processes.ts`       | The order of the processes, and the end of an output   |
+| `src/process-browser.ts` | The processes panel state: list, choice, and cancel    |
+| `src/process-panel.ts`   | The processes panel beside the conversation            |
+| `src/database.ts`        | The SQLite preview: tables and their first rows        |
+| `src/refs.ts`            | The refs of a message: parse, resolve, and one chip    |
+| `src/tui.ts`             | The terminal: layout, keys, and the run loop           |
+| `src/kinds.ts`           | The executor kind, model, and key of each seat         |
+| `src/unavailable.ts`     | The execution of a kind that has no key                |
+| `src/main.ts`            | The entry point                                        |
+| `src/brand.ts`           | The product name and the terminal palette              |
+| `library/`               | The datasheets                                         |

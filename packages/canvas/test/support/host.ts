@@ -79,7 +79,7 @@ export function host(options: HostOptions = {}): Host {
 		name: 'lab',
 		runtime,
 		store,
-		breakout: options.breakout ?? { team: ['cy'] },
+		...(options.breakout === undefined ? {} : { breakout: options.breakout }),
 		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
 		...(options.widgets === undefined ? {} : { widgets: options.widgets }),
 		onError: (error) => void errors.push(error),

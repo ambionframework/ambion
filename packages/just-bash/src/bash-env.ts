@@ -36,6 +36,7 @@ import {
 	withDeadline,
 } from '@ambionframework/workspace';
 import type { Bash, FsStat } from 'just-bash';
+import { rangeReader } from './range-fs.ts';
 
 /** just-bash puts the code at the front of the message; the wording after it differs per filesystem. */
 const ERROR_CODES: Record<string, FileErrorCode> = {
@@ -82,6 +83,11 @@ export class BashEnv extends HomeEnv implements WorkspaceEnv {
 	protected readonly files: FileOperations = {
 		readText: (path) => this.bash.fs.readFile(path),
 		readBinary: (path) => this.bash.fs.readFileBuffer(path),
+		readRange: async (path, start, length) => {
+			const read = rangeReader(this.bash.fs);
+			if (read) return read(path, start, length);
+			return (await this.bash.fs.readFileBuffer(path)).slice(start, start + length);
+		},
 		write: (path, content) => this.bash.fs.writeFile(path, content),
 		append: (path, content) => this.bash.fs.appendFile(path, content),
 		rename: (source, destination) => this.bash.fs.mv(source, destination),

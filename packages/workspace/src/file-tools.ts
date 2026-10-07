@@ -1,11 +1,13 @@
 /**
- * The three file tools of every workspace: `read`, `write`, and `edit`. Each
- * one runs over the port of a bash backend, through the whole-operation
- * queue of the resource, so a call sees the files as the previous call left
- * them.
+ * The four file tools of every workspace: `read`, `write`, `edit`, and
+ * `apply_patch`. Each one runs over the port of a bash backend, through the
+ * whole-operation queue of the resource, so a call sees the files as the
+ * previous call left them.
  *
- * The names, parameters, and results derive from the file tools of the agent
- * harness of Pi (earendil-works/pi, MIT License, Mario Zechner).
+ * The names, parameters, and results of `read`, `write`, and `edit` derive
+ * from the file tools of the agent harness of Pi (earendil-works/pi, MIT
+ * License, Mario Zechner). The envelope of `apply_patch` follows the
+ * `apply_patch` tool of Codex.
  */
 
 import {
@@ -15,6 +17,12 @@ import {
 	type ToolResult,
 } from '@ambionframework/ambion';
 import { type Static, Type } from 'typebox';
+import {
+	APPLY_PATCH_DESCRIPTION,
+	applyPatchFiles,
+	applyPatchSchema,
+	prepareApplyPatchArguments,
+} from './apply-patch-tool.ts';
 import type { WorkspaceEnv } from './backend.ts';
 import {
 	applyEdits,
@@ -25,11 +33,18 @@ import {
 	stripBom,
 	unifiedPatch,
 } from './edit-diff.ts';
+import { accessError, assertLive, readEditable, resolvePath, text, value } from './file-support.ts';
 import { imageMimeType } from './image-type.ts';
-import type { FileError, Result } from './port.ts';
 import { TruncationFacts } from './process-schema.ts';
+import { lineRange, SCAN_BYTES, type Scan, scanLines } from './read-scan.ts';
 import type { WorkspaceResource } from './resource.ts';
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from './truncate.ts';
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	type Truncation,
+	truncateHead,
+} from './truncate.ts';
 
 const readSchema = Type.Object({
 	path: Type.String({ description: 'Path to the file to read (relative or absolute)' }),
@@ -55,7 +70,12 @@ const ReadOutput = Type.Object(
 				description: 'The last line of text. It is one less than from when text is empty.',
 			}),
 		),
-		lines: Type.Optional(Type.Integer({ description: 'The lines in the file.' })),
+		lines: Type.Optional(
+			Type.Integer({
+				description:
+					'The lines in the file. Present when the scan reached the end of the file, and absent when the view ended it early.',
+			}),
+		),
 		next: Type.Optional(
 			Type.Integer({ description: 'The offset to read next when more lines of the file remain.' }),
 		),
@@ -97,33 +117,6 @@ const editSchema = Type.Object({
 type ReadParams = Static<typeof readSchema>;
 type WriteParams = Static<typeof writeSchema>;
 type EditParams = Static<typeof editSchema>;
-
-/** The value of a result, or its error thrown. */
-function value<T>(result: Result<T, FileError>): T {
-	if (!result.ok) throw result.error;
-	return result.value;
-}
-
-function assertLive(signal: AbortSignal | undefined): void {
-	if (signal?.aborted) throw new Error('Operation aborted');
-}
-
-function text(message: string): ToolResult<undefined>;
-function text<D>(message: string, details: D): ToolResult<D>;
-function text(message: string, details?: unknown): ToolResult {
-	return { content: [{ type: 'text', text: message }], details };
-}
-
-/** An error for a file that the tool could not reach, with the cause. */
-function accessError(path: string, error: FileError): Error {
-	return new Error(`Could not edit file: ${path}. Error code: ${error.code}.`, { cause: error });
-}
-
-/** The absolute path of a tool path. A leading `@` and the Unicode spaces of a pasted path go. */
-async function resolvePath(env: WorkspaceEnv, path: string, signal?: AbortSignal): Promise<string> {
-	const plain = path.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
-	return value(await env.absolutePath(plain.startsWith('@') ? plain.slice(1) : plain, signal));
-}
 
 /**
  * The path of a file to read. A screenshot name can differ from the name that
@@ -187,34 +180,64 @@ async function readImage(
 function readNotice(
 	truncation: Pick<ReturnType<typeof truncateHead>, 'truncatedBy' | 'outputLines'>,
 	first: number,
-	total: number,
+	total: number | undefined,
 ): string {
 	const last = first + truncation.outputLines - 1;
-	const where = `Showing lines ${first}-${last} of ${total}`;
+	const where = `Showing lines ${first}-${last}${total === undefined ? '' : ` of ${total}`}`;
 	const limit =
 		truncation.truncatedBy === 'lines' ? '' : ` (${formatSize(DEFAULT_MAX_BYTES)} limit)`;
 	return `\n\n[${where}${limit}. Use offset=${last + 1} to continue.]`;
 }
 
-/** The lines of a file: none for an empty file, and no empty line after a final newline. */
-function lineCount(lines: readonly string[]): number {
-	if (lines.length === 1 && lines[0] === '') return 0;
-	return lines.at(-1) === '' ? lines.length - 1 : lines.length;
+/** The notice after the lines of a `read` that end before the file does. */
+function moreNotice(end: number, total: number | undefined): string {
+	const count = total === undefined ? 'More lines' : `${total - end} more lines`;
+	return `\n\n[${count} in file. Use offset=${end + 1} to continue.]`;
+}
+
+/** What a cut kept and dropped. */
+type Cut = Omit<Truncation, 'content'>;
+
+/** The view of a `read`: the text that fits the limits, and what the cut dropped. */
+function cutView(scan: Scan): { content: string; facts: Cut } {
+	const { content, ...cut } = truncateHead(
+		new TextDecoder('utf-8', { ignoreBOM: true }).decode(scan.bytes),
+	);
+	if (!cut.truncated) return { content, facts: cut };
+	return { content, facts: { ...cut, totalLines: scan.seen.lines, totalBytes: scan.seen.bytes } };
+}
+
+/** The result of a `read` that starts at a first line over the byte limit. */
+function longLine(scan: Scan, given: string, view: ReadDetails, facts: Cut) {
+	const size = formatSize(scan.firstLineBytes);
+	const sed = `sed -n '${view.from}p' ${given} | head -c ${DEFAULT_MAX_BYTES}`;
+	return text(
+		`[Line ${view.from} is ${size}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: ${sed}]`,
+		{ ...view, text: '', truncation: facts },
+	);
+}
+
+/** The result of a `read` of a view that a limit of the file tools did not cut. */
+function readWindow(scan: Scan, view: ReadDetails, hasLimit: boolean): ToolResult<ReadDetails> {
+	const total = scan.file?.elements;
+	const end = Math.min(scan.range.end, total ?? Number.POSITIVE_INFINITY);
+	const more = total === undefined ? scan.more : end < total;
+	if (!hasLimit || !more) return text(view.text, view);
+	return text(view.text + moreNotice(end, total), { ...view, next: end + 1 });
 }
 
 /** The result of a `read` of a text file at `path`, an absolute path. */
 function readText(
-	bytes: Uint8Array,
+	scan: Scan,
 	{ path: given, offset, limit }: ReadParams,
 	path: string,
 ): ToolResult<ReadDetails> {
-	const lines = new TextDecoder().decode(bytes).split('\n');
-	const start = offset ? Math.max(0, offset - 1) : 0;
-	if (start >= lines.length) {
-		throw new Error(`Offset ${offset} is beyond end of file (${lines.length} lines total)`);
+	const { start } = scan.range;
+	const total = scan.file?.elements;
+	if (total !== undefined && start >= total) {
+		throw new Error(`Offset ${offset} is beyond end of file (${total} lines total)`);
 	}
-	const end = limit === undefined ? lines.length : Math.min(start + limit, lines.length);
-	const { content, ...facts } = truncateHead(lines.slice(start, end).join('\n'));
+	const { content, facts } = cutView(scan);
 	const first = start + 1;
 	const last = first + facts.outputLines - 1;
 	const view: ReadDetails = {
@@ -222,25 +245,15 @@ function readText(
 		text: content,
 		from: first,
 		to: last,
-		lines: lineCount(lines),
+		...(scan.file === undefined ? {} : { lines: scan.file.lines }),
 	};
-	if (facts.firstLineExceedsLimit) {
-		const size = formatSize(Buffer.byteLength(lines[start] ?? '', 'utf8'));
-		const sed = `sed -n '${first}p' ${given} | head -c ${DEFAULT_MAX_BYTES}`;
-		return text(
-			`[Line ${first} is ${size}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: ${sed}]`,
-			{ ...view, text: '', truncation: facts },
-		);
-	}
-	if (facts.truncated) {
-		const notice = readNotice(facts, first, lines.length);
-		return text(content + notice, { ...view, next: last + 1, truncation: facts });
-	}
-	if (limit !== undefined && end < lines.length) {
-		const more = `\n\n[${lines.length - end} more lines in file. Use offset=${end + 1} to continue.]`;
-		return text(content + more, { ...view, next: end + 1 });
-	}
-	return text(content, view);
+	if (facts.firstLineExceedsLimit) return longLine(scan, given, view, facts);
+	if (!facts.truncated) return readWindow(scan, view, limit !== undefined);
+	return text(content + readNotice(facts, first, total), {
+		...view,
+		next: last + 1,
+		truncation: facts,
+	});
 }
 
 async function readFile(
@@ -249,11 +262,14 @@ async function readFile(
 	signal: AbortSignal | undefined,
 ): Promise<ToolResult<ReadDetails>> {
 	const path = await resolveReadPath(env, params.path, signal);
-	const bytes = value(await env.readBinaryFile(path, signal));
-	const mimeType = imageMimeType(bytes);
-	return mimeType === undefined
-		? readText(bytes, params, path)
-		: readImage(env, params.path, bytes, mimeType, signal);
+	const first = value(await env.readRange(path, 0, SCAN_BYTES, signal));
+	const mimeType = imageMimeType(first);
+	if (mimeType !== undefined) {
+		const bytes = value(await env.readBinaryFile(path, signal));
+		return readImage(env, params.path, bytes, mimeType, signal);
+	}
+	const range = lineRange(params.offset, params.limit);
+	return readText(await scanLines(env, path, range, first, signal), params, path);
 }
 
 async function writeFile(
@@ -266,23 +282,6 @@ async function writeFile(
 	value(await env.writeFile(absolute, content, signal));
 	assertLive(signal);
 	return text(`Successfully wrote to ${path}`);
-}
-
-/** The content of a file that `edit` may change, or the error that names why it may not. */
-async function readEditable(
-	env: WorkspaceEnv,
-	path: string,
-	absolute: string,
-	signal?: AbortSignal,
-): Promise<string> {
-	const info = await env.fileInfo(absolute, signal);
-	if (!info.ok) throw accessError(path, info.error);
-	if (info.value.kind !== 'file' && info.value.kind !== 'symlink') {
-		throw new Error(`Could not edit file: ${path}. Path is not a file.`);
-	}
-	const content = await env.readTextFile(absolute, signal);
-	if (!content.ok) throw accessError(path, content.error);
-	return content.value;
 }
 
 async function editFile(
@@ -354,7 +353,7 @@ function prepareEditArguments(input: unknown): EditParams {
 	return { ...rest, edits: [...listed, { oldText, newText }] } as EditParams;
 }
 
-/** The three file tools, run through the queue of `use`. */
+/** The four file tools, run through the queue of `use`. */
 export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly AmbionTool[] {
 	const through =
 		<P, R extends ToolResult>(
@@ -387,6 +386,14 @@ export function fileTools(use: WorkspaceResource<WorkspaceEnv>['use']): readonly
 			parameters: editSchema,
 			prepareArguments: prepareEditArguments,
 			execute: through(editFile),
+		}),
+		defineTool({
+			name: 'apply_patch',
+			label: 'apply_patch',
+			description: APPLY_PATCH_DESCRIPTION,
+			parameters: applyPatchSchema,
+			prepareArguments: prepareApplyPatchArguments,
+			execute: through(applyPatchFiles),
 		}),
 	]);
 }

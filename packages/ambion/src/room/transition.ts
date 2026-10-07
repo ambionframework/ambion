@@ -257,7 +257,7 @@ const refsField = (refs: string[] | undefined): { refs?: string[] } =>
 
 /**
  * A person delivers through a visit, or the host posts as the system: to
- * someone in the room who hears it, or to the room. A post has no author.
+ * someone in the room who hears it, or to the room. A system message has no author.
  */
 function deliver(
 	state: RoomState,
@@ -268,14 +268,14 @@ function deliver(
 	const person = command.type === 'deliver' ? command.from : undefined;
 	if (person !== undefined && state.people.get(person)?.presence !== 'present')
 		return refused(`'${person}' is not present in this room.`, 'not_present');
-	const what = person === undefined ? 'a post' : 'a delivery';
+	const what = person === undefined ? 'a system message' : 'a delivery';
 	const target = state.roster.find((seat) => seat.name === to);
 	if (to !== undefined && !state.people.has(to) && target === undefined)
 		return refused(`Cannot direct ${what} to '${to}': not in this room.`, 'unknown_participant');
 	if (target?.attention === 'none')
 		return refused(`Cannot direct ${what} to '${to}': it wakes for nothing said.`);
 	const author =
-		person === undefined ? { kind: 'posted' as const } : { kind: 'said' as const, from: person };
+		person === undefined ? { kind: 'system' as const } : { kind: 'said' as const, from: person };
 	const body = { ...author, at: iso(now), ...(to === undefined ? {} : { to }), text };
 	return message(state, { ...body, ...refsField(refs) }, now, true, command.bytes);
 }

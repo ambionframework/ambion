@@ -13,7 +13,6 @@ import {
 	getCurrentSystemPrompt,
 } from '@earendil-works/pi-ai';
 import { onTestFinished, vi } from 'vitest';
-import { workerNames } from '../src/definitions.ts';
 import { PIN_KINDS } from '../src/pins.ts';
 import { type OpenOptions, openWorkbench, type Workbench } from '../src/workbench.ts';
 
@@ -109,7 +108,6 @@ export function bundleCanvas() {
 		name: 'workbench',
 		runtime: createRuntime({ storage: memoryJournals(), execution: [] }),
 		store: memoryCanvas(),
-		breakout: { team: workerNames },
 		widgets: { kinds: PIN_KINDS },
 	});
 }

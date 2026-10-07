@@ -195,7 +195,7 @@ const exhausted = (): Promise<readonly Entry[]> =>
  */
 const checksLater: PiScript = (context) => {
 	if (context.messages.at(-1)?.role === 'toolResult') return quiet();
-	if (contextText(context).includes('[posted → worker, returns')) return say('The slab is poured.');
+	if (contextText(context).includes('[system → worker, returns')) return say('The slab is poured.');
 	return schedule('Check the pour log.', 600);
 };
 

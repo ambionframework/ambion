@@ -423,20 +423,20 @@ each step with `activation`, `pass`, `at`, and `index`. `index` counts from
 zero in each pass. The `TraceStep` type is the stamped form. `Step` in
 `types.ts` holds the fields of each kind.
 
-| Step          | Recorded by | Meaning                                                                                                      |
-| ------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                                |
-| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                              |
-| `text`        | executor    | A block of model text. `final` closes the block.                                                             |
-| `tool_call`   | executor    | A tool starts, with its input. `parent` names the `compose` call that made a nested call.                    |
-| `tool_result` | executor    | A tool ends, with its output, or with `error`. `parent` is the same as on `tool_call`.                       |
-| `approval`    | `compose`   | The answer of `approve` to one compose call: the `compose` call id, and `allow` or `deny`.                   |
-| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.            |
-| `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                              |
-| `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Claude and Codex record it. |
-| `usage`       | executor    | Tokens and cost.                                                                                             |
-| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.              |
-| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.               |
+| Step          | Recorded by | Meaning                                                                                                     |
+| ------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                               |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                             |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                            |
+| `tool_call`   | executor    | A tool starts, with its input. `parent` names the `compose` call that made a nested call.                   |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`. `parent` is the same as on `tool_call`.                      |
+| `approval`    | `compose`   | The answer of `approve` to one compose call: the `compose` call id, and `allow` or `deny`.                  |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.           |
+| `steer`       | driver      | A message landed mid-activation. `consumed` says whether the pass delivered it.                             |
+| `session`     | executor    | What the vendor session opened with: its name, model, `cwd`, tools, and servers. Every executor records it. |
+| `usage`       | executor    | Tokens and cost.                                                                                            |
+| `notice`      | executor    | A non-fatal diagnostic of the harness, at `level` `info` or `warning`. It never gates anything.             |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `cut`. A failure adds its `cause` and `message`.              |
 
 **A compose call records its own steps.** `compose` records an
 `approval` step when the `approve` hook answers. It records a `tool_call` step

@@ -1,4 +1,4 @@
-/** The two bundles of the canvas: the opener bundle, and the worker bundle. */
+/** The bundle of the canvas: `breakout`, `tell`, `archive`, `report`, and the reminder. */
 import { defineTool, type ToolBundle, type ToolContext } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 import { archiveRoom, type BreakoutPort, callerOf, openBreakout, tellRoom } from './breakout.ts';
@@ -41,28 +41,27 @@ const ReportOutput = Type.Object({
 	to: Type.Optional(Type.String({ description: 'The opener, when the report went to it.' })),
 });
 
-const OPENER_GUIDANCE = [
-	'A breakout room is a room of its own for background work. Its workers come from the worker team.',
+const GUIDANCE = [
+	'A breakout room is a room of its own for background work. `breakout` seats agents by name.',
 	'`breakout` opens one with a goal and a first message. A repeat call with the same name returns the same room.',
-	'A task that you delegate goes to the breakout room alone. Do not seat a specialist of this room, and do not ask one, for that task.',
+	'A task that you delegate goes to the breakout room alone. Do not ask for it in this room.',
 	'`tell` posts into a breakout room that you opened, and steers its workers.',
 	'`archive` ends a breakout room, and records `done` or `failed`. An archived room does not start again.',
 	'A report of the workers arrives in this room as a message that starts with `breakout <room>:`. When the report arrives, archive the room as `done` or `failed`, and answer the person who asked with the result. A close notice with the same start carries no result: use `tell` to ask the workers again.',
-	'Your reminder lists the breakout rooms that you hold. Read it before you say that a room failed.',
+	'In a root room, your reminder lists the breakout rooms that you hold. Read it before you say that a room failed.',
+	'In a breakout room, `report` posts your result into the room that opened yours. Call it inside the exchange that activated you.',
+	'A question for a person goes to a person who is present in this room, with `say({ to })`. When nobody is present and this room has an opener, `report` the question.',
 ].join('\n');
 
-const WORKER_GUIDANCE =
-	'`report` posts your result into the room that opened yours. Call it inside the exchange that activated you.';
-
-/** The opener bundle: `breakout`, `tell`, `archive`, and the reminder. */
-export function openerBundle(port: BreakoutPort): ToolBundle {
+/** The bundle of the canvas: `breakout`, `tell`, `archive`, `report`, and the reminder. */
+export function breakoutBundle(port: BreakoutPort): ToolBundle {
 	return {
 		tools: [
 			defineTool({
 				name: 'breakout',
 				label: 'Open a breakout room',
 				description:
-					'Open a breakout room only when it is valuable: for independent work that runs in parallel while this room continues, or for a narrow task that would distract this room. Else answer in this room, or ask a specialist of this room. The tool opens the breakout room <your room>-<name> with a goal. Seat workers from the team, and post the first message to one worker or to all. A repeat call with the same name returns the room that you opened.',
+					'Open a breakout room only when it is valuable: for independent work that runs in parallel while this room continues, or for a narrow task that would distract this room. Else answer in this room, or ask a specialist of this room. The tool opens the breakout room <your room>-<name> with a goal. Seat one or more agents of the canvas, and post the first message to one worker or to all. A repeat call with the same name returns the room that you opened.',
 				parameters: Type.Object({
 					name: Type.String({
 						description: 'The room is <your room>-<name>, at most 48 characters.',
@@ -70,7 +69,7 @@ export function openerBundle(port: BreakoutPort): ToolBundle {
 					goal: Type.String({ description: 'The goal of the room.' }),
 					message: Type.String({ description: 'The first message. It opens the first exchange.' }),
 					agents: Type.Array(Type.String(), {
-						description: 'One or more names from the worker team.',
+						description: 'One or more names of agents of the canvas.',
 					}),
 					to: Type.Optional(
 						Type.String({ description: 'One worker. Omit it to post to every worker.' }),
@@ -117,23 +116,13 @@ export function openerBundle(port: BreakoutPort): ToolBundle {
 					return text(`Archived "${result.room}" as ${result.result}.`, result);
 				},
 			}),
-		],
-		guidance: OPENER_GUIDANCE,
-		remind: breakoutReminder(port),
-	};
-}
-
-/** The worker bundle: `report`. */
-export function workerBundle(port: BreakoutPort): ToolBundle {
-	return {
-		tools: [
 			defineTool({
 				name: 'report',
 				label: 'Report to the opener',
 				description:
-					'Post a result into the room that opened your room, to the agent that opened it. Call it inside the exchange that activated you.',
+					'Post a result, or a question for a person, into the room that opened your room, to the agent that opened it. Call it inside the exchange that activated you. Only a breakout room reports.',
 				parameters: Type.Object({
-					text: Type.String({ description: 'The result.' }),
+					text: Type.String({ description: 'The result, or the question for a person.' }),
 					refs: Type.Optional(Type.Array(Type.String())),
 				}),
 				compose: { output: ReportOutput },
@@ -143,6 +132,7 @@ export function workerBundle(port: BreakoutPort): ToolBundle {
 				},
 			}),
 		],
-		guidance: WORKER_GUIDANCE,
+		guidance: GUIDANCE,
+		remind: breakoutReminder(port),
 	};
 }

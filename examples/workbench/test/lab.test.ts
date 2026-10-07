@@ -170,6 +170,16 @@ describe('the instrument resource', () => {
 			'SELECT outcome FROM operations WHERE id = 1 OR request_id = 1 ORDER BY id DESC LIMIT 1',
 		);
 		expect(status).toEqual([{ outcome: 'approved' }]);
+		// With no person in the exchange, the request still lands, and the seat reports it to the opener.
+		const { exchange: _exchange, ...bare } = contextOf('design', 'act-3');
+		const unattended = await operate('led-current', 30, bare);
+		for (const part of ['operation id 3', 'No person is in this exchange', '`report`'])
+			expect(unattended).toContain(part);
+		expect((await operations(lab)).at(-1)).toMatchObject({
+			outcome: 'requested',
+			exchange_person: null,
+		});
+		expect(await answer(3, 'allow')).toContain('reading 30');
 	});
 
 	it('inserts again when an activation repeats operate, and records a denial without a reading', async () => {
@@ -182,14 +192,13 @@ describe('the instrument resource', () => {
 		expect(rows[2]).toMatchObject({ request_id: 1, reading: null });
 	});
 
-	it('rejects a bad id, an unknown request, an unknown instrument, and a request with no open exchange', async () => {
+	it('rejects a bad id, an unknown request, and an unknown instrument', async () => {
 		const { lab, operate, answer } = bench();
 		await expect(answer(-1, 'allow')).rejects.toThrow(/non-negative integer/);
 		await expect(answer(1.5, 'allow')).rejects.toThrow(/non-negative integer/);
 		await expect(answer(7, 'allow')).rejects.toThrow(/No requested operation 7/);
 		await expect(operate('laser', 1)).rejects.toThrow(/Unknown instrument/);
 		const { exchange: _exchange, ...bare } = contextOf('design', 'act-1');
-		await expect(operate('led-current', 30, bare)).rejects.toThrow(/open exchange/);
 		// Within the limit, an operation runs with no exchange, and its exchange columns stay NULL.
 		expect(await operate('led-current', 5, bare)).toContain('reading 5');
 		expect(await operations(lab)).toEqual([

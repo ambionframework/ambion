@@ -31,7 +31,7 @@ function check(context: Context) {
 		context.messages.some(
 			(message) => message.role === 'user' && JSON.stringify(message.content).includes(text),
 		);
-	const call = has('[posted → checker, returns')
+	const call = has('[system → checker, returns')
 		? fauxToolCall('say', { to: 'priya', text: 'The check came back.' })
 		: fauxToolCall('schedule', {
 				text: 'Check the pour log.',

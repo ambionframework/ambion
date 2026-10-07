@@ -16,7 +16,7 @@ const quiet = () => fauxAssistantMessage('quiet', { stopReason: 'stop' });
 /**
  * The model answers once more after each tool result, so each tool call is
  * followed by a quiet answer. The assistant opens `bringup-<name>` for
- * `worker` at its first activation, and archives it at its second. A worker
+ * `worker` at its first activation, and archives it at its second. A specialist
  * that `reports` calls `report` at its first activation. A summary request
  * gets a plain summary and takes no step.
  */
@@ -56,7 +56,7 @@ describe('Workbench delegation', () => {
 		const directory = await freshDirectory();
 		const workbench = await openHost({
 			directory,
-			stream: delegating('survey', 'scout', true),
+			stream: delegating('survey', 'datasheets', true),
 		});
 		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'k1', 'Check the LED current.');
@@ -75,7 +75,7 @@ describe('Workbench delegation', () => {
 		const breakout = await workbench.read('bringup-survey', 0);
 		expect(
 			breakout.participants.filter((seat) => seat.kind === 'agent').map((s) => s.name),
-		).toEqual(['scout']);
+		).toEqual(['datasheets']);
 		expect(textsOf(breakout.messages)).toContain('Find the forward current of the red LED.');
 		const parent = textsOf(await messagesOf(workbench, 'bringup'));
 		expect(parent.filter((text) => text.startsWith('breakout bringup-survey:'))).toEqual([
@@ -83,7 +83,7 @@ describe('Workbench delegation', () => {
 		]);
 		expect(parent.some((text) => text.includes('is closed'))).toBe(false);
 		const bringup = await workbench.read('bringup', 0);
-		expect(bringup.participants.map((seat) => seat.name)).not.toContain('scout');
+		expect(bringup.participants.map((seat) => seat.name)).toContain('datasheets');
 		expect(await workbench.pins('bringup-survey')).toEqual({ pins: [], more: 0 });
 		expect(canvasRow(directory, 'bringup-survey')).toMatchObject({
 			state: 'archived',
@@ -92,7 +92,7 @@ describe('Workbench delegation', () => {
 	}, 20_000);
 
 	it('gives the opener one close notice for an exchange with no report, and a person can visit the room', async () => {
-		const workbench = await openHost({ stream: delegating('idle', 'maker', false) });
+		const workbench = await openHost({ stream: delegating('idle', 'datasheets', false) });
 		await workbench.visit('bringup', 'mira');
 		await workbench.send('bringup', 'mira', 'k1', 'Check the LED current.');
 		await vi.waitFor(
@@ -106,7 +106,7 @@ describe('Workbench delegation', () => {
 		);
 		await workbench.visit('bringup-idle', 'mira');
 		expect((await workbench.read('bringup-idle', 0)).participants.map((seat) => seat.name)).toEqual(
-			expect.arrayContaining(['maker', 'mira']),
+			expect.arrayContaining(['datasheets', 'mira']),
 		);
 	}, 20_000);
 
@@ -114,7 +114,7 @@ describe('Workbench delegation', () => {
 		const directory = await freshDirectory();
 		const first = await openHost({
 			directory,
-			stream: delegating('survey', 'scout', false, false),
+			stream: delegating('survey', 'datasheets', false, false),
 		});
 		await first.visit('bringup', 'mira');
 		await first.send('bringup', 'mira', 'k1', 'Check the LED current.');
@@ -130,7 +130,7 @@ describe('Workbench delegation', () => {
 
 		const second = await openHost({
 			directory,
-			stream: delegating('survey', 'scout', false, false),
+			stream: delegating('survey', 'datasheets', false, false),
 		});
 		const row = (await second.rooms()).find((room) => room.name === 'bringup-survey');
 		expect(row).toMatchObject({ parent: 'bringup', status: 'running' });
