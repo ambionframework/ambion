@@ -7,8 +7,8 @@ needs only Node **>= 22.19**.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and
-[the plan](planning/next.md) for the scope of the next release, the work,
-and its evidence. [The backlog](planning/backlog.md) holds everything else.
+[the road to 1.0.0](planning/1.0.0.md) for the scope of each release, the
+work, and its evidence. [The backlog](planning/backlog.md) holds everything else.
 
 ```sh
 pnpm install

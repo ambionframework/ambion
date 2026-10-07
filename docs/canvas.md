@@ -3,7 +3,7 @@
 > **Status: the package `@ambionframework/canvas` implements this page.** It
 > holds the store, the lifecycle, the tools, the bridge, and the widgets with
 > their acts. The runtime is a required parameter of each room operation.
-> [The plan](../planning/next.md) owns delivery and evidence.
+> [The road to 1.0.0](../planning/1.0.0.md) owns delivery and evidence.
 
 **A canvas is a named collection of rooms.** It holds the rooms of a
 deployment and the relations between them. A room that a host opens is a
@@ -630,5 +630,5 @@ place.
 
 ## Out of scope
 
-[The plan](../planning/next.md#out-of-scope) lists the work that this
-package leaves out.
+[The road to 1.0.0](../planning/1.0.0.md#out-of-scope) lists the work that
+this package leaves out.

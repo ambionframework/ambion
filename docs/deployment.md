@@ -2,7 +2,7 @@
 
 **The host supplies execution; Ambion supplies collaboration semantics.**
 Placement, journal persistence, and tool resources are separate decisions.
-[The plan](../planning/next.md#the-scope) defines the next release. The
+[The road to 1.0.0](../planning/1.0.0.md#the-road) defines the next releases. The
 table below states the status of each deployment model.
 
 ## Deployment models

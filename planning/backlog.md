@@ -1,8 +1,10 @@
 # Backlog
 
-Everything that is not in [next.md](next.md). Each item names the
-condition that brings it into a release. Nothing here blocks a release
-until the item moves to that file.
+Everything outside the scope files of the releases. [1.0.0](1.0.0.md)
+holds the road. Each item names the condition that brings it into a
+release. Nothing here blocks a release until the item moves to the scope
+file of that release. [Accepted risks](#accepted-risks) holds the risks
+that the road leaves open.
 
 **An item stays only when it meets one of four tests.** It is a defect
 that someone reproduced. It waits on a decision of the owner. It closes a
@@ -15,51 +17,6 @@ pages own design details. Git history keeps completed plans, removed
 findings, and prior reviews. [Considered and kept](#considered-and-kept)
 and [Deferred by decision](#deferred-by-decision) stop a later review from
 proposing the same change again.
-
-## Pending decisions
-
-**Each item waits on a decision of the owner.** It joins a release only
-when the owner says yes.
-
-**Q1. The `assistant` room option.** `normalizeAssistant` in
-`packages/ambion/src/room.ts` turns the option into an `agents` entry, a
-`broadcast` seat, and the `summaryWriter`. The kernel then holds a role
-that it otherwise treats as ordinary. The question: does the option go,
-with a helper in `@ambionframework/assistant` that returns the three
-options? The executor of the assistant is settled: `defineAssistant`
-takes an `executor` function. A close as a message (D2) removes the
-option with it.
-
-**Q2. The `awaiting` rule for the opener.** A message to the author of the
-opening message closes the exchange `complete`
-(`packages/ambion/src/room/exchange.ts`). An agent that asks the opener
-a clarifying question or an approval therefore reads as done, and
-`awaitingFor` does not list it. A canvas form to the opener closes
-`complete` for the same reason ([The canvas](../docs/canvas.md)). The
-question: does a directed message that ends the exchange await its
-recipient, the opener included?
-**Condition:** a host that must show an open question to the opener, or
-a canvas form must await the opener.
-
-**Q3. Seat selection and seat options in one map.** With no `seats`, the
-room seats every agent at `broadcast`. With `seats: {}`, it seats nobody.
-A `seats` entry for one agent puts every other agent in the reserve
-(`initialSeats` in `packages/ambion/src/room.ts`). `roster.md` documents
-it. The question: do the initial roster and the per-seat options split,
-for example `seats: string[]` and `attention: Record<string, ...>`?
-Decide with Q1, since `assistant` expands into the same map, and with
-the 0.7.0 plan, since a breakout room opens with `seats`. **Condition:**
-Q1 is decided, or a host reports an agent that it configured and found
-unseated.
-
-**Q4. The order of an execution list.** `route` in
-`packages/ambion/src/execution/route.ts` takes the first execution that
-serves a kind, and an execution with no `kind` serves every kind. A
-kinded execution after a catch-all in the same list never runs. The
-catch-all is deliberate (`scripted`, the Cloudflare seat object), and the
-room list overrides the runtime list on purpose. The question: does the
-room refuse a list where a kind repeats or follows a catch-all?
-**Condition:** a host reports a seat that ran on the wrong execution.
 
 ## Known defects
 
@@ -113,48 +70,16 @@ three bounds:
 
 **Condition:** an application requires a kernel-enforced bound.
 
-**D2. Compaction with no person.** A summary goes to a person, so an
-exchange where no person spoke never folds. A monitor that ticks each ten
-minutes adds about 1,000 returned says in a week. The first step is a
-render rule: a closed exchange with no spoken message shows as one line,
-and `recall` still reads it. A later step lets a seat write a summary over
-its own range. **Condition:** a measured context cost from a
-self-scheduling seat.
-
-**The second step can make a close a message.** A close that routes to
-the summary writer makes the summary an ordinary respond activation. The
-`closed` activation source, `owed.ts`, `closedLeases`, `closeFor`, and
-`summaryWriter` on the close then go, and Q1 goes with them. Due work
-becomes one list, and a scheduled say becomes one entry. The review of
-2026-10-02 priced the change:
-
-- **The purpose moves into a rule.** A summary reads to its close, reads
-  the preferences of the person, and writes one summary for each person.
-  These become rules on the kind of the message that woke the writer.
-- **A close must not wake the writer in a loop.** A close routes to the
-  writer only when a person spoke in its range, as `summaryVerdict` says
-  today.
-- **The tools still branch.** A summary `say` drops `readThrough`, holds no
-  agent tools, and ends after the last recipient.
-- **`fixed` stays** unless a close can reach a writer that has no seat.
-
 **D3. A fence on the process table.** A process runs until it ends, times
 out, or gets a cancel ([Processes](../docs/processes.md)). The table has
 no fence, so two runs of the host over one account adopt the same
 processes. **Condition:** a placement that runs two hosts over one
 account.
 
-**D4. One stored source for the roster.** A composition seeds the roster
-from its `agents`, and each seating and unseating changes it. A
-recomposition resets the roster, so it drops a seating that a seat made.
-The change writes one seating for each seat at a start and drops `agents`
-from the composition. **Condition:** a recomposition that must keep a
-seating that a seat made.
-
 ## Supporting work
 
-**These items stay outside the 0.7.0 scope.** Each enters a
-release only when its condition holds.
+**These items stay outside 1.0.0.** Each enters a release only when its
+condition holds. Each one adds to an interface and breaks none.
 
 **RC1. Range recall in the own room.** `recall` grows two selections:
 
@@ -187,6 +112,81 @@ ChatGPT login runs before the cut and one after.
 
 **Evidence:** the token count of a bare seat before and after, and the
 two live runs.
+
+**RA1. A `retry-after` header sets the next attempt.** A 429 with a
+`retry-after` header waits the backoff of the room, which can be shorter
+than the provider asks. The next attempt derives from the record, so the
+delay needs an optional field on the `ended` body.
+
+**Condition:** a provider that refuses retries inside its stated delay.
+
+**V1. A remote viewer of the canvas.** A person watches a bench from
+another machine or a phone. The canvas keeps its handles in one process,
+and the workbench draws a terminal alone. A viewer reads the rooms, the
+widgets, and their sources through a second reader of the storage (PR3 in
+`0.12.0.md`), and the host owns the sign-in.
+
+**Condition:** a person who must watch a room away from its host.
+
+**C1. The canvas on Cloudflare.** The Cloudflare adapter runs a room and
+its seats as Durable Objects, and no canvas store or bridge runs there.
+
+**Condition:** a deployment that needs breakout rooms or widgets on
+Cloudflare.
+
+## Open proofs
+
+**FP1. The rules that decide liveness and spend have no proof.** The
+Dafny rules stop at the fold and the admissions. `routes`, `nextAlarm`,
+`renewUntil`, the window of the view, `classifyCause`, and
+`contributionMatches` run with tests alone. The robustness evaluation of
+2026-10-05 listed them. **Condition:** a defect in one of these functions,
+or a change of [0.9.0](0.9.0.md) that moves one of them into a
+`*.verified.ts`.
+
+## Accepted risks
+
+**The owner accepted these risks on 2026-10-05, and the road leaves them
+open.** Each one is a reproduced or code-verified gap on main at
+`0d1aced`. The record holds under each one: the conditional append is
+atomic, a fence refuses every stale write, and a retry under the same key
+lands once. An entry leaves when a fix lands, or when it moves to the
+scope file of a release.
+
+**AR3. No budget bounds an exchange or a room.** Two seats that direct
+messages at each other wrote 324 messages in 3 s inside 2 activations.
+Only `limits.lease.deadline` ends an activation, and the next message
+starts a new one with no attempts spent. A seat can also keep 4
+scheduled says pending at a 60 s floor. **Today:** monitor usage on the
+`ended` entries. [D1](#designs-with-a-shape) holds the design.
+
+**AR11. A compose child process can outlive its host.** `processRuntime`
+kills its children on the `exit` event of the host. A SIGTERM with no
+handler or a SIGKILL skips that event. A child in a busy loop then runs
+at full CPU with no end. Code: `compose/src/process.ts`. **Today:** use
+`quickjsRuntime`, or run the host under a supervisor that kills its
+process group.
+
+**AR12. An SFTP call that never returns stalls the workspace.** A
+workstation file call has no deadline and no abort. A `write` to a FIFO
+can block the SFTP server, and every agent waits in the one workspace
+queue. This comes from the code; a real sshd has not reproduced it.
+
+**AR16. The failure classifier reads permanence from free text.** A
+proxy error page that contains "unauthorized" ends an activation in one
+attempt. Code: `execution/failure.ts`. UR1 in `0.9.0.md` does not change
+this classifier.
+
+**AR18. A storage call that never settles hangs the room.** `stop()`,
+`read()`, and every write wait with no deadline, and the room name stays
+taken. The shipped storages are synchronous, so only a custom async
+storage or Durable Object storage reaches this.
+
+**AR20. Replay cost grows faster than the record.** At 100,000 entries,
+the projection replays in 13–16 s and holds about 170 MB. Each live
+entry costs time in proportion to the history, because the projection
+copies whole containers. No snapshot exists. A snapshot is a cache of
+the projection, so it can follow 1.0.0 with no change of format.
 
 ## Considered and kept
 

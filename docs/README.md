@@ -71,7 +71,7 @@ specific to one adapter. Read `exchange.md` and
 `deployment.md` for host procedures. `limits.md` lists every
 configurable limit and the cost of the fold. `formal.md` states how a rule is
 proven and how a change to one reaches the gate. `toolchain.md` is the repository guide;
-[the plan](../planning/next.md) and [the backlog](../planning/backlog.md)
+[the road to 1.0.0](../planning/1.0.0.md) and [the backlog](../planning/backlog.md)
 are planning records, not API references.
 
 Human review and agent context intentionally differ: after a close, a summary

@@ -44,9 +44,9 @@ newer, the OpenTUI floor.
   `docs/` hold the sensor and actuator patterns.
 - `examples/camera-chat`: a macOS room chat with an agent-managed camera
   and a preview.
-- `planning/`: `next.md` is the 0.7.0 scope and plan, the canvas and
-  breakout rooms. `backlog.md` is everything else. `risks.md` lists the
-  robustness gaps the owner accepted.
+- `planning/`: one scope file for each release on the road to 1.0.0,
+  from `0.8.0.md` to `1.0.0.md`. `1.0.0.md` holds the road. `backlog.md`
+  holds everything else and the risks that the owner accepted.
 
 ## Read before you change
 
@@ -140,7 +140,7 @@ need the key. Read neither login file.
   export, a journal body, or a stored format. Add no re-export, deprecated
   alias, reader for an older format, or compatibility test. Update the export
   snapshot and the golden journals in the same commit, and name the change in
-  the changelog. [`planning/next.md`](planning/next.md) holds the rule.
+  the changelog. [`planning/1.0.0.md`](planning/1.0.0.md) holds the rule.
 - **History lives in git.** Code, comments, docs, error messages, and tests
   describe the current state. Do not write how a name, an API, or a design
   changed. A test asserts what the code does, and asserts nothing about a
@@ -150,7 +150,8 @@ need the key. Read neither login file.
   say brings an agent back on the room's clock. A host wakes a room with
   `room.post`.
 - **`docs/` describe the implemented API.** Label a pending change
-  explicitly. `planning/next.md` owns open work and its evidence.
+  explicitly. The scope file of each release in `planning/` owns its open
+  work and its evidence.
 
 ## Code rules
 

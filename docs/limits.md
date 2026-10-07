@@ -70,7 +70,7 @@ incremental projection in
 the addressed fields that one entry changes. It still copies whole
 containers for each entry, so a new question costs more as the history
 grows. The table below shows it, and replay grows faster than the
-history ([Accepted risks](../planning/risks.md)).
+history ([Accepted risks](../planning/backlog.md#accepted-risks)).
 
 **The projection is a cache.** It is the one derivation of the room state
 that the room runs, and `foldRoom` is the oracle that the tests compare it

@@ -8,7 +8,7 @@ roster, the presence, and each exchange.
 The [repository README](../README.md) holds the positioning and the current
 surface. The [runnable example](example.md) shows a room at work. The
 [documentation index](README.md) links every contract. The
-[plan](../planning/next.md) defines the scope of the next release.
+[road to 1.0.0](../planning/1.0.0.md) defines the scope of each release.
 
 **The journal holds speech. Tools do the work.** An agent contributes to the
 room through `say`. An agent reaches data through its tools and the resources
