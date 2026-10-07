@@ -46,8 +46,12 @@ export interface BoundTool {
 
 /** What the driver and the executor write to. One sink serves one activation. */
 export interface TraceSink {
-	/** Open a pass. The sink stamps this pass on every step until the next one. */
-	startPass(input: 'view' | 'delta', through: Seq): void;
+	/**
+	 * Open a pass. The sink stamps this pass on every step until the next one.
+	 * The first pass fixes the exchange of the activation, and the sink stamps
+	 * it on every later step. An activation outside an exchange has none.
+	 */
+	startPass(input: 'view' | 'delta', through: Seq, exchange?: Seq): void;
 	/**
 	 * Record one raw step. The sink joins consecutive `thinking` and `text`
 	 * deltas into one block. A block ends at a `final` step or at a step of

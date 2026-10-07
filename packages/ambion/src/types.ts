@@ -494,6 +494,11 @@ export interface TracedStep {
 	readonly room: string;
 	/** The seat that ran the activation. */
 	readonly seat: string;
+	/**
+	 * The seq of the message that opened the exchange that the activation
+	 * works on. Absent outside an exchange, and before the first pass.
+	 */
+	readonly exchange?: Seq;
 	/** The step, stamped with `activation`, `pass`, `index` and `at`. */
 	readonly step: TraceStep;
 }

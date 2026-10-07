@@ -16,7 +16,7 @@
  * comes in resolved (`reminders.ts`).
  */
 
-import type { ActivationView, ContextParticipant } from '../protocol.ts';
+import { type ActivationView, type ContextParticipant, exchangeOf } from '../protocol.ts';
 import { type Block, blocks, refsOf, renderLine } from '../record.ts';
 import { messageUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
@@ -346,13 +346,7 @@ function renderContext(
 		renderPeople(people, context.now),
 		``,
 		`The record of '${context.name}' so far:`,
-		renderRecord(
-			context.messages,
-			people,
-			context.now,
-			view.spec.purpose.kind === 'respond' ? context.exchange?.from : view.spec.purpose.exchange,
-			context.omitted,
-		),
+		renderRecord(context.messages, people, context.now, exchangeOf(view), context.omitted),
 		``,
 		...paragraph(renderScheduled(view)),
 		...paragraph(view.spec.purpose.kind === 'respond' ? reminders : undefined),

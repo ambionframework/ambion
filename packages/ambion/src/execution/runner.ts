@@ -10,15 +10,16 @@
  */
 
 import type { SeatContext } from '../host/runtime.ts';
-import type {
-	ActivationView,
-	AgentPort,
-	CommitRequest,
-	CommitResult,
-	RoomProtocol,
-	Steer,
-	ViewResponse,
-	Wake,
+import {
+	type ActivationView,
+	type AgentPort,
+	type CommitRequest,
+	type CommitResult,
+	exchangeOf,
+	type RoomProtocol,
+	type Steer,
+	type ViewResponse,
+	type Wake,
 } from '../protocol.ts';
 import type {
 	ActivationEvent,
@@ -506,7 +507,7 @@ function broke(state: ActivationState, thrown: unknown): PassResult {
 
 /** One pass, opened in the trace. The first pass reads the view; a later one follows the record. */
 function passOver(state: ActivationState, trace: TraceSink, input: PassInput): Promise<PassResult> {
-	trace.startPass(input.kind, input.view.through);
+	trace.startPass(input.kind, input.view.through, exchangeOf(input.view));
 	return state.pass(input);
 }
 

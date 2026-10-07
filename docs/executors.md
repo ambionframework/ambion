@@ -465,13 +465,23 @@ the cap applies. The sum holds when the host passes no logger.
 each activation, and passes the executor its `record` with the activation,
 as a `StepSink`. The driver keeps the passes, the usage, and the close. The
 sink gives each step to the `logger` that the host passes to
-`createRuntime`, as one `TracedStep`: `room`, `seat`, and the stamped step.
-With no logger, the sink drops the steps. The record and the trace never share an entry.
+`createRuntime`, as one `TracedStep`: `room`, `seat`, `exchange`, and the
+stamped step. With no logger, the sink drops the steps. The record and the trace never share an entry.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/ambion-activation-trace-dark.svg">
   <img alt="Agent B activates on entry 1 of the room journal. Each thing the activation does is one step in its trace, which goes to the host's logger: a pass, thinking, tool calls and results, and the room answers. The first say comes back missed with entry 2, and the second say commits as entry 3. A usage step holds tokens and cost, and an end step stops the activation. The driver records the pass, room, and end steps. The release entry in the record carries the usage sum." src="assets/ambion-activation-trace.svg">
 </picture>
+
+**The `exchange` field names the exchange of the activation.** It holds the
+seq of the message that opened the exchange that the activation works on. A
+response works on the open exchange, and a summary works on the exchange
+that it closes. The driver passes the exchange of the first view to the
+sink, and the sink stamps it on every step of the activation, the `end`
+step included. The field is absent when the activation works outside an
+exchange, such as an arrival in a `presence` seat while no exchange is open.
+It is also absent when the activation ends before its first pass.
+A host groups the activations of one question by this seq.
 
 **The trace never gates the activation.** The room does not read the trace.
 A logger that throws or rejects does not change the activation outcome or

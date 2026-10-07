@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**A traced step names its exchange.** `TracedStep` has a new optional field,
+`exchange`. It holds the seq of the message that opened the exchange that the
+activation works on. A summary activation names the exchange that it
+summarizes. The field is absent when the activation works outside an
+exchange, or ends before its first pass. `TraceSink.startPass` takes the exchange as a third argument, and
+the sink stamps it on every step of the activation.
+
 **The trace can record the input of the model.** A new `input` step holds
 the text that the driver renders for the pass. The `part` field says
 `system` or `record`. The driver records one `record` step for each pass
