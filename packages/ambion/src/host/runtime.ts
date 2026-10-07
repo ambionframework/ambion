@@ -116,13 +116,21 @@ export interface Limits {
 	 * return. `maxDelaySeconds` and `waiting` may be `Infinity`.
 	 */
 	readonly schedule: ScheduleLimits;
-	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
-	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
+	/**
+	 * How many bytes of tool output and of `input` text a step keeps, and how
+	 * many steps one pass keeps.
+	 */
+	readonly trace: {
+		readonly toolOutputBytes: number;
+		readonly inputBytes: number;
+		readonly stepsPerPass: number;
+	};
 }
 
 /** What the trace keeps of a step, and how many steps one pass keeps, by default. */
 export const DEFAULT_TRACE_LIMITS: Limits['trace'] = Object.freeze({
 	toolOutputBytes: 65_536,
+	inputBytes: 1_048_576,
 	stepsPerPass: 1_000,
 });
 

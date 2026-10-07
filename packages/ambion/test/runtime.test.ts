@@ -114,7 +114,11 @@ describe('createRuntime', () => {
 		expect(limits.call).toEqual({ attempts: 2, timeout: 10_000 });
 		expect(limits.context).toEqual({ messages: Number.POSITIVE_INFINITY });
 		expect(limits.message).toEqual({ bytes: Number.POSITIVE_INFINITY });
-		expect(limits.trace).toEqual({ toolOutputBytes: 65_536, stepsPerPass: 1_000 });
+		expect(limits.trace).toEqual({
+			toolOutputBytes: 65_536,
+			inputBytes: 1_048_576,
+			stepsPerPass: 1_000,
+		});
 		expect(limits.schedule).toEqual({ minDelaySeconds: 60, maxDelaySeconds: 604_800, waiting: 4 });
 
 		const overridden = hostingOf(

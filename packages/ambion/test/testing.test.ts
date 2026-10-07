@@ -500,7 +500,8 @@ describe('scriptedOpener', () => {
 				room: { view: async () => ({ stale: 'unused' }), commit: async () => said(4) },
 				definition: agent('a', tools),
 				emit: (event) => events.push(event),
-				trace: { record: (step) => void steps.push(step) },
+				// The steer tests read the steer steps: the driver's `input` steps stay out.
+				trace: { record: (step) => void (step.type !== 'input' && steps.push(step)) },
 			},
 		);
 		const activation = opened[0];

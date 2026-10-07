@@ -262,7 +262,8 @@ describe('the steps of a real pass', () => {
 		});
 		const steps: Step[] = [];
 		const session = stateOf(opener, definition, {
-			trace: { record: (step) => void steps.push(step) },
+			// The test reads the steps of the executor: the driver's `input` steps stay out.
+			trace: { record: (step) => void (step.type !== 'input' && steps.push(step)) },
 		});
 		const view = await viewOf('message:1:worker:1');
 		await session.pass({ kind: 'view', view: { ...view, spec: { ...view.spec, seat: 'worker' } } });

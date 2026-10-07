@@ -26,6 +26,7 @@ import type {
 	ActivationEvent,
 	AgentDefinition,
 	CreateRuntimeOptions,
+	Message,
 	TraceLogger,
 	TraceStep,
 } from '../src/index.ts';
@@ -229,6 +230,14 @@ describe('the trace limits and policy', () => {
 		expect(JSON.stringify(ran.output)).toContain(output);
 	});
 
+	it.each([
+		['an absent input field', undefined],
+		['input: omit', { thinking: 'start', toolOutput: 'full', input: 'omit' } as const],
+	])('logs no input step for %s', async (_name, policy) => {
+		const ran = await run(asker(policy));
+		expect(sorted(ran.steps)).not.toContain('input');
+	});
+
 	it('omits what the policy omits', async () => {
 		const ran = await run(asker({ thinking: 'omit', toolOutput: 'omit' }));
 		expect(sorted(ran.steps)).not.toContain('thinking');
@@ -238,6 +247,26 @@ describe('the trace limits and policy', () => {
 	it('cuts tool output to limits.trace.toolOutputBytes', async () => {
 		const { output } = await run(asker(), { limits: { trace: { toolOutputBytes: 10 } } });
 		expect(String(output)).toMatch(/^.{10}\n\[truncated: \d+ bytes\]$/s);
+	});
+
+	it('cuts an input step to limits.trace.inputBytes', async () => {
+		const log = collectSteps();
+		const sink = openTrace({
+			room: 'input',
+			seat: 'product',
+			activation: 'message:2:product:1',
+			limits: { toolOutputBytes: 100, inputBytes: 10, stepsPerPass: 10 },
+			policy: { thinking: 'omit', toolOutput: 'omit', input: 'full' },
+			now: () => 0,
+			logger: log.logger,
+		});
+		sink.startPass('view', 1);
+		sink.record({ type: 'input', part: 'record', text: 'a'.repeat(50) });
+		await sink.close();
+		expect(log.records[1]?.step).toMatchObject({
+			type: 'input',
+			text: `${'a'.repeat(10)}\n[truncated: 50 bytes]`,
+		});
 	});
 
 	it('drops steps past limits.trace.stepsPerPass and keeps the end', async () => {
@@ -262,7 +291,7 @@ describe('the trace limits and policy', () => {
 			room: 'usage-sum',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 1 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 1 },
 			policy: { thinking: 'full', toolOutput: 'full' } as const,
 			now: () => 0,
 		};
@@ -295,7 +324,7 @@ describe('the trace limits and policy', () => {
 			room: 'nested',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
 			policy: { thinking: 'full', toolOutput: 'full' },
 			now: () => 0,
 			logger: log.logger,
@@ -321,7 +350,7 @@ describe('the trace limits and policy', () => {
 			room: 'notice',
 			seat: 'product',
 			activation: 'message:2:product:1',
-			limits: { toolOutputBytes: 100, stepsPerPass: 10 },
+			limits: { toolOutputBytes: 100, inputBytes: 100, stepsPerPass: 10 },
 			policy: { thinking: 'omit', toolOutput: 'omit' },
 			now: () => 0,
 			logger: log.logger,
@@ -352,6 +381,14 @@ describe('the trace limits and policy', () => {
 				trace: { thinking: 'all' as never, toolOutput: 'full' },
 			}),
 		).toThrow(/trace.thinking/);
+		expect(() =>
+			defineAgent({
+				name: 'x',
+				identity: 'x',
+				executor: pi({ instructions: '', model: 'scripted/x' }),
+				trace: { thinking: 'start', toolOutput: 'full', input: 'all' as never },
+			}),
+		).toThrow('trace.input must be omit or full.');
 	});
 });
 
@@ -379,6 +416,7 @@ class PlayedRoom implements RoomProtocol {
 	constructor(private readonly now: () => number) {}
 	readonly leases: LeaseRequest[] = [];
 	lastSeq = 1;
+	messages: Message[] = [];
 	answer: CommitResult = { refused: 'not here' };
 	async view(activation: string): Promise<ViewResponse> {
 		return {
@@ -390,7 +428,13 @@ class PlayedRoom implements RoomProtocol {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: this.lastSeq,
-				context: { name: 'played', now: 0, participants: [], messages: [], reserve: [] },
+				context: {
+					name: 'played',
+					now: 0,
+					participants: [],
+					messages: this.messages,
+					reserve: [],
+				},
 			},
 		};
 	}
@@ -411,6 +455,7 @@ function play(
 	logger: TraceLogger = collectSteps().logger,
 	wrap: (opener: TraceOpener) => TraceOpener = (opener) => opener,
 	stub?: ActivationOpener,
+	policy: TracePolicy = { thinking: 'full', toolOutput: 'full' },
 ) {
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -438,7 +483,7 @@ function play(
 				seat: 'product',
 				logger,
 				limits: hosting.limits.trace,
-				policy: { thinking: 'full', toolOutput: 'full' },
+				policy,
 				now: () => 0,
 			}),
 		),
@@ -481,7 +526,11 @@ describe('the steps the driver owns', () => {
 			return quiet();
 		});
 		const log = collectSteps();
-		const { room, actor } = play(stream, log.logger);
+		const { room, actor } = play(stream, log.logger, undefined, undefined, {
+			thinking: 'full',
+			toolOutput: 'full',
+			input: 'full',
+		});
 		const done = actor.run(id);
 		// Before the first pass, the core holds a steer. The first prompt carries it.
 		await actor.steer({
@@ -500,6 +549,7 @@ describe('the steps the driver owns', () => {
 			message: said(3),
 		});
 		room.lastSeq = 4;
+		room.messages = [said(2), said(3)];
 		release.resolve();
 		await done;
 		const steps = log.of(id);
@@ -508,6 +558,16 @@ describe('the steps the driver owns', () => {
 			expect.objectContaining({ input: 'view', pass: 1 }),
 			expect.objectContaining({ input: 'delta', pass: 2, through: 4 }),
 		]);
+		// The system part comes once, right after the first `pass` step. Each pass records its record.
+		const inputs = steps.filter((step) => step.type === 'input');
+		expect(inputs.map((step) => [step.pass, step.type === 'input' && step.part])).toEqual([
+			[1, 'system'],
+			[1, 'record'],
+			[2, 'record'],
+		]);
+		expect(steps.indexOf(inputs[0] as TraceStep)).toBe(steps.indexOf(passes[0] as TraceStep) + 1);
+		expect(inputs[0]).toMatchObject({ text: expect.stringContaining('Answer.') });
+		expect(inputs[2]).toMatchObject({ text: expect.stringContaining('[new]') });
 		const steers = steps.filter((step) => step.type === 'steer');
 		expect(steers).toEqual([
 			expect.objectContaining({ seq: 2, consumed: true, pass: 1 }),

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**The trace can record the input of the model.** A new `input` step holds
+the text the model received. The `part` field says `system` or `record`.
+The driver records one `record` step for each pass that reads a record, and
+one `system` step in the first pass. The new trace policy field
+`input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
+`limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
+
 **The dependencies are at their latest versions.** The release moves
 `vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
 3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`

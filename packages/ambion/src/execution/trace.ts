@@ -144,7 +144,8 @@ class Trace implements TraceSink {
 			return;
 		}
 		this.flush();
-		this.stamp(this.limited(step));
+		const limited = this.limited(step);
+		if (limited !== undefined) this.stamp(limited);
 	}
 
 	async close(): Promise<void> {
@@ -169,9 +170,13 @@ class Trace implements TraceSink {
 		this.stamp({ type: block.type, text, final: true });
 	}
 
-	/** The policy and the byte limit applied to a step. */
-	private limited(step: Step): Step {
+	/** The policy and the byte limit applied to a step. A step the policy omits gives nothing. */
+	private limited(step: Step): Step | undefined {
 		switch (step.type) {
+			case 'input':
+				return this.options.policy.input === 'full'
+					? { ...step, text: bounded(step.text, this.options.limits.inputBytes) as string }
+					: undefined;
 			case 'tool_call':
 				return { ...step, input: plain(step.input) };
 			case 'tool_result': {

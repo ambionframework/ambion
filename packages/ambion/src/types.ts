@@ -437,6 +437,13 @@ export function addUsage(total: Usage | undefined, step: Usage): Usage {
 export type Step =
 	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
 	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
+	/**
+	 * The text the model received. `system` is the system part of the seat: the
+	 * mechanism and the agent, joined by a blank line. `record` is the record
+	 * that one pass reads. A host puts the system part in a system message and
+	 * the record in a user message.
+	 */
+	| { type: 'input'; part: 'system' | 'record'; text: string }
 	/** A block of the model's reasoning. `final` closes the block. */
 	| { type: 'thinking'; text: string; final: boolean }
 	/** A block of the model's text. `final` closes the block. */
@@ -500,6 +507,12 @@ export interface TracePolicy {
 	/** `start` keeps the start of each block. */
 	readonly thinking: 'omit' | 'start' | 'full';
 	readonly toolOutput: 'omit' | 'full';
+	/**
+	 * `full` logs an `input` step with the text the model received. Absent
+	 * reads as `omit`. The text holds whatever the record holds, secrets
+	 * included.
+	 */
+	readonly input?: 'omit' | 'full';
 }
 
 /** The room's event stream: room facts and activation events, under one `subscribe`. */
