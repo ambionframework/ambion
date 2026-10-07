@@ -16,6 +16,13 @@ that reads a record, and one `system` step in the first pass. The new trace poli
 `input: 'omit' | 'full'` turns it on. An absent field reads as `omit`.
 `limits.trace.inputBytes` cuts the text and defaults to 1 MiB.
 
+**The Claude trace has one `usage` step for each model request.** The step
+comes from the `usage` of the `message_start` event, the `message_delta`
+events, and the assistant messages of a top-level request. It comes
+before the tool results of the request and before the next request. The step of the last request
+carries the cost of the result and the tokens that the requests did not
+report, so the steps sum to the totals of the results.
+
 **One agent definition works in a root room and in a breakout room.** The
 composition of the room decides how an agent behaves: who is present, and
 whether the room has an opener in a parent. `Canvas.workerTools()` and

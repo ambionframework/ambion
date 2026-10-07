@@ -195,8 +195,8 @@ activation sends the whole view in its first pass.
 **Steps.** The executor records `thinking`, `text`, `tool_call`,
 `tool_result`, `session`, `steer`, and `usage`.
 
-**Usage.** One `usage` step follows each SDK `result`, with the cost that the
-SDK reports. `maxBudgetUsd` caps one activation. A spent budget is a permanent
+**Usage.** One `usage` step covers each model request. The step of the last
+request carries the cost that the SDK reports in the `result`. `maxBudgetUsd` caps one activation. A spent budget is a permanent
 failure.
 
 **Failures.** Credit, usage-limit, or authentication text and an `api_error_status` of 400,

@@ -31,11 +31,20 @@ interface Block {
 	readonly is_error?: boolean;
 }
 
+/** The token counts that a message or a `message_delta` event reports for one request. */
+interface RawUsage {
+	readonly input_tokens?: number | null;
+	readonly output_tokens?: number | null;
+	readonly cache_read_input_tokens?: number | null;
+	readonly cache_creation_input_tokens?: number | null;
+}
+
 /** The part of a raw stream event that the steps read. */
 interface StreamEvent {
 	readonly type: string;
 	readonly index?: number;
-	readonly message?: { readonly id?: string };
+	readonly message?: { readonly id?: string; readonly usage?: RawUsage };
+	readonly usage?: RawUsage;
 	readonly content_block?: { readonly type?: string };
 	readonly delta?: { readonly type?: string; readonly text?: string; readonly thinking?: string };
 }
@@ -60,8 +69,32 @@ function errorOf(block: Block): string | undefined {
 	return text === '' ? 'The tool failed.' : text;
 }
 
-/** The tokens every model of a result used, summed. */
-function tokensOf(result: SDKResultMessage): Usage {
+type Tokens = Omit<Usage, 'cost'>;
+
+const NO_TOKENS: Tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+
+/** The tokens of a request, from the `usage` of a message. */
+function tokensOfRequest(raw: RawUsage | undefined): Tokens {
+	return {
+		input: raw?.input_tokens ?? 0,
+		output: raw?.output_tokens ?? 0,
+		cacheRead: raw?.cache_read_input_tokens ?? 0,
+		cacheWrite: raw?.cache_creation_input_tokens ?? 0,
+	};
+}
+
+/** Each count of `a` joined with the same count of `b`. */
+function join(a: Tokens, b: Tokens, count: (x: number, y: number) => number): Tokens {
+	return {
+		input: count(a.input, b.input),
+		output: count(a.output, b.output),
+		cacheRead: count(a.cacheRead, b.cacheRead),
+		cacheWrite: count(a.cacheWrite, b.cacheWrite),
+	};
+}
+
+/** The tokens every model of a result used, summed, and the cost of the query. */
+function totalOf(result: SDKResultMessage): Usage {
 	const models = Object.values(result.modelUsage ?? {});
 	const sum = (read: (model: (typeof models)[number]) => number) =>
 		models.reduce((total, model) => total + read(model), 0);
@@ -74,26 +107,10 @@ function tokensOf(result: SDKResultMessage): Usage {
 	};
 }
 
-/** What `total` holds beyond `before`, or nothing when it holds no more. */
-function beyond(total: Usage, before: Usage | undefined): Usage | undefined {
-	const step: Usage = {
-		input: total.input - (before?.input ?? 0),
-		output: total.output - (before?.output ?? 0),
-		cacheRead: total.cacheRead - (before?.cacheRead ?? 0),
-		cacheWrite: total.cacheWrite - (before?.cacheWrite ?? 0),
-		cost: (total.cost ?? 0) - (before?.cost ?? 0),
-	};
+/** A usage step, or nothing when it holds no tokens and no cost. */
+function usageStep(step: Usage): Step[] {
 	const tokens = step.input + step.output + step.cacheRead + step.cacheWrite;
-	return tokens > 0 || step.cost !== 0 ? step : undefined;
-}
-
-/** The usage a result message adds beyond `before`, and the running totals it carries. */
-export function usageOf(
-	result: SDKResultMessage,
-	before: Usage | undefined,
-): { readonly total: Usage; readonly step: Usage | undefined } {
-	const total = tokensOf(result);
-	return { total, step: beyond(total, before) };
+	return tokens > 0 || (step.cost ?? 0) !== 0 ? [{ type: 'usage', ...step }] : [];
 }
 
 /** The steps of a block the assistant message holds whole. */
@@ -138,6 +155,10 @@ export class ClaudeSteps {
 	private readonly open = new Map<number, 'text' | 'thinking'>();
 	/** Tool calls seen, by id, so an assistant message resent adds none. */
 	private readonly seen = new Set<string>();
+	/** The request of the top-level model that is under way, with the tokens counted so far. */
+	private pending: { readonly id: string; readonly tokens: Tokens } | undefined;
+	/** The tokens of the request steps emitted since the last result. */
+	private emitted = NO_TOKENS;
 	private cumulative: Usage | undefined;
 
 	steps(message: SDKMessage): Step[] {
@@ -149,7 +170,7 @@ export class ClaudeSteps {
 			case 'assistant':
 				return message.parent_tool_use_id === null ? this.assistant(message) : [];
 			case 'user':
-				return message.parent_tool_use_id === null ? this.results(message.message.content) : [];
+				return message.parent_tool_use_id === null ? this.user(message.message.content) : [];
 			case 'result':
 				return this.spent(message);
 			default:
@@ -158,7 +179,9 @@ export class ClaudeSteps {
 	}
 
 	private stream(event: StreamEvent): Step[] {
-		if (event.type === 'message_start') return this.begin(event.message?.id ?? '');
+		if (event.type === 'message_start')
+			return this.begin(event.message?.id ?? '', event.message?.usage);
+		if (event.type === 'message_delta') return this.request(this.pending?.id, event.usage);
 		if (event.index === undefined) return [];
 		if (event.type === 'content_block_start')
 			return this.opened(event.index, event.content_block?.type);
@@ -168,10 +191,37 @@ export class ClaudeSteps {
 		return event.type === 'content_block_delta' ? deltaStep(kind, event.delta) : [];
 	}
 
-	private begin(id: string): Step[] {
+	private begin(id: string, usage: RawUsage | undefined): Step[] {
 		this.streamed.add(id);
 		this.open.clear();
-		return [];
+		return this.request(id, usage);
+	}
+
+	/**
+	 * Counts `usage` for the request `id`. The counts of one request only
+	 * grow, so each count keeps its largest value, and a message that the
+	 * SDK repeats adds nothing. A new id ends the pending request: its step
+	 * comes before the steps of the new one.
+	 */
+	private request(id: string | undefined, usage: RawUsage | undefined): Step[] {
+		if (id === undefined) return [];
+		const tokens = tokensOfRequest(usage);
+		if (this.pending?.id === id) {
+			this.pending = { id, tokens: join(this.pending.tokens, tokens, Math.max) };
+			return [];
+		}
+		const ended = this.end();
+		this.pending = { id, tokens };
+		return ended;
+	}
+
+	/** The step of the pending request, which ends before the result. */
+	private end(): Step[] {
+		const tokens = this.pending?.tokens;
+		this.pending = undefined;
+		if (tokens === undefined) return [];
+		this.emitted = join(this.emitted, tokens, (x, y) => x + y);
+		return usageStep(tokens);
 	}
 
 	private opened(index: number, kind: string | undefined): Step[] {
@@ -185,11 +235,15 @@ export class ClaudeSteps {
 	}
 
 	private assistant(message: Extract<SDKMessage, { type: 'assistant' }>): Step[] {
-		const streamed = this.streamed.has(message.message.id);
-		return blocksOf(message.message.content).flatMap((block): Step[] => {
-			if (block.type === 'tool_use') return this.called(block);
-			return streamed ? [] : whole(block);
-		});
+		const { id, usage, content } = message.message;
+		const ended = this.request(id, usage);
+		const streamed = this.streamed.has(id);
+		return ended.concat(
+			blocksOf(content).flatMap((block): Step[] => {
+				if (block.type === 'tool_use') return this.called(block);
+				return streamed ? [] : whole(block);
+			}),
+		);
 	}
 
 	/** A tool call the model made. A call the assistant message repeats adds nothing. */
@@ -199,6 +253,11 @@ export class ClaudeSteps {
 		return [
 			{ type: 'tool_call', call: block.id, name: plainName(block.name ?? ''), input: block.input },
 		];
+	}
+
+	/** A user message answers the pending request, so the step of the request comes first. */
+	private user(content: unknown): Step[] {
+		return this.end().concat(this.results(content));
 	}
 
 	private results(content: unknown): Step[] {
@@ -216,10 +275,22 @@ export class ClaudeSteps {
 		});
 	}
 
-	/** Every result carries the running totals of the session. The step holds what this result added. */
+	/**
+	 * Every result carries the running totals of the session. The last
+	 * request takes what this result added beyond the request steps already
+	 * emitted, with the cost, so the steps sum to the totals. A request keeps
+	 * its own counts when they exceed that share. The share holds the tokens
+	 * of subagents and the tokens that the stream did not report.
+	 */
 	private spent(result: SDKResultMessage): Step[] {
-		const { total, step } = usageOf(result, this.cumulative);
+		const total = totalOf(result);
+		const before = this.cumulative ?? { ...NO_TOKENS, cost: 0 };
 		this.cumulative = total;
-		return step === undefined ? [] : [{ type: 'usage', ...step }];
+		const added = join(total, before, (x, y) => x - y);
+		const rest = join(added, this.emitted, (x, y) => x - y);
+		const last = join(this.pending?.tokens ?? NO_TOKENS, rest, Math.max);
+		this.pending = undefined;
+		this.emitted = NO_TOKENS;
+		return usageStep({ ...last, cost: Math.max(0, (total.cost ?? 0) - (before.cost ?? 0)) });
 	}
 }

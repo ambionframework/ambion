@@ -471,29 +471,46 @@ failure does.
 table below gives the SDK source of each step. A message from a subagent
 (`parent_tool_use_id` set) adds no step.
 
-| Step          | Source in the SDK                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `thinking`    | `content_block_delta` events, then `content_block_stop`. A block the stream did not send arrives whole.                |
-| `text`        | The same events for a text block.                                                                                      |
-| `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                                      |
-| `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                          |
-| `session`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name. |
-| `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                   |
-| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                          |
-| `usage`       | Each `result` message. The step holds what the result adds beyond the earlier total.                                   |
+| Step          | Source in the SDK                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `thinking`    | `content_block_delta` events, then `content_block_stop`. A block the stream did not send arrives whole.                 |
+| `text`        | The same events for a text block.                                                                                       |
+| `tool_call`   | A `tool_use` block of an assistant message. One step for each id.                                                       |
+| `tool_result` | A `tool_result` block of a user message. `is_error` adds `error` with the text of the result.                           |
+| `session`     | The `system` init message of a session. `tools` holds the room tools by plain name. `auth` is the `apiKeySource` name.  |
+| `steer`       | Never. The core records it. The executor calls `read` on the echo of a steered line.                                    |
+| `approval`    | Never. The `compose` tool records it through the step sink of the activation.                                           |
+| `usage`       | One for each top-level model request, from the `usage` of its `message_start`, `message_delta`, and assistant messages. |
 
 ## Usage and cost
 
-**One `usage` step follows each SDK `result`.** The executor sums
-`modelUsage` over every model of the result for `input`, `output`,
-`cacheRead`, and `cacheWrite`. `cost` is `total_cost_usd`. The SDK reports
-running totals for the query. The executor writes the difference from the
-earlier result, and writes no step when both tokens and cost stand at zero.
+**One `usage` step covers each model request of the top-level agent.** The
+executor reads the token counts of a request from the `usage` of its
+`message_start` event, its `message_delta` events, and its assistant
+messages. The SDK can send several assistant messages with one id, and
+their counts can be stale. The counts of one request only grow, so the
+executor keeps the largest value of each count. A request has one step.
+
+**A request ends when the next one starts, or when its tool results
+arrive.** The step of a request comes before the first step of the next
+request and before the tool results of the request. The last request ends
+at the `result`. A request with no tokens adds no step.
+
+**The `result` closes the last request.** The executor sums `modelUsage`
+over every model of the result for `input`, `output`, `cacheRead`, and
+`cacheWrite`. `cost` is `total_cost_usd`. The SDK reports running totals
+for the query. The executor takes the difference from the earlier result
+and subtracts the steps it already wrote. The last request takes the rest
+and the whole cost, so the steps sum to the totals of the results. A pass
+with no pending request writes the rest as its own step. The step is
+absent when both tokens and cost stand at zero.
 
 The known limits:
 
-- **A step covers one SDK result.** The step of a pass with several
-  results sums them.
+- **A subagent has no step of its own.** Its tokens and cost reach the
+  trace through the step of the last request.
+- **A request that reports more than the result keeps its own counts.**
+  The steps then sum to more than the totals.
 - **`cost` is the number that the SDK reports.** The executor does not
   compute it.
 - **A resumed session may report totals of earlier activations.** The first
