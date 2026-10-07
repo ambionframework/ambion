@@ -100,7 +100,9 @@ describe('the rendered prompt', () => {
 			renderActivation({ ...respond, context: { ...respond.context, ...extra } }, worker).agent;
 		expect(handoff({ seating: false })).toBe(handoff({}));
 		expect(handoff({ reserved: undefined })).toBe(handoff({}));
-		expect(handoff({})).toContain('colleague with no mark reads the record');
+		expect(handoff({})).toContain(
+			'"named only".\nA seated colleague with no mark reads the record',
+		);
 	});
 
 	it('renders a closing activation', () => {
@@ -138,7 +140,7 @@ describe('the rendered prompt', () => {
 		])
 			expect(policy.agent).not.toContain(advice);
 		expect(policy.context.split('\n').at(-1)).toBe(
-			"priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Begin your activation, other: this is a respond activation.",
+			"priya's exchange opened by message 2 is active; the marked request is the current human direction. The opening message's URI is ambion://room/site/message/2. Begin your activation, other: this is a respond activation. A line marked [new] is a message that landed during your activation.",
 		);
 		for (const advice of [
 			'Follow your instructions',

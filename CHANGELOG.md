@@ -2,16 +2,17 @@
 
 ## Unreleased
 
-**An application can replace every piece of behavioral advice in the seat
-prompt.** `speaking` now replaces the whole respond policy: the speaking
+**An application can replace the speaking and summary policies of the seat
+prompt in full.** `speaking` now replaces the whole respond policy: the speaking
 text, the paragraph on arrivals and departures, the paragraph on hand-off,
 and the closing reminder of the respond ask line. A new `summarizing` option
 replaces the summary duties and the advice in the summary ask line. The main
 entry exports `DEFAULT_SUMMARIZING`. The kernel keeps the mechanism of the
 protocol. The default prompt changes in one place: the hand-off paragraph no
 longer says "Seat them first if they are in the reserve", because
-`DEFAULT_SPEAKING` and the `seat` tool already state that seating a colleague
-is the hand-off.
+`DEFAULT_SPEAKING` already states that seating a colleague is the hand-off.
+A replaced `speaking` policy reads one mechanism line in the ask line: what
+the `[new]` prefix means.
 
 ## 0.7.0 (2026-10-06)
 

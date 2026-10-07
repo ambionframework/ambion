@@ -231,8 +231,8 @@ export const DEFAULT_SPEAKING = [
 	`there. A hand-off is still a message: say what you wrote and where, in a directed say to`,
 	`the agent that needs it. Do not leave an artifact and assume the reader finds it. Your`,
 	`identity on the roster names your work. When a task falls under a colleague's identity,`,
-	`hand it to them with a directed say if the roster marks their seat "named only". A seated`,
-	`colleague with no mark reads the record and needs no`,
+	`hand it to them with a directed say if the roster marks their seat "named only".`,
+	`A seated colleague with no mark reads the record and needs no`,
 	`repeated request. Do not do their work, and do not copy what they already hold into the record. Put the URI of what`,
 	`you cite or changed in refs on the say, and keep the text for what the reader must know.`,
 ].join('\n');
@@ -273,6 +273,9 @@ export function renderDelta(view: ActivationView, after: Seq): string | undefine
 	if (fresh.length === 0) return undefined;
 	return fresh.map(renderNew).join('\n');
 }
+
+/** What the `[new]` prefix means. The default policy states it, so a replaced policy reads this line. */
+const NEW_LINE = 'A line marked [new] is a message that landed during your activation.';
 
 /** How a room works. No definition and no pass shapes it. */
 const MECHANISM = [
@@ -414,7 +417,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	if (purpose.kind === 'summarize') return summarizeAsk(view, purpose, def);
 	// A seat seated during an exchange reads which question it was seated for.
 	const mechanism = `${openingLine(view, def.name)}Begin your activation, ${def.name}: this is a respond activation. `;
-	if (def.executor.speaking !== undefined) return mechanism.trimEnd();
+	if (def.executor.speaking !== undefined) return `${mechanism}${NEW_LINE}`;
 	return (
 		`${mechanism}` +
 		`Follow your instructions, and speak only to add something the record lacks. ` +
