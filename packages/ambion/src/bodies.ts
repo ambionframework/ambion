@@ -103,16 +103,16 @@ export const dismissedSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
-export const postedSchema = Type.Object(
+export const systemSchema = Type.Object(
 	{
 		...common,
-		kind: Type.Literal('posted'),
-		/** The seat or the person it goes to. Absent for a post to the room. */
+		kind: Type.Literal('system'),
+		/** The seat or the person it goes to. Absent for a system message to the room. */
 		to: Type.Optional(Type.String()),
 		text: Type.String(),
 		...cited,
 		/**
-		 * On a returned say, the seq of the scheduled say. The post copies the text
+		 * On a returned say, the seq of the scheduled say. The system message copies the text
 		 * and the refs of that say, and `to` names the seat that scheduled it.
 		 */
 		returns: Type.Optional(Type.Integer({ minimum: 1 })),

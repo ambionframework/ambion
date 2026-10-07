@@ -156,7 +156,7 @@ class Walk {
 				...(this.chance(0.5) ? { from: say.seat, activation: `message:1:${say.seat}:1` } : {}),
 			});
 		return this.message({
-			kind: 'posted',
+			kind: 'system',
 			to: say.seat,
 			returns: say.seq,
 			text: 'Check later.',
@@ -257,7 +257,7 @@ function rejectContainerChanges(state: RoomState, entry: RoomEntry): void {
 	// @ts-expect-error A consumer cannot remove due work.
 	state.due.splice(0, 1);
 	// @ts-expect-error A consumer cannot append a message.
-	state.messages.push({ kind: 'posted', text: '', seq: 1, at: '' });
+	state.messages.push({ kind: 'system', text: '', seq: 1, at: '' });
 	// @ts-expect-error A consumer cannot reorder scheduled says.
 	state.scheduled.reverse();
 	// @ts-expect-error Only replay can select the owned step.
@@ -356,11 +356,11 @@ it('shares untouched containers when a replayed projection advances', () => {
 			at: new Date(start).toISOString(),
 		},
 	};
-	const posted: RoomEntry = {
+	const system: RoomEntry = {
 		kind: 'message',
 		seq: 2,
 		body: {
-			kind: 'posted',
+			kind: 'system',
 			text: 'Start.',
 			wakes: ['scout'],
 			refs: ['https://example.com'],
@@ -378,7 +378,7 @@ it('shares untouched containers when a replayed projection advances', () => {
 			at: new Date(start).toISOString(),
 		},
 	};
-	const before = replay([arrived, posted], retry);
+	const before = replay([arrived, system], retry);
 	const held = projectState(before);
 	const snapshot = structuredClone(held);
 	const after = advance(before, lease, retry);
@@ -391,7 +391,7 @@ it('shares untouched containers when a replayed projection advances', () => {
 	expect(next.closes).toBe(held.closes);
 	expect(next.deliveries).toBe(held.deliveries);
 	expect(held).toEqual(snapshot);
-	expect(next).toEqual(foldRoom([arrived, posted, lease], retry));
+	expect(next).toEqual(foldRoom([arrived, system, lease], retry));
 });
 
 describe('the incremental projection equals the fold', () => {

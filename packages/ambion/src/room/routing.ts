@@ -31,11 +31,11 @@ const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, pres
  */
 type RoutedMessage = Message | Body<Message>;
 
-/** A say or a post: text that reaches the seat it names, or the room. */
+/** A say or a system message: text that reaches the seat it names, or the room. */
 function isText(
 	message: RoutedMessage,
-): message is Extract<RoutedMessage, { kind: 'said' | 'posted' }> {
-	return message.kind === 'said' || message.kind === 'posted';
+): message is Extract<RoutedMessage, { kind: 'said' | 'system' }> {
+	return message.kind === 'said' || message.kind === 'system';
 }
 
 function reachOf(message: RoutedMessage): Attention {

@@ -138,7 +138,7 @@ describe('exchange outcomes', () => {
 		const returned: RoomEntry = {
 			kind: 'message',
 			seq: 4,
-			body: { kind: 'posted', at, to: 'worker', returns: 3, text: 'Check the build.' },
+			body: { kind: 'system', at, to: 'worker', returns: 3, text: 'Check the build.' },
 		};
 		const closeOf = (through: number, person?: string): RoomEntry => ({
 			kind: 'close',

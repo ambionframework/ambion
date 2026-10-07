@@ -17,10 +17,10 @@ export function exchange(run: RoomRunState, from: Seq): ExchangeHandle | undefin
 	const close = state.closes.find((candidate) => candidate.from === from);
 	const found = close ?? (state.exchange?.from === from ? state.exchange : undefined);
 	if (found === undefined) return undefined;
-	// A person's question or a post opens an exchange.
+	// A person's question or a system message opens an exchange.
 	const opens = state.messages.some(
 		(candidate) =>
-			candidate.seq === from && (candidate.kind === 'said' || candidate.kind === 'posted'),
+			candidate.seq === from && (candidate.kind === 'said' || candidate.kind === 'system'),
 	);
 	return opens ? handleFor(run, found, false) : undefined;
 }
@@ -39,8 +39,8 @@ function handleFor(run: RoomRunState, found: ExchangeRef, opened: boolean): Exch
 
 /** The handle for the exchange a committed delivery belongs to. */
 export function handleForMessage(run: RoomRunState, message: Message): ExchangeHandle {
-	if (message.kind !== 'said' && message.kind !== 'posted')
-		throw new Error('A delivery did not commit a said message or a post.');
+	if (message.kind !== 'said' && message.kind !== 'system')
+		throw new Error('A delivery did not commit a said message or a system message.');
 	const state = run.state();
 	const close = state.closes.find(
 		(candidate) => message.seq >= candidate.from && message.seq <= candidate.through,
