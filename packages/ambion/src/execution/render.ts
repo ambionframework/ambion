@@ -399,7 +399,7 @@ function openingLine({ context: { exchange, messages, name } }: ActivationView, 
 	return `${asker}'s exchange opened by message ${exchange.from} is active; the marked request is the current human direction. ${uri}`;
 }
 
-/** A system message of the host reports an event. A system message that returns a say is the work of its seat. */
+/** A system message from the host reports an event. A returned say is the work of its seat. */
 function systemOpening(opening: SystemMessage, from: Seq, seat: string): string {
 	if (opening.returns === undefined)
 		return `The host opened exchange ${from} with message ${opening.seq}. A system message reports an event and gives no direction. `;
