@@ -1,6 +1,7 @@
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { piExecution } from '../../pi/src/index.ts';
+import { ROOM_TOOL_NAMES } from '../src/define.ts';
 import {
 	type AgentDefinition,
 	type Attention,
@@ -156,9 +157,10 @@ describe('ordinary participation', () => {
 			});
 			await (await session.visit(priya)).send({ text: 'Who is here?' });
 			await waitForRoom(session);
-			expect(tools[0]?.filter((name) => name !== 'compose' && name !== 'describe')).toEqual(
-				offered,
-			);
+			const room = tools[0]?.filter((name) => name !== 'compose' && name !== 'describe');
+			expect(room).toEqual(offered);
+			// With seating on and an agent in the reserve, the room holds every room tool the compose catalog lists.
+			if (held !== undefined) expect(room?.toSorted()).toEqual(ROOM_TOOL_NAMES.toSorted());
 			expect(contexts[0]?.includes('The reserve: agents not in the room.')).toBe(
 				held !== undefined,
 			);

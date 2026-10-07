@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**A macro can name a room tool.** The check of a macro reads the compose
+catalog that `compose` binds, so a macro that uses `say`, `recall`, or any
+other room tool passes. The room tool list has one owner in `define.ts`.
+
+**The scripted executor runs `dismiss` and `recall`.** A script calls every
+room tool of the activation. `dismiss` commits, and `recall` gives the text
+of its result.
+
 **An application can replace the respond and summary policies of the seat
 prompt in full.** `respondPolicy` now replaces the whole respond policy: the speaking
 text, the paragraph on arrivals and departures, the paragraph on hand-off,

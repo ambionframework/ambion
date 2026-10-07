@@ -27,8 +27,8 @@ import {
 	DESCRIBE_TOOL_NAME,
 	mismatchOf,
 } from './compose.ts';
-import { assertMacros, macrosOf } from './compose-macros.ts';
-import { composeGuidance, composeTools } from './compose-tool.ts';
+import { macrosOf } from './compose-macros.ts';
+import { composeGuidance, composeTools, type RoomSpec } from './compose-tool.ts';
 import { AmbionError } from './errors.ts';
 import { isName } from './names.ts';
 import type { AgentDefinition, Executor, PersonDefinition, TracePolicy } from './types.ts';
@@ -135,7 +135,6 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	const input = flattenTools(options.tools, options.bundles);
 	// A seat without `compose` ignores the macros, so one skill set fits every seat.
 	const macros = compose === undefined ? [] : macrosOf(options.bundles);
-	assertMacros(macros, input);
 	const own = input.map((tool) => captureTool(tool));
 	const guidance = joined([guidanceOf(options.bundles), composeGuidance(compose, own, macros)]);
 	const reminders = remindersOf(options.bundles);
@@ -143,7 +142,7 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 	const tools = Object.freeze(
 		compose === undefined
 			? own
-			: [...own, ...composeTools(compose, own, macros, ROOM_COMPOSE).map(captureTool)],
+			: [...own, ...composeTools(compose, own, macros, ROOM_TOOLS).map(captureTool)],
 	);
 	return Object.freeze({
 		kind: options.kind,
@@ -399,26 +398,22 @@ export const RECALL = {
 	}),
 };
 
-/** The names that the room supplies for an activation. An agent's own tool takes none of them. */
-export const ROOM_TOOL_NAMES: readonly string[] = [
-	SAY.name,
-	SCHEDULE.name,
-	RECALL.name,
-	SEAT.name,
-	UNSEAT.name,
-	DISMISS.name,
-];
-
-/** The room tools that a compose call binds. The catalog lists them for every seat that composes. */
-const ROOM_COMPOSE = [
+/**
+ * The room tools, in the order of the compose catalog. The names, the compose
+ * catalog, the tools that commit, and the scripted executor read this list.
+ */
+const ROOM_TOOLS: readonly RoomSpec[] = [
 	SAY,
 	SCHEDULE,
 	RECALL,
 	// The room offers `seat` and `unseat` to some rooms alone, so the catalog lists them apart.
-	{ ...SEAT, optional: true as const },
-	{ ...UNSEAT, optional: true as const },
+	{ ...SEAT, optional: true },
+	{ ...UNSEAT, optional: true },
 	DISMISS,
 ];
+
+/** The names that the room supplies for an activation. An agent's own tool takes none of them. */
+export const ROOM_TOOL_NAMES: readonly string[] = ROOM_TOOLS.map((spec) => spec.name);
 
 function flattenTools(
 	tools: readonly AmbionTool[] | undefined,

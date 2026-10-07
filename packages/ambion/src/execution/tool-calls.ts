@@ -6,7 +6,7 @@
  * events, so no executor raises one. A harness that hosts a tool where it
  * cannot see the id of a call takes the id from the steps.
  */
-import { DISMISS, SAY, SCHEDULE, SEAT, UNSEAT } from '../define.ts';
+import { RECALL, ROOM_TOOL_NAMES } from '../define.ts';
 import type { Step } from '../types.ts';
 import type { StepSink } from './contract.ts';
 
@@ -15,13 +15,9 @@ import type { StepSink } from './contract.ts';
  * event of the entry reports the call, so the call raises no tool event.
  * `recall` commits nothing, and it raises tool events.
  */
-const COMMITS: ReadonlySet<string> = new Set([
-	SAY.name,
-	SCHEDULE.name,
-	SEAT.name,
-	UNSEAT.name,
-	DISMISS.name,
-]);
+const COMMITS: ReadonlySet<string> = new Set(
+	ROOM_TOOL_NAMES.filter((name) => name !== RECALL.name),
+);
 
 type ToolEvent = 'tool_call' | 'tool_result';
 

@@ -6,9 +6,8 @@
  */
 import { Meta } from 'typebox/schema';
 import { Check, Errors } from 'typebox/value';
-import type { AmbionTool, ToolBundle } from './bundle.ts';
+import type { ToolBundle } from './bundle.ts';
 import { type ComposeMacro, plainJson } from './compose.ts';
-import { bindable } from './compose-catalog.ts';
 import { AmbionError } from './errors.ts';
 
 const METASCHEMA = Meta['https://json-schema.org/draft/2020-12/schema'];
@@ -192,18 +191,18 @@ function checked(macro: unknown): ComposeMacro {
 }
 
 /**
- * Refuse a macro that names a tool of no catalog entry, and two macros of
- * one name. A tool with `compose: false`, the tool `compose`, and the tool
- * `describe` are not in the catalog.
+ * Refuse a macro that names a tool that `catalog` does not hold, and two
+ * macros of one name. `catalog` holds the names of the tools that a compose
+ * call binds: the room tools and the tools of the definition. A tool with
+ * `compose: false`, the tool `compose`, and the tool `describe` are not in it.
  */
-export function assertMacros(macros: readonly ComposeMacro[], tools: readonly AmbionTool[]): void {
-	const names = new Set(tools.filter(bindable).map((tool) => tool.name));
+export function assertMacros(macros: readonly ComposeMacro[], catalog: ReadonlySet<string>): void {
 	const seen = new Set<string>();
 	for (const macro of macros) {
 		if (seen.has(macro.name))
 			throw new AmbionError('invalid_tool', `Two macros are named '${macro.name}'.`);
 		seen.add(macro.name);
-		const missing = macro.uses.filter((name) => !names.has(name));
+		const missing = macro.uses.filter((name) => !catalog.has(name));
 		if (missing.length > 0)
 			throw new AmbionError(
 				'invalid_tool',

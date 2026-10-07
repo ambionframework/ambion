@@ -97,6 +97,29 @@ describe('scripted', () => {
 		expect(results).toContainEqual(['echoed', 'delivered']);
 	});
 
+	it('runs every room tool of the activation: dismiss commits, and recall reads and commits nothing', async () => {
+		const results: string[][] = [];
+		const room = await open({
+			name: roomName('testing-room-calls'),
+			agents: [agent('a')],
+			runtime: createRuntime({ storage: memoryJournals() }),
+			execution: scripted(
+				byAgent({
+					a: (step, _seat, request) => {
+						results.push(step.results.map((result) => result.text));
+						if (request === 1) return schedule('Check the build.', 600);
+						if (request === 2) return callTool('dismiss', { message: 6 });
+						return request === 3 ? callTool('recall', { refs: ['#4'] }) : quiet();
+					},
+				}),
+			),
+		});
+		await (await room.visit(andrei)).send({ text: 'Hello?' });
+		await settled(room);
+		// The person says at #4 and the scheduled say lands at #6. The schedule and the dismiss commit, and the recall gives the text of #4.
+		expect(results.at(-1)).toEqual(['delivered', 'delivered', expect.stringContaining('Hello?')]);
+	});
+
 	it('gives a tool call a signal and the deadline, and no sink, and settled waits for it', async () => {
 		const seen: { signal?: AbortSignal; deadline?: number; functions: PropertyKey[] } = {
 			functions: [],
