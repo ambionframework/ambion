@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**The Claude trace has one `usage` step for each model request.** The step
+comes from the `usage` of the `message_start` event, the `message_delta`
+events, and the assistant messages of a top-level request, and it comes
+before the first step of the next request. The step of the last request
+carries the cost of the result and the tokens that the requests did not
+report, so the steps sum to the totals of the results.
+
 **The dependencies are at their latest versions.** The release moves
 `vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
 3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
