@@ -444,6 +444,10 @@ describe('the harness of an activation', () => {
 				'scripted/first',
 				'scripted/second',
 			]);
+			// Both activations ran on one session: the second resumed it.
+			const sessions = steps.flatMap((step) => (step.type === 'session' ? [step.session] : []));
+			expect(sessions).toHaveLength(2);
+			expect(sessions[1]).toBe(sessions[0]);
 		});
 
 		const LEVELS = 'off, minimal, low, medium, high, xhigh, max';

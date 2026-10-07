@@ -246,9 +246,9 @@ of the person who owns the account.
 read position and the record window. Pi adds these facts.
 
 **One harness serves one activation.** The first pass resolves the model
-and the thinking level, opens or creates the session storage, binds the tools, and opens one
-pi-durable `Harness` over the storage. The harness holds one root
-conversation. Every pass of the activation submits one input to that
+and the thinking level, opens or creates the session storage, binds the
+tools, and opens one pi-durable `Harness` over the storage. The harness
+holds one root conversation. Every pass of the activation submits one input to that
 conversation, and resolves when the submission settles. The harness runs
 with the `thinking` level of the activation.
 

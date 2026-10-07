@@ -165,7 +165,7 @@ export interface Chosen {
 	readonly thinking: ThinkingLevel;
 }
 
-/** Call a function of the executor. A function that throws fails the activation for good. */
+/** Call a function of the executor. A function that throws fails the activation as permanent. */
 function callChoice(choice: () => unknown, agent: string, field: string): unknown {
 	try {
 		return choice();
