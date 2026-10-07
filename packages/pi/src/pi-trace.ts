@@ -18,6 +18,16 @@ import type {
 	UsageState,
 } from '@earendil-works/pi-durable';
 
+/**
+ * What the session of an activation opened with. `model` is the model string
+ * of the options, `provider/model-id`. `tools` holds the tools of the
+ * harness by name. Pi keeps no working directory, credential source, or
+ * permission mode, and it hosts no server.
+ */
+export function sessionStep(model: string, session: string, tools: readonly string[]): Step {
+	return { type: 'session', name: 'pi', model, session, tools: [...tools], servers: [] };
+}
+
 const isAssistant = (message: Message | undefined): message is AssistantMessage =>
 	message?.role === 'assistant';
 

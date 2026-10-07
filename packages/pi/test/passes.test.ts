@@ -113,10 +113,17 @@ const texts = (context: Context) =>
 
 describe('the Pi executor across the passes of one activation', () => {
 	it('keeps one session, prompts a later pass with the delta alone, and advances readThrough', async () => {
-		const { session, requests } = activation(() => quiet());
+		const { session, requests, steps } = activation(() => quiet());
 		await session.pass({ kind: 'view', view: viewOf(first, 1) });
 		expect(session.readThrough).toBe(1);
 		await session.pass({ kind: 'delta', after: 1, view: viewOf(both, 2) });
+
+		// One `session` step opens the activation, before the first request is spent.
+		const sessions = steps.filter((step) => step.type === 'session');
+		expect(sessions).toEqual([expect.objectContaining({ name: 'pi', model: 'scripted/worker' })]);
+		expect(steps.findIndex((step) => step.type === 'usage')).toBeGreaterThan(
+			steps.findIndex((step) => step.type === 'session'),
+		);
 
 		expect(requests).toHaveLength(2);
 		const [before, after] = requests;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**The Pi executor records a `session` step.** The step opens each
+activation, before the first model step. It holds the name `pi`, the model
+string of the executor options, the session id, and the names of the tools.
+
 **The dependencies are at their latest versions.** The release moves
 `vitest` and `@vitest/coverage-v8` to 5.0, `diff` to 9.0, `just-bash` to
 3.6, `just-git` to 1.9, `@openai/codex` to 0.160.1, `@anthropic-ai/claude-agent-sdk`
