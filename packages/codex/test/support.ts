@@ -23,9 +23,9 @@ import { type CodexOptions, codex } from '../src/index.ts';
 import type { DynamicToolCallResponse } from '../src/protocol.ts';
 import { type FakeOptions, type FakeTurn, fakeServer } from './fake.ts';
 
-/** The catalog entries that a real `codex` 0.159.2 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
+/** The catalog entries that a real `codex` 0.160.1 printed, for `gpt-5.6-luna` and `gpt-5.5`. */
 export const catalogFixture = JSON.parse(
-	readFileSync(new URL('./fixtures/catalog-0.159.2.json', import.meta.url), 'utf8'),
+	readFileSync(new URL('./fixtures/catalog-0.160.1.json', import.meta.url), 'utf8'),
 ) as { models: CatalogEntry[] };
 
 /** A catalog source that reads the recorded entries. */

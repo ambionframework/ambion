@@ -4,11 +4,11 @@
  *
  * Codex gives a seat native tools that no sandbox setting removes. Code
  * Mode, a JavaScript runtime, read host files under a read-only sandbox
- * with no network on 0.155.1. On 0.159.2 the catalog entry of the model
+ * with no network on 0.155.1. On 0.160.1 the catalog entry of the model
  * still lists the Code Mode tools `exec` and `wait` when every feature is
  * off. The model catalog turns Code Mode on, so a feature flag cannot turn
  * it off. A custom catalog can. This file holds the recipe, and its
- * facts belong to Codex 0.159.2:
+ * facts belong to Codex 0.160.1:
  *
  * 1. `exclusiveEntry` patches the catalog entry of the model.
  * 2. `exclusiveConfig` turns off every feature and tool the config controls,
@@ -53,7 +53,7 @@ export function exclusiveEntry(entry: CatalogEntry): CatalogEntry {
 }
 
 /**
- * The features of Codex 0.159.2 that give a seat a native tool, or that act
+ * The features of Codex 0.160.1 that give a seat a native tool, or that act
  * on the host or the network. Each is off.
  * `shell_snapshot` runs the shell of the host user at the start of a session
  * and writes its environment to a file in the seat home. `daemon_auto_start`

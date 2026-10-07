@@ -72,7 +72,7 @@ export interface FakeOptions {
 /** The thread fields of an answer, with a rollout file when the thread keeps tools. */
 function openedOf(id: string, path: string | null, params: Record<string, unknown>) {
 	return {
-		thread: { id, path, cliVersion: '0.159.2' },
+		thread: { id, path, cliVersion: '0.160.1' },
 		model: params.model,
 		cwd: params.cwd,
 		approvalPolicy: params.approvalPolicy,
@@ -259,7 +259,7 @@ export function fakeServer(turns: readonly FakeTurn[], options: FakeOptions = {}
 
 	/** The answer of each request the fake knows. */
 	const answers: Record<string, (params: Params) => unknown> = {
-		initialize: () => ({ userAgent: 'fake/0.159.2' }),
+		initialize: () => ({ userAgent: 'fake/0.160.1' }),
 		'thread/start': startThread,
 		'thread/resume': resumeThread,
 		'account/read': () => ({ account: { type: 'apiKey' } }),
