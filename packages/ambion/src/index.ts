@@ -38,7 +38,7 @@ export type { DefineAgentOptions, DefineHumanOptions } from './define.ts';
 export { defineAgent, definePerson, defineTool } from './define.ts';
 export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
-export { DEFAULT_SPEAKING, DEFAULT_SUMMARIZING } from './execution/render.ts';
+export { DEFAULT_RESPOND_POLICY, DEFAULT_SUMMARY_POLICY } from './execution/render.ts';
 export { loggedToolResult } from './execution/trace.ts';
 export type { CreateRuntimeOptions, Execution, Runtime } from './host/runtime.ts';
 export { createRuntime, systemClock } from './host/runtime.ts';

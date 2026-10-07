@@ -519,10 +519,10 @@ export interface Executor {
 	readonly guidance?: string;
 	/** The reminders of the agent's tool bundles, in bundle order. */
 	readonly reminders?: readonly Reminder[];
-	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
-	readonly speaking?: string;
-	/** The summary policy. It replaces `DEFAULT_SUMMARIZING`. Absent uses the default. */
-	readonly summarizing?: string;
+	/** The respond policy. It replaces `DEFAULT_RESPOND_POLICY`. Absent uses the default. */
+	readonly respondPolicy?: string;
+	/** The summary policy. It replaces `DEFAULT_SUMMARY_POLICY`. Absent uses the default. */
+	readonly summaryPolicy?: string;
 	/**
 	 * The token limit for the record one activation reads. When set, the room
 	 * keeps the newest part of the record that fits the limit, plus the open

@@ -1,7 +1,7 @@
 /**
  * The rendered prompt of one respond and one summary activation, part by
  * part. The snapshots put the prompt text in the diff of every change to it.
- * The speaking and summarizing policies of a definition replace the defaults
+ * The respond and summary policies of a definition replace the defaults
  * in the agent part and in the ask line.
  * The resolved reminders of the definition's bundles join the context of a
  * respond activation, before its ask line.
@@ -11,8 +11,8 @@ import { pi } from '../../pi/src/index.ts';
 import type { ReminderSeat } from '../src/bundle.ts';
 import { REMINDER_TIMEOUT_MS, resolveReminders } from '../src/execution/reminders.ts';
 import {
-	DEFAULT_SPEAKING,
-	DEFAULT_SUMMARIZING,
+	DEFAULT_RESPOND_POLICY,
+	DEFAULT_SUMMARY_POLICY,
 	renderActivation,
 } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
@@ -118,8 +118,8 @@ describe('the rendered prompt', () => {
 			executor: pi({
 				instructions: 'Other.',
 				model: 'scripted/other',
-				speaking: 'Custom policy.',
-				summarizing: 'Custom summary policy.',
+				respondPolicy: 'Custom policy.',
+				summaryPolicy: 'Custom summary policy.',
 			}),
 		});
 		const { mechanism } = renderActivation(respond, worker);
@@ -130,11 +130,11 @@ describe('the rendered prompt', () => {
 			expect(mechanism).not.toContain(text);
 
 		const standard = renderActivation(respond, worker);
-		expect(standard.agent).toContain(DEFAULT_SPEAKING);
+		expect(standard.agent).toContain(DEFAULT_RESPOND_POLICY);
 		const policy = renderActivation(respond, other);
 		expect(policy.agent).toContain('Custom policy.');
 		for (const advice of [
-			DEFAULT_SPEAKING,
+			DEFAULT_RESPOND_POLICY,
 			'Who is reading can change while you work',
 			'The record holds conversation',
 		])
@@ -151,7 +151,7 @@ describe('the rendered prompt', () => {
 			expect(policy.context).not.toContain(advice);
 
 		const closing = renderActivation(summarize, worker);
-		expect(closing.agent).toContain(DEFAULT_SUMMARIZING);
+		expect(closing.agent).toContain(DEFAULT_SUMMARY_POLICY);
 		expect(closing.context).toContain('Check two cases first');
 		const custom = renderActivation(summarize, other);
 		expect(custom.agent).toContain('Custom summary policy.');

@@ -56,8 +56,8 @@ field, which reaches respond activations only. Shared instructions describe
 closing behavior and application precedence. Both activation purposes retain
 the application's additional instructions.
 
-The kernel owns the shared speaking policy as `DEFAULT_SPEAKING` and the
-summary policy as `DEFAULT_SUMMARIZING`. The package keeps only the
+The kernel owns the shared respond policy as `DEFAULT_RESPOND_POLICY` and the
+summary policy as `DEFAULT_SUMMARY_POLICY`. The package keeps only the
 orchestration guidance that the kernel does not enforce.
 
 **Additional instructions can override any assistant behavioral default.**

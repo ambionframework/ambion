@@ -71,10 +71,10 @@ export interface ExecutorBaseOptions {
 	readonly tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	readonly bundles?: readonly ToolBundle[];
-	/** The speaking policy. It replaces `DEFAULT_SPEAKING`. Absent uses the default. */
-	readonly speaking?: string;
-	/** The summary policy. It replaces `DEFAULT_SUMMARIZING`. Absent uses the default. */
-	readonly summarizing?: string;
+	/** The respond policy. It replaces `DEFAULT_RESPOND_POLICY`. Absent uses the default. */
+	readonly respondPolicy?: string;
+	/** The summary policy. It replaces `DEFAULT_SUMMARY_POLICY`. Absent uses the default. */
+	readonly summaryPolicy?: string;
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
 	readonly activationTokenLimit?: number;
 	/**
@@ -151,8 +151,8 @@ export function describeExecutor(options: ExecutorOptions): Executor {
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
 		...(reminders === undefined ? {} : { reminders }),
-		...(options.speaking === undefined ? {} : { speaking: options.speaking }),
-		...(options.summarizing === undefined ? {} : { summarizing: options.summarizing }),
+		...(options.respondPolicy === undefined ? {} : { respondPolicy: options.respondPolicy }),
+		...(options.summaryPolicy === undefined ? {} : { summaryPolicy: options.summaryPolicy }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
 }

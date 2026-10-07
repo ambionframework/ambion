@@ -51,8 +51,8 @@ it('exports exactly what an application needs to build a room, and nothing a hos
 	expect(Object.keys(main).sort()).toEqual([
 		'AmbionError',
 		'COMPOSE_GUIDANCE',
-		'DEFAULT_SPEAKING',
-		'DEFAULT_SUMMARIZING',
+		'DEFAULT_RESPOND_POLICY',
+		'DEFAULT_SUMMARY_POLICY',
 		'PACKAGE_NAME',
 		'REF_LIMITS',
 		'addUsage',

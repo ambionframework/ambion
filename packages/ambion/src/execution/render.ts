@@ -197,9 +197,9 @@ export interface RenderedPrompt {
 /**
  * The default policy for a respond activation: when to speak, how to read an
  * arrival, and how to hand work to a colleague. An agent definition replaces
- * all of it with the `speaking` option of its executor.
+ * all of it with the `respondPolicy` option of its executor.
  */
-export const DEFAULT_SPEAKING = [
+export const DEFAULT_RESPOND_POLICY = [
 	`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 	`your activation without saying anything, and no mark is left. Speak only when your reply`,
 	`adds something the record does not already hold — new information, a decision moved`,
@@ -302,8 +302,8 @@ function renderAgent(view: ActivationView, def: AgentDefinition): string {
 /** What this seat is for, read off the activation purpose. */
 function duties(view: ActivationView, def: AgentDefinition): string[] {
 	if (view.spec.purpose.kind === 'summarize')
-		return [def.executor.summarizing ?? DEFAULT_SUMMARIZING];
-	const lines = [def.executor.speaking ?? DEFAULT_SPEAKING];
+		return [def.executor.summaryPolicy ?? DEFAULT_SUMMARY_POLICY];
+	const lines = [def.executor.respondPolicy ?? DEFAULT_RESPOND_POLICY];
 	if (def.executor.guidance) lines.push(``, def.executor.guidance);
 	return lines;
 }
@@ -417,7 +417,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	if (purpose.kind === 'summarize') return summarizeAsk(view, purpose, def);
 	// A seat seated during an exchange reads which question it was seated for.
 	const mechanism = `${openingLine(view, def.name)}Begin your activation, ${def.name}: this is a respond activation. `;
-	if (def.executor.speaking !== undefined) return `${mechanism}${NEW_LINE}`;
+	if (def.executor.respondPolicy !== undefined) return `${mechanism}${NEW_LINE}`;
 	return (
 		`${mechanism}` +
 		`Follow your instructions, and speak only to add something the record lacks. ` +
@@ -436,7 +436,7 @@ function summarizeAsk(
 		`${purpose.person}'s exchange is over: it holds the messages from seq ` +
 		`${purpose.exchange} to seq ${purpose.through}. The opening message's URI is ` +
 		`${messageUri(view.context.name, purpose.exchange)}.`;
-	if (def.executor.summarizing !== undefined)
+	if (def.executor.summaryPolicy !== undefined)
 		return `${mechanism} Write the message with say, or end your activation without calling say to leave the range whole.`;
 	return `${mechanism} These messages are your only source. ${action(purpose.kind)}`;
 }
@@ -453,9 +453,9 @@ export function offersSeat(context: ActivationView['context']): boolean {
 /**
  * The default policy for a summarize activation: what the one message holds
  * and where its facts come from. An agent definition replaces all of it with
- * the `summarizing` option of its executor.
+ * the `summaryPolicy` option of its executor.
  */
-export const DEFAULT_SUMMARIZING = [
+export const DEFAULT_SUMMARY_POLICY = [
 	`The exchange is over. Write the one message the assigned person reads instead of the working,`,
 	`using the say tool. Report what the exchange established, and keep only facts that change what`,
 	`they do next. Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns`,
