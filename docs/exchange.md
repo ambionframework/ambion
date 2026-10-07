@@ -39,8 +39,8 @@ stored field.
 ## 3. Three rules
 
 1. A person's question or a system message opens an exchange only when none
-   is open. A system message is a message of the system: the host posts it
-   with `room.post`, and the room's clock writes a returned say. Agent speech,
+   is open. A system message has no author: the host posts it with
+   `room.post`, and the room's clock writes a returned say. Agent speech,
    arrivals, and departures do not open one. A question or a system message
    that lands while one is open belongs to that exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
@@ -199,10 +199,10 @@ deliberately stays silent. A revoked or abandoned summary activation rejects
 the response when the summary is required. The exchange handle is the completion API; there is no room-wide
 quiet wait.
 
-**The host posts with `room.post`.** A system message has no author:
-the `system` entry `{ to?, text, refs? }` is a message of the system, and
-a seat cannot write one. It opens an exchange when none is open, and the call returns the
-handle of the exchange that holds it.
+**The host posts with `room.post`.** The `system` entry
+`{ to?, text, refs? }` has no author, and a seat cannot write one. It
+opens an exchange when none is open, and the call returns the handle of
+the exchange that holds it.
 
 ```ts
 workspace.processes.subscribe((event) => {

@@ -44,7 +44,7 @@ function messageLine(message: Message): string {
 	return `[${message.seq}] ${message.subject} ${message.kind}${by}`;
 }
 
-/** A system message of the host, or a say that the room returned to its seat. */
+/** A system message from the host, or a say that the room returned to its seat. */
 function systemLine(message: SystemMessage, text: string): string {
 	const verb = message.returns === undefined ? 'system' : 'the room returned a say';
 	return `[${message.seq}] ${verb} to ${message.to ?? 'the room'}: ${text}`;

@@ -147,8 +147,8 @@ range alone, so the bridge reads the outcome with `readRoom`. `readRoom`
 reads a live room and a stopped room alike.
 
 **A report pass looks for each key first.** For each closed exchange of a
-breakout room, the bridge reads the `key` of each `system` message in the
-record of the parent. A key `breakout:<name>:<from>`, or a key that starts
+breakout room, the bridge reads the `key` of each message in the record
+of the parent. A key `breakout:<name>:<from>`, or a key that starts
 with `breakout:<name>:<from>:`, means that the exchange is done. For an
 exchange with no such key, the bridge posts the close notice:
 
