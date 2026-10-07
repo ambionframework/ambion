@@ -26,9 +26,8 @@ import {
 import { type Static, Type } from 'typebox';
 import type { WorkspaceEnv } from './backend.ts';
 import type { Capability } from './capability.ts';
-import type { ShellOutputTruncation } from './port.ts';
 import { DEFAULT_GRACE_SECONDS, PROCESSES_DIR, type Process } from './process-files.ts';
-import { readOutput } from './process-output.ts';
+import { type LineRange, type OutputRead, readOutput } from './process-output.ts';
 import { MAX_TIMER_SECONDS } from './process-run.ts';
 import {
 	type ProcessDetails,
@@ -42,7 +41,7 @@ import type { ProcessTable } from './process-table.ts';
 import { deadlineNote, psTable, stateLine } from './process-text.ts';
 import type { WorkspaceResource } from './resource.ts';
 import { type DetailedResult, ToolFailure } from './tools.ts';
-import { DEFAULT_MAX_BYTES, formatSize } from './truncate.ts';
+import { DEFAULT_MAX_BYTES } from './truncate.ts';
 
 /** Seconds a process may run when `bash` names no timeout. */
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -464,12 +463,12 @@ async function described(
 		},
 		ctx.signal,
 	);
-	const output = read.text.endsWith('\n') ? read.text.slice(0, -1) : read.text;
+	const output = shownOf(read);
 	const notes = [
 		stateLine(process),
 		note,
-		output === '' || read.truncation.truncated ? '' : startLine(read.from),
-		truncationLine(read.truncation, read.from),
+		output === '' || read.cut ? '' : startLine(read.from),
+		truncationLine(read),
 	].filter((line) => line !== '');
 	const text = [bodyOf(output, process, read.from), `[${notes.join(' ')}]`]
 		.filter((part) => part !== '')
@@ -479,6 +478,7 @@ async function described(
 		text: output,
 		read: { from: read.from, to: read.to },
 		...(read.truncation.truncated ? { truncation: read.truncation } : {}),
+		...(read.cut?.omitted ? { omitted: read.cut.omitted } : {}),
 	};
 	return { content: [{ type: 'text', text }], details };
 }
@@ -500,9 +500,31 @@ function startLine(from: number): string {
 		: `The text above starts at byte ${from} of the output. An earlier result showed the bytes before it.`;
 }
 
-/** The note for a view that keeps only the end of the new output: `totalBytes` counts the bytes after `from`. */
-function truncationLine(truncation: ShellOutputTruncation, from: number): string {
-	if (!truncation.truncated) return '';
+/** The new output as the agent sees it: the whole text, or the start, a marker, and the end. */
+function shownOf({ text, cut }: OutputRead): string {
+	const start = text.endsWith('\n') ? text.slice(0, -1) : text;
+	if (cut === undefined) return start;
+	return [start, `[${markerOf(cut.omitted)}]`, cut.tail].filter((part) => part !== '').join('\n');
+}
+
+/** The sentence that names the lines between the two ends, and how `read` reaches them. */
+function markerOf(omitted: LineRange | undefined): string {
+	if (omitted === undefined) return 'Part of the output is not shown.';
+	const { offset, limit } = omitted;
+	const lines =
+		limit === 1
+			? `Line ${offset} of the output is`
+			: `Lines ${offset} to ${offset + limit - 1} of the output are`;
+	return `${lines} not shown. Read ${limit === 1 ? 'it' : 'them'} with read, offset ${offset} and limit ${limit}.`;
+}
+
+/** The note for a cut view: how many lines each end holds. `totalLines` counts the lines after `from`. */
+function truncationLine({ cut, truncation, from }: OutputRead): string {
+	if (cut === undefined) return '';
 	const after = from === 0 ? '' : ` after byte ${from}`;
-	return `The text above is the last ${truncation.outputLines} lines, ${formatSize(truncation.outputBytes)} of the ${formatSize(truncation.totalBytes)}${after}.`;
+	const ends = [
+		...(cut.headLines > 0 ? [`first ${cut.headLines}`] : []),
+		`last ${cut.tailLines}`,
+	].join(' and the ');
+	return `The text above is the ${ends} of the ${truncation.totalLines} lines${after}.`;
 }

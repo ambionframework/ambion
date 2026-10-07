@@ -194,20 +194,38 @@ describe('bash', () => {
 	});
 
 	it.each([
-		['read whole', 5000],
-		['read with tail, past 200 KB', 60000],
+		['one read', 5000],
+		['two bounded reads, past 50 KB', 60000],
 	])(
-		'shows the end of a long output, %s, and keeps the whole output in the file',
+		'shows the start and the end of a long output with a marker for the lines between, %s, and keeps the whole output in the file',
 		async (_case, lines) => {
 			const workspace = site();
 			const { text, details } = await call(workspace, 'bash', { command: `seq 1 ${lines}` });
-			expect(details.truncation).toMatchObject({ truncated: true, outputLines: 2000 });
-			expect(text.startsWith(`${lines - 1999}\n`)).toBe(true);
+			const omitted = { offset: 1001, limit: lines - 2000 };
+			const last = omitted.offset + omitted.limit - 1;
+			expect(details.truncation).toMatchObject({
+				truncated: true,
+				truncatedBy: 'lines',
+				totalLines: lines,
+				outputLines: 2000,
+			});
+			expect(details.omitted).toEqual(omitted);
+			expect(text.startsWith('1\n2\n')).toBe(true);
+			expect(text).toContain(
+				`1000\n[Lines 1001 to ${last} of the output are not shown. Read them with read, offset 1001 and limit ${omitted.limit}.]\n${last + 1}\n`,
+			);
 			expect(text).toContain(`${lines}\n\n[Process`);
-			expect(text).toContain('The text above is the last 2000 lines');
+			expect(text).toContain(
+				`The text above is the first 1000 and the last 1000 of the ${lines} lines.]`,
+			);
+			expect(details.text).toBe(text.slice(0, text.indexOf('\n\n[Process')));
 			const whole = await fileOf(workspace, 'alpha', details.process.output);
 			expect(whole.split('\n').length).toBe(lines + 1);
 			expect(details.truncation?.totalBytes).toBe(whole.length);
+			// The `read` tool reaches the lines between the two ends from the marker.
+			const between = await call(workspace, 'read', { path: details.process.output, ...omitted });
+			expect(between.text.startsWith('1001\n1002\n')).toBe(true);
+			expect(between.details).toMatchObject({ from: 1001 });
 			// A small new part of a long file comes back alone, from the cursor.
 			await workspace.use({ name: 'alpha' }, (env) =>
 				env.writeFile(details.process.output, `${whole}extra\n`),
@@ -215,6 +233,58 @@ describe('bash', () => {
 			const next = await call(workspace, 'wait', { handles: [details.process.handle], timeout: 0 });
 			expect(next.text.startsWith('extra\n\n[Process')).toBe(true);
 			expect(next.details.read).toEqual({ from: whole.length, to: whole.length + 6 });
+		},
+	);
+
+	it('counts the lines of the output file before the cursor in the lines between the two ends', async () => {
+		const workspace = site();
+		const first = await call(workspace, 'bash', { command: 'seq 1 10' });
+		const output = first.details.process.output;
+		const before = await fileOf(workspace, 'alpha', output);
+		const burst = Array.from({ length: 5000 }, (_, index) => `burst ${index + 1}`).join('\n');
+		await workspace.use({ name: 'alpha' }, (env) => env.writeFile(output, `${before}${burst}\n`));
+		const next = await call(workspace, 'wait', {
+			handles: [first.details.process.handle],
+			timeout: 0,
+		});
+		expect(next.details.omitted).toEqual({ offset: 1011, limit: 3000 });
+		expect(next.details.truncation).toMatchObject({ totalLines: 5000, outputLines: 2000 });
+		expect(next.text.startsWith('burst 1\nburst 2\n')).toBe(true);
+		expect(next.text).toContain(
+			'The text above is the first 1000 and the last 1000 of the 5000 lines after byte',
+		);
+		const between = await call(workspace, 'read', { path: output, ...next.details.omitted });
+		expect(between.text.startsWith('burst 1001\n')).toBe(true);
+	});
+
+	it.each([
+		[
+			'a first line past the byte limit',
+			"seq 1 15000 | tr -d '\\n'; echo; seq 1 5",
+			'[Line 1 of the output is not shown. Read it with read, offset 1 and limit 1.]\n1\n2\n3\n4\n5\n\n[Process',
+			{ offset: 1, limit: 1 },
+			6,
+		],
+		[
+			'one line past the byte limit',
+			"seq 1 15000 | tr -d '\\n'",
+			'[Part of the output is not shown.]\n',
+			undefined,
+			1,
+		],
+	])(
+		'keeps the end of the lines that exceed the byte limit, %s',
+		async (_case, command, shown, omitted, lines) => {
+			const { text, details } = await call(site(), 'bash', { command });
+			expect(text).toContain(shown);
+			expect(text.startsWith('[')).toBe(true);
+			expect(details.omitted).toEqual(omitted);
+			expect(details.truncation).toMatchObject({
+				truncatedBy: 'bytes',
+				totalLines: lines,
+				totalBytes: lines === 6 ? 63905 : 63894,
+				firstLineExceedsLimit: true,
+			});
 		},
 	);
 

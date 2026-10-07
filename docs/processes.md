@@ -202,11 +202,11 @@ cursor to the size of `out` when the read began, and writes that size to
 above starts at byte <n> of the output. An earlier result showed the bytes
 before it.` `details.text` holds the new output with no bracketed line, and
 `details.read` holds `from` and `to`, the byte offsets of the output file.
-Ten polls of a long build give ten new parts, and no part twice. One read
-takes at most 200 KB, so a burst past that shows only its end, and `read`
-reaches the rest. The cursor is a file, so a new run of the host reads on
-from the same byte. A failed write of `cursor` gives
-the same bytes again on the next read.
+Ten polls of a long build give ten new parts, and no part twice. A burst
+costs two bounded reads, and `read` reaches the lines that the view leaves
+out. The cursor is a file, so a new run of the host reads on from the same
+byte. A failed write of `cursor` gives the same bytes again on the next
+read.
 
 ```text
 /home/writer
@@ -258,12 +258,37 @@ adds one note, and it names each running process past the reach of a wait.
 no `schedule`. A process that ends inside the reach of a wait needs a
 `wait`, and each returned say costs one activation.
 
-**The view keeps the last 2000 lines or 50 KB of the new output.** These
-are the limits of Pi's `bash` tool. When the view cuts the new output, the
-bracketed line adds `The text above is the last <n> lines, <size> of the
-<total> after byte <n>.` in place of the start line. One read takes at
-most 200 KB, with `head -c <size> | tail -c <count>`. The agent reads the
-rest with `read`, which takes an offset and a limit.
+**The view keeps the start and the end of the new output.** A new part of
+at most 2000 lines and 50 KB shows whole. A longer part shows its first
+1000 lines or 25 KB and its last 1000 lines or 25 KB. A marker line sits
+between them:
+
+```text
+[Lines 1001 to 4000 of the output are not shown. Read them with read, offset 1001 and limit 3000.]
+```
+
+The numbers are lines of the output file, so `read` takes them as `offset`
+and `limit`. The bracketed line adds `The text above is the first <n> and
+the last <n> of the <total> lines after byte <n>.` in place of the start
+line. The words `after byte` are absent when the result starts at byte 0.
+When the cut lies inside one line, the marker reads `Part of the output is
+not shown.`
+
+**A new part past 50 KB makes two reads of the output file.** The first
+read takes the first 50 KB of the new part, without the partial line at its
+end. The second read takes the last 50 KB. Each read uses
+`head -c <size> | tail -c <count>`. One script counts the newlines in the
+bytes before the cursor and in the bytes up to the end, with `head -c
+<size> | wc -l`. The counts give the line numbers of the marker. A new
+part of at most 50 KB makes one read. Any cut view makes the count.
+
+**`details.omitted` holds the lines between the two ends.** It has
+`offset` and `limit`, the arguments that `read` takes for those lines.
+The field is present only when the view is cut and at least one whole
+line lies between the two ends. `details.text` holds the start, the marker
+line, and the end. `details.truncation` counts both ends: `outputLines` and
+`outputBytes` sum them, and `totalLines` and `totalBytes` count the whole
+new part.
 
 **`details.process` is a `Process`.** The host's view gives the
 same value.
