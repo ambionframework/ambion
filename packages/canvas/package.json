@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/canvas",
-	"version": "0.7.0",
+	"version": "0.8.0",
 	"type": "module",
 	"description": "The canvas store: one durable row for each room of a deployment, in memory or in SQLite.",
 	"license": "Apache-2.0",
