@@ -157,6 +157,10 @@ describe('the definition of a seat with macros', () => {
 		expect(() => seatOf(carrying(...macros))).toThrow(message);
 	});
 
+	it('accepts a macro that uses a room tool, since the compose catalog lists it', () => {
+		expect(() => seatOf(carrying(macro('a/b', ['echo', 'say', 'recall'])))).not.toThrow();
+	});
+
 	it('refuses two macros of one name across two bundles', () => {
 		const second: ToolBundle = { tools: [], macros: [macro('a/b')] };
 		expect(() =>

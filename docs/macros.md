@@ -184,9 +184,10 @@ only carries the data.
 
 **`describeExecutor` checks the macros of a seat that has the `compose` tool.** It
 collects the macros of every bundle. It refuses a macro that names a tool
-which the catalog lacks. A tool with `compose: false` is not in the
-catalog. It refuses two macros with one name. The error is an
-`AmbionError` with the code `invalid_tool`.
+which the catalog lacks. The catalog holds the tools of the seat and the room
+tools. A tool with `compose: false` is not in the catalog. It refuses two
+macros with one name. The error is an `AmbionError` with the code
+`invalid_tool`.
 
 **`compose` takes a macro in place of `uses` and `code`.** The model gives
 `macro` and an optional `args`. These steps run in this order:

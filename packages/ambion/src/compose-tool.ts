@@ -40,7 +40,7 @@ import {
 } from './compose.ts';
 import { bindable } from './compose-catalog.ts';
 import { bindingsText, describeTool, namedTools, signatureText } from './compose-describe.ts';
-import { macroGuidance } from './compose-macros.ts';
+import { assertMacros, macroGuidance } from './compose-macros.ts';
 import { type ComposeOutcome, ComposeRun } from './compose-run.ts';
 import { checkedArguments, messageOf, runToolCall } from './tool-call.ts';
 import type { Step } from './types.ts';
@@ -509,6 +509,7 @@ export function composeTools(
 			(tool) => [tool.name, tool],
 		),
 	);
+	assertMacros(macros, new Set(catalog.keys()));
 	const limits = limitsOf(options);
 	const entry: ComposeEntry = async (params, ctx, record, calls) => {
 		// The public `invoke` reaches this entry with unchecked arguments, so the check stays.

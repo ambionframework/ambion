@@ -1,5 +1,6 @@
 import { contentText, type ToolContext, type ToolResult } from '../bundle.ts';
 import { invokeTool } from '../compose-tool.ts';
+import { ROOM_TOOL_NAMES } from '../define.ts';
 import { localConnector } from '../execution/connector.ts';
 import type {
 	ActivationOpener,
@@ -100,7 +101,7 @@ export const isSummarizing = (view: ActivationView): boolean =>
 	view.spec.purpose.kind === 'summarize';
 
 /** The room tools a script calls by name. Every other call names a tool of the agent. */
-const ROOM_CALLS: ReadonlySet<string> = new Set(['say', 'schedule', 'seat', 'unseat']);
+const ROOM_CALLS: ReadonlySet<string> = new Set(ROOM_TOOL_NAMES);
 
 const textOf = (result: string | ToolResult): string =>
 	typeof result === 'string' ? result : contentText(result.content);
@@ -208,10 +209,12 @@ class ScriptedActivation implements RunningActivation {
 		const result = await tool.run(call.args, id);
 		// The script reads each result, so the result reached the model.
 		this.activation.delivered(id);
-		// Each room tool a script calls commits, so the room answered it. The
-		// result holds only the text a model reads, and a script reads the
-		// answer itself, so the answer comes from beside the result.
-		const response = answerOf(result) ?? { unknown: 'The room gave no answer.' };
+		// A room tool that commits has an answer of the room. The result holds
+		// only the text a model reads, and a script reads the answer itself, so
+		// the answer comes from beside the result. A tool that commits nothing,
+		// such as `recall`, has no answer, and its result is the text.
+		const response = answerOf(result);
+		if (response === undefined) return contentText(result.content);
 		const outcome = answer(response);
 		if (isSummarizing(pass.view) && outcome.text === 'delivered') this.done = true;
 		return outcome.text;
